@@ -19,7 +19,6 @@ import type {
   ProcessRuntime,
   ProcessServices,
   PlatformSecrets,
-  StateStore,
   WorkspaceRoots,
 } from '@texra-ai/harness';
 
@@ -38,7 +37,6 @@ export class SettingsViewProvider {
 
   constructor(
     context: vscode.ExtensionContext,
-    globalState: StateStore,
     secrets: PlatformSecrets,
     private readonly runtime: ProcessRuntime,
     roots: WorkspaceRoots,
@@ -51,7 +49,6 @@ export class SettingsViewProvider {
     );
     this.messageHandler = new SettingsViewMessageHandler(
       context,
-      globalState,
       secrets,
       runtime,
       roots,

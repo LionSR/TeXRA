@@ -332,24 +332,25 @@ const writeStampedCopy = Effect.fn('writeStampedCopy')(function* (
 
 /** Where a copy of `entry` lands: its path relative to the source root
  *  that holds it, under the custom directory; undefined when that escapes. */
-const copyTarget = (entry: AgentEntry) =>
-  Effect.gen(function* () {
-    const directories = yield* AgentDirectories;
-    const [customDir, sourceRoots] = yield* Effect.all(
-      [directories.custom(), agentSourceRoots(directories, entry.source)],
-      { concurrency: 'unbounded' },
-    );
-    const sourceRoot = sourceRoots.find((root) =>
-      isStrictlyWithin(root, entry.path),
-    );
-    const target = path.join(
-      customDir,
-      sourceRoot
-        ? path.relative(sourceRoot, entry.path)
-        : path.basename(entry.path),
-    );
-    return isStrictlyWithin(customDir, target) ? target : undefined;
-  });
+const copyTarget = Effect.fn('AgentDirectoryService.copyTarget')(function* (
+  entry: AgentEntry,
+) {
+  const directories = yield* AgentDirectories;
+  const [customDir, sourceRoots] = yield* Effect.all(
+    [directories.custom(), agentSourceRoots(directories, entry.source)],
+    { concurrency: 'unbounded' },
+  );
+  const sourceRoot = sourceRoots.find((root) =>
+    isStrictlyWithin(root, entry.path),
+  );
+  const target = path.join(
+    customDir,
+    sourceRoot
+      ? path.relative(sourceRoot, entry.path)
+      : path.basename(entry.path),
+  );
+  return isStrictlyWithin(customDir, target) ? target : undefined;
+});
 
 /** Apply `change` to the custom copy of `entry`; `newerBuiltIn` is the
  *  changed bundled version a `keep` re-stamps with. The copy's path. */

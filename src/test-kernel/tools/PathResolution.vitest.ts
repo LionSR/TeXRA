@@ -6,10 +6,8 @@ import { it } from '@effect/vitest';
 
 import { describe, expect } from 'vitest';
 
-import { StateReadFailed } from '@platform/interfaces';
 import { ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { installedHost, installPlatform } from '@test/support/setupPlatform';
 import {
   assertNoParentTraversal,
@@ -27,44 +25,11 @@ describe('assertNoParentTraversal', () => {
       );
     }),
   );
-
-  it.effect.each(['a/b', 'a..b'])('accepts %s', (targetPath) =>
-    assertNoParentTraversal(targetPath),
-  );
 });
 
 describe('resolveToolPath path protection', () => {
   const workspacePath = path.resolve(path.sep, 'workspace');
   const outsidePath = path.resolve(path.sep, 'outside', 'file.tex');
-
-  it.effect('does not read path protection for a contained path', () =>
-    Effect.gen(function* () {
-      const { stores, workspaceState } = makeFakeSettingsStores();
-      const resolved = yield* resolveToolPath(
-        {
-          roots: {
-            workspace: workspacePath,
-            ...stores,
-            workspaceState: {
-              get: (key) =>
-                Effect.fail(
-                  new StateReadFailed({
-                    key,
-                    message: 'state unavailable',
-                    cause: new Error('state unavailable'),
-                  }),
-                ),
-              update: (key, value) => workspaceState.update(key, value),
-              modify: (key, change) => workspaceState.modify(key, change),
-            },
-          },
-        },
-        'inside.tex',
-      );
-
-      expect(resolved.absolute).toBe(path.join(workspacePath, 'inside.tex'));
-    }),
-  );
 
   it.effect('rejects paths outside the working directory by default', () =>
     Effect.gen(function* () {

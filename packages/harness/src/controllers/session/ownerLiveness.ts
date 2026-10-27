@@ -32,18 +32,17 @@ function foreignOwners(view: SessionView, self: OwnerId | null): OwnerId[] {
 }
 
 /** The foreign owners of `view` a probe proves dead, in owner order. */
-export const deadOwners = (
+export const deadOwners = Effect.fn('ownerLiveness.deadOwners')(function* (
   view: SessionView,
   self: OwnerId | null,
-): Effect.Effect<OwnerId[], never, ProcessProbe> =>
-  Effect.gen(function* () {
-    const dead: OwnerId[] = [];
-    for (const owner of foreignOwners(view, self)) {
-      const liveness = yield* proveOwnerLiveness(ownerIdentity(owner));
-      if (liveness === 'dead') dead.push(owner);
-    }
-    return dead;
-  });
+): Effect.fn.Return<OwnerId[], never, ProcessProbe> {
+  const dead: OwnerId[] = [];
+  for (const owner of foreignOwners(view, self)) {
+    const liveness = yield* proveOwnerLiveness(ownerIdentity(owner));
+    if (liveness === 'dead') dead.push(owner);
+  }
+  return dead;
+});
 
 /**
  * The liveness prober: every owner the view names on a

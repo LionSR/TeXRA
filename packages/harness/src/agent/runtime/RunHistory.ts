@@ -98,8 +98,7 @@ function rowOrigins(row: RunHistoryDraft): readonly ModelOrigin[] {
     case 'accepted':
       return [p.operation.origin];
     case 'response': {
-      const continuation =
-        p.turn.kind === 'http' ? (p.turn.continuation ?? null) : null;
+      const continuation = p.turn.continuation ?? null;
       return continuation === null
         ? [p.turn.requestedOrigin]
         : [p.turn.requestedOrigin, continuation.origin];
@@ -117,7 +116,6 @@ function rowOrigins(row: RunHistoryDraft): readonly ModelOrigin[] {
  * that violated it, never the endpoint the check keeps out of durable state.
  */
 function unsafeEndpoint(origin: ModelOrigin): string | null {
-  if (origin.protocol === 'vscode-lm') return null;
   const { endpoint } = origin.deployment;
   if (!URL.canParse(endpoint)) return 'the endpoint is not a URL';
   const url = new URL(endpoint);
@@ -196,35 +194,34 @@ const applyStored = (state: RunState | null, rows: readonly SessionEvent[]) =>
   Result.flatMap(runHistoryRows(rows), (live) => applyRunRows(state, live));
 
 /** `load`'s answer for a run's applied rows, which a resume shares. */
-const loaded = (
+const loaded = Effect.fn('RunHistory.loaded')(function* (
   run: RunId,
   applied: ReturnType<typeof applyRunRows>,
   prepared = true,
-): Effect.Effect<RunState | null, RunHistoryRefused> =>
-  Effect.gen(function* () {
-    if (Result.isFailure(applied))
-      return yield* inconsistent(run, applied.failure);
-    const state = applied.success;
-    // A run's input changes no state; a request before its opening leaves
-    // an unopened state (`phase` null).
-    if (state === null) return null;
-    if (state.phase === null && !state.hasHistoryRows) return state;
-    if (state.phase === null) {
-      return yield* inconsistent(
-        run,
-        new RunHistoryInconsistent({
-          reason: 'out-of-order',
-          detail: 'run history rows without an opening run.position',
-          commit: state.commit,
-        }),
-      );
-    }
-    if (prepared && state.messages.length > 0) {
-      const refusal = unprepared(run, state.messages);
-      if (refusal !== null) return yield* refusal;
-    }
-    return state;
-  });
+): Effect.fn.Return<RunState | null, RunHistoryRefused> {
+  if (Result.isFailure(applied))
+    return yield* inconsistent(run, applied.failure);
+  const state = applied.success;
+  // A run's input changes no state; a request before its opening leaves
+  // an unopened state (`phase` null).
+  if (state === null) return null;
+  if (state.phase === null && !state.hasHistoryRows) return state;
+  if (state.phase === null) {
+    return yield* inconsistent(
+      run,
+      new RunHistoryInconsistent({
+        reason: 'out-of-order',
+        detail: 'run history rows without an opening run.position',
+        commit: state.commit,
+      }),
+    );
+  }
+  if (prepared && state.messages.length > 0) {
+    const refusal = unprepared(run, state.messages);
+    if (refusal !== null) return yield* refusal;
+  }
+  return state;
+});
 
 /** A batch this module refuses to commit: its caller's defect. */
 const broken = (detail: string) =>

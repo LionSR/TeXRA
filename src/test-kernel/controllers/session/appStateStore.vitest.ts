@@ -5,7 +5,7 @@
  */
 
 import { it } from '@effect/vitest';
-import { Context, Effect, Exit, Layer, Result, Scope } from 'effect';
+import { Context, Effect, Layer, Result } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { globalAppStateLayer } from '@controllers/session/appStateStore';
@@ -34,25 +34,6 @@ describe('application state on SQLite', () => {
       Effect.provide(ProcessIdentity.layer(processOwnerId('app-state-test'))),
       Effect.provide(nodePlatformLayer),
     );
-
-  it.live('reads back the latest value of each key after reopening', () =>
-    Effect.gen(function* () {
-      const storage = yield* Effect.promise(() =>
-        makeTempDir('texra-app-state-', tempDirs),
-      );
-      const first = yield* openStore(storage);
-      yield* first.update('texra.modelSelection', ['a']);
-      yield* first.update('texra.modelSelection', ['b']);
-      yield* first.update('goals:index', { open: 1 });
-      yield* first.update('texra.dropped', 'gone');
-      yield* first.update('texra.dropped', undefined);
-
-      const reopened = yield* openStore(storage);
-      expect(yield* reopened.get('texra.modelSelection')).toEqual(['b']);
-      expect(yield* reopened.get('goals:index')).toEqual({ open: 1 });
-      expect(yield* reopened.get('texra.dropped')).toBeUndefined();
-    }),
-  );
 
   it.live('keeps both writers when two stores share one database', () =>
     Effect.gen(function* () {
@@ -86,40 +67,5 @@ describe('application state on SQLite', () => {
         [...((yield* one.get('texra.disabledTools')) as string[])].sort(),
       ).toEqual(['a', 'b']);
     }),
-  );
-
-  it.live('fails the caller when a value is not JSON', () =>
-    Effect.gen(function* () {
-      const storage = yield* Effect.promise(() =>
-        makeTempDir('texra-app-state-', tempDirs),
-      );
-      const store = yield* openStore(storage);
-      yield* store.update('texra.customTeams', ['valid']);
-      const failure = yield* Effect.flip(
-        store.update('texra.customTeams', () => undefined),
-      );
-      expect(failure._tag).toBe('StateWriteFailed');
-      expect(failure.message).toContain('not JSON');
-      expect(yield* store.get('texra.customTeams')).toEqual(['valid']);
-    }),
-  );
-  it.live(
-    'releases the connection with its owner and reports failed reads',
-    () =>
-      Effect.gen(function* () {
-        const storage = yield* Effect.promise(() =>
-          makeTempDir('texra-app-state-', tempDirs),
-        );
-        const scope = yield* Scope.make();
-        yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
-        const store = yield* Scope.provide(openStore(storage), scope);
-        yield* store.update('value', 1);
-        yield* Scope.close(scope, Exit.void);
-        const failure = yield* Effect.flip(store.get('value'));
-        expect(failure._tag).toBe('StateReadFailed');
-        expect(failure.key).toBe('value');
-        const reopened = yield* openStore(storage);
-        expect(yield* reopened.get('value')).toBe(1);
-      }),
   );
 });

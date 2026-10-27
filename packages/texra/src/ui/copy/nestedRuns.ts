@@ -52,12 +52,6 @@ export const AGENT_LIST = {
   parentAction: 'parent',
 } as const;
 
-/** Follow-up rejection copy when the focused agent has already finished. */
-export const FOCUSED_AGENT = {
-  selectedNoLongerAccepting:
-    'The selected agent has finished and no longer takes messages.',
-} as const;
-
 /** The task-level actions every host names the same way. */
 export const TASK_ACTIONS = {
   /** The header menu's destructive item and the desktop rail's ×. */

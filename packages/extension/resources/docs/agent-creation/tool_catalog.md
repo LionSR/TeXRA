@@ -1,8 +1,6 @@
 # Tool Catalog for Agents
 
-Every tool an agent can declare in `tools`, organised by group. When designing a
-new agent, pick the smallest set of tools that covers its purpose — the
-recommended groups at the bottom are a good starting point.
+Grant only the tools the agent needs; start from the recommended groups below.
 
 ## File operations
 
@@ -168,12 +166,8 @@ lean_file, lean_project, lean_inspect, lean_loogle`
 **Minimal chat agent:**
 `bash, read_file, write_file, glob, grep`
 
-## System prompt best practices
+## System prompt conventions
 
-- Start with a clear role: "You are a [role]. Your task is to [objective]."
-- Give tool usage guidance tailored to the agent's purpose.
-- Structure complex workflows as numbered steps.
-- Mention tool limitations (e.g. bash cwd is the workspace).
-- For agents with many tools, organise guidance by phase (discovery →
-  analysis → output).
-- Keep prompts focused — describe only what this specific agent needs.
+- Tool-use agents receive no pre-loaded file variables (`{{ INPUT_CONTENT }}`, etc.); instruct them to discover and read files with `glob`, `grep`, and `read_file`.
+- Mention tool constraints where relevant (for example, `bash` runs in the workspace root).
+- For agents with many tools, organize instructions by phase (discovery → analysis → output).

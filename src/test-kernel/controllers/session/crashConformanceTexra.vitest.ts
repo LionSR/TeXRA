@@ -6,4 +6,4 @@ import '@test/support/sessionGraphTestSetup';
 
 import { crashConformanceSuite } from '@test/support/crashConformance';
 
-crashConformanceSuite('TeXRA plugins');
+crashConformanceSuite();

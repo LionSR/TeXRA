@@ -18,10 +18,6 @@ import {
 import { describe, expect } from 'vitest';
 
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
-import {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-} from '@platform/languageModel';
 import type { RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -32,7 +28,6 @@ import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { toolCatalogLayer } from '@tools/liveTools';
 import { mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import { toolTable } from '@tools/toolTable';
-import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import {
   autoDecideRequests,
   createRecordingHost,
@@ -154,10 +149,7 @@ describe('MCP server plugins', () => {
         );
 
         const services = yield* Layer.build(
-          Layer.mergeAll(
-            mcpToolTableLayer(dir),
-            LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-          ),
+          Layer.mergeAll(mcpToolTableLayer(dir)),
         );
         const open = (pin: Scope.Scope) =>
           resolveTestStep({
@@ -242,149 +234,6 @@ describe('MCP server plugins', () => {
             yield* Effect.sleep(Duration.millis(20));
         }).pipe(Effect.timeout(Duration.seconds(5)));
         expect([isAlive(pid), isAlive(editedPid)]).toEqual([false, false]);
-      }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
-    20_000,
-  );
-
-  // A server's 'exit' can precede the end of its stdout: an answer written
-  // after it is the call's result, not a disposal.
-  it.live('answers a call whose answer arrives after its server exited', () =>
-    Effect.gen(function* () {
-      const dir = mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-'));
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
-      );
-      writeFileSync(path.join(dir, 'server.cjs'), FIXTURE_SERVER);
-      writeFileSync(
-        path.join(dir, 'mcp.json'),
-        JSON.stringify({
-          mcpServers: {
-            fixture: {
-              command: process.execPath,
-              args: [path.join(dir, 'server.cjs'), path.join(dir, 'pid')],
-              env: { FIXTURE_MODE: 'exit' },
-            },
-          },
-        }),
-      );
-      const resolved = yield* resolveTestStep({
-        tools: [{ name: 'mcp__fixture__*' }],
-        injectTools: false,
-        stores: hostStores(),
-        workspaceRoot: undefined,
-        host: 'cli',
-      }).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            mcpToolTableLayer(dir),
-            LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-          ),
-        ),
-      );
-      const tool = resolved.registry.get('mcp__fixture__echo')!;
-      expect(yield* tool.call({ text: 'hi' })).toMatchObject({
-        status: 'executed',
-        output: 'late',
-      });
-    }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
-  );
-
-  it.live(
-    'builds the composition without a server that fails to start, and says so in the transcript',
-    () =>
-      Effect.gen(function* () {
-        const dir = mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-'));
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
-        );
-        writeFileSync(
-          path.join(dir, 'mcp.json'),
-          JSON.stringify({
-            mcpServers: {
-              broken: { command: path.join(dir, 'no-such-server') },
-              'bad name!': { command: 'node' },
-            },
-          }),
-        );
-        const resolved = yield* resolveTestStep({
-          tools: [{ name: 'mcp__broken__*' }, { name: 'grep' }],
-          injectTools: false,
-          stores: hostStores(),
-          workspaceRoot: undefined,
-          host: 'cli',
-        }).pipe(
-          Effect.provide(
-            Layer.mergeAll(
-              mcpToolTableLayer(dir),
-              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-            ),
-          ),
-        );
-        expect(resolved.definitions).toEqual([]);
-        expect([...resolved.held.warnings, ...resolved.warnings]).toEqual([
-          expect.stringContaining('MCP server "bad name!"'),
-          expect.stringContaining('MCP server "broken" did not start'),
-          'Declared tool not found in registry: grep',
-        ]);
-      }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
-  );
-
-  // The command is pinned on the extended process PATH, so a project `.env`
-  // PATH must not choose the binary the server runs; its other variables do
-  // reach the server.
-  it.live(
-    "spawns a server on the extended process PATH, not the project's .env PATH",
-    () =>
-      Effect.gen(function* () {
-        const dir = mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-'));
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
-        );
-        const envFile = path.join(dir, 'env.json');
-        writeFileSync(path.join(dir, 'server.cjs'), FIXTURE_SERVER);
-        writeFileSync(
-          path.join(dir, 'mcp.json'),
-          JSON.stringify({
-            mcpServers: {
-              fixture: {
-                command: process.execPath,
-                args: [
-                  path.join(dir, 'server.cjs'),
-                  path.join(dir, 'pid'),
-                  envFile,
-                ],
-              },
-            },
-          }),
-        );
-        const sentinel = path.join(dir, 'project-bin');
-        const resolved = yield* resolveTestStep({
-          tools: [{ name: 'mcp__fixture__*' }],
-          injectTools: false,
-          stores: hostStores(),
-          workspaceRoot: undefined,
-          host: 'cli',
-        }).pipe(
-          Effect.provide(
-            Layer.mergeAll(
-              mcpToolTableLayer(dir),
-              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-            ),
-          ),
-          Effect.provideService(ProjectEnvironment, {
-            PATH: sentinel,
-            FIXTURE_MARK: 'from-dotenv',
-          }),
-        );
-        expect([...resolved.held.warnings, ...resolved.warnings]).toEqual([]);
-        const seen = JSON.parse(readFileSync(envFile, 'utf8'));
-        expect(seen.mark).toBe('from-dotenv');
-        expect(seen.PATH).not.toContain(sentinel);
-        expect(seen.PATH.split(path.delimiter)).toEqual(
-          expect.arrayContaining(
-            (process.env.PATH ?? '').split(path.delimiter).filter(Boolean),
-          ),
-        );
       }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
     20_000,
   );

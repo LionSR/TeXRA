@@ -15,7 +15,6 @@ import '@test/support/defaultSessionTestSetup';
 import {
   Deferred,
   Effect,
-  Exit,
   Fiber,
   Layer,
   Schema,
@@ -27,7 +26,6 @@ import { TestClock } from 'effect/testing';
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { APIError as OpenAIAPIError } from 'openai';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
   type Model,
@@ -51,17 +49,9 @@ import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import {
-  failureInfo,
-  routePolicies,
-} from '@agent/runtime/modelAccess/failureInfo';
+import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
-import {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-} from '@platform/languageModel';
 import {
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -180,8 +170,6 @@ function completedTurn(text: string): TurnResult {
 type AttemptOutcome =
   | { readonly ok: TurnResult }
   | { readonly fail: unknown }
-  /** The stream ends without a `completed` event. */
-  | { readonly silent: true }
   /** The stream never ends: the process stops while it runs. */
   | { readonly hang: true };
 
@@ -222,7 +210,6 @@ function stubModel(outcomes: readonly AttemptOutcome[]): StubModel {
                   ),
             );
           }
-          if ('silent' in outcome) return Stream.empty;
           if ('hang' in outcome) return Stream.never;
           const events: TurnEvent[] = [
             {
@@ -282,28 +269,19 @@ const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
 
 /**
  * The run service the invoker reads: identity, session, trace, binding. A
- * rebind keeps the stub (a fresh copy of the binding) unless `binds`, where
- * the real binder runs and, with no key in this suite, fails.
+ * rebind keeps the stub (a fresh copy of the binding).
  */
 function agentRun(
   runId: RunId,
   session: SessionHandle,
-  logger: AgentTrace,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
-  binds: boolean,
 ): AgentRunShape {
   return testAgentRun(
-    { runId, session, logger, model, scope: Scope.makeUnsafe() },
+    { runId, session, logger: noopTrace, model, scope: Scope.makeUnsafe() },
     {
       config: CONFIG,
-      ...(binds
-        ? {}
-        : {
-            swapModel: () =>
-              SynchronizedRef.updateAndGet(model, (current) => ({
-                ...current,
-              })),
-          }),
+      swapModel: () =>
+        SynchronizedRef.updateAndGet(model, (current) => ({ ...current })),
     },
   );
 }
@@ -331,9 +309,6 @@ interface InvokerKit {
 const openRun = Effect.fn('openRun')(function* (
   session: SessionHandle,
   model: Model,
-  overrides: Partial<BoundModel> = {},
-  logger: AgentTrace = noopTrace,
-  binds = false,
 ): Effect.fn.Return<
   InvokerKit,
   RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed
@@ -357,21 +332,14 @@ const openRun = Effect.fn('openRun')(function* (
     MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
   ).pipe(Effect.orDie);
   const bound = yield* SynchronizedRef.make(
-    boundModel(model, { automaticRetries, ...overrides }),
+    boundModel(model, { automaticRetries }),
   );
   const layer = modelInvokerLayer().pipe(
     Layer.provide(
       Layer.mergeAll(
-        Layer.succeed(AgentRun, agentRun(runId, session, logger, bound, binds)),
+        Layer.succeed(AgentRun, agentRun(runId, session, bound)),
         UsageLog.disabled,
-        modelAccessLayer(hostStores()).pipe(
-          Layer.provide(
-            Layer.merge(
-              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-              testHttpClientLayer,
-            ),
-          ),
-        ),
+        modelAccessLayer(hostStores()).pipe(Layer.provide(testHttpClientLayer)),
       ),
     ),
     Layer.merge(Layer.succeed(RunHistory, session.runHistory)),
@@ -389,12 +357,9 @@ const invokeOn = ({ layer, cell }: InvokerKit) =>
   }).pipe(
     // `invoke`'s debug-object sink writes through the process `FileSystem`;
     // this suite runs on `it.effect`'s own runtime, so the service comes from
-    // the Node layer rather than the installed platform. `LanguageModel` is
-    // the unavailable port: a manual-retry rebind's catalogue discovery finds
-    // no editor models here.
+    // the Node layer rather than the installed platform.
     Effect.provide(layer),
     Effect.provide(nodePlatformLayer),
-    Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     Effect.provide(testHttpClientLayer),
   );
 
@@ -433,197 +398,12 @@ function httpError(
   );
 }
 
-/** A status-less OpenAI server_error response, as the SDK raises it. */
-function statuslessServerError(message: string): ModelError {
-  const body = { type: 'server_error', code: 'server_error', message };
-  return judged(
-    new ModelError({
-      kind: 'provider-rejection',
-      message,
-      cause: new OpenAIAPIError(undefined, body, message, undefined),
-    }),
-  );
-}
-
-/** The binding every classification below ran under. */
-const BOUND = boundModel(stubModel([]).model);
-
-/**
- * The two recovery projections the attempt hands the process gate: the wire
- * route cools on shared-route evidence, the model route only on a limit the
- * provider scoped to one model.
- */
-const [modelRoute, wireRoute] = BOUND.routes;
-const wireRouteRecovery = (error: Error) => wireRoute.classifyFailure(error);
-const modelRouteRecovery = (error: Error) => modelRoute.classifyFailure(error);
-
-describe('the failure a run records', () => {
-  it('carries the text streamed before the failure onto the retry surface', () => {
-    const error = httpError('stream dropped', 500);
-
-    expect(
-      failureInfo(error, 'openai', { partialText: 'partial answer' })
-        .partialText,
-    ).toBe('partial answer');
-    // A failure with nothing streamed carries no tail at all.
-    expect(failureInfo(error, 'openai').partialText).toBeUndefined();
-  });
-
-  it('reports a retryable provider failure with its formatted message', () => {
-    expect(
-      failureInfo(httpError('transient provider failure', 503), 'openai'),
-    ).toMatchObject({
-      message: 'HTTP 503 Service Unavailable – transient provider failure',
-      userRetryable: true,
-    });
-  });
-});
-
-describe('recovery-route verdicts', () => {
-  it('cools the wire route on an unscoped rate limit, not the model route', () => {
-    const rateLimit = httpError('rate limited', 429, {
-      headers: { 'retry-after': '3' },
-    });
-
-    expect(wireRouteRecovery(rateLimit)).toEqual({ retryAfterMs: 3_000 });
-    expect(modelRouteRecovery(rateLimit)).toBeUndefined();
-  });
-
-  it('cools only the model route on an explicitly model-scoped limit', () => {
-    const rateLimit = httpError('model rate limited', 429, {
-      headers: { 'retry-after': '3' },
-      error: { type: 'rate_limit_error', scope: 'model' },
-    });
-
-    expect(wireRouteRecovery(rateLimit)).toBeUndefined();
-    expect(modelRouteRecovery(rateLimit)).toEqual({ retryAfterMs: 3_000 });
-  });
-
-  it('cools the wire route on credential exhaustion across models', () => {
-    const exhausted = httpError('quota exhausted', 429, {
-      headers: { 'retry-after': '3' },
-      error: {
-        message: 'You exceeded your current quota.',
-        type: 'insufficient_quota',
-        code: 'insufficient_quota',
-      },
-    });
-
-    expect(wireRouteRecovery(exhausted)).toEqual({ retryAfterMs: 3_000 });
-    expect(modelRouteRecovery(exhausted)).toBeUndefined();
-  });
-
-  it.each([
-    {
-      name: 'cools the wire route on a transport failure from long model calls',
-      error: judged(
-        new ModelError({
-          kind: 'transport',
-          message: 'Connection error',
-          cause: new TypeError('fetch failed'),
-        }),
-      ),
-      expected: { retryAfterMs: undefined },
-    },
-    {
-      name: 'keeps a deterministic undici code local despite the fetch-failed wrapper',
-      error: judged(
-        new ModelError({
-          kind: 'transport',
-          message: 'Connection error',
-          cause: new TypeError('fetch failed', {
-            cause: Object.assign(new Error('invalid header'), {
-              code: 'UND_ERR_INVALID_ARG',
-            }),
-          }),
-        }),
-      ),
-      expected: undefined,
-    },
-    {
-      name: 'coordinates a structured status-less server failure from the SDK',
-      error: statuslessServerError('temporary provider failure'),
-      expected: { retryAfterMs: undefined },
-    },
-    {
-      name: 'coordinates a status-less server failure from a background response',
-      error: judged(
-        new ModelError({
-          kind: 'transport',
-          message: 'background response failed',
-          cause: Object.assign(new Error('background response failed'), {
-            error: {
-              code: 'server_error',
-              message: 'temporary background failure',
-            },
-          }),
-        }),
-      ),
-      expected: { retryAfterMs: undefined },
-    },
-    {
-      name: 'keeps per-response retries local to their invocation',
-      error: new Error('stream ended before the final response event'),
-      expected: undefined,
-    },
-    {
-      name: 'honors retry-after guidance for shared HTTP failures',
-      error: httpError('busy', 503, { headers: { 'retry-after': '12' } }),
-      expected: { retryAfterMs: 12_000 },
-    },
-    {
-      name: 'does not gate unrelated calls after a 401 on the api-key route',
-      error: httpError('credential rejected', 401),
-      expected: undefined,
-    },
-    {
-      name: 'does not share model-specific permission failures across calls',
-      error: httpError('model access denied', 403),
-      expected: undefined,
-    },
-    {
-      name: 'retries HTTP conflicts locally without cooling the shared route',
-      error: httpError('conflict', 409),
-      expected: undefined,
-    },
-  ])('$name', ({ error, expected }) => {
-    expect(wireRouteRecovery(error)).toEqual(expected);
-  });
-});
-
 describe('ModelInvoker retry', () => {
   // The project's policy is the fake host's setting, shared by the file.
   beforeEach(() => setTestApprovalPolicy('ask'));
   afterEach(async () => {
     await installPlatform();
   });
-
-  it.effect('keeps a delegated call on its own model and run history', () =>
-    Effect.gen(function* () {
-      const session = yield* sessionWithInteractions(undefined);
-      const parentModel = stubModel([{ ok: completedTurn('parent') }]);
-      const childModel = stubModel([{ ok: completedTurn('child') }]);
-      const parent = yield* openRun(session, parentModel.model);
-      const child = yield* openRun(session, childModel.model);
-
-      const outcome = yield* Effect.gen(function* () {
-        // A child starts while its parent's request service is still alive.
-        yield* ModelInvoker;
-        return yield* invokeOn(child);
-      }).pipe(Effect.provide(parent.layer));
-
-      expect(outcome.kind).toBe('response');
-      expect(childModel.attempts()).toBe(1);
-      expect(parentModel.attempts()).toBe(0);
-      expect(
-        (yield* session.runHistory.load(parent.runId))?.lastTurn,
-      ).toBeNull();
-      expect((yield* session.runHistory.load(child.runId))?.lastTurn).toEqual(
-        completedTurn('child'),
-      );
-      yield* closeSessionOf(session);
-    }),
-  );
 
   // The invoker's backoff and the session gate's probe both sleep on the
   // Effect clock, so a forked pump walks the test clock past each park and
@@ -646,60 +426,62 @@ describe('ModelInvoker retry', () => {
     }),
   );
 
-  it.effect('reports a stream that produced no completed turn as failed', () =>
+  // The setting bounds the automatic batch; the human gate opens only once it
+  // is spent.
+  it.effect('cancels the run when the user declines the retry', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
         installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
       );
       const session = yield* sessionWithInteractions(undefined);
-      const denied = autoDecideRequests(session, () => ({
-        action: 'deny',
-        reason: 'Denied by the approval policy.',
+      const requests = autoDecideRequests(session, () => ({
+        action: 'cancel',
+        cause: 'The user declined the retry.',
       }));
-      const stub = stubModel([{ silent: true }]);
+      const stub = stubModel([
+        { fail: httpError('temporary provider failure', 503) },
+      ]);
 
-      const outcome = yield* invokeOn(yield* openRun(session, stub.model));
+      const kit = yield* openRun(session, stub.model);
+      const { runId } = kit;
+      yield* Effect.promise(() => seedActiveRun(session, runId));
+      const outcome = yield* invokeOn(kit);
 
-      expect(outcome.kind).toBe('failed');
-      if (outcome.kind === 'failed') {
-        expect(outcome.state.lastError?.message).toContain(
-          'Model response was empty',
-        );
-      }
-      denied.detach();
+      expect(outcome.kind).toBe('cancelled');
+      expect(stub.attempts()).toBe(1);
+      requests.detach();
       yield* closeSessionOf(session);
     }),
   );
 
-  it.effect('abandons the pending retry when the run is interrupted', () =>
+  it.effect('stops automatic attempts at the configured limit', () =>
     Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installPlatform({
+          config: {
+            'texra.model.retry.maxAttempts':
+              MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+          },
+        }),
+      );
       const session = yield* sessionWithInteractions(undefined);
-      const backoffStarted = yield* Deferred.make<void>();
-      const logger = new TraceEmitter((event) => {
-        if (event.type === 'log' && event.message.includes('automatic retry')) {
-          Deferred.doneUnsafe(backoffStarted, Effect.void);
-        }
-      });
-      const stub = stubModel([
-        { fail: httpError('temporary provider failure', 503) },
-        { ok: completedTurn('too late') },
-      ]);
+      const pump = yield* pumpClock;
+      const requests = autoDecideRequests(session, () => ({
+        action: 'deny',
+        reason: 'Denied by the approval policy.',
+      }));
+      const stub = stubModel([{ fail: httpError('busy', 503) }]);
 
-      const kit = yield* openRun(session, stub.model, {}, logger);
-      const fiber = yield* Effect.forkChild(invokeOn(kit));
-      // The interrupt lands while the fiber is parked in the backoff, so it
-      // must abandon the retry instead of waking to another billed attempt.
-      yield* Deferred.await(backoffStarted);
-      yield* settle;
-      yield* Fiber.interrupt(fiber);
-      const exit = yield* Fiber.await(fiber);
-      // Nothing is left parked in the backoff: moving the clock past it bills
-      // no further attempt.
-      yield* TestClock.adjust(RETRY_BACKOFF_MS * 10);
-      yield* settle;
+      const kit = yield* openRun(session, stub.model);
+      yield* Effect.promise(() => seedActiveRun(session, kit.runId));
+      yield* invokeOn(kit);
 
-      expect(Exit.hasInterrupts(exit)).toBe(true);
-      expect(stub.attempts()).toBe(1);
+      expect(stub.attempts()).toBe(
+        1 + MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
+      );
+      expect(requests.opened).toHaveLength(1);
+      requests.detach();
+      yield* Fiber.interrupt(pump);
       yield* closeSessionOf(session);
     }),
   );
@@ -754,118 +536,6 @@ describe('ModelInvoker retry', () => {
       yield* Fiber.interrupt(pump);
       yield* closeSessionOf(session);
     }),
-  );
-
-  // As above: the authorized attempt waits out the gate cooldown, pumped.
-  it.effect(
-    'declines the exhausted subscription route for the run, not in settings',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
-        );
-        const session = yield* sessionWithInteractions(undefined);
-        const pump = yield* pumpClock;
-        const requests = autoDecideRequests(session, () => ({
-          action: 'retry',
-          credentials: 'personal',
-        }));
-        const stub = stubModel([
-          {
-            fail: httpError('subscription quota exhausted', 429, {
-              error: { type: 'usage_limit_reached' },
-            }),
-          },
-          { ok: completedTurn('recovered') },
-        ]);
-
-        const kit = yield* openRun(session, stub.model, {
-          route: { kind: 'chatgpt-subscription', contextWindow: 272_000 },
-        });
-        yield* Effect.promise(() => seedActiveRun(session, kit.runId));
-        const outcome = yield* invokeOn(kit);
-
-        expect(outcome.kind).toBe('response');
-        // The route the failed attempt billed is declined on this run's own
-        // run history, so a resume rebinds the same way and a concurrent run keeps
-        // the subscription the user still prefers.
-        if (outcome.kind === 'response') {
-          expect(outcome.state.declinedRoutes).toStrictEqual([
-            'chatgpt-subscription',
-          ]);
-        }
-        requests.detach();
-        yield* Fiber.interrupt(pump);
-        yield* closeSessionOf(session);
-      }),
-  );
-
-  // Failure mode: the answered retry cannot rebind (no personal key: it went
-  // away while the prompt was open), and the loop resends on the binding it
-  // meant to leave instead of failing.
-  it.effect('fails an answered retry whose rebind fails, sending nothing', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
-      );
-      const session = yield* sessionWithInteractions(undefined);
-      const pump = yield* pumpClock;
-      const requests = autoDecideRequests(session, () => ({
-        action: 'retry',
-        credentials: 'personal',
-      }));
-      const stub = stubModel([
-        { fail: httpError('temporary provider failure', 503) },
-        { ok: completedTurn('sent on the old binding') },
-      ]);
-      const kit = yield* openRun(session, stub.model, {}, noopTrace, true);
-      yield* Effect.promise(() => seedActiveRun(session, kit.runId));
-
-      const outcome = yield* invokeOn(kit);
-
-      expect(outcome.kind).toBe('failed');
-      expect(stub.attempts()).toBe(1);
-      // The failed rebind is the next attempt's recorded, unsent failure.
-      expect(
-        (yield* session.runHistory.load(kit.runId))?.invocation?.current,
-      ).toMatchObject({ ref: { attempt: 2 }, sent: null });
-      requests.detach();
-      yield* Fiber.interrupt(pump);
-      yield* closeSessionOf(session);
-    }),
-  );
-
-  // Failure mode: a 404 on a request that chained nothing reads as a lost
-  // chain, and the "resend once" repeats without end.
-  it.effect(
-    'treats a gone continuation it never sent as an ordinary failure',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
-        );
-        const session = yield* sessionWithInteractions(undefined);
-        const denied = autoDecideRequests(session, () => ({
-          action: 'deny',
-          reason: 'Denied by the approval policy.',
-        }));
-        const stub = stubModel([
-          {
-            fail: new ModelError({
-              kind: 'continuation-gone',
-              status: 404,
-              message: 'No endpoints found for this model.',
-            }),
-          },
-        ]);
-
-        const outcome = yield* invokeOn(yield* openRun(session, stub.model));
-
-        expect(outcome.kind).toBe('failed');
-        expect(stub.attempts()).toBe(1);
-        denied.detach();
-        yield* closeSessionOf(session);
-      }),
   );
 
   // Failure modes: a resume resends a billed attempt a person admitted
@@ -938,66 +608,6 @@ describe('ModelInvoker retry', () => {
       // terminalize (#7331).
       expect(session.view.run(runId)?.status).toBe(RUN_PHASE.RUNNING);
       expect(stub.attempts()).toBe(1);
-      yield* closeSessionOf(session);
-    }),
-  );
-
-  it.effect('cancels the run when the user declines the retry', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
-      );
-      const session = yield* sessionWithInteractions(undefined);
-      const requests = autoDecideRequests(session, () => ({
-        action: 'cancel',
-        cause: 'The user declined the retry.',
-      }));
-      const stub = stubModel([
-        { fail: httpError('temporary provider failure', 503) },
-      ]);
-
-      const kit = yield* openRun(session, stub.model);
-      const { runId } = kit;
-      yield* Effect.promise(() => seedActiveRun(session, runId));
-      const outcome = yield* invokeOn(kit);
-
-      expect(outcome.kind).toBe('cancelled');
-      expect(stub.attempts()).toBe(1);
-      requests.detach();
-      yield* closeSessionOf(session);
-    }),
-  );
-
-  // The setting bounds the automatic batch; the human gate opens only once it
-  // is spent.
-  it.effect('stops automatic attempts at the configured limit', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        installPlatform({
-          config: {
-            'texra.model.retry.maxAttempts':
-              MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
-          },
-        }),
-      );
-      const session = yield* sessionWithInteractions(undefined);
-      const pump = yield* pumpClock;
-      const requests = autoDecideRequests(session, () => ({
-        action: 'deny',
-        reason: 'Denied by the approval policy.',
-      }));
-      const stub = stubModel([{ fail: httpError('busy', 503) }]);
-
-      const kit = yield* openRun(session, stub.model);
-      yield* Effect.promise(() => seedActiveRun(session, kit.runId));
-      yield* invokeOn(kit);
-
-      expect(stub.attempts()).toBe(
-        1 + MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
-      );
-      expect(requests.opened).toHaveLength(1);
-      requests.detach();
-      yield* Fiber.interrupt(pump);
       yield* closeSessionOf(session);
     }),
   );

@@ -52,7 +52,7 @@ export const listRunWorkspaceFiles = Effect.fn('storage.listRunWorkspaceFiles')(
       // is not a directory any more — is simply not listed; every other failure
       // propagates, so an unreadable entry is never reported as a missing one.
       const entry = yield* entryMetadataAt(resolved.absolutePath).pipe(
-        Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+        Effect.catchIf(absentReason, () => Effect.void),
       );
       if (entry === undefined) continue;
 

@@ -98,23 +98,29 @@ export function prepareServiceDirectories(
 function ownDirectory(
   directory: string,
 ): Effect.Effect<void, PlatformError.PlatformError> {
+  const failure = (description: string, cause?: unknown) =>
+    PlatformError.badArgument({
+      module: 'TexraService',
+      method: 'prepareServiceDirectories',
+      description,
+      cause,
+    });
   return Effect.try({
-    try: () => {
-      const stat = lstatSync(directory);
-      const uid = process.getuid?.();
-      if (!stat.isDirectory() || (uid !== undefined && stat.uid !== uid))
-        throw new Error(
+    try: () => lstatSync(directory),
+    catch: (cause) => failure(toErrorMessage(cause), cause),
+  }).pipe(
+    Effect.filterOrFail(
+      (stat) => {
+        const uid = process.getuid?.();
+        return stat.isDirectory() && (uid === undefined || stat.uid === uid);
+      },
+      () =>
+        failure(
           `${directory} is not a directory this user owns; remove it and start the service again`,
-        );
-    },
-    catch: (cause) =>
-      PlatformError.badArgument({
-        module: 'TexraService',
-        method: 'prepareServiceDirectories',
-        description: toErrorMessage(cause),
-        cause,
-      }),
-  });
+        ),
+    ),
+    Effect.asVoid,
+  );
 }
 
 /** The family's one key: a storage root has one service. */

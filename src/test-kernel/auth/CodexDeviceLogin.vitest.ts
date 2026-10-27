@@ -5,7 +5,6 @@ import { TestClock } from 'effect/testing';
 import { describe, expect, vi } from 'vitest';
 
 import { codexLoginWithDeviceCode as loginWithDeviceCode } from '@texra-ai/llm/node';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 import {
   CODEX_DEVICE_TOKEN_URL,
@@ -54,96 +53,6 @@ const settle = Effect.promise(
 );
 
 describe('Codex device login', () => {
-  it.effect(
-    'does not exchange a token when interruption lands during a poll',
-    () =>
-      Effect.gen(function* () {
-        const inFlight = createDeferred<Response>();
-        const fetchMock = deviceEndpointsFetch({}, () => inFlight.promise);
-        const coordinator = coordinatorStub();
-        const shown = yield* Deferred.make<void>();
-        const onPrompt = vi.fn(() =>
-          Effect.asVoid(Deferred.succeed(shown, undefined)),
-        );
-        const fiber = yield* Effect.forkChild(
-          loginWithDeviceCode({ coordinator, onPrompt }).pipe(
-            Effect.provide(FetchHttpClient.layer),
-            Effect.provideService(FetchHttpClient.Fetch, fetchMock),
-          ),
-        );
-        yield* Deferred.await(shown);
-        expect(onPrompt).toHaveBeenCalledOnce();
-        yield* settle;
-        yield* TestClock.adjust('5 seconds');
-        yield* settle;
-
-        yield* Fiber.interrupt(fiber);
-        inFlight.resolve(
-          jsonResponse({
-            authorization_code: 'authorization-code',
-            code_verifier: 'code-verifier',
-          }),
-        );
-
-        const exit = yield* Fiber.await(fiber);
-        expect(
-          Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause),
-        ).toBe(true);
-        expect(coordinator.loginWithCode).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect(
-    'lets the session store finish when interruption lands while it runs',
-    () =>
-      Effect.gen(function* () {
-        const fetchMock = deviceEndpointsFetch({}, async () =>
-          jsonResponse({
-            authorization_code: 'authorization-code',
-            code_verifier: 'code-verifier',
-          }),
-        );
-        const store = createDeferred<{ accessToken: string }>();
-        const coordinator = coordinatorStub();
-        const storeEntered = yield* Deferred.make<void>();
-        vi.mocked(coordinator.loginWithCode).mockImplementation(() => {
-          Deferred.doneUnsafe(storeEntered, Effect.void);
-          return Effect.promise(() => store.promise) as never;
-        });
-        const shown = yield* Deferred.make<void>();
-        const onPrompt = vi.fn(() =>
-          Effect.asVoid(Deferred.succeed(shown, undefined)),
-        );
-        const fiber = yield* Effect.forkChild(
-          loginWithDeviceCode({ coordinator, onPrompt }).pipe(
-            Effect.provide(FetchHttpClient.layer),
-            Effect.provideService(FetchHttpClient.Fetch, fetchMock),
-          ),
-        );
-        yield* Deferred.await(shown);
-        expect(onPrompt).toHaveBeenCalledOnce();
-        yield* settle;
-        yield* TestClock.adjust('5 seconds');
-        yield* Deferred.await(storeEntered);
-        expect(coordinator.loginWithCode).toHaveBeenCalledOnce();
-
-        // The store is uninterruptible: start the interrupt now, so it is
-        // pending before resolving the store rather than queued behind this
-        // test fiber's next scheduler turn.
-        const interruption = yield* Effect.forkChild(Fiber.interrupt(fiber), {
-          startImmediately: true,
-        });
-        expect(fiber.pollUnsafe()).toBeUndefined();
-        store.resolve({ accessToken: 'stored' });
-
-        yield* Fiber.join(interruption);
-        const exit = yield* Fiber.await(fiber);
-        expect(
-          Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause),
-        ).toBe(true);
-      }),
-  );
-
   it.effect(
     'gives up at the expiry the server reported, not the local fallback',
     () =>

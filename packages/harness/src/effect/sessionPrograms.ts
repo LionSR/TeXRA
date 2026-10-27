@@ -179,7 +179,6 @@ function start(
             tools: input.tools,
             continues: input.continues,
             preferHelperModel: input.helperModel,
-            ownApiKeyFallback: input.ownKeyFallback,
             approveDelegatedWork: input.approval?.delegated,
             approvalPolicy: input.approval?.policy,
           },

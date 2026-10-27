@@ -388,52 +388,48 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       // committed outcome (`resolveWorkflowOutput` copies only a completed
       // run's): output that cannot be written fails this command, never the
       // recorded run. Inside the finalization a shutdown waits for.
-      afterRun: (ended) =>
-        Effect.gen(function* () {
-          if (ended.error) return;
-          // The defaults the run executed, as its recorded configuration
-          // states them (the launch resolves an empty output list to the
-          // agent's declared ones); the input-derived
-          // `cli.expectedOutputFiles` stand in when the agent declares none.
-          // A configuration that does not read leaves the copy undone: that
-          // fails the command when a completed run's copy was asked for, and
-          // only warns otherwise.
-          const recorded = yield* Effect.result(
-            session.records(ended.runId).readConfig(),
-          );
-          if (Result.isFailure(recorded)) {
-            const message = `The output of task ${ended.runId} was not copied: its recorded configuration could not be read: ${toErrorMessage(recorded.failure)}`;
-            if (
-              (output || outputDir) &&
-              ended.outcome === RUN_OUTCOME.COMPLETED
-            )
-              workflowOutputError = new Error(message, {
-                cause: recorded.failure,
-              });
-            else writeTextStderr(`[warn] ${message}`);
-          }
-          const copied = Result.isSuccess(recorded);
-          const declaredOutputFiles = copied
-            ? (recorded.success?.outputFiles ?? []).filter(Boolean)
-            : [];
-          const expectedOutputFiles = declaredOutputFiles.length
-            ? declaredOutputFiles
-            : (config.cli?.expectedOutputFiles ?? undefined);
-          const outputResult = yield* Effect.result(
-            resolveWorkflowOutput(
-              copied ? output : undefined,
-              copied ? outputDir : undefined,
-              ended,
-              runContext,
-              { expectedOutputFiles, storageRoot: session.roots.storage },
-            ).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem)),
-          );
-          if (Result.isFailure(outputResult)) {
-            workflowOutputError ??= outputResult.failure;
-          } else {
-            workflowResult = outputResult.success;
-          }
-        }),
+      afterRun: Effect.fn('workflow.afterRun')(function* (ended) {
+        if (ended.error) return;
+        // The defaults the run executed, as its recorded configuration
+        // states them (the launch resolves an empty output list to the
+        // agent's declared ones); the input-derived
+        // `cli.expectedOutputFiles` stand in when the agent declares none.
+        // A configuration that does not read leaves the copy undone: that
+        // fails the command when a completed run's copy was asked for, and
+        // only warns otherwise.
+        const recorded = yield* Effect.result(
+          session.records(ended.runId).readConfig(),
+        );
+        if (Result.isFailure(recorded)) {
+          const message = `The output of task ${ended.runId} was not copied: its recorded configuration could not be read: ${toErrorMessage(recorded.failure)}`;
+          if ((output || outputDir) && ended.outcome === RUN_OUTCOME.COMPLETED)
+            workflowOutputError = new Error(message, {
+              cause: recorded.failure,
+            });
+          else writeTextStderr(`[warn] ${message}`);
+        }
+        const copied = Result.isSuccess(recorded);
+        const declaredOutputFiles = copied
+          ? (recorded.success?.outputFiles ?? []).filter(Boolean)
+          : [];
+        const expectedOutputFiles = declaredOutputFiles.length
+          ? declaredOutputFiles
+          : (config.cli?.expectedOutputFiles ?? undefined);
+        const outputResult = yield* Effect.result(
+          resolveWorkflowOutput(
+            copied ? output : undefined,
+            copied ? outputDir : undefined,
+            ended,
+            runContext,
+            { expectedOutputFiles, storageRoot: session.roots.storage },
+          ).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem)),
+        );
+        if (Result.isFailure(outputResult)) {
+          workflowOutputError ??= outputResult.failure;
+        } else {
+          workflowResult = outputResult.success;
+        }
+      }),
     });
     if (!run.ok) return run.exitCode;
 

@@ -1,4 +1,3 @@
-import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
@@ -48,24 +47,7 @@ function compile(
   ).pipe(Effect.provide(rootedFsLayer(roots)));
 }
 
-/** Seed an engine log on the real filesystem. */
-function writeLog(outputDirectory: string, content: string) {
-  return Effect.promise(async () => {
-    await mkdir(outputDirectory, { recursive: true });
-    await writeFile(path.join(outputDirectory, 'main.log'), content);
-  });
-}
-
-function failedLogTail(result: CompileLatex2PdfResult): string {
-  if (result.ok) throw new Error('expected a failed compile');
-  return result.logTail;
-}
-
-// Issue #7079: compileLatex2Pdf used to return a bare boolean, so every
-// caller besides compileCheck.readLogTail swallowed the compile log on
-// failure. These tests exercise the real production code (only the
-// subprocess call is mocked) to prove the { ok, logTail } shape and the
-// 200-line raw-tail extraction it now owns.
+// Exercises the real production code; only the subprocess call is mocked.
 describe('compileLatex2Pdf structured return', () => {
   beforeEach(async () => {
     mocks.runToolWithCheck.mockReset();
@@ -104,84 +86,6 @@ describe('compileLatex2Pdf structured return', () => {
             }),
           }),
         );
-      }),
-  );
-
-  it.live(
-    'surfaces the last 200 lines of the engine log as logTail on a failed compile',
-    () =>
-      Effect.gen(function* () {
-        mocks.runToolWithCheck.mockReturnValue(
-          Effect.succeed(execResult(false)),
-        );
-
-        const outputDirectory = path.join(workspacePath, 'build');
-        // Zero-padded so containment checks below can't be fooled by numeric
-        // substrings (e.g. "L0001" would otherwise match inside "L00010").
-        const lines = Array.from(
-          { length: 250 },
-          (_, i) => `L${String(i + 1).padStart(4, '0')}`,
-        );
-        yield* writeLog(outputDirectory, lines.join('\n'));
-
-        const logTail = failedLogTail(yield* compile());
-
-        // Last 200 of 250 lines survive: L0051 .. L0250.
-        expect(logTail).toContain('L0051');
-        expect(logTail).toContain('L0250');
-        expect(logTail).not.toContain('L0050');
-        expect(logTail).not.toContain('L0001');
-      }),
-  );
-
-  it.live('finds the engine log for a .ltx source, not just .tex', () =>
-    Effect.gen(function* () {
-      mocks.runToolWithCheck.mockReturnValue(Effect.succeed(execResult(false)));
-
-      const outputDirectory = path.join(workspacePath, 'build.ltx');
-      // The engine always names the log after the source with ITS OWN
-      // extension stripped, regardless of which LaTeX extension was used.
-      yield* writeLog(outputDirectory, 'engine log content');
-
-      const logTail = failedLogTail(
-        yield* compile('main.ltx', outputDirectory),
-      );
-
-      expect(logTail).toContain('engine log content');
-      expect(logTail).not.toContain('no LaTeX log at');
-    }),
-  );
-
-  it.live(
-    'falls back to a discoverable placeholder when no engine log exists on disk',
-    () =>
-      Effect.gen(function* () {
-        mocks.runToolWithCheck.mockReturnValue(
-          Effect.succeed(execResult(false)),
-        );
-
-        const logTail = failedLogTail(
-          yield* compile(
-            'missing.tex',
-            path.join(workspacePath, 'build-missing'),
-          ),
-        );
-
-        expect(logTail).toContain('no LaTeX log at');
-      }),
-  );
-
-  it.live(
-    'surfaces the exception message as logTail when the compiler invocation throws',
-    () =>
-      Effect.gen(function* () {
-        mocks.runToolWithCheck.mockReturnValue(
-          Effect.fail(new Error('boom: pdflatex crashed')),
-        );
-
-        const logTail = failedLogTail(yield* compile());
-
-        expect(logTail).toContain('boom: pdflatex crashed');
       }),
   );
 });

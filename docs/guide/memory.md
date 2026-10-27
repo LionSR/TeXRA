@@ -53,13 +53,11 @@ Every note is a Markdown file. Agents see them at `/memories/<name>.md`; on disk
 
 Unpinned notes are searchable context: the agent can read them when it needs to, but they don't take up space in every prompt.
 
-**Pinned notes are different.** They're loaded at the start of every session, so put only the highest-value notes there: conventions, hard-won techniques, recurring pitfalls. You can pin up to **10 notes**; if you hit the limit, unpin a stale note before pinning the next one.
-
-The pinned indicator in Settings is a blue left border plus a `Pinned` badge in the metadata strip.
+**Pinned notes** load at the start of every session, so reserve them for high-value notes: conventions, hard-won techniques, and recurring pitfalls. You can pin up to **10 notes**; if you hit the limit, unpin a stale note before pinning the next one.
 
 <MemoryPinHero />
 
-<p class="hero-caption">Pinned notes carry the blue left border and a <code>Pinned</code> badge and load every session; unpinned notes stay as searchable context the agent reads on demand.</p>
+<p class="hero-caption">Pinned notes carry a blue left border and a <code>Pinned</code> badge in the metadata strip.</p>
 
 ## Managing memories from Settings
 
@@ -75,10 +73,7 @@ The toolbar above the list has **Refresh** and **Open folder**. Open folder reve
 
 <MemoryItemAnatomy />
 
-<p class="hero-caption">One expanded note, part by part: the <code>/memories/...</code> path, the metadata strip, the pin / open / delete actions, and the collapsible Contents preview, with Refresh and Open folder in the toolbar above.</p>
-
-The same store is inspectable from a terminal. Memory is shared state, not a
-Settings feature:
+The same store is inspectable from a terminal:
 
 <CliMemoryHero />
 
@@ -93,8 +88,6 @@ Within a single run, the orchestrator and every subagent it spawns see the **sam
 - **Throwaway intermediate work**: that belongs in the agent's plan or scratch reasoning, not in a saved note.
 - **Sensitive credentials**: memory files are plain Markdown on disk; treat them like any other workspace file.
 - **Auto-generated logs**: runs already have run storage for artifacts; don't duplicate them as memories.
-
-If you end up with a long list of stale, never-pinned notes, delete them. The agent never reads what isn't there, so a small, curated memory is usually more useful than a sprawling one.
 
 ## Related
 

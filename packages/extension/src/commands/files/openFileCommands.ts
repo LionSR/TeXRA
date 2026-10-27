@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
@@ -43,14 +43,7 @@ export function openFile(file: string, line?: number) {
       : yield* (yield* WorkspaceFs).resolve(file);
     return yield* line !== undefined && line > 0
       ? openInEditor(absolutePath, () => new vscode.Position(line - 1, 0))
-      : Effect.tryPromise({
-          try: () =>
-            vscode.commands.executeCommand(
-              'vscode.open',
-              vscode.Uri.file(absolutePath),
-            ),
-          catch: ensureError,
-        });
+      : executeVscodeCommand('vscode.open', vscode.Uri.file(absolutePath));
   });
   return opened.pipe(
     Effect.tapError((error) =>

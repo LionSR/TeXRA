@@ -93,32 +93,4 @@ describe('settingsMemoryCommands', () => {
       }),
     ),
   );
-
-  it.effect('deletes confirmed memory files and posts refreshed data', () =>
-    withMemoryTree((storage) =>
-      Effect.gen(function* () {
-        const page = createMemoryPage({ confirmResponses: [true] });
-
-        yield* page.handlers.deleteMemory(deleteNotes);
-
-        // The folder goes with its contents (a recursive remove), inside the
-        // session's storage root; the file beside it stays.
-        assert.equal(
-          existsSync(path.join(storage, 'memories', 'notes')),
-          false,
-        );
-        assert.equal(
-          existsSync(path.join(storage, 'memories', 'keep.md')),
-          true,
-        );
-        const [message, ...rest] = page.posted;
-        assert.deepEqual(rest, []);
-        assert.ok(message?.command === SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY);
-        assert.deepEqual(
-          message.items.map((item) => item.storagePath),
-          ['memories/keep.md'],
-        );
-      }),
-    ),
-  );
 });

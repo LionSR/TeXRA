@@ -77,7 +77,7 @@ there is a single runtime implementation behind both.
             └─────────────────────┘                       └─────────────────────────┘
 ```
 
-Not every product event needs a named helper. Every other arm of the
+Not every product event needs a named helper. Every other case of the
 `AgentEvent` union (usage, context state, tool cards, the finalized
 response) is emitted directly with `trace.emit({ type, ... })`, and
 low-traffic, TeXRA-specific facts ride a log call
@@ -100,11 +100,11 @@ packages/harness/src/logger/                       ← channel output and redact
 ├── effectLog.ts                  ← withLogChannel for Effect.log*
 └── redaction.ts                  ← provider-key redaction for logged text
 
-packages/harness/src/transcript/                   ← TeXRA transcript plane
+packages/harness/src/transcript/                   ← TeXRA transcript layer
 ├── TexraTranscriptRecorder.ts    ← subscriber → StreamLogStore (transcript)
 └── StreamLogStore.ts             ← transcript persistence (file-backed)
 
-src/telemetry/
+packages/texra/src/telemetry/
 └── UsageLogService.ts            ← usage write path, fed per priced call by
                                     `reportUsage` (`packages/harness/src/agent/runtime/run/modelCall.ts`,
                                     called from `ModelInvoker` and `modelCall`)
@@ -132,20 +132,19 @@ trace.debug(msg)         ─►  emitLog('debug', msg)
 ```
 
 Every sugar method (`logError`, `latexDiff`, `openStage`, `usage`, …)
-reduces to one `emit()` call. The §6 precursor cleanup of the original
-proposal collapsed ten `resolveActiveGroupId()` callsites in the logger
-this channel replaced down to this single point.
+reduces to one `emit()` call, collapsing ten `resolveActiveGroupId()`
+callsites in the previous logger down to this single point.
 
-## Adding a new event arm
+## Adding a new event case
 
 1. Extend `AgentEvent` in `packages/harness/src/agent/trace/events.ts`.
 2. The exhaustive `switch (event.type)` in `TexraTranscriptRecorder.ts`
    (and any other subscriber) fails to compile until handled.
 3. Add a sugar method on `AgentTrace` that reduces to `emit({type:'…'})`,
-   or, if the arm is TeXRA-specific, a helper function over `AgentTrace`
+   or, if the case is TeXRA-specific, a helper function over `AgentTrace`
    in `helpers.ts`.
 4. Update the test-support `noopTrace` (`src/test-kernel/support/noopTrace.ts`)
-   if the new arm has a return shape.
+   if the new case has a return shape.
 
 The discriminated union is the SSoT — interface drift forces a build
 break in subscribers, not silent data loss.

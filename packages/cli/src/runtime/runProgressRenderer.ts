@@ -67,7 +67,7 @@ export function createRunProgressRenderer(
   context: CliContext,
   init?: RunProgressRendererInit,
 ): RunProgressRenderer | undefined {
-  if (context.renderRunProgress !== true) return undefined;
+  if (!context.renderRunProgress) return undefined;
   return new DefaultRunProgressRenderer({
     colorEnabled: context.stderrColorEnabled,
     ...init,

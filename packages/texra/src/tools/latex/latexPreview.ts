@@ -87,33 +87,32 @@ const DIFF_SUFFIX = '_diff';
 type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 
 /** Delete a file or directory; a real failure is logged, not raised. */
-const silentDelete = (
+const silentDelete = Effect.fn('latexPreview.silentDelete')(function* (
   targetPath: string,
   kind: 'file' | 'dir',
-): Effect.Effect<void, never, FileSystem.FileSystem> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    // `fs.remove` without `recursive`: a non-directory (a symlink included)
-    // is unlinked, a directory is `rm`'d without
-    // recursion, and an already-absent target is not an error — that last is
-    // what `force` carries, not a new best-effort.
-    yield* fs.remove(targetPath, { force: true }).pipe(
-      // Best-effort temp cleanup: `force` already absorbs an absent target,
-      // so what reaches here is a real fault worth a warning.
-      Effect.catch((error) =>
-        Effect.logWarning(`Failed to delete temp ${kind} ${targetPath}`).pipe(
-          withLogChannel(CHANNEL),
-          Effect.annotateLogs({ data: error }),
-        ),
+): Effect.fn.Return<void, never, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
+  // `fs.remove` without `recursive`: a non-directory (a symlink included)
+  // is unlinked, a directory is `rm`'d without
+  // recursion, and an already-absent target is not an error — that last is
+  // what `force` carries, not a new best-effort.
+  yield* fs.remove(targetPath, { force: true }).pipe(
+    // Best-effort temp cleanup: `force` already absorbs an absent target,
+    // so what reaches here is a real fault worth a warning.
+    Effect.catch((error) =>
+      Effect.logWarning(`Failed to delete temp ${kind} ${targetPath}`).pipe(
+        withLogChannel(CHANNEL),
+        Effect.annotateLogs({ data: error }),
       ),
-    );
-  });
+    ),
+  );
+});
 
 /** Delete a file and the LaTeX auxiliary files built beside it */
-const deleteWithAuxFiles = (
-  filePath: string,
-): Effect.Effect<void, never, FileSystem.FileSystem> =>
-  Effect.gen(function* () {
+const deleteWithAuxFiles = Effect.fn('latexPreview.deleteWithAuxFiles')(
+  function* (
+    filePath: string,
+  ): Effect.fn.Return<void, never, FileSystem.FileSystem> {
     const ext = path.extname(filePath);
     // An extensionless file (extname returns '') has no suffix to strip:
     // `slice(0, -0)` is `slice(0, 0)`, which would drop the path entirely and
@@ -139,7 +138,8 @@ const deleteWithAuxFiles = (
       (target) => silentDelete(target, 'file'),
       { concurrency: 8, discard: true },
     );
-  });
+  },
+);
 
 /** Register cleanup with the entry, or run it now if the entry already settled */
 const registerCleanup = (
@@ -189,11 +189,11 @@ const withLatexOperation = (
  *  benign, so only that case falls back silently. Any other failure still
  *  falls back — the held in-memory content keeps the preview usable — but
  *  warns, because the preview would silently drop the user's saved edits. */
-const readFileWithFallback = (
-  uri: { fsPath: string },
-  fallback: string,
-): Effect.Effect<string, never, PreviewServices> =>
-  Effect.gen(function* () {
+const readFileWithFallback = Effect.fn('latexPreview.readFileWithFallback')(
+  function* (
+    uri: { fsPath: string },
+    fallback: string,
+  ): Effect.fn.Return<string, never, PreviewServices> {
     const fs = yield* FileSystem.FileSystem;
     // The raw bytes decoded as-is, line endings included.
     return yield* fs.readFile(uri.fsPath).pipe(
@@ -210,7 +210,8 @@ const readFileWithFallback = (
             ),
       ),
     );
-  });
+  },
+);
 
 /**
  * Create a temporary file and register its cleanup with the entry.

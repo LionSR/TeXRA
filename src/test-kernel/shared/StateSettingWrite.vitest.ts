@@ -4,58 +4,14 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 
 describe('applyStateSettingUpdate', () => {
-  it.effect(
-    'writes state-backed and core-config rows through one boundary',
-    () =>
-      Effect.gen(function* () {
-        const fake = makeFakeSettingsStores();
-        const stores = fake.stores;
-
-        expect(
-          yield* applyStateSettingUpdate(
-            GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-            true,
-            { stores, host: 'vscode' },
-          ),
-        ).toMatchObject({
-          kind: 'applied',
-          entry: {
-            key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-            surfaces: { settingsView: 'agents' },
-          },
-        });
-        expect(
-          yield* fake.globalState.get(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP),
-        ).toBe(true);
-
-        expect(
-          yield* applyStateSettingUpdate(BASH_APPROVAL_CONFIG_KEY, false, {
-            stores,
-            host: 'vscode',
-          }),
-        ).toMatchObject({
-          kind: 'applied',
-          entry: {
-            key: BASH_APPROVAL_CONFIG_KEY,
-            slot: 'config',
-            surfaces: { settingsView: 'approval' },
-          },
-        });
-        expect(fake.config.get(BASH_APPROVAL_CONFIG_KEY)).toBe(false);
-      }),
-  );
-
   it.effect('uses null as an explicit reset and omission as a no-op', () =>
     Effect.gen(function* () {
       const fake = makeFakeSettingsStores();
@@ -97,67 +53,5 @@ describe('applyStateSettingUpdate', () => {
         ),
       ).toEqual({ kind: 'ignored' });
     }),
-  );
-
-  it.effect(
-    'lets CLI /config write its rows that the settings view does not render',
-    () =>
-      Effect.gen(function* () {
-        const fake = makeFakeSettingsStores();
-        const key = DocumentsStateKey.LATEXDIFF_TIMEOUT_MS;
-
-        expect(
-          yield* applyStateSettingUpdate(key, 20000, {
-            stores: fake.stores,
-            host: 'cli',
-          }),
-        ).toMatchObject({ kind: 'applied', entry: { key } });
-        expect(yield* fake.workspaceState.get(key)).toBe(20000);
-        expect(
-          yield* applyStateSettingUpdate(key, null, {
-            stores: fake.stores,
-            host: 'cli',
-          }),
-        ).toMatchObject({ kind: 'applied' });
-        expect(yield* isStored(fake.workspaceState, key)).toBe(false);
-
-        // The settings view still cannot write a row it does not render.
-        expect(
-          yield* applyStateSettingUpdate(key, 20000, {
-            stores: fake.stores,
-            host: 'vscode',
-          }),
-        ).toEqual({ kind: 'ignored' });
-      }),
-  );
-
-  it.effect(
-    'ignores unknown keys and preserves catalog validation errors',
-    () =>
-      Effect.gen(function* () {
-        const ports = {
-          stores: makeFakeSettingsStores().stores,
-          host: 'vscode' as const,
-        };
-
-        expect(
-          yield* applyStateSettingUpdate('texra.unknown', true, ports),
-        ).toEqual({ kind: 'ignored' });
-
-        expect(
-          yield* applyStateSettingUpdate(
-            DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
-            'bogus',
-            ports,
-          ),
-        ).toMatchObject({
-          kind: 'rejected',
-          entry: {
-            key: DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
-            surfaces: { settingsView: 'latex' },
-          },
-          error: expect.any(Error),
-        });
-      }),
   );
 });

@@ -32,7 +32,12 @@ import { decodeTurnRequest, fitLimit } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
 import { ModelError, fillModelError, sdkModelError } from '../errors.js';
-import { parseOutboundToolArguments, sdkStream } from './transport.js';
+import {
+  decodeWireOrFail,
+  parseOutboundToolArguments,
+  sdkStream,
+  wireFail as fail,
+} from './transport.js';
 import {
   filesApiUploads,
   UploadedSchema,
@@ -396,22 +401,14 @@ function anthropicWire() {
   let open: { index: number; type: string; signed: boolean } | undefined;
   let stop: typeof StopSchema.Type = {};
   let usage: typeof UsageSchema.Type = {};
-  const fail = (
-    message: string,
-    kind: ModelError['kind'] = 'malformed-output',
-  ) => Effect.fail(new ModelError({ kind, message }));
 
   const parts = (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
     Effect.gen(function* () {
-      const decoded = Schema.decodeUnknownResult(EventSchema)(raw);
-      if (!Result.isSuccess(decoded))
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message:
-            'Anthropic returned an unsupported or malformed stream event.',
-          cause: decoded.failure,
-        });
-      const event = decoded.success;
+      const event = yield* decodeWireOrFail(
+        EventSchema,
+        'Anthropic returned an unsupported or malformed stream event.',
+        raw,
+      );
       if (event.type === 'message_start') {
         const message = event.message;
         if (

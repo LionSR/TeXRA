@@ -2,7 +2,7 @@ import { Effect, FileSystem } from 'effect';
 
 import { AgentCatalog } from '@texra-ai/harness';
 import { pathExists } from '@texra-ai/harness/node';
-import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
+import { implicitDefaultToolUseAgents } from '@texra-ai/harness';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 

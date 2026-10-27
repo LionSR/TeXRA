@@ -1,13 +1,8 @@
-import { Cause, Effect, Exit } from 'effect';
+import { Cache, Cause, Clock, Duration, Effect } from 'effect';
 import { Settings, withLogChannel } from '@texra-ai/harness';
 import { HttpClientError } from 'effect/http';
-import { LRUCache } from 'lru-cache';
 
-import {
-  codexCoordinator,
-  SharedAttempt,
-  SubscriptionOAuthError,
-} from '@texra-ai/llm/node';
+import { codexCoordinator, SubscriptionOAuthError } from '@texra-ai/llm/node';
 import { lookupApiKey } from '@texra-ai/llm';
 import { toErrorMessage, GlobalStateKey } from '@texra-ai/harness/schemas';
 import type {
@@ -31,7 +26,7 @@ import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'SubscriptionUsage';
 
-const CACHE_TTL_MS = 30_000;
+const CACHE_TTL = Duration.seconds(30);
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 
 type CodingPlanUsageProvider =
@@ -55,13 +50,15 @@ const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
   ...mapCodingPlanSubscriptions('displayName'),
 };
 
-/** The credential stores this service reads, plus the two test-only clocks. */
+/** The credential stores this service reads, plus a test-only deadline. */
 interface SubscriptionUsageServiceInit {
   readonly secrets: PlatformSecrets;
   readonly stores: SettingsStores;
-  readonly now?: () => number;
   readonly requestTimeoutMs?: number;
 }
+
+/** One cache entry per provider and request variant (the GLM region). */
+type UsageCacheKey = readonly [SubscriptionUsageProvider, boolean | undefined];
 
 /** Why a usage snapshot carries no data (the `unavailable` variant's reason). */
 type SubscriptionUsageUnavailableReason = Extract<
@@ -91,32 +88,48 @@ interface SubscriptionUsageAdapter {
 export class SubscriptionUsageService {
   private readonly secrets: PlatformSecrets;
   private readonly stores: SettingsStores;
-  private readonly now: () => number;
   private readonly requestTimeoutMs: number;
   private readonly adapters: Readonly<
     Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
   >;
-  private readonly cache: LRUCache<string, SubscriptionUsageSnapshot>;
-  private readonly pending = new Map<
-    string,
-    SharedAttempt<SubscriptionUsageSnapshot, never>
-  >();
+  private cache:
+    | Cache.Cache<
+        UsageCacheKey,
+        SubscriptionUsageSnapshot,
+        never,
+        HttpClient.HttpClient
+      >
+    | undefined;
 
   constructor(init: SubscriptionUsageServiceInit) {
     this.secrets = init.secrets;
     this.stores = init.stores;
-    this.now = init.now ?? Date.now;
     this.requestTimeoutMs = init.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.adapters = this.createAdapters();
-    this.cache = new LRUCache({
-      max: 64,
-      ttl: CACHE_TTL_MS,
-      // The default resolution debounces perf.now() via a real setTimeout,
-      // which ignores the injected clock (this.now) entirely in tests.
-      ttlResolution: 0,
-      perf: { now: this.now },
-    });
   }
+
+  /**
+   * The snapshot cache, made on the first read because the settings body
+   * builds this service outside any program. Entries live for the TTL by the
+   * reading fiber's `Clock`; concurrent reads of one key share one lookup, and
+   * the lookup is interrupted once every waiting reader has left.
+   */
+  private readonly usageCache = Effect.suspend(() =>
+    this.cache
+      ? Effect.succeed(this.cache)
+      : Effect.map(
+          Cache.makeWith(
+            ([provider, variant]: UsageCacheKey) =>
+              this.fetchUsage(provider, variant),
+            {
+              capacity: 64,
+              timeToLive: () => CACHE_TTL,
+              requireServicesAt: 'lookup',
+            },
+          ),
+          (made) => (this.cache ??= made),
+        ),
+  );
 
   /** Provider transports are adapters; caching and failure policy stay common. */
   private createAdapters(): Readonly<
@@ -202,18 +215,18 @@ export class SubscriptionUsageService {
     };
   });
 
-  /** Drop cached and in-flight work after credentials or accounts change. */
-  invalidate(provider?: SubscriptionUsageProvider): void {
-    const providers = provider ? [provider] : SUBSCRIPTION_USAGE_PROVIDERS;
-    for (const target of providers) {
-      const keyPrefix = `${target}:`;
-      for (const key of this.cache.keys()) {
-        if (key.startsWith(keyPrefix)) this.cache.delete(key);
+  /**
+   * Drop a provider's cached and in-flight entries after its credentials or
+   * account change. A reader already waiting on an in-flight lookup still
+   * receives its result, but that result is not cached.
+   */
+  invalidate(provider: SubscriptionUsageProvider): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const cache = yield* this.usageCache;
+      for (const key of [...(yield* Cache.keys(cache))]) {
+        if (key[0] === provider) yield* Cache.invalidate(cache, key);
       }
-      for (const key of this.pending.keys()) {
-        if (key.startsWith(keyPrefix)) this.pending.delete(key);
-      }
-    }
+    });
   }
 
   getUsage(
@@ -236,7 +249,7 @@ export class SubscriptionUsageService {
               Effect.annotateLogs({ data: error }),
               withLogChannel(CHANNEL),
             );
-            return this.unavailable(provider, 'request_failed');
+            return yield* this.unavailable(provider, 'request_failed');
           }),
         onSuccess: (variant) => this.coalesced(provider, variant, options),
       },
@@ -263,76 +276,47 @@ export class SubscriptionUsageService {
     );
   }
 
-  /**
-   * One probe per cache key at a time, served from the TTL cache while it is
-   * warm. Callers of one key share a {@link SharedAttempt}, so one caller's
-   * cancellation cancels only its own wait.
-   *
-   * Return path: when invalidate()
-   * races an in-flight probe, the identity check below keeps the stale result
-   * out of the cache, but the already-waiting caller still receives it — one
-   * accepted stale read on a read-only usage display.
-   */
+  /** One lookup per key at a time, served from the cache while it is warm. */
   private coalesced(
     provider: SubscriptionUsageProvider,
     variant: boolean | undefined,
     options: { readonly forceRefresh?: boolean },
   ): Effect.Effect<SubscriptionUsageSnapshot, never, HttpClient.HttpClient> {
-    const key = `${provider}:${variant ?? 'default'}`;
-    return Effect.suspend(() => {
-      if (options.forceRefresh) {
-        this.cache.delete(key);
-        this.pending.delete(key);
-      }
-      const cached = this.cache.get(key);
-      if (cached !== undefined) return Effect.succeed(cached);
-      let attempt = this.pending.get(key);
-      if (attempt === undefined) {
-        attempt = new SharedAttempt();
-        this.pending.set(key, attempt);
-      }
-      const request = attempt;
-      return request.run(() =>
-        this.fetchUsage(provider, variant).pipe(
-          Effect.onExit((exit) =>
-            Effect.sync(() => {
-              if (this.pending.get(key) !== request) return;
-              this.pending.delete(key);
-              if (Exit.isSuccess(exit)) this.cache.set(key, exit.value);
-            }),
-          ),
-        ),
-      );
-    });
+    const key: UsageCacheKey = [provider, variant];
+    return Effect.flatMap(this.usageCache, (cache) =>
+      options.forceRefresh
+        ? Effect.andThen(Cache.invalidate(cache, key), Cache.get(cache, key))
+        : Cache.get(cache, key),
+    );
   }
 
   private unavailable(
     provider: SubscriptionUsageProvider,
     reason: SubscriptionUsageUnavailableReason,
-  ): SubscriptionUsageSnapshot {
-    return {
+  ): Effect.Effect<SubscriptionUsageSnapshot> {
+    return Effect.map(Clock.currentTimeMillis, (fetchedAt) => ({
       state: 'unavailable',
       provider,
       providerName: PROVIDER_NAMES[provider],
       planName: DEFAULT_PLAN_NAMES[provider],
       windows: [],
-      fetchedAt: this.now(),
+      fetchedAt,
       reason,
-    };
+    }));
   }
 
   private available(
     provider: SubscriptionUsageProvider,
     parsed: ParsedSubscriptionUsage,
-  ): SubscriptionUsageSnapshot {
-    return {
+  ): Effect.Effect<SubscriptionUsageSnapshot> {
+    return Effect.map(Clock.currentTimeMillis, (fetchedAt) => ({
       state: 'available',
       provider,
       providerName: PROVIDER_NAMES[provider],
       planName: parsed.planName ?? DEFAULT_PLAN_NAMES[provider],
       windows: [...parsed.windows],
-      fetchedAt: this.now(),
-    };
+      fetchedAt,
+    }));
   }
 
   private fetchUsage(
@@ -340,7 +324,7 @@ export class SubscriptionUsageService {
     variant: boolean | undefined,
   ): Effect.Effect<SubscriptionUsageSnapshot, never, HttpClient.HttpClient> {
     return Effect.suspend(() => this.adapters[provider].fetch(variant)).pipe(
-      Effect.map((parsed) => {
+      Effect.flatMap((parsed) => {
         if (parsed === null) {
           return this.unavailable(provider, 'missing_credentials');
         }
@@ -378,15 +362,15 @@ export class SubscriptionUsageService {
             status === 401 ||
             status === 403;
           if (invalidCredentials) {
-            return this.unavailable(provider, 'invalid_credentials');
+            return yield* this.unavailable(provider, 'invalid_credentials');
           }
           if (
             httpError?._tag === 'DecodeError' &&
             httpError.cause instanceof SyntaxError
           ) {
-            return this.unavailable(provider, 'malformed_response');
+            return yield* this.unavailable(provider, 'malformed_response');
           }
-          return this.unavailable(provider, 'request_failed');
+          return yield* this.unavailable(provider, 'request_failed');
         }),
       ),
     );

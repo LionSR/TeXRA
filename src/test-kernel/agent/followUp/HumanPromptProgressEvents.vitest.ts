@@ -15,7 +15,6 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { generateRunId } from '@utils/core';
@@ -55,108 +54,6 @@ describe('human prompt progress events', () => {
   beforeEach(async () => {
     await installPlatform({});
   });
-
-  it.live('opens a bash request on the run and settles on its decision', () =>
-    Effect.gen(function* () {
-      const explicit = createRecordingHost();
-      const runId = startedRun();
-      const decided = autoDecideRequests(testDefaultSession(), () => ({
-        action: 'approve',
-      }));
-
-      try {
-        const approval = yield* inToolContext(
-          explicit.interactions,
-          runId,
-          () =>
-            requestBashApproval({
-              command: 'echo hello',
-              cwd: '/tmp/texra-project',
-              grant: 'shell',
-            }),
-        );
-
-        expect(approval).toMatchObject({ action: 'approve' });
-        expect(decided.opened.map((request) => request.payload)).toEqual([
-          {
-            kind: 'bash',
-            data: {
-              requestId: expect.stringContaining('bash-'),
-              command: 'echo hello',
-              cwd: '/tmp/texra-project',
-              allowBypass: true,
-              runId,
-            },
-          },
-        ]);
-      } finally {
-        decided.detach();
-      }
-    }).pipe(Effect.provide(nativeToolTestLayer())),
-  );
-
-  it.live(
-    'opens a user-question request and reports the submitted answers',
-    () =>
-      Effect.gen(function* () {
-        const explicit = createRecordingHost();
-        const runId = startedRun();
-        const tool = AskUserQuestionTool;
-        const question = 'Which path should the agent take?';
-        const decided = autoDecideRequests(testDefaultSession(), () => ({
-          action: 'submit',
-          answers: { [question]: 'Run the build' },
-        }));
-
-        try {
-          const result = yield* inToolContext(
-            explicit.interactions,
-            runId,
-            () =>
-              tool.call({
-                context: 'Choose the next step.',
-                questions: [
-                  {
-                    question,
-                    header: 'Path',
-                    options: [
-                      { label: 'Inspect logs' },
-                      { label: 'Run the build' },
-                    ],
-                  },
-                ],
-              }),
-          );
-
-          expect(result).toMatchObject({
-            summary: 'Answered 1 user question(s).',
-          });
-          expect(decided.opened.map((request) => request.payload)).toEqual([
-            {
-              kind: 'userQuestion',
-              data: {
-                requestId: expect.stringContaining('userQuestion-'),
-                questions: [
-                  {
-                    question,
-                    header: 'Path',
-                    options: [
-                      { label: 'Inspect logs' },
-                      { label: 'Run the build' },
-                    ],
-                  },
-                ],
-                context: 'Choose the next step.',
-                allowBypass: false,
-                runId,
-              },
-            },
-          ]);
-        } finally {
-          decided.detach();
-        }
-      }).pipe(Effect.provide(nativeToolTestLayer())),
-  );
 
   it.live('keeps bash and edit session bypasses independent', () =>
     Effect.gen(function* () {

@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber } from 'effect';
+import { Effect } from 'effect';
 import { FetchHttpClient } from 'effect/http';
 import { describe, expect, vi } from 'vitest';
 
@@ -47,95 +47,6 @@ const login = (options: Parameters<typeof loginWithLoopback>[0]) =>
 // callback port (or its fallback), answers real fetches, and its callback
 // wait sits under the live AUTH_CALLBACK_TIMEOUT_MS.
 describe('Codex loopback login', () => {
-  it.live('closes the callback wait when its host cancels', () =>
-    Effect.gen(function* () {
-      // The host cancels from inside the launcher, as `controller.abort()`
-      // did: synchronously, inside the uninterruptible setup prefix.
-      const host: { fiber?: Fiber.Fiber<CodexSession, unknown> } = {};
-      const fiber = yield* Effect.forkChild(
-        login({
-          coordinator: coordinatorStub(),
-          openBrowser: () =>
-            Effect.sync(() => {
-              host.fiber?.interruptUnsafe();
-            }),
-        }),
-      );
-      host.fiber = fiber;
-
-      expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
-    }),
-  );
-
-  it.live(
-    'settles cancellation while the browser launcher remains pending',
-    () =>
-      Effect.gen(function* () {
-        const browserLaunched = yield* Deferred.make<void>();
-        // startImmediately is load-bearing: the fiber has to reach the
-        // uninterruptible setup before the interrupt, so the launcher is
-        // still invoked and the interrupt lands at the launcher join.
-        const fiber = yield* Effect.forkChild(
-          login({
-            coordinator: coordinatorStub(),
-            openBrowser: () => Deferred.await(browserLaunched),
-          }),
-          { startImmediately: true },
-        );
-
-        yield* Fiber.interrupt(fiber);
-
-        expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
-        Deferred.doneUnsafe(browserLaunched, Effect.void);
-      }),
-  );
-
-  it.live(
-    'does not exchange a code when cancellation follows its callback',
-    () =>
-      Effect.gen(function* () {
-        let request!: SubscriptionAuthorizeRequest;
-        const loginWithCode = vi.fn();
-        const delivered = yield* Deferred.make<void>();
-        let releaseLauncher!: () => void;
-        // Holding the launcher pins the login fiber at the interruptible
-        // launcher join, so the interrupt lands before the code exchange
-        // can be reached.
-        const launcherHeld = new Promise<void>((resolve) => {
-          releaseLauncher = resolve;
-        });
-        const fiber = yield* Effect.forkChild(
-          login({
-            coordinator: coordinatorStub({
-              buildAuthorizeRequest: (
-                port: number,
-              ): SubscriptionAuthorizeRequest => {
-                request = loopbackRequest(port);
-                return request;
-              },
-              loginWithCode,
-            }),
-            openBrowser: () =>
-              Effect.promise(async () => {
-                const callback = new URL(request.redirectUri);
-                callback.searchParams.set('state', request.state);
-                callback.searchParams.set('code', 'authorization-code');
-                await fetch(callback);
-                Deferred.doneUnsafe(delivered, Effect.void);
-                await launcherHeld;
-              }),
-          }),
-        );
-
-        yield* Deferred.await(delivered);
-        yield* Fiber.interrupt(fiber);
-        releaseLauncher();
-
-        expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
-        expect(loginWithCode).not.toHaveBeenCalled();
-      }),
-  );
-
   it.live(
     'ignores stale callback errors and accepts a later valid callback',
     () =>

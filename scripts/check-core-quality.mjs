@@ -2,8 +2,9 @@
 // The core-quality ratchet (owner, 2026-10-03: "super high coding quality like
 // pi" for the harness and llm cores). core-quality-measure.mjs counts each
 // rule's sites per core file; this gate holds those counts to
-// config/ratchets/core-quality/<rule>.json and the public surface of the core
-// packages to config/api-reports/.
+// config/ratchets/core-quality/<rule>.json, the public surface of the core
+// packages to config/api-reports/, and their API references to
+// packages/{harness,llm}/docs/api/.
 //
 // Counts are shrink-only. A file whose count rose, or a file absent from the
 // baseline with a site, fails. A count that fell is stale headroom and fails
@@ -17,10 +18,11 @@
 //
 // The API reports are not budgets but review diffs: any change to an entry's
 // exports fails until `--update` regenerates the report, so the diff of the
-// public surface shows up in the PR that changes it.
+// public surface shows up in the PR that changes it. The API references
+// regenerate the same way, so a TSDoc edit lands with its published page.
 //
 //   node scripts/check-core-quality.mjs            check
-//   node scripts/check-core-quality.mjs --update   lower baselines, rewrite reports
+//   node scripts/check-core-quality.mjs --update   lower baselines, rewrite reports and references
 //   node scripts/check-core-quality.mjs --report   per-package totals and hotspots
 //   node scripts/check-core-quality.mjs --update --move packages/harness/src/agent/=packages/harness/src/
 //     carry a moved file's or directory's rows to its new path (a rename is
@@ -40,7 +42,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
-import { apiReports } from './core-quality-api-report.mjs';
+import { GENERATED_DIRS, apiReports } from './core-quality-api-report.mjs';
 import { MEASURED_ONLY, RULES, measure } from './core-quality-measure.mjs';
 
 const rootDir = path.resolve(
@@ -48,7 +50,6 @@ const rootDir = path.resolve(
   '..',
 );
 const baselineDir = path.join(rootDir, 'config', 'ratchets', 'core-quality');
-const reportDir = path.join(rootDir, 'config', 'api-reports');
 const SITES_SHOWN = 8;
 
 const baselinePath = (rule) => path.join(baselineDir, `${rule}.json`);
@@ -125,25 +126,29 @@ function lowered(rule, baseline, actual) {
 
 function checkReports(reports, update) {
   const problems = [];
-  mkdirSync(reportDir, { recursive: true });
   const existing = new Set(
-    readdirSync(reportDir).filter((name) => name.endsWith('.api.md')),
+    GENERATED_DIRS.flatMap((dir) => {
+      mkdirSync(path.join(rootDir, dir), { recursive: true });
+      return readdirSync(path.join(rootDir, dir))
+        .filter((name) => name.endsWith('.md'))
+        .map((name) => `${dir}/${name}`);
+    }),
   );
-  for (const [name, { text }] of reports) {
+  for (const [name, text] of reports) {
     existing.delete(name);
-    const file = path.join(reportDir, name);
+    const file = path.join(rootDir, name);
     const current = existsSync(file) ? readFileSync(file, 'utf8') : null;
     if (current === text) continue;
-    if (update) writeFileSync(file, text);
-    else
+    if (update) {
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, text);
+    } else
       problems.push(
-        `api-report: config/api-reports/${name} ${current == null ? 'is missing' : 'differs from the package exports'} — run \`node scripts/check-core-quality.mjs --update\` and review the surface diff`,
+        `api-report: ${name} ${current == null ? 'is missing' : 'differs from the package exports'} — run \`node scripts/check-core-quality.mjs --update\` and review the diff`,
       );
   }
   for (const name of existing) {
-    problems.push(
-      `api-report: config/api-reports/${name} has no package entry — delete it`,
-    );
+    problems.push(`api-report: ${name} has no package entry — delete it`);
   }
   return problems;
 }

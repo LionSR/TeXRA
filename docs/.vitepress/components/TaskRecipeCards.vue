@@ -34,7 +34,7 @@ const recipes = [
     model: 'anthropic/claude-opus-5-5',
     alts: 'anthropic/claude-sonnet-5-5',
     instruction:
-      'Improve the writing style to make it more engaging and clear. Enhance the flow between paragraphs while preserving all technical content.',
+      'Tighten the prose and transitions between paragraphs while preserving all technical content and notation.',
   },
 ];
 </script>

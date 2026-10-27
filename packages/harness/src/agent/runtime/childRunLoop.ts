@@ -429,25 +429,24 @@ const progressNotify =
  * the wait. Not best-effort: a refused append is the turn's failure, and
  * `not-owner` stops the loop rather than run under a lost claim.
  */
-const beginTurn = <TTurn, R>(
+const beginTurn = Effect.fn('childRunLoop.beginTurn')(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   resumed: boolean,
-): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> =>
-  Effect.gen(function* () {
-    const { runId, session } = loop.params;
-    loop.turnIndex += 1;
-    loop.turnStart = yield* Clock.currentTimeMillis;
-    yield* session.log.transact([
-      ...(resumed ? [waitingRow(runId, 'resumed')] : []),
-      {
-        type: 'child.turn',
-        aggregateId: qualifyAggregateId('run', runId),
-        attemptId: loop.attemptId,
-        turnIndex: loop.turnIndex,
-        phase: 'accepted',
-      },
-    ]);
-  });
+): Effect.fn.Return<void, DatabaseNotOwner | DatabaseWriteFailed> {
+  const { runId, session } = loop.params;
+  loop.turnIndex += 1;
+  loop.turnStart = yield* Clock.currentTimeMillis;
+  yield* session.log.transact([
+    ...(resumed ? [waitingRow(runId, 'resumed')] : []),
+    {
+      type: 'child.turn',
+      aggregateId: qualifyAggregateId('run', runId),
+      attemptId: loop.attemptId,
+      turnIndex: loop.turnIndex,
+      phase: 'accepted',
+    },
+  ]);
+});
 
 /** Who reads this turn's result: its parent, unless the child is
  *  persist-only or stopped with nothing to deliver. A detach is read from
@@ -472,43 +471,45 @@ const deliveryTarget = <TTurn, R>(
 };
 
 /** One turn's result, and what an awaiting caller reads of it. */
-const buildTurnResult = <TTurn, R>(
+const buildTurnResult = Effect.fn('childRunLoop.buildTurnResult')(function* <
+  TTurn,
+  R,
+>(
   loop: ChildLoop<TTurn, R>,
   { turn, err, turnIsError }: Turned<TTurn>,
   last = false,
-): Effect.Effect<{ result: ChildTurnResult; turn: LastTurn }, Error, R> =>
-  Effect.gen(function* () {
-    const { params } = loop;
-    const { strategy, runId } = params;
-    if (loop.turnIndex === 0) yield* beginTurn(loop, false);
-    const wallTimeMs = (yield* Clock.currentTimeMillis) - loop.turnStart;
-    const isError = err != null || turnIsError;
-    const message =
-      turn != null && !isError
-        ? yield* strategy.formatDelivery(turn, wallTimeMs)
-        : yield* Effect.try({
-            try: () => strategy.formatError(turn, err, wallTimeMs),
-            catch: ensureError,
-          });
-    const resultMeta = strategy.buildResultMeta
-      ? yield* strategy.buildResultMeta(turn, isError, wallTimeMs)
-      : undefined;
-    const result = childTurnResult({
-      runId,
-      turn: { key: loop.attemptId, index: loop.turnIndex },
-      message,
-      resultMeta,
-      consumed: loop.consumed,
-      deliveryId:
-        params.childRun === undefined ? params.strategy.deliveryId : undefined,
-      to: deliveryTarget(loop, isError),
-      ...(last && { end: isError ? 'failed' : 'completed' }),
-    });
-    return {
-      result,
-      turn: { resultMeta, isError, ...(err != null && { error: err }) },
-    };
+): Effect.fn.Return<{ result: ChildTurnResult; turn: LastTurn }, Error, R> {
+  const { params } = loop;
+  const { strategy, runId } = params;
+  if (loop.turnIndex === 0) yield* beginTurn(loop, false);
+  const wallTimeMs = (yield* Clock.currentTimeMillis) - loop.turnStart;
+  const isError = err != null || turnIsError;
+  const message =
+    turn != null && !isError
+      ? yield* strategy.formatDelivery(turn, wallTimeMs)
+      : yield* Effect.try({
+          try: () => strategy.formatError(turn, err, wallTimeMs),
+          catch: ensureError,
+        });
+  const resultMeta = strategy.buildResultMeta
+    ? yield* strategy.buildResultMeta(turn, isError, wallTimeMs)
+    : undefined;
+  const result = childTurnResult({
+    runId,
+    turn: { key: loop.attemptId, index: loop.turnIndex },
+    message,
+    resultMeta,
+    consumed: loop.consumed,
+    deliveryId:
+      params.childRun === undefined ? params.strategy.deliveryId : undefined,
+    to: deliveryTarget(loop, isError),
+    ...(last && { end: isError ? 'failed' : 'completed' }),
   });
+  return {
+    result,
+    turn: { resultMeta, isError, ...(err != null && { error: err }) },
+  };
+});
 
 /** Record the last turn as the child's end, which writes its result with
  *  its `run.end` (`handedOff`: a native run's own). A failure is the loop's,
@@ -531,17 +532,16 @@ const recordLastTurn = <TTurn, R>(
 /** The last turn ends the child: recorded here unless a native run's own
  *  `run.end` took it; a result that could not be built is the loop's
  *  failure. */
-const endTurns = <TTurn, R>(
+const endTurns = Effect.fn('childRunLoop.endTurns')(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   turned: Turned<TTurn>,
-): Effect.Effect<void, Error, R> =>
-  Effect.gen(function* () {
-    const end =
-      loop.end.kind === 'open'
-        ? yield* recordLastTurn(loop, turned, false)
-        : loop.end;
-    if (end.kind === 'error') return yield* Effect.fail(end.error);
-  });
+): Effect.fn.Return<void, Error, R> {
+  const end =
+    loop.end.kind === 'open'
+      ? yield* recordLastTurn(loop, turned, false)
+      : loop.end;
+  if (end.kind === 'error') return yield* Effect.fail(end.error);
+});
 
 /** The turns a native run's own loop finishes, on its own fiber, under the
  *  services this loop runs with. */
@@ -552,12 +552,11 @@ function nativeTurns<TTurn, R>(
 ): ChildRunTurns<TTurn> {
   const { session } = loop.params;
   return {
-    turnPermit: (turn) =>
-      Effect.gen(function* () {
-        if (loop.isInterrupted()) return yield* Effect.interrupt;
-        yield* beginTurn(loop, false);
-        return yield* loop.budget ? loop.budget.withPermit(turn) : turn;
-      }),
+    turnPermit: Effect.fn('childRunLoop.turnPermit')(function* (turn) {
+      if (loop.isInterrupted()) return yield* Effect.interrupt;
+      yield* beginTurn(loop, false);
+      return yield* loop.budget ? loop.budget.withPermit(turn) : turn;
+    }),
     finishTurn: (turn) =>
       Effect.map(
         buildTurnResult(loop, { turn, err: null, turnIsError: false }),
@@ -602,11 +601,11 @@ function nativeTurns<TTurn, R>(
  * (so one sent on them finds it waiting, never mid-turn), and the parent's
  * resume.
  */
-const finishInterimTurn = <TTurn, R>(
-  loop: ChildLoop<TTurn, R>,
-  turned: Turned<TTurn>,
-): Effect.Effect<void, Error, R> =>
-  Effect.gen(function* () {
+const finishInterimTurn = Effect.fn('childRunLoop.finishInterimTurn')(
+  function* <TTurn, R>(
+    loop: ChildLoop<TTurn, R>,
+    turned: Turned<TTurn>,
+  ): Effect.fn.Return<void, Error, R> {
     const { session, runId } = loop.params;
     const { result } = yield* buildTurnResult(loop, turned);
     const wait = loop.isInterrupted() ? undefined : waitingRow(runId, 'parked');
@@ -617,149 +616,150 @@ const finishInterimTurn = <TTurn, R>(
     if (wait && turned.turn !== null && !loop.isInterrupted())
       loop.process?.onTurnSuccess?.(turned.turn);
     yield* wakeParent(session, result.delivery, loop.trace);
-  });
+  },
+);
 
 /**
  * A native child: its launch runs the whole run on its own fiber and offers
  * its turn boundaries through `nativeTurns`; a launch that fails before its
  * run's birth tells the parent as input alone.
  */
-const driveNative = <TTurn, R>(
+const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   strategy: NativeChildStrategy<TTurn, R>,
-): Effect.Effect<TTurn | undefined, Error, R> =>
-  Effect.gen(function* () {
-    const { session, runId } = loop.params;
-    // A stop that landed during the setup: the run never launches.
-    if (loop.isInterrupted()) return undefined;
-    const turns = nativeTurns(loop, strategy, yield* Effect.context<R>());
-    loop.turnStart = yield* Clock.currentTimeMillis;
-    const turned = yield* attemptTurn(
-      loop,
-      Effect.suspend(() =>
-        strategy.launch(progressNotify(loop, strategy), turns),
-      ),
-    );
-    if (turned === undefined) return undefined;
-    const { turn, err } = turned;
-    if (turn !== null && strategy.isTurnInterrupted?.(turn)) {
-      loop.interrupt();
-      return turn;
+): Effect.fn.Return<TTurn | undefined, Error, R> {
+  const { session, runId } = loop.params;
+  // A stop that landed during the setup: the run never launches.
+  if (loop.isInterrupted()) return undefined;
+  const turns = nativeTurns(loop, strategy, yield* Effect.context<R>());
+  loop.turnStart = yield* Clock.currentTimeMillis;
+  const turned = yield* attemptTurn(
+    loop,
+    Effect.suspend(() =>
+      strategy.launch(progressNotify(loop, strategy), turns),
+    ),
+  );
+  if (turned === undefined) return undefined;
+  const { turn, err } = turned;
+  if (turn !== null && strategy.isTurnInterrupted?.(turn)) {
+    loop.interrupt();
+    return turn;
+  }
+  noteFailure(loop, turned);
+  // A launch can fail before its first cycle, and before its run's birth.
+  if (
+    loop.turnIndex === 0 &&
+    loop.failure !== undefined &&
+    !(yield* session.log.owns(runId))
+  ) {
+    if (strategy.deliveryMode !== 'persistOnly') {
+      const wallTimeMs = (yield* Clock.currentTimeMillis) - loop.turnStart;
+      const message = strategy.formatError(turn, err, wallTimeMs);
+      yield* deliverLaunchFailure(session, runId, message);
     }
-    noteFailure(loop, turned);
-    // A launch can fail before its first cycle, and before its run's birth.
-    if (
-      loop.turnIndex === 0 &&
-      loop.failure !== undefined &&
-      !(yield* session.log.owns(runId))
-    ) {
-      if (strategy.deliveryMode !== 'persistOnly') {
-        const wallTimeMs = (yield* Clock.currentTimeMillis) - loop.turnStart;
-        const message = strategy.formatError(turn, err, wallTimeMs);
-        yield* deliverLaunchFailure(session, runId, message);
-      }
-      return yield* Effect.fail(ensureError(loop.failure.cause));
-    }
-    yield* endTurns(loop, turned);
-    return turn ?? undefined;
-  });
+    return yield* Effect.fail(ensureError(loop.failure.cause));
+  }
+  yield* endTurns(loop, turned);
+  return turn ?? undefined;
+});
 
 /**
  * A process child: each turn's result commits here before the loop waits on
  * `input` for its next batch (raced against the loop's stop).
  */
-const driveProcess = <TTurn, R>(
+const driveProcess = Effect.fn('childRunLoop.driveProcess')(function* <
+  TTurn,
+  R,
+>(
   loop: ChildLoop<TTurn, R>,
   strategy: ProcessChildStrategy<TTurn, R>,
   input: RunInput,
-): Effect.Effect<TTurn | undefined, Error, R> =>
-  Effect.gen(function* () {
-    let next = () => strategy.launch(loop.signal);
-    let result: TTurn | undefined;
-    let resumed = false;
-    while (!loop.isInterrupted()) {
-      yield* beginTurn(loop, resumed);
-      const turned = yield* attemptTurn(loop, Effect.suspend(next));
-      if (turned === undefined) break;
-      const { turn } = turned;
-      if (turn !== null) result = turn;
-      noteFailure(loop, turned);
-      const runTurn = strategy.runTurn;
-      if (loop.failure !== undefined || turn === null || !runTurn) {
-        yield* endTurns(loop, turned);
-        break;
-      }
-      yield* finishInterimTurn(loop, turned);
-      const batch = loop.isInterrupted()
-        ? null
-        : yield* Effect.raceFirst(
-            input.next('idle'),
-            Effect.callback<null>((resume) =>
-              Effect.sync(
-                onAbort(loop.signal, () => resume(Effect.succeed(null))),
-              ),
-            ),
-          ).pipe(Effect.interruptible);
-      if (!batch || loop.isInterrupted()) break;
-      // The batch ends the wait: the turn it starts is the current one.
-      loop.consumed = batch.kind === 'synthetic' ? [] : batch.followUps;
-      resumed = true;
-      const prompts: readonly FollowUpContent[] =
-        batch.kind === 'synthetic'
-          ? [{ text: batch.text, from: { kind: 'user' } }]
-          : loop.consumed.map((followUp) => followUp.content);
-      next = () => runTurn(prompts, loop.signal);
+): Effect.fn.Return<TTurn | undefined, Error, R> {
+  let next = () => strategy.launch(loop.signal);
+  let result: TTurn | undefined;
+  let resumed = false;
+  while (!loop.isInterrupted()) {
+    yield* beginTurn(loop, resumed);
+    const turned = yield* attemptTurn(loop, Effect.suspend(next));
+    if (turned === undefined) break;
+    const { turn } = turned;
+    if (turn !== null) result = turn;
+    noteFailure(loop, turned);
+    const runTurn = strategy.runTurn;
+    if (loop.failure !== undefined || turn === null || !runTurn) {
+      yield* endTurns(loop, turned);
+      break;
     }
-    return result;
-  });
+    yield* finishInterimTurn(loop, turned);
+    const batch = loop.isInterrupted()
+      ? null
+      : yield* Effect.raceFirst(
+          input.next('idle'),
+          Effect.callback<null>((resume) =>
+            Effect.sync(
+              onAbort(loop.signal, () => resume(Effect.succeed(null))),
+            ),
+          ),
+        ).pipe(Effect.interruptible);
+    if (!batch || loop.isInterrupted()) break;
+    // The batch ends the wait: the turn it starts is the current one.
+    loop.consumed = batch.kind === 'synthetic' ? [] : batch.followUps;
+    resumed = true;
+    const prompts: readonly FollowUpContent[] =
+      batch.kind === 'synthetic'
+        ? [{ text: batch.text, from: { kind: 'user' } }]
+        : loop.consumed.map((followUp) => followUp.content);
+    next = () => runTurn(prompts, loop.signal);
+  }
+  return result;
+});
 
 /**
  * A native child's end outside its exited lifecycle (an end it wrote
  * stands), or its last turn's result alone; a user's stop then queues
  * what the child left for its parent to resume.
  */
-const endNative = <TTurn, R>(
+const endNative = Effect.fn('childRunLoop.endNative')(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   strategy: NativeChildStrategy<TTurn, R>,
   outcome: RunOutcome,
   stopped: boolean,
   lastTurn: TransactionPart | undefined,
-): Effect.Effect<void, Error, R | Runs> =>
-  Effect.gen(function* () {
-    const { session, runId } = loop.params;
-    const abnormal = stopped || loop.failure !== undefined;
-    if (abnormal && (yield* session.log.owns(runId)))
-      yield* endRunOutsideLifecycle(
-        session,
-        runId,
-        outcome,
-        loop.failure?.cause,
-        lastTurn,
-      );
-    else if (!abnormal && lastTurn !== undefined)
-      yield* commitPart(session, lastTurn);
-    if (
-      strategy.stopNotice === undefined ||
-      strategy.deliveryMode === 'persistOnly' ||
-      !loop.userStopped
-    )
-      return;
-    // A notice that cannot be read still says the child stopped: the stop
-    // stands, and the failure is loud.
-    const text = yield* strategy
-      .stopNotice()
-      .pipe(
-        Effect.catch((error) =>
-          Effect.as(
-            loop.log('warn', 'Child-run stop notice failed', { runId, error }),
-            `Run ${runId} was stopped. What it had done could not be read: ${toErrorMessage(error)}`,
-          ),
+): Effect.fn.Return<void, Error, R | Runs> {
+  const { session, runId } = loop.params;
+  const abnormal = stopped || loop.failure !== undefined;
+  if (abnormal && (yield* session.log.owns(runId)))
+    yield* endRunOutsideLifecycle(
+      session,
+      runId,
+      outcome,
+      loop.failure?.cause,
+      lastTurn,
+    );
+  else if (!abnormal && lastTurn !== undefined)
+    yield* commitPart(session, lastTurn);
+  if (
+    strategy.stopNotice === undefined ||
+    strategy.deliveryMode === 'persistOnly' ||
+    !loop.userStopped
+  )
+    return;
+  // A notice that cannot be read still says the child stopped: the stop
+  // stands, and the failure is loud.
+  const text = yield* strategy
+    .stopNotice()
+    .pipe(
+      Effect.catch((error) =>
+        Effect.as(
+          loop.log('warn', 'Child-run stop notice failed', { runId, error }),
+          `Run ${runId} was stopped. What it had done could not be read: ${toErrorMessage(error)}`,
         ),
-      );
-    const deliveryId = `${runId}:${loop.attemptId}:stopped`;
-    const item = { text, from: { kind: 'run', runId } as const, deliveryId };
-    yield* sendToParent(session, item, { hold: 'instruction' }, loop.trace);
-  });
+      ),
+    );
+  const deliveryId = `${runId}:${loop.attemptId}:stopped`;
+  const item = { text, from: { kind: 'run', runId } as const, deliveryId };
+  yield* sendToParent(session, item, { hold: 'instruction' }, loop.trace);
+});
 
 /** The child's terminal row, its process port's finalize or a native run's
  *  end, carrying the last turn's result unless its run's end took it. */
@@ -913,46 +913,46 @@ const failUnstarted =
 /** Reserve the child's stop target, budget and stage, each release on the
  *  setup scope (ownership first, so a refused activation still lets an agent
  *  CLI's provider ids go), then launch its run, admitted a tick later. */
-const launchChildLoop = <TTurn, R extends AgentRunServices>(
+const launchChildLoop = Effect.fn('childRunLoop.launchChildLoop')(function* <
+  TTurn,
+  R extends AgentRunServices,
+>(
   loop: ChildLoop<TTurn, R>,
-): Effect.Effect<Fiber.Fiber<TTurn | undefined, Error>, Error, R | Runs> =>
-  Effect.gen(function* () {
-    const { params, setup } = loop;
-    const { childRun, runId } = params;
+): Effect.fn.Return<Fiber.Fiber<TTurn | undefined, Error>, Error, R | Runs> {
+  const { params, setup } = loop;
+  const { childRun, runId } = params;
+  yield* Scope.addFinalizer(
+    setup,
+    Effect.sync(() => loop.releaseOwnership()),
+  );
+  // Every child loop reserves its stop target for its whole life.
+  const releaseActivation = loop.runs.reserveChildActivation({
+    runId,
+    launchParent: params.parentRunId,
+    interrupt: () => loop.interrupt(),
+  });
+  yield* Scope.addFinalizer(setup, Effect.sync(releaseActivation));
+  // Read after the reservation, so no stop lands while there is no target.
+  if (params.childRun === undefined && params.awaited !== true)
+    loop.budget = yield* loop.runs.childRunBudget(
+      yield* resolveChildRunConcurrencyBudget(params.session.roots),
+    );
+  const stage = yield* Effect.sync(() => {
+    // A stop sees the handle only from here, with its target reserved.
+    childRun?.track();
+    return loop.trace?.openStage(params.strategy.stageLabel);
+  });
+  if (stage !== undefined) {
+    loop.stage = stage;
     yield* Scope.addFinalizer(
       setup,
-      Effect.sync(() => loop.releaseOwnership()),
+      Effect.sync(() => stage.end(RUN_OUTCOME.FAILED)),
     );
-    // Every child loop reserves its stop target for its whole life.
-    const releaseActivation = loop.runs.reserveChildActivation({
-      runId,
-      launchParent: params.parentRunId,
-      interrupt: () => loop.interrupt(),
-    });
-    yield* Scope.addFinalizer(setup, Effect.sync(releaseActivation));
-    // Read after the reservation, so no stop lands while there is no target.
-    if (params.childRun === undefined && params.awaited !== true)
-      loop.budget = yield* loop.runs.childRunBudget(
-        yield* resolveChildRunConcurrencyBudget(params.session.roots),
-      );
-    const stage = yield* Effect.sync(() => {
-      // A stop sees the handle only from here, with its target reserved.
-      childRun?.track();
-      return loop.trace?.openStage(params.strategy.stageLabel);
-    });
-    if (stage !== undefined) {
-      loop.stage = stage;
-      yield* Scope.addFinalizer(
-        setup,
-        Effect.sync(() => stage.end(RUN_OUTCOME.FAILED)),
-      );
-    }
-    return yield* loop.runs.start(runId, runChildLoop(loop), (admitted) =>
-      Effect.andThen(Effect.yieldNow, admitted).pipe(
-        failUnstarted(setup, runId),
-      ),
-    );
-  });
+  }
+  return yield* loop.runs.start(runId, runChildLoop(loop), (admitted) =>
+    Effect.andThen(Effect.yieldNow, admitted).pipe(failUnstarted(setup, runId)),
+  );
+});
 
 /**
  * Own one child's delivery, queue, concurrency budget and terminal cleanup.

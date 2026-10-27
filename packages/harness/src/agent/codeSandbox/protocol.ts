@@ -54,22 +54,19 @@ const IssuedOpSchema = Schema.Struct({
 });
 
 const ScriptEndSchema = Schema.Union([
-  Schema.Struct({
-    _tag: Schema.Literal('Returned'),
+  Schema.TaggedStruct('Returned', {
     value: Schema.optional(JsonText),
   }),
-  Schema.Struct({
-    _tag: Schema.Literal('Threw'),
+  Schema.TaggedStruct('Threw', {
     name: Schema.String,
     message: Schema.String,
     stack: Schema.optional(Schema.String),
   }),
-  Schema.Struct({
-    _tag: Schema.Literal('SyntaxError'),
+  Schema.TaggedStruct('SyntaxError', {
     message: Schema.String,
   }),
-  Schema.Struct({ _tag: Schema.Literal('CpuExhausted') }),
-  Schema.Struct({ _tag: Schema.Literal('MemoryExhausted') }),
+  Schema.TaggedStruct('CpuExhausted', {}),
+  Schema.TaggedStruct('MemoryExhausted', {}),
 ]);
 export type ScriptEnd = typeof ScriptEndSchema.Type;
 

@@ -286,27 +286,17 @@ export function executeCliRequest(
     yield* Scope.addFinalizer(presentationScope, presentationHost.close());
     let failurePresented = false;
     const renderWorkflowPlainProgress =
-      runContext.outputFormat === 'text' &&
-      runContext.renderRunProgress === true;
+      runContext.outputFormat === 'text' && runContext.renderRunProgress;
     yield* presentationHost
       .attachRunProgressRenderer(session, { runId: request.runId })
       .pipe(Scope.provide(presentationScope));
-    const host = createHeadlessCliHostInteractions(
-      session,
-      options.services.runtime,
-      runContext,
-      {
-        prompting: () => presentationHost.holdForPrompt?.(),
-        emit: (event, payload) => {
-          if (event === 'requestShowError') failurePresented = true;
-          presentationHost.emit(event, payload);
-        },
+    const host = yield* createHeadlessCliHostInteractions(session, runContext, {
+      prompting: () => presentationHost.holdForPrompt?.(),
+      emit: (event, payload) => {
+        if (event === 'requestShowError') failurePresented = true;
+        presentationHost.emit(event, payload);
       },
-    );
-    yield* Scope.addFinalizer(
-      presentationScope,
-      Effect.sync(() => host.dispose?.()),
-    );
+    }).pipe(Scope.provide(presentationScope));
     yield* session.attach(host).pipe(Scope.provide(presentationScope));
     if (runContext.outputFormat === 'ndjson') {
       yield* Scope.addFinalizer(

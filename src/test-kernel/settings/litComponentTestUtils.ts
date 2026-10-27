@@ -98,42 +98,6 @@ function installAnimationPolyfill(window: JSDOM['window']): void {
   }
 }
 
-function installXtermBrowserPolyfill(window: JSDOM['window']): void {
-  // xterm.js resolves browser APIs off the window that owns its container, not
-  // off globalThis, so the replacements installed above don't reach it.
-  // <terminal-output> renders inside <task-group-list>, so any suite mounting
-  // that component boots a real Terminal and needs both of these.
-
-  // Device-pixel-ratio tracking in the Terminal constructor. Report "no match"
-  // and ignore listeners — nothing under test reads DPR. `addListener` is the
-  // deprecated MediaQueryList API, which xterm still calls.
-  if (typeof window.matchMedia !== 'function') {
-    window.matchMedia = ((query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      addListener: () => {},
-      removeListener: () => {},
-      dispatchEvent: () => false,
-    })) as unknown as typeof window.matchMedia;
-  }
-
-  // The render debouncer schedules every repaint through raf; same setTimeout
-  // emulation as the globalThis replacement above.
-  if (typeof window.requestAnimationFrame !== 'function') {
-    window.requestAnimationFrame = ((cb: FrameRequestCallback) =>
-      setTimeout(() => cb(performance.now()), 0) as unknown as number) as (
-      cb: FrameRequestCallback,
-    ) => number;
-    window.cancelAnimationFrame = ((handle: number) =>
-      clearTimeout(handle as unknown as ReturnType<typeof setTimeout>)) as (
-      handle: number,
-    ) => void;
-  }
-}
-
 function installDialogPolyfill(window: JSDOM['window']): void {
   // jsdom (as of 24.x) does not implement HTMLDialogElement's showModal/close.
   // wa-dialog calls these in firstUpdated; without them, attaching wa-dialog
@@ -337,7 +301,6 @@ export function useLitComponentTestDom(
     installElementInternalsPolyfill(dom.window);
     installDialogPolyfill(dom.window);
     installAnimationPolyfill(dom.window);
-    installXtermBrowserPolyfill(dom.window);
     await importComponents?.();
   }, hookTimeout);
 
@@ -375,20 +338,4 @@ export async function mountComponent<
   document.body.append(element as unknown as HTMLElement);
   await element.updateComplete;
   return element;
-}
-
-/**
- * Dispatches the keydown a component's keyboard-activation handlers listen for:
- * bubbling and composed so shadow-DOM delegates see it, cancelable so a handler
- * calling `preventDefault()` is observable.
- */
-export function dispatchKey(target: EventTarget, key: string): void {
-  target.dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key,
-      bubbles: true,
-      composed: true,
-      cancelable: true,
-    }),
-  );
 }

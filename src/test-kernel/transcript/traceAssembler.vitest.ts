@@ -1,8 +1,7 @@
 import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentConfigSchema,
@@ -11,11 +10,9 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   type RunId,
-  type RunOutcome,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import {
   createTestSession,
   publishTestRunStart,
@@ -28,105 +25,62 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
 import { assembleTrace } from '@transcript/traceAssembler';
+import { parseTraceData } from '../../../packages/trace-viewer/src/traceDataSchema';
 
 const tempDirs = useTempDirs();
-let session: SessionHandle;
-
-/** Populate the transcript input consumed by the export. */
-async function appendLogEntry(runId: RunId, text: string): Promise<void> {
-  await Effect.runPromise(
-    session.log.transact([
-      {
-        type: 'log',
-        aggregateId: qualifyAggregateId('run', runId),
-        level: LOG_LEVELS.INFO,
-        messageType: MESSAGE_TYPES.DEFAULT,
-        message: text,
-      },
-    ]),
-  );
-}
-
-function config(overrides: Partial<AgentConfig> = {}): AgentConfig {
-  return Schema.decodeUnknownSync(AgentConfigSchema)({
-    agent: 'orchestrator',
-    model: 'deepseek/deepseek-v4-flash',
-    instruction: 'Solve the problem.',
-    workingDirectory: '/workspace',
-    ...overrides,
-  });
-}
-
-/** Persist a run record plus, when given, the run's terminal outcome. */
-async function writeRun(
-  runId: RunId,
-  meta: { outcome?: RunOutcome } = {},
-  runConfigRecord: AgentConfig = config(),
-): Promise<void> {
-  publishTestRunStart(session, runId);
-  await Effect.runPromise(session.log.settled);
-  await Effect.runPromise(seedRunRecord(session, runId, runConfigRecord));
-  // The terminal fact is `run.end`; the view's outcome is folded from it.
-  if (meta.outcome)
-    await Effect.runPromise(
-      session.log.transact([
-        {
-          type: 'run.end',
-          aggregateId: qualifyAggregateId('run', runId),
-          outcome: meta.outcome,
-          output: emptyRunEndOutput(),
-        },
-      ]),
-    );
-}
-
-type AssembleTraceResult = Effect.Success<ReturnType<typeof assembleTrace>>;
-
-/** Assert the ok branch and hand back the result, narrowing for the caller. */
-function unwrapOk(result: AssembleTraceResult) {
-  expect(result.status).toBe('ok');
-  if (result.status !== 'ok') {
-    throw new Error(`expected an ok trace, got ${result.status}`);
-  }
-  return result;
-}
 
 describe('assembleTrace', () => {
   setupPlatform(() => createTempDirPlatform('texra-trace-', tempDirs));
 
-  beforeEach(async () => {
-    session = await Effect.runPromise(
-      createTestSession({ roots: testWorkspaceRoots() }),
-    );
-  });
-
-  afterEach(async () => {
-    vi.restoreAllMocks();
-  });
-
   it.effect('assembles a full trace document for a run', () =>
     Effect.gen(function* () {
-      const runId = 'aa11bb22cc33' as RunId;
-      const runConfigRecord = config({
-        agent: 'review',
-        model: 'anthropic/claude-sonnet-5-5',
+      const session: SessionHandle = yield* createTestSession({
+        roots: testWorkspaceRoots(),
       });
-
-      yield* Effect.promise(() =>
-        writeRun(runId, { outcome: 'completed' }, runConfigRecord),
-      );
-      yield* Effect.promise(() => appendLogEntry(runId, 'hello'));
+      const runId = 'aa11bb22cc33' as RunId;
+      const aggregateId = qualifyAggregateId('run', runId);
       const plan = { objective: 'Check the argument' };
-      publishTestRows(session, [
+
+      publishTestRunStart(session, runId);
+      yield* session.log.settled;
+      yield* seedRunRecord(
+        session,
+        runId,
+        Schema.decodeUnknownSync(AgentConfigSchema)({
+          agent: 'review',
+          model: 'anthropic/claude-sonnet-5-5',
+          instruction: 'Solve the problem.',
+          workingDirectory: '/workspace',
+        }),
+      );
+      // The terminal fact is `run.end`; the view's outcome is folded from it.
+      yield* session.log.transact([
         {
-          type: 'run.fact',
-          aggregateId: qualifyAggregateId('run', runId),
-          fact: { key: 'plan', plan },
+          type: 'run.end',
+          aggregateId,
+          outcome: 'completed',
+          output: emptyRunEndOutput(),
         },
       ]);
-      yield* Effect.promise(() => settleSessionEvents());
+      yield* session.log.transact([
+        {
+          type: 'log',
+          aggregateId,
+          level: LOG_LEVELS.INFO,
+          messageType: MESSAGE_TYPES.DEFAULT,
+          message: 'hello',
+        },
+      ]);
+      publishTestRows(session, [
+        { type: 'run.fact', aggregateId, fact: { key: 'plan', plan } },
+      ]);
+      yield* session.log.settled;
 
-      const { trace, record } = unwrapOk(yield* assembleTrace(runId, session));
+      const result = yield* assembleTrace(runId, session);
+      if (result.status !== 'ok') {
+        throw new Error(`expected an ok trace, got ${result.status}`);
+      }
+      const { trace, record } = result;
 
       expect(trace.runId).toBe(runId);
       expect(record).toMatchObject({
@@ -154,28 +108,8 @@ describe('assembleTrace', () => {
           fact: { key: 'plan', plan },
         }),
       );
-    }),
-  );
-
-  it.effect('returns config_missing when no config was ever written', () =>
-    Effect.gen(function* () {
-      const result = yield* assembleTrace('dec0de000001' as RunId, session);
-      expect(result).toEqual({ status: 'config_missing' });
-    }),
-  );
-
-  it.effect('exports a registered run with an empty transcript', () =>
-    Effect.gen(function* () {
-      const runId = 'eec000001' as RunId;
-      yield* Effect.promise(() => writeRun(runId));
-
-      const result = yield* assembleTrace(runId, session);
-
-      // Only the creation rows: a run that recorded nothing still exports.
-      expect(unwrapOk(result).trace.events.map((event) => event.type)).toEqual([
-        'run.start',
-        'run.config',
-      ]);
+      // The trace viewer reads the same document the export writes.
+      expect(() => parseTraceData(trace)).not.toThrow();
     }),
   );
 });

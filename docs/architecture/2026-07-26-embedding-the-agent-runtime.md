@@ -40,7 +40,7 @@ one of two owners, and an embedder supplies each one there:
 
 - **Process services** (the `agentDirectories` port,
   the optional `toolMissingReporter`, the filesystem, `Path`, secrets,
-  application state, the resume port, the editor language-model bridge) are
+  application state, the resume port) are
   Effect services provided once per process by `installProcessRuntime`
   (`packages/harness/src/controllers/session/sessionLayer.ts`).
 - **Per-workspace services** (the workspace root, its storage paths, its
@@ -123,8 +123,7 @@ decides how it surfaces (the default logs it at `warn`).
 
 Alternatively, skip the packaged tree entirely and hand `installProcessRuntime` an
 `AgentDirectoriesPort` of your own that points at your directory. See
-[§2](#2-agentdirectoriesport-is-three-directory-paths-not-agent-values) — this
-is the part the plan of record describes incorrectly.
+[§2](#2-agentdirectoriesport-is-two-directory-paths-not-agent-values).
 
 ### Prerequisite A — a default or explicit session
 
@@ -160,7 +159,7 @@ yields the detach disposer, so it is `yield*`ed. The attachment answers
 nothing: every request a run makes of a person (retry, question, approval) is
 a `request.opened` row the run's fold lists, closed by the
 `request.decided` row a surface's decision commits
-(`packages/harness/src/agent/runtime/HostInteractions.ts:70-77`). An unanswered request stays
+(`packages/harness/src/agent/runtime/HostInteractions.ts:67-74`). An unanswered request stays
 parked on its row. The adapter in the example below only receives
 presentation events, and sets `approvalPromptsUnavailable: true` on the
 object it passes to `use` (§3), which keeps the approval-gated tools away from the model.
@@ -194,15 +193,9 @@ const platform = nodePlatform({
 
 const program = Effect.gen(function* () {
   const session = yield* (yield* Sessions).open(platform.roots);
-  // §3: this host can answer no approval, so no run of the session is
-  // offered a tool that would ask for one, and the session denies the
-  // retry a provider failure opens. Attached for the program's scope.
-  yield* session.attach({
-    approvalPromptsUnavailable: true,
-    emit: (event, payload) => {
-      console.error(`[host] ${event}`, payload);
-    },
-  });
+  // §3: with no approval handler attached, no run of the session is offered
+  // a tool that requires approval, and the session denies any retry a
+  // provider failure opens.
   const run = yield* session.start({
     agent: 'assistant',
     instruction: 'Hello',
@@ -256,13 +249,9 @@ means opening the run on the document recipe
 
 ---
 
-## 2. `AgentDirectoriesPort` is three directory paths, not agent values
+## 2. `AgentDirectoriesPort` is two directory paths, not agent values
 
-`2026-07-09-agent-sdk-north-star.md:79-85` and
-`2026-07-09-state-of-the-architecture.md:815-824` present
-"inject `AgentDirectoriesPort`" as the answer to "load agent X from a YAML" for
-an embedder. That is correct only in a narrow sense, and the phrasing invites a
-wrong reading. State it plainly:
+`AgentDirectoriesPort` resolves the directory paths the catalog scans:
 
 ```ts
 // packages/harness/src/platform/interfaces.ts:230-238
@@ -276,12 +265,13 @@ export interface AgentDirectoriesPort {
 }
 ```
 
-Three methods, each yielding a **directory path string**. The port cannot
-carry an agent definition, a parsed object, a YAML string, or a virtual
-filesystem. Injecting it redirects the scan to _a different real directory on
-disk_; that is the entire capability.
+Two methods, each yielding a **directory path string**. Injecting the port
+redirects the catalog scan to a different real directory on disk; to pass an
+in-memory agent definition directly without a YAML file on disk, pass an
+inline persona object (`InlinePersonaSchema`) to `session.start({ agent: { ... } })`
+instead.
 
-### Why in-memory definitions cannot work: two filesystem planes in one function
+### Why `scanDirectory` requires a real filesystem directory
 
 The catalog's load resolves the agent roots and hands each to
 `scanDirectory` (`packages/harness/src/agent/index/agentCatalog.ts`). Inside
@@ -293,54 +283,21 @@ The catalog's load resolves the agent roots and hands each to
 - **Reading** three lines later goes through Effect's own `FileSystem`, which
   a test or an embedder can back with something other than the real disk.
 
-So one function straddles two filesystem planes. Serving an in-memory
-`FileSystem` changes only the _read_ half; `glob` still enumerates the real
-disk and finds nothing, so the scan yields zero agents.
+Serving an in-memory `FileSystem` changes only the _read_ half; `glob` still
+enumerates the real disk and finds nothing, so `scanDirectory` yields zero
+agents unless the files exist on disk.
 
-### The repo's own tests prove the constraint
-
-`src/test-kernel/agent/AgentRegistry.vitest.ts` installs a fake platform whose
-only override is the directory port:
-
-```ts
-// src/test-kernel/agent/AgentRegistry.vitest.ts
-await installPlatform(
-  { workspaceState },
-  { agentDirectories: mutableAgentDirectories },
-);
-```
-
-…and to register a single custom agent it must create a real temp directory and
-write a real YAML file:
-
-```ts
-// src/test-kernel/agent/AgentRegistry.vitest.ts
-const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
-await writeFile(resolve(customDir, 'chat.yaml'), [...].join('\n'));
-…
-useAgentDirectories({ custom: () => Effect.succeed(customDir) });
-```
-
-Its `builtIn()` points at the real repo tree
-(`packages/extension/resources/agents`) —
-`src/test-kernel/agent/AgentRegistry.vitest.ts`.
-
-If the codebase's own memfs kernel cannot avoid touching real disk to register
-one agent, an embedder cannot either.
-
-### What injection _does_ buy you
+### What `AgentDirectoriesPort` configures
 
 - **Skipping the packaged bundle.** `scanDirectory` returns no entries for an
   empty path (`packages/harness/src/agent/index/agentYamlScanner.ts:71`), so
-  `builtIn: () => Effect.succeed('')` is legal and cheap. This is the
-  "empty-builtIn trick" the proposals mention, and it does work. With it you
-  can skip the packaged resources tree entirely and point `custom()` at your
-  own directory of YAML.
+  `builtIn: () => Effect.succeed('')` skips the packaged resources tree and
+  points `custom()` at your own YAML directory.
 - **Choosing where custom agents live.** The CLI builds its port with
   `new AgentDirectoryService({ channel: 'cli', resourcesPath, state })`
-  (`packages/cli/src/runtime/cliProcessRuntime.ts:218-229`,
-  `packages/harness/src/agent/index/AgentDirectoryService.ts`). An embedder is free to
-  supply a three-line literal instead:
+  (`packages/cli/src/runtime/cliProcessRuntime.ts:231-235`,
+  `packages/harness/src/agent/index/AgentDirectoryService.ts`). An embedder can
+  supply a literal implementation instead:
 
   ```ts
   const agentDirectories: AgentDirectoriesPort = {
@@ -349,34 +306,21 @@ one agent, an embedder cannot either.
   };
   ```
 
-  Note that the built-in tree is where the shipped agents live; emptying it
-  means _only_ your YAML is resolvable. Whether any runtime feature hard-requires
-  a specific built-in agent name is an open question — the state-of-the-architecture
-  note flags it as a residual unknown
-  (`2026-07-09-state-of-the-architecture.md:825-826`) and this
-  document does not resolve it.
-
-**Bottom line for an SDK conversation:** the port is a _directory redirect_,
-not a definitions API. "Definitions as values" would be new code, not
-documentation.
-
 ---
 
-## 3. The headless minimum for requests — the one section to read
+## 3. Requests and headless sessions
 
-**Every request a run opens waits until something writes its decision. The
-runtime writes none for you, and attaching host interactions does not answer
-anything.** A headless embedder must either remove the requests its runs can
-raise or answer them itself. This is the single highest-consequence fact in
-this document.
+**Every request a run opens waits until something writes its decision.** A
+headless embedder must either withhold the requests its runs can raise or
+answer them through an attached approval handler (`session.attach({ approve })`)
+or `session.request({ kind: 'request.decide', ... })`.
 
 ### The mechanism
 
 A run that needs a person commits a `request.opened` row carrying what a
-surface shows (a diff, a command, a question) and parks. The row is answered
+surface shows (a diff, a command, a question) and waits. The row is answered
 by a `request.decided` row (`packages/harness/src/shared/schemas/sessionEvent.ts:381-396`).
-"Pending" is nothing but the fold: an opened request with no decision is
-listed in the session view's `requests`
+An opened request with no decision is listed in the session view's `requests`
 (`packages/harness/src/shared/session/sessionView.ts:256`;
 `projectRequests` in `packages/harness/src/shared/session/sessionViewUpdate.ts`), which a host reads through
 `SessionHandle.view` or the level stream `SessionHandle.viewChanges`
@@ -401,28 +345,29 @@ run's `request.decided` row, and the run continues from it.
 `HostInteractions` is not part of this path. It is a presentation port —
 events, diagnostics, PDFs, the tool-edit preview a durable payload cannot
 carry — and no method on it returns a decision
-(`packages/harness/src/agent/runtime/HostInteractions.ts:70-77`). Attaching a host with
+(`packages/harness/src/agent/runtime/HostInteractions.ts:67-74`). Attaching a host with
 `session.interactions.use(...)` is how a host sees what a run does; it never
-unparks a run.
+resumes a waiting run.
 
 ### The request kinds
 
 The payload union is the vocabulary: `toolEdit`, `bash`, `retry`,
 `proposal`, `planApproval`, `externalInquiry`, `userQuestion`
 (`packages/harness/src/shared/schemas/progressView/data.ts:106-128`). Every kind but
-`externalInquiry` parks the tool or turn that opened it
+`externalInquiry` blocks the tool or turn that opened it
 (`requestParksItsCaller`, `:144-148`); an external inquiry is answered later
-and parks nothing.
+and blocks nothing.
 
 ### Removing the requests: `approvalPromptsUnavailable`
 
-The host says it by supplying `approvalPromptsUnavailable` on the object it
-passes to `session.interactions.use({...})`, as in the §1 example; it is a
-field of `HostInteractions` (`packages/harness/src/agent/runtime/HostInteractions.ts:97`), not
+An internal host supplies `approvalPromptsUnavailable` on the object it
+passes to `session.interactions.use({...})`; on the public `@texra-ai/harness`
+surface, a session with no `approve` handler attached in `session.attach({ approve })`
+withholds approval-gated tools automatically. `approvalPromptsUnavailable` is a
+field of `HostInteractions` (`packages/harness/src/agent/runtime/HostInteractions.ts:49`), not
 an option of the root launch, and `RootLaunchOptions` has no such property. The
 session's `interactions.approvalPromptsUnavailable` getter reads the attached
-host's answer (`HostInteractions.ts:272-276`), and it is `false` while no host
-is attached. It is a fact of the session, not a launch option: each step
+host's answer (`HostInteractions.ts:218-222`). Each step
 applies the session's approval policy to it (`withholdsApprovalTools`,
 `packages/harness/src/agent/runtime/requestPolicy.ts:44`) when it resolves the tools it offers
 (`packages/harness/src/agent/runtime/loop/step.ts:204-207`), so a policy change or a host
@@ -437,9 +382,7 @@ requests those tools would raise. Tools an embedder supplies in
 offered them, so a run-scoped tool that needs approval is left to the
 approval guard, which may deny the call, rather than removed. The tools that open
 `toolEdit`, `bash`, `proposal`, `planApproval`, `externalInquiry` and
-`userQuestion` requests all declare `requiresApproval: true`. This is a loud,
-defined degradation — an agent that cannot ask is not given the catalog tools
-that ask — rather than a hang.
+`userQuestion` requests all declare `requiresApproval: true`.
 
 The headless CLI host answers it from its mode alone
 (`packages/cli/src/runtime/approvalAdapter.ts`); the session applies its
@@ -453,7 +396,7 @@ user-retryable provider failure, so the flag cannot remove it. The session
 decides it in the batch that opens it (`decideRetryApproval`, read off
 `session.approvalPolicy` and this same flag): a host that cannot answer gets
 the denial as the run's `request.decided` row, with no listener of its own.
-The `@texra-ai/agent` package's sessions rely on that, and the headless CLI
+The `@texra-ai/harness` package's sessions rely on that, and the headless CLI
 answers what its policy leaves open from a terminal prompt
 (`createHeadlessCliHostInteractions`,
 `packages/cli/src/runtime/approvalAdapter.ts`).
@@ -531,7 +474,7 @@ following classification makes that distinction.
 ### Runtime bootstrap and shipped-feature parity
 
 - **`:275-282` — `installCliProcessRuntime(...)`:** Required. The one process
-  runtime (`packages/cli/src/runtime/cliProcessRuntime.ts:230`), which also
+  runtime (`packages/cli/src/runtime/cliProcessRuntime.ts:229`), which also
   builds the agent-directories port
   (`:218-229`). The direct Lean language-server layer
   (`packages/texra/src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; an embedder may pass
@@ -573,7 +516,7 @@ following classification makes that distinction.
 The desktop main process makes the same runtime choices, showing how a shipped
 host obtains full feature parity rather than proving that every call is a
 minimum runtime requirement: it builds its agent-directories port at
-`packages/desktop/src/main/platform/index.ts:167`, runs the same
+`packages/desktop/src/main/platform/index.ts:164`, runs the same
 `bootstrapHost` at `:228`. Product policy is
 not necessarily CLI-only: the disabled-tool seed and the runtime skill sources
 reach both hosts through that one shared call rather than being repeated per

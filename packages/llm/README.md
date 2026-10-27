@@ -1,16 +1,12 @@
 # @texra-ai/llm
 
-TeXRA's complete model package: the model catalog over `llm-zoo`, the
-provider catalog, the route decision, the subscription sign-in flows, and one
-contract over four HTTP wire protocols and the editor's `vscode-lm`. A
-`Model` is a configured executable value. It owns the wire — lowering a turn,
-decoding the stream, classifying the failure — and nothing else. Conversation,
-retry, pricing, approval, budgets and persistence are the runtime's, and the
-package is pure: no `platform()`, no `Effect.run*`, no `AbortController`, no
-`vscode`. It reads no settings and imports nothing else in the repo: the host
-passes configuration in (`RouteFacts`) and credentials through one port,
-`CredentialStore`. Its only dependencies are `llm-zoo`, the provider SDKs,
-`ws`, and `effect` as a peer.
+TeXRA's model package: the model catalog over `llm-zoo`, the provider catalog,
+the route decision, the subscription sign-in flows, and one contract over three
+HTTP wire protocols. A `Model` is a configured executable value that lowers a
+turn, decodes the stream, and classifies failures. Conversation state, retries,
+pricing, approvals, budgets, and persistence belong to the caller, and the
+package is pure: the host passes configuration in (`RouteFacts`) and
+credentials through `CredentialStore`.
 
 > **0.x: the API may change in any minor release.** The package is versioned
 > on its own, not with the TeXRA app.
@@ -118,8 +114,7 @@ never on its message:
 | `quota`                                      | for `quota-exhausted`: the `plan` used up (a `PlanRoute`, or `null` for the account's credit), and when it resets                                                                                                                   |
 | `status`, `requestId`, `responseId`, `model` | the HTTP facts, when the failure had a reply                                                                                                                                                                                        |
 
-`ModelErrorFieldsSchema` is the same fields as data, for an error that
-crosses a process boundary. The package itself retries nothing. Retry,
+The package itself retries nothing. Retry,
 pricing and persistence belong to the caller
 ([`@texra-ai/harness`](../harness/README.md) is one).
 
@@ -145,6 +140,9 @@ The package is split by where its code runs, not by topic.
 | `./node` | `bindModel(spec) → Binding`, the ChatGPT and Grok sign-in flows and their `SubscriptionCoordinator`s, `SharedAttempt`                                                                                                                                 | Node         |
 
 Every type a public signature names is exported from one of the two entries.
+Each entry's exports, with their TSDoc and declarations, are listed in
+[`docs/api/index.md`](./docs/api/index.md) and
+[`docs/api/node.md`](./docs/api/node.md), generated from the source.
 The protocols (`api/`), the prefix fingerprint and the upload cache are
 internal: `bindModel` loads the chosen protocol with a literal
 `import('./api/<protocol>.js')`, so a run loads only its provider's SDK.
@@ -170,17 +168,17 @@ prepareTurn(request) -> ResolvedTurn // freeze the binding and the controls
 streamTurn(turn)     -> Stream<TurnEvent>
 ```
 
-A caller that wants only the result folds the stream with
+A caller that wants only the result collects the stream with
 `completedTurn(model.streamTurn(turn))`; there is no separate non-streaming
 member, so the two paths cannot diverge. Preparation is where a
-request is admitted or rejected: an unsupported control, an unrepresentable
+request is accepted or rejected: an unsupported control, an unrepresentable
 history or an unsupported media part fails there, before transport. Execution
-never rewrites an admitted request.
+never rewrites an accepted request.
 
 Three optional members, present only where the binding serves them:
 `uploadFile` / `releaseUploads` (provider file ids, held in the model's memory
 only and never persisted) and `background` (`submit`, `observe`, `cancel`) for
-the protocols with remote execution. `observe` takes the admitted turn back
+the protocols with remote execution. `observe` takes the accepted turn back
 because a completion's continuation anchors to the exact history prefix it
 covers, which the operation handle deliberately does not copy.
 
@@ -195,16 +193,16 @@ covers, which the operation handle deliberately does not copy.
 | `api/transport.ts`                | stream pull, tool-argument parsing, the abort-safe request helper                                                                                                       |
 | `api/openaiResponses.ts`          | `openaiResponsesModel`                                                                                                                                                  |
 | `api/parts.ts`                    | the part events every codec reports a response in, and the canonical-part algebra (identity, restatement, growth)                                                       |
-| `api/assembleTurn.ts`             | the one turn fold over part events: identity, positions, deltas, call arguments, finish agreement, terminal validation                                                  |
+| `api/assembleTurn.ts`             | the one turn reducer over part events: identity, positions, deltas, call arguments, finish agreement, terminal validation                                               |
 | `api/openaiResponsesCodec.ts`     | the response-side schemas, content lowering, and the one Responses event decoder (stream, WebSocket, observation)                                                       |
-| `api/openaiResponsesUsage.ts`     | the usage receipt schema and its normalization, xAI's settled cost included                                                                                             |
+| `api/openaiResponsesUsage.ts`     | the usage receipt schema and its normalization, xAI's final cost included                                                                                               |
 | `api/openaiResponsesLower.ts`     | input lowering and the continuation anchor                                                                                                                              |
 | `api/openaiResponsesRequest.ts`   | preparing a turn, its parameters, the abort classification                                                                                                              |
 | `api/openaiResponsesWebSocket.ts` | the experimental WebSocket transport                                                                                                                                    |
 | `api/anthropicMessages.ts`        | `anthropicMessagesModel`                                                                                                                                                |
 | `api/googleInteractions.ts`       | `googleInteractionsModel`                                                                                                                                               |
 | `api/uploadCache.ts`              | the digest-keyed, model-scoped upload cache behind `uploadFile`                                                                                                         |
-| `api/prefixFingerprint.ts`        | the admitted-history fingerprint a background completion anchors on                                                                                                     |
+| `api/prefixFingerprint.ts`        | the accepted-history fingerprint a background completion anchors on                                                                                                     |
 | `api/openaiError.ts`              | SDK error classification into `ModelError`                                                                                                                              |
 | `node.ts`                         | the `./node` entry: `bindModel`, the protocol choice, and the sign-in exports                                                                                           |
 | `api/configuration.ts`            | the vendor rules that turn a catalog model, its route and the caller's options into each protocol's configuration (`responsesConfiguration.ts`: the Responses vendors') |
@@ -212,12 +210,6 @@ covers, which the operation handle deliberately does not copy.
 | `providers/`                      | the provider plugins, the API-key providers and their key lookup, `CredentialStore`                                                                                     |
 | `models/`                         | model selection over llm-zoo, the route decision and its config and endpoint, the reasoning choice, a turn's cost                                                       |
 | `oauth/`                          | the ChatGPT (`codex/`) and Grok (`xai/`) sign-in flows over the shared subscription coordinator, loopback and device flows                                              |
-
-The `vscode-lm` protocol cannot live here: it is acquired from the
-editor. `packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts`
-implements the same `Model` contract against `vscode.lm`, captures one
-concrete model with its exact vendor, id and version, and rejects a foreign or
-retired acquisition rather than silently selecting a replacement.
 
 ## Who calls it
 
@@ -243,13 +235,11 @@ are contract.
 Unsupported content fails explicitly; no protocol silently discards reasoning,
 media or evidence it cannot represent. The current explicit failures:
 
-- Hosted tools, ruled out of 1.0
-  ([the ruling](../../.agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md)):
-  the run's local `web_search` and `web_fetch` tools are the one system for
-  web search and fetch, and the codecs request no provider-hosted tool. A
-  stream that carries hosted execution still fails explicitly — the hosted
-  blocks fail the event schema as malformed output, and a paused hosted turn
-  fails by name as the boundary a future lane would have to implement.
+- Hosted tools: the run's local `web_search` and `web_fetch` tools are the one
+  system for web search and fetch, and the codecs request no provider-hosted
+  tool. A stream that carries hosted execution still fails explicitly — the
+  hosted blocks fail the event schema as malformed output, and a paused hosted
+  turn fails by name.
 - Assistant media output, Responses service-tier billing accounting, and native
   provider compaction.
 - Streaming reconnection and managed-agent execution for background work.
@@ -273,9 +263,7 @@ behind `vitest.live.config.mjs`. Each suite skips itself unless its own key is
 in the environment, so a run with one key exercises one route and skips the
 rest. It is deliberately not part of `npm test`: reach it by name
 (`npm run test:live`) or through the labelled job in
-`.github/workflows/live-llm.yml`. `vscode-lm` has no
-suite there — it is acquired through the extension host's `vscode.lm` API, so
-its live check belongs to an Extension Development Host job.
+`.github/workflows/live-llm.yml`.
 
 What the live tier does not claim: SSE parsing belongs to the vendor SDKs, so
 the package makes no bounded-stream-memory claim, and cleanup joins foreign

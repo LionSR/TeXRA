@@ -41,10 +41,12 @@ import {
 } from '../errors.js';
 import {
   admitObservation,
+  decodeWireOrFail,
   ownedAbortSafeRequest,
   parseOutboundToolArguments,
   pullStream,
   readerAbortSignal,
+  wireFail as fail,
 } from './transport.js';
 import type { InputPart, Part, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
@@ -452,20 +454,13 @@ function deltaPart(
 
 function googleWire(store: boolean) {
   let done = false;
-  const fail = (
-    message: string,
-    kind: ModelError['kind'] = 'malformed-output',
-  ) => Effect.fail(new ModelError({ kind, message }));
   return (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
     Effect.gen(function* () {
-      const decoded = Schema.decodeUnknownResult(WireEventSchema)(raw);
-      if (!Result.isSuccess(decoded))
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'Google returned malformed or unsupported stream data.',
-          cause: decoded.failure,
-        });
-      const event = decoded.success;
+      const event = yield* decodeWireOrFail(
+        WireEventSchema,
+        'Google returned malformed or unsupported stream data.',
+        raw,
+      );
       if (done)
         return yield* fail(
           'Google emitted data after its completed interaction.',
@@ -712,16 +707,12 @@ export function googleInteractionsModel(
           message: `Google background interaction ended with status ${interaction.status}.`,
         });
       }
-      const steps = Schema.decodeUnknownResult(WireSnapshotStepsSchema)(
+      const steps = yield* decodeWireOrFail(
+        WireSnapshotStepsSchema,
+        'Google returned malformed or unsupported completed steps.',
         interaction.steps,
       );
-      if (!Result.isSuccess(steps))
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'Google returned malformed or unsupported completed steps.',
-          cause: steps.failure,
-        });
-      const parts = yield* Effect.forEach(steps.success, (step, index) =>
+      const parts = yield* Effect.forEach(steps, (step, index) =>
         Effect.map(stepPart(step), (part): PartEvent[] => [
           { kind: 'open', index, part },
           { kind: 'close', index },

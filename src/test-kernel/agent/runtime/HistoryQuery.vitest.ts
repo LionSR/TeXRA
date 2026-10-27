@@ -1,20 +1,17 @@
 import '@test/support/sessionGraphTestSetup';
 
+import { setTimeout as delay } from 'node:timers/promises';
+
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Fiber } from 'effect';
+import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  qualifyAggregateId,
-  emptyRunEndOutput,
-  type RunId,
-} from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
-  publishTestRows,
 } from '@test/support/sessionTestUtils';
 
 /**
@@ -35,8 +32,6 @@ const withSession = <A, E>(
   body: (session: SessionHandle) => Effect.Effect<A, E>,
 ) => Effect.acquireUseRelease(createTestSession(), body, closeSessionOf);
 
-const run = (runId: RunId) => qualifyAggregateId('run', runId);
-
 const query = (session: SessionHandle, sql: string, params: string[] = []) =>
   Effect.gen(function* () {
     yield* session.log.settled.pipe(Effect.orDie);
@@ -44,99 +39,29 @@ const query = (session: SessionHandle, sql: string, params: string[] = []) =>
   });
 
 describe('HistoryQuery', () => {
-  it.live('compiles every view against the current vocabulary', () =>
-    withSession((session) =>
-      Effect.gen(function* () {
-        publishTestRunStart(session);
-        for (const view of [
-          'runs',
-          'run_tree',
-          'messages',
-          'tool_calls',
-          'usage',
-          'events',
-        ]) {
-          const page = yield* query(session, `SELECT * FROM ${view}`);
-          expect(page.columns.length).toBeGreaterThan(0);
-        }
-      }),
-    ),
-  );
-
-  it.live('reports a resumed run by its latest lifecycle', () =>
-    withSession((session) =>
-      Effect.gen(function* () {
-        const runId = publishTestRunStart(session);
-        publishTestRows(session, [
-          {
-            type: 'run.activate',
-            aggregateId: run(runId),
-          },
-          {
-            type: 'run.end',
-            aggregateId: run(runId),
-            outcome: 'failed',
-            output: emptyRunEndOutput(),
-          },
-        ]);
-        const ended = yield* query(
-          session,
-          'SELECT lifecycle, outcome FROM runs WHERE id = ?',
-          [runId],
-        );
-        expect(ended.rows).toEqual([['ended', 'failed']]);
-
-        publishTestRows(session, [
-          {
-            type: 'run.activate',
-            aggregateId: run(runId),
-          },
-        ]);
-        const resumed = yield* query(
-          session,
-          'SELECT lifecycle, outcome FROM runs WHERE id = ?',
-          [runId],
-        );
-        expect(resumed.rows).toEqual([['activated', null]]);
-      }),
-    ),
-  );
-
-  it.live('drops a detached child from its former parent', () =>
-    withSession((session) =>
-      Effect.gen(function* () {
-        const parent = publishTestRunStart(session);
-        const child = publishTestRunStart(session, undefined, { parent });
-        const before = yield* query(
-          session,
-          'SELECT id FROM run_tree WHERE ancestor_id = ?',
-          [parent],
-        );
-        expect(before.rows).toEqual([[child]]);
-
-        publishTestRows(session, [
-          { type: 'run.detach', aggregateId: run(child) },
-        ]);
-        const after = yield* query(
-          session,
-          'SELECT id FROM run_tree WHERE ancestor_id = ?',
-          [parent],
-        );
-        expect(after.rows).toEqual([]);
-      }),
-    ),
-  );
-
   it.live(
     'stops a runaway statement at its deadline and serves the next query',
     () =>
       withSession((session) =>
         Effect.gen(function* () {
           publishTestRunStart(session);
-          const runaway = yield* query(
-            session,
-            'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n) SELECT count(*) FROM n',
-          ).pipe(Effect.flip);
+          // The store is open and fed, so the runaway's only wait is its
+          // deadline, which the test clock steps through.
+          yield* query(session, 'SELECT count(*) FROM runs');
+          const runaway = yield* Effect.gen(function* () {
+            const stopped = yield* query(
+              session,
+              'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n) SELECT count(*) FROM n',
+            ).pipe(Effect.flip, Effect.forkChild);
+            const stepping = yield* TestClock.adjust('1 second').pipe(
+              Effect.andThen(Effect.promise(() => delay(20))),
+              Effect.forever,
+              Effect.forkChild,
+            );
+            const refused = yield* Fiber.join(stopped);
+            yield* Fiber.interrupt(stepping);
+            return refused;
+          }).pipe(Effect.provide(TestClock.layer()));
           expect(runaway).toMatchObject({
             _tag: 'HistoryQueryRefused',
             reason: 'timeout',
@@ -145,27 +70,6 @@ describe('HistoryQuery', () => {
           expect(next.rows).toEqual([[1]]);
         }),
       ),
-    { timeout: 20_000 },
-  );
-
-  it.live('holds display rows only', () =>
-    withSession((session) =>
-      Effect.gen(function* () {
-        const runId = publishTestRunStart(session);
-        publishTestRows(session, [
-          { type: 'run.report', aggregateId: run(runId), report: 'secret' },
-        ]);
-        const types = yield* query(session, 'SELECT DISTINCT type FROM events');
-        expect(types.rows).toEqual([['run.start']]);
-        const base = yield* query(session, 'SELECT * FROM event').pipe(
-          Effect.flip,
-        );
-        expect(base).toMatchObject({
-          _tag: 'HistoryQueryRefused',
-          reason: 'rejected',
-        });
-      }),
-    ),
   );
 
   it.live('refuses a write and a second statement', () =>

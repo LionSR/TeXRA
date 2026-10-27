@@ -1,32 +1,12 @@
 /**
- * How a renderer words a size, a duration and a moment: English
+ * How a renderer words a size and a moment: English
  * copy every host prints the same way.
  */
 import prettyBytes from 'pretty-bytes';
-import prettyMilliseconds from 'pretty-ms';
 
 /** Human-readable byte size in binary units (`1.5 MiB`, `1023 B`). */
 export function formatBytes(bytes: number): string {
   return prettyBytes(bytes, { binary: true });
-}
-
-/**
- * Format a duration in milliseconds to a compact human-readable string
- * (e.g. `3m 42s`, `1h 5m`, `2d 4h`).
- *
- * Backed by `pretty-ms`, so durations spanning hours or days render
- * correctly instead of overflowing into `120min` style output. Durations
- * of one second or more are floored to whole-second granularity, so
- * per-second elapsed displays (e.g. ToolTimer) never report more than the
- * real elapsed time. Sub-second durations render as a `1s` minimum floor
- * (rather than `0s`).
- */
-export function formatDuration(durationMs: number): string {
-  if (durationMs < 0) return '0s';
-  if (durationMs < 1000) return '1s';
-  return prettyMilliseconds(Math.floor(durationMs / 1000) * 1000, {
-    secondsDecimalDigits: 0,
-  });
 }
 
 const relativeTimeFormat = new Intl.RelativeTimeFormat(undefined, {

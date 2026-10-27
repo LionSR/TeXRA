@@ -58,7 +58,7 @@ export function scrollableModalTextRowsBudget({
  * Prefixes apply per source line (first vs subsequent), e.g. the bash
  * command's `$ ` / `  ` gutter.
  */
-export function modalTextDisplayLines({
+function modalTextDisplayLines({
   continuationPrefix = '',
   firstLinePrefix = '',
   minContentWidth = MIN_MODAL_CONTENT_WIDTH,

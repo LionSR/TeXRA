@@ -18,7 +18,6 @@ import {
  * that can drift.
  */
 interface TestSourceModules {
-  '@platform/defaults/jsonConfigProvider': typeof import('@platform/defaults/jsonConfigProvider');
   '@platform/defaults/jsonStore': typeof import('@platform/defaults/jsonStore');
   '@desktop/main/desktopNavigationPolicy': typeof import('@desktop/main/desktopNavigationPolicy');
 }

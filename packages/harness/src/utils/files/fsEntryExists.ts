@@ -52,20 +52,19 @@ const isLink = (fs: FileSystem.FileSystem, target: string) =>
  * for the paths inside its root and the process filesystem answers for the
  * rest.
  */
-export const entryTypeIn = (
+export const entryTypeIn = Effect.fn('fsEntryExists.entryTypeIn')(function* (
   fs: FileSystem.FileSystem,
   target: string,
-): Effect.Effect<
+): Effect.fn.Return<
   FileSystem.File.Type | undefined,
   PlatformError.PlatformError
-> =>
-  Effect.gen(function* () {
-    if (yield* isLink(fs, target)) return 'SymbolicLink';
-    return yield* fs.stat(target).pipe(
-      Effect.map((info) => info.type),
-      Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
-    );
-  });
+> {
+  if (yield* isLink(fs, target)) return 'SymbolicLink';
+  return yield* fs.stat(target).pipe(
+    Effect.map((info) => info.type),
+    Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+  );
+});
 
 /**
  * Whether `target` names a filesystem entry, with {@link entryTypeIn}'s lstat

@@ -178,9 +178,10 @@ const UpdateAgentSelectionMessageSchema = Schema.Struct({
 /**
  * The model sources the Models tab groups its rows under, in display order.
  * A model whose source is outside this list never renders as a row, so the
- * controller admits only these. Every llm-zoo provider but `others` is a
- * source (checked below, so a provider a new llm-zoo release adds fails to
- * compile until it is placed here), plus the Kimi Code subscription.
+ * controller admits only these. Every llm-zoo provider but `others` and
+ * `copilot` (whose models TeXRA does not serve) is a source (checked below,
+ * so a provider a new llm-zoo release adds fails to compile until it is
+ * placed here), plus the Kimi Code subscription.
  */
 const MODEL_SOURCES = [
   'openai',
@@ -194,10 +195,12 @@ const MODEL_SOURCES = [
   'glm',
   'meta',
   'kimiCode',
-  'copilot',
 ] as const;
 type _EveryProviderIsASource = AssertNever<
-  Exclude<`${ModelProvider}`, (typeof MODEL_SOURCES)[number] | 'others'>
+  Exclude<
+    `${ModelProvider}`,
+    (typeof MODEL_SOURCES)[number] | 'others' | 'copilot'
+  >
 >;
 type AssertNever<T extends never> = T;
 
@@ -233,20 +236,6 @@ const ModelSelectionItemSchema = Schema.Struct({
 });
 export type ModelSelectionItem = typeof ModelSelectionItemSchema.Type;
 
-/**
- * One discovered Copilot access route, keyed by the canonical base model id
- * (#9635). The Models tab Copilot section renders route status from this list
- * — routes are transports for base models, never picker rows of their own.
- */
-const CopilotRouteInfoSchema = Schema.Struct({
-  name: Schema.String,
-  label: Schema.String,
-  access: Schema.Literals(['allowed', 'consent-required', 'unavailable']),
-  /** Whether the user has chosen this route for the base model (#9635). */
-  preferred: Schema.Boolean,
-});
-export type CopilotRouteInfo = typeof CopilotRouteInfoSchema.Type;
-
 /** Outbound: backend → frontend model selection data */
 const UpdateModelSelectionMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION),
@@ -254,8 +243,6 @@ const UpdateModelSelectionMessageSchema = Schema.Struct({
   helperModel: Schema.String,
   /** Whether the user prefers short (unpinned) model names. */
   preferShortModelNames: Schema.Boolean,
-  /** Discovered Copilot routes and their editor-reported access state. */
-  copilotModels: Schema.Array(CopilotRouteInfoSchema),
 });
 export type UpdateModelSelectionMessage =
   (typeof UpdateModelSelectionMessageSchema)['Type'];
@@ -571,12 +558,6 @@ const SetModelReasoningLevelMessageSchema = modelCommand(
     level: Schema.NullOr(ReasoningEffortSchema),
   }),
 );
-const RequestModelAccessMessageSchema = modelCommand(
-  SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
-);
-const ClearCopilotRouteMessageSchema = modelCommand(
-  SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE,
-);
 
 // Agent selection inbound messages
 const OpenAgentYamlMessageSchema = agentCommand(
@@ -772,8 +753,6 @@ export const SettingsViewInboundMessageSchema = Schema.Union([
   // Model selection messages
   SetModelEnabledMessageSchema,
   SetModelReasoningLevelMessageSchema,
-  RequestModelAccessMessageSchema,
-  ClearCopilotRouteMessageSchema,
   // Agent selection messages
   OpenAgentYamlMessageSchema,
   SetAgentEnabledMessageSchema,

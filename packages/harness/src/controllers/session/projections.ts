@@ -343,57 +343,58 @@ export function projectionUpkeep<E>(
     /** One catch-up step: a projection another build versioned is emptied
      *  and rebuilt; one behind `top` reads up to 1,000 rows on. Whether
      *  every projection reached `top`. */
-    catchUp: (top: number) =>
-      Effect.gen(function* () {
-        const current = yield* states;
-        let all = true;
-        for (const name of PROJECTION_NAMES) {
-          const state = current.get(name);
-          if (isCurrent(name, state, top)) continue;
-          const own = state?.version === PROJECTORS[name].version;
-          if (state !== undefined && !own)
-            yield* Effect.logInfo(
-              `Rebuilding the ${name} projection of ${path} (stored version ${state.version}, this build's ${PROJECTORS[name].version}).`,
-            ).pipe(withLogChannel('sessionDatabase'));
-          if (!own) {
-            yield* exec(`DELETE FROM ${PROJECTORS[name].table}`);
-            yield* exec(
-              'DELETE FROM projected_row WHERE type IN (SELECT value FROM json_each(?))',
-              [JSON.stringify(PROJECTORS[name].projects)],
-            );
-          }
-          const through = own ? (state?.through ?? 0) : 0;
-          const rows =
-            through >= top
-              ? []
-              : yield* exec(
-                  `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
+    catchUp: Effect.fn('projections.catchUp')(function* (top: number) {
+      const current = yield* states;
+      let all = true;
+      for (const name of PROJECTION_NAMES) {
+        const state = current.get(name);
+        if (isCurrent(name, state, top)) continue;
+        const own = state?.version === PROJECTORS[name].version;
+        if (state !== undefined && !own)
+          yield* Effect.logInfo(
+            `Rebuilding the ${name} projection of ${path} (stored version ${state.version}, this build's ${PROJECTORS[name].version}).`,
+          ).pipe(withLogChannel('sessionDatabase'));
+        if (!own) {
+          yield* exec(`DELETE FROM ${PROJECTORS[name].table}`);
+          yield* exec(
+            'DELETE FROM projected_row WHERE type IN (SELECT value FROM json_each(?))',
+            [JSON.stringify(PROJECTORS[name].projects)],
+          );
+        }
+        const through = own ? (state?.through ?? 0) : 0;
+        const rows =
+          through >= top
+            ? []
+            : yield* exec(
+                `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
                    WHERE e.type IN (SELECT value FROM json_each(?))
                      AND e."commit" > ? AND e."commit" <= ?
                    ORDER BY e."commit" LIMIT 1000`,
-                  [JSON.stringify(PROJECTORS[name].inputs), through, top],
-                );
-          yield* project(yield* read(rows, false), [name]);
-          const reached =
-            rows.length < 1000
-              ? top
-              : Schema.decodeUnknownSync(Schema.Int)(rows.at(-1)?.commit);
-          yield* setState(name, reached);
-          all &&= reached >= top;
-        }
-        return all;
-      }),
+                [JSON.stringify(PROJECTORS[name].inputs), through, top],
+              );
+        yield* project(yield* read(rows, false), [name]);
+        const reached =
+          rows.length < 1000
+            ? top
+            : Schema.decodeUnknownSync(Schema.Int)(rows.at(-1)?.commit);
+        yield* setState(name, reached);
+        all &&= reached >= top;
+      }
+      return all;
+    }),
     /** A batch committed after `before`: a projection current through
      *  `before` follows it; any other catches up on its owner's next read. */
-    follow: (events: readonly SessionEvent[], before: number) =>
-      Effect.gen(function* () {
-        const through = events.at(-1)?.commit ?? before;
-        const current = yield* states;
-        const following = PROJECTION_NAMES.filter((name) =>
-          isCurrent(name, current.get(name), before),
-        );
-        yield* project(events, following);
-        for (const name of following) yield* setState(name, through);
-      }),
+    follow: Effect.fn('projections.follow')(function* (
+      events: readonly SessionEvent[],
+      before: number,
+    ) {
+      const through = events.at(-1)?.commit ?? before;
+      const current = yield* states;
+      const following = PROJECTION_NAMES.filter((name) =>
+        isCurrent(name, current.get(name), before),
+      );
+      yield* project(events, following);
+      for (const name of following) yield* setState(name, through);
+    }),
   };
 }

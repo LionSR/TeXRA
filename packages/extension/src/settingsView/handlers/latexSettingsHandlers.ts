@@ -7,6 +7,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 import { ensureError } from '@texra-ai/harness/schemas';
+import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
@@ -109,14 +110,10 @@ export function vscodeLatexSettingsHandlers(
     body.reported(
       `Failed to install extension "${extensionId}"`,
       Effect.gen(function* () {
-        yield* Effect.tryPromise({
-          try: () =>
-            vscode.commands.executeCommand(
-              'workbench.extensions.installExtension',
-              extensionId,
-            ),
-          catch: ensureError,
-        });
+        yield* executeVscodeCommand(
+          'workbench.extensions.installExtension',
+          extensionId,
+        );
         yield* Effect.forkDetach(
           showLoggedInfoMessage(
             CHANNEL,

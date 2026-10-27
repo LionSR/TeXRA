@@ -242,30 +242,22 @@ texra chat --model deepseek/deepseek-flash@high # override the session model and
 texra run review --input main.tex --instruction "Check the proof." --print
 ```
 
-Slash commands inside the session: `/login` signs in and sets which provider
-subscriptions serve their models, `/approval` sets the approval policy and
-turns off a grant you gave with `a` on an approval card (`/status` lists them),
-`/config` holds settings and integrations, `/model` switches to
-another model from the same provider mid-session (the change applies
-immediately and persists on resume), `/skills` lists available skills and
-applies one to your next request, and `/resume` restores a stored execution.
-Chat requires an interactive terminal. For scripted, non-TTY runs use
-`texra run <agent>` with `--print` or `--output-format json|ndjson`. One
-command serves every agent: an agent without a document task accepts
-workspace `--input` and `--context` files plus a required instruction
-(`--instruction`, `--instruction-file`, or both); an agent with a document
-task runs that task over the `--input` files, takes `--output`/`--output-dir`,
-and produces document-oriented outputs. List the agents that have a document
-task with `texra agents list --tasks`. A bare name picks the
-highest-priority agent of that name (custom, then built-in, then plugin);
-pass a source-qualified key such as `texra run builtIn:assistant` to pick
-another.
+Slash commands inside the session:
 
-`/tasks` lists the tasks the background service runs, across every project
-(see [Background service](#background-service)). Choosing one attaches to it
-inside the chat: its transcript streams live, Enter sends it a follow-up,
-and a command, edit or question it asks appears as the usual approval card.
-Esc detaches; the task keeps running in the service.
+- `/login`: sign in and choose which provider subscriptions serve their models (`/login status` prints how each model is billed).
+- `/approval`: set the approval policy and revoke grants given with `a` on an approval card (`/status` lists active grants).
+- `/config`: open settings and integrations.
+- `/model`: switch to another model from the same provider mid-session (applies immediately and persists on resume).
+- `/skills`: list available skills and apply one to your next request.
+- `/resume`: restore a stored execution (`/resume all` continues every interrupted task).
+- `/rename <title>`: rename the focused task.
+- `/tasks`: list tasks running in the [background service](#background-service) across every project. Picking one attaches to it live: Enter sends a follow-up, approval requests appear inline, and Esc detaches while the task keeps running.
+
+`texra chat` requires an interactive terminal. For scripts and CI, use `texra run <agent>` with `--print` or `--output-format json|ndjson`:
+
+- An agent **without** a document task accepts `--input` and `--context` files plus a required instruction (`--instruction`, `--instruction-file`, or both).
+- An agent **with** a document task runs that pipeline over `--input` files, accepts `--output` / `--output-dir`, and writes versioned document outputs. List document-task agents with `texra agents list --tasks`.
+- A bare agent name picks the highest-priority match (`custom`, then `builtIn`, then `plugin`); pass a qualified key such as `texra run builtIn:assistant` to target a specific source.
 
 ## Teams
 
@@ -338,54 +330,23 @@ texra plugin disable paper-protocol
 texra plugin remove paper-protocol
 ```
 
-An installed plugin stays off until you enable it. `texra plugin enable` shows
-what the plugin declares (its skills, commands, agents, and each MCP server's
-command line) and asks you to trust it. The trust covers that version, every
-file in the plugin folder, and the MCP servers' commands, arguments and
-environment values. If any of those change, the plugin loads nothing until you
-enable it again and trust it anew. A program or file outside the plugin that a
-server runs, such as `node`, is listed as external and trusted by its path,
-size and date, not by its content. A plugin cannot be named `custom`,
-`builtIn` or `plugin`.
-A plugin with LSP servers runs code of its own and cannot be enabled yet;
-output styles and apps are not loaded. A plugin's Claude Code hooks run as
-processes in the workspace. A `Stop` hook that blocks (`decision: "block"`,
-or exit code 2) keeps the run going once with its reason as the next
-instruction, even under `texra run`. The stop after that turn tells the hook
-`stop_hook_active: true` and cannot block again.
+An installed plugin stays off until you enable it:
 
-An enabled, trusted plugin loads under its own name: its skills and commands
-are skills named `<plugin>:<name>`, its agents are agents named
-`<plugin>:<name>`, and every top-level chat run is offered its MCP servers'
-tools, named `mcp__plugin_<plugin>_<server>__<tool>`. A plugin agent that lists
-`tools` gets only those; one that lists none inherits them: a subagent gets
-every tool its parent was offered, and a top-level run the file, shell and web
-tools plus the installed plugins' tools. A subagent never gets more than its
-parent was offered. Each server runs as its own
-process in the plugin folder, and its tool calls are approved like shell
-commands. Enabling, disabling or changing a plugin reaches a running
-conversation at its next model request, which records the change; a call to a
-tool that has since gone is refused. What a plugin took part in stays in the
-history after you disable or remove it.
+- **Trust on enable**: `texra plugin enable` shows what the plugin declares (skills, commands, agents, and each MCP server's command line) and asks you to trust it. Trust covers that version, every file in the plugin folder, and the MCP servers' commands, arguments, and environment values. External binaries a server runs (such as `node`) are trusted by path, size, and modification time. If any covered file or setting changes, the plugin stops loading until you re-enable and re-trust it.
+- **Reserved names and unsupported features**: A plugin cannot be named `custom`, `builtIn`, or `plugin`. Plugins with LSP servers cannot be enabled yet; output styles and apps are not loaded.
+- **Hooks**: Claude Code hooks run as processes in the workspace. A `Stop` hook that blocks (`decision: "block"`, or exit code 2) continues the run for one extra turn using its reason as the next instruction, even under `texra run`. The stop after that turn passes `stop_hook_active: true` and cannot block again.
 
-A fetched plugin lives in `~/.texra/v1/global-storage/plugins/<name>/`, pinned
-to the commit its branch or tag resolved to. `texra plugin update` fetches the
-same branch or tag again and pins the new commit. If removing a plugin could
-not delete its folder, `texra plugin remove` again finishes the job. A local
-folder is used in
-place and is not copied, so edits to it show up at once; removing it only
-forgets it.
+Once enabled and trusted, a plugin's components load under its namespace:
 
-A repository with a marketplace file (`.claude-plugin/marketplace.json` or
-`.agents/plugins/marketplace.json`) and no plugin manifest of its own installs
-the plugin it lists. When it lists several, name the ones you want with
-`--plugin <name>`, which may be repeated. <!-- guidance-refs-ignore -->
+- **Names**: Skills and commands become `<plugin>:<name>`, agents become `<plugin>:<name>`, and MCP tools are offered to top-level chat runs as `mcp__plugin_<plugin>_<server>__<tool>`.
+- **Tool inheritance**: A plugin agent that lists `tools` receives only those. One that omits `tools` inherits its parent's offered tools (for a subagent) or the file, shell, web, and enabled plugin tools (for a top-level run). A subagent never receives more tools than its parent.
+- **Runtime changes**: Each MCP server runs as its own process in the plugin folder, with tool calls approved like shell commands. Enabling, disabling, or modifying a plugin takes effect at the next model request in a running conversation; calls to removed tools are refused, while earlier history is preserved.
 
-The CLI, the VS Code extension and the desktop app share one install record
-and one set of trust decisions. The Skills section of the Agents settings page
-in the extension and the desktop lists installed plugins and installs,
-enables, disables, updates and removes them; enabling there asks for trust in
-a dialog.
+Fetched plugins are stored in `~/.texra/v1/global-storage/plugins/<name>/`, pinned to the resolved commit. `texra plugin update` re-fetches the branch or tag and pins the new commit. Local folders are used in place without copying, so edits take effect immediately and `texra plugin remove` only unregisters them (if removing a fetched plugin fails to delete its folder, run `texra plugin remove` again).
+
+A repository with a marketplace file (`.claude-plugin/marketplace.json` or `.agents/plugins/marketplace.json`) and no plugin manifest installs the plugin it lists; if it lists several, pass `--plugin <name>` (repeatable). <!-- guidance-refs-ignore -->
+
+The CLI, VS Code extension, and desktop app share installed plugins and trust decisions. In the extension and desktop app, manage them under **Settings → Agents → Skills**.
 
 ## Shell completion
 

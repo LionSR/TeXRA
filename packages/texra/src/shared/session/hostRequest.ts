@@ -68,7 +68,6 @@ export const HostRequestSchema = Schema.Union([
     kind: Schema.Literal('useOwnApiKey'),
     ...runScoped,
     requestId: Schema.String.check(Schema.isMinLength(1)),
-    model: Schema.optional(Schema.NullOr(Schema.String)),
     credentialSwitch: CredentialSwitchSchema,
   }),
   Schema.Struct({ kind: Schema.Literal('latexdiff'), ...runScoped }),

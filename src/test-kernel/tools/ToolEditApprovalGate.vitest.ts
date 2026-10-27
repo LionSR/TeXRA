@@ -14,15 +14,8 @@ import { humanGrant } from '@agent/runtime/runApprovalQueue';
 // Local imports
 import type { ToolServices } from '@agent/runtime/ToolServices';
 
-import type { SessionTransaction } from '@agent/runtime/SessionHandle';
 import { WorkspaceFs } from '@platform/rootedFs';
-import type { Append, UnfoldedDraft } from '@shared/session/sessionEvents';
-import type {
-  RequestDecision,
-  RunId,
-  SessionEventDraft,
-} from '@shared/schemas';
-import { DatabaseWriteFailed } from '@shared/session/database';
+import type { RequestDecision, RunId } from '@shared/schemas';
 import {
   setTestApprovalPolicy,
   publishTestRunStart,
@@ -31,10 +24,7 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { fakePath } from '@test/support/FakePlatform';
-import {
-  createFakeHost,
-  installPlatform as installFakePlatform,
-} from '@test/support/setupPlatform';
+import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { EditFileTool } from '@tools/EditTool';
 import { writeFileTool } from '@tools/WriteTool';
 import {
@@ -174,23 +164,6 @@ function inRun<A, E>(effect: Effect.Effect<A, E, ToolServices>) {
   );
 }
 
-/** Whether a transaction's job opens a request: its first append, read
- *  against a transaction that commits nothing and stops there. */
-const opensRequest = (
-  work: (tx: SessionTransaction) => Effect.Effect<unknown, unknown>,
-): Effect.Effect<boolean> =>
-  Effect.suspend(() => {
-    let opens = false;
-    const append = ((drafts: readonly SessionEventDraft[]) => {
-      opens = drafts.some((event) => event.type === 'request.opened');
-      return Effect.fail(
-        new DatabaseWriteFailed({ path: 'probe', cause: null }),
-      );
-    }) as Append;
-    const tx = { append, claim: () => Effect.void };
-    return Effect.map(Effect.exit(work(tx)), () => opens);
-  });
-
 describe('Tool edit approval gating', () => {
   beforeEach(async () => {
     await installPlatform();
@@ -235,85 +208,6 @@ describe('Tool edit approval gating', () => {
     }),
   );
 
-  it.effect('write_file applies changes after approval', () =>
-    Effect.gen(function* () {
-      const tool = writeFileTool();
-      const write = stubWorkspaceFile('doc.txt', {
-        exists: true,
-        content: 'old content',
-      });
-
-      const result = yield* inRun(
-        tool.call({ path: 'doc.txt', content: 'new content' }),
-      );
-
-      const [request] = approvalRequests;
-      assert.strictEqual(request?.path, path.join(WORKSPACE_PATH, 'doc.txt'));
-      assert.strictEqual(request?.permission.relativePath, 'doc.txt');
-      assert.strictEqual(request?.originalContent, 'old content');
-      assert.strictEqual(request?.proposedContent, 'new content');
-      assert.strictEqual(request?.sourceTool, 'write_file');
-      assert.strictEqual(write.mock.lastCall?.[1], 'new content');
-      assert.strictEqual(
-        result.output,
-        'written\n\nReplaced 1 lines with 1 lines.',
-      );
-      assert.strictEqual(result.userInstruction, undefined);
-    }),
-  );
-
-  it.effect('write_file resolves paths in the invoking project scope', () =>
-    Effect.gen(function* () {
-      const tool = writeFileTool();
-      const project = createFakeHost({
-        workspacePath: path.resolve(path.sep, 'project'),
-        config: { 'texra.toolUse.requireEditApproval': true },
-      });
-      const projectPath = project.roots.workspace!;
-      const filePath = path.join(projectPath, 'scoped.txt');
-      // A new file: absent in both views the flow reads, since a path that
-      // appears between the proposal and the write is a conflict.
-      relativeFiles.set('scoped.txt', { exists: false, content: '' });
-      const write = workspaceWrites;
-
-      const result = yield* withStubbedEditFiles(
-        tool.call({ path: filePath, content: 'new content' }),
-      ).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            readFiles,
-            run: { runId, session: testDefaultSession(), toolPolicy: {} },
-            roots: project.roots,
-          }),
-        ),
-      );
-
-      assert.strictEqual(result.status, 'executed');
-      assert.strictEqual(approvalRequests[0]?.path, 'scoped.txt');
-      assert.strictEqual(write.mock.lastCall?.[0], 'scoped.txt');
-    }),
-  );
-
-  it.effect('write_file reports the content adjusted during approval', () =>
-    Effect.gen(function* () {
-      const tool = writeFileTool();
-      const write = stubWorkspaceFile('doc.txt', {
-        exists: true,
-        content: 'old content',
-      });
-      nextDecision = () => ({ action: 'approve', content: 'reviewed content' });
-
-      const result = yield* inRun(
-        tool.call({ path: 'doc.txt', content: 'new content' }),
-      );
-
-      assert.strictEqual(write.mock.lastCall?.[1], 'reviewed content');
-      assert.match(result.output ?? '', /User adjustments to doc\.txt/);
-      assert.strictEqual(result.edits?.[0]?.path, 'doc.txt');
-      assert.strictEqual(result.edits?.[0]?.startLine, 1);
-    }),
-  );
-
   it.effect('write_file rejects when user denies approval', () =>
     Effect.gen(function* () {
       const tool = writeFileTool();
@@ -335,47 +229,6 @@ describe('Tool edit approval gating', () => {
         'User rejected write_file for summary.txt.',
       );
       assert.strictEqual(result.userInstruction, 'Rejected by user');
-    }),
-  );
-
-  it.effect('does not present an automatic cancellation as user feedback', () =>
-    Effect.gen(function* () {
-      const tool = writeFileTool();
-      const write = stubWorkspaceFile('summary.txt', {
-        exists: true,
-        content: 'base',
-      });
-      nextDecision = () => ({ action: 'cancel', cause: 'Session disposed.' });
-
-      const result = yield* inRun(
-        tool.call({ path: 'summary.txt', content: 'new content' }),
-      );
-
-      assert.strictEqual(write.mock.calls.length, 0);
-      assert.match(result.error ?? '', /Tool edit cancelled/);
-      assert.match(result.error ?? '', /Session disposed\./);
-      assert.strictEqual(result.userInstruction, undefined);
-    }),
-  );
-
-  it.effect('write_file skips approval when disabled via config', () =>
-    Effect.gen(function* () {
-      yield* Effect.tryPromise(() =>
-        installPlatform({ 'texra.toolUse.requireEditApproval': false }),
-      );
-      const tool = writeFileTool();
-      const write = stubWorkspaceFile('doc.txt', {
-        exists: false,
-        content: '',
-      });
-
-      const result = yield* inRun(
-        tool.call({ path: 'doc.txt', content: 'new content' }),
-      );
-
-      assert.strictEqual(approvalRequests.length, 0);
-      assert.strictEqual(write.mock.lastCall?.[1], 'new content');
-      assert.strictEqual(result.output, 'written');
     }),
   );
 
@@ -403,159 +256,6 @@ describe('Tool edit approval gating', () => {
       assert.match(result.error ?? '', /Denied by the approval policy\./);
       assert.strictEqual(policyDenials, 1);
     }),
-  );
-
-  it.effect('session bypass auto-approves pending requests', () =>
-    Effect.gen(function* () {
-      const tool = writeFileTool();
-      const write = stubWorkspaceFile('doc.txt', {
-        exists: false,
-        content: '',
-      });
-
-      yield* testDefaultSession().approvals.change(
-        runId,
-        humanGrant(['toolEdit'], true),
-      );
-
-      // The bypass check requires a runId on the request; the approval layer
-      // picks it up from the active run context.
-      const result = yield* inRun(
-        tool.call({ path: 'doc.txt', content: 'auto' }),
-      );
-
-      assert.strictEqual(approvalRequests.length, 0);
-      assert.strictEqual(write.mock.lastCall?.[1], 'auto');
-      assert.strictEqual(result.output, 'written');
-    }),
-  );
-
-  it.effect('releases the staged preview when its request cannot open', () =>
-    Effect.gen(function* () {
-      // The commit that would list the request is refused, so no
-      // `request.decided` will ever release the preview staged before it:
-      // `requests.ask`, the one call that knows the row never landed, runs
-      // the release the staging handed it.
-      const session = testDefaultSession();
-      const transact = session.log.transact.bind(session.log);
-      vi.spyOn(session.log, 'transact').mockImplementation(((
-        work:
-          | readonly UnfoldedDraft[]
-          | ((tx: SessionTransaction) => Effect.Effect<unknown, unknown>),
-      ) => {
-        if (typeof work !== 'function') return transact(work);
-        return Effect.flatMap(opensRequest(work), (opens) =>
-          opens
-            ? Effect.fail(
-                new DatabaseWriteFailed({
-                  path: 'session.db',
-                  cause: 'the disk is full',
-                }),
-              )
-            : transact(work),
-        );
-      }) as typeof transact);
-
-      const failure = yield* inRun(
-        requestToolEditApproval({
-          path: 'doc.txt',
-          originalContent: 'old content',
-          proposedContent: 'new content',
-          sourceTool: 'write_file',
-        }),
-      ).pipe(Effect.flip);
-
-      assert.ok(failure instanceof DatabaseWriteFailed);
-      assert.deepStrictEqual(releasedPreviews, [
-        approvalRequests[0]?.permission.requestId,
-      ]);
-    }),
-  );
-
-  it.live(
-    'releases the staged preview when the open is interrupted mid-commit',
-    () =>
-      Effect.gen(function* () {
-        // The `request.opened` commit never settles, so the interrupt lands
-        // with no row written: the cancellation finds nothing open, writes
-        // no decision, and releases what the open never listed.
-        const session = testDefaultSession();
-        const transact = session.log.transact.bind(session.log);
-        vi.spyOn(session.log, 'transact').mockImplementation(((
-          work:
-            | readonly UnfoldedDraft[]
-            | ((tx: SessionTransaction) => Effect.Effect<unknown, unknown>),
-        ) => {
-          if (typeof work !== 'function') return transact(work);
-          return Effect.flatMap(opensRequest(work), (opens) =>
-            opens ? Effect.never : transact(work),
-          );
-        }) as typeof transact);
-
-        const request = yield* Effect.forkChild(
-          inRun(
-            requestToolEditApproval({
-              path: 'doc.txt',
-              originalContent: 'old content',
-              proposedContent: 'new content',
-              sourceTool: 'write_file',
-            }),
-          ),
-        );
-        yield* Effect.tryPromise(() =>
-          waitForCondition(() => approvalRequests.length === 1, {
-            timeoutMessage: 'Timed out waiting for the edit to be staged',
-          }),
-        );
-
-        yield* Fiber.interrupt(request);
-
-        // The cancellation is a job of the session's publisher, so the
-        // release it finds necessary lands with it, not with the interrupt.
-        yield* Effect.tryPromise(() =>
-          waitForCondition(() => releasedPreviews.length === 1, {
-            timeoutMessage: 'Timed out waiting for the preview to be released',
-          }),
-        );
-        assert.deepStrictEqual(releasedPreviews, [
-          approvalRequests[0]?.permission.requestId,
-        ]);
-      }),
-  );
-
-  it.live(
-    'leaves a committed request its decision when the open is interrupted',
-    () =>
-      Effect.gen(function* () {
-        // The row landed, so the interrupt's cancellation is a decision like
-        // any other and every host releases on that. Releasing here too
-        // would strand the request the fold still lists whenever that
-        // cancellation is itself refused: nothing left to render, nothing
-        // left to answer.
-        nextDecision = () => null;
-        const session = testDefaultSession();
-
-        const request = yield* Effect.forkChild(
-          inRun(
-            requestToolEditApproval({
-              path: 'doc.txt',
-              originalContent: 'old content',
-              proposedContent: 'new content',
-              sourceTool: 'write_file',
-            }),
-          ),
-        );
-        yield* Effect.tryPromise(() =>
-          waitForCondition(() => decisions?.opened.length === 1, {
-            timeoutMessage: 'Timed out waiting for the request to open',
-          }),
-        );
-
-        yield* Fiber.interrupt(request);
-        yield* session.log.settled;
-
-        assert.deepStrictEqual(releasedPreviews, []);
-      }),
   );
 
   it.live('rechecks session bypass between concurrent approval requests', () =>

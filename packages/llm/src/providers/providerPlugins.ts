@@ -190,7 +190,6 @@ export const BACKEND_PROTOCOLS = Object.freeze({
   minimax: 'openai-responses',
   glm: 'openai-responses',
   meta: 'openai-responses',
-  copilot: 'vscode-lm',
 } satisfies Partial<
   Record<(typeof MANIFEST)[number]['id'], typeof TurnProtocolSchema.Type>
 >);

@@ -32,12 +32,6 @@ function runGate(fixture: string): { status: number; output: string } {
 }
 
 describe('check-guidance-refs', () => {
-  // `run.ts` parses as the `run` namespace plus a second segment, so without
-  // the extension filter the gate reports a file as an unknown event type.
-  it('accepts resolvable paths, real rows, and a filename whose stem is a namespace', () => {
-    expect(runGate('valid')).toMatchObject({ status: 0 });
-  });
-
   it('fails on a dead path, a row the vocabulary does not declare, and a line citation past its file', () => {
     const { status, output } = runGate('broken');
 

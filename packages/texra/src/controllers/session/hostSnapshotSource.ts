@@ -14,7 +14,6 @@ import {
   AgentDirectories,
   getEnabledModels,
   readModelOptions,
-  type LanguageModel,
   type PlatformSecrets,
   type PerKeyLane,
   Settings,
@@ -24,7 +23,7 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
-import { loadTeamOptions } from '@common/teams/TeamPlan';
+import { loadTeamOptions } from '@texra-ai/harness';
 import type {
   FileOptions,
   HostSnapshot,
@@ -89,11 +88,7 @@ interface HostSnapshotSourceOptions {
   workspaceRoots?: () => HostSnapshot['workspaceRoots'];
   /** Hosts that surface these outside Settings answer them; absent means
    *  never shown. */
-  apiKeyBanner?: () => Effect.Effect<
-    Banners['apiKey'],
-    HostSnapshotReadFailed,
-    LanguageModel
-  >;
+  apiKeyBanner?: () => Effect.Effect<Banners['apiKey'], HostSnapshotReadFailed>;
   dependencyBanner?: () => Effect.Effect<
     Banners['dependency'],
     HostSnapshotReadFailed,
@@ -113,24 +108,16 @@ export interface HostSnapshotSource {
   readonly refresh: Effect.Effect<
     void,
     never,
-    AgentCatalog | FileSystem.FileSystem | LanguageModel | ChildProcessSpawner
+    AgentCatalog | FileSystem.FileSystem | ChildProcessSpawner
   >;
   /** The agent, team, and model catalogs changed (an agent list edit, a
    *  credential, a sign-in). */
-  readonly refreshCatalogs: Effect.Effect<
-    void,
-    never,
-    AgentCatalog | LanguageModel
-  >;
+  readonly refreshCatalogs: Effect.Effect<void, never, AgentCatalog>;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
   readonly refreshCommits: Effect.Effect<void, never, ChildProcessSpawner>;
   /** The host's own banners changed (a key stored, a tool installed). */
-  readonly refreshHostBanners: Effect.Effect<
-    void,
-    never,
-    LanguageModel | ChildProcessSpawner
-  >;
+  readonly refreshHostBanners: Effect.Effect<void, never, ChildProcessSpawner>;
   /** The workspace folders changed. */
   refreshWorkspaceRoots(): Effect.Effect<void>;
   /** The one recorder per process started or stopped. */
@@ -301,9 +288,9 @@ export function createHostSnapshotSource(
 
   return {
     refresh: guarded<
-      AgentCatalog | FileSystem.FileSystem | LanguageModel | ChildProcessSpawner
+      AgentCatalog | FileSystem.FileSystem | ChildProcessSpawner
     >(...catalogLoads, loadFiles, loadCommits, loadHostBanners),
-    refreshCatalogs: guarded<AgentCatalog | LanguageModel>(...catalogLoads),
+    refreshCatalogs: guarded<AgentCatalog>(...catalogLoads),
     refreshFiles: guarded(loadFiles),
     refreshCommits: guarded(loadCommits),
     refreshHostBanners: guarded(loadHostBanners),
@@ -312,23 +299,24 @@ export function createHostSnapshotSource(
       Effect.sync(() => {
         recording = next;
       }).pipe(Effect.andThen(publish)),
-    showAgentConfigBanner: (agentName) =>
-      Effect.gen(function* () {
-        // An unreadable setting is reported and the banner offers the agent
-        // settings, which always open, instead of a directory it cannot name.
-        const customDirSet = yield* Effect.flatMap(AgentDirectories, (dirs) =>
-          dirs.customConfigured(),
-        ).pipe(
-          Effect.catch((cause) =>
-            Effect.sync(() => {
-              options.onError(cause);
-              return false;
-            }),
-          ),
-        );
-        agentConfig = { visible: true, agentName, customDirSet };
-        yield* publish;
-      }),
+    showAgentConfigBanner: Effect.fn(
+      'hostSnapshotSource.showAgentConfigBanner',
+    )(function* (agentName) {
+      // An unreadable setting is reported and the banner offers the agent
+      // settings, which always open, instead of a directory it cannot name.
+      const customDirSet = yield* Effect.flatMap(AgentDirectories, (dirs) =>
+        dirs.customConfigured(),
+      ).pipe(
+        Effect.catch((cause) =>
+          Effect.sync(() => {
+            options.onError(cause);
+            return false;
+          }),
+        ),
+      );
+      agentConfig = { visible: true, agentName, customDirSet };
+      yield* publish;
+    }),
     clearAgentConfigBanner: Effect.suspend(() => {
       if (!agentConfig.visible) return Effect.void;
       agentConfig = { visible: false };

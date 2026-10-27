@@ -59,32 +59,33 @@ const pidProvablyDead = (pid: number): Effect.Effect<boolean> =>
  * it folds its own throw, so this effect has no error channel and a prober
  * that yields it cannot be ended by one.
  */
-export const proveOwnerLiveness = (
+export const proveOwnerLiveness = Effect.fn(
+  'leaseOwnerLiveness.proveOwnerLiveness',
+)(function* (
   owner: ClaimOwnerRecord,
-): Effect.Effect<OwnerLiveness, never, ProcessProbe> =>
-  Effect.gen(function* () {
-    const localHostname = os.hostname();
-    if (owner.hostname.toLowerCase() !== localHostname.toLowerCase()) {
-      yield* Effect.logWarning(
-        `Claim owner pid ${owner.pid} was recorded on host ${owner.hostname}; its liveness is unprovable from ${localHostname}`,
-      ).pipe(withLogChannel(CHANNEL));
-      return 'unprovable';
-    }
+): Effect.fn.Return<OwnerLiveness, never, ProcessProbe> {
+  const localHostname = os.hostname();
+  if (owner.hostname.toLowerCase() !== localHostname.toLowerCase()) {
+    yield* Effect.logWarning(
+      `Claim owner pid ${owner.pid} was recorded on host ${owner.hostname}; its liveness is unprovable from ${localHostname}`,
+    ).pipe(withLogChannel(CHANNEL));
+    return 'unprovable';
+  }
+  if (yield* pidProvablyDead(owner.pid)) return 'dead';
+  const observed = yield* nodeProcesses.identity(owner.pid);
+  if (observed === undefined) {
+    // The process may have exited between the two probes.
     if (yield* pidProvablyDead(owner.pid)) return 'dead';
-    const observed = yield* nodeProcesses.identity(owner.pid);
-    if (observed === undefined) {
-      // The process may have exited between the two probes.
-      if (yield* pidProvablyDead(owner.pid)) return 'dead';
-      yield* Effect.logWarning(
-        `Claim owner pid ${owner.pid} exists but its start identity cannot be read; its liveness is unprovable`,
-      ).pipe(withLogChannel(CHANNEL));
-      return 'unprovable';
-    }
-    if (owner.processStart === null) {
-      yield* Effect.logWarning(
-        `Claim owner pid ${owner.pid} exists but its record carries no start identity; its liveness is unprovable`,
-      ).pipe(withLogChannel(CHANNEL));
-      return 'unprovable';
-    }
-    return observed === owner.processStart ? 'alive' : 'dead';
-  });
+    yield* Effect.logWarning(
+      `Claim owner pid ${owner.pid} exists but its start identity cannot be read; its liveness is unprovable`,
+    ).pipe(withLogChannel(CHANNEL));
+    return 'unprovable';
+  }
+  if (owner.processStart === null) {
+    yield* Effect.logWarning(
+      `Claim owner pid ${owner.pid} exists but its record carries no start identity; its liveness is unprovable`,
+    ).pipe(withLogChannel(CHANNEL));
+    return 'unprovable';
+  }
+  return observed === owner.processStart ? 'alive' : 'dead';
+});

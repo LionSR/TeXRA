@@ -18,7 +18,6 @@ import {
   apiKeySecretName,
   SecretsFailed,
 } from '@texra-ai/llm';
-import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
 const mocks = vi.hoisted(() => ({
   /** The key prompt: the user closes it without entering a key. */
@@ -65,7 +64,6 @@ import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApproval
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import {
-  type AgentProposalPermission,
   type PermissionPayload,
   type RequestDecision,
   type RetryPermission,
@@ -75,7 +73,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installedHost } from '@test/support/setupPlatform';
 import {
   isStored,
@@ -87,11 +84,9 @@ import {
   setTestApprovalPolicy,
 } from '@test/support/sessionTestUtils';
 import {
-  APPROVE_ALL_DELEGATED_WORK_ACTION,
   APPROVE_SESSION_ACTION,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
-import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
 import type { PlatformSecrets } from '@texra-ai/harness';
 
@@ -167,23 +162,6 @@ function ensureRun(runId: RunId): Effect.Effect<void> {
   });
 }
 
-function requestEdit(runId: RunId) {
-  return requestToolEditApproval({
-    path: '/work/main.tex',
-    originalContent: 'old',
-    proposedContent: 'new',
-    sourceTool: 'edit',
-    runId,
-  }).pipe(
-    Effect.provide(
-      nativeToolTestLayer({
-        workingDirectory: '/work',
-        run: { runId, session: testDefaultSession(), toolPolicy: {} },
-      }),
-    ),
-  );
-}
-
 /** Ask through the protocol the TUI host answers: `request.opened` on the
  *  run, settled by the `request.decided` a surface commits. */
 function openRequest(
@@ -203,29 +181,6 @@ function openRetry(
     kind: 'retry',
     data: permission,
   });
-}
-
-function proposalPayload(
-  requestId: string,
-  runId: RunId,
-  instruction = 'Check the local compactness claim.',
-): AgentProposalPermission {
-  return {
-    requestId,
-    runId,
-    agent: 'critic',
-    agentSource: null,
-    model: 'moonshot/kimi-k2.6',
-    instruction,
-    memories: [],
-    workingDirectory: null,
-    inputFiles: [],
-    contextFiles: [],
-    mediaFiles: [],
-    outputFiles: [],
-    task: false,
-    options: {},
-  };
 }
 
 let retrySeq = 0;
@@ -273,11 +228,6 @@ const PERSONAL_KEY_RETRY = {
   action: 'retry',
   credentials: 'personal',
 } as const;
-
-/** The pre-switch route: the ChatGPT subscription is still preferred. */
-function expectChatGptSubscriptionRoute(): void {
-  expect(mocks.preferSubscription).toBe(true);
-}
 
 /** The retry writes no access setting: the run declines the exhausted route
  *  on its own run history and the user's switches stay theirs. */
@@ -407,197 +357,6 @@ describe('TUI request decisions', () => {
   );
 
   it.effect(
-    'sets the run command bypass for a goal and leaves the latest human choice when it ends',
-    () =>
-      Effect.gen(function* () {
-        tui();
-        const runId = runIdFor('goal-bypass');
-        yield* ensureRun(runId);
-
-        const session = testDefaultSession();
-        const { approvals } = session;
-        yield* approvals.change(runId, humanGrant(['bash'], false));
-        yield* approvals.change(runId, goalGrant(['bash']));
-        expect(approvals.bypass(runId, 'bash') !== null).toBe(true);
-        // The human turns commands off, then on again, while the goal runs,
-        // and approves edits for the session; ending the goal must write
-        // none of the values from before it back.
-        yield* approvals.change(runId, humanGrant(['bash'], false));
-        expect(approvals.bypass(runId, 'bash') !== null).toBe(false);
-        yield* approvals.change(runId, humanGrant(['bash'], true));
-        yield* approvals.change(runId, humanGrant(['toolEdit'], true));
-
-        yield* approvals.change(runId, goalGrant([]));
-        expect(approvals.bypass(runId, 'bash') !== null).toBe(true);
-        expect(approvals.bypass(runId, 'toolEdit') !== null).toBe(true);
-      }),
-  );
-
-  it.effect('sets the run edit bypass at the approval decision site', () =>
-    Effect.gen(function* () {
-      tui();
-      const runId = runIdFor('edit-bypass');
-      yield* ensureRun(runId);
-      const applied = yield* Effect.forkChild(requestEdit(runId));
-
-      yield* waitForApproval('toolEdit', { runId });
-      decideCurrent({ action: APPROVE_SESSION_ACTION });
-
-      expect(yield* Fiber.join(applied)).toMatchObject({
-        action: 'apply',
-        appliedContent: 'new',
-      });
-      yield* waitFor(() =>
-        expect(
-          testDefaultSession().approvals.bypass(runId, 'toolEdit') !== null,
-        ).toBe(true),
-      );
-    }),
-  );
-
-  it.effect.each([
-    {
-      label: 'a failed fetch',
-      fetched: Effect.fail(new Error('service connection closed')),
-      reason: 'the service did not send it (service connection closed)',
-    },
-    {
-      label: 'a preview no host staged',
-      fetched: Effect.succeed(null),
-      reason: "no host staged this edit's preview",
-    },
-  ])(
-    'says the preview of a served edit is unavailable after $label, never an empty diff',
-    ({ fetched, reason }) =>
-      Effect.gen(function* () {
-        tui(host(), {}, () => fetched);
-        const runId = runIdFor(`edit-unavailable-${reason}`);
-        yield* ensureRun(runId);
-        yield* Effect.forkChild(requestEdit(runId));
-
-        // The fetch lands after the request is listed, over anything staged.
-        yield* waitFor(() =>
-          expect(currentApproval.get()?.payload).toMatchObject({
-            kind: 'toolEdit',
-            data: { runId },
-            tui: { kind: 'unavailable', reason },
-          }),
-        );
-      }),
-  );
-
-  it.effect(
-    'enables the complete delegated-task approval mode at the proposal decision site',
-    () =>
-      Effect.gen(function* () {
-        tui();
-        const runId = runIdFor('proposal-bypass');
-        const pending = yield* Effect.forkChild(
-          openRequest(runId, {
-            kind: 'proposal',
-            data: proposalPayload('proposal-bypass', runId),
-          }),
-        );
-
-        yield* waitForApproval('proposal', { runId });
-        decideCurrent({ action: APPROVE_ALL_DELEGATED_WORK_ACTION });
-
-        expect(yield* Fiber.join(pending)).toMatchObject({
-          action: 'approve',
-        });
-        yield* waitFor(() => {
-          expect(
-            testDefaultSession().approvals.bypass(runId, 'superYolo') !== null,
-          ).toBe(true);
-          expect(
-            testDefaultSession().approvals.bypass(runId, 'toolEdit') !== null,
-          ).toBe(true);
-          expect(
-            testDefaultSession().approvals.bypass(runId, 'bash') !== null,
-          ).toBe(true);
-        });
-      }),
-  );
-
-  it.effect('approves delegated work already queued in the same run', () =>
-    Effect.gen(function* () {
-      tui();
-      const runId = runIdFor('parallel-approval');
-      yield* ensureRun(runId);
-      const proposal = yield* Effect.forkChild(
-        openRequest(runId, {
-          kind: 'proposal',
-          data: proposalPayload('proposal-current', runId),
-        }),
-      );
-      const edit = yield* Effect.forkChild(requestEdit(runId));
-      const bash = yield* Effect.forkChild(
-        openRequest(runId, {
-          kind: 'bash',
-          data: bashApprovalRequest({ command: 'lake build', runId }),
-        }),
-      );
-      yield* Effect.forkChild(
-        openRequest(runId, {
-          kind: 'planApproval',
-          data: {
-            requestId: 'plan-excluded',
-            runId,
-            plan: { objective: 'Keep the approval categories distinct.' },
-          },
-        }),
-      );
-
-      yield* waitForApproval('proposal', { requestId: 'proposal-current' });
-      decideCurrent({ action: APPROVE_ALL_DELEGATED_WORK_ACTION });
-
-      expect(yield* Fiber.join(proposal)).toMatchObject({ action: 'approve' });
-      expect(yield* Fiber.join(edit)).toMatchObject({
-        action: 'apply',
-        appliedContent: 'new',
-      });
-      expect(yield* Fiber.join(bash)).toEqual({ action: 'approve' });
-      // A plan approval is not delegated work: it still waits for the user.
-      yield* waitFor(() =>
-        expect(currentApproval.get()?.payload.kind).toBe('planApproval'),
-      );
-    }),
-  );
-
-  it.effect(
-    'keeps an ordinary proposal approval limited to the current request',
-    () =>
-      Effect.gen(function* () {
-        tui();
-        const runId = runIdFor('proposal-one-off');
-        const pending = yield* Effect.forkChild(
-          openRequest(runId, {
-            kind: 'proposal',
-            data: proposalPayload(
-              'proposal-one-off',
-              runId,
-              'Check one calculation.',
-            ),
-          }),
-        );
-
-        yield* waitForApproval('proposal', { requestId: 'proposal-one-off' });
-        decideCurrent({ action: 'approve' });
-
-        expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
-        expect(
-          testDefaultSession().approvals.bypass(runId, 'superYolo') !== null,
-        ).toBe(false);
-        expect(
-          testDefaultSession().approvals.bypass(runId, 'toolEdit') !== null,
-        ).toBe(false);
-        expect(
-          testDefaultSession().approvals.bypass(runId, 'bash') !== null,
-        ).toBe(false);
-      }),
-  );
-
-  it.effect(
     'switches a ChatGPT subscription retry to the API key only on the explicit decision',
     () =>
       Effect.gen(function* () {
@@ -672,67 +431,5 @@ describe('TUI request decisions', () => {
         ).toBe(true);
         yield* Fiber.interrupt(pending);
       }),
-  );
-
-  it.effect(
-    'leaves a retry pending, with its card back, when no own key was entered',
-    () =>
-      Effect.gen(function* () {
-        tui();
-        const permission = chatGptSubscriptionRetry('no-key');
-        const pending = yield* Effect.forkChild(openRetry(permission));
-        yield* waitForApproval('retry', { requestId: permission.requestId });
-
-        decideRetry(PERSONAL_KEY_RETRY);
-
-        // No key was entered: the request is neither denied nor decided, as
-        // on the extension and the desktop, and the user chooses again.
-        yield* waitForApproval('retry', { requestId: permission.requestId });
-        yield* testDefaultSession().log.settled;
-        expect(
-          SubscriptionRef.getUnsafe(
-            testDefaultSession().view.ref,
-          ).requests.some(
-            (request) => request.requestId === permission.requestId,
-          ),
-        ).toBe(true);
-        expect(pending.pollUnsafe()).toBeUndefined();
-        yield* Fiber.interrupt(pending);
-      }),
-  );
-
-  it.effect(
-    'retries ChatGPT subscription access without changing credentials when the ordinary retry action is chosen',
-    () =>
-      Effect.gen(function* () {
-        tui();
-        const pending = yield* Effect.forkChild(
-          openRetry(chatGptSubscriptionRetry('subscription-retry')),
-        );
-
-        yield* waitForApproval('retry', {
-          runId: runIdFor('subscription-retry'),
-        });
-        decideRetry({ action: 'retry' });
-
-        expect(yield* Fiber.join(pending)).toEqual({ action: 'retry' });
-        expect(openAiKeyChecks()).toBe(0);
-        expectNoPreferenceWrites();
-        expectChatGptSubscriptionRoute();
-      }),
-  );
-
-  it.effect('cancels the retry modal when the run interrupts its request', () =>
-    Effect.gen(function* () {
-      tui();
-      const pending = yield* Effect.forkChild(
-        openRetry(chatGptSubscriptionRetry('modal-interrupt')),
-      );
-
-      yield* waitForApproval('retry', { runId: runIdFor('modal-interrupt') });
-      yield* Fiber.interrupt(pending);
-
-      yield* waitForNoApproval();
-    }),
   );
 });

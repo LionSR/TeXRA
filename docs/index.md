@@ -29,8 +29,8 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
     <span class="trust-icon" aria-hidden="true">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
     </span>
-    <h3>Three independent checks</h3>
-    <p>Prose reviewed by an LLM, algebra checked in Wolfram, proofs verified in Lean 4: three layers of verification in one environment.</p>
+    <h3>Your keys, direct to the model</h3>
+    <p>Use your own API keys or existing ChatGPT, Grok, Kimi Code, or GLM subscriptions. Requests go straight from your machine to the provider.</p>
   </div>
 </section>
 
@@ -195,7 +195,7 @@ import LandingCliStrip from './.vitepress/components/LandingCliStrip.vue';
 
   <details>
     <summary>What models does it support?</summary>
-    <p>OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Qwen, GLM, MiniMax, and any OpenAI-compatible endpoint. Bring your own API key, or use a provider subscription you already pay for (ChatGPT, Grok, Kimi Code, GLM Coding Plan, and GitHub Copilot in VS Code). Each agent on a team can run a different model.</p>
+    <p>OpenAI, Anthropic Claude, Google Gemini, DeepSeek, xAI Grok, Moonshot Kimi, Qwen, GLM, MiniMax, and any OpenAI-compatible endpoint. Bring your own API key, or use a provider subscription you already pay for (ChatGPT, Grok, Kimi Code and the GLM Coding Plan). Each agent on a team can run a different model.</p>
   </details>
 
   <details>

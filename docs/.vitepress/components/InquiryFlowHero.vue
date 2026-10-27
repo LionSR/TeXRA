@@ -80,8 +80,7 @@ const targets = [
 
     <div class="inq-foot">
       <span class="inq-dot"></span>
-      Dispatch is non-blocking — the agent's cycle continues while you fetch the
-      answer, and resumes automatically once you paste it back.
+      Non-blocking — the run continues and incorporates the reply once pasted.
     </div>
   </div>
 </template>

@@ -2,7 +2,7 @@
 
 Every agent is a persona: a `prompt`, its `tools` and a `temperature`. Run
 with a prompt (a chat, or an `agent` call), it works in multiple turns with
-tool calling. They access files ONLY through their declared tools (`read_file`,
+tool calling. It accesses files ONLY through its declared tools (`read_file`,
 `write_file`, `bash`, `grep`, etc.) — no pre-loaded content. The user's
 instruction arrives as the user message, not through a template variable.
 

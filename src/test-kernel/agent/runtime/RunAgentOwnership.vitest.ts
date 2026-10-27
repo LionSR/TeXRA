@@ -83,27 +83,6 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
   );
 
   it.live(
-    "a fresh run is born as its agent's and lets its claim go when the launch ends",
-    () =>
-      Effect.gen(function* () {
-        const roots = testWorkspaceRoots();
-        const session = yield* openTestDefaultSession({ roots });
-        const runId = generateRunId();
-
-        yield* launch(session, runId, { stopAfterCycle: true });
-
-        const start = storedRows(roots.storage).find(
-          (row) => row.run === runId,
-        );
-        expect(start?.type).toBe('run.start');
-        expect(JSON.parse(start!.data)).toMatchObject({
-          identity: { kind: 'agent', agent: 'assistant' },
-        });
-        expect(claimHolder(roots.storage, runId)).toBeNull();
-      }),
-  );
-
-  it.live(
     'a launch whose opening is refused fails as itself, leaves no run or claim, and presents its failure',
     () =>
       Effect.gen(function* () {

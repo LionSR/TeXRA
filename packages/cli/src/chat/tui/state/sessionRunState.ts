@@ -76,8 +76,6 @@ export class TuiSession {
     rootRunClaim.set(NO_CLAIM);
   }
 
-  /** Root conversation that remains recoverable after an interrupted turn. */
-  interruptedRunId: RunId | undefined;
   runExitCode: CliExitCode = CliExitCode.Success;
   /** The chat is leaving (`/exit`, a quit). Unlike a claim's stop, this
    *  stands until the state is cleared: no claim taken while leaving starts
@@ -113,16 +111,13 @@ export class TuiSession {
 
   clearRunState(): void {
     rootRunClaim.set(NO_CLAIM);
-    this.interruptedRunId = undefined;
     this.runExitCode = CliExitCode.Success;
     this.leaving = false;
   }
 
-  /** Claim the slot for `runSettled`'s run, `runId`, in one write: a claim
-   *  held with no run id read to a follow-up as "the run already settled"
-   *  (`awaitRunFolded(undefined)`), so a message typed while the claimant
-   *  was still choosing its model was bounced as sent to an ended
-   *  conversation. */
+  /** Claim the slot for `runSettled`'s run, `runId`, in one write, so a
+   *  message typed while the claimant is still choosing its model already
+   *  names the run it will go to. */
   markRunPending(runSettled: RootRunSettled, runId?: RunId): void {
     rootRunClaim.set({ runId, runSettled, runCompleted: false, stop: false });
     this.runExitCode = CliExitCode.Success;

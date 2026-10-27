@@ -80,9 +80,9 @@ const platforms = [
     <div class="tps-fallback">
       <wa-icon class="tps-fb-ic" library="texra" name="search"></wa-icon>
       <span class="tps-fb-tx">
-        Not found in standard paths? TeXRA scans
-        <code>texmf-dist/scripts</code> and uses <code>kpsewhich</code> to
-        locate Perl helpers like <code>latexdiff.pl</code>.
+        Fallback: scans <code>texmf-dist/scripts</code> and runs
+        <code>kpsewhich</code> to locate Perl helpers such as
+        <code>latexdiff.pl</code>.
       </span>
     </div>
   </div>

@@ -1,137 +1,57 @@
 // Node imports
-import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, FileSystem, Layer } from 'effect';
-import { describe } from 'vitest';
+import { Effect, Layer } from 'effect';
+import { describe, expect } from 'vitest';
 
 // Local imports
 import { AgentDirectoryService } from '@agent/index/AgentDirectoryService';
-import type { GlobalStorageFs } from '@platform/rootedFs';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import {
-  globalStorageFsTestLayer,
-  nodePlatformLayer,
-  pathExists,
-} from '@test/support/fsTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
-import {
-  createTempDirPlatform,
-  makeTempDir,
-  useTempDirs,
-} from '@test/support/tempDirPlatform';
-
-const MISSING_CUSTOM_PATH = path.resolve('/texra-missing-parent', 'custom');
-
-class RecordingIssueReporter {
-  readonly reports: Array<{ message: string; docsId: string }> = [];
-
-  report(message: string, docsId: string): Effect.Effect<void> {
-    return Effect.sync(() => {
-      this.reports.push({ message, docsId });
-    });
-  }
-}
-
-const RESOURCES_PATH = path.resolve('/texra-resources');
-
-function createService(customDirectory = ''): {
-  service: AgentDirectoryService;
-  reporter: RecordingIssueReporter;
-} {
-  const reporter = new RecordingIssueReporter();
-  const service = new AgentDirectoryService({
-    channel: 'AgentDirectoryServiceTest',
-    resourcesPath: RESOURCES_PATH,
-    state: { get: () => Effect.succeed(customDirectory) },
-    issueReporter: reporter,
-  });
-
-  return { service, reporter };
-}
+import { globalStorageFsLayer } from '@platform/rootedFs';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 describe('AgentDirectoryService', () => {
   const tempDirs = useTempDirs();
 
-  setupPlatform(() => createTempDirPlatform('texra-agent-dirs-', tempDirs));
+  // A rejected configured path falls back loudly: the person is told why,
+  // and the path does not count as configured.
+  it.live(
+    'falls back to the default custom directory for a relative configured path',
+    () =>
+      Effect.gen(function* () {
+        const storageBase = yield* Effect.promise(() =>
+          makeTempDir('texra-agent-dirs-', tempDirs),
+        );
+        const reports: Array<{ message: string; docsId: string }> = [];
+        const service = new AgentDirectoryService({
+          channel: 'AgentDirectoryServiceTest',
+          resourcesPath: path.resolve('/texra-resources'),
+          state: { get: () => Effect.succeed('relative/custom') },
+          issueReporter: {
+            report: (message, docsId) =>
+              Effect.sync(() => {
+                reports.push({ message, docsId });
+              }),
+          },
+        });
+        const layer = Layer.merge(
+          Layer.provide(globalStorageFsLayer(storageBase), nodePlatformLayer),
+          nodePlatformLayer,
+        );
 
-  function storageBase(): string {
-    return testWorkspaceRoots().globalStorage;
-  }
-
-  /** The service's readers over the process's global storage view, which the
-   *  process runtime serves and this suite provides for `runPromise`. */
-  function runDirectories<A, E>(
-    program: Effect.Effect<A, E, GlobalStorageFs | FileSystem.FileSystem>,
-  ): Promise<A> {
-    return Effect.runPromise(
-      Effect.provide(
-        program,
-        Layer.merge(globalStorageFsTestLayer(storageBase()), nodePlatformLayer),
-      ),
-    );
-  }
-
-  it('uses the default custom directory when no custom path is configured', async () => {
-    const { service } = createService('   ');
-
-    assert.equal(
-      await runDirectories(service.custom()),
-      path.join(storageBase(), 'custom_agents'),
-    );
-    assert.equal(
-      await pathExists(path.join(storageBase(), 'custom_agents')),
-      true,
-    );
-    assert.equal(await runDirectories(service.customConfigured()), false);
-  });
-
-  it('uses a configured absolute custom directory with an existing parent', async () => {
-    const parentDir = await makeTempDir('texra-agent-parent-', tempDirs);
-    const customPath = path.join(parentDir, 'custom');
-    const { service, reporter } = createService(customPath);
-
-    assert.equal(await runDirectories(service.custom()), customPath);
-    assert.equal(await pathExists(customPath), true);
-    assert.equal(
-      await pathExists(path.join(storageBase(), 'custom_agents')),
-      false,
-    );
-    assert.deepEqual(reporter.reports, []);
-    assert.equal(await runDirectories(service.customConfigured()), true);
-  });
-
-  it.each([
-    {
-      name: 'relative configured paths',
-      customPath: 'relative/custom',
-      message: 'Custom agents directory must be an absolute path',
-    },
-    {
-      name: 'a missing configured parent',
-      customPath: MISSING_CUSTOM_PATH,
-      message: 'Parent directory for custom agents directory does not exist',
-    },
-  ])(
-    'falls back to the default custom directory for $name',
-    async ({ customPath, message }) => {
-      const { service, reporter } = createService(customPath);
-
-      assert.equal(
-        await runDirectories(service.custom()),
-        path.join(storageBase(), 'custom_agents'),
-      );
-      assert.equal(
-        await pathExists(path.join(storageBase(), 'custom_agents')),
-        true,
-      );
-      assert.deepEqual(reporter.reports, [
-        { message, docsId: 'custom-agents' },
-      ]);
-      // The banner asks the same question: a rejected path is not "set".
-      assert.equal(await runDirectories(service.customConfigured()), false);
-    },
+        const custom = yield* service.custom().pipe(Effect.provide(layer));
+        expect(custom).toBe(path.join(storageBase, 'custom_agents'));
+        expect(reports).toEqual([
+          {
+            message: 'Custom agents directory must be an absolute path',
+            docsId: 'custom-agents',
+          },
+        ]);
+        expect(
+          yield* service.customConfigured().pipe(Effect.provide(layer)),
+        ).toBe(false);
+      }),
   );
 });

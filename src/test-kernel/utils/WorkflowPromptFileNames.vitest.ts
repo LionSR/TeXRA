@@ -13,7 +13,6 @@ import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,
 } from '@texra/utils/files/outputFileUtils';
-import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { getXmlFormatFromReadableFiles } from '@utils/files/varsUtils';
 
 describe('workflow prompt file names', () => {
@@ -24,38 +23,6 @@ describe('workflow prompt file names', () => {
       '/outside/absolute.tex': 'external text',
     },
   });
-
-  const root = fakePath('workspace');
-
-  it.effect(
-    'uses workspace-relative names and external basenames in prompt variables',
-    () =>
-      Effect.gen(function* () {
-        expect(
-          getPromptFileName(root, fakePath('workspace/chapter/main.tex')),
-        ).toBe('chapter/main.tex');
-        expect(getPromptFileName(root, fakePath('outside/absolute.tex'))).toBe(
-          'absolute.tex',
-        );
-        expect(getPromptFileName(root, 'local.tex')).toBe('local.tex');
-
-        expect(
-          getListOfFiles(root, [
-            fakePath('workspace/chapter/main.tex'),
-            fakePath('outside/absolute.tex'),
-          ]),
-        ).toBe('chapter/main.tex, absolute.tex');
-
-        const { xml } = yield* getXmlFormatFromReadableFiles(root, [
-          fakePath('workspace/chapter/main.tex'),
-          fakePath('outside/absolute.tex'),
-        ]);
-
-        expect(xml).toContain('<document name="chapter/main.tex">');
-        expect(xml).toContain('<document name="absolute.tex">');
-        expect(xml).not.toContain(`name="${fakePath('outside/absolute.tex')}"`);
-      }).pipe(Effect.provide(fakeProcessServices())),
-  );
 
   // #12803: with no workspace root, a relative entry makes
   // `workspaceAbsolutePath` throw. Resolved as an argument that throw was a

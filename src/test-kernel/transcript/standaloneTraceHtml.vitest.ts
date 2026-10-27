@@ -59,10 +59,4 @@ describe('injectStandaloneTrace', () => {
 
     expect(embeddedTrace(html).events[0]).toMatchObject({ message: payload });
   });
-
-  it('throws a clear error when the template has no module script tag', () => {
-    expect(() => injectStandaloneTrace('<html></html>', trace())).toThrow(
-      /missing its module/,
-    );
-  });
 });

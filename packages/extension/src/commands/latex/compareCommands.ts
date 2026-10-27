@@ -2,20 +2,17 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Cause, Effect, FileSystem, Schema } from 'effect';
+import { Cause, Effect, FiberHandle, FileSystem, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
-import {
-  ensureError,
-  toErrorMessage,
-  type FileLocation,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
-import { registerDiffRefresh } from '@frontend/ui/diffView';
+import { executeVscodeCommand } from '@frontend/system/commandUtils';
+import { refreshDiffOnLayoutChange } from '@frontend/ui/diffView';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
@@ -28,51 +25,10 @@ import {
   siblingLocation,
   type CommitAcceptedFilePorts,
 } from '@latex/acceptedFileTarget';
-import { DIFF_REGISTRATION_DELAY_MS } from '@texra/shared/constants/latexTiming';
 import { workflowOutputCopyStem } from '@texra/utils/files/outputFileUtils';
 import { type AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
 
 const CHANNEL = 'CompareCommands';
-
-/**
- * A VS Code command this file dispatched and VS Code refused.
- *
- * `not-registered` is the host saying the id does not exist — the only way a
- * caller here tolerates a failure, and the only place the reading happens:
- * VS Code reports an unregistered id in the message text and nowhere else, so
- * the text is read once, beside the dispatch, and callers match `reason`.
- */
-class VscodeCommandRefused extends Schema.TaggedError<VscodeCommandRefused>()(
-  'VscodeCommandRefused',
-  {
-    reason: Schema.Literals(['not-registered', 'failed']),
-    commandId: Schema.String,
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
-/** Dispatch one VS Code command, naming an unregistered id as its own reason. */
-function executeVscodeCommand<T = void>(
-  commandId: string,
-  ...args: unknown[]
-): Effect.Effect<T | undefined, VscodeCommandRefused> {
-  return Effect.tryPromise({
-    try: () =>
-      Promise.resolve(vscode.commands.executeCommand<T>(commandId, ...args)),
-    catch: (cause) => {
-      const message = toErrorMessage(cause);
-      return new VscodeCommandRefused({
-        reason: message.includes(`command '${commandId}' not found`)
-          ? 'not-registered'
-          : 'failed',
-        commandId,
-        message,
-        cause,
-      });
-    },
-  });
-}
 
 /**
  * The host-neutral accept sequence, or the quick pick in front of it, faulted.
@@ -143,7 +99,12 @@ const validateFilesExist = Effect.fnUntraced(function* (
 });
 
 export const handleCompare = Effect.fn('compareCommands.handleCompare')(
-  function* (baseLocation: FileLocation, editedLocation: FileLocation) {
+  function* (
+    baseLocation: FileLocation,
+    editedLocation: FileLocation,
+    /** The window's diff refresh, which this comparison takes over. */
+    diffRefresh: FiberHandle.FiberHandle,
+  ) {
     if (!(yield* validateFilesExist(baseLocation, editedLocation))) {
       return;
     }
@@ -176,21 +137,10 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
 
     yield* executeVscodeCommand('vscode.diff', editedUri, baseUri, title);
 
-    yield* Effect.forkDetach(
-      Effect.sleep(DIFF_REGISTRATION_DELAY_MS).pipe(
-        Effect.andThen(
-          Effect.try({
-            try: () => registerDiffRefresh(editedUri, baseUri, title),
-            catch: ensureError,
-          }),
-        ),
-        // Nothing joins this fiber: a failed registration is logged here.
-        Effect.catch((error) =>
-          Effect.logWarning(
-            'Could not register the diff refresh; the comparison will not update on save.',
-          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
-        ),
-      ),
+    // One refresh per window: this comparison's replaces the last one's.
+    yield* FiberHandle.run(
+      diffRefresh,
+      refreshDiffOnLayoutChange(editedUri, baseUri, title),
     );
 
     yield* Effect.logInfo(

@@ -1,9 +1,9 @@
 /**
  * `SessionRequests`: one handler for every request a surface issues to its
  * session's runtime, answered once with an `Outcome` or a request error.
- * Existence is read from the sequence table first: no row is
- * `Unavailable`, a foreign claim without a death
- * proof `NotOwner`, a rejecting collaborator a defect.
+ * Existence is read from the sequence table first: no row is `Unavailable`,
+ * a foreign claim without a death proof `NotOwner`, a rejecting collaborator
+ * a defect. A message is the exception: `submitFollowUp` admits it.
  */
 import { Effect, SubscriptionRef, type Context } from 'effect';
 
@@ -234,7 +234,7 @@ const decideRequest = (
 ): Effect.Effect<Outcome, RequestError, GlobalValues> => {
   const answer = Effect.gen(function* () {
     const pending = pendingOf(deps, req.runId, req.requestId);
-    if (pending === undefined) return yield* Effect.fail(settled(req.runId));
+    if (pending === undefined) return yield* settled(req.runId);
     // A request that parks its caller is answered by the fiber waiting on it,
     // and that fiber died with the owner this decision takes over from:
     // recording a decision would clear the panel without doing what it says.
@@ -263,7 +263,7 @@ const decideRequest = (
           }),
         ),
       );
-    if (!recorded) return yield* Effect.fail(settled(req.runId));
+    if (!recorded) return yield* settled(req.runId);
     return done;
   });
   return withPerKeyLane(
@@ -273,31 +273,30 @@ const decideRequest = (
 };
 
 /** Answered by the run's live loop once its resume here settles (none: refused): a /compact or /model sent mid-resume waits until the run rests. */
-const viaControls = (
+const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
   deps: RequestDeps,
   req: Extract<RuntimeRequest, { kind: `run.${'compact' | 'model'}` }>,
-): Effect.Effect<Outcome, RequestError> =>
-  Effect.gen(function* () {
-    const { runId } = req;
-    const unavailable = (reason: string) => new Unavailable({ runId, reason });
-    yield* deps.session().followUps.resumes.settled(runId);
-    const controls = deps.session().runs.get(runId)?.controls;
-    const noun = runNoun(deps.session(), runId);
-    if (controls === undefined)
-      return yield* unavailable(
-        req.kind === 'run.compact'
-          ? `This ${noun} has no conversation to compact.`
-          : `Resume the ${noun} to switch its model.`,
-      );
-    const action =
-      req.kind === 'run.model'
-        ? controls.switchModel(req.model)
-        : controls.requestImmediateCompaction();
-    return yield* action.pipe(
-      Effect.mapError((error) => unavailable(error.message)),
-      Effect.as(done),
+): Effect.fn.Return<Outcome, RequestError> {
+  const { runId } = req;
+  const unavailable = (reason: string) => new Unavailable({ runId, reason });
+  yield* deps.session().followUps.resumes.settled(runId);
+  const controls = deps.session().runs.get(runId)?.controls;
+  const noun = runNoun(deps.session(), runId);
+  if (controls === undefined)
+    return yield* unavailable(
+      req.kind === 'run.compact'
+        ? `This ${noun} has no conversation to compact.`
+        : `Resume the ${noun} to switch its model.`,
     );
-  });
+  const action =
+    req.kind === 'run.model'
+      ? controls.switchModel(req.model)
+      : controls.requestImmediateCompaction();
+  return yield* action.pipe(
+    Effect.mapError((error) => unavailable(error.message)),
+    Effect.as(done),
+  );
+});
 
 /** Delete the admitted lifetime after acquiring its inactive run slot. */
 const deleteAdmittedRun = (
@@ -346,7 +345,7 @@ const deleteAdmittedRun = (
 
 const handle = (
   deps: RequestDeps,
-  req: RuntimeRequest,
+  req: Exclude<RuntimeRequest, { kind: 'followUp.send' }>,
   admitted: AggregateState,
   heldHere: boolean,
 ): Effect.Effect<Outcome, RequestError, RequestServices> => {
@@ -398,35 +397,6 @@ const handle = (
         ),
         Effect.map((runId): Outcome => ({ kind: 'forked', runId })),
       );
-    case 'followUp.send':
-      return submitFollowUp(
-        req.runId,
-        {
-          text: req.text,
-          from: { kind: 'user' },
-          ...(req.displayText == null ? {} : { displayText: req.displayText }),
-          ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
-        },
-        { session: deps.session() },
-      ).pipe(
-        Effect.orDie,
-        Effect.flatMap((result) =>
-          result.status === 'failed'
-            ? Effect.fail(
-                new Unavailable({
-                  runId: req.runId,
-                  reason: describeFollowUpFailure(result.reason),
-                }),
-              )
-            : Effect.succeed<Outcome>({
-                kind: 'followUp',
-                status: result.status,
-                ...(result.status === 'queued' && result.wake === 'failed'
-                  ? { wake: 'failed' }
-                  : {}),
-              }),
-        ),
-      );
     case 'request.decide':
       return decideRequest(deps, req, heldHere);
     case 'request.preview':
@@ -459,6 +429,31 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
   const request = Effect.fn('SessionRequests.request')(function* (
     req: RuntimeRequest,
   ) {
+    // A message skips `admit`: `submitFollowUp` refuses under the run's claim
+    // and keeps its run's sends in order, so nothing may wait before it.
+    if (req.kind === 'followUp.send')
+      return yield* submitFollowUp(
+        req.runId,
+        {
+          text: req.text,
+          from: { kind: 'user' },
+          ...(req.displayText == null ? {} : { displayText: req.displayText }),
+          ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
+        },
+        { session: deps.session(), hold: req.holdUntil ?? undefined },
+      ).pipe(
+        Effect.orDie,
+        Effect.flatMap((result) =>
+          result.status === 'failed'
+            ? Effect.fail(
+                new Unavailable({
+                  runId: req.runId,
+                  reason: describeFollowUpFailure(result.reason),
+                }),
+              )
+            : Effect.succeed<Outcome>({ kind: 'followUp', ...result }),
+        ),
+      );
     yield* requireRunAction(deps, req);
     const admitted = yield* admit(deps, req);
     // This process holds the run's claim: a parked request has a fiber here.

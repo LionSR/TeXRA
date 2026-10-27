@@ -48,7 +48,7 @@ const COMPOSITION_ROOT_FILES = new Set([
   path.join(__dirname, 'packages/harness/src/effect/sessions.ts'),
   // The test suite's composition root: the one harness file that installs
   // the process runtime the session graph runs on, over the plugin list its
-  // setup module passes (`sessionGraphTestSetup`, `builtinSessionGraphTestSetup`).
+  // setup module passes (`sessionGraphTestSetup`).
   path.join(__dirname, 'src/test-kernel/support/sessionGraphInstall.ts'),
 ]);
 

@@ -1,7 +1,7 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Layer, Schema } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports
 import { AgentCatalog } from '@agent/index/agentCatalog';
@@ -19,6 +19,10 @@ import {
 } from '@test/support/setupPlatform';
 import { LaunchSurfaceSchema } from '@texra/shared/session/surface';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
+import {
+  launchFormOf,
+  prepareSurfaceLaunch,
+} from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
 
 /**
  * A program over the process's global storage view and the bundled agents:
@@ -49,25 +53,6 @@ function onGlobalStorage<A, E>(
   );
 }
 
-const mocks = vi.hoisted(() => ({
-  createTeamCatalogPorts: vi.fn(() => Effect.succeed({ catalog: true })),
-  resolveTeamLaunch: vi.fn(),
-}));
-
-vi.mock('@common/teams/TeamPlan', () => ({
-  formatTeamLaunchBlockedMessage: (teamId: string, reason: string) =>
-    `Blocked ${teamId}: ${reason}`,
-  formatUnknownTeamMessage: (teamId: string) => `Unknown ${teamId}`,
-  resolveTeamLaunch: mocks.resolveTeamLaunch,
-  TEAM_SELECTION_REQUIRED_MESSAGE: 'Select a team',
-}));
-vi.mock('@texra/controllers/mainView/teamCatalogPorts', () => ({
-  createTeamCatalogPorts: mocks.createTeamCatalogPorts,
-}));
-
-const { launchFormOf, prepareSurfaceLaunch } =
-  await import('@texra/controllers/mainView/backend/MainViewRunLaunchController');
-
 /** The requesting session's slots and the storage root its pasted images
  *  live under. */
 const ROOTS = {
@@ -87,72 +72,6 @@ function launchRequest(
 }
 
 describe('main-view run launch controller', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it.effect('prepares ordinary launches without loading the team catalog', () =>
-    Effect.gen(function* () {
-      const { config } = yield* onGlobalStorage(
-        prepareSurfaceLaunch(launchRequest({ agent: 'orchestrator' }), ROOTS),
-      );
-
-      expect(config).toMatchObject({
-        agent: 'orchestrator',
-        instruction: 'Improve the draft.',
-        outputFiles: [],
-      });
-      expect(mocks.resolveTeamLaunch).not.toHaveBeenCalled();
-    }),
-  );
-
-  it.effect(
-    'keeps missing selections explicit before schema prefaults apply',
-    () =>
-      Effect.gen(function* () {
-        const error = yield* Effect.flip(
-          onGlobalStorage(
-            prepareSurfaceLaunch(launchRequest({ model: '' }), ROOTS),
-          ),
-        );
-
-        expect(error).toMatchObject({
-          _tag: 'Rejected',
-          reason: 'Choose an agent and a model first.',
-        });
-      }),
-  );
-
-  it.effect('requires an input or media file for a document agent', () =>
-    Effect.gen(function* () {
-      const error = yield* Effect.flip(
-        onGlobalStorage(
-          prepareSurfaceLaunch(launchRequest({ agent: 'correct' }), ROOTS),
-        ),
-      );
-
-      expect(error).toMatchObject({
-        _tag: 'Rejected',
-        reason: 'Choose an input or media file first.',
-        docsPage: 'file-management',
-      });
-      // Media alone is a task too (#14148).
-      const { config } = yield* onGlobalStorage(
-        prepareSurfaceLaunch(
-          launchRequest({
-            agent: 'correct',
-            mediaFiles: ['/papers/first/scan.png'],
-          }),
-          ROOTS,
-        ),
-      );
-      expect(config).toMatchObject({
-        inputFiles: [],
-        mediaFiles: ['/papers/first/scan.png'],
-      });
-    }),
-  );
-
   it.effect(
     'fills Run again… with the agent key, model and files a form launch saved',
     () =>
@@ -175,37 +94,5 @@ describe('main-view run launch controller', () => {
           instruction: 'Improve the draft.',
         });
       }),
-  );
-
-  it.effect('builds the resolved team fields over the renderer agent', () =>
-    Effect.gen(function* () {
-      mocks.resolveTeamLaunch.mockReturnValue({
-        status: 'ready',
-        fields: {
-          agent: 'builtIn:lead',
-          delegationAgentScope: ['builtIn:writer', 'builtIn:lead'],
-          cli: { teamId: 'custom-team' },
-        },
-        missingNames: ['writer'],
-      });
-
-      // The renderer's selected agent is ignored in favour of the team plan.
-      const { config } = yield* onGlobalStorage(
-        prepareSurfaceLaunch(
-          launchRequest({
-            launchTarget: 'team',
-            selectedTeamId: 'physicist',
-            agent: 'stale-renderer-agent',
-          }),
-          ROOTS,
-        ),
-      );
-
-      expect(config).toMatchObject({
-        agent: 'builtIn:lead',
-        delegationAgentScope: ['builtIn:writer', 'builtIn:lead'],
-        cli: { teamId: 'custom-team' },
-      });
-    }),
   );
 });

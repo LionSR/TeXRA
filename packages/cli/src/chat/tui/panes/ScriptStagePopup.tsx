@@ -18,7 +18,13 @@ import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
-import { CROSS, HOLLOW_DOT, SKIP_CIRCLE, TICK } from '@cli/tui/ui/glyphs';
+import {
+  CROSS,
+  HOLLOW_DOT,
+  SKIP_CIRCLE,
+  STATUS_DIAMOND,
+  TICK,
+} from '@cli/tui/ui/glyphs';
 import {
   COLOR_BORDER,
   COLOR_ERROR,
@@ -34,12 +40,7 @@ import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
 
 // Local imports - TUI state
 import { type ScriptPopupView } from '../state/cliState';
-import {
-  CLI_FOLLOW_UP_HOST,
-  killableRunId,
-  runViewOf,
-  sessionView,
-} from '../state/sessionView';
+import { killableRunId, runViewOf, sessionView } from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
 import { RowSegment } from './SubagentList';
 import type { RuntimeRequest, RunId } from '@texra-ai/harness/schemas';
@@ -137,8 +138,7 @@ export function ScriptStagePopup({
   const { columns } = useWindowSize();
   const session = useSignal(sessionView());
   const run = runViewOf(session, runId);
-  const stages =
-    run === undefined ? [] : scriptStages(run, session, CLI_FOLLOW_UP_HOST);
+  const stages = run === undefined ? [] : scriptStages(run, session);
   // The newest script unless the user moved to another.
   const stageIndex = Math.max(
     0,
@@ -155,7 +155,7 @@ export function ScriptStagePopup({
           {
             kind: 'heading' as const,
             key: `phase:${phase.title}`,
-            text: `◆ ${phase.title}`,
+            text: `${STATUS_DIAMOND} ${phase.title}`,
           },
         ]),
     ...phase.calls.map((call) => ({

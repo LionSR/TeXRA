@@ -194,8 +194,7 @@ const MESSAGE_HANDLERS: {
         );
       const answered: RunState = {
         ...updated,
-        continuation:
-          p.turn.kind === 'http' ? (p.turn.continuation ?? null) : null,
+        continuation: p.turn.continuation ?? null,
         lastError: null,
         lastTurn: p.turn,
         countStale: false,

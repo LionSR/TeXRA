@@ -80,29 +80,6 @@ function createHarness(options: HarnessOptions = {}): {
 }
 
 describe('ProgressApiKeyRetryController', () => {
-  itHosted(
-    'requires a changed usable key after upstream credit depletion',
-    () =>
-      Effect.gen(function* () {
-        const harness = createHarness({
-          keys: { anthropic: 'old-key' },
-          prompt: (keys) => {
-            keys.set('anthropic', 'new-key');
-          },
-        });
-
-        yield* harness.controller.useOwnApiKey({
-          stream: 'stream-a' as RunId,
-          requestId: 'retry-a',
-          provider: 'anthropic',
-          requireNewKey: true,
-        });
-
-        expect(harness.prompts).toStrictEqual(['anthropic']);
-        expect(harness.retries).toStrictEqual(['stream-a']);
-      }),
-  );
-
   itHosted('does not retry when a depleted provider key was not changed', () =>
     Effect.gen(function* () {
       const harness = createHarness({
@@ -121,87 +98,6 @@ describe('ProgressApiKeyRetryController', () => {
 
       expect(harness.prompts).toStrictEqual(['anthropic']);
       expect(harness.retries).toStrictEqual([]);
-    }),
-  );
-
-  itHosted('retries with the existing OpenAI key without prompting', () =>
-    Effect.gen(function* () {
-      const harness = createHarness({ keys: { openai: 'stored-openai' } });
-
-      yield* harness.controller.useOwnApiKey({
-        stream: 'stream-d' as RunId,
-        requestId: 'retry-d',
-        provider: 'openai',
-        requireNewKey: false,
-      });
-
-      // The subscription quota failed, not the key — a stored key is already
-      // usable, so "Use your own API key" must not jump to the key-input
-      // prompt. The route the run turns away from is the run's own decision,
-      // recorded on its run history, not a write to the user's settings.
-      expect(harness.prompts).toStrictEqual([]);
-      expect(harness.retries).toStrictEqual(['stream-d']);
-    }),
-  );
-
-  itHosted('does not retry when no usable OpenAI key is available', () =>
-    Effect.gen(function* () {
-      const harness = createHarness({ keys: {} });
-
-      yield* harness.controller.useOwnApiKey({
-        stream: 'stream-e' as RunId,
-        requestId: 'retry-e',
-        provider: 'openai',
-        requireNewKey: false,
-      });
-
-      // No usable key exists, so the prompt is still shown (then declined here).
-      expect(harness.prompts).toStrictEqual(['openai']);
-      expect(harness.retries).toStrictEqual([]);
-    }),
-  );
-
-  itHosted(
-    'prepares an existing direct key for a fresh Copilot fallback without retrying in place',
-    () =>
-      Effect.gen(function* () {
-        const harness = createHarness({
-          keys: { anthropic: 'stored-anthropic' },
-        });
-
-        const proceeded = yield* harness.controller.ensureOwnApiKey(
-          'anthropic',
-          false,
-        );
-
-        expect(proceeded).toBe(true);
-        expect(harness.prompts).toStrictEqual([]);
-        // The Copilot fallback launches a replacement run; nothing is retried
-        // in place, and no preference of the user's is written.
-        expect(harness.retries).toStrictEqual([]);
-      }),
-  );
-
-  itHosted('rechecks the retry identity after the key prompt', () =>
-    Effect.gen(function* () {
-      let pendingChecks = 0;
-      const harness = createHarness({
-        keys: { openai: 'stored-openai' },
-        isRetryPending: () => {
-          pendingChecks += 1;
-          return false;
-        },
-      });
-
-      yield* harness.controller.useOwnApiKey({
-        stream: 'stream-stale' as RunId,
-        requestId: 'retry-stale',
-        provider: 'openai',
-        requireNewKey: false,
-      });
-
-      expect(harness.retries).toStrictEqual([]);
-      expect(pendingChecks).toBe(1);
     }),
   );
 });

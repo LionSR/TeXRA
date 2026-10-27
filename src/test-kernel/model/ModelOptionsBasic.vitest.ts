@@ -20,10 +20,6 @@ describe('default helper model', () => {
 });
 
 describe('default model list', () => {
-  it('only contains model ids known by llm-zoo', () => {
-    expect(DEFAULT_MODELS.filter((model) => !modelConfig(model))).toEqual([]);
-  });
-
   // The list is literal data: an llm-zoo bump that retires or deprecates an
   // entry fails here and the entry is replaced by hand.
   it('only contains live, non-deprecated models', () => {

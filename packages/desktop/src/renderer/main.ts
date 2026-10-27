@@ -98,17 +98,17 @@ if (appRoot == null) {
 // is in-memory). Reads run at module load: unreadable storage or non-JSON
 // falls back to the default, a refused write goes unsaved, both loudly.
 const rendererState: KeyValueStore = {
-  get<T>(key: string, defaultValue?: T): T {
+  get(key) {
     try {
       const raw = window.localStorage.getItem(key);
-      if (raw === null) return defaultValue as T;
-      return JSON.parse(raw) as T;
+      if (raw === null) return undefined;
+      return JSON.parse(raw);
     } catch (error) {
       console.warn(
         `[desktop] Saved renderer state "${key}" is unreadable; falling back to defaults.`,
         error,
       );
-      return defaultValue as T;
+      return undefined;
     }
   },
   update(key, value) {

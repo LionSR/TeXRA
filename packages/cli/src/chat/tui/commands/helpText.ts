@@ -58,7 +58,7 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
       : '`Ctrl-J` inserts a newline';
   return [
     '**Keyboard**',
-    `- \`Enter\` sends · ${newline}`,
+    `- \`Enter\` sends (a working agent reads it at its next step) · \`Shift-Tab\` sends it for the end of the agent's turn · ${newline}`,
     '- `↑`/`↓` browse input history · `Ctrl-R` searches it',
     // Generated from the editing keymap so this list can't drift from the
     // bindings that actually exist (see textInputBindings.ts).

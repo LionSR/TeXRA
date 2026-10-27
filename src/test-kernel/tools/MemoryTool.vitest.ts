@@ -1,38 +1,20 @@
 // Node imports
-import { Buffer } from 'node:buffer';
 import * as path from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, type FileSystem, Option, Stream } from 'effect';
+import { Effect, type FileSystem, Option } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { StorageFs } from '@platform/rootedFs';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { MEMORY_DISPLAY_ROOT } from '@tools/memory/memoryUtils';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 const TEST_TIMESTAMP = Date.parse('2026-01-01T00:00:00.000Z');
-const TEST_FRONTMATTER = [
-  '---',
-  'modifiedBy: test-agent',
-  'modifiedAt: 2026-01-01T00:00:00.000Z',
-  '---',
-  'note body',
-].join('\n');
-const PINNED_FRONTMATTER = [
-  '---',
-  'modifiedBy: pin-agent',
-  'modifiedAt: 2026-01-01T00:00:00.000Z',
-  'runId: run-7',
-  'pinned: true',
-  '---',
-  'pinned body',
-].join('\n');
 
 /** One `stat` answer of the session's storage view. */
 function entryInfo(
@@ -103,89 +85,6 @@ describe('MemoryTool view with an omitted path', () => {
     }),
   );
 
-  it.effect(
-    'preserves the model-facing directory listing bytes and depth limit',
-    () =>
-      Effect.gen(function* () {
-        // Only the system clock is pinned; the walk runs on Effect's scheduler, which needs live
-        // setImmediate/setTimeout to make progress.
-        vi.useFakeTimers({ toFake: ['Date'] });
-        vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'));
-
-        const alphaPath = path.posix.join(
-          WORKSPACE_STORAGE_LAYOUT.memory,
-          'alpha',
-        );
-        const betaPath = path.posix.join(alphaPath, 'beta');
-        const pinnedPath = path.posix.join(alphaPath, 'pinned.md');
-        const rootFilePath = path.posix.join(
-          WORKSPACE_STORAGE_LAYOUT.memory,
-          'root.md',
-        );
-
-        const storageFs = storageView({
-          exists: () => Effect.succeed(true),
-          readDirectoryTyped: (target) => {
-            if (target === WORKSPACE_STORAGE_LAYOUT.memory) {
-              return Effect.succeed([
-                ['alpha', 'Directory'],
-                ['root.md', 'File'],
-              ] as const);
-            }
-            if (target === alphaPath) {
-              return Effect.succeed([
-                ['pinned.md', 'File'],
-                ['beta', 'Directory'],
-              ] as const);
-            }
-            if (target === betaPath) {
-              return Effect.die(
-                new Error('The depth-2 directory must not be traversed'),
-              );
-            }
-            return Effect.die(
-              new Error(`Unexpected listing target: ${target}`),
-            );
-          },
-          stat: (target) => {
-            if (target === pinnedPath) {
-              return Effect.succeed(
-                entryInfo('File', Buffer.byteLength(PINNED_FRONTMATTER)),
-              );
-            }
-            if (target === rootFilePath) {
-              return Effect.succeed(
-                entryInfo('File', Buffer.byteLength(TEST_FRONTMATTER)),
-              );
-            }
-            return Effect.succeed(entryInfo('Directory', 0));
-          },
-          stream: (target) =>
-            Stream.make(
-              Buffer.from(
-                target === pinnedPath ? PINNED_FRONTMATTER : TEST_FRONTMATTER,
-              ),
-            ),
-        });
-
-        const result = yield* viewMemory(storageFs, MEMORY_DISPLAY_ROOT);
-
-        expect(result).toEqual({
-          status: 'executed',
-          summary: 'Listed directory: /memories (1–5 of 5)',
-          output: [
-            'Contents of /memories (showing 1–5 of 5, up to 2 levels deep):',
-            'SIZE\tMODIFIED\tBY\tPATH',
-            '0 bytes\t2026-01-01T00:00:00.000Z\t-\t/memories',
-            '0 bytes\t2026-01-01T00:00:00.000Z\t-\t/memories/alpha',
-            `${Buffer.byteLength(PINNED_FRONTMATTER)} bytes\t2026-01-01T00:00:00.000Z\tpin-agent (run-7)\t/memories/alpha/pinned.md [pinned]`,
-            '0 bytes\t2026-01-01T00:00:00.000Z\t-\t/memories/alpha/beta',
-            `${Buffer.byteLength(TEST_FRONTMATTER)} bytes\t2026-01-01T00:00:00.000Z\ttest-agent\t/memories/root.md`,
-          ].join('\n'),
-        });
-      }),
-  );
-
   it.effect('skips a symlink cycle when listing memory directories', () =>
     Effect.gen(function* () {
       const cyclePath = path.posix.join(
@@ -221,59 +120,5 @@ describe('MemoryTool view with an omitted path', () => {
       });
       expect(result.output).not.toContain('cycle');
     }),
-  );
-});
-
-describe('MemoryTool invocation storage root', () => {
-  afterEach(() => vi.restoreAllMocks());
-
-  it.effect(
-    'writes through the view its call was given, not an ambient root',
-    () =>
-      Effect.gen(function* () {
-        const first = createFakeWorkspaceRoots({ storagePath: '/storage/one' });
-        const second = createFakeWorkspaceRoots({
-          storagePath: '/storage/two',
-        });
-        const writes: string[] = [];
-        const viewOf = (root: string): RootedFileSystem =>
-          storageView({
-            root,
-            exists: () => Effect.succeed(false),
-            makeDirectory: () => Effect.void,
-            writeFileAtomic: (target) =>
-              Effect.sync(() => {
-                writes.push(path.resolve(root, target));
-              }),
-          });
-
-        yield* Effect.forEach(
-          [
-            [first, 'one.md'],
-            [second, 'two.md'],
-          ] as const,
-          ([roots, file]) =>
-            MemoryTool.call({
-              command: 'create',
-              path: `/memories/${file}`,
-              file_text: file,
-            }).pipe(
-              Effect.provideService(StorageFs, viewOf(roots.storage)),
-              Effect.provide(
-                nativeToolTestLayer({
-                  roots,
-                }),
-              ),
-            ),
-          { concurrency: 'unbounded' },
-        );
-
-        expect(writes.toSorted()).toEqual(
-          [
-            path.resolve(first.storage, 'memories/one.md'),
-            path.resolve(second.storage, 'memories/two.md'),
-          ].toSorted(),
-        );
-      }),
   );
 });

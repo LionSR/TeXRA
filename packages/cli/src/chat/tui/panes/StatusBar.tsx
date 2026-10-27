@@ -1,5 +1,5 @@
 import { Box, Text, useStderr, useWindowSize } from 'ink';
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, type Fiber } from 'effect';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { readModelOptions, type PlatformSecrets } from '@texra-ai/harness';
@@ -72,9 +72,10 @@ interface StatusBarProps {
 /**
  * Poll `read` every `intervalMs` on the shared poll registry, and at once when
  * `key` changes. One rule governs staleness: a key already in flight is not
- * re-read, and only the latest request settles, so a superseded read never
- * overwrites a newer one. The settled exit is returned only while its key is
- * still current; an undefined key reads nothing.
+ * re-read, and only the latest request settles: a superseded read is
+ * interrupted, as is the read in flight at unmount. The settled exit is
+ * returned only while its key is still current; an undefined key reads
+ * nothing.
  */
 function usePolledRead<K extends string, A, E>(
   runtime: ProcessRuntime,
@@ -86,22 +87,37 @@ function usePolledRead<K extends string, A, E>(
     readonly key: K;
     readonly exit: Exit.Exit<A, E>;
   }>();
-  const requestRef = useRef<{ generation: number; inFlightKey?: K }>({
-    generation: 0,
-  });
+  const requestRef = useRef<{
+    generation: number;
+    inFlightKey?: K;
+    reading?: Fiber.Fiber<A, E>;
+  }>({ generation: 0 });
+  useEffect(
+    () => () => {
+      const request = requestRef.current;
+      request.generation += 1;
+      request.reading?.interruptUnsafe();
+    },
+    [],
+  );
   usePollingInterval(
     () => {
       const request = requestRef.current;
       if (key !== undefined && request.inFlightKey === key) return;
       const generation = ++request.generation;
       request.inFlightKey = key;
+      request.reading?.interruptUnsafe();
+      request.reading = undefined;
       if (key === undefined) {
         setSettled(undefined);
         return;
       }
-      runtime.runFork(read(key)).addObserver((exit) => {
+      const reading = runtime.runFork(read(key));
+      request.reading = reading;
+      reading.addObserver((exit) => {
         if (request.generation !== generation) return;
         request.inFlightKey = undefined;
+        request.reading = undefined;
         setSettled({ key, exit });
       });
     },
@@ -269,6 +285,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     },
     shortcuts: {
       chatInputAvailable: props.chatInputAvailable,
+      holdAvailable: props.chatInputAvailable && isActivePhase(displayStatus),
       childNavigationAvailable: props.childNavigationAvailable,
       parentNavigationAvailable: runViewOf(view, activeRunId)?.parentId != null,
       transcriptAvailable: props.transcriptAvailable,

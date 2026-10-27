@@ -7,7 +7,7 @@
 // A signal cause restores terminal modes synchronously before its first await,
 // then skips the graceful queue/run drain and exits with the signal code.
 
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Exit, Scope } from 'effect';
 import { withProcessServices, type ProcessRuntime } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { readCliCwd } from '@cli/runtime/cliContext';
@@ -67,15 +67,16 @@ interface SessionExitControllerContext {
   readonly commandName: string;
   /** `context.cwd` — the launch directory shown in the resume hint. */
   readonly cwd: string;
-  /** Session-scoped subscriptions torn down on graceful exit. */
-  readonly disposables: DisposableStore;
+  /** The chat's scope: what the session holds, closed and awaited on
+   *  graceful exit. */
+  readonly chatScope: Scope.Closeable;
   /** The TUI's hold on the terminal, suspended, resumed and released here. */
   readonly terminal: TuiTerminal;
   /** The process runtime the exit drain runs on: one run per exit path. */
   readonly runtime: ProcessRuntime;
-  /** Settles once the follow-up delivery queue has drained; a graceful exit
-   *  waits on it before it returns. */
-  readonly followUpsIdle: Effect.Effect<void>;
+  /** Settles once every message the chat was sending is sent (or started
+   *  its run); a graceful exit waits on it before it returns. */
+  readonly submitted: Effect.Effect<void>;
   /** Reads the live approval policy for the resume hint. */
   readonly getApprovalPolicy: () => ApprovalPolicy;
   /** Materialize buffered trace chunks and drain queued publications. */
@@ -266,8 +267,9 @@ export function createSessionExitController(
   // run; the returned program is the rest of the exit, run once by `teardown`.
   const beginTeardown = (cause: ExitCause): Effect.Effect<void, Error> => {
     detachSignals();
-    // Snapshot the view while it is still bound: disposing ctx.disposables
-    // below unbinds it, but the resume hint prints later.
+    // Snapshot the view while it is still bound: closing ctx.chatScope
+    // below ends the session's subscriptions, but the resume hint prints
+    // later.
     const resumeHint: ResumeHintSnapshot = {
       view: currentView(),
       rootRunId: rootRunIdSignal.get(),
@@ -313,28 +315,22 @@ export function createSessionExitController(
       ctx.interruptActive('shutdown');
       return true;
     };
-    // Interrupt an actively-running turn BEFORE draining the queue. A queued
-    // follow-up that already entered its recovery path awaits `dispatch.resume`
-    // (ToolUseFollowUp), which resolves only when the resumed turn finishes and
-    // never observes `stopRequested` — draining first would block the quit
-    // behind a long model turn. Re-check after the drain for a run the drain
-    // itself started.
+    // Interrupt an actively-running turn BEFORE waiting for the chat's sends:
+    // a message to a stopping run lands only once the stop finishes. Re-check
+    // after the wait for a run a send itself resumed.
     const drain = withProcessServices(
       ctx.runtime,
       Effect.gen(function* () {
         // A disposal failure does not stop the exit: it is reported and
         // rethrown once the session is persisted and the terminal restored.
-        const disposalFailure = yield* Effect.try({
-          try: () => ctx.disposables.dispose(),
-          catch: ensureError,
-        }).pipe(
-          Effect.match({
-            onFailure: (error) => error,
-            onSuccess: () => undefined,
-          }),
+        const closed = yield* Effect.exit(
+          Scope.close(ctx.chatScope, Exit.void),
         );
+        const disposalFailure = Exit.isFailure(closed)
+          ? ensureError(Cause.squash(closed.cause))
+          : undefined;
         let interrupted = interruptPendingRun();
-        yield* ctx.followUpsIdle;
+        yield* ctx.submitted;
         interrupted = interruptPendingRun() || interrupted;
         const idle = session.isResumableIdle();
         // Only await a run we actually interrupted/finished. A resumableIdle

@@ -16,9 +16,7 @@
 import { randomUUID } from 'node:crypto';
 import { isPathWithin } from '@texra-ai/harness';
 
-import { ModelError, ModelErrorFieldsSchema } from '@texra-ai/llm';
 import {
-  type Cause,
   Clock,
   Deferred,
   type Duration,
@@ -58,21 +56,8 @@ export class WindowCallFailed extends Schema.TaggedError<WindowCallFailed>()(
      *  not answer in time; `failed`: it answered with its own failure. */
     reason: Schema.Literals(['detached', 'no-answer', 'failed']),
     message: Schema.String,
-
-    /** A model's failure, as the window's model raised it. */
-    model: Schema.optional(ModelErrorFieldsSchema),
   },
 ) {}
-
-/** A model call's failure as the run's model binding sees it: the
- *  window's own, or the window's absence as a transport failure. */
-const modelError = (failure: WindowCallFailed): ModelError =>
-  new ModelError(
-    failure.model ?? {
-      kind: 'transport',
-      message: `The VS Code window serving this editor model ${failure.reason === 'failed' ? 'failed' : 'is gone'}: ${failure.message}`,
-    },
-  );
 
 /** How long a run waits for each answer. A diagnostics read may build the
  *  document first, so it waits longest. */
@@ -81,8 +66,6 @@ const ANSWER_WITHIN = {
   addCriticism: '10 seconds',
   openPdf: '30 seconds',
   approveToolEdit: '30 seconds',
-  lmModels: '30 seconds',
-  lmPrepare: '30 seconds',
 } satisfies Partial<Record<HostCall['kind'], Duration.Input>>;
 type AnsweredCall = Extract<HostCall, { kind: keyof typeof ANSWER_WITHIN }>;
 
@@ -111,7 +94,6 @@ const answerFailure = (
   new WindowCallFailed({
     reason: 'failed',
     message: answer.message,
-    ...(answer.model !== undefined && { model: answer.model }),
   });
 
 type PresentedToolEdit = Extract<
@@ -258,76 +240,6 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
       return parsed.success;
     });
 
-  /** Send a streamed call to the window `key`'s project routes it to: its
-   *  items, decoded by `schema`, until its final answer. Ending early (the
-   *  run stopped) tells the window to cancel; the window going fails it. */
-  const askStream = <A>(
-    key: string,
-    call: Extract<HostCall, { kind: 'lmStream' }>,
-    schema: Schema.Codec<A, unknown>,
-    window = target(key, CALL_CAPABILITY[call.kind]),
-  ): Stream.Stream<A, WindowCallFailed> =>
-    Stream.unwrap(
-      Effect.gen(function* () {
-        // Made first, so the check below and the registration are one step
-        // and a detach either finds this call or came before it.
-        const items = yield* Queue.unbounded<
-          A,
-          WindowCallFailed | Cause.Done
-        >();
-        if (window === undefined || !windows.has(window))
-          return yield* new WindowCallFailed({
-            reason: 'detached',
-            message: 'No TeXRA window of this project is attached.',
-          });
-        const id = randomUUID();
-        let settled = false;
-        // In the stream's scope before the call is registered, so an
-        // interrupt at any point after (the frame's offer included) still
-        // drops the call and tells the window to cancel it.
-        yield* Effect.addFinalizer(() =>
-          Effect.suspend(() => {
-            if (!window.pending.delete(id)) return Effect.void;
-            calls.delete(id);
-            return settled || !windows.has(window)
-              ? Effect.void
-              : tell(window, { kind: 'cancel', call: id });
-          }),
-        );
-        window.pending.set(id, {
-          answer: (answer) => {
-            if (!answer.ok) {
-              settled = true;
-              return Queue.fail(items, answerFailure(answer)).pipe(
-                Effect.asVoid,
-              );
-            }
-            if (answer.more !== true) {
-              settled = true;
-              return Queue.end(items).pipe(Effect.asVoid);
-            }
-            const item = Schema.decodeUnknownResult(schema)(answer.value);
-            return Result.isSuccess(item)
-              ? Queue.offer(items, item.success).pipe(Effect.asVoid)
-              : Queue.fail(
-                  items,
-                  new WindowCallFailed({
-                    reason: 'failed',
-                    message: `The TeXRA window answered ${call.kind} with an item it does not take.`,
-                  }),
-                ).pipe(Effect.asVoid);
-          },
-          fail: (failure) => {
-            settled = true;
-            return Queue.fail(items, failure).pipe(Effect.asVoid);
-          },
-        });
-        calls.set(id, window);
-        yield* Queue.offer(window.frames, { kind: 'call', id, call });
-        return Stream.fromQueue(items);
-      }),
-    );
-
   /** The window went: what it was asked fails, and its project hears once
    *  when no window of it is left. */
   const detach = (window: Window) =>
@@ -376,42 +288,6 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             id: randomUUID(),
             call: { kind: 'approvalDenied', denial, runId },
           });
-      },
-      get languageModel(): SessionHost['languageModel'] {
-        if (!offers(key, 'languageModel')) return undefined;
-        return {
-          selectModels: (selector) =>
-            ask(
-              key,
-              { kind: 'lmModels', vendor: selector?.vendor ?? null },
-              CallResultSchemas.lmModels,
-            ).pipe(Effect.mapError((failure) => new Error(failure.message))),
-          // The window holds the editor's model; a turn prepared in one
-          // window streams in that window (its acquisition prepared it).
-          acquire: (configuration) =>
-            Effect.sync(() => {
-              let preparedIn: Window | undefined;
-              return {
-                prepareTurn: (request) =>
-                  Effect.suspend(() => {
-                    preparedIn = target(key, 'languageModel');
-                    return ask(
-                      key,
-                      { kind: 'lmPrepare', configuration, request },
-                      CallResultSchemas.lmPrepare,
-                      preparedIn,
-                    );
-                  }).pipe(Effect.mapError(modelError)),
-                streamTurn: (turn) =>
-                  askStream(
-                    key,
-                    { kind: 'lmStream', configuration, turn },
-                    CallResultSchemas.lmStream,
-                    preparedIn,
-                  ).pipe(Stream.mapError(modelError)),
-              };
-            }),
-        };
       },
       // The staged preview of a request the session still lists.
       preview: (requestId) =>
@@ -588,33 +464,32 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
       Effect.suspend(
         () => calls.get(id)?.pending.get(id)?.answer(answer) ?? Effect.void,
       ),
-    adopt: (session, editors) =>
-      Effect.gen(function* () {
-        const key = session.roots.storage;
-        // A staged preview whose request the session listed and no longer
-        // lists has settled: it is dropped, and its window releases its
-        // view. One not listed yet is kept: staging precedes the row.
-        yield* Effect.forkScoped(
-          Stream.runForEach(session.view.changes, (view) =>
-            Effect.gen(function* () {
-              const held = staged.group(key);
-              if (held.size === 0) return;
-              const pending = new Set(view.requests.map((r) => r.requestId));
-              for (const [requestId, entry] of [...held]) {
-                if (pending.has(requestId)) entry.seen = true;
-                else if (entry.seen) {
-                  staged.delete(key, requestId);
-                  yield* tell(liveWindow(entry), {
-                    kind: 'releaseToolEdit',
-                    requestId,
-                  });
-                }
+    adopt: Effect.fn('hostWindows.adopt')(function* (session, editors) {
+      const key = session.roots.storage;
+      // A staged preview whose request the session listed and no longer
+      // lists has settled: it is dropped, and its window releases its
+      // view. One not listed yet is kept: staging precedes the row.
+      yield* Effect.forkScoped(
+        Stream.runForEach(session.view.changes, (view) =>
+          Effect.gen(function* () {
+            const held = staged.group(key);
+            if (held.size === 0) return;
+            const pending = new Set(view.requests.map((r) => r.requestId));
+            for (const [requestId, entry] of [...held]) {
+              if (pending.has(requestId)) entry.seen = true;
+              else if (entry.seen) {
+                staged.delete(key, requestId);
+                yield* tell(liveWindow(entry), {
+                  kind: 'releaseToolEdit',
+                  requestId,
+                });
               }
-            }),
-          ),
-        );
-        yield* session.attach(interactionsOf(session));
-        yield* editors.attach(key, editorOf(key));
-      }),
+            }
+          }),
+        ),
+      );
+      yield* session.attach(interactionsOf(session));
+      yield* editors.attach(key, editorOf(key));
+    }),
   };
 });

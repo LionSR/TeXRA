@@ -126,9 +126,7 @@ function addRemainingWindows(
   }
 }
 
-export function parseGlmCodingPlanUsage(
-  body: unknown,
-): ParsedSubscriptionUsage {
+function parseGlmCodingPlanUsage(body: unknown): ParsedSubscriptionUsage {
   const root = asObject(body);
   if (root?.success === false) return { windows: [] };
   const data = asObject(root?.data) ?? root;

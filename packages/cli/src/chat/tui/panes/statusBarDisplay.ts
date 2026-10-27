@@ -183,6 +183,9 @@ interface StatusBarChildListInput {
 interface StatusBarShortcutsInput {
   /** True when slash commands and text entry are actionable in this view. */
   readonly chatInputAvailable: boolean;
+  /** True when the displayed run is working a turn, so Shift-Tab can send
+   *  a message it reads only once the turn ends. */
+  readonly holdAvailable?: boolean;
   /** True when bare Escape can focus the active run's immediate parent. */
   readonly parentNavigationAvailable?: boolean;
   /** True when the persistent child list has a session row. */
@@ -552,6 +555,7 @@ function statusBarBindingRow(
 function statusBarBindingsText(
   {
     chatInputAvailable,
+    holdAvailable = false,
     childNavigationAvailable = false,
     parentNavigationAvailable = false,
     transcriptAvailable = false,
@@ -576,8 +580,21 @@ function statusBarBindingsText(
     ? keyHintText({ key: '/', action: 'commands' })
     : undefined;
   const ctrlC = keyHintText({ key: 'Ctrl-C', action: ctrlCAction });
+  const hold = holdAvailable
+    ? keyHintText({ key: 'Shift-Tab', action: 'send after turn' })
+    : undefined;
   return firstFittingCandidate({
     candidates: [
+      hold &&
+        statusBarBindingRow([
+          parentBack,
+          childList,
+          fullOutput,
+          script,
+          hold,
+          commands,
+          ctrlC,
+        ]),
       statusBarBindingRow([
         parentBack,
         childList,

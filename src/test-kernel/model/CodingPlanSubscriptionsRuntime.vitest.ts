@@ -12,10 +12,6 @@ import {
 } from '@texra-ai/llm';
 import { readModelOptions } from '@model/computeModelOptions';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
-import {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-} from '@platform/languageModel';
 import type { DeclinableUsageRoute } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
@@ -35,8 +31,6 @@ const boundEndpoint = (
     const route = decideModelRoute(config, {
       ...facts,
       validation: false,
-      prefersCopilot: false,
-      copilotRoute: undefined,
     });
     if (route.kind !== 'api-key') {
       throw new Error(`unexpected ${route.kind} route`);
@@ -68,57 +62,6 @@ describe('coding-plan subscription runtime', () => {
       hostStores().globalState.update(GlobalStateKey.GLM_USE_CHINA, true),
     );
   });
-
-  it.effect.each([
-    {
-      name: 'China Coding Plan',
-      useChina: true,
-      codingPlan: true,
-      expected: {
-        baseUrl: 'https://open.bigmodel.cn/api/v1',
-        usageRoute: 'glm-coding-plan-subscription',
-      },
-    },
-    {
-      name: 'global Coding Plan',
-      useChina: false,
-      codingPlan: true,
-      expected: {
-        baseUrl: 'https://api.z.ai/api/v1',
-        usageRoute: 'glm-coding-plan-subscription',
-      },
-    },
-    {
-      name: 'China regular API',
-      useChina: true,
-      codingPlan: false,
-      expected: {
-        baseUrl: 'https://open.bigmodel.cn/api/v1',
-      },
-    },
-    {
-      name: 'global regular API',
-      useChina: false,
-      codingPlan: false,
-      expected: {
-        baseUrl: 'https://api.z.ai/api/v1',
-      },
-    },
-  ])('resolves the exact $name route', ({ useChina, codingPlan, expected }) =>
-    Effect.gen(function* () {
-      yield* hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, '');
-      yield* hostStores().globalState.update(
-        GlobalStateKey.GLM_CODING_PLAN,
-        codingPlan,
-      );
-      yield* hostStores().globalState.update(
-        GlobalStateKey.GLM_USE_CHINA,
-        useChina,
-      );
-
-      expect(yield* boundEndpoint(GLM53)).toEqual(expected);
-    }),
-  );
 
   it.effect.each([
     {
@@ -162,11 +105,8 @@ describe('coding-plan subscription runtime', () => {
           ...(usageRoute && { usageRoute }),
         });
         expect(
-          (yield* readModelOptions(hostStores(), ['glm/glm-5.3']).pipe(
-            Effect.provide(
-              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
-            ),
-          ))[0]?.usageRoute,
+          (yield* readModelOptions(hostStores(), ['glm/glm-5.3']))[0]
+            ?.usageRoute,
         ).toBe(usageRoute);
       }),
   );

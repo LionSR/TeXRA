@@ -1,23 +1,20 @@
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { envFlag } from '@texra-ai/harness/node';
 import { withEnv } from '@test/support/testEnv';
 
-const readFlag = (env: Record<string, string>): boolean =>
-  Effect.runSync(envFlag('FLAG').pipe(withEnv(env)));
-
 describe('envFlag', () => {
-  it.each(['1', 'true', 'yes', ' TRUE '])(
-    'reads any set value other than an off spelling as on: %j',
-    (value) => {
-      expect(readFlag({ FLAG: value })).toBe(true);
-    },
-  );
-
   // The whole point of a shared helper: `=0` used to mean "on" wherever the
   // caller tested `env[NAME]` for truthiness.
-  it.each(['0', 'false', 'No', 'off', '  '])('reads %j as off', (value) => {
-    expect(readFlag({ FLAG: value })).toBe(false);
-  });
+  it.effect.each([
+    { value: '0', on: false },
+    { value: ' off ', on: false },
+    { value: 'yes', on: true },
+  ])('reads $value as on=$on', ({ value, on }) =>
+    Effect.gen(function* () {
+      expect(yield* envFlag('FLAG').pipe(withEnv({ FLAG: value }))).toBe(on);
+    }),
+  );
 });

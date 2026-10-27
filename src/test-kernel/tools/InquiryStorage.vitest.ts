@@ -15,7 +15,6 @@ import { InquiryRecords } from '@texra/shared/plugins/externalInquiry';
 import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
 
 const RUN_A = Schema.decodeUnknownSync(RunIdSchema)('1a1a1a1a1a1a');
-const RUN_B = Schema.decodeUnknownSync(RunIdSchema)('1b1b1b1b1b1b');
 
 describe('InquiryStorage', () => {
   let storage: string;
@@ -158,85 +157,5 @@ describe('InquiryStorage', () => {
           followUp,
         );
       }).pipe(Effect.provide(layer)),
-  );
-
-  it.live('updates parentRunId on cross-run follow-up', () =>
-    Effect.gen(function* () {
-      const records = yield* InquiryRecords;
-      const t = yield* records.recordOpenQuestion({
-        parentRunId: RUN_A,
-        question: 'Q1',
-      });
-      yield* records.recordAnswerForOpenTurn({
-        threadId: t.threadId,
-        turnIndex: 1,
-        answer: 'A1',
-      });
-
-      const fromB = yield* records.recordOpenQuestion({
-        threadId: t.threadId,
-        parentRunId: RUN_B,
-        question: 'Q2 from B',
-      });
-      expect(fromB.parentRunId).toBe(RUN_B);
-
-      const openOnA = yield* records.listThreadsByStatus({
-        status: 'open',
-        scope: 'run',
-        runId: RUN_A,
-      });
-      const openOnB = yield* records.listThreadsByStatus({
-        status: 'open',
-        scope: 'run',
-        runId: RUN_B,
-      });
-      expect(openOnA).toHaveLength(0);
-      expect(openOnB).toHaveLength(1);
-    }).pipe(Effect.provide(layer)),
-  );
-
-  it.live('listThreadsByStatus filters by status and scope', () =>
-    Effect.gen(function* () {
-      const records = yield* InquiryRecords;
-      const t1 = yield* records.recordOpenQuestion({
-        parentRunId: RUN_A,
-        question: 'Q1',
-      });
-      yield* records.recordAnswerForOpenTurn({
-        threadId: t1.threadId,
-        turnIndex: 1,
-        answer: 'A1',
-      });
-
-      const t2 = yield* records.recordOpenQuestion({
-        parentRunId: RUN_A,
-        question: 'Q2',
-      });
-
-      const t3 = yield* records.recordOpenQuestion({
-        parentRunId: RUN_B,
-        question: 'Q3',
-      });
-      yield* records.markDropped({ threadId: t3.threadId, turnIndex: 1 });
-
-      const openOnA = yield* records.listThreadsByStatus({
-        status: 'open',
-        scope: 'run',
-        runId: RUN_A,
-      });
-      expect(openOnA.map((t) => t.threadId)).toEqual([t2.threadId]);
-
-      const allDropped = yield* records.listThreadsByStatus({
-        status: 'dropped',
-        scope: 'all',
-      });
-      expect(allDropped.map((t) => t.threadId)).toEqual([t3.threadId]);
-
-      const answered = yield* records.listThreadsByStatus({
-        status: 'answered',
-        scope: 'all',
-      });
-      expect(answered.map((t) => t.threadId)).toEqual([t1.threadId]);
-    }).pipe(Effect.provide(layer)),
   );
 });

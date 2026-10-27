@@ -7,16 +7,7 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue'
 
 # Handling multiple files (inputs & outputs)
 
-Academic projects often span multiple modular documents: chapters, appendices, dedicated proof files, or supplementary materials. This guide explains how to manage multiple input sources and coordinate agents that emit distinct, structured outputs within a single execution.
-
-## Why use multiple files?
-
-You need multiple files when:
-
-- Your source document is split (for example `chapter1.tex`, `chapter2.tex`, `appendixA.tex`).
-- You want consistent changes (such as polishing or correcting) across related documents.
-- You want an agent to modify only specific parts (for example, update only `chapter2.tex` and `appendixA.tex` based on the full context).
-- An agent needs to generate distinct outputs from a single input (less common, but possible).
+When a paper is split across several files (`chapter1.tex`, `chapter2.tex`, `appendixA.tex`), a single document task run can read them together and write one revised file per input. Custom document tasks can also generate fixed output files from one or more inputs.
 
 ## UI for multiple files
 
@@ -75,30 +66,18 @@ This is the part that matters for generating multiple distinct files:
 
 <p class="hero-caption">Each <code>&lt;document name="…"&gt;</code> block is matched by name against the expected output filenames. Matches are saved; a block with no matching name is skipped.</p>
 
-**Key point:** The agent must be explicitly instructed through its prompts to
-generate the `<document name=\"...\">` structure matching the output filenames
-provided through `INPUT_FILES` for editing agents, or `OUTPUT_FILES` for agents
-that declare generated output filenames.
+## Editing vs. fixed outputs in YAML
 
-## Tracking multi-output runs
+Output filenames come from one of two lists:
 
-TeXRA uses the selected input filenames as the output filenames for ordinary
-editing agents. Agents that generate files with fixed names can declare
-`task.outputs`; those names are exposed as `OUTPUT_FILES`. Prompt rendering
-and output extraction depend on these filename lists, not on a separate YAML flag
-or a `_multiple` filename convention.
+- **Editing agents (no `task.outputs`)**: reuse the selected `INPUT_FILES`.
+- **Generator agents (with `task.outputs`)**: emit the fixed filenames listed in `task.outputs`, exposed to prompts as `OUTPUT_FILES`. Set `rewrite: false` only to skip diff lineage for newly written files.
 
 <MultiOutputModesHero />
 
 <p class="hero-caption">Two ways output filenames are determined: editing agents reuse the selected <code>INPUT_FILES</code>, while generator agents emit the fixed names declared in <code>task.outputs</code> (exposed as <code>OUTPUT_FILES</code>).</p>
 
-### Declaring multi-output agents in YAML
-
-Custom document tasks can declare that they expect multiple outputs by
-setting `task.outputs` to the expected filenames, usually with
-`rewrite: false` since they write new documents. This gives
-prompts a fixed `OUTPUT_FILES` list when the filenames are not the input
-filenames.
+### Declaring fixed outputs
 
 ```yaml
 name: my_agent
@@ -112,20 +91,15 @@ task:
       [Request that emits one <document> per name in OUTPUT_FILES]
 ```
 
-## Example: multiple-output agent prompts
+### Prompt template for multiple outputs
 
-Document task requests can use `INPUT_FILES` to request and format
-multiple outputs within the `<documents>` tag. `INPUT_FILES` is an array
-of selected input filenames, so templates should iterate over it. Use
-`{{ INPUT_FILES | join(", ") }}` when the prompt needs a readable list.
+Iterate over `INPUT_FILES` (or `OUTPUT_FILES` when `task.outputs` is set) so the model emits one `<document name="...">` block per expected filename. Use `{{ INPUT_FILES | join(", ") }}` when the prompt needs a comma-separated list:
 
 ```
 # Inside a task.requests entry:
-# ... instructions ...
 Output one updated document for each input file, using the matching input
 filename as the document name.
 
-# Use the following format:
 <documents>
 {% for output in INPUT_FILES %}
 <document name="{{ output }}">
@@ -135,27 +109,8 @@ filename as the document name.
 </documents>
 ```
 
-For agents with `task.outputs`, iterate over `OUTPUT_FILES`
-instead.
-
-This instructs the model to generate the XML structure that TeXRA can parse.
-
-## When to use
-
-- Applying consistent edits (for example `polish`, `correct`) across multiple related `.tex` files.
-- Tasks where an agent naturally produces distinct outputs (less common than editing existing files).
-- Targeting agent modifications to specific files within a larger project.
-
 ## Next steps
 
 - [Custom agents](./custom-agents.md): design prompts for agents handling multiple outputs.
 - [File management](./file-management.md): the file selection UI in detail.
 - [Agent architecture](./agent-architecture.md): the overall agent execution flow.
-
-## Output naming
-
-By default, TeXRA uses the selected input filenames as the output filenames.
-Agents that write fixed new files should declare `task.outputs`.
-Editing prompts should reference `INPUT_FILES`; generated-output prompts should
-reference `OUTPUT_FILES` so the model emits matching `<document name="...">`
-tags.

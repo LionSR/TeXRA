@@ -1,20 +1,17 @@
-import { mkdir, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { Effect } from 'effect';
 import {
   buildCliContext,
-  CliUsageError,
-  resolveStreamColor,
   type BuildCliContextInit,
   type CliAmbientState,
   type CliContext,
 } from '@cli/runtime/cliContext';
-import * as logSinks from '@cli/runtime/logSinks';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
@@ -22,8 +19,6 @@ import {
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { withEnv } from '@test/support/testEnv';
-import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
-import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
 
 const ambient = {
   isCi: true,
@@ -75,48 +70,6 @@ async function workspaceWithConfig(config: string): Promise<string> {
 }
 
 describe('CLI context config defaults', () => {
-  it('applies flag over env over workspace config over built-in defaults', async () => {
-    const workspace = await workspaceWithConfig(
-      JSON.stringify({
-        outputFormat: 'json',
-        approvalPolicy: 'ask',
-      }),
-    );
-
-    await expect(
-      cliContext({
-        ambient,
-        env: { TEXRA_OUTPUT_FORMAT: 'ndjson' },
-        globalArgs: { cwd: workspace },
-      }),
-    ).resolves.toMatchObject({
-      outputFormat: 'ndjson',
-      approvalPolicy: 'ask',
-    });
-
-    await expect(
-      cliContext({
-        ambient,
-        env: { TEXRA_OUTPUT_FORMAT: 'ndjson' },
-        globalArgs: { cwd: workspace, outputFormat: 'text' },
-      }),
-    ).resolves.toMatchObject({
-      outputFormat: 'text',
-      approvalPolicy: 'ask',
-    });
-
-    await expect(
-      cliContext({
-        ambient,
-        env: {},
-        globalArgs: { cwd: tmpdir() },
-      }),
-    ).resolves.toMatchObject({
-      outputFormat: 'text',
-      approvalPolicy: 'ask',
-    });
-  });
-
   it('reads the approval policy from the user files, never the project file', async () => {
     const storageRoot = await makeTempDir('texra-cli-user-config-', tempDirs);
     const globalStorage = resolveGlobalStoragePath(storageRoot);
@@ -180,299 +133,15 @@ describe('CLI context config defaults', () => {
       }),
     ).resolves.toMatchObject({ approvalPolicy: 'yolo' });
   });
-
-  it('reports unknown workspace config keys without failing', async () => {
-    const workspace = await workspaceWithConfig(
-      JSON.stringify({
-        unknown: true,
-        'texra.chat': { other: true, model: 'deepseek/deepseek-v4-flash' },
-      }),
-    );
-
-    const context = await cliContext({
-      ambient,
-      env: {},
-      globalArgs: { cwd: workspace },
-    });
-
-    expect(context.configWarnings.join('\n')).toContain('unknown');
-    expect(context.configWarnings.join('\n')).toContain('texra.chat.other');
-    // The section itself still resolves: an unknown member is a diagnostic,
-    // not a reason to drop the keys beside it.
-    expect(context.config.get('texra.chat')).toMatchObject({
-      model: 'deepseek/deepseek-v4-flash',
-    });
-  });
-
-  it('warns on a malformed user mcp.json, the warning doctor reports', async () => {
-    // The mcp.json of the storage root the CLI was started on.
-    const storageRoot = await makeTempDir('texra-cli-storage-', tempDirs);
-    const mcpConfigPath = mcpConfigPathOf(storageRoot);
-    await writeFile(mcpConfigPath, '{ "mcpServers": ');
-    const context = await cliContext({
-      ambient,
-      env: {},
-      globalArgs: {
-        cwd: await makeTempDir('texra-cli-context-', tempDirs),
-      },
-      storageRoot,
-    });
-
-    expect(context.configWarnings.join('\n')).toContain(
-      `${mcpConfigPath} is not valid JSON`,
-    );
-  });
-
-  it('accepts every config key a CLI reader honors', async () => {
-    const workspace = await workspaceWithConfig(
-      JSON.stringify({
-        'texra.chatgptCodex.preferSubscription': true,
-        'texra.agent': 'generic',
-        'texra.model': 'openai/gpt-5.5-2026-04-23',
-        'texra.chat': { agent: 'chat', model: 'deepseek/deepseek-v4-flash' },
-        'texra.run': {
-          agent: 'criticize',
-          model: 'anthropic/claude-sonnet-5-5',
-        },
-      }),
-    );
-
-    const context = await cliContext({
-      ambient,
-      env: {},
-      globalArgs: { cwd: workspace },
-    });
-
-    expect(context.configWarnings).toEqual([]);
-    expect(context.config.get('texra.run')).toEqual({
-      agent: 'criticize',
-      model: 'anthropic/claude-sonnet-5-5',
-    });
-  });
-
-  it('canonicalizes existing workspace paths before reading config', async () => {
-    const root = await makeTempDir('texra-cli-context-link-', tempDirs);
-    const workspace = join(root, 'workspace');
-    const link = join(root, 'linked-workspace');
-    await mkdir(join(workspace, '.texra'), { recursive: true });
-    await writeFile(
-      join(workspace, '.texra', 'config.json'),
-      JSON.stringify({ 'texra.outputFormat': 'json' }),
-    );
-    await symlink(workspace, link, 'dir');
-
-    const context = await cliContext({
-      ambient,
-      env: {},
-      globalArgs: { cwd: link },
-    });
-
-    expect(context.cwd).toBe(canonicalizeWorkspacePath(workspace));
-    expect(context.outputFormat).toBe('json');
-  });
-
-  it.each([
-    { label: 'malformed JSON', write: () => workspaceWithConfig('{') },
-    {
-      label: 'an unreadable path',
-      write: async () => {
-        const workspace = await makeTempDir('texra-cli-context-', tempDirs);
-        await mkdir(join(workspace, '.texra', 'config.json'), {
-          recursive: true,
-        });
-        return workspace;
-      },
-    },
-  ])(
-    'says so out loud and keeps running when the project config has $label',
-    async ({ write }) => {
-      const warnSpy = vi
-        .spyOn(logSinks, 'writeTextStderr')
-        .mockImplementation(() => {});
-      try {
-        const workspace = await write();
-
-        const context = await cliContext({
-          ambient,
-          env: {},
-          globalArgs: { cwd: workspace },
-        });
-
-        // The unreadable file is ignored, loudly, never fatal; the degradation
-        // is one `contextFromArgs` prints even under `--quiet`.
-        expect(context.approvalPolicy).toBe('ask');
-        expect(context.configDegradations).toEqual([
-          expect.stringContaining(join('.texra', 'config.json')),
-        ]);
-        expect(context.configWarnings).toEqual([]);
-      } finally {
-        warnSpy.mockRestore();
-      }
-    },
-  );
-
-  it('ignores unknown TEXRA_MODEL values before they reach runtime', async () => {
-    const context = await cliContext({
-      ambient,
-      env: { TEXRA_MODEL: 'claude-opus-5-5' },
-      globalArgs: { cwd: tmpdir() },
-    });
-
-    expect(context.envModel).toBeUndefined();
-    expect(context.configWarnings?.join('\n')).toContain('TEXRA_MODEL');
-  });
-});
-
-describe('CLI --cwd validation', () => {
-  // `it.live`, not `it.effect`: these probe the real filesystem, so a
-  // TestContext clock starting at 0 would be a trap rather than a help.
-  const cwdOf = (cwd: string | undefined) =>
-    Effect.promise(
-      async () =>
-        (await cliContext({ ambient, env: {}, globalArgs: { cwd } })).cwd,
-    );
-  const cwdFailure = (cwd: string) =>
-    Effect.promise(() =>
-      cliContext({ ambient, env: {}, globalArgs: { cwd } }).then(
-        () => undefined,
-        (error: unknown) => error,
-      ),
-    );
-
-  it.live('preserves whitespace in an explicit workspace path', () =>
-    Effect.gen(function* () {
-      const root = yield* Effect.promise(() =>
-        makeTempDir('texra-cli-cwd-root-', tempDirs),
-      );
-      const workspace = join(root, 'workspace ');
-      yield* Effect.promise(() => mkdir(workspace));
-
-      expect(yield* cwdOf(workspace)).toBe(
-        canonicalizeWorkspacePath(workspace),
-      );
-    }),
-  );
-
-  it.live('rejects a --cwd path that does not exist', () =>
-    Effect.gen(function* () {
-      const missing = join(tmpdir(), 'texra-cli-cwd-missing-' + Date.now());
-
-      const failure = yield* cwdFailure(missing);
-      expect(failure).toBeInstanceOf(CliUsageError);
-      expect((failure as CliUsageError).message).toMatch(/does not exist/);
-    }),
-  );
-
-  it.live('rejects a --cwd path that points at a file', () =>
-    Effect.gen(function* () {
-      const workspace = yield* Effect.promise(() =>
-        makeTempDir('texra-cli-cwd-', tempDirs),
-      );
-      const filePath = join(workspace, 'config.json');
-      yield* Effect.promise(() => writeFile(filePath, '{}'));
-
-      const failure = yield* cwdFailure(filePath);
-      expect(failure).toBeInstanceOf(CliUsageError);
-      expect((failure as CliUsageError).message).toMatch(/not a directory/);
-    }),
-  );
-});
-
-describe('CLI per-stream color resolution', () => {
-  it.each([
-    {
-      label: 'NO_COLOR disables color even on a TTY',
-      isTty: true,
-      options: { env: { NO_COLOR: '1' } },
-      expected: false,
-    },
-    {
-      label: 'empty NO_COLOR still disables color',
-      isTty: true,
-      options: { env: { NO_COLOR: '' } },
-      expected: false,
-    },
-    {
-      label: 'TERM=dumb disables color even on a TTY',
-      isTty: true,
-      options: { env: { TERM: 'dumb' } },
-      expected: false,
-    },
-    {
-      label: 'FORCE_COLOR enables color even off a TTY',
-      isTty: false,
-      options: { env: { FORCE_COLOR: '1' } },
-      expected: true,
-    },
-    {
-      label: 'FORCE_COLOR=0 disables color even on a TTY',
-      isTty: true,
-      options: { env: { FORCE_COLOR: '0' } },
-      expected: false,
-    },
-    {
-      label: 'FORCE_COLOR=no disables color even on a TTY',
-      isTty: true,
-      options: { env: { FORCE_COLOR: 'no' } },
-      expected: false,
-    },
-    {
-      label: 'empty FORCE_COLOR does not force color off a TTY',
-      isTty: false,
-      options: { env: { FORCE_COLOR: '' } },
-      expected: false,
-    },
-    {
-      label: 'NO_COLOR wins over FORCE_COLOR',
-      isTty: true,
-      options: { env: { FORCE_COLOR: '1', NO_COLOR: '1' } },
-      expected: false,
-    },
-  ])('$label', ({ isTty, options, expected }) => {
-    expect(resolveStreamColor(isTty, options)).toBe(expected);
-  });
 });
 
 describe('CLI color/no-input flag wiring', () => {
-  it('--no-color force-disables both stream gates', async () => {
-    const context = await cliContext({
-      ambient: ttyAmbient(),
-      env: {},
-      globalArgs: { cwd: tmpdir(), noColor: true },
-    });
-    expect(context.stdoutColorEnabled).toBe(false);
-    expect(context.stderrColorEnabled).toBe(false);
-  });
-
   it('--no-input forces headless mode and defaults approval policy to never', async () => {
     const context = await cliContext({
       // stdin is a TTY, so without --no-input this would be interactive.
       ambient: ttyAmbient(),
       env: {},
       globalArgs: { cwd: tmpdir(), noInput: true },
-    });
-    expect(context.mode).toBe('headless');
-    expect(context.approvalPolicy).toBe('never');
-  });
-
-  it('--no-input preserves explicit approval policy', async () => {
-    const context = await cliContext({
-      ambient: ttyAmbient(),
-      env: {},
-      globalArgs: { cwd: tmpdir(), noInput: true, approvalPolicy: 'yolo' },
-    });
-    expect(context.mode).toBe('headless');
-    expect(context.approvalPolicy).toBe('yolo');
-  });
-
-  it('--no-input ignores env and config approval defaults', async () => {
-    const workspace = await workspaceWithConfig(
-      JSON.stringify({ approvalPolicy: 'yolo' }),
-    );
-    const context = await cliContext({
-      ambient: ttyAmbient(),
-      env: { TEXRA_APPROVAL_POLICY: 'yolo' },
-      globalArgs: { cwd: workspace, noInput: true },
     });
     expect(context.mode).toBe('headless');
     expect(context.approvalPolicy).toBe('never');

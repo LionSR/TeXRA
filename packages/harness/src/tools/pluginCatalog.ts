@@ -45,8 +45,7 @@ const SWITCH_READ = Schedule.exponential('200 millis');
  * switches and the plugin install record. A switch flipped or a plugin
  * disabled in any process sharing that state reaches the catalog at once
  * (`AppState.changes`), not only at a run's next step, so what follows the
- * catalog outside a run (a plugin layer's lifetime, Copilot's tools)
- * follows the switch.
+ * catalog outside a run (a plugin layer's lifetime) follows the switch.
  */
 export const pluginCatalogLayer = (
   plugins: readonly Plugin[],

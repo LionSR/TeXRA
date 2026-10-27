@@ -181,76 +181,74 @@ const startCommand = defineCliCommand({
     model: { type: 'string', alias: 'm', description: 'Model for the agent' },
   },
   catchExitCode: CliExitCode.AgentError,
-  run: (context, ctx) =>
-    Effect.gen(function* () {
-      const instruction = ctx.args.instruction.trim();
-      if (!instruction)
-        return yield* Effect.fail(
-          new CliUsageError({ message: '--instruction must not be empty.' }),
-        );
-      const services = yield* initCliPlatform(context);
-      // The task runs in the service under the project's persisted policy,
-      // with what this command asked for riding the launch
-      // (`launchApproval`).
-      const requested = context.requestedApprovalPolicy;
-      const approval = launchApproval(requested);
-      const refused = launchApprovalNotice(
-        requested,
-        Settings.getConfig<ApprovalPolicy>(
-          services.config,
-          APPROVAL_POLICY_CONFIG_KEY,
-        ),
+  run: Effect.fn('tasks.run')(function* (context, ctx) {
+    const instruction = ctx.args.instruction.trim();
+    if (!instruction)
+      return yield* Effect.fail(
+        new CliUsageError({ message: '--instruction must not be empty.' }),
       );
-      if (refused !== undefined) writeTextStderr(refused);
-      // Asked beside the launch, so a slow login shell never delays it.
-      const keys = yield* Effect.forkChild(serviceKeysNotice());
-      const agent = yield* resolveCliRunAgent(services, ctx.args.agent);
-      const model = yield* selectCliRunModel(
-        context,
-        optString(ctx.args.model),
-        'chat',
-        services,
-      );
-      const payload: AgentConfigPayload = {
-        agent: ctx.args.agent,
-        agentSource: agent.source,
-        model,
+    const services = yield* initCliPlatform(context);
+    // The task runs in the service under the project's persisted policy,
+    // with what this command asked for riding the launch
+    // (`launchApproval`).
+    const requested = context.requestedApprovalPolicy;
+    const approval = launchApproval(requested);
+    const refused = launchApprovalNotice(
+      requested,
+      Settings.getConfig<ApprovalPolicy>(
+        services.config,
+        APPROVAL_POLICY_CONFIG_KEY,
+      ),
+    );
+    if (refused !== undefined) writeTextStderr(refused);
+    // Asked beside the launch, so a slow login shell never delays it.
+    const keys = yield* Effect.forkChild(serviceKeysNotice());
+    const agent = yield* resolveCliRunAgent(services, ctx.args.agent);
+    const model = yield* selectCliRunModel(
+      context,
+      optString(ctx.args.model),
+      'chat',
+      services,
+    );
+    const payload: AgentConfigPayload = {
+      agent: ctx.args.agent,
+      agentSource: agent.source,
+      model,
+      inputFiles: [],
+      contextFiles: [],
+      instruction: formatToolUseAgentRunInstruction({
         inputFiles: [],
         contextFiles: [],
-        instruction: formatToolUseAgentRunInstruction({
-          inputFiles: [],
-          contextFiles: [],
-          instruction,
-        }),
-        displayInstruction: instruction,
-        workingDirectory: context.cwd,
-      };
-      const config =
-        yield* Schema.decodeUnknownEffect(AgentConfigSchema)(payload);
-      const runId = yield* Effect.scoped(
-        Effect.gen(function* () {
-          const { client } = yield* connectCliService(context.storageRoot);
-          return yield* client['task.start']({
-            workspace: context.cwd,
-            runId: generateRunId(),
-            config,
-            continues: null,
-            preferHelperModel: false,
-            ownApiKeyFallback: false,
-            approvalPolicy: approval.approvalPolicy ?? null,
-            approveDelegatedWork: approval.approveDelegatedWork,
-          });
-        }),
-      ).pipe(Effect.mapError(ensureError));
-      const notice = yield* Fiber.join(keys);
-      if (notice !== null) writeTextStderr(notice);
-      emitCliResult(context, {
-        json: { runId, workspace: context.cwd },
-        ndjson: { kind: 'task', task: { runId, workspace: context.cwd } },
-        text: runId,
-      });
-      return CliExitCode.Success;
-    }),
+        instruction,
+      }),
+      displayInstruction: instruction,
+      workingDirectory: context.cwd,
+    };
+    const config =
+      yield* Schema.decodeUnknownEffect(AgentConfigSchema)(payload);
+    const runId = yield* Effect.scoped(
+      Effect.gen(function* () {
+        const { client } = yield* connectCliService(context.storageRoot);
+        return yield* client['task.start']({
+          workspace: context.cwd,
+          runId: generateRunId(),
+          config,
+          continues: null,
+          preferHelperModel: false,
+          approvalPolicy: approval.approvalPolicy ?? null,
+          approveDelegatedWork: approval.approveDelegatedWork,
+        });
+      }),
+    ).pipe(Effect.mapError(ensureError));
+    const notice = yield* Fiber.join(keys);
+    if (notice !== null) writeTextStderr(notice);
+    emitCliResult(context, {
+      json: { runId, workspace: context.cwd },
+      ndjson: { kind: 'task', task: { runId, workspace: context.cwd } },
+      text: runId,
+    });
+    return CliExitCode.Success;
+  }),
 });
 
 const sendCommand = defineCliCommand({

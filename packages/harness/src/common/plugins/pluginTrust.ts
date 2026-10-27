@@ -99,73 +99,75 @@ export interface PluginReview {
 }
 
 /** The capabilities a plugin declares, as the trust prompt lists them. */
-const reviewLines = (record: InstalledPlugin, plugin: ResolvedPlugin) =>
-  Effect.gen(function* () {
-    const skillCount = (yield* Effect.forEach(
-      plugin.skills.map((skill) => path.join(record.path, skill)),
-      countSkills,
-    )).reduce((sum, count) => sum + count, 0);
-    const lines = [
-      `Source: ${record.commit ? `${record.source} at ${record.commit.slice(0, 12)}` : `${record.source} (local)`}`,
-      `Skills: ${skillCount}; commands: ${plugin.commands.length}; agents: ${plugin.agents.length} (loaded as ${plugin.name}:<name>)`,
-    ];
-    if (plugin.mcpServers.length === 0) lines.push('MCP servers: none');
-    else {
-      lines.push(
-        'MCP servers (each runs as a process on this machine, its tools approved like shell commands):',
-      );
-      for (const server of plugin.mcpServers) {
-        lines.push(`  ${describeServer(server)}`);
-        for (const external of yield* externalFiles(record.path, server))
-          lines.push(
-            `    external ${external.role}: ${external.path} (trusted by its path, size and date, not its content)`,
-          );
-      }
-    }
-    const { hooks, unsupported } = plugin.hooks;
-    if (hooks.length === 0) lines.push('Hooks: none');
-    else {
-      lines.push(
-        'Hooks (each runs as a process in the workspace, as you, with only PATH, HOME and the CLAUDE_* paths set; it can deny a tool call, add text the model reads, and keep a run going past the end of a turn once):',
-      );
-      for (const hook of hooks) {
-        lines.push(`  ${describeHook(hook)}`);
-        const pin = yield* pinHook(record.path, hook);
-        if (pin.kind === 'dynamic') {
-          lines.push(
-            `    cannot pin what this runs (${pin.reason}): trust covers its exact text, ${JSON.stringify([hook.command, ...(hook.args ?? [])].join(' '))}, and a change to it asks again`,
-          );
-          continue;
-        }
-        for (const file of pin.files) {
-          if (file.kind === 'program')
-            lines.push(
-              `    program: ${file.path} (trusted by its path, size and date, not its content)`,
-            );
-          else if (file.sha256 === null)
-            lines.push(
-              `    names ${file.path}, outside the plugin, which does not exist now (creating it asks again)`,
-            );
-          else
-            lines.push(
-              `    runs ${file.path}, outside the plugin (trusted by its content: an edit asks again)`,
-            );
-        }
-      }
-    }
-    if (unsupported.length > 0)
-      lines.push(
-        'Hooks this build does not run:',
-        ...unsupported.map((line) => `  ${line}`),
-      );
+const reviewLines = Effect.fn('pluginTrust.reviewLines')(function* (
+  record: InstalledPlugin,
+  plugin: ResolvedPlugin,
+) {
+  const skillCount = (yield* Effect.forEach(
+    plugin.skills.map((skill) => path.join(record.path, skill)),
+    countSkills,
+  )).reduce((sum, count) => sum + count, 0);
+  const lines = [
+    `Source: ${record.commit ? `${record.source} at ${record.commit.slice(0, 12)}` : `${record.source} (local)`}`,
+    `Skills: ${skillCount}; commands: ${plugin.commands.length}; agents: ${plugin.agents.length} (loaded as ${plugin.name}:<name>)`,
+  ];
+  if (plugin.mcpServers.length === 0) lines.push('MCP servers: none');
+  else {
     lines.push(
-      'Trust covers this version, every file in the plugin, its servers’ settings, each hook’s text and the scripts its hooks run: a change to any of them asks again.',
+      'MCP servers (each runs as a process on this machine, its tools approved like shell commands):',
     );
-    if (plugin.ignored.length > 0)
-      lines.push(`Not loaded: ${plugin.ignored.join(', ')}`);
-    lines.push(...plugin.warnings);
-    return lines;
-  });
+    for (const server of plugin.mcpServers) {
+      lines.push(`  ${describeServer(server)}`);
+      for (const external of yield* externalFiles(record.path, server))
+        lines.push(
+          `    external ${external.role}: ${external.path} (trusted by its path, size and date, not its content)`,
+        );
+    }
+  }
+  const { hooks, unsupported } = plugin.hooks;
+  if (hooks.length === 0) lines.push('Hooks: none');
+  else {
+    lines.push(
+      'Hooks (each runs as a process in the workspace, as you, with only PATH, HOME and the CLAUDE_* paths set; it can deny a tool call, add text the model reads, and keep a run going past the end of a turn once):',
+    );
+    for (const hook of hooks) {
+      lines.push(`  ${describeHook(hook)}`);
+      const pin = yield* pinHook(record.path, hook);
+      if (pin.kind === 'dynamic') {
+        lines.push(
+          `    cannot pin what this runs (${pin.reason}): trust covers its exact text, ${JSON.stringify([hook.command, ...(hook.args ?? [])].join(' '))}, and a change to it asks again`,
+        );
+        continue;
+      }
+      for (const file of pin.files) {
+        if (file.kind === 'program')
+          lines.push(
+            `    program: ${file.path} (trusted by its path, size and date, not its content)`,
+          );
+        else if (file.sha256 === null)
+          lines.push(
+            `    names ${file.path}, outside the plugin, which does not exist now (creating it asks again)`,
+          );
+        else
+          lines.push(
+            `    runs ${file.path}, outside the plugin (trusted by its content: an edit asks again)`,
+          );
+      }
+    }
+  }
+  if (unsupported.length > 0)
+    lines.push(
+      'Hooks this build does not run:',
+      ...unsupported.map((line) => `  ${line}`),
+    );
+  lines.push(
+    'Trust covers this version, every file in the plugin, its servers’ settings, each hook’s text and the scripts its hooks run: a change to any of them asks again.',
+  );
+  if (plugin.ignored.length > 0)
+    lines.push(`Not loaded: ${plugin.ignored.join(', ')}`);
+  lines.push(...plugin.warnings);
+  return lines;
+});
 
 /**
  * Enable a recorded plugin. A plugin the user already trusts as it is now
@@ -184,9 +186,7 @@ export function enablePlugin<E, R>(
     );
     const plugin = yield* rereadPlugin(record);
     if (plugin.code.length > 0)
-      return yield* Effect.fail(
-        new PluginError({ message: codeRefusal(name, plugin) }),
-      );
+      return yield* new PluginError({ message: codeRefusal(name, plugin) });
     const key = yield* trustKey(record, plugin, yield* envKeyOf(env));
     if (!trusts(record, key)) {
       const accepted = yield* confirm({

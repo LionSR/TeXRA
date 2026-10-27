@@ -7,9 +7,9 @@
  * call; `failureInfo` words either for the run's rows.
  *
  * Built where a run's project environment is in force (its `.env` as the
- * `ConfigProvider`, its proxy as `ProjectEnvironment`, its window's editor
- * models): the layer captures them, so every credential and every request
- * of a binding follows the project the run belongs to, whoever calls.
+ * `ConfigProvider`, its proxy as `ProjectEnvironment`): the layer captures
+ * them, so every credential and every request of a binding follows the
+ * project the run belongs to, whoever calls.
  */
 import { ConfigProvider, Context, Effect, Layer, type Scope } from 'effect';
 import { HttpClient } from 'effect/http';
@@ -30,7 +30,6 @@ import {
 } from '@model/computeModelOptions';
 import { readModelSettings } from '@model/modelSettings';
 import type { StateReadFailed } from '@platform/interfaces';
-import { LanguageModel } from '@platform/languageModel';
 import type {
   CredentialSwitch,
   DeclinableUsageRoute,
@@ -95,8 +94,6 @@ export interface BindRequest {
   readonly config?: ModelConfig;
   /** A resumed run's backend wins over today's default route. */
   readonly backend?: ModelBackend;
-  /** Own-key quota fallback also declines the Copilot preference. */
-  readonly ownApiKeyFallback?: boolean;
   /** The routes the run declined, as its rows record them. */
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
   readonly textOnly: boolean;
@@ -142,7 +139,7 @@ const settingsOf = (stores: ModelOptionStores) =>
 /** The helper model's request: the configured model, if it can serve now. */
 const helperRequest = Effect.fn('ModelAccess.helper')(function* (
   stores: ModelOptionStores,
-): Effect.fn.Return<BindRequest, RouteUnavailable, LanguageModel> {
+): Effect.fn.Return<BindRequest, RouteUnavailable> {
   const modelId = yield* Effect.mapError(
     getHelperModelName(stores),
     RouteUnavailable.of,
@@ -164,7 +161,7 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
 ): Effect.fn.Return<
   BoundModel,
   CallFailure,
-  Scope.Scope | LanguageModel | HttpClient.HttpClient
+  Scope.Scope | HttpClient.HttpClient
 > {
   const selected = selectModel(request.modelId);
   const catalog = request.config ?? selected?.config;
@@ -209,17 +206,15 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
  */
 export const modelAccessLayer = (
   stores: ModelOptionStores,
-): Layer.Layer<ModelAccess, never, LanguageModel | HttpClient.HttpClient> =>
+): Layer.Layer<ModelAccess, never, HttpClient.HttpClient> =>
   Layer.effect(
     ModelAccess,
     Effect.gen(function* () {
-      const editor = yield* LanguageModel;
       const http = yield* HttpClient.HttpClient;
       const env = yield* ConfigProvider.ConfigProvider;
       const project = yield* ProjectEnvironment;
       const inProject = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
         effect.pipe(
-          Effect.provideService(LanguageModel, editor),
           Effect.provideService(HttpClient.HttpClient, http),
           Effect.provideService(ConfigProvider.ConfigProvider, env),
           Effect.provideService(ProjectEnvironment, project),

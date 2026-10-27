@@ -63,6 +63,7 @@ import {
   buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
+  StreamedToolCards,
 } from './agentCliShared';
 import {
   CODEX_AGENT_NAME,
@@ -177,19 +178,14 @@ function buildCodexLiveToolLog(
 function publishCodexItemProgress(params: {
   item: ThreadItem;
   status: ToolCallStatus;
-  logger: AgentTrace;
-  refs: Map<string, ToolCardHandle>;
+  cards: StreamedToolCards;
 }): boolean {
-  const { item, status, logger, refs } = params;
+  const { item, status, cards } = params;
 
   const toolLog = buildCodexLiveToolLog(item, status);
   if (!toolLog) return false;
 
-  // The card stays after it closes (re-ending is idempotent); it knows
-  // whether it is still open when the turn's finalizer asks.
-  const existing = refs.get(item.id);
-  if (existing) existing.update(toolLog);
-  else refs.set(item.id, logger.openToolCard(toolLog));
+  cards.openOrUpdate(item.id, toolLog);
   return true;
 }
 
@@ -208,7 +204,7 @@ function codexTurnUsage({ usage }: RunResult): TokenUsageStats | null {
 /** Run a single streamed turn, logging events to the child stream. The
  * `@openai/codex-sdk` event iterator is this module's foreign edge, consumed
  * as a Stream below. */
-export function runStreamedTurn(
+function runStreamedTurn(
   thread: Thread,
   prompt: string,
   logger: AgentTrace,
@@ -218,7 +214,7 @@ export function runStreamedTurn(
     logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
     const responseParts: string[] = [];
     let usage: RunResult['usage'] = null;
-    const itemLogRefs = new Map<string, ToolCardHandle>();
+    const itemCards = new StreamedToolCards(logger);
 
     // The live "Codex Turn" card is opened on turn.started and closed on
     // turn.completed / turn.failed with the measured wall time. The
@@ -242,7 +238,8 @@ export function runStreamedTurn(
       turnCard = null;
     };
 
-    const onEvent = (event: ThreadEvent): void => {
+    // A failed turn or stream error ends the run as a ToolError.
+    const onEvent = (event: ThreadEvent): Effect.Effect<void, ToolError> => {
       switch (event.type) {
         case 'thread.started':
           logger.openToolCard(buildCodexThreadToolLog(event));
@@ -258,8 +255,7 @@ export function runStreamedTurn(
           publishCodexItemProgress({
             item: event.item,
             status: 'in_progress',
-            logger,
-            refs: itemLogRefs,
+            cards: itemCards,
           });
           break;
         case 'item.completed': {
@@ -267,8 +263,7 @@ export function runStreamedTurn(
           const wasRenderedAsProgress = publishCodexItemProgress({
             item,
             status: 'completed',
-            logger,
-            refs: itemLogRefs,
+            cards: itemCards,
           });
           if (!wasRenderedAsProgress) logCodexItem(item, logger);
           if (item.type === 'agent_message') responseParts.push(item.text);
@@ -280,11 +275,16 @@ export function runStreamedTurn(
           break;
         case 'turn.failed':
           finalizeTurnCard('failed', event.error.message);
-          throw new ToolError(event.error.message ?? 'Codex turn failed');
+          return Effect.fail(
+            new ToolError(event.error.message ?? 'Codex turn failed'),
+          );
         case 'error':
           finalizeTurnCard('failed', event.message);
-          throw new ToolError(event.message ?? 'Codex stream error');
+          return Effect.fail(
+            new ToolError(event.message ?? 'Codex stream error'),
+          );
       }
+      return Effect.void;
     };
 
     return Effect.tryPromise({
@@ -293,7 +293,7 @@ export function runStreamedTurn(
     }).pipe(
       Effect.flatMap(({ events }) =>
         Stream.runForEach(Stream.fromAsyncIterable(events, ensureError), (e) =>
-          Effect.try({ try: () => onEvent(e), catch: ensureError }),
+          Effect.suspend(() => onEvent(e)),
         ),
       ),
       Effect.map((): RunResult => {
@@ -302,8 +302,7 @@ export function runStreamedTurn(
       }),
       Effect.ensuring(
         Effect.sync(() => {
-          for (const card of itemLogRefs.values()) card.failIfOpen();
-          itemLogRefs.clear();
+          itemCards.failOpen();
           finalizeTurnCard('failed');
         }),
       ),

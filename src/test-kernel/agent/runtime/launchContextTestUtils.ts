@@ -40,7 +40,6 @@ export function createTestLaunchContext({
   return {
     config,
     persona: Schema.decodeUnknownSync(PersonaSchema)({}),
-    ownApiKeyFallback: false,
     // The launch stores a real run carries; no fixture reads through them.
     stores: { ...stores, secrets },
     runId,

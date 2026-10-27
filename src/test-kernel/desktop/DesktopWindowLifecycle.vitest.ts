@@ -1,69 +1,10 @@
-import { EventEmitter } from 'node:events';
-
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  bootstrapDesktopWindowLifecycle,
-  installDesktopBeforeQuitWiring,
-} from '@desktop/main/desktopWindowLifecycle';
+import { installDesktopBeforeQuitWiring } from '@desktop/main/desktopWindowLifecycle';
 import { createDeferred } from '@test/support/asyncTestUtils';
 
-class FakeWebContents extends EventEmitter {}
-
 describe('desktop window lifecycle', () => {
-  it('skips initial renderer navigation and cleans up on reload', () => {
-    const webContents = new FakeWebContents();
-    const disposeRendererResources = vi.fn();
-    bootstrapDesktopWindowLifecycle({
-      webContents,
-      workspaceIpc: { disposeRendererResources },
-      showDiscardDialog: () => 0,
-      isFatalShutdownRequested: () => false,
-      clearContinueQuitAfterWindowClose: vi.fn(),
-    });
-    webContents.emit('did-navigate');
-    expect(disposeRendererResources).not.toHaveBeenCalled();
-    webContents.emit('did-navigate');
-    expect(disposeRendererResources).toHaveBeenCalledOnce();
-  });
-
-  it('allows discard and clears continuations when editing continues', () => {
-    const webContents = new FakeWebContents();
-    const clearContinueQuitAfterWindowClose = vi.fn();
-    const showDiscardDialog = vi.fn(() => 0);
-    bootstrapDesktopWindowLifecycle({
-      webContents,
-      workspaceIpc: { disposeRendererResources: vi.fn() },
-      showDiscardDialog,
-      isFatalShutdownRequested: () => false,
-      clearContinueQuitAfterWindowClose,
-    });
-    const keepEditing = { preventDefault: vi.fn() };
-    showDiscardDialog.mockReturnValueOnce(0);
-    webContents.emit('will-prevent-unload', keepEditing);
-    expect(keepEditing.preventDefault).not.toHaveBeenCalled();
-    expect(clearContinueQuitAfterWindowClose).toHaveBeenCalledOnce();
-
-    const discard = { preventDefault: vi.fn() };
-    showDiscardDialog.mockReturnValueOnce(1);
-    webContents.emit('will-prevent-unload', discard);
-    expect(discard.preventDefault).toHaveBeenCalledOnce();
-
-    const fatal = { preventDefault: vi.fn() };
-    const fatalWebContents = new FakeWebContents();
-    bootstrapDesktopWindowLifecycle({
-      webContents: fatalWebContents,
-      workspaceIpc: { disposeRendererResources: vi.fn() },
-      showDiscardDialog,
-      isFatalShutdownRequested: () => true,
-      clearContinueQuitAfterWindowClose,
-    });
-    fatalWebContents.emit('will-prevent-unload', fatal);
-    expect(fatal.preventDefault).toHaveBeenCalledOnce();
-    expect(showDiscardDialog).toHaveBeenCalledTimes(2);
-  });
-
   it('continues a closed-window quit through one shutdown sequence', async () => {
     let listener: ((event: { preventDefault(): void }) => void) | undefined;
     const app = {

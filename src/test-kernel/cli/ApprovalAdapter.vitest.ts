@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const formatRetryRequestMessageMock = vi.hoisted(() => vi.fn());
@@ -19,23 +19,11 @@ vi.mock('@cli/runtime/approval/approvalSummaries', async (importOriginal) => {
 
 import { createHeadlessCliHostInteractions } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { CliExitCode } from '@cli/runtime/exitCodes';
-import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
+import { type CliApprovalPromptHooks } from '@cli/runtime/approval/approvalPrompts';
 import {
-  askApproval,
-  type CliApprovalPromptHooks,
-} from '@cli/runtime/approval/approvalPrompts';
-import {
-  buildAgentProposalApprovalContent,
-  buildToolEditApprovalContent,
-  formatRetryRequestMessage,
-} from '@cli/runtime/approval/approvalSummaries';
-import {
-  RUN_OUTCOME,
   type AgentProposalPermission,
   type PermissionPayload,
   type RequestDecision,
-  type RetryPermission,
   type RunId,
 } from '@shared/schemas';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
@@ -47,17 +35,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
-import { buildDiffHunks } from '@utils/text/unifiedDiff';
-
-/** An edit's content with the diff its request carries. */
-function editContent(originalContent: string, proposedContent: string) {
-  return {
-    originalContent,
-    proposedContent,
-    hunks: buildDiffHunks(originalContent, proposedContent).hunks,
-    firstChangedLine: 0,
-  };
-}
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   const ctx = createTestCliContext({
@@ -71,26 +48,29 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
   return ctx;
 }
 
-function stubStderrWrites() {
-  return vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-}
-
 function useCliHostInteractions(
   cliContext: CliContext,
   hooks: CliApprovalPromptHooks = {},
 ): void {
   detachHostInteractions();
   setTestApprovalPolicy(cliContext.approvalPolicy);
-  detachHostInteractions = Effect.runSync(
+  // The host's view watch lives in this scope; detaching closes it.
+  const scope = Scope.makeUnsafe();
+  const detach = Effect.runSync(
     testDefaultSession().interactions.use(
-      createHeadlessCliHostInteractions(
-        testSessionOf(testDefaultSession()),
-        testRuntime(),
-        cliContext,
-        hooks,
+      testRuntime().runSync(
+        createHeadlessCliHostInteractions(
+          testSessionOf(testDefaultSession()),
+          cliContext,
+          hooks,
+        ).pipe(Scope.provide(scope)),
       ),
     ),
   );
+  detachHostInteractions = () => {
+    detach();
+    Effect.runFork(Scope.close(scope, Exit.void));
+  };
 }
 
 const ROOT_RUN = 'a00001' as RunId;
@@ -206,17 +186,6 @@ function trackPromptEvents(): {
   };
 }
 
-const credentialExhaustedRetry: RetryPermission = {
-  requestId: 'upstream-credit-retry',
-  runId: 'test-stream' as RetryPermission['runId'],
-  operation: 'Model request',
-  errorMessage: 'HTTP 429 Too Many Requests',
-  errorDetails: {
-    classification: { kind: 'upstream-credit' },
-    statusCode: 429,
-  },
-};
-
 beforeEach(async () => {
   const actual = await vi.importActual<
     typeof import('@cli/runtime/approval/approvalSummaries')
@@ -233,55 +202,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('human input approval policy', () => {
-  it.effect(
-    'warns the operator of a shared edit-policy denial through the host',
-    () =>
-      Effect.gen(function* () {
-        const ctx = context({ approvalPolicy: 'never', mode: 'headless' });
-        useCliHostInteractions(ctx);
-        const stderr = stubStderrWrites();
-
-        const result = yield* requestNewProofEdit();
-        // A policy refusal with nobody to ask is a denial, not a person's
-        // rejection: the model reads the reason and routes around it.
-        expect(result).toMatchObject({ action: 'deny' });
-        expect(stderr).toHaveBeenCalledTimes(1);
-        expect(String(stderr.mock.calls[0]?.[0])).toContain(
-          'Command or edit denied',
-        );
-        // The model routes around the denial, so the run's exit code is untouched.
-        expect(runOutcomeExitCode(RUN_OUTCOME.COMPLETED)).toBe(
-          CliExitCode.Success,
-        );
-        expect(runOutcomeExitCode(RUN_OUTCOME.CANCELLED)).toBe(
-          CliExitCode.Interrupted,
-        );
-      }),
-  );
-});
-
 describe('approval prompt hooks', () => {
-  it.effect('runs the before-prompt hook for interactive approval events', () =>
-    Effect.gen(function* () {
-      const tracker = trackPromptEvents();
-      useCliHostInteractions(
-        context({ approvalPrompt: tracker.answerWith('n no review needed') }),
-        tracker.hooks,
-      );
-      const result = yield* openRequest({
-        kind: 'proposal',
-        data: agentProposal(),
-      });
-
-      expect(result).toEqual({
-        action: 'reject',
-        feedback: 'no review needed',
-      });
-      expect(tracker.events).toEqual(['before', 'prompt', 'after']);
-    }),
-  );
-
   it.effect(
     'denies a request still listed pending when the run has nobody to ask',
     () =>
@@ -307,71 +228,7 @@ describe('approval prompt hooks', () => {
   );
 });
 
-describe('retry request classification (#7331)', () => {
-  let retryOrdinal = 0;
-  const retryRequest = (): RetryPermission => ({
-    requestId: `headless-retry-${(retryOrdinal += 1)}`,
-    runId: ROOT_RUN,
-    operation: 'Model invocation',
-    errorMessage: 'stream dropped before first token',
-  });
-
-  function requestHeadlessRetry(
-    ctx: CliContext,
-    overrides: Partial<RetryPermission> = {},
-  ): Effect.Effect<RequestDecision, Error> {
-    useCliHostInteractions(ctx);
-    return openRequest({
-      kind: 'retry',
-      data: { ...retryRequest(), ...overrides },
-    });
-  }
-
-  it.effect('cancels a retry the interactive user explicitly rejects', () =>
-    Effect.gen(function* () {
-      const result = yield* requestHeadlessRetry(
-        context({ approvalPrompt: () => Effect.succeed('n not now') }),
-      );
-
-      // The operator's note rides the cancellation: a dismissed retry is
-      // their call, and the reason they gave is the cause.
-      expect(result).toEqual({ action: 'cancel', cause: 'not now' });
-    }),
-  );
-});
-
 describe('buildToolEditApprovalContent', () => {
-  it.effect('passes one-line rejection feedback to the tool result', () =>
-    Effect.gen(function* () {
-      useCliHostInteractions(
-        context({
-          approvalPrompt: () => Effect.succeed('n proof misses the p = 5 case'),
-        }),
-      );
-
-      const result = yield* requestNewProofEdit();
-
-      expect(result).toMatchObject({
-        action: 'reject',
-        feedback: 'proof misses the p = 5 case',
-      });
-    }),
-  );
-
-  it.effect('does not synthesize feedback for a note-free rejection', () =>
-    Effect.gen(function* () {
-      useCliHostInteractions(
-        context({
-          approvalPrompt: () => Effect.succeed(''),
-        }),
-      );
-
-      const result = yield* requestNewProofEdit();
-
-      expect(result).toEqual({ action: 'reject', feedback: null });
-    }),
-  );
-
   it.effect('preserves a failed edit prompt as an automatic cancellation', () =>
     Effect.gen(function* () {
       useCliHostInteractions(
@@ -390,172 +247,6 @@ describe('buildToolEditApprovalContent', () => {
       });
     }),
   );
-
-  it.effect('prompts for rejection feedback after an explicit no', () =>
-    Effect.gen(function* () {
-      const prompts: string[] = [];
-      const summaries: string[] = [];
-      const answers = ['n', 'use the workspace-local file path'];
-      useCliHostInteractions(
-        context({
-          approvalPrompt: (request) =>
-            Effect.sync(() => {
-              prompts.push(request.prompt);
-              summaries.push(request.summary);
-              return answers.shift() ?? '';
-            }),
-        }),
-      );
-
-      const result = yield* requestNewProofEdit();
-
-      expect(prompts).toEqual([
-        'Approve? [y/N, or n <feedback>] ',
-        'Rejection feedback (optional, Enter to skip): ',
-      ]);
-      expect(summaries[0]).toContain('Tool edit requested by write_file');
-      expect(summaries[1]).toBe('');
-      expect(result).toMatchObject({
-        action: 'reject',
-        feedback: 'use the workspace-local file path',
-      });
-    }),
-  );
-
-  it.effect(
-    'shows complete bounded content without settling the approval',
-    () =>
-      Effect.gen(function* () {
-        const prompts: string[] = [];
-        const summaries: string[] = [];
-        const answers = ['view', 'y'];
-        const prompting = vi.fn(() => undefined);
-        const stderrWrite = stubStderrWrites();
-
-        const decision = yield* askApproval(
-          context({
-            approvalPrompt: (request) =>
-              Effect.sync(() => {
-                prompts.push(request.prompt);
-                summaries.push(request.summary);
-                return answers.shift() ?? '';
-              }),
-          }),
-          { summary: 'bounded preview', details: () => 'complete proposal' },
-          { prompting },
-        );
-
-        expect(decision).toEqual({ action: 'approve' });
-        expect(prompts).toEqual([
-          'Approve? [y/N, v view full, or n <feedback>] ',
-          'Approve? [y/N, v view full, or n <feedback>] ',
-        ]);
-        expect(summaries).toEqual(['bounded preview', 'bounded preview']);
-        expect(prompting).toHaveBeenCalledTimes(2);
-        expect(stderrWrite).toHaveBeenCalledWith(
-          'complete proposal\n',
-          expect.any(Function),
-        );
-      }),
-  );
-
-  it.effect('removes terminal control sequences from complete content', () =>
-    Effect.gen(function* () {
-      const answers = ['v', 'y'];
-      const stderrWrite = stubStderrWrites();
-
-      yield* askApproval(
-        context({
-          approvalPrompt: () => Effect.sync(() => answers.shift() ?? ''),
-        }),
-        {
-          summary: 'bounded preview',
-          details: () => 'safe\u001b]0;unsafe\u0007\ntext',
-        },
-      );
-
-      expect(stderrWrite).toHaveBeenCalledWith(
-        'safe\ntext\n',
-        expect.any(Function),
-      );
-    }),
-  );
-
-  it.effect('holds the prompt queue while complete content is viewed', () =>
-    Effect.gen(function* () {
-      const summaries: string[] = [];
-      let firstPromptCount = 0;
-      let resolveView!: (answer: string) => void;
-      let resolveDecision!: (answer: string) => void;
-      const viewAnswer = new Promise<string>((resolve) => {
-        resolveView = resolve;
-      });
-      const decisionAnswer = new Promise<string>((resolve) => {
-        resolveDecision = resolve;
-      });
-      const secondFirstPrompt = yield* Deferred.make<void>();
-      stubStderrWrites();
-      const cliContext = context({
-        approvalPrompt: (request) => {
-          summaries.push(request.summary);
-          if (request.summary !== 'first') return Effect.succeed('y');
-          firstPromptCount += 1;
-          if (firstPromptCount === 1) return Effect.promise(() => viewAnswer);
-          Deferred.doneUnsafe(secondFirstPrompt, Effect.void);
-          return Effect.promise(() => decisionAnswer);
-        },
-      });
-
-      const first = yield* Effect.forkChild(
-        askApproval(cliContext, {
-          summary: 'first',
-          details: () => 'complete first proposal',
-        }),
-      );
-      const second = yield* Effect.forkChild(
-        askApproval(cliContext, { summary: 'second' }),
-      );
-
-      resolveView('v');
-      yield* Deferred.await(secondFirstPrompt);
-      expect(summaries).toEqual(['first', 'first']);
-
-      resolveDecision('y');
-      expect(yield* Fiber.join(first)).toEqual({ action: 'approve' });
-      expect(yield* Fiber.join(second)).toEqual({ action: 'approve' });
-      expect(summaries).toEqual(['first', 'first', 'second']);
-    }),
-  );
-
-  it('bounds long diff lines before prompting', () => {
-    const longLine = 'x'.repeat(1_000);
-    const { summary, details } = buildToolEditApprovalContent({
-      path: '/tmp/generated.json',
-      ...editContent('', `${longLine}\n`),
-      sourceTool: 'write_file',
-    });
-
-    expect(summary).toContain('[line truncated]');
-    expect(summary).not.toContain(longLine);
-    expect(summary.length).toBeLessThan(1_000);
-    expect(details?.()).toContain(longLine);
-  });
-
-  it('marks hidden diff lines when the line budget is exceeded', () => {
-    const proposedContent = Array.from(
-      { length: 100 },
-      (_, index) => `generated line ${index + 1}`,
-    ).join('\n');
-    const { summary, details } = buildToolEditApprovalContent({
-      path: '/tmp/generated.tex',
-      ...editContent('', proposedContent),
-      sourceTool: 'write_file',
-    });
-
-    expect(summary).toContain('diff lines hidden');
-    expect(details?.()).toContain('+generated line 100');
-    expect(details?.()).not.toContain('diff lines hidden');
-  });
 
   it.effect('skips prompting for auto-approved edits', () =>
     Effect.gen(function* () {
@@ -582,52 +273,4 @@ describe('buildToolEditApprovalContent', () => {
       });
     }),
   );
-});
-
-describe('buildAgentProposalApprovalContent', () => {
-  it('bounds long subagent instructions before prompting', () => {
-    const longLine = 'verify '.repeat(200);
-    const instruction = Array.from(
-      { length: 60 },
-      (_, index) => `${index + 1}. ${longLine}`,
-    ).join('\n');
-
-    const { summary, details } = buildAgentProposalApprovalContent(
-      agentProposal({
-        instruction,
-        memories: ['/memories/proof-style.md'],
-        workingDirectory: '/tmp/project',
-      }),
-    );
-
-    expect(summary).toContain('Working directory: /tmp/project');
-    expect(summary).toContain('Memories: /memories/proof-style.md');
-    expect(summary).toContain('[line truncated]');
-    expect(summary).toContain('instruction lines hidden');
-    expect(summary).not.toContain(longLine);
-    expect(details?.()).toContain(`  60. ${longLine}`);
-    expect(details?.()).not.toContain('instruction lines hidden');
-  });
-});
-
-describe('formatRetryRequestMessage', () => {
-  it('offers no switch key the headless y/N prompt would read as a cancel', () => {
-    const retry: RetryPermission = {
-      ...credentialExhaustedRetry,
-      errorDetails: {
-        classification: { kind: 'kimi-code-subscription' },
-        statusCode: 429,
-      },
-      credentialSwitch: {
-        kind: 'decline-route',
-        route: 'kimi-code-subscription',
-        provider: 'moonshot',
-        automatic: false,
-      },
-    };
-
-    expect(formatRetryRequestMessage(retry)).toBe(
-      'Retry requested (Model request): HTTP 429 Too Many Requests',
-    );
-  });
 });

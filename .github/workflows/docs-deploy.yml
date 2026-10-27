@@ -7,6 +7,8 @@ on:
       - 'docs/**'
       - 'TERMS_OF_SERVICE.md'
       - 'CHANGELOG.md'
+      - 'packages/harness/docs/api/**'
+      - 'packages/llm/docs/api/**'
       - '.github/workflows/docs-deploy.yml'
   workflow_dispatch:
 

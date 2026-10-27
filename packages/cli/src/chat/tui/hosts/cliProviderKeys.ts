@@ -6,7 +6,7 @@
 // graphical hosts. Its notices land in the chat transcript.
 
 // Third-party imports
-import { Effect, Fiber } from 'effect';
+import { Effect } from 'effect';
 
 import { type ApiKeyProviderId, apiProviderOfSecretName } from '@texra-ai/llm';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -18,11 +18,7 @@ import {
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { tuiUi } from './tuiUiHost';
-import type {
-  ProcessRuntime,
-  PlatformSecrets,
-  SettingsStores,
-} from '@texra-ai/harness';
+import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness';
 
 /** Run one controller action on the TUI's prompt; a failure names its cause
  *  and stays in the Effect channel. */
@@ -75,25 +71,19 @@ export const promptForCliProviderApiKey = (
   viaTui(secrets, stores, (controller) => controller.setProviderKey(provider));
 
 /**
- * The chat TUI's `credentialChanged` subscriber, forked at its run edge (R1)
- * and interrupted by the returned disposer. The secret store announces every
+ * The chat TUI's `credentialChanged` subscriber, which the chat forks into
+ * its scope and interrupts when it closes. The secret store announces every
  * committed write, whoever made it: `/key`, `/config`, the setup agent's
  * `unset_api_key`. A provider key bumps the subscription-preference level the
  * status bar and model pickers read. A key a tool plugin declares (the GitHub
  * token) is re-probed by the shared bootstrap. Other entries (OAuth tokens)
  * are ignored.
  */
-export function subscribeCliCredentialChanges(
-  runtime: ProcessRuntime,
-): () => void {
-  const fiber = runtime.runFork(
-    onAppSignal('credentialChanged', ({ key }) => {
-      if (apiProviderOfSecretName(key) !== undefined) {
-        bumpCodexPreferenceVersion();
-      }
-    }),
-  );
-  return () => {
-    runtime.runFork(Fiber.interrupt(fiber));
-  };
-}
+export const followCliCredentialChanges: Effect.Effect<void> = onAppSignal(
+  'credentialChanged',
+  ({ key }) => {
+    if (apiProviderOfSecretName(key) !== undefined) {
+      bumpCodexPreferenceVersion();
+    }
+  },
+);

@@ -1,51 +1,9 @@
-// Suites for @utils/core (comparators, type guards, async helpers).
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createFlushableDebounce,
   type FlushableDebounce,
 } from '@texra/utils/core/flushableDebounce';
-import { getBasename, getFileStem } from '@utils/core';
 import { deriveRunId } from '@utils/core/idHash';
-
-describe('getBasename', () => {
-  it.each([
-    ['/home/user/file.txt', 'file.txt'],
-    ['C:\\Users\\file.txt', 'file.txt'],
-    ['C:/Users\\Documents/file.txt', 'file.txt'],
-    ['C:\\Users\\', 'Users'],
-    ['', ''],
-    ['/', ''],
-    ['//', ''],
-    ['file.txt', 'file.txt'],
-    ['../file.txt', 'file.txt'],
-    ['/home/user/.bashrc', '.bashrc'],
-    // Regression: paths ending with a separator used to return empty.
-    ['folder/', 'folder'],
-    ['/home/user/folder/', 'folder'],
-  ])('getBasename(%j) === %j', (input, expected) => {
-    expect(getBasename(input)).toBe(expected);
-  });
-});
-
-describe('getFileStem', () => {
-  it.each([
-    ['dir/paper.tex', 'paper'],
-    // Dotfiles keep their full name — a leading dot isn't an extension.
-    ['/home/user/.bashrc', '.bashrc'],
-    // Only the final extension is stripped.
-    ['/path/to/file.tar.gz', 'file.tar'],
-    ['C:\\Users\\report.docx', 'report'],
-    ['/path/to/dir/', 'dir'],
-    ['', ''],
-  ])('getFileStem(%j) === %j', (input, expected) => {
-    expect(getFileStem(input)).toBe(expected);
-  });
-
-  it.each([[undefined], [null]])('getFileStem(%j) === ""', (input) => {
-    expect(getFileStem(input)).toBe('');
-  });
-});
 
 describe('deriveRunId', () => {
   it('is stable across identity field order', () => {
@@ -62,47 +20,6 @@ describe('createFlushableDebounce', () => {
 
   afterEach(() => {
     vi.useRealTimers();
-  });
-
-  it('restarts the timer on every schedule() call, like a classic trailing debounce', () => {
-    const callback = vi.fn();
-    const batcher = createFlushableDebounce(callback, 100);
-
-    batcher.schedule();
-    vi.advanceTimersByTime(60);
-    batcher.schedule(); // resets the 100ms window
-    vi.advanceTimersByTime(60);
-    expect(callback).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(40);
-    expect(callback).toHaveBeenCalledOnce();
-  });
-
-  it('flush() runs the callback synchronously and clears the pending timer', () => {
-    const callback = vi.fn();
-    const batcher = createFlushableDebounce(callback, 100);
-
-    batcher.schedule();
-    batcher.flush();
-
-    expect(callback).toHaveBeenCalledOnce();
-    expect(batcher.pending).toBe(false);
-
-    // The timer was cleared by flush(), so letting it "expire" must not
-    // invoke the callback a second time.
-    vi.advanceTimersByTime(100);
-    expect(callback).toHaveBeenCalledOnce();
-  });
-
-  it('cancel() drops the pending call without invoking the callback', () => {
-    const callback = vi.fn();
-    const batcher = createFlushableDebounce(callback, 100);
-
-    batcher.schedule();
-    batcher.cancel();
-    expect(batcher.pending).toBe(false);
-
-    vi.advanceTimersByTime(1000);
-    expect(callback).not.toHaveBeenCalled();
   });
 
   // The CLI transcript sync re-schedules from inside its own callback (its

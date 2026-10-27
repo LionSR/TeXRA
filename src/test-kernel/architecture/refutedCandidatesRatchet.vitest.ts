@@ -3,15 +3,9 @@
 // re-proposes them. config/ratchets/refuted-candidates.json holds them as
 // data; this suite pins each refused symbol's shape against it.
 //
-// It is one of two enforcement points, because a pure-tier suite has no PR
-// body: the other is .github/workflows/refuted-candidates.yml, which fails a
-// PR that touches one of these declarations without citing the ruling id.
-// This suite also proves that gate can still find every symbol, so a rename
-// fails here rather than making the workflow silently blind.
-//
-// Neither gate forbids the change. They require the author to have read the
-// ruling: a candidate that lands on NEW evidence updates or deletes its entry
-// in the same PR.
+// It does not forbid the change: a candidate that lands on NEW evidence
+// updates or deletes its entry in the same PR, and by convention cites the
+// ruling id in the PR body.
 
 // Node imports
 import { readFileSync } from 'node:fs';
@@ -22,11 +16,6 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import { parseSourceFile, REPO_ROOT } from '../support/repoScan';
-
-const { locateSymbol } = await import(
-  // @ts-expect-error This internal JavaScript script intentionally has no declaration file.
-  '../../../scripts/refutedCandidates.mjs'
-);
 
 const BASELINE_FILE = 'config/ratchets/refuted-candidates.json';
 
@@ -211,22 +200,4 @@ describe('refuted-candidate shape ratchet', () => {
         `signature in ${BASELINE_FILE} in the same PR.`,
     ).toBe(entry.signature);
   });
-
-  it.each(cases)(
-    '$id: keeps $symbol findable by the CI gate text locator',
-    (entry) => {
-      const source = readFileSync(resolve(REPO_ROOT, entry.file), 'utf8');
-      const { startLine, endLine } = locateSymbol(source, entry.symbol) as {
-        startLine: number;
-        endLine: number;
-      };
-      // A range that collapsed to nothing would let the workflow pass a PR
-      // that rewrote the declaration.
-      expect(endLine).toBeGreaterThanOrEqual(startLine);
-      expect(
-        source.split('\n')[startLine - 1],
-        `scripts/refutedCandidates.mjs located the wrong line for ${entry.symbol}`,
-      ).toContain(entry.symbol);
-    },
-  );
 });

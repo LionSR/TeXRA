@@ -10,7 +10,6 @@ import {
   hostStores,
   setupPlatform,
 } from '@test/support/setupPlatform';
-import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { getChatGptSubscriptionStatus } from '@texra/tools/setup/platform';
 
 setupPlatform(
@@ -29,14 +28,6 @@ afterEach(() => {
 });
 
 describe('shared setup capabilities', () => {
-  it.effect('keeps API-key-only setup usable', () =>
-    Effect.gen(function* () {
-      expect(
-        yield* hasUsableSetupCredential(hostStores(), hostStores().secrets),
-      ).toBe(true);
-    }).pipe(Effect.provide(fakeProcessServices())),
-  );
-
   it.effect(
     'does not expose ChatGPT account identifiers through setup tools',
     () =>

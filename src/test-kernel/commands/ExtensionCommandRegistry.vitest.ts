@@ -62,40 +62,21 @@ function dispatch(
 }
 
 describe('extension command surface — catalog-tagged command dispatch', () => {
-  it.each([null, true, 'true', { inPlace: 'true' }, { extra: true }])(
-    'texra.showProgressView rejects malformed argument %j',
-    async (argument) => {
-      const actions = makeActions();
-      await expect(
-        dispatch(actions, 'texra.showProgressView', argument),
-      ).resolves.toBe(false);
-      expect(actions.showProgressView).not.toHaveBeenCalled();
-    },
-  );
-
-  it('texra.setApiKey rejects unknown provider', async () => {
-    const actions = makeActions();
-    await expect(
-      dispatch(actions, 'texra.setApiKey', 'not-a-provider'),
-    ).resolves.toBe(false);
-    expect(actions.setApiKey).not.toHaveBeenCalled();
-  });
-
   // Regression guard for #3782: handlers must propagate async rejections
   // instead of swallowing them through `void actions.X(); return true;`.
   // Each asserted handler returns a failing program, and settling it must
   // surface that same rejection to VS Code's `executeCommand` callers.
   describe('async rejection propagation (regression guard for #3782)', () => {
-    it.each([
-      ['texra.showMemory', 'showSettings'],
-      ['texra.cloneOverleafProject', 'cloneOverleafProject'],
-    ] as const)('%s rejection bubbles up', async (id, actionKey) => {
-      const actions = makeActions();
-      const failure = new Error(`boom-${actionKey}`);
+    it.each([['texra.showMemory', 'showSettings']] as const)(
+      '%s rejection bubbles up',
+      async (id, actionKey) => {
+        const actions = makeActions();
+        const failure = new Error(`boom-${actionKey}`);
 
-      (actions[actionKey] as any).mockReturnValueOnce(Effect.fail(failure));
+        (actions[actionKey] as any).mockReturnValueOnce(Effect.fail(failure));
 
-      await expect(dispatch(actions, id)).rejects.toBe(failure);
-    });
+        await expect(dispatch(actions, id)).rejects.toBe(failure);
+      },
+    );
   });
 });

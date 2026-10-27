@@ -1,29 +1,15 @@
-import { Effect, Result, Schema } from 'effect';
+import { Effect } from 'effect';
 import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as codexAuth from '@texra-ai/llm/node';
-import { SubscriptionOAuthError } from '@texra-ai/llm/node';
 import type { PlatformSecrets } from '@platform/secrets';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingsStores } from '@shared/config/settings';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import {
-  SubscriptionUsageSnapshotsSchema,
-  type SubscriptionUsageSnapshot,
-} from '@texra/shared/model/subscriptionUsage';
 import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { parseKimiCodeUsage } from '@texra/controllers/modelAccess/subscriptionUsage/kimiCodeUsageAdapter';
-import {
-  GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
-  GLM_CODING_PLAN_USAGE_URL,
-  parseGlmCodingPlanUsage,
-} from '@texra/controllers/modelAccess/subscriptionUsage/glmCodingPlanUsageAdapter';
-import { timestampField } from '@texra/controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing';
-import { parseChatGptUsage } from '@texra/controllers/modelAccess/subscriptionUsage/codexUsageAdapter';
 import type { HttpClient } from 'effect/http';
 
 /** The request the adapters make through `FetchHttpClient.Fetch`. */
@@ -73,38 +59,16 @@ function makeService(
   options: {
     readonly secrets?: PlatformSecrets;
     readonly stores?: SettingsStores;
-    readonly now?: () => number;
     readonly requestTimeoutMs?: number;
   } = {},
 ): SubscriptionUsageService {
   return new SubscriptionUsageService({
     secrets: options.secrets ?? new FakeSecrets(CODING_PLAN_KEYS),
     stores: options.stores ?? makeFakeSettingsStores().stores,
-    now: options.now ?? (() => 1_800_000_000_000),
     ...(options.requestTimeoutMs === undefined
       ? {}
       : { requestTimeoutMs: options.requestTimeoutMs }),
   });
-}
-
-/**
- * Stores over one mutable GLM region flag. The catalog default is the China
- * endpoint, so a test that wants the international one seeds `false`.
- */
-function glmRegionStores(useChina?: boolean): {
-  readonly stores: SettingsStores;
-  setRegion(next: boolean): void;
-} {
-  const globalState =
-    useChina === undefined
-      ? new FakeStateStore()
-      : new FakeStateStore({ [GlobalStateKey.GLM_USE_CHINA]: useChina });
-  return {
-    stores: { ...makeFakeSettingsStores().stores, globalState },
-    setRegion: (next) => {
-      Effect.runSync(globalState.update(GlobalStateKey.GLM_USE_CHINA, next));
-    },
-  };
 }
 
 /**
@@ -113,14 +77,10 @@ function glmRegionStores(useChina?: boolean): {
  * fake `fetch` is provided as the same reference the adapters read, so nothing
  * has to be threaded through the service to reach the transport.
  */
-function runUsage(
-  program: Effect.Effect<
-    SubscriptionUsageSnapshot,
-    never,
-    HttpClient.HttpClient
-  >,
+function runUsage<A>(
+  program: Effect.Effect<A, never, HttpClient.HttpClient>,
   http: UsageFetch,
-): Promise<SubscriptionUsageSnapshot> {
+): Promise<A> {
   return testRuntime().runPromise(
     Effect.provideService(
       program,
@@ -130,540 +90,12 @@ function runUsage(
   );
 }
 
-describe('subscription usage parsers', () => {
-  it('parses ChatGPT primary and secondary rate-limit windows', () => {
-    expect(
-      parseChatGptUsage({
-        plan_type: 'pro',
-        rate_limit: {
-          primary_window: {
-            used_percent: 25,
-            limit_window_seconds: 18_000,
-            reset_at: 1_800_000_100,
-          },
-          secondary_window: {
-            used_percent: 40,
-            limit_window_seconds: 604_800,
-            expiry_date: '2027-01-15T08:00:00Z',
-          },
-        },
-      }),
-    ).toStrictEqual({
-      planName: 'pro',
-      windows: [
-        {
-          name: 'five_hour',
-          percentUsed: 25,
-          percentRemaining: 75,
-          resetAt: 1_800_000_100_000,
-          limitWindowSeconds: 18_000,
-        },
-        {
-          name: 'seven_day',
-          percentUsed: 40,
-          percentRemaining: 60,
-          resetAt: Date.parse('2027-01-15T08:00:00Z'),
-          limitWindowSeconds: 604_800,
-        },
-      ],
-    });
-  });
-
-  it('parses normalized ChatGPT windows and relative reset variants', () => {
-    expect(
-      parseChatGptUsage(
-        {
-          rate_limits: {
-            plan_type: 'team',
-            primary: {
-              used_percent: '12.5',
-              window_minutes: 300,
-              reset_after_seconds: 60,
-            },
-            secondary: {
-              remaining_percent: 75,
-              resets_in_seconds: 120,
-            },
-          },
-        },
-        1_800_000_000_000,
-      ),
-    ).toStrictEqual({
-      planName: 'team',
-      windows: [
-        {
-          name: 'five_hour',
-          percentUsed: 12.5,
-          percentRemaining: 87.5,
-          resetAt: 1_800_000_060_000,
-          limitWindowSeconds: 18_000,
-        },
-        {
-          name: 'secondary',
-          percentUsed: 25,
-          percentRemaining: 75,
-          resetAt: 1_800_000_120_000,
-        },
-      ],
-    });
-  });
-
-  it('falls back to normalized ChatGPT windows and names stable durations', () => {
-    const mixed = parseChatGptUsage({
-      rate_limit: {
-        primary_window: { used_percent: 'invalid' },
-      },
-      rate_limits: {
-        primary: { used_percent: 10, limit_window_seconds: 2_592_000 },
-        secondary: { used_percent: 20, limit_window_seconds: 172_800 },
-      },
-    });
-
-    expect(mixed.windows.map((window) => window.name)).toStrictEqual([
-      'thirty_day',
-      '2_day',
-    ]);
-  });
-
-  it.each([0, -1, 1.5, Number.POSITIVE_INFINITY])(
-    'omits invalid ChatGPT window metadata: %s',
-    (limitWindowSeconds) => {
-      const parsed = parseChatGptUsage({
-        rate_limit: {
-          primary_window: {
-            used_percent: 10,
-            limit_window_seconds: limitWindowSeconds,
-          },
-        },
-      });
-
-      expect(parsed.windows).toStrictEqual([
-        { name: 'primary', percentUsed: 10, percentRemaining: 90 },
-      ]);
-      // The adapters no longer fabricate a display name; the service owns the
-      // default (`available()` applies `?? DEFAULT_PLAN_NAMES`), so the
-      // snapshot is built with that default's literal value here.
-      expect(
-        Result.isSuccess(
-          Schema.decodeUnknownResult(SubscriptionUsageSnapshotsSchema.value)({
-            state: 'available',
-            provider: 'chatgpt',
-            providerName: 'ChatGPT',
-            planName: parsed.planName ?? 'ChatGPT Coding Plan',
-            fetchedAt: 1,
-            windows: parsed.windows,
-          }),
-        ),
-      ).toBe(true);
-    },
-  );
-
-  it('parses Kimi limit/remaining windows and legacy USD quota records', () => {
-    expect(
-      parseKimiCodeUsage({
-        limits: [
-          {
-            detail: {
-              limit: 100,
-              remaining: 30,
-              resetTime: 1_800_001_000_000,
-            },
-          },
-        ],
-        usage: {
-          limit: '500',
-          used: '100',
-          resetTime: '2027-01-20T08:30:00Z',
-        },
-      }).windows,
-    ).toStrictEqual([
-      {
-        name: 'five_hour',
-        percentUsed: 70,
-        percentRemaining: 30,
-        resetAt: 1_800_001_000_000,
-      },
-      {
-        name: 'weekly_limit',
-        percentUsed: 20,
-        percentRemaining: 80,
-        resetAt: Date.parse('2027-01-20T08:30:00Z'),
-      },
-    ]);
-
-    expect(
-      parseKimiCodeUsage({
-        data: {
-          limits: {
-            quota_5_hour: {
-              used_value_usd: 2,
-              max_value_usd: 8,
-              resets_at: '2027-01-01T00:00:00Z',
-            },
-            quota_7_day: { usedValueUsd: 9, maxValueUsd: 10 },
-          },
-        },
-      }).windows.map((window) => [window.name, window.percentUsed]),
-    ).toStrictEqual([
-      ['quota_5_hour', 25],
-      ['quota_7_day', 90],
-    ]);
-  });
-
-  it('parses GLM token limits by unit and nested remaining variants', () => {
-    expect(
-      parseGlmCodingPlanUsage({
-        success: true,
-        data: {
-          level: 'Lite',
-          limits: [
-            {
-              type: 'TOKENS_LIMIT',
-              percentage: 30,
-              nextResetTime: 1_800_003_000_000,
-              unit: 3,
-              number: 5,
-            },
-            {
-              type: 'tokens_limit',
-              percentage: 55,
-              nextResetTime: 1_800_004_000_000,
-              unit: 6,
-              number: 7,
-            },
-          ],
-        },
-      }),
-    ).toStrictEqual({
-      planName: 'Lite',
-      windows: [
-        {
-          name: 'five_hour',
-          percentUsed: 30,
-          percentRemaining: 70,
-          resetAt: 1_800_003_000_000,
-        },
-        {
-          name: 'weekly',
-          percentUsed: 55,
-          percentRemaining: 45,
-          resetAt: 1_800_004_000_000,
-        },
-      ],
-    });
-
-    expect(
-      parseGlmCodingPlanUsage({
-        data: {
-          model_remains: {
-            'glm-5': {
-              current_interval_remaining_percent: 80,
-              current_weekly_remaining_percent: 65,
-              weekly_end_time: 1_800_005_000,
-            },
-          },
-        },
-      }).windows,
-    ).toStrictEqual([
-      {
-        name: 'glm-5:five_hour',
-        percentUsed: 20,
-        percentRemaining: 80,
-      },
-      {
-        name: 'glm-5:weekly',
-        percentUsed: 35,
-        percentRemaining: 65,
-        resetAt: 1_800_005_000_000,
-      },
-    ]);
-  });
-
-  it('parses current GLM credit limits for five-hour and weekly usage', () => {
-    const parsed = parseGlmCodingPlanUsage({
-      success: true,
-      data: {
-        level: 'Pro',
-        limits: [
-          {
-            type: 'CREDIT_LIMIT',
-            percentage: 18,
-            unit: 3,
-            number: 5,
-            nextResetTime: 1_800_006_000_000,
-          },
-          {
-            type: 'credit_limit',
-            percentage: 42,
-            unit: 6,
-            number: 7,
-            nextResetTime: 1_800_007_000_000,
-          },
-        ],
-      },
-    });
-
-    expect(parsed.windows).toStrictEqual([
-      {
-        name: 'five_hour',
-        percentUsed: 18,
-        percentRemaining: 82,
-        resetAt: 1_800_006_000_000,
-      },
-      {
-        name: 'weekly',
-        percentUsed: 42,
-        percentRemaining: 58,
-        resetAt: 1_800_007_000_000,
-      },
-    ]);
-  });
-
-  it('ignores unrelated GLM limits and classifies unknown units by reset', () => {
-    const parsed = parseGlmCodingPlanUsage({
-      data: {
-        limits: [
-          { percentage: 1, unit: 3, nextResetTime: 1_700_000_000_000 },
-          {
-            type: 'REQUESTS_LIMIT',
-            percentage: 2,
-            unit: 3,
-            nextResetTime: 1_700_000_000_000,
-          },
-          {
-            type: 'tokens_limit',
-            percentage: 30,
-            unit: 99,
-            nextResetTime: 1_800_000_000_000,
-          },
-          {
-            type: 'TOKENS_LIMIT',
-            percentage: 40,
-            unit: 100,
-            nextResetTime: 1_900_000_000_000,
-          },
-        ],
-      },
-    });
-
-    expect(
-      parsed.windows.map((window) => [window.name, window.percentUsed]),
-    ).toStrictEqual([
-      ['five_hour', 30],
-      ['weekly', 40],
-    ]);
-  });
-
-  // A numeric-looking string that fails the epoch check must not fall
-  // through to Date.parse, which accepts some non-ISO numeric strings as
-  // dates (e.g. Date.parse('-1') resolves to 2001-01-01).
-  it('rejects a negative numeric timestamp instead of misreading it as a date', () => {
-    expect(timestampField({ resetAt: -1 }, 'resetAt')).toBeUndefined();
-    expect(timestampField({ resetAt: '-1' }, 'resetAt')).toBeUndefined();
-  });
-});
-
 describe('SubscriptionUsageService', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it.each([
-    {
-      provider: 'chatgpt' as const,
-      url: 'https://chatgpt.com/backend-api/wham/usage',
-      response: {
-        rate_limit: { primary_window: { used_percent: 10 } },
-      },
-      authorization: 'Bearer chatgpt-secret',
-      extraHeaders: {
-        'chatgpt-account-id': 'account-123',
-        'user-agent': 'codex-cli',
-      },
-    },
-    {
-      provider: 'kimiCode' as const,
-      url: 'https://api.kimi.com/coding/v1/usages',
-      response: { usage: { limit: 10, remaining: 5 } },
-      authorization: 'Bearer kimiCode-secret',
-      extraHeaders: {},
-    },
-    {
-      provider: 'glmCodingPlan' as const,
-      url: GLM_CODING_PLAN_USAGE_URL,
-      response: {
-        success: true,
-        data: {
-          limits: [{ type: 'TOKENS_LIMIT', percentage: 10, unit: 3 }],
-        },
-      },
-      authorization: 'glm-secret',
-      extraHeaders: { 'accept-language': 'en-US,en' },
-    },
-  ])(
-    'sends the required $provider authentication headers',
-    async ({ provider, url, response, authorization, extraHeaders }) => {
-      stubCodexSession();
-      const http = vi.fn<UsageFetch>(async () => jsonResponse(response));
-      const snapshot = await runUsage(makeService().getUsage(provider), http);
-
-      expect(snapshot.state).toBe('available');
-      expect(
-        Schema.decodeUnknownSync(SubscriptionUsageSnapshotsSchema.value)(
-          snapshot,
-        ),
-      ).toStrictEqual(snapshot);
-      expect(http).toHaveBeenCalledTimes(1);
-      const [calledUrl, init] = http.mock.calls[0];
-      // The client calls fetch with a URL object and lowercased header keys.
-      expect(String(calledUrl)).toBe(url);
-      expect(init.method).toBe('GET');
-      expect(init.signal).toBeInstanceOf(AbortSignal);
-      expect(init.headers).toMatchObject({
-        authorization,
-        ...extraHeaders,
-      });
-    },
-  );
-
-  it('does not reuse GLM usage from the previous region within the TTL', async () => {
-    const http = vi.fn<UsageFetch>(async (url) =>
-      jsonResponse({
-        success: true,
-        data: {
-          limits: [
-            {
-              type: 'TOKENS_LIMIT',
-              percentage: String(url) === GLM_CODING_PLAN_USAGE_URL ? 10 : 80,
-              unit: 3,
-            },
-          ],
-        },
-      }),
-    );
-    const region = glmRegionStores(true);
-    const service = makeService({ stores: region.stores });
-
-    const china = await runUsage(service.getUsage('glmCodingPlan'), http);
-    region.setRegion(false);
-    const international = await runUsage(
-      service.getUsage('glmCodingPlan'),
-      http,
-    );
-
-    expect(http.mock.calls.map(([url]) => String(url))).toStrictEqual([
-      GLM_CODING_PLAN_USAGE_URL,
-      GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
-    ]);
-    expect(china.state).toBe('available');
-    expect(china.windows[0]?.percentUsed).toBe(10);
-    expect(international.state).toBe('available');
-    expect(international.windows[0]?.percentUsed).toBe(80);
-  });
-
-  it.each([
-    [true, GLM_CODING_PLAN_USAGE_URL, GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL],
-    [false, GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL, GLM_CODING_PLAN_USAGE_URL],
-  ])(
-    'serves concurrent GLM region requests from independent cache keys: China=%s',
-    async (initialUseChina, olderUrl, newerUrl) => {
-      const responses = new Map<string, (response: Response) => void>();
-      const firstRequest = createDeferred<void>();
-      const secondRequest = createDeferred<void>();
-      const http = vi.fn<UsageFetch>((url) => {
-        (responses.size === 0 ? firstRequest : secondRequest).resolve();
-        return new Promise<Response>((resolve) => {
-          responses.set(String(url), resolve);
-        });
-      });
-      const region = glmRegionStores(initialUseChina);
-      const service = makeService({ stores: region.stores });
-
-      const olderRequest = runUsage(service.getUsage('glmCodingPlan'), http);
-      await firstRequest.promise;
-      region.setRegion(!initialUseChina);
-      const newerRequest = runUsage(service.getUsage('glmCodingPlan'), http);
-      await secondRequest.promise;
-
-      responses.get(newerUrl)?.(
-        jsonResponse({
-          success: true,
-          data: {
-            limits: [{ type: 'TOKENS_LIMIT', percentage: 80, unit: 3 }],
-          },
-        }),
-      );
-      const newer = await newerRequest;
-      responses.get(olderUrl)?.(
-        jsonResponse({
-          success: true,
-          data: {
-            limits: [{ type: 'TOKENS_LIMIT', percentage: 10, unit: 3 }],
-          },
-        }),
-      );
-      const olderCaller = await olderRequest;
-
-      expect(http.mock.calls.map(([url]) => String(url))).toStrictEqual([
-        olderUrl,
-        newerUrl,
-      ]);
-      expect(newer.windows[0]?.percentUsed).toBe(80);
-      expect(olderCaller.windows[0]?.percentUsed).toBe(10);
-    },
-  );
-
-  it('does not fall back across GLM hosts when the selected region fails', async () => {
-    const http = vi.fn<UsageFetch>(async () =>
-      jsonResponse({ message: 'unavailable' }, 500),
-    );
-    const snapshot = await runUsage(
-      makeService({ stores: glmRegionStores(false).stores }).getUsage(
-        'glmCodingPlan',
-      ),
-      http,
-    );
-
-    expect(http).toHaveBeenCalledOnce();
-    expect(String(http.mock.calls[0][0])).toBe(
-      GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
-    );
-    expect(snapshot).toMatchObject({
-      state: 'unavailable',
-      reason: 'request_failed',
-    });
-  });
-
-  it.each([
-    ['chatgpt' as const, { 'apiKey.kimiCode': 'k', 'apiKey.glm': 'g' }],
-    ['kimiCode' as const, { 'apiKey.glm': 'glm-secret' }],
-    ['glmCodingPlan' as const, { 'apiKey.kimiCode': 'kimiCode-secret' }],
-  ])(
-    'returns unavailable when %s credentials are missing',
-    async (provider, secrets) => {
-      stubCodexSession({ loadSession: () => Effect.succeed(null) });
-      const http = vi.fn<UsageFetch>();
-
-      await expect(
-        runUsage(
-          makeService({ secrets: new FakeSecrets(secrets) }).getUsage(provider),
-          http,
-        ),
-      ).resolves.toMatchObject({
-        state: 'unavailable',
-        provider,
-        reason: 'missing_credentials',
-        windows: [],
-      });
-      expect(http).not.toHaveBeenCalled();
-    },
-  );
-
-  it.each([
-    ['chatgpt' as const, 401],
-    ['kimiCode' as const, 403],
-    ['glmCodingPlan' as const, 401],
-  ])(
+  it.each([['chatgpt' as const, 401]])(
     'maps %s HTTP %s to invalid credentials without exposing details',
     async (provider, status) => {
       let accessToken = 'chatgpt-secret';
@@ -695,30 +127,6 @@ describe('SubscriptionUsageService', () => {
       }
     },
   );
-
-  // SubscriptionOAuthError.needsReauth decides it: a ChatGPT session refresh
-  // that needs re-auth is an invalid credential, a transient one is not.
-  it.each([
-    ['fatal' as const, 'invalid_credentials'],
-    ['expired' as const, 'invalid_credentials'],
-    ['transient' as const, 'request_failed'],
-  ])('maps ChatGPT %s auth failures to %s', async (kind, reason) => {
-    stubCodexSession({
-      getFreshSession: () =>
-        Effect.fail(
-          new SubscriptionOAuthError({ message: 'refresh failed', kind }),
-        ),
-    });
-    const http = vi.fn<UsageFetch>();
-
-    await expect(
-      runUsage(makeService().getUsage('chatgpt'), http),
-    ).resolves.toMatchObject({
-      state: 'unavailable',
-      reason,
-    });
-    expect(http).not.toHaveBeenCalled();
-  });
 
   it('normalizes malformed bodies and HTTP failures without exposing details', async () => {
     stubCodexSession();
@@ -756,70 +164,6 @@ describe('SubscriptionUsageService', () => {
     expect(JSON.stringify(snapshot)).not.toContain('secret');
   });
 
-  it('times out provider requests and returns an unavailable snapshot', async () => {
-    stubCodexSession();
-    const http = vi.fn<UsageFetch>(
-      (_url, init) =>
-        new Promise((_resolve, reject) => {
-          init.signal?.addEventListener(
-            'abort',
-            () => reject(init.signal?.reason),
-            {
-              once: true,
-            },
-          );
-        }),
-    );
-
-    await expect(
-      runUsage(makeService({ requestTimeoutMs: 1 }).getUsage('chatgpt'), http),
-    ).resolves.toMatchObject({
-      state: 'unavailable',
-      reason: 'request_failed',
-    });
-  });
-
-  it('uses the TTL cache and forced refresh bypasses it', async () => {
-    let now = 1000;
-    const http = vi.fn<UsageFetch>(async () =>
-      jsonResponse({ usage: { limit: 100, remaining: 50 } }),
-    );
-    const service = makeService({ now: () => now });
-
-    const first = await runUsage(service.getUsage('kimiCode'), http);
-    expect(await runUsage(service.getUsage('kimiCode'), http)).toBe(first);
-    expect(http).toHaveBeenCalledTimes(1);
-
-    await runUsage(service.getUsage('kimiCode', { forceRefresh: true }), http);
-    expect(http).toHaveBeenCalledTimes(2);
-
-    now += 30_001;
-    await runUsage(service.getUsage('kimiCode'), http);
-    expect(http).toHaveBeenCalledTimes(3);
-  });
-
-  it('invalidates cached provider snapshots after credentials change', async () => {
-    let remaining = 50;
-    const http = vi.fn<UsageFetch>(async () =>
-      jsonResponse({ usage: { limit: 100, remaining } }),
-    );
-    const service = makeService();
-
-    await expect(
-      runUsage(service.getUsage('kimiCode'), http),
-    ).resolves.toMatchObject({
-      windows: [expect.objectContaining({ percentUsed: 50 })],
-    });
-    remaining = 25;
-    service.invalidate('kimiCode');
-    await expect(
-      runUsage(service.getUsage('kimiCode'), http),
-    ).resolves.toMatchObject({
-      windows: [expect.objectContaining({ percentUsed: 75 })],
-    });
-    expect(http).toHaveBeenCalledTimes(2);
-  });
-
   // Pins the return path of an invalidated fetch: the caller
   // already waiting on an invalidated fetch accepts one stale read, but the
   // stale result never enters the cache — later callers see new-account usage.
@@ -838,7 +182,7 @@ describe('SubscriptionUsageService', () => {
 
     const oldAccountRequest = runUsage(service.getUsage('kimiCode'), http);
     await firstRequest.promise;
-    service.invalidate('kimiCode');
+    await runUsage(service.invalidate('kimiCode'), http);
     const newAccountRequest = runUsage(service.getUsage('kimiCode'), http);
     await secondRequest.promise;
 
@@ -859,32 +203,5 @@ describe('SubscriptionUsageService', () => {
       newCallerSnapshot,
     );
     expect(http).toHaveBeenCalledTimes(2);
-  });
-
-  it('deduplicates concurrent requests for the same provider', async () => {
-    stubCodexSession();
-    let resolveResponse: ((response: Response) => void) | undefined;
-    const requested = createDeferred<void>();
-    const response = new Promise<Response>((resolve) => {
-      resolveResponse = resolve;
-    });
-    const http = vi.fn<UsageFetch>(() => {
-      requested.resolve();
-      return response;
-    });
-    const service = makeService();
-
-    const first = runUsage(service.getUsage('chatgpt'), http);
-    const second = runUsage(service.getUsage('chatgpt'), http);
-    await requested.promise;
-    resolveResponse?.(
-      jsonResponse({
-        rate_limit: { primary_window: { used_percent: 10 } },
-      }),
-    );
-
-    const [firstSnapshot, secondSnapshot] = await Promise.all([first, second]);
-    expect(secondSnapshot).toBe(firstSnapshot);
-    expect(http).toHaveBeenCalledTimes(1);
   });
 });

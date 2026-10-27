@@ -107,9 +107,6 @@ export {
   type ToolPathResolution,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
-/** The `web` plugin's fetch tool, typed with what its call requires, for a
- *  host that calls it outside a run (the editor's Copilot tools). */
-export { WebFetchTool } from '@tools/web/WebFetchTool';
 // The memory tool's tree as a host reads and edits it outside a run, over
 // the session's storage view.
 export {

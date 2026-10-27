@@ -6,7 +6,7 @@ import CliRunHero from '../.vitepress/components/CliRunHero.vue';
 
 # First run
 
-With TeXRA installed, this walkthrough guides you through running your first agent—`polish`—on a `.tex` document. The process takes under five minutes and illustrates both the VS Code extension and the terminal CLI side by side.
+This walkthrough runs your first agent—`polish`—on a `.tex` file and shows how to inspect the resulting diff in VS Code or the terminal. It takes under five minutes.
 
 If you don't have TeXRA yet, read the [installation guide](./installation.md).
 
@@ -31,16 +31,6 @@ A credential is the one step no agent can do for you. Three ways in:
   ChatGPT sign-in section; in the terminal, run `texra auth chatgpt login`.
   Grok connects from the same place; Kimi Code and the GLM Coding Plan take
   a key under **Settings → Models → API keys**.
-- **Use GitHub Copilot in VS Code**: compatible models through your Copilot
-  subscription. Open **Settings → Models → Subscriptions → Copilot in VS Code** and grant
-  access in the native VS Code prompt. No provider API key is needed. This
-  source is unavailable in the terminal and desktop applications.
-
-## What you'll do
-
-1.  Get a sample `.tex` file.
-2.  Run the `polish` agent with one instruction.
-3.  Read the diff.
 
 ## Get a sample file
 

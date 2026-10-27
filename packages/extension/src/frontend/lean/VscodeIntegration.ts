@@ -15,6 +15,8 @@ import { Cause, Effect, Fiber, Result, Schema } from 'effect';
 
 import { withLogChannel, isStrictlyWithin } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import { withCancellationToken } from '@frontend/hosts/VscodeUiHost';
+import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
@@ -180,7 +182,11 @@ function createLeanFileUri(absolutePath: string): LeanFileUri {
  */
 interface LeanClient {
   isRunning(): boolean;
-  sendRequest(method: string, params: unknown): Promise<unknown>;
+  sendRequest(
+    method: string,
+    params: unknown,
+    token: vscode.CancellationToken,
+  ): Promise<unknown>;
 }
 
 interface LeanClientProvider {
@@ -235,17 +241,17 @@ function getDiagnostics(absolutePath: string): LeanDiagnostic[] {
 function executeLeanCommand(
   commandId: string,
 ): Effect.Effect<void, VscodeCommandFailed> {
-  return Effect.tryPromise({
-    try: async () => {
-      await vscode.commands.executeCommand(commandId);
-    },
-    catch: (cause) =>
-      new VscodeCommandFailed({
-        message: `VS Code command "${commandId}" failed: ${toErrorMessage(cause)}`,
-        commandId,
-        cause,
-      }),
-  });
+  return executeVscodeCommand(commandId).pipe(
+    Effect.asVoid,
+    Effect.mapError(
+      (cause) =>
+        new VscodeCommandFailed({
+          message: `VS Code command "${commandId}" failed: ${cause.message}`,
+          commandId,
+          cause,
+        }),
+    ),
+  );
 }
 
 function executeFileCommand(
@@ -390,15 +396,16 @@ function sendPositionRequest<T>(
       textDocument: { uri: leanUri.toString() },
       position: { line, character: column },
     };
-    return yield* Effect.tryPromise({
-      try: () => client.sendRequest(method, params),
-      catch: (cause) =>
+    // An interrupted call cancels the request at the server.
+    return yield* withCancellationToken(
+      (token) => client.sendRequest(method, params, token),
+      (cause) =>
         new LspRequestFailed({
           method,
           message: `LSP request ${method} failed: ${toErrorMessage(cause)}`,
           cause,
         }),
-    }).pipe(
+    ).pipe(
       Effect.map((result) => ({ data: result as T })),
       Effect.catchTag('LspRequestFailed', (failure) =>
         Effect.succeed({ data: null, error: failure.message }),

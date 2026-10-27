@@ -74,10 +74,6 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
    *
    * `requestOpenFile` and `requestEnsureProgressView` have no presentation of
    * their own in either mode.
-   * `RUNTIME_PRESENTATION_NDJSON_CASES` in
-   * `src/test-kernel/cli/RunProgressRenderer.vitest.ts` pins the exact record
-   * set each event may emit in NDJSON mode.
-   *
    * `runProgress?.preserve()` is inert in NDJSON mode: production never builds
    * a renderer there (`shouldRenderRunProgress`), and where a test context
    * does, `preserve()` no-ops behind its own `ansi && liveLine` guard.

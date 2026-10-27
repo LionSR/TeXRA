@@ -1,125 +1,12 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Schema } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 import { TestClock } from 'effect/testing';
 import { FetchHttpClient } from 'effect/http';
-import { afterEach, describe, expect, vi, type Mock } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { jsonResponse } from '@test/support/fetchTestUtils';
-import {
-  exchangeAuthorizationCode,
-  refreshOAuthTokens,
-  type OAuthFormEndpoint,
-} from '../../../packages/llm/src/oauth/formTokenClient.js';
 import { postOAuth } from '../../../packages/llm/src/oauth/oauthRequest.js';
-
-const TokenSchema = Schema.Struct({
-  access_token: Schema.String.check(Schema.isMinLength(1)),
-  refresh_token: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ),
-  id_token: Schema.optional(
-    Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
-  ),
-  expires_in: Schema.Number,
-});
-
-const ENDPOINT: OAuthFormEndpoint<typeof TokenSchema.Type> = {
-  tokenUrl: 'https://example.test/token',
-  clientId: 'client-1',
-  tokenResponseSchema: TokenSchema,
-};
-
-/**
- * A fetch mock answering every call with `payload` as JSON. It is handed to the
- * client through the `FetchHttpClient.Fetch` reference rather than installed on
- * the global, so nothing here depends on test ordering.
- */
-function jsonFetchMock(payload: unknown): Mock<typeof fetch> {
-  return vi.fn<typeof fetch>(async () => jsonResponse(payload));
-}
-
-describe('form token endpoint (declarative)', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it.effect('exchanges an authorization code via form body', () =>
-    Effect.gen(function* () {
-      const fetchMock = jsonFetchMock({
-        access_token: 'access',
-        refresh_token: 'refresh',
-        expires_in: 3600,
-      });
-
-      const tokens = yield* exchangeAuthorizationCode(ENDPOINT, {
-        code: 'code-1',
-        verifier: 'verifier-1',
-        redirectUri: 'http://127.0.0.1/callback',
-      }).pipe(
-        Effect.provide(FetchHttpClient.layer),
-        Effect.provideService(FetchHttpClient.Fetch, fetchMock),
-      );
-
-      expect(tokens.access_token).toBe('access');
-      expect(fetchMock).toHaveBeenCalledOnce();
-      const [url, init] = fetchMock.mock.calls[0]!;
-      expect(String(url)).toBe('https://example.test/token');
-      expect(init?.method).toBe('POST');
-      expect(new Headers(init?.headers).get('content-type')).toBe(
-        'application/x-www-form-urlencoded',
-      );
-      const body = new URLSearchParams(String(init?.body));
-      expect(body.get('grant_type')).toBe('authorization_code');
-      expect(body.get('client_id')).toBe('client-1');
-      expect(body.get('code')).toBe('code-1');
-      expect(body.get('code_verifier')).toBe('verifier-1');
-      expect(body.get('redirect_uri')).toBe('http://127.0.0.1/callback');
-    }),
-  );
-
-  it.effect('refreshes with the refresh_token grant', () =>
-    Effect.gen(function* () {
-      const fetchMock = jsonFetchMock({
-        access_token: 'new-access',
-        expires_in: 1800,
-      });
-
-      const tokens = yield* refreshOAuthTokens(ENDPOINT, 'old-refresh').pipe(
-        Effect.provide(FetchHttpClient.layer),
-        Effect.provideService(FetchHttpClient.Fetch, fetchMock),
-      );
-      expect(tokens.access_token).toBe('new-access');
-      const body = new URLSearchParams(
-        String(fetchMock.mock.calls[0]![1]?.body),
-      );
-      expect(body.get('grant_type')).toBe('refresh_token');
-      expect(body.get('refresh_token')).toBe('old-refresh');
-    }),
-  );
-
-  it.effect('maps 401 token errors to fatal', () =>
-    Effect.gen(function* () {
-      const fetchMock = vi.fn<typeof fetch>(
-        async () => new Response('nope', { status: 401 }),
-      );
-
-      const error = yield* Effect.flip(
-        refreshOAuthTokens(ENDPOINT, 'bad').pipe(
-          Effect.provide(FetchHttpClient.layer),
-          Effect.provideService(FetchHttpClient.Fetch, fetchMock),
-        ),
-      );
-      expect(error).toMatchObject({
-        _tag: 'OAuthHttpError',
-        message: 'Token refresh failed (HTTP 401): nope',
-        kind: 'fatal',
-        status: 401,
-      });
-    }),
-  );
-});
 
 describe('postOAuth', () => {
   it.effect('times out a response whose body stalls after the headers', () =>

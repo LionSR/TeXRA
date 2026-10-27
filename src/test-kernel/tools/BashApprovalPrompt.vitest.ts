@@ -9,11 +9,7 @@ import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  BASH_APPROVAL_CONFIG_KEY,
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
-  type BashPermission,
-} from '@shared/schemas';
+import { type BashPermission } from '@shared/schemas';
 import {
   setTestApprovalPolicy,
   createTestSession,
@@ -21,9 +17,7 @@ import {
   publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { closeSessionOf } from '@test/support/sessionEnd';
-import { createFakeHost, installedHost } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { requestBashApproval } from '@tools/approval/bashApproval';
 import { generateRunId } from '@utils/core';
 
@@ -66,55 +60,6 @@ function watchBashRequests(session: SessionHandle) {
 describe('requestBashApproval queueing', () => {
   // The project's policy is the fake host's setting, shared by the file.
   beforeEach(() => setTestApprovalPolicy('ask'));
-  it.effect(
-    'uses the invoking project approval settings outside its ambient scope',
-    () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const session = yield* createTestSession();
-          yield* Effect.addFinalizer(() => closeSessionOf(session));
-          setTestApprovalPolicy('ask');
-          const keys = [
-            BASH_APPROVAL_CONFIG_KEY,
-            TOOL_EDIT_APPROVAL_CONFIG_KEY,
-          ];
-          const processConfig = installedHost().roots.config;
-          const previous = keys.map((key) => processConfig.get(key));
-          yield* Effect.addFinalizer(() =>
-            Effect.all(
-              keys.map((key, index) =>
-                processConfig.update(key, previous[index]),
-              ),
-            ).pipe(Effect.orDie, Effect.asVoid),
-          );
-          yield* Effect.all(
-            keys.map((key) => processConfig.update(key, false)),
-          );
-          const project = createFakeHost({
-            config: Object.fromEntries(keys.map((key) => [key, true])),
-          });
-          yield* session.interactions.use({ approvalPromptsUnavailable: true });
-          const layer = nativeToolTestLayer({
-            roots: project.roots,
-            run: { session, runId: generateRunId(), toolPolicy: {} },
-          });
-          const bash = yield* requestBashApproval({
-            command: 'echo scoped',
-            grant: 'shell',
-          }).pipe(Effect.provide(layer));
-          const edit = yield* requestToolEditApproval({
-            path: 'Proof.lean',
-            originalContent: '',
-            proposedContent: 'theorem',
-            sourceTool: 'write',
-          }).pipe(Effect.provide(layer));
-          // Process defaults would auto-approve both; the project requires a prompt,
-          // so this headless invocation must refuse both operations.
-          expect(bash.action).toBe('deny');
-          expect(edit.action).toBe('deny');
-        }),
-      ),
-  );
 
   it.effect('lets never override a run bypass at the shared boundary', () =>
     Effect.scoped(

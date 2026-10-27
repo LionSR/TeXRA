@@ -362,8 +362,8 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
      *  holds, over the run's own output). A background
      *  command's record is its own result, and an ended recipe's run (whose
      *  value is its result) needs none. Null otherwise with no record. */
-    readResult: (): Effect.Effect<RunResult | null, DatabaseReadFailed> =>
-      Effect.gen(function* () {
+    readResult: Effect.fn('runRecords.readResult')(
+      function* (): Effect.fn.Return<RunResult | null, DatabaseReadFailed> {
         const rows = yield* runRows;
         const meta = latestOfType(rows, id, 'run.result')?.result ?? null;
         if (meta?.producer === 'backgroundBash') return meta;
@@ -376,6 +376,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
           ...(end ?? {}),
           output: { ...(end?.output ?? emptyRunEndOutput()), ...meta.output },
         };
-      }),
+      },
+    ),
   };
 }

@@ -48,6 +48,9 @@ interface BaseTextInputProps {
   readonly maxDisplayRows?: number;
   readonly displayWidth?: number;
   readonly onSubmit: (value: string) => void;
+  /** Shift-Tab submits through this instead of `onSubmit` (the chat's
+   *  composer: a message held until the agent's turn ends). */
+  readonly onSubmitHeld?: (value: string) => void;
   readonly onInputChunkSubmit?: (value: string) => void;
   readonly onChange: (value: string) => void;
   /** ↑ pressed while the caret is on the first line of the draft (where ↑ has
@@ -295,6 +298,13 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       }
       if (isPlainReturnInput(input, key)) {
         submitAfterImagePastes(onSubmit, latestStateRef.current.value);
+        return;
+      }
+      if (key.tab && key.shift && props.onSubmitHeld) {
+        submitAfterImagePastes(
+          props.onSubmitHeld,
+          latestStateRef.current.value,
+        );
         return;
       }
       if (key.upArrow || key.downArrow) {

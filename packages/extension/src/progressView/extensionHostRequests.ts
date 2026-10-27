@@ -12,7 +12,7 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Effect, FileSystem, type Scope } from 'effect';
+import { Effect, FiberHandle, FileSystem, Scope } from 'effect';
 
 import {
   AgentDirectories,
@@ -24,7 +24,6 @@ import {
   type HostRequestFailure,
   type RequestRefusal,
   PlatformSecrets,
-  LanguageModel,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
@@ -54,7 +53,14 @@ import {
   createFileSelectionPickers,
   getCurrentFile,
 } from '@commands/files/fileSelectionCommands';
-import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { setApiKey } from '@commands/api/apiKeyCommands';
+import { cloneOverleafProject } from '@commands/git/gitCommands';
+import { downloadArXivSource } from '@commands/latex/arXivCommands';
+import { launchSetupAssistant } from '@commands/setup/setupAssistantCommand';
+import { createSampleProject } from '@commands/system/sampleProjectCommands';
+import { openGettingStarted } from '@commands/system/walkthroughCommands';
+import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
+import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
@@ -69,6 +75,7 @@ import {
 } from '@texra/controllers/onboarding/onboardingFunnel';
 import { isMultipleDocumentFileType } from '@texra/shared/launcher/fileTypes';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type {
   GettingStartedAction,
   HostRequest,
@@ -117,13 +124,6 @@ import { getToolDocsPage } from '@texra/utils/system/toolChecks';
 
 const CHANNEL = 'ExtensionHostRequests';
 
-/** The VS Code command behind each getting-started action. */
-const GETTING_STARTED_COMMANDS = {
-  createSampleProject: EXTENSION_COMMANDS.CREATE_SAMPLE_PROJECT,
-  cloneOverleaf: EXTENSION_COMMANDS.CLONE_OVERLEAF_PROJECT,
-  downloadArxiv: EXTENSION_COMMANDS.DOWNLOAD_ARXIV_SOURCE,
-} satisfies Record<GettingStartedAction, string>;
-
 interface ExtensionHostRequestsOptions {
   /** The run records and failure surface the run actions read, from the
    *  window's own session handle or from the service. */
@@ -133,6 +133,8 @@ interface ExtensionHostRequestsOptions {
   /** Where this window's runs run: the session here, or the service's. */
   readonly runSession: Session;
   readonly extensionPath: string;
+  /** The extension's id, which names its getting-started walkthrough. */
+  readonly extensionId: string;
   readonly globalState: StateStore;
   /** The process secret store the extension root holds (model availability). */
   readonly secrets: PlatformSecrets;
@@ -142,8 +144,18 @@ interface ExtensionHostRequestsOptions {
   /** The process runtime the extension root holds; every request arm that
    *  settles an Effect runs it here. */
   readonly runtime: ProcessRuntime;
-  /** The view's scope: what a run's end does lives as long as the view. */
+  /** The view's scope: what a run's end does lives as long as the view,
+   *  as do a comparison's refresh and a PDF viewer's delayed open. */
   readonly scope: Scope.Scope;
+  /** The settings view at a target (`texra.showDashboard`). */
+  openSettings(
+    target: SettingsTarget | undefined,
+  ): Effect.Effect<void, Error, ProcessServices>;
+  /** Bring the "Connect a model" card into view (the setup assistant's
+   *  answer when no credential is usable). */
+  showConnectModel(): Effect.Effect<void, Error, ProcessServices>;
+  /** Reveal the task list (`texra.showProgressView`). */
+  showProgressView(): Effect.Effect<void, Error>;
   /** A host-initiated change to the surface (PRD 8.5). */
   surfaceAction(action: SurfaceActionMessage['action']): void;
   /** Select a run this window just launched (the run actions' `launched`). */
@@ -156,8 +168,7 @@ interface ExtensionHostRequestsOptions {
   readonly refreshApiKeyStatus: Effect.Effect<void, Error, ProcessServices>;
   refreshOnboardingFunnel(): Effect.Effect<
     void,
-    StateReadFailed | StateWriteFailed,
-    LanguageModel
+    StateReadFailed | StateWriteFailed
   >;
 }
 
@@ -185,20 +196,8 @@ const logCommandFailure =
     return self.pipe(Effect.tapError(log), Effect.tapDefect(log));
   };
 
-/** A VS Code command lifted once through `fromHost`, named by the command,
- *  with its failure logged before it travels on. */
-function runCommand<T = void>(
-  command: string,
-  ...args: unknown[]
-): Effect.Effect<T | undefined, HostCallFailed | RequestRefusal> {
-  return fromHost(command, () =>
-    vscode.commands.executeCommand<T | undefined>(command, ...args),
-  ).pipe(logCommandFailure(command));
-}
-
-/** One of this extension's own command handlers, run in the arm's fiber
- *  rather than through `vscode.commands.executeCommand`: a typed failure or a
- *  defect is named and logged as a command's is. */
+/** One of this extension's own command handlers, or a VS Code command, run
+ *  in the arm's fiber: a typed failure or a defect is named and logged. */
 function runHandler<A, E, R>(
   command: string,
   handler: Effect.Effect<A, E, R>,
@@ -209,10 +208,12 @@ function runHandler<A, E, R>(
   );
 }
 
-/** A VS Code command as a verb of the shared binding table: lifted once,
- *  named, and with the command's own result discarded. */
+/** A VS Code command as a verb of the shared binding table: named, and
+ *  with the command's own result discarded. */
 function commandVerb(command: string, ...args: unknown[]) {
-  return Effect.asVoid(runCommand(command, ...args));
+  return Effect.asVoid(
+    runHandler(command, executeVscodeCommand(command, ...args)),
+  );
 }
 
 /** This window's `host.request` handler over its ports. */
@@ -251,10 +252,10 @@ export function createExtensionHostRequests(
         ),
       loadModelOptions: () =>
         withProcessServices(runtime, loadModelOptions({ ...roots, secrets })),
-      // The set-key quick pick is a VS Code command: it either runs or
-      // faults, so its rejection is the one failure, as `ApiKeyPromptFailed`.
+      // The set-key prompt either runs or faults, so its failure is the one
+      // failure, as `ApiKeyPromptFailed`.
       promptForApiKey: (provider) =>
-        runCommand(EXTENSION_COMMANDS.SET_API_KEY, provider).pipe(
+        runHandler('setApiKey', setApiKey(roots, secrets, provider)).pipe(
           Effect.mapError(
             (failure) =>
               new ApiKeyPromptFailed({
@@ -270,6 +271,15 @@ export function createExtensionHostRequests(
   );
 
   const { runOutputs } = runActions;
+  // The window's one comparison refresh: a newer comparison replaces it,
+  // and the view's scope ends it.
+  const diffRefresh = runtime.runSync(
+    FiberHandle.make().pipe(Scope.provide(options.scope)),
+  );
+  /** A file action that schedules a PDF viewer opens it in the view's
+   *  scope, so a close of the view cancels a delayed open. */
+  const inViewScope = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    Effect.provideService(effect, Scope.Scope, options.scope);
   const at = (file: string) => pathToLocationIn(roots.workspace, file);
   // A file-action port's handler; the process services come from the runtime.
   const runFileAction = <A, E>(
@@ -283,16 +293,22 @@ export function createExtensionHostRequests(
     host: {
       // Each command is named, so a failure carries a tag, never a rejection.
       compareFiles: (base, edited) =>
-        runFileAction('compare', handleCompare(at(base), at(edited))),
+        runFileAction(
+          'compare',
+          handleCompare(at(base), at(edited), diffRefresh),
+        ),
       acceptEditedFile: (base, edited, copyMeta) =>
         runFileAction(
           'acceptEdited',
           handleAcceptEdited(at(base), at(edited), copyMeta),
         ),
       latexdiffFile: (base, edited) =>
-        runFileAction('latexdiff', handleLatexdiff(roots, base, edited)),
+        runFileAction(
+          'latexdiff',
+          inViewScope(handleLatexdiff(roots, base, edited)),
+        ),
       openDirectory: (directory) =>
-        runCommand('revealFileInOS', vscode.Uri.file(directory)),
+        commandVerb('revealFileInOS', vscode.Uri.file(directory)),
       // An accepted-edit backup names an absolute workspace path the
       // controller already resolved, so this reads through the process
       // filesystem rather than a rooted view that would refuse a path the
@@ -332,10 +348,10 @@ export function createExtensionHostRequests(
       }).pipe(Effect.asVoid);
     }
     if (kind === 'pdf') {
-      return Effect.tryPromise({
-        try: () => vscode.commands.executeCommand('vscode.open', uri),
-        catch: failed,
-      }).pipe(Effect.asVoid);
+      return executeVscodeCommand('vscode.open', uri).pipe(
+        Effect.asVoid,
+        Effect.mapError(failed),
+      );
     }
     return openFileInEditor(filePath).pipe(
       Effect.asVoid,
@@ -539,6 +555,18 @@ export function createExtensionHostRequests(
     { concurrency: 'unbounded', discard: true },
   );
 
+  /** What each getting-started action runs. */
+  const gettingStarted = (action: GettingStartedAction) => {
+    switch (action) {
+      case 'createSampleProject':
+        return createSampleProject(options.extensionPath);
+      case 'cloneOverleaf':
+        return cloneOverleafProject(secrets);
+      case 'downloadArxiv':
+        return downloadArXivSource(roots);
+    }
+  };
+
   /** This host's half of the shared body's binding table: every verb mapped
    *  onto a VS Code command, an editor API, or the sidebar. */
   const hostBindings: SharedHostRequestBindings = {
@@ -549,7 +577,10 @@ export function createExtensionHostRequests(
     showInfo: (message) => vscodeUi.showInfoMessage(message),
     admitLaunch,
     runWorkflowDiff: (diff) =>
-      runHandler('runLatexdiff', handleRunLatexdiff(roots, runSession, diff)),
+      runHandler(
+        'runLatexdiff',
+        inViewScope(handleRunLatexdiff(roots, runSession, diff)),
+      ),
     presentWorkflowFileOperation: (operation, files) =>
       runHandler(
         operation,
@@ -558,12 +589,15 @@ export function createExtensionHostRequests(
     latexdiffAgainstCommit: (action, baseFile, commit) =>
       runHandler(
         action,
-        handleLatexdiffCommitAction(roots, action, baseFile, commit),
+        inViewScope(
+          handleLatexdiffCommitAction(roots, action, baseFile, commit),
+        ),
       ),
-    openSettings: (target) => commandVerb('texra.showDashboard', target),
+    openSettings: (target) =>
+      runHandler('openSettings', options.openSettings(target)),
     // SecretManager has no key-changed event, so the set-key flow's
     // completion is the explicit refresh point for the funnel.
-    setApiKey: commandVerb('texra.setApiKey').pipe(
+    setApiKey: runHandler('setApiKey', setApiKey(roots, secrets)).pipe(
       Effect.andThen(refreshOnboardingFunnel),
     ),
     openApiKeyGuide: Effect.asVoid(
@@ -579,13 +613,13 @@ export function createExtensionHostRequests(
       const dir = yield* (yield* AgentDirectories).custom();
       if (dir) yield* commandVerb('revealFileInOS', vscode.Uri.file(dir));
     }),
-    openAgentDocs: commandVerb('texra.openDoc', 'custom-agents'),
+    openAgentDocs: runHandler('openDoc', openGuidePage('custom-agents')),
     recheckDependencies: Effect.gen(function* () {
       yield* checkCoreDependencies(true);
       yield* snapshot.refreshHostBanners;
     }),
-    openInstallGuide: (tool) =>
-      Effect.gen(function* () {
+    openInstallGuide: Effect.fn('extensionHostRequests.openInstallGuide')(
+      function* (tool) {
         const page = getToolDocsPage(tool);
         if (!page) {
           return yield* Effect.fail(
@@ -594,8 +628,9 @@ export function createExtensionHostRequests(
             }),
           );
         }
-        yield* commandVerb('texra.openDoc', page);
-      }),
+        yield* runHandler('openDoc', openGuidePage(page));
+      },
+    ),
     onboarding: {
       signInChatGpt: Effect.gen(function* () {
         yield* signInWithSubscription(roots, CHANNEL, 'chatgpt');
@@ -606,12 +641,25 @@ export function createExtensionHostRequests(
         yield* refreshOnboardingFunnel;
       }),
       runSetup: Effect.gen(function* () {
-        yield* commandVerb(EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT);
+        yield* runHandler(
+          'runSetupAssistant',
+          launchSetupAssistant(
+            secrets,
+            roots,
+            runSession,
+            (runId) => Effect.sync(() => options.presentLaunchedRun(runId)),
+            options.showConnectModel(),
+            options.showProgressView(),
+          ),
+        );
         yield* refreshOnboardingFunnel;
       }),
       // The provider's `firstRunDone` follower refreshes the funnel.
       skipSetup: setFirstRunDone(globalState, true),
-      openGettingStarted: commandVerb(EXTENSION_COMMANDS.OPEN_GETTING_STARTED),
+      openGettingStarted: runHandler(
+        'openGettingStarted',
+        openGettingStarted(options.extensionId),
+      ),
     },
   };
 
@@ -630,10 +678,10 @@ export function createExtensionHostRequests(
   /**
    * One program per request. Every arm this host performs its own way is
    * here; the rest reach the shared body above. The capabilities that still
-   * answer with a promise - the VS Code commands `runCommand` wraps, the
-   * editor APIs, the Promise-faced controller ports - are lifted once
-   * through `fromHost`, so no arm re-enters the runtime between here and the
-   * bridge that runs this program.
+   * answer with a promise - VS Code commands, the editor APIs - are lifted
+   * once (`executeVscodeCommand`, `fromHost`), and this extension's own
+   * commands run as the programs behind them, so no arm re-enters the
+   * runtime between here and the bridge that runs this program.
    */
   function dispatch(
     request: HostRequest,
@@ -677,7 +725,7 @@ export function createExtensionHostRequests(
           return outcome;
         }
         case 'gettingStarted':
-          yield* commandVerb(GETTING_STARTED_COMMANDS[request.action]);
+          yield* runHandler(request.action, gettingStarted(request.action));
           return done;
         case 'workspaceFile':
           return yield* Effect.fail(

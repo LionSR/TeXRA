@@ -41,6 +41,23 @@ All notable changes to this project will be documented in this file.
   offered; one an agent or setting still names fails with a message saying
   so. Conversations saved by an earlier build show as written by that build
   and cannot be resumed by this one.
+- **GitHub Copilot is no longer supported.** The VS Code extension no longer
+  serves models through a Copilot subscription: the "Copilot in VS Code"
+  section of **Settings → Models → Subscriptions**, its **Grant access** and
+  **Use Copilot** controls, and the "Via Copilot" picker badge are gone, and a
+  model you had set to use Copilot now takes its own provider key or
+  subscription. The Copilot Chat Tools plugin is gone too, so
+  `#texra_arxiv_search` and `#texra_web_fetch` no longer appear in Copilot
+  Chat. The one model only Copilot served (`copilot/copilot-gpt-4o`) is no
+  longer offered. Conversations saved by an earlier build show as written by
+  that build and cannot be resumed by this one.
+- **SDK: editor-supplied models are gone.** A host can no longer hand
+  `@texra-ai/harness` a model from its editor: the `LanguageModel` service,
+  `UNAVAILABLE_LANGUAGE_MODEL_PORT`, `CopilotRoutes`, the `languageModel`
+  field of the process and session options, and the `ownKeyFallback` launch
+  option are removed, as are `ToolCatalog.current` and `WebFetchTool` in
+  `@texra-ai/harness/plugins`. `@texra-ai/llm` serves only its HTTP providers:
+  a turn, its result and a model error no longer carry an editor variant.
 - **Attachments no longer freeze TeXRA.** A workspace whose conversations
   carried large attachments (recordings, PDFs, images) made every TeXRA
   window and terminal flip between "The TeXRA service is offline" and
@@ -716,6 +733,9 @@ history`, a resume and a follow-up say it was "written by an earlier
   after its one turn is refused with that reason instead of queuing unread,
   and a run written by an earlier build refuses a resume as such instead of
   failing it.
+- **Shift-Tab in the terminal chat holds a message for the end of the
+  turn.** Enter still sends a message the working agent reads at its next
+  step; Shift-Tab sends one it reads only once its current turn ends.
 - **Check an agent's launch in the New task form, and run a task again
   with changes.** An agent's proposal card has **Edit** (`e`): it opens the
   New task form filled with what the agent would start, its agent, model,

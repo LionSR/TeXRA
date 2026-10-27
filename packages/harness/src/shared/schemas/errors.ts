@@ -15,9 +15,6 @@ const ExhaustionReasonSchema = Schema.Literals([
    *  Remark: permanently flipping it off is not always ideal — when the
    *  quota later resets, the user may forget to turn it back on. */
   'chatgpt-subscription',
-  /** A GitHub Copilot request was rejected because the subscription quota is
-   *  exhausted. */
-  'copilot-subscription',
   /** A Kimi Code (Moonshot coding-subscription) request was rejected because
    *  the membership's usage quota is exhausted; accepting the switch turns off
    *  "Kimi Code subscription" so dual-backend Kimi models re-route through the

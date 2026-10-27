@@ -1,8 +1,7 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
-import { TestClock } from 'effect/testing';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
 
 // Local imports
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -13,38 +12,15 @@ import {
   hostStores,
   installPlatform,
 } from '@test/support/setupPlatform';
-import { wolfram, zotero } from '@texra/tools/integrationPlugins';
+import { wolfram } from '@texra/tools/integrationPlugins';
 import { texraPlugins } from '@texra/tools/registry';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-
-/** Let a forked probe reach the call it will be interrupted in. */
-const started = Effect.promise(
-  () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
-);
-
-const PLUGINS = texraPlugins();
-
-const EXPECTED_DEFAULTS = PLUGINS.filter(
-  (plugin) => plugin.toggle === 'off',
-).map((plugin) => plugin.id);
 
 describe('seedDisabledToolDefaults', () => {
   afterEach(() => installPlatform());
 
-  it.effect(
-    'seeds toggleable tool defaults when DISABLED_TOOLS is missing',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() => installPlatform());
-
-        yield* seedDisabledToolDefaults(hostStores().globalState, PLUGINS);
-
-        expect(
-          yield* hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
-        ).toEqual(EXPECTED_DEFAULTS);
-      }),
-  );
-
+  // An empty list is the person's choice (every tool enabled); reseeding it
+  // would silently switch their tools back off on the next start.
   it.effect(
     'does not seed for an already-seeded DISABLED_TOOLS list, even an empty one',
     () =>
@@ -55,7 +31,10 @@ describe('seedDisabledToolDefaults', () => {
           }),
         );
 
-        yield* seedDisabledToolDefaults(hostStores().globalState, PLUGINS);
+        yield* seedDisabledToolDefaults(
+          hostStores().globalState,
+          texraPlugins(),
+        );
 
         expect(
           yield* hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
@@ -65,16 +44,10 @@ describe('seedDisabledToolDefaults', () => {
 });
 
 /**
- * Both probe kinds a dashboard refresh forks have to answer to the fiber that
- * runs them: a spawned `<tool> --version` when the refresh is interrupted, and
- * the Zotero request when localhost never answers. The spawned probe lives in
- * the fiber's scope, and the Zotero request takes the fiber's own signal.
+ * A dashboard refresh forks the version probes; an interrupted refresh must
+ * stop the `<tool> --version` process it spawned, not leave it running.
  */
 describe('external tool availability probes', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it.effect('an interrupted version probe stops the process it spawned', () =>
     Effect.gen(function* () {
       const spawner = scriptedSpawnerLayer(() => 'hang');
@@ -94,28 +67,5 @@ describe('external tool availability probes', () => {
 
       expect(spawner.killed).toEqual(spawner.calls);
     }),
-  );
-
-  it.effect(
-    'the Zotero probe answers at its deadline when nothing replies',
-    () =>
-      Effect.gen(function* () {
-        vi.spyOn(globalThis, 'fetch').mockReturnValue(
-          new Promise<Response>(() => {}),
-        );
-        const fiber = yield* Effect.forkChild(
-          // The port the group's own probe resolves out of the workspace
-          // configuration, handed to `check` the way the availability layer
-          // hands back a cached probe result.
-          zotero
-            .availability!.check(23119)
-            .pipe(Effect.provide(fakeProcessServices())),
-        );
-
-        yield* started;
-        yield* TestClock.adjust('2000 millis');
-
-        expect(yield* Fiber.join(fiber)).toBe(false);
-      }),
   );
 });

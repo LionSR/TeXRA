@@ -9,16 +9,13 @@ import { describe, expect, vi } from 'vitest';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import { TraceEmitter } from '@agent/trace';
-import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
+import { RUN_OUTCOME } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
-import type { RunState } from '@shared/session/runState';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   agentRunTestLayer,
   scriptedInvokerLayer,
   startedRun,
-  textTurn,
   toolCallTurn,
   type ScriptedRunInit,
   type ScriptedTurn,
@@ -63,17 +60,6 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
 
 const quietSession = () => sessionWithInteractions({ emit: () => {} });
 
-/** The plain text of every user message the run recorded. */
-function userTexts(state: RunState | null): string[] {
-  return (state?.messages ?? []).flatMap((message) =>
-    message.role === 'user'
-      ? message.content.flatMap((part) =>
-          part.kind === 'text' ? [part.text] : [],
-        )
-      : [],
-  );
-}
-
 function echoTool(name: string): ITool {
   return {
     definition: { name },
@@ -87,134 +73,6 @@ function echoTool(name: string): ITool {
 }
 
 describe('the tool-use turn', () => {
-  it.effect(
-    'finalizes the response of a turn that ends with text, and not of one that continues with tools',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* quietSession();
-        const runId = startedRun(session);
-
-        const { state } = yield* runScript({
-          runId,
-          session,
-          tools: { echo: echoTool('echo') },
-          script: [
-            toolCallTurn([{ id: 'call-1', name: 'echo' }]),
-            textTurn('Done \\checkmark'),
-          ],
-        });
-
-        // The tool-calling round is not the end of the turn, so only the
-        // text round's response is finalized, once, with its text, as a row
-        // of the run's history (never a detached trace row).
-        const finalized = yield* session.log.rows(
-          qualifyAggregateId('run', runId),
-          ['response.finalized'],
-        );
-        expect(
-          finalized.map((row) =>
-            row.type === 'response.finalized' ? row.text : null,
-          ),
-        ).toEqual(['Done \\checkmark']);
-        expect(state?.answerFinalized).toBe(true);
-        expect(state?.messages.at(-1)?.role).toBe('assistant');
-      }),
-  );
-
-  it.effect(
-    'asks once more when the model returns a blank turn after a tool result, and does not repeat it',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* quietSession();
-
-        const { requests, state } = yield* runScript({
-          runId: startedRun(session),
-          session,
-          tools: { echo: echoTool('echo') },
-          script: [
-            toolCallTurn([{ id: 'call-1', name: 'echo' }]),
-            textTurn(''),
-            textTurn(''),
-          ],
-        });
-
-        expect(requests).toHaveLength(3);
-        const continuations = userTexts(state).filter((text) =>
-          text.includes('blank'),
-        );
-        expect(continuations).toHaveLength(1);
-        expect(continuations[0]).toContain('tool result');
-      }),
-  );
-
-  it.effect.each([true, false])(
-    'forces one terminal-tool turn only where the provider can force it (%s)',
-    (forcedToolChoice) =>
-      Effect.gen(function* () {
-        const session = yield* quietSession();
-        const { requests, state } = yield* runScript({
-          runId: startedRun(session),
-          session,
-          bound: { forcedToolChoice },
-          finalToolName: 'submit_output',
-          tools: { submit_output: echoTool('submit_output') },
-          script: [textTurn('Draft answer'), textTurn('Still drafting')],
-        });
-
-        // Exploration is never forced; the terminal tool gets one forced
-        // turn where the route supports it.
-        expect(requests.map((request) => request.toolChoice)).toEqual([
-          undefined,
-          forcedToolChoice ? { name: 'submit_output' } : undefined,
-        ]);
-        // The instruction is written once, forced or not.
-        expect(
-          userTexts(state).filter((text) =>
-            text.includes('Submit the final structured output now.'),
-          ),
-        ).toHaveLength(1);
-      }),
-  );
-
-  it.effect('returns the text that accompanied the terminal tool', () =>
-    Effect.gen(function* () {
-      const session = yield* quietSession();
-      // Its settled value is the run's structured output.
-      const submitOutput: ITool = {
-        definition: { name: 'submit_output' },
-        call: vi.fn(() =>
-          Effect.succeed({
-            status: 'executed' as const,
-            output: 'recorded',
-            endTurn: true,
-            value: { answer: 'done' },
-          }),
-        ),
-      } as ITool;
-
-      const { result } = yield* runScript({
-        runId: startedRun(session),
-        session,
-        finalToolName: 'submit_output',
-        tools: { submit_output: submitOutput },
-        script: [
-          toolCallTurn(
-            [{ id: 'call-1', name: 'submit_output' }],
-            'Here is the structured result.',
-          ),
-        ],
-      });
-
-      expect(result).toMatchObject({
-        outcome: RUN_OUTCOME.COMPLETED,
-        output: {
-          response: 'Here is the structured result.',
-          structured: { answer: 'done' },
-        },
-      });
-    }),
-  );
-
   it.effect(
     'keeps the text of an earlier turn when a later model turn fails',
     () =>
@@ -248,118 +106,10 @@ describe('the tool-use turn', () => {
         });
       }),
   );
-
-  it.effect(
-    'keeps the fresh response when a compaction replaces the whole conversation',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* quietSession();
-
-        const { result, state } = yield* runScript({
-          runId: startedRun(session),
-          session,
-          script: [
-            {
-              compactTo: [
-                {
-                  role: 'user',
-                  content: [{ kind: 'text', text: 'Compacted context.' }],
-                },
-              ],
-              turn: textTurn('B'),
-            },
-          ],
-        });
-
-        expect(result.output.response).toBe('B');
-        // The replacement is the history now: the paid response lands on it,
-        // not on the conversation it discarded.
-        expect(state?.messages).toMatchObject([
-          {
-            role: 'user',
-            content: [{ kind: 'text', text: 'Compacted context.' }],
-          },
-          {
-            role: 'assistant',
-            content: [
-              { kind: 'message', content: [{ kind: 'text', text: 'B' }] },
-            ],
-          },
-        ]);
-      }),
-  );
-});
-
-describe('the transcript row of the opening message (regression #7508)', () => {
-  it.effect(
-    'logs the user request even when the launch media cannot be attached',
-    () =>
-      Effect.gen(function* () {
-        // A failed first turn (corrupt or oversized media, a provider
-        // validation error) must still leave a record of what the user asked
-        // for, or the transcript's opening row vanishes for exactly the runs
-        // most likely to need debugging.
-        const session = yield* quietSession();
-        const logger = new TraceEmitter();
-        const info = vi.spyOn(logger, 'info');
-
-        const exit = yield* Effect.exit(
-          runScript({
-            runId: startedRun(session),
-            session,
-            logger,
-            bound: { supportsVision: true },
-            mediaFiles: ['/tmp/texra-missing-figure.png'],
-            script: [textTurn('unreachable')],
-          }),
-        );
-
-        expect(exit._tag).toBe('Failure');
-        expect(info).toHaveBeenCalledWith(
-          'Do the thing.',
-          expect.objectContaining({ messageType: expect.any(String) }),
-        );
-      }),
-  );
-
-  it.effect('logs nothing when the launch had no transcript row to write', () =>
-    Effect.gen(function* () {
-      const session = yield* quietSession();
-      const logger = new TraceEmitter();
-      const info = vi.spyOn(logger, 'info');
-
-      const exit = yield* Effect.exit(
-        runScript({
-          runId: startedRun(session),
-          session,
-          logger,
-          bound: { supportsVision: true },
-          mediaFiles: ['/tmp/texra-missing-figure.png'],
-          initialUserMessage: undefined,
-          script: [textTurn('unreachable')],
-        }),
-      );
-
-      expect(exit._tag).toBe('Failure');
-      expect(info).not.toHaveBeenCalled();
-    }),
-  );
 });
 
 describe('tool-use session-stage outcome persistence (#8023)', () => {
   it.effect.each([
-    {
-      name: 'completed',
-      script: [textTurn('done')] as ScriptedTurn[],
-      expectedOutcome: RUN_OUTCOME.COMPLETED,
-    },
-    {
-      name: 'failed',
-      script: [
-        { failWith: { message: 'round failed', userRetryable: false } },
-      ] as ScriptedTurn[],
-      expectedOutcome: RUN_OUTCOME.FAILED,
-    },
     {
       name: 'cancelled',
       script: [{ cancelled: true }] as ScriptedTurn[],

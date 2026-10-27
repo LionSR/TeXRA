@@ -1,0 +1,127 @@
+{
+  "semantics": "For each session row type (a durable arm of packages/harness/src/shared/schemas/sessionEvent.ts), the production files that read it, by comparing, switching on or listing the type literal, outside its reducers and the row vocabulary (REDUCERS and VOCABULARY in src/test-kernel/architecture/factOwnerRatchet.vitest.ts). Each such file decides the row's fact on its own. Shrink-only: a file not listed fails (read the state the reducer builds instead); a listed file that stopped reading fails until the list is rewritten with `npx vitest run src/test-kernel/architecture/factOwnerRatchet.vitest.ts -u`, which only drops entries. A type absent from the list has no reader outside its reducers.",
+  "readers": {
+    "approval.policy": [
+      "packages/harness/src/agent/runtime/runApprovalQueue.ts",
+      "packages/harness/src/agent/runtime/runRegistry.ts",
+      "packages/harness/src/shared/approvalBypassKind.ts"
+    ],
+    "child.park": [
+      "packages/harness/src/agent/runtime/runLaunchGuard.ts",
+      "packages/harness/src/controllers/session/sweepLeftoverRuns.ts",
+      "packages/harness/src/tools/delegation/childRun.ts"
+    ],
+    "child.turn": ["packages/harness/src/agent/storage/runRecords.ts"],
+    "context.blob": ["packages/harness/src/controllers/session/rowCodec.ts"],
+    "context.edit": [
+      "packages/harness/src/agent/runtime/RunHistory.ts",
+      "packages/harness/src/agent/runtime/storedTurn.ts"
+    ],
+    "followup.closed": ["packages/harness/src/agent/followUp/Inbox.ts"],
+    "followup.queued": [
+      "packages/harness/src/agent/runtime/runLaunchGuard.ts",
+      "packages/harness/src/shared/session/runFacts.ts"
+    ],
+    "model.message": [
+      "packages/harness/src/agent/runtime/RunHistory.ts",
+      "packages/harness/src/agent/runtime/storedTurn.ts",
+      "packages/harness/src/tools/codemode/SelfTool.ts",
+      "packages/harness/src/tools/plan/PlanTool.ts"
+    ],
+    "plugin.fact": [
+      "packages/harness/src/controllers/session/Database.ts",
+      "packages/harness/src/controllers/session/SessionView.ts",
+      "packages/harness/src/controllers/session/rowCodec.ts",
+      "packages/harness/src/tools/plugins.ts",
+      "packages/harness/src/transcript/traceDocumentSchema.ts",
+      "packages/texra/src/shared/plugins/documents.ts",
+      "packages/texra/src/tools/documents/documentState.ts"
+    ],
+    "request.decided": [
+      "packages/harness/src/agent/runtime/requestPolicy.ts",
+      "packages/harness/src/transcript/traceAssembler.ts",
+      "packages/texra/src/controllers/approval/ToolEditApprovalController.ts"
+    ],
+    "request.opened": [
+      "packages/harness/src/agent/runtime/loop/toolGuard.ts",
+      "packages/harness/src/agent/runtime/requestPolicy.ts",
+      "packages/texra/src/tools/inquiry/ExternalInquiryTool.ts"
+    ],
+    "run.activate": [
+      "packages/harness/src/agent/followUp/Inbox.ts",
+      "packages/harness/src/agent/runtime/runLaunchGuard.ts",
+      "packages/harness/src/agent/storage/runLifecycle.ts",
+      "packages/harness/src/shared/session/runFacts.ts"
+    ],
+    "run.config": [
+      "packages/harness/src/agent/runtime/run/AgentRun.ts",
+      "packages/harness/src/agent/storage/resumability.ts",
+      "packages/harness/src/agent/storage/runListing.ts",
+      "packages/harness/src/agent/storage/runRecords.ts"
+    ],
+    "run.description": ["packages/harness/src/agent/runtime/forkRun.ts"],
+    "run.detach": ["packages/harness/src/shared/session/runRelation.ts"],
+    "run.end": [
+      "packages/harness/src/agent/followUp/Inbox.ts",
+      "packages/harness/src/agent/runtime/runLaunchGuard.ts",
+      "packages/harness/src/controllers/session/sessionLayer.ts",
+      "packages/harness/src/controllers/session/sweepLeftoverRuns.ts",
+      "packages/harness/src/shared/session/runFacts.ts"
+    ],
+    "run.position": [
+      "packages/harness/src/agent/runtime/forkRun.ts",
+      "packages/harness/src/agent/storage/runLifecycle.ts",
+      "packages/trace-viewer/src/traceFrames.ts"
+    ],
+    "run.removed": [
+      "packages/harness/src/agent/followUp/Inbox.ts",
+      "packages/harness/src/agent/runtime/SessionEvents.ts",
+      "packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts",
+      "packages/harness/src/agent/storage/runRecords.ts",
+      "packages/harness/src/controllers/session/Database.ts",
+      "packages/harness/src/controllers/session/deletionCleanup.ts",
+      "packages/harness/src/controllers/session/runTrace.ts",
+      "packages/harness/src/controllers/session/sessionStore.ts",
+      "packages/harness/src/controllers/session/sweepLeftoverRuns.ts",
+      "packages/harness/src/effect/sessionReads.ts"
+    ],
+    "run.report": [
+      "packages/harness/src/agent/runtime/runLaunchGuard.ts",
+      "packages/harness/src/agent/storage/runRecords.ts"
+    ],
+    "run.result": ["packages/harness/src/agent/storage/runRecords.ts"],
+    "run.start": [
+      "packages/harness/src/agent/runtime/AgentLaunchContext.ts",
+      "packages/harness/src/agent/runtime/forkRun.ts",
+      "packages/harness/src/agent/runtime/loop/runProgram.ts",
+      "packages/harness/src/agent/runtime/requestPolicy.ts",
+      "packages/harness/src/agent/runtime/runApprovalQueue.ts",
+      "packages/harness/src/agent/runtime/runRegistry.ts",
+      "packages/harness/src/agent/storage/resumability.ts",
+      "packages/harness/src/agent/storage/runLifecycle.ts",
+      "packages/harness/src/agent/storage/runRecords.ts",
+      "packages/harness/src/controllers/session/Database.ts",
+      "packages/harness/src/controllers/session/rowReader.ts",
+      "packages/harness/src/controllers/session/sessionStore.ts",
+      "packages/harness/src/controllers/session/sweepLeftoverRuns.ts",
+      "packages/harness/src/effect/sessionReads.ts",
+      "packages/harness/src/shared/approvalBypassKind.ts",
+      "packages/harness/src/shared/session/runRelation.ts",
+      "packages/harness/src/tools/codemode/SelfTool.ts",
+      "packages/harness/src/transcript/traceAssembler.ts",
+      "packages/texra/src/controllers/progressView/ChatExportController.ts",
+      "packages/trace-viewer/src/traceFrames.ts"
+    ],
+    "script.call": [
+      "packages/harness/src/agent/runtime/scriptRun.ts",
+      "packages/harness/src/tools/codemode/SelfTool.ts",
+      "packages/harness/src/tools/plan/PlanTool.ts"
+    ],
+    "tool.result": [
+      "packages/harness/src/agent/runtime/scriptRun.ts",
+      "packages/harness/src/controllers/session/rowReader.ts",
+      "packages/harness/src/tools/delegation/agentChild.ts",
+      "packages/harness/src/tools/plan/PlanTool.ts"
+    ]
+  }
+}

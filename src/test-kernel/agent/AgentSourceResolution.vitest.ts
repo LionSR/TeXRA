@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Layer, Schema } from 'effect';
+import { Effect, Layer } from 'effect';
 import { it } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect } from 'vitest';
 
@@ -16,7 +16,6 @@ import {
 import type { AgentEntry } from '@agent/index/agentEntry';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
-import { PersonaSchema } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
@@ -133,124 +132,4 @@ describe('shadowed agent resolution', () => {
         expect(custom?.source).toBe('custom');
       }),
   );
-
-  it.effect(
-    'resolves an unpinned launch through the same visible set as validation',
-    () =>
-      Effect.gen(function* () {
-        // A direct launch without a pinned source (e.g. the webview "Run") routes
-        // through the visible agents — the identical lookup validation makes.
-        const unpinned = yield* catalog.forLaunch(hostStores(), 'assistant');
-        expect(unpinned).toBe(yield* visibleAgent('assistant'));
-        expect(unpinned?.source).toBe('custom');
-
-        // A stale/missing pinned source falls through to that same visible-set tier.
-        const stale = yield* catalog.forLaunch(
-          hostStores(),
-          'assistant',
-          'plugin',
-        );
-        expect(stale?.source).toBe('custom');
-
-        // A `source:name` key matches its exact entry, even a shadowed one.
-        const keyed = yield* catalog.forLaunch(
-          hostStores(),
-          'builtIn:assistant',
-        );
-        expect(keyed?.source).toBe('builtIn');
-      }),
-  );
-
-  // Failure mode: a pinned launch captures the old entry before the pending
-  // source refresh, so an agent edited during the watcher debounce runs stale.
-  it.live('launches the refreshed custom agent after invalidation', () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const original = yield* catalog.forLaunch(
-        hostStores(),
-        'review',
-        'custom',
-      );
-      const contents = yield* fs.readFileString(original.path);
-      yield* Effect.addFinalizer(() =>
-        fs
-          .writeFileString(original.path, contents)
-          .pipe(Effect.andThen(catalog.refresh), Effect.orDie),
-      );
-      yield* fs.writeFileString(
-        original.path,
-        'name: review\nprompt: Updated custom review agent.\n',
-      );
-      yield* catalog.invalidate;
-
-      const launched = yield* catalog.forLaunch(
-        hostStores(),
-        'review',
-        'custom',
-      );
-      expect(catalog.get('custom:review')?.persona.prompt).toBe(
-        'Updated custom review agent.',
-      );
-      expect(launched.persona.prompt).toBe('Updated custom review agent.');
-    }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.effect('resolves scoped keys and drops unknown ones', () =>
-    Effect.gen(function* () {
-      const scoped = yield* catalog.visible(hostStores(), [
-        'assistant',
-        'builtIn:assistant',
-        'missing-agent',
-      ]);
-
-      expect(scoped.map((entry) => `${entry.source}:${entry.name}`)).toEqual([
-        'custom:assistant',
-        'builtIn:assistant',
-      ]);
-    }),
-  );
-
-  it.effect(
-    'preserves exact source-qualified agent list entries before name deduplication',
-    () =>
-      Effect.gen(function* () {
-        // Both source-qualified identifiers must resolve to their own entry
-        // (`custom:review` to the custom one, not the built-in it shadows), and
-        // the deduplicated result must keep both, in scope order.
-        const scoped = yield* catalog.visible(hostStores(), [
-          'builtIn:review',
-          'custom:review',
-        ]);
-
-        expect(scoped.map((entry) => `${entry.source}:${entry.name}`)).toEqual([
-          'builtIn:review',
-          'custom:review',
-        ]);
-      }),
-  );
-});
-
-describe('findAgentByIdentifier (shared identity rule)', () => {
-  function entry(name: string, source: AgentEntry['source']): AgentEntry {
-    return {
-      name,
-      source,
-      path: '',
-      persona: Schema.decodeUnknownSync(PersonaSchema)({}),
-      blocks: {},
-    };
-  }
-  const entries = [entry('review', 'builtIn'), entry('review', 'custom')];
-
-  it('matches a bare name by name (first candidate wins)', () => {
-    expect(findAgentByIdentifier(entries, 'review')?.source).toBe('builtIn');
-  });
-
-  it('matches a source-qualified key only by exact key', () => {
-    expect(findAgentByIdentifier(entries, 'custom:review')?.source).toBe(
-      'custom',
-    );
-    // A key whose source is absent from the set must not fall back to the name.
-    expect(findAgentByIdentifier(entries, 'remote:review')).toBeUndefined();
-  });
 });

@@ -84,8 +84,9 @@ export {
   type WorkspaceAgentsControllerDeps,
   type WorkspaceAgentsEntry,
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
-export type { TeamPreset } from '@common/teams/TeamPresets';
-export type { TeamCatalogAgent, TeamRunPlan } from '@common/teams/TeamPlan';
+export * from '@common/teams/TeamPresets';
+export * from '@common/teams/TeamPlan';
+export * from '@shared/constants/agents';
 export type { AgentDelegationScope } from '@shared/schemas';
 export {
   AgentCustomizeRefused,
@@ -195,14 +196,6 @@ export {
   type ToolMissingHandler,
 } from '@platform/interfaces';
 export { Secrets, type PlatformSecrets } from '@platform/secrets';
-export {
-  LanguageModel,
-  UNAVAILABLE_LANGUAGE_MODEL_PORT,
-  type LanguageModelAccessState,
-  type LanguageModelInfo,
-  type LanguageModelPort,
-  type LanguageModelReference,
-} from '@platform/languageModel';
 export type { WorkspaceRoots } from '@platform/workspaceRoots';
 
 // What a plugin's `availability` answers with, and reads.
@@ -235,7 +228,6 @@ export {
   type RunModelDecisionReason,
   type RunModelFallbackMode,
 } from '@model/runModelDecision';
-export { CopilotRoutes, type CopilotModelRoute } from '@model/copilotRouting';
 export { SubscriptionPreference } from '@model/subscriptionAccess';
 export {
   reasoningEffortOverrides,

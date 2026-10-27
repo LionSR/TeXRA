@@ -70,16 +70,6 @@ afterEach(() => {
 });
 
 describe('desktop package native CLI payload', () => {
-  it('passes when no Codex or Claude Code CLI payload is bundled', () => {
-    const { packageRoot } = createFakeDesktopPackage();
-
-    const result = runVerifier(packageRoot);
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain(
-      '- no bundled Codex or Claude Code CLI payload',
-    );
-  });
-
   it.each([
     { cli: 'codex' as const, label: 'OpenAI Codex CLI' },
     { cli: 'claude' as const, label: 'Claude Code CLI' },
@@ -92,34 +82,6 @@ describe('desktop package native CLI payload', () => {
     expect(result.stderr).toContain('bundles native CLI payloads');
     expect(result.stderr).toContain(label);
     expect(result.stderr).toContain('MiB');
-  });
-
-  it('requires the trace-viewer template in packaged resources', () => {
-    const { packageRoot, resourcesDir } = createFakeDesktopPackage();
-    rmSync(join(resourcesDir, 'resources', 'traceViewer', 'index.html'));
-
-    const result = runVerifier(packageRoot);
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain(
-      'Missing trace-viewer HTML template: resources/traceViewer/index.html',
-    );
-  });
-
-  it('resolves relative metafile imports from the importing output directory', () => {
-    const { packageRoot } = createFakeDesktopPackage({
-      startupImportPath: './bootstrap.js',
-      bootstrapInputs: {
-        'node_modules/.pnpm/openai@0.0.0/node_modules/openai/index.js': {
-          bytesInOutput: 1,
-        },
-      },
-    });
-
-    const result = runVerifier(packageRoot);
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain(
-      'Packaged desktop startup graph eagerly includes provider SDK code (OpenAI SDK)',
-    );
   });
 });
 

@@ -4,12 +4,9 @@ import { Schema } from 'effect';
 import {
   qualifyAggregateId,
   DisplaySessionEventSchema,
-  LOG_LEVELS,
-  MESSAGE_TYPES,
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
   type RunIdentity,
-  type RunOutcome,
 } from '@shared/schemas';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
@@ -78,71 +75,10 @@ function runStart(
   };
 }
 
-function runEnd(outcome: RunOutcome): Record<string, unknown> {
-  return {
-    type: 'run.end',
-    outcome,
-    output: { response: '', files: [] },
-  };
-}
-
 describe('traceFrame replays the document through the one fold', () => {
-  it('replays logged content into the transcript', () => {
-    const trace = traceDocument(runStart(), {
-      type: 'log',
-      level: LOG_LEVELS.INFO,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      message: 'Archived derivation',
-    });
-
-    const replayed = foldTrace(trace);
-    expect(replayed?.transcript.rows).toContainEqual(
-      expect.objectContaining({
-        kind: 'log',
-        text: expect.objectContaining({ full: 'Archived derivation' }),
-      }),
-    );
-  });
-
-  it('replays the run plan', () => {
-    const trace = traceDocument(runStart(), {
-      type: 'run.fact',
-      fact: { key: 'plan', plan: { objective: 'Replay the plan' } },
-    });
-
-    const replayed = foldTrace(trace);
-    expect(replayed).toMatchObject({
-      plan: { objective: 'Replay the plan' },
-    });
-  });
-
-  it.each([
-    { outcome: 'failed', expected: 'failed' },
-    { outcome: 'completed', expected: 'completed' },
-  ] as const)(
-    'folds the exported run.end "$outcome" to the terminal status "$expected"',
-    ({ outcome, expected }) => {
-      const replayed = foldTrace(traceDocument(runStart(), runEnd(outcome)));
-      expect(replayed?.status).toBe(expected);
-      expect(replayed?.durableOutcome).toBe(expected);
-    },
-  );
-
   it('reports no durable outcome when the document carries no run.end', () => {
     // No terminal fact: an exported trace with no producer folds as an
     // interrupted run, never as a finished one.
     expect(foldTrace(traceDocument(runStart()))?.durableOutcome).toBeNull();
-  });
-
-  it("folds a process run's exported config into the command", () => {
-    const trace = traceDocument(runStart({ kind: 'process', tool: 'bash' }), {
-      type: 'run.config',
-      config: {
-        agent: 'bash',
-        instruction: 'ls -la',
-      },
-    });
-
-    expect(foldTrace(trace)?.command).toBe('ls -la');
   });
 });

@@ -58,11 +58,11 @@ type ActiveFileGuardResult =
  * Retrieve the active text editor when it holds a `.tex` document, optionally
  * saving it first when dirty.
  */
-const getActiveLatexEditor = (
-  roots: WorkspaceRoots,
-  saveDocument: boolean,
-): Effect.Effect<ActiveFileGuardResult, NotificationFailed> =>
-  Effect.gen(function* () {
+const getActiveLatexEditor = Effect.fn('activeFileGuards.getActiveLatexEditor')(
+  function* (
+    roots: WorkspaceRoots,
+    saveDocument: boolean,
+  ): Effect.fn.Return<ActiveFileGuardResult, NotificationFailed> {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       yield* vscodeUi.showWarningMessage(GUARD_FAILURE_MESSAGES.noEditor.user);
@@ -108,7 +108,8 @@ const getActiveLatexEditor = (
       editor,
       relativePath,
     } satisfies ActiveFileGuardResult;
-  });
+  },
+);
 
 interface GuardedLatexCommandOptions {
   /** The logging channel to use */

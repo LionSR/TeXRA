@@ -4,29 +4,15 @@ import PrReviewCard from '../.vitepress/components/PrReviewCard.vue';
 
 # Code review
 
-The **TeXRA Code Review** GitHub Action posts a pull request review on each PR:
-a short summary at the top, and inline comments on the lines TeXRA wants to
-flag.
+The **TeXRA Code Review** GitHub Action runs in your repository's GitHub Actions environment using provider API keys stored in your repository secrets. Your code and diffs go directly from GitHub's runner to your model provider; only a GitHub-signed workload identity is exchanged for a short-lived TeXRA GitHub App token.
 
-It runs from your own GitHub Actions environment, using model provider API keys
-you put in your repo's secrets. Your code and diffs are not sent through any
-TeXRA service; only a GitHub-signed workload identity is exchanged for a
-short-lived TeXRA GitHub App token.
-
-This page walks through the whole setup from zero; no prior GitHub Actions
-experience is needed. Short version: from the repo, run
-`texra install-github-action`, then set one provider API key secret.
+From your repository checkout, run `texra install-github-action` and set one provider API key secret.
 
 ## What you'll see on a PR
 
-Once installed, every PR gets a single review from `texra-ai-bot[bot]`: a
-summary comment at the top with TeXRA's overall verdict, plus inline comments on
-the lines it wants to question. On the next push to the same PR, TeXRA updates
-those same threads instead of posting duplicates.
+Every PR gets a single review from `texra-ai-bot[bot]` with a top-level verdict summary and inline comments on flagged lines. Subsequent pushes to the same PR update those existing review threads in place instead of posting duplicates.
 
 <PrReviewCard />
-
-<p class="hero-caption">One review per PR: a top-level verdict plus inline comments pinned to the flagged lines, refreshed in place on the next push.</p>
 
 ## How it works
 
@@ -299,20 +285,6 @@ instead of posting a fallback review. Treat that failed check as the signal
 that no review was completed. Open the run log from the **Actions** tab to see
 the error. Common causes are an expired or out-of-credit API key and provider
 outages. Use **Re-run failed jobs** on the run page to try again.
-
-### Common questions
-
-**Where does my code go?** From GitHub's runner directly to the model provider
-your key belongs to, and nowhere else. No TeXRA service sees your code or diffs.
-
-**What does it cost?** Whatever your provider charges for the tokens in the
-review call, billed to your API key like any other usage. No TeXRA account or
-subscription is involved.
-
-**Can I add keys for several providers?** Yes. TeXRA uses the first available
-provider in its default order (DeepSeek → Anthropic → OpenAI → Google →
-xAI → Moonshot → DashScope → MiniMax → GLM), or exactly what you
-pin via `TEXRA_REVIEW_MODEL`.
 
 ## Next steps
 

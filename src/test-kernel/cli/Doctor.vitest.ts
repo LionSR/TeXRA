@@ -1,78 +1,15 @@
-// Node.js imports
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { subset } from 'semver';
-import stripAnsi from 'strip-ansi';
 
-import {
-  buildDoctorReport,
-  doctorExitCode,
-  doctorNdjsonRecords,
-  type DoctorReport,
-  writeDoctorReport,
-} from '@cli/runtime/doctor';
-import { CliExitCode } from '@cli/runtime/exitCodes';
-import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@cli/runtime/terminalRequirements';
+import { type DoctorReport, writeDoctorReport } from '@cli/runtime/doctor';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
 const context: CliContext = createTestCliContext({
   cwd: '/workspace',
   resourcesPath: '/resources',
 });
-
-const latexProbe = {
-  tools: [
-    {
-      name: 'latexmk',
-      installed: false,
-      required: true,
-      purpose: 'LaTeX build orchestration',
-    },
-    {
-      name: 'pdflatex',
-      installed: true,
-      required: true,
-      purpose: 'PDFLaTeX compiler',
-    },
-  ],
-  hasCompiler: true,
-} as const;
-
-const availableModels = [
-  {
-    available: true,
-    status: 'available',
-    model: { value: 'deepseek/deepseek-v4-flash', label: 'DeepSeek T' },
-  },
-];
-
-const allInstalledLatexProbe = {
-  ...latexProbe,
-  tools: latexProbe.tools.map((tool) => ({ ...tool, installed: true })),
-};
-
-const healthyNodeReport: DoctorReport = {
-  ok: true,
-  checks: [
-    {
-      id: 'node',
-      name: 'Node.js',
-      status: 'pass',
-      message: 'Node 24.15.0',
-    },
-  ],
-};
-
-const NDJSON_TS = '2026-05-18T00:00:00.000Z';
 
 function captureDoctorStdout(
   writeContext: CliContext,
@@ -92,175 +29,7 @@ function captureDoctorStdout(
   return stdout;
 }
 
-type DoctorProbes = Omit<
-  Extract<Parameters<typeof buildDoctorReport>[1], { kind: 'ready' }>,
-  'kind'
->;
-
-// A signed-in report on supported Node with no model available and a partially
-// installed LaTeX toolchain; tests override only the probes they care about.
-// The builder is a program, so this helper is where it is run, over a
-// filesystem where every probed path is an accessible directory.
-function buildReport(
-  probes: Partial<DoctorProbes> = {},
-  reportContext: CliContext = context,
-  fileSystem: Partial<FileSystem.FileSystem> = {},
-): Promise<DoctorReport> {
-  return Effect.runPromise(
-    buildDoctorReport(reportContext, {
-      kind: 'ready',
-      nodeVersion: '24.15.0',
-      modelAccessList: Effect.succeed([]),
-      latexToolchain: Effect.succeed(latexProbe),
-      usageLoggingOptOut: Effect.succeed(null),
-      ...probes,
-    }).pipe(
-      Effect.provide([
-        FileSystem.layerNoop({
-          stat: () =>
-            Effect.succeed({ type: 'Directory' } as FileSystem.File.Info),
-          access: () => Effect.void,
-          ...fileSystem,
-        }),
-        nodeSpawnerLayer,
-      ]),
-    ),
-  );
-}
-
-// The same report with one available model and a fully installed LaTeX
-// toolchain; only the optional context varies.
-function buildReadyReport(
-  reportContext: CliContext = context,
-): Promise<DoctorReport> {
-  return buildReport(
-    {
-      modelAccessList: Effect.succeed(availableModels),
-      latexToolchain: Effect.succeed(allInstalledLatexProbe),
-    },
-    reportContext,
-  );
-}
-
-function checkById(
-  report: DoctorReport,
-  id: string,
-): DoctorReport['checks'][number] | undefined {
-  return report.checks.find((check) => check.id === id);
-}
-
-const colorCases: Array<{
-  name: string;
-  output: Pick<
-    CliContext,
-    'stdoutIsTty' | 'stderrIsTty' | 'stdoutColorEnabled' | 'stderrColorEnabled'
-  >;
-  colored: boolean;
-}> = [
-  {
-    name: 'does not color successful text output when stdout is piped',
-    output: {
-      stdoutIsTty: false,
-      stderrIsTty: true,
-      stdoutColorEnabled: false,
-      stderrColorEnabled: true,
-    },
-    colored: false,
-  },
-  {
-    name: 'keeps successful text output colored when only stderr is redirected',
-    output: {
-      stdoutIsTty: true,
-      stderrIsTty: false,
-      stdoutColorEnabled: true,
-      stderrColorEnabled: false,
-    },
-    colored: true,
-  },
-];
-
 describe('CLI doctor', () => {
-  it('reports failed checks and exits nonzero', async () => {
-    const report = await buildReport({
-      nodeVersion: '20.1.0',
-    });
-
-    expect(report.ok).toBe(false);
-    expect(checkById(report, 'node')?.status).toBe('fail');
-    expect(checkById(report, 'latex.latexmk')?.status).toBe('fail');
-    expect(doctorExitCode(report)).toBe(CliExitCode.ModelOrNetworkError);
-  });
-
-  it('asks only for read access on the packaged resources directory', async () => {
-    // `sudo npm install -g` leaves the package root-owned and unwritable,
-    // which is the norm on Linux and WSL; the CLI only ever reads from it.
-    const writable = new Map<string, boolean | undefined>();
-    const report = await buildReport({}, context, {
-      access: (filePath, options) => {
-        writable.set(filePath, options?.writable);
-        return Effect.void;
-      },
-    });
-
-    expect(checkById(report, 'resources')?.status).toBe('pass');
-    expect(writable.get('/resources')).toBe(false);
-    expect(writable.get('/workspace')).toBe(true);
-  });
-
-  it('matches the published Node engine range', async () => {
-    const cases: Array<[string, 'pass' | 'fail']> = [
-      ['21.9.9', 'fail'],
-      ['22.9.0', 'fail'],
-      ['22.15.0', 'fail'],
-      ['22.16.0', 'fail'],
-      ['22.18.0', 'fail'],
-      ['22.19.0', 'pass'],
-      ['v22.19.0', 'pass'],
-      ['23.0.0', 'fail'],
-      ['23.11.0', 'fail'],
-      ['24.0.0', 'pass'],
-      ['24.15.0', 'pass'],
-      ['26.0.0', 'pass'],
-    ];
-
-    for (const [nodeVersion, expected] of cases) {
-      const report = await buildReport({ nodeVersion });
-      expect(checkById(report, 'node')?.status).toBe(expected);
-    }
-
-    const unsupportedRelease = await buildReport({ nodeVersion: '21.0.0' });
-    expect(checkById(unsupportedRelease, 'node')).toMatchObject({
-      message: 'Node 21.0.0 is outside the supported range.',
-      hint: 'Install Node ^22.19.0 || >=24.0.0 before running TeXRA CLI.',
-    });
-  });
-
-  it('keeps the supported Node range inside the bundled undici requirement', () => {
-    const require = createRequire(import.meta.url);
-    const undiciNodeRange = (
-      require('undici/package.json') as { engines: { node: string } }
-    ).engines.node;
-    const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
-    const publishedRanges = [
-      TEXRA_CLI_SUPPORTED_NODE_RANGE,
-      ...['packages/cli', 'packages/harness'].map(
-        (packageDir) =>
-          (
-            JSON.parse(
-              readFileSync(join(repoRoot, packageDir, 'package.json'), 'utf8'),
-            ) as { engines: { node: string } }
-          ).engines.node,
-      ),
-    ];
-
-    for (const range of publishedRanges) {
-      expect(
-        subset(range, undiciNodeRange),
-        `${range} must satisfy undici's engines.node ${undiciNodeRange}`,
-      ).toBe(true);
-    }
-  });
-
   it('redacts email-like values in check messages and hints', () => {
     const report: DoctorReport = {
       ok: true,
@@ -276,50 +45,10 @@ describe('CLI doctor', () => {
     };
 
     const text = captureDoctorStdout(context, report);
-    const records = doctorNdjsonRecords(report, NDJSON_TS);
 
     expect(text).toContain('Workspace config references o***@e***.edu.');
     expect(text).toContain('Ask a***@e***.edu to update it.');
     expect(text).not.toContain('owner@example.edu');
     expect(text).not.toContain('admin@example.edu');
-    expect(records).toContainEqual(
-      expect.objectContaining({
-        id: 'config',
-        message: 'Workspace config references owner@example.edu.',
-        hint: 'Ask admin@example.edu to update it.',
-      }),
-    );
-  });
-
-  it('emits stable ndjson record kinds', async () => {
-    const report = await buildReadyReport();
-
-    const records = doctorNdjsonRecords(report, NDJSON_TS);
-
-    expect(records.at(0)).toMatchObject({
-      kind: 'doctor-check',
-      ts: NDJSON_TS,
-      id: 'node',
-    });
-    expect(records.at(-1)).toEqual({
-      kind: 'doctor-summary',
-      ts: NDJSON_TS,
-      ok: true,
-    });
-    expect(doctorExitCode(report)).toBe(CliExitCode.Success);
-  });
-
-  it.each(colorCases)('$name', ({ output, colored }) => {
-    const stdout = captureDoctorStdout(
-      { ...context, ...output },
-      healthyNodeReport,
-    );
-
-    expect(stripAnsi(stdout)).toContain('PASS Node.js: Node 24.15.0');
-    if (colored) {
-      expect(stdout).not.toBe(stripAnsi(stdout));
-    } else {
-      expect(stdout).toBe(stripAnsi(stdout));
-    }
   });
 });

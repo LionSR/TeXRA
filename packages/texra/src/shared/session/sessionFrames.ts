@@ -289,20 +289,18 @@ export class SessionFrames extends Context.Service<
               ),
             ),
           ),
-        begin: (generation) =>
-          Effect.gen(function* () {
-            yield* SubscriptionRef.set(current, {
-              generation,
-              queue: yield* Queue.unbounded<EventsFrame, Cause.Done>(),
-            });
-          }),
-        feed: (frame) =>
-          Effect.gen(function* () {
-            const read = yield* SubscriptionRef.get(current);
-            if (frame.generation !== read.generation) return;
-            if (frame.host) yield* SubscriptionRef.set(host, frame.host);
-            yield* Queue.offer(read.queue, frame);
-          }),
+        begin: Effect.fn('sessionFrames.begin')(function* (generation) {
+          yield* SubscriptionRef.set(current, {
+            generation,
+            queue: yield* Queue.unbounded<EventsFrame, Cause.Done>(),
+          });
+        }),
+        feed: Effect.fn('sessionFrames.feed')(function* (frame) {
+          const read = yield* SubscriptionRef.get(current);
+          if (frame.generation !== read.generation) return;
+          if (frame.host) yield* SubscriptionRef.set(host, frame.host);
+          yield* Queue.offer(read.queue, frame);
+        }),
       };
     }),
   );

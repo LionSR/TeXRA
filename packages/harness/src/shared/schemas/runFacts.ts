@@ -119,14 +119,13 @@ export interface SkillCatalogEntry {
 // ---------------------------------------------------------- model backend
 
 /**
- * Who serves a run's conversation: the provider plugin its route lands on
- * (`copilot` or the model's own provider, whose plugin names the protocol),
- * or the internal validation model. A run keeps its backend: a resume or a
- * model switch rebinds it, whatever the Copilot preference says now.
+ * Who serves a run's conversation: the model's own provider, whose plugin
+ * names the protocol, or the internal validation model. A run keeps its
+ * backend: a resume or a model switch rebinds it, whatever the subscription
+ * preferences say now.
  */
 export const ModelBackendSchema = Schema.Literals([
   'validation',
-  'copilot',
   'openai',
   'anthropic',
   'google',
@@ -173,9 +172,9 @@ export type RunInput = typeof RunInputSchema.Type;
 /**
  * What a run is bound to beyond its model id, recorded on its `run.config`
  * once it binds: the backend a resume or a switch rebinds on, whatever the
- * provider preferences say by then, and the subscription routes its launch
- * declined (an own-API-key fallback declines them all). Routes declined by a
- * later retry are folded from that retry's decision.
+ * provider preferences say by then, and the subscription routes it
+ * declined. Routes declined by a retry are folded from that retry's
+ * decision.
  */
 export const RunBindingSchema = Schema.Struct({
   backend: ModelBackendSchema,

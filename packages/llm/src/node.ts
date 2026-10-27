@@ -15,9 +15,8 @@ import { toErrorMessage } from './oauth/support.js';
 import { originOf, type ModelOrigin } from './protocol.js';
 import type { ModelConfig } from 'llm-zoo';
 
-import type { HttpModelConfiguration } from './api/configuration.js';
 import type { ReasoningChoice } from './models/reasoningChoice.js';
-import type { Model } from './turn.js';
+import type { Model, ModelConfiguration } from './turn.js';
 
 /**
  * The credential a binding sends: an API key (or any bearer token the
@@ -34,7 +33,7 @@ export type ModelCredential =
 
 /** One model on one route, and what the caller asks of it. */
 export interface BindSpec {
-  readonly protocol: Exclude<ModelOrigin['protocol'], 'vscode-lm'>;
+  readonly protocol: ModelOrigin['protocol'];
   /** The llm-zoo entry after `routeConfig`. */
   readonly model: ModelConfig;
   readonly endpoint: string;
@@ -105,7 +104,7 @@ const bearer = (credential: ModelCredential, protocol: string) =>
 
 /** The model one configuration builds, over its protocol's module. */
 const construct = Effect.fn('llm.construct')(function* (
-  configuration: HttpModelConfiguration,
+  configuration: ModelConfiguration,
   credential: ModelCredential,
   webSocket: boolean,
   fetch: typeof globalThis.fetch | undefined,

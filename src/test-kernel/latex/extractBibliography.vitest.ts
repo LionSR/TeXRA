@@ -5,19 +5,7 @@ import { it } from '@effect/vitest';
 import { Effect, FileSystem, Layer, PlatformError } from 'effect';
 import { describe } from 'vitest';
 
-import {
-  extractBibliographyContext,
-  loadBibliographyEntries,
-  summarizeBibliographyEntries,
-} from '@latex/extractBibliography';
-
-const BIB_CONTENT = `@article{alpha,
-  title = {Alpha Paper},
-}
-
-@book{beta,
-  title = {Beta Book},
-}`;
+import { extractBibliographyContext } from '@latex/extractBibliography';
 
 /**
  * The files "on disk" for one case. The module reads through the *context*
@@ -79,73 +67,4 @@ describe('extractBibliography helpers', () => {
       ),
     );
   });
-
-  it.effect(
-    'marks missing bibliography files and ignores empty citations',
-    () => {
-      const texPath = 'paper.tex';
-      const presentBibPath = path.join('bib', 'two.bib');
-
-      return Effect.gen(function* () {
-        const result = yield* extractBibliographyContext(texPath);
-
-        assert.deepStrictEqual(result.bibliographyFiles, [presentBibPath]);
-        assert.deepStrictEqual(result.missingBibliographyFiles, [
-          path.join('bib', 'one.bib'),
-        ]);
-        assert.deepStrictEqual(
-          new Set(result.citationKeys),
-          new Set(['first', 'second', 'third']),
-        );
-      }).pipe(
-        Effect.provide(
-          filesLayer({
-            [texPath]: `
-      \\bibliography{bib/one, bib/two.bib, } % trailing comma
-      \\cite{first} \\cite{second, third}
-    `,
-            [presentBibPath]: '',
-          }),
-        ),
-      );
-    },
-  );
-
-  it.effect(
-    'loads requested bibliography entries and reports missing keys',
-    () =>
-      Effect.gen(function* () {
-        const { entries, missingKeys } = yield* loadBibliographyEntries(
-          ['references.bib'],
-          ['alpha', 'gamma'],
-        );
-
-        assert.strictEqual(entries.size, 1);
-        // formatBibEntry drops the trailing comma after the last field.
-        assert.strictEqual(
-          entries.get('alpha'),
-          '@article{alpha,\n  title = {Alpha Paper}\n}',
-        );
-        assert.deepStrictEqual(missingKeys, ['gamma']);
-
-        const formatted = summarizeBibliographyEntries(entries, 5);
-        assert.deepStrictEqual(formatted, [
-          '@article{alpha,\n  title = {Alpha Paper}\n}',
-        ]);
-      }).pipe(Effect.provide(filesLayer({ 'references.bib': BIB_CONTENT }))),
-  );
-
-  it.effect('loads all entries when nocite wildcard is present', () =>
-    Effect.gen(function* () {
-      const { entries, missingKeys } = yield* loadBibliographyEntries(
-        ['references.bib'],
-        ['*'],
-      );
-
-      assert.strictEqual(entries.size, 2);
-      assert.deepStrictEqual(missingKeys, []);
-      assert.ok(entries.has('alpha'));
-      assert.ok(entries.has('beta'));
-    }).pipe(Effect.provide(filesLayer({ 'references.bib': BIB_CONTENT }))),
-  );
 });

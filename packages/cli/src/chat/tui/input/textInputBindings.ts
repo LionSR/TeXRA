@@ -68,7 +68,7 @@ type TextInputBinding = {
 const wordModified = (key: TextInputKey): boolean =>
   key.ctrl === true || key.meta === true;
 
-export const TEXT_INPUT_BINDINGS: readonly TextInputBinding[] = [
+const TEXT_INPUT_BINDINGS: readonly TextInputBinding[] = [
   {
     keys: 'Ctrl-W / Alt-Backspace',
     action: 'delete word left',

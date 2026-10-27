@@ -17,6 +17,7 @@ import {
   type RunOutcome,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { outcomeFromCause } from '@shared/runs/runStatus';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -68,53 +69,44 @@ const NOT_RESUMABLE_MESSAGE =
  * launch onto a run that already holds history state is refused (#11313).
  * The caller opens a cell whose state has no phase.
  */
-export const openRun = (
+export const openRun = Effect.fn('runProgram.openRun')(function* (
   runId: RunId,
   resume: boolean,
-): Effect.Effect<RunCell, Error, RunHistory | AgentRun> =>
-  Effect.gen(function* () {
-    const runHistory = yield* RunHistory;
-    const run = yield* AgentRun;
-    const cell = yield* runHistory
-      .open(
-        runId,
-        resume
-          ? {
-              activation: (state: RunState | null) =>
-                state?.phase == null
-                  ? Effect.fail(new Error(NOT_RESUMABLE_MESSAGE))
-                  : activationRows(run.session, runId, run.config),
-            }
-          : { registration: Effect.sync(() => birthRows(run)) },
-      )
-      .pipe(
-        // A resume enters once its activation settled (a fresh run, with its
-        // opening batch); a stop lands before both or after both.
-        Effect.tap(() => (resume ? run.entry.entered : Effect.void)),
-        Effect.uninterruptible,
-      );
-    if (!resume && (yield* cell.current).phase !== null)
-      return yield* Effect.fail(
-        new Error(
-          `Run ${runId} already has run history state; resume it instead.`,
-        ),
-      );
-    return cell;
-  });
+): Effect.fn.Return<RunCell, Error, RunHistory | AgentRun> {
+  const runHistory = yield* RunHistory;
+  const run = yield* AgentRun;
+  const cell = yield* runHistory
+    .open(
+      runId,
+      resume
+        ? {
+            activation: (state: RunState | null) =>
+              state?.phase == null
+                ? Effect.fail(new Error(NOT_RESUMABLE_MESSAGE))
+                : activationRows(run.session, runId, run.config),
+          }
+        : { registration: Effect.sync(() => birthRows(run)) },
+    )
+    .pipe(
+      // A resume enters once its activation settled (a fresh run, with its
+      // opening batch); a stop lands before both or after both.
+      Effect.tap(() => (resume ? run.entry.entered : Effect.void)),
+      Effect.uninterruptible,
+    );
+  if (!resume && (yield* cell.current).phase !== null)
+    return yield* Effect.fail(
+      new Error(
+        `Run ${runId} already has run history state; resume it instead.`,
+      ),
+    );
+  return cell;
+});
 
 /** What a run program, and each of its turns, returns. */
 export type RunExit = {
   readonly state: RunState;
   readonly outcome: RunOutcome;
 };
-
-/**
- * The one verdict of a failure cause. Any interrupt in it is a stop, even
- * when a finalizer then failed (`Interrupt` + `Die`): the run lifecycle
- * already reports that run `CANCELLED`, so every terminal row agrees.
- */
-const failureOutcome = (cause: Cause.Cause<unknown>): RunOutcome =>
-  Cause.hasInterrupts(cause) ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED;
 
 /**
  * The exit protocol, as the release arm of the run's acquireUseRelease:
@@ -133,7 +125,7 @@ export const settleRun =
     // The body's own value when it returned.
     const outcome = Exit.match(exit, {
       onSuccess: (value) => value.outcome,
-      onFailure: failureOutcome,
+      onFailure: outcomeFromCause,
     });
     return Effect.gen(function* () {
       const runs = registryOf(yield* Runs);
@@ -179,7 +171,7 @@ export const stagedBy =
           stage.end(
             Exit.match(exit, {
               onSuccess: outcomeOf,
-              onFailure: failureOutcome,
+              onFailure: outcomeFromCause,
             }),
           ),
         ),

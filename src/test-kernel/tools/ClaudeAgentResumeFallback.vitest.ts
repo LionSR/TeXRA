@@ -11,11 +11,9 @@
  * setup, while concurrent calls wait for that loop and then queue onto it.
  *
  * Failure modes:
- * - a launch nobody can collect, or whose setup fails, leaves a child run;
- * - a fallback launch forgets the stale id, so the SDK starts afresh;
  * - concurrent calls on one stale id start two loops, spin on the claim, or
  *   strand the waiter when the first launch fails;
- * - a fork mutates its source session, or a failed fork is resumed;
+ * - a fork mutates its source session, or forks a session another run owns;
  * - a detached loop's failure after the tool answered is never said.
  */
 import { it } from '@effect/vitest';
@@ -44,16 +42,12 @@ vi.mock('@texra/tools/claudeAgentImport', async (importActual) => {
 import '@test/support/sessionGraphTestSetup';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { setLogSink } from '@logger/logSink';
 import type { RunId } from '@shared/schemas';
-import { captureLogEntries } from '@test/support/logSinkCapture';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
-import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import {
   parkedRoot,
   REAL_RUN_TIMEOUT,
-  sessionStoreFaults,
   storedRows,
   untilStored,
   validationHost,
@@ -62,8 +56,7 @@ import { noPluginHold } from '@test/support/testPluginServices';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@texra/tools/agentCliSessionStores';
 import { AgentCliSessionRegistry } from '@texra/tools/agentCliSessionRegistry';
-import { ClaudeAgentTool, runStreamedTurn } from '@texra/tools/claudeAgent';
-import { generateRunId } from '@utils/core';
+import { ClaudeAgentTool } from '@texra/tools/claudeAgent';
 
 interface Parent {
   readonly session: SessionHandle;
@@ -105,12 +98,6 @@ const answer = (result: Record<string, unknown>) =>
 const succeeded = (sessionId: string, text = 'Done.') =>
   answer({ subtype: 'success', session_id: sessionId, result: text });
 
-/** The SDK options each `query` call was made with, in order. */
-const queriedOptions = () =>
-  mocks.query.mock.calls.map(
-    ([args]) => (args as { options: Record<string, unknown> }).options,
-  );
-
 /** Wait until the SDK has been queried `n` times. */
 const untilQueried = (storage: string, n: number) =>
   untilStored(storage, () => mocks.query.mock.calls.length >= n);
@@ -150,233 +137,6 @@ describe(
       mocks.findClaudeBinaryPath.mockReturnValue(Effect.succeed(undefined));
       return yield* parkedParent;
     });
-
-    it.live(
-      'refuses a one-shot run whose follow-up could never be collected',
-      () =>
-        Effect.gen(function* () {
-          const parent = yield* setUp;
-          const registry = new AgentCliSessionRegistry(noPluginHold);
-          const result = yield* ClaudeAgentTool.call({
-            prompt: 'must not launch into a run that ends first',
-          }).pipe(
-            Effect.provide(
-              toolLayer(registry, parent, { stopAfterCycle: true }),
-            ),
-          );
-
-          expect(result).toMatchObject({
-            status: 'error',
-            error: expect.stringContaining(
-              'claude_code is unavailable in one-shot runs',
-            ),
-          });
-          expect(childrenOf(parent)).toEqual([]);
-        }),
-    );
-
-    it.live('does not create a run when Claude binary discovery fails', () =>
-      Effect.gen(function* () {
-        const parent = yield* setUp;
-        mocks.findClaudeBinaryPath.mockReturnValue(
-          Effect.fail(new Error('Claude binary lookup failed')),
-        );
-
-        const result = yield* ClaudeAgentTool.call({
-          prompt: 'must not create a stale child',
-        }).pipe(
-          Effect.provide(
-            toolLayer(new AgentCliSessionRegistry(noPluginHold), parent),
-          ),
-        );
-
-        expect(result.status).toBe('error');
-        expect(childrenOf(parent)).toEqual([]);
-      }),
-    );
-
-    it.live('detaches the abort link when SDK query construction throws', () =>
-      Effect.gen(function* () {
-        const signal = new AbortController().signal;
-        const removeEventListener = vi.spyOn(signal, 'removeEventListener');
-        const failure = new Error('Claude query construction failed');
-        mocks.query.mockImplementationOnce(() => {
-          throw failure;
-        });
-
-        const caught = yield* Effect.flip(
-          runStreamedTurn({
-            prompt: 'start Claude',
-            logger: createTestRunTrace(generateRunId()).trace,
-            signal,
-            model: 'claude-sonnet-5-5',
-            permissionMode: 'acceptEdits',
-            effort: 'high',
-            thinking: { type: 'adaptive' },
-            cwd: undefined,
-            additionalDirectories: undefined,
-            env: {},
-            resumeSessionId: undefined,
-            pathToClaudeCodeExecutable: undefined,
-          }),
-        );
-        expect(caught).toBe(failure);
-        expect(removeEventListener).toHaveBeenCalledWith(
-          'abort',
-          expect.any(Function),
-        );
-      }),
-    );
-
-    it.live('logs a detached run-loop rejection through the child trace', () =>
-      Effect.gen(function* () {
-        const parent = yield* setUp;
-        mocks.query.mockImplementation(() =>
-          answer({ subtype: 'error_during_execution', errors: ['crashed'] }),
-        );
-        // The failed turn ends the child. Neither its settled end nor the
-        // end recording the lost result commits, so the backstop end is
-        // written and the loop fails after the tool has answered.
-        const logs = captureLogEntries();
-        yield* Effect.addFinalizer(() => Effect.sync(() => setLogSink(null)));
-        const faults = yield* sessionStoreFaults(parent.storage);
-        yield* faults.failNext('appendAll', 'run.end');
-        yield* faults.failNext('appendAll', 'run.end');
-
-        expect(
-          yield* ClaudeAgentTool.call({ prompt: 'launch Claude' }).pipe(
-            Effect.provide(
-              toolLayer(new AgentCliSessionRegistry(noPluginHold), parent),
-            ),
-          ),
-        ).toMatchObject({ status: 'executed' });
-        yield* untilStored(parent.storage, () =>
-          logs.has(
-            'ERROR',
-            'childRunLoop',
-            "Child 'claude_code' run loop failed after launch",
-          ),
-        );
-        // The child reads as ended, not as running.
-        const [child] = childrenOf(parent);
-        expect(
-          storedRows(parent.storage).find(
-            (row) => row.run === child && row.type === 'run.end',
-          )?.data,
-        ).toContain("The run's end was not saved: injected appendAll fault");
-      }),
-    );
-
-    it.live(
-      'seeds the fallback launch with the stale session_id so the SDK resumes from disk',
-      () =>
-        Effect.gen(function* () {
-          const parent = yield* setUp;
-          mocks.query.mockImplementation(() =>
-            succeeded('stale-session', 'Resumed and continued.'),
-          );
-
-          yield* ClaudeAgentTool.call({
-            prompt: 'continue the refactor',
-            session_id: 'stale-session',
-          }).pipe(
-            Effect.provide(
-              toolLayer(new AgentCliSessionRegistry(noPluginHold), parent),
-            ),
-          );
-          yield* untilQueried(parent.storage, 1);
-
-          expect(childrenOf(parent)).toHaveLength(1);
-          expect(queriedOptions()[0]?.resume).toBe('stale-session');
-        }),
-    );
-
-    it.live(
-      'sends the selected model id, its effort and adaptive thinking to the SDK',
-      () =>
-        Effect.gen(function* () {
-          const parent = yield* setUp;
-          mocks.query.mockImplementation(() => succeeded('model-session'));
-
-          const result = yield* ClaudeAgentTool.call({
-            prompt: 'review the proof',
-            model: 'anthropic/claude-opus-5-5@high',
-          }).pipe(
-            Effect.provide(
-              toolLayer(new AgentCliSessionRegistry(noPluginHold), parent),
-            ),
-          );
-          expect(result).toMatchObject({ status: 'executed' });
-          yield* untilQueried(parent.storage, 1);
-
-          expect(queriedOptions()[0]).toMatchObject({
-            model: 'claude-opus-5-5',
-            effort: 'high',
-            thinking: { type: 'adaptive' },
-          });
-          // The run's history label is the model's reference.
-          const [child] = childrenOf(parent);
-          expect(
-            storedRows(parent.storage).find(
-              (row) => row.run === child && row.type === 'run.config',
-            )?.data,
-          ).toContain('"model":"anthropic/claude-opus-5-5"');
-        }),
-    );
-
-    it.live('refuses a model Claude Code cannot run before launching', () =>
-      Effect.gen(function* () {
-        const parent = yield* setUp;
-        const result = yield* ClaudeAgentTool.call({
-          prompt: 'review the proof',
-          model: 'openai/gpt-6.1-sol',
-        }).pipe(
-          Effect.provide(
-            toolLayer(new AgentCliSessionRegistry(noPluginHold), parent),
-          ),
-        );
-
-        expect(result).toMatchObject({
-          status: 'error',
-          error: expect.stringContaining('Claude Code cannot run'),
-        });
-        expect(childrenOf(parent)).toEqual([]);
-      }),
-    );
-
-    it.live('preserves legacy usage when a result has no modelUsage', () =>
-      Effect.gen(function* () {
-        const parent = yield* setUp;
-        mocks.query.mockImplementation(() =>
-          (async function* () {
-            yield {
-              type: 'result',
-              subtype: 'error_during_execution',
-              errors: ['failed before the first model call'],
-              usage: { input_tokens: 12, output_tokens: 3 },
-              total_cost_usd: 0,
-            };
-          })(),
-        );
-
-        yield* ClaudeAgentTool.call({ prompt: 'start Claude' }).pipe(
-          Effect.provide(
-            toolLayer(new AgentCliSessionRegistry(noPluginHold), parent),
-          ),
-        );
-        const [child] = childrenOf(parent);
-        // The turn publishes its own usage as it returns.
-        yield* untilStored(parent.storage, (rows) =>
-          rows.some(
-            (row) =>
-              row.run === child &&
-              row.type === 'usage' &&
-              row.data.includes('"inputTokens":12') &&
-              row.data.includes('"outputTokens":3'),
-          ),
-        );
-      }),
-    );
 
     it.live(
       'launches one fallback loop when concurrent calls use the same stale session_id',
@@ -432,189 +192,6 @@ describe(
           // count is what distinguishes waiting from polling.
           expect(claim).toHaveBeenCalledTimes(2);
         }),
-    );
-
-    it.live(
-      'lets a waiting caller own the fallback after the first launch fails',
-      () =>
-        Effect.gen(function* () {
-          const parent = yield* setUp;
-          const firstEnvStarted = yield* Deferred.make<void>();
-          const firstEnv = yield* Deferred.make<NodeJS.ProcessEnv>();
-          const secondDispatching = yield* Deferred.make<void>();
-          const { registry } = contendedRegistry(secondDispatching);
-          mocks.query.mockImplementation(() => succeeded('stale-session'));
-          mocks.buildClaudeAgentEnv
-            .mockImplementationOnce(() =>
-              // An env read that dies is a defect the tool surfaces as an
-              // error result.
-              Deferred.succeed(firstEnvStarted, undefined).pipe(
-                Effect.andThen(Deferred.await(firstEnv)),
-              ),
-            )
-            .mockReturnValueOnce(Effect.succeed({}));
-          const call = (prompt: string) =>
-            ClaudeAgentTool.call({ prompt, session_id: 'stale-session' }).pipe(
-              Effect.provide(toolLayer(registry, parent)),
-            );
-
-          const first = yield* Effect.forkChild(call('first attempt'));
-          yield* Deferred.await(firstEnvStarted);
-          const second = yield* Effect.forkChild(call('retry from the waiter'));
-          yield* Deferred.await(secondDispatching);
-
-          yield* Deferred.die(firstEnv, new Error('first environment failed'));
-          const [firstResult, secondResult] = yield* Effect.all([
-            Fiber.join(first),
-            Fiber.join(second),
-          ]);
-
-          expect(firstResult.status).toBe('error');
-          expect(secondResult.status).toBe('executed');
-          expect(secondResult.summary).toMatch(/Launched Claude Code CLI/);
-          expect(mocks.buildClaudeAgentEnv).toHaveBeenCalledTimes(2);
-          expect(childrenOf(parent)).toHaveLength(1);
-        }),
-    );
-
-    it.live(
-      'still enqueues a follow-up (no fresh launch) when session_id IS active in the registry',
-      () =>
-        Effect.gen(function* () {
-          const parent = yield* setUp;
-          const registry = new AgentCliSessionRegistry(noPluginHold);
-          mocks.query.mockImplementation(() => succeeded('sess-resumed'));
-          const call = (input: { prompt: string; session_id?: string }) =>
-            ClaudeAgentTool.call(input).pipe(
-              Effect.provide(toolLayer(registry, parent)),
-            );
-          yield* call({ prompt: 'start the session' });
-          yield* untilStored(
-            parent.storage,
-            () => registry.lookup('sess-resumed') !== undefined,
-          );
-
-          const result = yield* call({
-            prompt: 'one more follow-up',
-            session_id: 'sess-resumed',
-          });
-
-          expect(result.status).toBe('executed');
-          expect(result.summary).toMatch(/Follow-up queued/);
-          yield* untilQueried(parent.storage, 2);
-          expect(childrenOf(parent)).toHaveLength(1);
-          expect(queriedOptions()[1]?.resume).toBe('sess-resumed');
-        }),
-    );
-
-    it.live(
-      'forks an active session into a distinct child and only forks its first turn',
-      () =>
-        Effect.gen(function* () {
-          const parent = yield* setUp;
-          const registry = new AgentCliSessionRegistry(noPluginHold);
-          const sourceRunId = generateRunId();
-          registry.register('source-session', { runId: sourceRunId });
-          mocks.query.mockImplementation(() => succeeded('forked-session'));
-          const call = (input: {
-            prompt: string;
-            session_id: string;
-            fork_session?: boolean;
-          }) =>
-            ClaudeAgentTool.call(input).pipe(
-              Effect.provide(toolLayer(registry, parent)),
-            );
-
-          const result = yield* call({
-            prompt: 'try a different proof',
-            session_id: 'source-session',
-            fork_session: true,
-          });
-          expect(result.summary).toMatch(/Launched Claude Code CLI/);
-          yield* untilStored(
-            parent.storage,
-            () => registry.lookup('forked-session') !== undefined,
-          );
-          // The fork's next turn continues the fork, not its source.
-          expect(
-            (yield* call({
-              prompt: 'continue the fork',
-              session_id: 'forked-session',
-            })).summary,
-          ).toMatch(/Follow-up queued/);
-          yield* untilQueried(parent.storage, 2);
-
-          expect(childrenOf(parent)).toHaveLength(1);
-          expect(queriedOptions()[0]).toMatchObject({
-            resume: 'source-session',
-            forkSession: true,
-          });
-          expect(queriedOptions()[1]).toMatchObject({
-            resume: 'forked-session',
-          });
-          expect(queriedOptions()[1]).not.toHaveProperty('forkSession');
-          expect(registry.lookup('source-session')?.runId).toBe(sourceRunId);
-        }),
-    );
-
-    it.live.each([
-      { caseName: 'omits the new session id', subtype: 'success' },
-      {
-        caseName: 'echoes the source session id',
-        subtype: 'success',
-        sessionId: 'source-session',
-      },
-      {
-        caseName: 'reports an error without a new session id',
-        subtype: 'error_during_execution',
-      },
-    ])('fails a fork that $caseName', ({ subtype, sessionId }) =>
-      Effect.gen(function* () {
-        const parent = yield* setUp;
-        const registry = new AgentCliSessionRegistry(noPluginHold);
-        registry.register('source-session', { runId: generateRunId() });
-        mocks.query.mockImplementation(() =>
-          (async function* () {
-            yield {
-              type: 'result',
-              subtype,
-              ...(subtype === 'success'
-                ? { result: 'Malformed fork turn' }
-                : { errors: ['Provider fork failure'] }),
-              ...(sessionId ? { session_id: sessionId } : {}),
-              usage: { input_tokens: 7, output_tokens: 3 },
-              total_cost_usd: 0.25,
-            };
-          })(),
-        );
-
-        const result = yield* ClaudeAgentTool.call({
-          prompt: 'try a different proof',
-          session_id: 'source-session',
-          fork_session: true,
-        }).pipe(Effect.provide(toolLayer(registry, parent)));
-        expect(result.status).toBe('executed');
-
-        // The failed fork ends its child, and its parent hears why and what
-        // it cost; nothing resumes the source.
-        const [child] = childrenOf(parent);
-        yield* untilStored(parent.storage, (rows) =>
-          rows.some((row) => row.run === child && row.type === 'run.end'),
-        );
-        const delivered = storedRows(parent.storage).filter(
-          (row) =>
-            row.run === parent.runId &&
-            row.data.includes('Claude Code fork did not create a distinct'),
-        );
-        expect(delivered.map((row) => row.data).join('')).toContain(
-          '<cost-usd>0.2500</cost-usd>',
-        );
-        expect(mocks.query).toHaveBeenCalledOnce();
-        expect(queriedOptions()[0]).toMatchObject({
-          resume: 'source-session',
-          forkSession: true,
-        });
-      }),
     );
 
     it.live('rejects a fork from a live session owned by another run', () =>

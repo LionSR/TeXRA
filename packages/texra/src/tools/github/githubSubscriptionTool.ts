@@ -176,8 +176,8 @@ type ParsedPath = ParsedRepoPath | ParsedPRPath | ParsedIssuePath;
 
 const PATH_RE = /^([^/\s]+)\/([^/\s]+)(?:\/(pulls|issues)\/(\d+))?$/;
 
-const requireToken = (): Effect.Effect<void, Error, Secrets> =>
-  Effect.gen(function* () {
+const requireToken = Effect.fn('githubSubscriptionTool.requireToken')(
+  function* (): Effect.fn.Return<void, Error, Secrets> {
     const secrets = yield* Secrets;
     const token = yield* getGitHubToken(secrets);
     if (!token) {
@@ -187,7 +187,8 @@ const requireToken = (): Effect.Effect<void, Error, Secrets> =>
         ),
       );
     }
-  });
+  },
+);
 
 /** `owner/repo` for any parsed target. */
 function slugOf(target: { owner: string; repo: string }): string {
@@ -633,27 +634,28 @@ export const GitHubSubscriptionTool = defineTool({
     `Caps: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PR subscriptions, ${MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS} concurrent issue subscriptions, ${MAX_CONCURRENT_REPO_SUBSCRIPTIONS} concurrent repo subscriptions per process. Poll interval ≈ ${GITHUB_POLL_INTERVAL_MS / 1000}s. Requires a GitHub token: set it via /config → GitHub token (CLI), Settings → General (VS Code / desktop), or GITHUB_TOKEN / GH_TOKEN.`,
   ].join(' '),
   schema: GitHubSubscriptionInputSchema,
-  execute: (input: GitHubSubscriptionInput) =>
-    Effect.gen(function* () {
-      const toolCall = yield* ToolContext;
-      const { run } = yield* requireRun('github_subscription');
-      switch (input.command) {
-        case 'subscribe':
-          return yield* execSubscribe(
-            input,
-            run.runId,
-            yield* (yield* ChildRuns).inbox(run.runId),
-          );
-        case 'unsubscribe':
-          return yield* execUnsubscribe(input, run.runId);
-        case 'list':
-          return yield* execList(run.runId);
-        case 'find_current':
-          return yield* execFindCurrent(
-            input,
-            toolCall.env.workingDirectory,
-            toolCall.env.roots,
-          );
-      }
-    }),
+  execute: Effect.fn('githubSubscriptionTool.execute')(function* (
+    input: GitHubSubscriptionInput,
+  ) {
+    const toolCall = yield* ToolContext;
+    const { run } = yield* requireRun('github_subscription');
+    switch (input.command) {
+      case 'subscribe':
+        return yield* execSubscribe(
+          input,
+          run.runId,
+          yield* (yield* ChildRuns).inbox(run.runId),
+        );
+      case 'unsubscribe':
+        return yield* execUnsubscribe(input, run.runId);
+      case 'list':
+        return yield* execList(run.runId);
+      case 'find_current':
+        return yield* execFindCurrent(
+          input,
+          toolCall.env.workingDirectory,
+          toolCall.env.roots,
+        );
+    }
+  }),
 });

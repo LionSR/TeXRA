@@ -16,7 +16,6 @@ import {
 
 import {
   AppState,
-  LanguageModel,
   withProcessServices,
   SessionHostInteractions,
   type HostInteractions,
@@ -32,11 +31,12 @@ import {
   GlobalStateKey,
 } from '@texra-ai/harness/schemas';
 import { BundledViewContentProvider } from '@common/webview';
-import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
+import { appSignalStream, emitAppSignal } from '@eventBus/AppSignals';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
+import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import {
   getFirstRunDone,
   OnboardingFunnelRefresher,
@@ -52,6 +52,7 @@ import {
   type EditorRegistry,
 } from '@texra/tools/editorHost';
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
+import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import { DOCUMENTS_OUTPUT_KEY } from '@texra/shared/plugins/documents';
 import type {
   DownMessage,
@@ -204,6 +205,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     /** The setup pill: painted from the same credential answer the funnel
      *  reads, so the pill and the "Connect a model" card agree. */
     private readonly paintSetupPill: (credentialUsable: boolean) => void,
+    /** The settings view at a target. The settings view is built after
+     *  this one, so this waits for it. */
+    openSettings: (
+      target: SettingsTarget | undefined,
+    ) => Effect.Effect<void, Error, ProcessServices>,
   ) {
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -324,6 +330,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
         this.runtime,
         roots,
+        this.scope,
       ),
       // A decision goes where the run runs.
       session: runSession,
@@ -335,8 +342,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const presentation = createAgentPresentationHost(
       this,
       globalState,
+      secrets,
       this.runtime,
       roots,
+      this.scope,
     );
     const { records, exportRecords } = this.windowRecords(
       windowSession,
@@ -349,6 +358,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       runtime: this.runtime,
       scope: this.scope,
       extensionPath: context.extensionPath,
+      extensionId: context.extension.id,
+      openSettings,
+      showConnectModel: () => this.showConnectModel(),
+      showProgressView: () => this.showProgressView(),
       globalState,
       secrets,
       snapshot: this.snapshot,
@@ -382,28 +395,27 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         readonly location: FileLocation;
         readonly preserveFocus: boolean;
       }) =>
-        Effect.tryPromise({
-          try: () =>
-            vscode.commands.executeCommand<void>(
-              'vscode.open',
-              vscode.Uri.file(location.absolutePath),
-              {
-                viewColumn: vscode.ViewColumn.Beside,
-                preserveFocus,
-              } satisfies vscode.TextDocumentShowOptions,
-            ),
-          catch: (cause) =>
-            new PdfOpenFailed({
-              path: location.absolutePath,
-              message: 'VS Code would not open the PDF in its viewer.',
-              cause,
-            }),
-        }),
+        executeVscodeCommand(
+          'vscode.open',
+          vscode.Uri.file(location.absolutePath),
+          {
+            viewColumn: vscode.ViewColumn.Beside,
+            preserveFocus,
+          } satisfies vscode.TextDocumentShowOptions,
+        ).pipe(
+          Effect.mapError(
+            (cause) =>
+              new PdfOpenFailed({
+                path: location.absolutePath,
+                message: 'VS Code would not open the PDF in its viewer.',
+                cause,
+              }),
+          ),
+        ),
     };
     // A window that runs its tasks here attaches to its own session; a
     // window of the service is its project's window there: the service's
-    // runs ask it for the same, stage their tool edits here, and bind the
-    // editor's language models (Copilot) through it.
+    // runs ask it for the same and stage their tool edits here.
     if (windowSession.service === undefined) {
       this.runtime.runSync(
         this.editors
@@ -421,19 +433,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const { service } = windowSession;
     if (service !== undefined)
       this.runtime.runFork(
-        Effect.flatMap(Effect.service(LanguageModel), (languageModel) =>
-          this.attachToService(service, {
-            ...presentation,
-            ...editor,
-            languageModel,
-            // What a service task wrote, told here as a task here tells
-            // it: the file decorations follow it.
-            filesWritten: (absolutePaths) =>
-              emitAppSignal('workspaceFilesWritten', {
-                absolutePaths: [...absolutePaths],
-              }),
-          }),
-        ).pipe(Scope.provide(this.scope)),
+        this.attachToService(service, {
+          ...presentation,
+          ...editor,
+          // What a service task wrote, told here as a task here tells
+          // it: the file decorations follow it.
+          filesWritten: (absolutePaths) =>
+            emitAppSignal('workspaceFilesWritten', {
+              absolutePaths: [...absolutePaths],
+            }),
+        }).pipe(Scope.provide(this.scope)),
       );
 
     this.watchWorkspace();
@@ -610,26 +619,36 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
     const filePattern =
       extensions.size === 0 ? '**/*' : `**/*.{${[...extensions].join(',')}}`;
-    const fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern);
-    const refreshFiles = () => {
-      this.runtime.runSync(
-        Effect.forkIn(this.snapshot.refreshFiles, this.scope),
-      );
-    };
-    fileWatcher.onDidCreate(refreshFiles);
-    fileWatcher.onDidDelete(refreshFiles);
-    this.own(fileWatcher);
-    // The catalog reloads itself on every change to its sources
-    // (`agentCatalogFollower`); this launcher repaints what it lists, at most
-    // once per 300ms burst of changes.
-    const agentsChanged = Stream.callback<void>((queue) =>
-      onAppSignal('workspaceAgentsChanged', () =>
-        Queue.offerUnsafe(queue, undefined),
+    // One listing per burst of creates and deletes: a checkout that adds
+    // a thousand files lists the workspace once, not a thousand times.
+    const filesChanged = Stream.callback<void>((queue) =>
+      Effect.acquireRelease(
+        Effect.sync(() => {
+          const fileWatcher =
+            vscode.workspace.createFileSystemWatcher(filePattern);
+          const changed = () => Queue.offerUnsafe(queue, undefined);
+          fileWatcher.onDidCreate(changed);
+          fileWatcher.onDidDelete(changed);
+          return fileWatcher;
+        }),
+        (fileWatcher) => Effect.sync(() => fileWatcher.dispose()),
       ),
     );
     this.runtime.runSync(
       Effect.forkIn(
-        agentsChanged.pipe(
+        filesChanged.pipe(
+          Stream.debounce('300 millis'),
+          Stream.runForEach(() => this.snapshot.refreshFiles),
+        ),
+        this.scope,
+      ),
+    );
+    // The catalog reloads itself on every change to its sources
+    // (`agentCatalogFollower`); this launcher repaints what it lists, at most
+    // once per 300ms burst of changes.
+    this.runtime.runSync(
+      Effect.forkIn(
+        appSignalStream('workspaceAgentsChanged').pipe(
           Stream.debounce('300 millis'),
           Stream.runForEach(() =>
             this.refreshCatalogs({ agentCatalogAlreadyFresh: true }).pipe(
@@ -687,8 +706,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** Recompute the user-scoped funnel; the shared refresher owns the loop. */
   public refreshOnboardingFunnel(): Effect.Effect<
     void,
-    StateReadFailed | StateWriteFailed,
-    LanguageModel
+    StateReadFailed | StateWriteFailed
   > {
     return this.onboardingFunnel.run();
   }
@@ -854,15 +872,17 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   public showInSidebar(): Effect.Effect<void, SurfacePlacementFailed> {
-    return Effect.tryPromise({
-      try: () => vscode.commands.executeCommand<void>('texra.mainView.focus'),
-      catch: (cause) =>
-        new SurfacePlacementFailed({
-          member: 'showInSidebar',
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    });
+    return executeVscodeCommand('texra.mainView.focus').pipe(
+      Effect.asVoid,
+      Effect.mapError(
+        (cause) =>
+          new SurfacePlacementFailed({
+            member: 'showInSidebar',
+            message: cause.message,
+            cause,
+          }),
+      ),
+    );
   }
 
   /**

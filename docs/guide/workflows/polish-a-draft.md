@@ -49,18 +49,11 @@ texra run polish \
 
 <p class="hero-caption">Revisions stream as progress, then the path to the final revision prints on stdout. That printed path is the success signal.</p>
 
-Each revision writes its output into the run folder, an
-`executions/<run-id>/` folder under TeXRA's workspace storage directory,
-using the **input filename** as the document name:
-
-```
-executions/<run-id>/r0/intro.tex   # Revision 1: first revision
-executions/<run-id>/r1/intro.tex   # Revision 2: critique-and-revise pass
-```
+Each revision writes its output into `executions/<run-id>/` under TeXRA's workspace storage directory, keeping the **input filename**:
 
 <PolishRoundsTree />
 
-<p class="hero-caption">Both revisions reuse your input filename: <code>r0/</code> holds the first revision, <code>r1/</code> the critique-and-revise pass you usually keep.</p>
+<p class="hero-caption">Both revisions reuse your input filename: <code>r0/intro.tex</code> holds the first revision, and <code>r1/intro.tex</code> holds the critique-and-revise pass.</p>
 
 To write the final revision next to your input instead:
 

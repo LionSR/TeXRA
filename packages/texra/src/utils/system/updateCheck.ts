@@ -95,15 +95,15 @@ interface DailyUpdateCheckOptions<R> {
 }
 
 /** Consult the source, notify, then persist the successful check in that order. */
-export const runDailyUpdateCheck = <R>({
-  currentVersion,
-  host,
-  notifyOnce = false,
-  fetchLatest,
-  notify,
-  stampFailure = 'throw',
-}: DailyUpdateCheckOptions<R>) =>
-  Effect.gen(function* () {
+export const runDailyUpdateCheck = Effect.fn('updateCheck.runDailyUpdateCheck')(
+  function* <R>({
+    currentVersion,
+    host,
+    notifyOnce = false,
+    fetchLatest,
+    notify,
+    stampFailure = 'throw',
+  }: DailyUpdateCheckOptions<R>) {
     const records = yield* UpdateCheckRecords;
     const previous = yield* records.read(host);
     const nowMs = yield* Clock.currentTimeMillis;
@@ -144,7 +144,8 @@ export const runDailyUpdateCheck = <R>({
         : stamp;
     }
     return latest;
-  });
+  },
+);
 
 interface FetchJsonStringFieldOptions {
   url: string;

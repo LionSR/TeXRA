@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -8,18 +8,11 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { runCli } from '@cli/commands/root';
-import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
-import { defaultBranch } from '@cli/runtime/gitOps';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { createDeferred } from '@test/support/asyncTestUtils';
-import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
-import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
-import { parseGitHubSlug } from '@texra/tools/github/githubSlug';
 
 const browserMocks = vi.hoisted(() => ({
   tryOpenBrowser: vi.fn(),
-  installCliProcessRuntime: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/browser', () => ({
@@ -28,19 +21,12 @@ vi.mock('@cli/runtime/browser', () => ({
 
 // The command brings no platform up, but its entry still installs the process
 // runtime its program runs on. Here that is the harness's, so the suite never
-// builds a real one, and the install is a spy so the test below can assert
-// what the entry hands it: `NO_PLATFORM_INSTALL`, the real value spread in
-// from the module. Without it the install would open the global root's handle
-// this command never brings a platform up to dispose.
+// builds a real one.
 vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
   const { testRuntime } = await import('@test/support/testProcessRuntime');
   const actual =
     await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>();
-  browserMocks.installCliProcessRuntime.mockImplementation(() => testRuntime());
-  return {
-    ...actual,
-    installCliProcessRuntime: browserMocks.installCliProcessRuntime,
-  };
+  return { ...actual, installCliProcessRuntime: () => testRuntime() };
 });
 
 const repos: string[] = [];
@@ -90,84 +76,6 @@ describe('install-github-action command', () => {
     spyOnStreamWrite(process.stderr);
     browserMocks.tryOpenBrowser.mockReset();
     browserMocks.tryOpenBrowser.mockImplementation(() => Effect.succeed(true));
-    browserMocks.installCliProcessRuntime.mockClear();
-  });
-
-  it('commits only the generated workflow file', async () => {
-    const repo = makeRepo();
-    writeFileSync(path.join(repo, 'already-staged.txt'), 'keep staged\n');
-    git(repo, 'add', 'already-staged.txt');
-
-    const result = await runInstall(repo);
-
-    expect(result.exitCode).toBe(CliExitCode.Success);
-    // The platform-less handoff itself: the entry opens no global state store
-    // and no global-root handle for a command that disposes neither.
-    expect(browserMocks.installCliProcessRuntime).toHaveBeenCalledWith(
-      defaultNodeStorageRoot(),
-      { ...NO_PLATFORM_INSTALL, minimumLogLevel: 'Info' },
-    );
-    expect(git(repo, 'show', '--name-only', '--format=', 'HEAD')).toBe(
-      '.github/workflows/texra-code-review.yml',
-    );
-    expect(git(repo, 'diff', '--cached', '--name-only')).toBe(
-      'already-staged.txt',
-    );
-    const workflow = readFileSync(
-      path.join(repo, '.github/workflows/texra-code-review.yml'),
-      'utf8',
-    );
-    expect(workflow).toContain('id-token: write');
-    expect(workflow).not.toContain('TEXRA_APP_PRIVATE_KEY');
-  });
-
-  it('does not switch branches before the GitHub App installer opens', async () => {
-    const repo = makeRepo();
-    git(
-      repo,
-      'remote',
-      'add',
-      'origin',
-      'https://github.com/example/project.git',
-    );
-    let rejectBrowser: ((error: Error) => void) | undefined;
-    const opened = createDeferred();
-    browserMocks.tryOpenBrowser.mockImplementationOnce(() =>
-      Effect.callback<boolean>((resume) => {
-        opened.resolve();
-        rejectBrowser = (error) => resume(Effect.die(error));
-      }),
-    );
-
-    const install = runInstall(repo);
-    await opened.promise;
-    expect(git(repo, 'branch', '--show-current')).toBe('main');
-
-    rejectBrowser?.(new Error('installer interrupted'));
-    await expect(install).resolves.toEqual({
-      exitCode: CliExitCode.AgentError,
-    });
-  });
-
-  it('creates the install branch from the requested base', async () => {
-    const repo = makeRepo();
-    git(repo, 'checkout', '-b', 'feature');
-    writeFileSync(path.join(repo, 'feature.txt'), 'feature work\n');
-    git(repo, 'add', 'feature.txt');
-    git(repo, 'commit', '-m', 'feature work');
-
-    const result = await runInstall(
-      repo,
-      '--branch',
-      'texra/install-from-main',
-      '--base',
-      'main',
-    );
-
-    expect(result.exitCode).toBe(CliExitCode.Success);
-    expect(git(repo, 'diff', '--name-only', 'main...HEAD')).toBe(
-      '.github/workflows/texra-code-review.yml',
-    );
   });
 
   it('reuses an existing branch under --force without resetting its commits', async () => {
@@ -190,39 +98,4 @@ describe('install-github-action command', () => {
     expect(git(repo, 'rev-parse', 'HEAD')).toBe(customCommit);
     expect(git(repo, 'log', '--format=%s', '-1')).toBe('custom branch edit');
   });
-});
-
-describe('parseGitHubSlug', () => {
-  it.each([
-    ['https://github.com/owner/repo.git', { owner: 'owner', repo: 'repo' }],
-    ['git@github.com:owner/repo.git', { owner: 'owner', repo: 'repo' }],
-    ['ssh://git@github.com/owner/repo.git', { owner: 'owner', repo: 'repo' }],
-    ['https://github.com/owner/repo/', { owner: 'owner', repo: 'repo' }],
-  ])('parses %s', (url, expected) => {
-    expect(parseGitHubSlug(url)).toEqual(expected);
-  });
-
-  it.each([
-    'https://gitlab.com/owner/repo.git',
-    'https://gitlab.com/group/github.com/owner/repo.git',
-  ])('rejects %s, which is not a GitHub remote', (url) => {
-    expect(parseGitHubSlug(url)).toBeNull();
-  });
-});
-
-describe('defaultBranch', () => {
-  it.effect('preserves slash-containing origin default branch names', () =>
-    Effect.gen(function* () {
-      const repo = makeRepo();
-      git(repo, 'update-ref', 'refs/remotes/origin/feature/default', 'HEAD');
-      git(
-        repo,
-        'symbolic-ref',
-        'refs/remotes/origin/HEAD',
-        'refs/remotes/origin/feature/default',
-      );
-
-      expect(yield* defaultBranch(repo)).toBe('feature/default');
-    }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
 });

@@ -6,7 +6,7 @@ import CliModelsHero from '../.vitepress/components/CliModelsHero.vue';
 
 # AI models
 
-TeXRA connects directly to frontier reasoning models from leading providers—including Anthropic, OpenAI, Google, DeepSeek, Moonshot, and DashScope. You can assign flagship reasoning models to demanding mathematical proofs and autonomous loops, while reserving faster, cost-efficient variants for routine document polish and formatting. Select a model from the dropdown menu in the TeXRA UI or pass `--model` in the CLI. Hover over any option to inspect its context window and pricing.
+TeXRA connects directly to models from Anthropic, OpenAI, Google, DeepSeek, Moonshot, DashScope, MiniMax, GLM, Meta, and xAI. Pick a model from the dropdown menu in the TeXRA UI or pass `--model` in the CLI; hover over any option in the picker to see its context window and token pricing.
 
 <ModelPickerHero />
 
@@ -161,19 +161,6 @@ and Google's own APIs).
 <p class="hero-caption">Pick a model by intent: each use case maps to a short list of recommended model references.</p>
 
 ## Setting API keys
-
-### Subscription-backed models in VS Code
-
-The VS Code extension can also use compatible models from a GitHub Copilot
-subscription. Open **Settings → Models → Subscriptions → Copilot in VS Code**, then select
-**Grant access**. VS Code shows its own consent prompt; TeXRA never asks for
-or stores a Copilot API key.
-
-Copilot models appear only in the VS Code extension because the official
-Language Model API is an editor capability. They do not appear in the CLI or
-desktop model lists. If Copilot quota is exhausted, the retry panel can start a
-new run through the corresponding provider model once a usable provider API
-key is available.
 
 Using your own provider API key? TeXRA stores keys in `~/.texra/secrets/`, a folder only your user can read, shared by the extension, the desktop app and the CLI; they are never written to settings files.
 

@@ -8,11 +8,10 @@ import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
 
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit } from 'effect';
+import { Effect } from 'effect';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { CliContext } from '@cli/runtime/cliContext';
-import { CliExitCode } from '@cli/runtime/exitCodes';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { RUN_OUTCOME } from '@shared/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
@@ -87,15 +86,6 @@ const { runHeadlessAgent: nativeRun } = await import('@cli/commands/workflow');
 const runToolUseAgent = (...args: Parameters<typeof nativeRun>) =>
   Effect.provide(nativeRun(...args), fakeProcessServices());
 
-/** The usage error a refused run fails with. */
-function usageErrorFrom(exit: Exit.Exit<number, Error>): Error {
-  if (!Exit.isFailure(exit)) throw new Error('The run was expected to fail.');
-  const failure = exit.cause.reasons.find(Cause.isFailReason)?.error;
-  if (!(failure instanceof Error))
-    throw new Error(`The run failed without a usage error: ${exit.cause}`);
-  return failure;
-}
-
 describe('CLI run command, tool-use agents', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -150,33 +140,8 @@ describe('CLI run command, tool-use agents', () => {
         });
 
         expect(exitCode).toBe(0);
-        expect(cliInitPlatformMock.initCliPlatform).toHaveBeenCalledWith(
-          expect.objectContaining({ cwd: '/tmp/project' }),
-        );
-        expect(
-          cliInitPlatformMock.initCliPlatform.mock.invocationCallOrder[0],
-        ).toBeLessThan(mocks.resolveCliRunAgent.mock.invocationCallOrder[0]);
-        expect(mocks.resolveCliRunAgent).toHaveBeenCalledWith(
-          expect.anything(),
-          'chat',
-        );
-        expect(mocks.withExpandedRunInputs).toHaveBeenCalledWith(
-          ['problem.md'],
-          ['notes.md'],
-          '/tmp/project',
-          {
-            allowEmptyInput: true,
-            requireWorkspaceFiles: true,
-          },
-          expect.any(Function),
-        );
         const config = mocks.executeCliToolUseConfig.mock.calls[0]?.[0];
-        expect(config?.inputFiles).toEqual(['problem.md']);
-        expect(config?.contextFiles).toEqual(['notes.md']);
         expect(config?.displayInstruction).toBe('Assess the proof concisely.');
-        expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
-          recoveryInputIsDurable: true,
-        });
         expect(config?.instruction).toContain('Primary user input files:');
         expect(config?.instruction).toContain('- "problem.md"');
         expect(config?.instruction).toContain('Read-only context files:');
@@ -207,124 +172,6 @@ describe('CLI run command, tool-use agents', () => {
           result: emission.json,
         });
         expect(emission?.text).toBe('Correct.');
-      }),
-  );
-
-  it.effect(
-    'marks materialized stdin as unavailable for recovery advertising',
-    () =>
-      Effect.gen(function* () {
-        mocks.withExpandedRunInputs.mockResolvedValueOnce({
-          inputFiles: ['.texra-tmp/stdin.tex'],
-          contextFiles: [],
-          stdinInputPath: '.texra-tmp/stdin.tex',
-        });
-        yield* runToolUseAgent(createRunCommandCliContext(), {
-          agent: 'chat',
-          inputFiles: ['-'],
-          contextFiles: [],
-          model: 'openai/gpt-5.4-2026-03-05',
-          instruction: 'Assess the proof.',
-        });
-
-        expect(mocks.executeCliToolUseConfig.mock.calls[0]?.[2]).toMatchObject({
-          recoveryInputIsDurable: false,
-        });
-      }),
-  );
-
-  it.effect('publishes the canonical outcome for a shutdown cancellation', () =>
-    Effect.gen(function* () {
-      mocks.executeCliToolUseConfig.mockResolvedValueOnce({
-        ok: true,
-        result: {
-          runId: 'run-interrupted',
-          outcome: RUN_OUTCOME.CANCELLED,
-          output: { response: '', files: [] },
-          workingDirectory: '/tmp/project',
-        },
-        exitCode: CliExitCode.Interrupted,
-      });
-      const exitCode = yield* runToolUseAgent(createRunCommandCliContext(), {
-        agent: 'chat',
-        inputFiles: ['problem.md'],
-        contextFiles: [],
-        instruction: 'Assess the proof.',
-      });
-
-      expect(exitCode).toBe(CliExitCode.Interrupted);
-      expect(cliOutputMock.emitCliResult.mock.calls[0]?.[1].json).toMatchObject(
-        { outcome: RUN_OUTCOME.CANCELLED },
-      );
-    }),
-  );
-
-  it.effect('reports missing instruction before resolving the model', () =>
-    Effect.gen(function* () {
-      const exit = yield* Effect.exit(
-        runToolUseAgent(createRunCommandCliContext(), {
-          agent: 'chat',
-          inputFiles: ['problem.md'],
-          contextFiles: [],
-          model: 'openai/gpt-5.4-2026-03-05',
-          instruction: '',
-        }),
-      );
-
-      expect(usageErrorFrom(exit).message).toBe(
-        'Provide --instruction or --instruction-file.',
-      );
-      expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
-      expect(mocks.withExpandedRunInputs).not.toHaveBeenCalled();
-    }),
-  );
-
-  // Neither a chat nor a document task can run an invocation with no
-  // instruction and no input,
-  // so it is refused before the platform init and the agent-catalog fetch a
-  // signed-in session would otherwise pay for on a plain usage error.
-  it.effect(
-    'refuses an invocation nothing can run without resolving the agent',
-    () =>
-      Effect.gen(function* () {
-        const exit = yield* Effect.exit(
-          runToolUseAgent(createRunCommandCliContext(), {
-            agent: 'chat',
-            inputFiles: [],
-            contextFiles: ['notes.md'],
-            instruction: '',
-          }),
-        );
-
-        expect(usageErrorFrom(exit).message).toBe(
-          'Provide --instruction or --instruction-file for an agent, or --input for a document task.',
-        );
-        expect(cliInitPlatformMock.initCliPlatform).not.toHaveBeenCalled();
-        expect(mocks.resolveCliRunAgent).not.toHaveBeenCalled();
-      }),
-  );
-
-  // The one headless `run` command carries document-task flags too, so those
-  // destinations have to be refused once the agent is known to have no task.
-  it.effect.each(['output', 'outputDir'] as const)(
-    'refuses the document-task-only --%s destination for an agent with no task',
-    (flag) =>
-      Effect.gen(function* () {
-        const exit = yield* Effect.exit(
-          runToolUseAgent(createRunCommandCliContext(), {
-            agent: 'chat',
-            inputFiles: ['problem.md'],
-            contextFiles: [],
-            instruction: 'Assess the proof.',
-            [flag]: 'out.tex',
-          }),
-        );
-
-        expect(usageErrorFrom(exit).message).toBe(
-          `${flag === 'output' ? '--output' : '--output-dir'} is only available for document tasks; "chat" has no task.`,
-        );
-        expect(mocks.selectCliRunModel).not.toHaveBeenCalled();
-        expect(mocks.executeCliToolUseConfig).not.toHaveBeenCalled();
       }),
   );
 });

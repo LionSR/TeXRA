@@ -212,9 +212,6 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   onAdmitted?: (runId: RunId) => Effect.Effect<void, Error>;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
-  /** This launch is the user's own-API-key fallback for a quota-exhausted
-   *  retry: it declines the Copilot route and every subscription route. */
-  ownApiKeyFallback?: boolean;
 }
 
 /**
@@ -245,7 +242,6 @@ export function executeAgent(
           ),
         ),
       session: options.session,
-      ownApiKeyFallback: options.ownApiKeyFallback,
       toolPolicy: { stopAfterCycle: options.stopAfterCycle },
     });
     const { config, session: runSession } = ctx;
@@ -331,10 +327,10 @@ export interface ResumeTurnIdentity {
   readonly agentConfig: AgentConfig;
 }
 
-/** What a fresh launch takes, but its registration and own-key fallback. */
+/** What a fresh launch takes, but its registration. */
 export interface ResumeToolUseFromResumeDataOptions extends Omit<
   ExecuteAgentOptions,
-  'ownApiKeyFallback' | 'registration'
+  'registration'
 > {
   /** A resumed cycle is idle after its child delivery, while its run stays live. */
   readonly onIdle?: () => void;

@@ -17,7 +17,6 @@ import {
   web,
   definePlugin,
   type ProcessPluginLayer,
-  ALWAYS_AVAILABLE,
 } from '@texra-ai/harness/plugins';
 
 // Local imports
@@ -235,15 +234,9 @@ const documents: Plugin = {
   arms: APP_PLUGIN_ARMS.documents,
 };
 
-/**
- * TeXRA's plugins, in dashboard order. `copilot` contributes no tool of its
- * own: its process layer, which the VS Code host passes here, exposes the
- * research tools of the other plugins on in the live catalog to Copilot while
- * it is on (`copilotToolsLayer` in packages/extension).
- */
+/** TeXRA's plugins, in dashboard order. */
 export const texraPlugins = (
   host: {
-    readonly copilot?: ProcessPluginLayer;
     /** The host's Lean services in place of the direct `lake` pool (VS
      *  Code's Lean 4 extension bridge). */
     readonly lean?: ProcessPluginLayer<LeanLanguageServices>['layer'];
@@ -277,12 +270,6 @@ export const texraPlugins = (
     core(editors, host.inlineComments),
     codemode,
     setup(host.setup ?? {}),
-    {
-      id: 'copilot',
-      toggle: 'on',
-      availability: ALWAYS_AVAILABLE,
-      ...(host.copilot !== undefined && { processLayer: host.copilot }),
-    },
     documents,
   ];
 };

@@ -192,57 +192,56 @@ export interface ChildLaunch {
  * outlives a restart; one the run's stop cancelled is asked again under the
  * next ordinal.
  */
-const scriptRequest = (
+const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   call: RunToolCall,
   script: ScriptScope,
   proposal: AgentProposal,
-) =>
-  Effect.gen(function* () {
-    const { session, runId } = call.run;
-    const shared = {
-      responseId: call.responseId,
-      callId: script.callId,
-      attempt: 0,
-    };
-    const from = session.log.now();
-    const state = yield* session.runHistory.load(runId);
-    const { raised, own } = attemptRequests(state?.requests ?? {}, shared);
-    if (own?.request.decision === null)
-      // A plane that closes first decides nothing: the call stays in
-      // flight, and the next resume finds the request still open.
-      return yield* session.requests.decision(runId, own.requestId, from).pipe(
-        Effect.map((row) => row.decision),
-        Effect.catch((cause) =>
-          Effect.logWarning(
-            `The script's agent request ${own.requestId} closed without a decision; the call stays in flight and the next resume asks again.`,
-          ).pipe(
-            Effect.annotateLogs({ data: cause }),
-            Effect.andThen(Effect.interrupt),
-          ),
+) {
+  const { session, runId } = call.run;
+  const shared = {
+    responseId: call.responseId,
+    callId: script.callId,
+    attempt: 0,
+  };
+  const from = session.log.now();
+  const state = yield* session.runHistory.load(runId);
+  const { raised, own } = attemptRequests(state?.requests ?? {}, shared);
+  if (own?.request.decision === null)
+    // A plane that closes first decides nothing: the call stays in
+    // flight, and the next resume finds the request still open.
+    return yield* session.requests.decision(runId, own.requestId, from).pipe(
+      Effect.map((row) => row.decision),
+      Effect.catch((cause) =>
+        Effect.logWarning(
+          `The script's agent request ${own.requestId} closed without a decision; the call stays in flight and the next resume asks again.`,
+        ).pipe(
+          Effect.annotateLogs({ data: cause }),
+          Effect.andThen(Effect.interrupt),
         ),
-      );
-    if (own !== null) return own.request.decision;
-    const calls = yield* script.calls;
-    return yield* call.requests.open({
-      kind: 'proposal',
-      data: {
-        requestId: callRequestId(shared, raised + 1),
-        runId,
-        ...proposal,
-        script: {
-          title: script.title,
-          source: script.source,
-          calls: calls.map(({ toolName, input }) => ({
-            toolName,
-            // A tool the preview does not know shows its arguments.
-            preview:
-              deriveToolInputPreview(toolName, input) ||
-              truncateWithEllipsis(JSON.stringify(input) ?? '', 200),
-          })),
-        },
+      ),
+    );
+  if (own !== null) return own.request.decision;
+  const calls = yield* script.calls;
+  return yield* call.requests.open({
+    kind: 'proposal',
+    data: {
+      requestId: callRequestId(shared, raised + 1),
+      runId,
+      ...proposal,
+      script: {
+        title: script.title,
+        source: script.source,
+        calls: calls.map(({ toolName, input }) => ({
+          toolName,
+          // A tool the preview does not know shows its arguments.
+          preview:
+            deriveToolInputPreview(toolName, input) ||
+            truncateWithEllipsis(JSON.stringify(input) ?? '', 200),
+        })),
       },
-    });
+    },
   });
+});
 
 /** What an ended child becomes for its call: its envelope (a recipe's read
  *  through its block), or the error a script's `await` throws for it. */

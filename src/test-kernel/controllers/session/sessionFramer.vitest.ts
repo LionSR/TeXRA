@@ -8,19 +8,9 @@
  * the frames to the view the runtime holds.
  */
 import { it } from '@effect/vitest';
-import {
-  Effect,
-  Fiber,
-  Layer,
-  Logger,
-  Queue,
-  Result,
-  Schema,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
 import { TestClock } from 'effect/testing';
-import { describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
@@ -36,8 +26,6 @@ import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { runStateAppend } from '@shared/session/runHistory';
 import {
   qualifyAggregateId,
-  DEBUG_MODE_KEY,
-  EventInputSchema,
   MESSAGE_TYPES,
   RUN_PHASE,
   type RunId,
@@ -47,20 +35,13 @@ import { Database } from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/readonlyViews';
-import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createFakeWorkspaceRoots,
   fakeConfig,
 } from '@test/support/FakePlatform';
-import {
-  fakeProcessServices,
-  storePluginsLayer,
-} from '@test/support/setupPlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
-import { testSessionOf } from '@test/support/testProcessRuntime';
+import { storePluginsLayer } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import type {
-  DownMessage,
   EventsFrame,
   Subscribe,
 } from '@texra/shared/session/sessionFrames';
@@ -72,7 +53,6 @@ import {
   frameSubscription,
   type FramerSource,
 } from '@texra/controllers/session/SessionFramer';
-import { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
 
 function textTail(
@@ -239,265 +219,6 @@ const framerSource = Effect.gen(function* () {
 });
 
 describe('session framer', () => {
-  it('rejects a run event carried by a plugin aggregate at the wire boundary', () => {
-    const input = {
-      _tag: 'event',
-      read: 'listing',
-      event: {
-        ...runStart,
-        aggregateId: qualifyAggregateId(
-          'plugin',
-          'external-inquiry:ei_012345abcdef',
-        ),
-        seq: 1,
-        commit: 1,
-        origin: SELF,
-        at: 0,
-      },
-    };
-    const accepts = (candidate: unknown) =>
-      Result.isSuccess(Schema.decodeUnknownResult(EventInputSchema)(candidate));
-    expect(accepts(input)).toBe(false);
-    expect(
-      accepts({
-        ...input,
-        event: { ...input.event, aggregateId: runStart.aggregateId },
-      }),
-    ).toBe(true);
-  });
-
-  it.live('preserves run subscription keys across the webview bridge', () =>
-    Effect.gen(function* () {
-      const session = yield* createTestSession();
-      // Registered first, so it runs last: the bridge's ports release their
-      // transcript sets through the session before it goes.
-      yield* Effect.addFinalizer(() => closeSessionOf(session));
-      const setSubscriptions = vi.spyOn(session.view, 'subscribe');
-      const bridge = yield* SessionBridge.make({
-        session: testSessionOf(session),
-        onPortClosed: () => {},
-        handleHostRequest: () =>
-          Effect.die(new Error('No host request is expected.')),
-      });
-      const keys = [
-        qualifyAggregateId('run', RUN),
-        qualifyAggregateId('run', SECOND),
-      ];
-      const port = yield* bridge.attach({ id: PORT, send: () => {} });
-      yield* port.receive({
-        ...subscribe,
-        session: session.roots.storage,
-        aggregates: keys.map((id) => ({ id, fromSeq: 0 })),
-      });
-      yield* Effect.promise(() =>
-        vi.waitFor(() => {
-          expect(setSubscriptions).toHaveBeenCalledWith(
-            expect.any(String),
-            keys.map((id) => ({ id, fromSeq: 0 })),
-          );
-        }),
-      );
-    }).pipe(Effect.provide(fakeProcessServices())),
-  );
-  it.live('holds host actions until the port first subscribes', () =>
-    Effect.gen(function* () {
-      const session = yield* createTestSession();
-      yield* Effect.addFinalizer(() => closeSessionOf(session));
-      const bridge = yield* SessionBridge.make({
-        session: testSessionOf(session),
-        onPortClosed: () => {},
-        handleHostRequest: () =>
-          Effect.die(new Error('No host request is expected.')),
-      });
-      const sent: DownMessage[] = [];
-      const port = yield* bridge.attach({
-        id: PORT,
-        send: (message) => sent.push(message),
-      });
-      const actions = () =>
-        sent.flatMap((message) =>
-          message.kind === 'surface.action' ? [message.action.kind] : [],
-        );
-
-      // Posted while the surface's document loads: nothing reaches it yet.
-      bridge.surfaceAction({ kind: 'selectNew' });
-      port.surfaceAction({ kind: 'showSessions', runId: RUN });
-      expect(sent).toEqual([]);
-
-      const live = { ...subscribe, session: session.roots.storage };
-      yield* port.receive(live);
-      expect(actions()).toEqual(['selectNew', 'showSessions']);
-
-      // Live from here on, and a resubscribe replays nothing.
-      port.surfaceAction({ kind: 'submit' });
-      yield* port.receive({ ...live, generation: 2 });
-      expect(actions()).toEqual(['selectNew', 'showSessions', 'submit']);
-    }).pipe(Effect.provide(fakeProcessServices())),
-  );
-  it.live('logs a replay read failure instead of stopping silently', () => {
-    const errors: unknown[] = [];
-    const capture = Logger.make((options) => {
-      if (options.logLevel === 'Error') errors.push(options.message);
-    });
-    return Effect.gen(function* () {
-      const session = yield* createTestSession();
-      yield* Effect.addFinalizer(() => closeSessionOf(session));
-      vi.spyOn(session.view, 'inputs').mockReturnValue(
-        Stream.die(new Error('replay read failed')),
-      );
-      const bridge = yield* SessionBridge.make({
-        session: testSessionOf(session),
-        onPortClosed: () => {},
-        handleHostRequest: () =>
-          Effect.die(new Error('No host request is expected.')),
-      });
-      const port = yield* bridge.attach({ id: PORT, send: () => {} });
-      yield* port.receive({ ...subscribe, session: session.roots.storage });
-      yield* Effect.promise(() =>
-        vi.waitFor(() => {
-          expect(String(errors.flat()[0])).toContain(
-            `Transcript frames for port ${PORT} stopped`,
-          );
-        }),
-      );
-    }).pipe(Effect.withLogger(capture), Effect.provide(fakeProcessServices()));
-  });
-  it.live('closes a superseded port before registering its replacement', () =>
-    Effect.gen(function* () {
-      const session = yield* createTestSession();
-      yield* Effect.addFinalizer(() => closeSessionOf(session));
-      const setSubscriptions = vi.spyOn(session.view, 'subscribe');
-      const onPortClosed = vi.fn();
-      const bridge = yield* SessionBridge.make({
-        session: testSessionOf(session),
-        onPortClosed,
-        handleHostRequest: () =>
-          Effect.die(new Error('No host request is expected.')),
-      });
-      const aggregates = [{ id: qualifyAggregateId('run', RUN), fromSeq: 0 }];
-      const first = yield* bridge.attach({ id: PORT, send: () => {} });
-      yield* first.receive({
-        ...subscribe,
-        session: session.roots.storage,
-        aggregates,
-      });
-      yield* Effect.promise(() =>
-        vi.waitFor(() => {
-          expect(setSubscriptions).toHaveBeenCalledWith(
-            expect.any(String),
-            aggregates,
-          );
-        }),
-      );
-
-      const second = yield* bridge.attach({ id: PORT, send: () => {} });
-      yield* second.receive({
-        ...subscribe,
-        session: session.roots.storage,
-        aggregates,
-      });
-
-      yield* Effect.promise(() =>
-        vi.waitFor(() => {
-          // The first port's watch lets go of its set before the
-          // replacement's watch names it again.
-          const [first, released, second] = setSubscriptions.mock.calls;
-          expect(setSubscriptions.mock.calls).toHaveLength(3);
-          expect(first).toEqual([first?.[0], aggregates]);
-          expect(released).toEqual([first?.[0], []]);
-          expect(second).toEqual([second?.[0], aggregates]);
-          expect(onPortClosed).toHaveBeenCalledTimes(1);
-          expect(onPortClosed).toHaveBeenCalledWith(PORT);
-          expect(setSubscriptions.mock.invocationCallOrder[1]).toBeLessThan(
-            setSubscriptions.mock.invocationCallOrder[2]!,
-          );
-          expect(onPortClosed.mock.invocationCallOrder[0]).toBeLessThan(
-            setSubscriptions.mock.invocationCallOrder[2]!,
-          );
-        }),
-      );
-    }).pipe(Effect.provide(fakeProcessServices())),
-  );
-  it.effect(
-    'answers a Subscribe with the replay, then frames the tail every 16 ms with one chunk per row',
-    () =>
-      Effect.gen(function* () {
-        const source = yield* framerSource;
-        const events = yield* SessionEvents;
-        const chunks = yield* TextChunkSource;
-        const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
-        const frames = yield* Queue.unbounded<EventsFrame>();
-        const framer = yield* Effect.forkScoped(
-          Stream.runForEach(
-            frameSubscription(source, host, subscribe),
-            (frame) => Queue.offer(frames, frame),
-          ),
-        );
-        const ticker = yield* Effect.forkScoped(ticking);
-        // The replay, over as many windows as its reads take: the listing
-        // rows first, the local snapshot with the marker last, every frame
-        // echoing the generation.
-        const replay: EventsFrame[] = [];
-        while (!replay.at(-1)?.replayComplete) {
-          replay.push(yield* Queue.take(frames));
-        }
-        expect(replay.every((frame) => frame.generation === 1)).toBe(true);
-        expect(
-          replay.flatMap((frame) =>
-            frame.events.map((row) => [row.read, row.event.type]),
-          ),
-        ).toEqual([
-          ['listing', 'run.start'],
-          ['listing', 'run.position'],
-          ['aggregate', 'run.start'],
-          ['aggregate', 'run.position'],
-        ]);
-        expect(replay.at(-1)?.local?.self).toEqual([SELF]);
-        // The tail: a commit after the replay is framed as an `all` row and
-        // the frame's cursor is the commit the framer drained; two appends
-        // to one row in one window merge into one chunk, never two; a chunk
-        // of an aggregate the Subscribe did not name is left out.
-        yield* events.transact((append) => runStateAppend(append)([running]));
-        const first = textTail('Hel');
-        yield* SubscriptionRef.set(
-          chunks.ref,
-          new Map([[`${RUN}/row-1`, first]]),
-        );
-        yield* SubscriptionRef.set(
-          chunks.ref,
-          new Map([
-            [`${RUN}/row-1`, textTail('lo', first)],
-            ['0ff1ce/row-1', textTail('hidden')],
-          ]),
-        );
-        const tail: EventsFrame[] = [];
-        while (
-          !tail.some((frame) => frame.events.length > 0) ||
-          (tail.at(-1)?.chunks.at(-1)?.to ?? 0) < 5
-        ) {
-          tail.push(yield* Queue.take(frames));
-        }
-        expect(
-          tail.flatMap((frame) =>
-            frame.events.map((row) => [row.read, row.event.commit]),
-          ),
-        ).toEqual([['all', 3]]);
-        expect(tail.at(-1)?.cursor).toBe(3);
-        expect(tail.every((frame) => frame.chunks.length <= 1)).toBe(true);
-        const merged = tail.flatMap((frame) => frame.chunks);
-        expect(merged.every((chunk) => chunk.runId === RUN)).toBe(true);
-        expect(merged.map((chunk) => chunk.text).join('')).toBe('Hello');
-        expect(merged[0]).toMatchObject({
-          runId: RUN,
-          rowId: 'row-1',
-          from: 0,
-        });
-        expect(merged.at(-1)?.to).toBe(5);
-        yield* Fiber.interrupt(ticker);
-        yield* Fiber.interrupt(framer);
-      }).pipe(Effect.provide(runtimeGraph([runStart, waiting]))),
-  );
-
   it.effect(
     'a webview graph over the frames folds to the view the runtime holds',
     () =>
@@ -764,90 +485,4 @@ describe('session framer', () => {
         ),
       ),
   );
-
-  it.effect('replays transcript history when debug policy changes', () => {
-    const config = fakeConfig({ [DEBUG_MODE_KEY]: 'false' });
-    const debugLog: SessionEventDraft = {
-      type: 'log',
-      aggregateId: qualifyAggregateId('run', RUN),
-      level: 'debug',
-      message: 'Historical debug detail.',
-    };
-    return Effect.gen(function* () {
-      const source = yield* framerSource;
-      const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
-      const webview = yield* WebviewSessions.open(KEY);
-      const aggregateId = qualifyAggregateId('run', RUN);
-      const hasDebugRow = (view: SessionView) =>
-        view.runs
-          .get(RUN)
-          ?.transcript.rows.some(
-            (row) => row.kind === 'log' && row.level === 'debug',
-          ) ?? false;
-      const startReplay = (request: Subscribe) =>
-        Effect.gen(function* () {
-          yield* webview.frames.begin(request.generation);
-          yield* webview.view.subscribe('shell', request.aggregates);
-          return yield* Effect.forkScoped(
-            Stream.runForEach(
-              frameSubscription(source, host, request),
-              webview.frames.feed,
-            ),
-          );
-        });
-      const ticker = yield* Effect.forkScoped(ticking);
-      let decoder = yield* startReplay(subscribe);
-      yield* settle(
-        webview.view.changes,
-        (view) =>
-          (view.transcriptSeq.get(aggregateId) ?? 0) > 0 && view.cursor > 0,
-      );
-      let current = webview.view.current();
-      expect(current.debug).toBe(false);
-      expect(hasDebugRow(current)).toBe(false);
-      expect(current.cursor).toBeGreaterThan(0);
-      const nonzeroFromSeq = current.transcriptSeq.get(aggregateId)!;
-
-      yield* config.update(DEBUG_MODE_KEY, true);
-      yield* Fiber.interrupt(decoder);
-      decoder = yield* startReplay({
-        ...subscribe,
-        generation: 2,
-        debug: current.debug,
-        cursor: current.cursor,
-        aggregates: [{ id: aggregateId, fromSeq: nonzeroFromSeq }],
-      });
-      yield* settle(
-        webview.view.changes,
-        (view) => view.debug && hasDebugRow(view),
-      );
-      current = webview.view.current();
-      expect(current.transcriptSeq.get(aggregateId)).toBe(nonzeroFromSeq);
-
-      yield* config.update(DEBUG_MODE_KEY, false);
-      yield* Fiber.interrupt(decoder);
-      decoder = yield* startReplay({
-        ...subscribe,
-        generation: 3,
-        debug: current.debug,
-        cursor: current.cursor,
-        aggregates: [
-          { id: aggregateId, fromSeq: current.transcriptSeq.get(aggregateId)! },
-        ],
-      });
-      yield* settle(
-        webview.view.changes,
-        (view) => !view.debug && !hasDebugRow(view) && view.runs.has(RUN),
-      );
-      yield* Fiber.interrupt(ticker);
-      yield* Fiber.interrupt(decoder);
-    }).pipe(
-      Effect.provide(
-        Layer.merge(
-          runtimeGraph([runStart, debugLog], config),
-          WebviewSessions.layerNoDeps,
-        ),
-      ),
-    );
-  });
 });

@@ -329,7 +329,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           if (Cause.hasInterrupts(streamed.cause))
             return yield* Effect.interrupt;
           const refused = findStorageRefusal(streamed.cause);
-          if (refused) return yield* Effect.fail(runRefusal(runId, refused));
+          if (refused) return yield* runRefusal(runId, refused);
           const found = Cause.findError(streamed.cause);
           if (Result.isFailure(found))
             return yield* Effect.die(Cause.squash(streamed.cause));
@@ -358,7 +358,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const usage = priceTurnUsage(bound, turn.usage, responseTimeMs);
         const responseId = randomUUID();
         const calls = dispatchFactsFor(
-          turn.kind === 'http' ? localCallsOf(turn.content) : [],
+          localCallsOf(turn.content),
           (yield* SynchronizedRef.get(run.steps))?.tools.registry,
           logger,
           generateShortId,
@@ -691,66 +691,65 @@ export const modelInvokerLayer = (): Layer.Layer<
             accepted === null
               ? attemptOnce(cell, ref, request, bound)
               : observeAccepted(cell, ref, request, bound, accepted),
-          failed: (ref, { error, unsent }, next, bound) =>
-            Effect.gen(function* () {
-              const info = failureInfo(error, bound.config.provider, {
-                partialText: unsent ? undefined : streamedTail,
-                unsent,
-              });
-              if (next.kind === 'ask' || next.kind === 'stop')
-                yield* logProviderError(
-                  logger,
-                  next.kind === 'ask'
-                    ? 'Model request failed'
-                    : 'Model request failed (no retry available)',
-                  { ...info, rawErrorBody: error.cause },
-                );
-              yield* cell.append(
-                yield* failedRows(cell, ref, info, next, bound),
+          failed: Effect.fn('ModelInvoker.failed')(function* (
+            ref,
+            { error, unsent },
+            next,
+            bound,
+          ) {
+            const info = failureInfo(error, bound.config.provider, {
+              partialText: unsent ? undefined : streamedTail,
+              unsent,
+            });
+            if (next.kind === 'ask' || next.kind === 'stop')
+              yield* logProviderError(
+                logger,
+                next.kind === 'ask'
+                  ? 'Model request failed'
+                  : 'Model request failed (no retry available)',
+                { ...info, rawErrorBody: error.cause },
               );
-              return info;
-            }),
+            yield* cell.append(yield* failedRows(cell, ref, info, next, bound));
+            return info;
+          }),
           asker: {
             requestId: () => `retry-${generateShortId()}`,
-            await: (requestId) =>
-              Effect.gen(function* () {
-                logger.debug('Waiting for manual retry');
-                // The answer is the `request.decided` row the decide
-                // command lands; a closing plane cancels.
-                const row = yield* session.requests
-                  .decision(runId, requestId, (yield* cell.current).commit)
-                  .pipe(
-                    Effect.catch((error) =>
-                      Effect.sync(() => {
-                        logger.warn(
-                          'The retry prompt closed before a decision',
-                          { data: error },
-                        );
-                        return null;
-                      }),
-                    ),
-                  );
-                if (row === null) return false;
-                yield* cell.refresh;
-                return true;
-              }),
-            reask: (attempt) =>
-              Effect.gen(function* () {
-                const bound = yield* SynchronizedRef.get(run.model);
-                yield* cell.append(
-                  yield* failedRows(
-                    cell,
-                    attempt.ref,
-                    {
-                      message: INTERRUPTED_RETRY_MESSAGE,
-                      provider: bound.config.provider,
-                      userRetryable: true,
-                    },
-                    { kind: 'ask', requestId: `retry-${generateShortId()}` },
-                    bound,
+            await: Effect.fn('ModelInvoker.await')(function* (requestId) {
+              logger.debug('Waiting for manual retry');
+              // The answer is the `request.decided` row the decide
+              // command lands; a closing plane cancels.
+              const row = yield* session.requests
+                .decision(runId, requestId, (yield* cell.current).commit)
+                .pipe(
+                  Effect.catch((error) =>
+                    Effect.sync(() => {
+                      logger.warn('The retry prompt closed before a decision', {
+                        data: error,
+                      });
+                      return null;
+                    }),
                   ),
                 );
-              }),
+              if (row === null) return false;
+              yield* cell.refresh;
+              return true;
+            }),
+            reask: Effect.fn('ModelInvoker.reask')(function* (attempt) {
+              const bound = yield* SynchronizedRef.get(run.model);
+              yield* cell.append(
+                yield* failedRows(
+                  cell,
+                  attempt.ref,
+                  {
+                    message: INTERRUPTED_RETRY_MESSAGE,
+                    provider: bound.config.provider,
+                    userRetryable: true,
+                  },
+                  { kind: 'ask', requestId: `retry-${generateShortId()}` },
+                  bound,
+                ),
+              );
+            }),
           },
           chains: (bound) =>
             Effect.map(

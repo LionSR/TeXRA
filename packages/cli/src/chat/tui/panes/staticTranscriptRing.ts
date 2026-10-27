@@ -312,7 +312,7 @@ function staticTranscriptItemsTotals(
  * both low-water marks. A single oversized newest entry is kept even when it
  * still exceeds a low-water mark; the header is never trimmed.
  */
-export function trimStaticTranscriptItems(
+function trimStaticTranscriptItems(
   items: readonly StaticTranscriptItem[],
   options: {
     readonly budgets?: StaticTranscriptRingBudgets;
@@ -528,7 +528,7 @@ interface BuildStaticTranscriptItemsOptions {
   readonly ringBudgets?: StaticTranscriptRingBudgets;
 }
 
-export function buildStaticTranscriptItems(
+function buildStaticTranscriptItems(
   options: BuildStaticTranscriptItemsOptions,
 ): RingTail {
   const {

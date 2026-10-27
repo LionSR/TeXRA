@@ -22,7 +22,6 @@ import {
   isModelOptionAvailable,
   type RunId,
   acceptsFollowUp,
-  type FollowUpHost,
   Rejected,
   type RequestError,
   type SessionView,
@@ -391,8 +390,8 @@ export function pruneSurface(
  * catalog no longer enables moves to the first available one (the first
  * enabled one when none is), and a working directory that is no longer an
  * open root clears to the default. A model the catalog still enables stays
- * chosen while it is unavailable (an unreadable key store, a pending
- * Copilot consent): the picker shows why, and a launch fails with that
+ * chosen while it is unavailable (an unreadable key store, a missing
+ * key): the picker shows why, and a launch fails with that
  * reason rather than running a model the user did not pick. Returns the
  * same record when both hold.
  */
@@ -433,12 +432,8 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
  * whether its composer shows), the draft must not be empty, and every pasted
  * image must already be stored by the host.
  */
-export function canSendFollowUp(
-  run: RunView,
-  draft: Draft,
-  host: FollowUpHost,
-): boolean {
-  if (!acceptsFollowUp(run, host)) return false;
+export function canSendFollowUp(run: RunView, draft: Draft): boolean {
+  if (!acceptsFollowUp(run)) return false;
   if (draft.images.some((image) => image.path === null)) return false;
   return draft.text.trim() !== '' || draft.images.length > 0;
 }

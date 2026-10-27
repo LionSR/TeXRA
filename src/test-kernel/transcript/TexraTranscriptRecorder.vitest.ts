@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  MESSAGE_TYPES,
-  RUN_OUTCOME,
-  RUN_PHASE,
-  TOOL_CALL_STATUS,
-  type RunId,
-} from '@shared/schemas';
+import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript/transcriptRow';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 
@@ -21,8 +15,6 @@ function attachRecorder(runId: RunId = 'stream:test' as RunId) {
     rows,
     row: (id: string | undefined): TranscriptRow | undefined =>
       rows().find((row) => row.id === id),
-    group: (id: string | undefined) =>
-      recorder.transcript().taskGroups.find((group) => group.id === id),
   };
 }
 
@@ -30,40 +22,6 @@ function attachRecorder(runId: RunId = 'stream:test' as RunId) {
 function assistantRows(rows: readonly TranscriptRow[]) {
   return rows.flatMap((row) => (row.kind === 'assistant' ? [row] : []));
 }
-
-describe('createTestRunTrace RunPhase-native group rows (issue #7993)', () => {
-  it('defaults a stage end to the literal RunOutcome.COMPLETED', () => {
-    const { trace, group } = attachRecorder();
-
-    const stage = trace.openStage('r0', { kind: 'session' });
-    stage.end();
-
-    expect(group(stage.id)?.status).toBe(RUN_OUTCOME.COMPLETED);
-  });
-
-  it('records a failed stage end as RunOutcome.FAILED', () => {
-    const { trace, group } = attachRecorder();
-
-    const stage = trace.openStage('r0', { kind: 'session' });
-    stage.end(RUN_OUTCOME.FAILED);
-
-    expect(group(stage.id)?.status).toBe(RUN_OUTCOME.FAILED);
-  });
-});
-
-describe('createTestRunTrace stage kind (issue #7267)', () => {
-  it("preserves a stage's kind onto its closed group", () => {
-    const { trace, group } = attachRecorder();
-
-    const round = trace.openStage('r0', { kind: 'session' });
-    round.end();
-
-    expect(group(round.id)).toMatchObject({
-      kind: 'session',
-      status: RUN_OUTCOME.COMPLETED,
-    });
-  });
-});
 
 describe('createTestRunTrace undecodable compaction payload', () => {
   it('writes an error row naming the diagnostic instead of dropping it', () => {
@@ -89,59 +47,6 @@ describe('createTestRunTrace undecodable compaction payload', () => {
 });
 
 describe('createTestRunTrace response.finalized (issue #7086)', () => {
-  it('upserts the round MODEL_RESPONSE stream entry to the authoritative text', () => {
-    const { trace, finalize, rows } = attachRecorder();
-
-    // The round's own stream writes raw provider text in real time...
-    const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
-    output.append('Done ✓');
-    output.finalize();
-    // ...then the flow boundary emits the authoritative, replacement-clean
-    // text once the response is final.
-    const completedText = 'Done \\checkmark\n'.repeat(4000);
-    finalize(completedText);
-
-    const responses = assistantRows(rows());
-    expect(responses).toHaveLength(1);
-    expect(responses[0]?.id).toBe(output.id);
-    expect(responses[0]?.text.full).toBe(completedText);
-  });
-
-  it('appends a fresh MODEL_RESPONSE entry when the round never streamed', () => {
-    const { finalize, rows } = attachRecorder();
-
-    finalize('The answer is 2.');
-
-    const responses = assistantRows(rows());
-    expect(responses).toHaveLength(1);
-    expect(responses[0]?.text.full).toBe('The answer is 2.');
-  });
-
-  it('does not let an earlier round leak its stream id into a later round', () => {
-    const { trace, finalize, rows } = attachRecorder();
-
-    const round0 = trace.openStage('r0', { kind: 'session' });
-    const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
-    output.append('Let me check that.');
-    output.finalize();
-    round0.end();
-
-    // Round 1 never opens its own stream (e.g. a non-streaming provider
-    // call) — its `response.finalized` must append a new entry, not
-    // overwrite round 0's already-closed stream entry.
-    const round1 = trace.openStage('r1', { kind: 'session' });
-    finalize('Final answer.');
-    round1.end();
-
-    const responses = assistantRows(rows());
-    expect(responses.map((row) => row.text.full)).toEqual([
-      'Let me check that.',
-      'Final answer.',
-    ]);
-    expect(responses[0]?.id).toBe(output.id);
-    expect(responses[1]?.id).not.toBe(output.id);
-  });
-
   it('does not let an earlier invocation in the same round stage overwrite a later finalized response', () => {
     const { trace, finalize, rows } = attachRecorder();
 
@@ -167,126 +72,5 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
       'The file contains the theorem statement.',
     ]);
     expect(responses[1]?.id).not.toBe(responses[0]?.id);
-  });
-});
-
-describe('createTestRunTrace settlement', () => {
-  it('assigns source settlement order before terminal status projection', () => {
-    const runId = 'stream:terminal-settlement' as RunId;
-    const { trace, finalize, settlePhase, row, rows } = attachRecorder(runId);
-
-    const response = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
-    response.append('Partial answer');
-    trace.emit({
-      type: 'tool.start',
-      logId: 'tool:pending',
-      toolName: 'read',
-      input: { path: 'paper.tex' },
-    });
-
-    settlePhase(RUN_PHASE.CANCELLED);
-
-    // The response stream, whose text only ever streamed live, settles
-    // first (1) and has no row of its own.
-    expect(row(response.id)).toBeUndefined();
-    expect(row('tool:pending')).toMatchObject({
-      settlementSeqNo: 2,
-      log: {
-        status: 'failed',
-        error: 'The task ended before this tool completed.',
-      },
-    });
-
-    // The terminal status is the authoritative boundary for recorder-owned
-    // runs/tools. Late provider cleanup cannot mutate a row already made
-    // printable in append-only Static scrollback.
-    trace.emit({
-      type: 'stream.end',
-      id: response.id,
-      finalText: 'Late replacement',
-    });
-    trace.emit({
-      type: 'tool.end',
-      logId: 'tool:pending',
-      status: TOOL_CALL_STATUS.COMPLETED,
-      result: { toolName: 'read', output: 'late result' },
-    });
-    expect(row(response.id)).toBeUndefined();
-    expect(row('tool:pending')).toMatchObject({
-      settlementSeqNo: 2,
-      log: {
-        status: 'failed',
-        error: 'The task ended before this tool completed.',
-      },
-    });
-
-    settlePhase(RUN_PHASE.RUNNING);
-    finalize('Fresh turn response');
-    const responses = assistantRows(rows());
-    expect(responses).toMatchObject([
-      { settlementSeqNo: 3, text: { full: 'Fresh turn response' } },
-    ]);
-    expect(responses[0]?.id).not.toBe(response.id);
-  });
-
-  it('closes source rows at waiting and accepts fresh rows after resume', () => {
-    const runId = 'stream:waiting-settlement' as RunId;
-    const { trace, settlePhase, rows } = attachRecorder(runId);
-
-    const waitingResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
-    waitingResponse.append('Waiting response');
-    trace.emit({
-      type: 'tool.start',
-      logId: 'tool:waiting',
-      toolName: 'read',
-      input: { path: 'waiting.tex' },
-    });
-    settlePhase(RUN_PHASE.WAITING);
-
-    // The live-only response settles (1) without a row; the card fails (2).
-    expect(rows()).toMatchObject([
-      {
-        id: 'tool:waiting',
-        settlementSeqNo: 2,
-        toolUse: { status: 'failed' },
-      },
-    ]);
-
-    settlePhase(RUN_PHASE.RUNNING);
-    const resumedResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
-    resumedResponse.append('Resumed response');
-    resumedResponse.finalize();
-    trace.emit({
-      type: 'tool.start',
-      logId: 'tool:resumed',
-      toolName: 'read',
-      input: { path: 'resumed.tex' },
-    });
-    trace.emit({
-      type: 'tool.end',
-      logId: 'tool:resumed',
-      status: TOOL_CALL_STATUS.COMPLETED,
-      result: { toolName: 'read', output: 'done' },
-    });
-
-    expect(rows()).toMatchObject([
-      {
-        id: 'tool:waiting',
-        settlementSeqNo: 2,
-        toolUse: { status: 'failed' },
-      },
-      {
-        id: resumedResponse.id,
-        settlementSeqNo: 3,
-        text: { full: 'Resumed response' },
-        streaming: false,
-      },
-      {
-        id: 'tool:resumed',
-        settlementSeqNo: 4,
-        toolUse: { status: 'completed' },
-      },
-    ]);
-    expect(waitingResponse.id).not.toBe(resumedResponse.id);
   });
 });

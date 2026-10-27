@@ -58,10 +58,7 @@ continue producing unsigned installer artifacts for development validation.
 
 ## Failure Modes
 
-- Missing or partial macOS secrets fail in the `Verify macOS signing secrets`
-  step when signing is required, or whenever a partial secret set is present.
-- Missing or partial Windows secrets fail in the
-  `Verify Windows signing secrets` step under the same conditions.
+- Missing or partial macOS or Windows secrets fail in the `Verify macOS signing secrets` or `Verify Windows signing secrets` step when signing is required, or whenever a partial secret set is present.
 - Apple notarization failures surface during the Electron Builder package step.
   Check Apple API key, issuer, team, bundle identifier, and Developer ID
   certificate validity.

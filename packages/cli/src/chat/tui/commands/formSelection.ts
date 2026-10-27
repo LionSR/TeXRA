@@ -131,31 +131,30 @@ export function formSelectionHandler<T>({
                   close();
                 }
               }),
-            onFailure: (cause) =>
-              Effect.gen(function* () {
-                let current = currentProgress();
-                if (!current) return;
-                if (echoOnPersist) onPersist?.();
-                const error = Cause.squash(cause);
-                const errorMessage = toErrorMessage(error);
-                const copyableMessage = current.copyableMessage;
-                yield* reportError(
-                  copyableMessage
-                    ? new Error(`${errorMessage}\n${copyableMessage}`)
-                    : error,
-                );
-                current = currentProgress();
-                if (!current) return;
-                if (current.copyableMessage) {
-                  formProgress.set({
-                    ...current,
-                    status: 'failed',
-                    message: errorMessage,
-                  });
-                } else {
-                  close();
-                }
-              }),
+            onFailure: Effect.fn('formSelection.onFailure')(function* (cause) {
+              let current = currentProgress();
+              if (!current) return;
+              if (echoOnPersist) onPersist?.();
+              const error = Cause.squash(cause);
+              const errorMessage = toErrorMessage(error);
+              const copyableMessage = current.copyableMessage;
+              yield* reportError(
+                copyableMessage
+                  ? new Error(`${errorMessage}\n${copyableMessage}`)
+                  : error,
+              );
+              current = currentProgress();
+              if (!current) return;
+              if (current.copyableMessage) {
+                formProgress.set({
+                  ...current,
+                  status: 'failed',
+                  message: errorMessage,
+                });
+              } else {
+                close();
+              }
+            }),
           }),
         ),
       );

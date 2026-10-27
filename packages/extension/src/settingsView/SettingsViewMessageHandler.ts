@@ -1,41 +1,36 @@
 /**
  * The extension's half of the settings view: the shared settings body
  * (`createSettingsViewBody`) over VS Code's editor, dialogs and webview, plus
- * the commands only VS Code answers (the Copilot
- * routes, installing extensions and writing VS Code's LaTeX settings).
+ * the commands only VS Code answers (installing extensions and writing VS
+ * Code's LaTeX settings).
  */
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Cause, Effect, Exit, Fiber, Result, Schema } from 'effect';
-import { ModelError, completedTurn } from '@texra-ai/llm';
+import { Effect, Fiber, Result, Schema, Stream } from 'effect';
 
-import { CopilotRoutes, Skills, hasExtension } from '@texra-ai/harness';
+import { Skills, hasExtension } from '@texra-ai/harness';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   ensureError,
 } from '@texra-ai/harness/schemas';
-import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
+import { appSignalStream, emitAppSignal } from '@eventBus/AppSignals';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { syncInlineCriticism } from '@frontend/latex/inlineCriticism';
-import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
-import { safeExecuteCommand } from '@frontend/system/commandUtils';
-import { selectFolder } from '@frontend/ui/dialogs';
 import {
-  showLoggedErrorMessage,
-  showLoggedInfoMessage,
-} from '@frontend/ui/errorHandlingUtils';
+  executeVscodeCommand,
+  safeExecuteCommand,
+} from '@frontend/system/commandUtils';
+import { selectFolder } from '@frontend/ui/dialogs';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import {
   SettingsViewInboundMessageSchema,
   type SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { createSettingsViewBody } from '@texra/controllers/settingsView/sharedSettingsCommands';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import {
   latexEditorStatus,
@@ -46,7 +41,6 @@ import type {
   ProcessRuntime,
   ProcessServices,
   PlatformSecrets,
-  StateStore,
   WorkspaceRoots,
 } from '@texra-ai/harness';
 
@@ -101,11 +95,10 @@ export class SettingsViewMessageHandler {
 
   constructor(
     context: vscode.ExtensionContext,
-    private readonly globalState: StateStore,
     secrets: PlatformSecrets,
-    private readonly runtime: ProcessRuntime,
+    runtime: ProcessRuntime,
     roots: WorkspaceRoots,
-    private readonly progressView: Pick<
+    progressView: Pick<
       ProgressViewProvider,
       'refreshCatalogs' | 'refreshApiKeyStatus' | 'revealRun' | 'runLabel'
     >,
@@ -135,14 +128,7 @@ export class SettingsViewMessageHandler {
               ).pipe(Effect.asVoid)
             : showDocument(() => vscode.workspace.openTextDocument(filePath)),
         revealPath: (filePath) =>
-          Effect.tryPromise({
-            try: () =>
-              vscode.commands.executeCommand(
-                'revealFileInOS',
-                vscode.Uri.file(filePath),
-              ),
-            catch: ensureError,
-          }),
+          executeVscodeCommand('revealFileInOS', vscode.Uri.file(filePath)),
         // An untitled buffer holds the text, so Ctrl+S prompts for a new
         // location instead of writing back over the source.
         showReadOnlyYaml: (_fileName, text) =>
@@ -174,9 +160,6 @@ export class SettingsViewMessageHandler {
         // The status-bar tooltip paints the approval policy outside this
         // view's round-trip, so it follows the policy on its own signal.
         stateSettingApplied: (key) => {
-          if (key === TexraStateKey.INLINE_CRITICISM_ENABLED) {
-            return syncInlineCriticism();
-          }
           if (key !== APPROVAL_POLICY_CONFIG_KEY) return Effect.void;
           return Effect.sync(() =>
             emitAppSignal('approvalPolicyChanged', undefined),
@@ -194,10 +177,6 @@ export class SettingsViewMessageHandler {
     });
     this.handlerRegistry = {
       ...this.body.handlers,
-      requestModelAccess: (message) =>
-        this.handleRequestModelAccess(message.modelName, context),
-      clearCopilotRoute: (message) =>
-        this.handleClearCopilotRoute(message.modelName),
       ...vscodeLatexSettingsHandlers(this.body),
     };
 
@@ -211,9 +190,9 @@ export class SettingsViewMessageHandler {
           this.body.followToolAvailability,
           ...(Object.keys(repaintOn) as Array<keyof typeof repaintOn>).map(
             (signal) =>
-              onAppSignal(signal, (payload) => {
+              Stream.runForEach(appSignalStream(signal), (payload) => {
                 const work = repaintOn[signal](payload as never);
-                if (work) runtime.runFork(settle(work));
+                return work ? Effect.forkChild(settle(work)) : Effect.void;
               }),
           ),
         ],
@@ -278,130 +257,5 @@ export class SettingsViewMessageHandler {
         parsed.failure.message,
       ).pipe(Effect.asVoid);
     });
-  }
-
-  private handleRequestModelAccess(
-    modelName: string,
-    context: vscode.ExtensionContext,
-  ) {
-    return Effect.gen({ self: this }, function* () {
-      // Discover now: authorization acts only on the route the editor
-      // reports for this request, and a failed probe fails the program.
-      const discovery = yield* Effect.exit(
-        Effect.map(CopilotRoutes.discover(), (routes) => routes.get(modelName)),
-      );
-      const route = Exit.isSuccess(discovery) ? discovery.value : undefined;
-      let result: Exit.Exit<unknown, unknown> = discovery;
-      if (route?.access === 'consent-required') {
-        result = yield* Effect.scoped(
-          Effect.gen(function* () {
-            // Await this fiber's complete exit: timeoutOrElse discards a release
-            // defect when its timeout wins, but native consent must retain it.
-            const pending = yield* Effect.forkScoped(
-              Effect.gen(function* () {
-                const model = yield* acquireVscodeLanguageModel(
-                  context,
-                  {
-                    protocol: 'vscode-lm',
-                    requestedModel: route.reference.id,
-                    deployment: {
-                      vendor: route.reference.vendor,
-                      version: route.version,
-                    },
-                    supportsImageInput: false,
-                    supportsToolCalling: false,
-                    defaults: { justification: 'Use Copilot models in TeXRA.' },
-                  },
-                  'request-on-send',
-                );
-                const turn = yield* model.prepareTurn({
-                  messages: [
-                    {
-                      role: 'user',
-                      content: [
-                        {
-                          kind: 'text',
-                          text: 'Reply with OK to confirm language-model access for TeXRA.',
-                        },
-                      ],
-                    },
-                  ],
-                });
-                if (turn.mode !== 'foreground') {
-                  return yield* new ModelError({
-                    kind: 'unsupported',
-                    message: 'Editor access requires a foreground request.',
-                  });
-                }
-                // Consume completion; partial output does not establish access.
-                yield* completedTurn(model.streamTurn(turn));
-              }).pipe(Effect.scoped),
-            );
-            yield* Effect.forkScoped(
-              Effect.sleep(120_000).pipe(
-                Effect.andThen(Fiber.interrupt(pending)),
-              ),
-            );
-            return yield* Fiber.await(pending);
-          }),
-        );
-      }
-      if (Exit.isSuccess(result)) {
-        // Two different programs: the notice is a host dialog, the preference
-        // is a state write. The boundary composes whichever it chose.
-        const settle: Effect.Effect<unknown, Error> =
-          !route || route.access === 'unavailable'
-            ? showLoggedInfoMessage(
-                this.channel,
-                'This Copilot model is no longer available in VS Code. Refresh the model list and choose another model.',
-              )
-            : CopilotRoutes.setPreferred(modelName, true, this.globalState);
-        result = yield* Effect.exit(settle);
-      }
-      if (Exit.isFailure(result)) {
-        const reason =
-          result.cause.reasons.length === 1
-            ? result.cause.reasons[0]
-            : undefined;
-        const error =
-          reason && Cause.isFailReason(reason) ? reason.error : undefined;
-        if (
-          error instanceof ModelError &&
-          error.providerEvidence?.kind === 'vscode-lm' &&
-          error.providerEvidence.code === 'NoPermissions'
-        ) {
-          yield* showLoggedInfoMessage(
-            this.channel,
-            'Copilot access was not granted. TeXRA will leave these models disabled.',
-          );
-        } else {
-          yield* showLoggedErrorMessage(
-            this.channel,
-            'Could not request Copilot model access',
-            new Error(
-              Cause.hasInterruptsOnly(result.cause)
-                ? 'The Copilot access request was cancelled.'
-                : Cause.pretty(result.cause),
-              { cause: result.cause },
-            ),
-          );
-        }
-      }
-    }).pipe(Effect.ensuring(this.refreshCopilotRoutes().pipe(Effect.orDie)));
-  }
-
-  /** Clear the per-model Copilot route preference (#9659), returning the
-   * canonical model to direct-provider routing. */
-  private handleClearCopilotRoute(modelName: string) {
-    return CopilotRoutes.setPreferred(modelName, false, this.globalState).pipe(
-      Effect.andThen(this.refreshCopilotRoutes()),
-    );
-  }
-
-  private refreshCopilotRoutes() {
-    return allSettledVoid<Error, ProcessServices>([
-      this.progressView.refreshCatalogs(),
-      this.body.postModelSelection,
-    ]);
   }
 }

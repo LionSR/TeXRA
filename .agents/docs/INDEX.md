@@ -25,6 +25,7 @@ ruling and argues against it explicitly.
 | Liveness and single ownership of a run    | [single owner liveness and one fold](./implemented/architecture/2026-09-20-single-owner-liveness-and-one-fold.md)     |
 | Run-to-run messaging, subagent reports    | [session messaging](./implemented/architecture/2026-09-25-session-messaging.md)                                       |
 | Child-run concurrency                     | [child run concurrency budget](./implemented/architecture/2026-08-15-child-run-concurrency-budget.md)                 |
+| GitHub Copilot (removed; options parked)  | [Copilot possibilities](./proposed/feature/2026-10-26-copilot-possibilities.md)                                       |
 | `packages/llm`                            | [`packages/llm/README.md`](../../packages/llm/README.md)                                                              |
 | Observability and the trace plane         | [observability plane](./implemented/architecture/2026-09-09-observability-plane.md)                                   |
 | Dual systems and Promise/Effect seams     | [effect round trips and dual systems](./implemented/simplification/2026-09-17-effect-round-trips-and-dual-systems.md) |

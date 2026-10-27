@@ -61,40 +61,13 @@ describe('InvokeCommandTool allowlist', () => {
       }),
   );
 
-  it.effect('allows texra.setApiKey without model-supplied arguments', () =>
-    Effect.gen(function* () {
-      const { tool, invocations } = yield* Effect.tryPromise(() => setupTool());
-      const result = yield* invoke(tool, { command: 'texra.setApiKey' });
-
-      assert.equal(result.status, 'executed');
-      assert.equal(invocations.length, 1);
-      assert.equal(invocations[0].command, 'texra.setApiKey');
-      assert.deepEqual(invocations[0].args, []);
-    }),
-  );
-
-  it.effect(
-    'rejects workbench.extensions.installExtension outside its dedicated tool',
-    () =>
-      Effect.gen(function* () {
-        const { tool, invocations } = yield* Effect.tryPromise(() =>
-          setupTool(),
-        );
-        const result = yield* invoke(tool, {
-          command: 'workbench.extensions.installExtension',
-        });
-
-        assert.equal(result.status, 'error');
-        assert.match(result.error ?? '', /not in the setup allowlist/);
-        assert.equal(invocations.length, 0);
-      }),
-  );
-
   it.effect('rejects arbitrary VS Code commands outside the allowlist', () =>
     Effect.gen(function* () {
       const { tool, invocations } = yield* Effect.tryPromise(() => setupTool());
 
       for (const command of [
+        // Has its own dedicated tool, so it stays outside this allowlist.
+        'workbench.extensions.installExtension',
         'workbench.action.files.save',
         'workbench.action.closeAllEditors',
         'editor.action.deleteAllLines',

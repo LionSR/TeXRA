@@ -605,19 +605,19 @@ function isFileTableExhausted(error: unknown): boolean {
 }
 
 /** Walk up from `filePath` looking for a Lake project root. */
-export const resolveWorkspaceRoot = Effect.fn(
-  'LeanServerPool.resolveWorkspaceRoot',
-)(function* (fs: FileSystem.FileSystem, filePath: string) {
-  let dir = path.dirname(path.resolve(filePath));
-  const root = path.parse(dir).root;
-  for (;;) {
-    if (
-      (yield* pathExists(fs, path.join(dir, 'lakefile.lean'))) ||
-      (yield* pathExists(fs, path.join(dir, 'lakefile.toml')))
-    ) {
-      return dir;
+const resolveWorkspaceRoot = Effect.fn('LeanServerPool.resolveWorkspaceRoot')(
+  function* (fs: FileSystem.FileSystem, filePath: string) {
+    let dir = path.dirname(path.resolve(filePath));
+    const root = path.parse(dir).root;
+    for (;;) {
+      if (
+        (yield* pathExists(fs, path.join(dir, 'lakefile.lean'))) ||
+        (yield* pathExists(fs, path.join(dir, 'lakefile.toml')))
+      ) {
+        return dir;
+      }
+      if (dir === root) return null;
+      dir = path.dirname(dir);
     }
-    if (dir === root) return null;
-    dir = path.dirname(dir);
-  }
-});
+  },
+);

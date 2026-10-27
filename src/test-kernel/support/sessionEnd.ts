@@ -46,15 +46,6 @@ export const closeTestSession = (
     return owner.close(root);
   });
 
-/** Every session the installed owner holds. */
-export const listTestSessions: Effect.Effect<readonly SessionHandle[]> =
-  Effect.flatMap(testSessionOwner, (owner) => owner.list);
-
-/** Close every session the installed owner holds, as a host's shutdown does. */
-export const closeAllTestSessions: Effect.Effect<
-  readonly SessionCloseReport[]
-> = Effect.flatMap(testSessionOwner, (owner) => owner.closeAll);
-
 /** Close a session through the one close every session takes, for a test
  *  that ends a session it opened. */
 export function closeSessionOf(session: SessionHandle): Effect.Effect<void> {

@@ -14,9 +14,8 @@ import { vi } from 'vitest';
  *
  * Ordering: the `vi.mock` below registers when this module evaluates, so the
  * import must precede anything that could load
- * `@cli/commands/_helpers/output` (see `cliLogSinksMock` for the idiom). The
- * bag is `vi.hoisted`, so the mock factory can never observe it
- * uninitialized.
+ * `@cli/commands/_helpers/output`. The bag is `vi.hoisted`, so the mock
+ * factory can never observe it uninitialized.
  */
 const cliOutputMock = vi.hoisted(() => ({
   emitCliResult: vi.fn(),

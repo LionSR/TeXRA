@@ -93,19 +93,7 @@ variable for any other provider, and an invented one renders as false.
 
 ## Multiple-output agents
 
-All document tasks use the same unified output protocol regardless of whether
-they produce one file or many. No separate `_multiple` variant is needed.
-
-- The `<documents><document name="...">` container is fixed protocol, not a
-  setting — every agent emits it; there is nothing to configure.
-- For editing agents, iterate over `INPUT_FILES` to emit one
-  `<document name="filename.tex">` block per selected input file inside
-  `<documents>`.
-- Add `task.outputs` only when the agent produces generated files with
-  fixed names distinct from the inputs. Those names are exposed as
-  `OUTPUT_FILES`.
-
-Example output format in a `task.requests` entry:
+All document tasks use the `<documents><document name="...">...</document></documents>` container regardless of whether they produce one file or many; no separate `_multiple` variant is needed. Editing agents iterate over `INPUT_FILES`, while generative agents with fixed output names declare `task.outputs` (exposed as `OUTPUT_FILES`):
 
 ```
 <documents>

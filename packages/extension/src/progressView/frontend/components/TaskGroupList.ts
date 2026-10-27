@@ -17,6 +17,7 @@ import {
   type TaskGroup,
 } from '@texra-ai/harness/schemas';
 import {
+  formatCompactDuration,
   taskGroupDisplayStatus,
   pluralize,
   compareBySeqNo,
@@ -35,7 +36,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
-import { formatDuration } from '@ui/copy/format';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, GROUP_DOM_IDS } from '../constants';
@@ -269,11 +269,10 @@ export class TaskGroupList extends LitElement {
       this.scripts =
         this.run && this.view
           ? new Map(
-              // The progress view's composer takes a terminal-backed run's
-              // follow-up too (`ToolUseRunContent`).
-              scriptStages(this.run, this.view, {
-                terminalBacked: true,
-              }).map((stage) => [stage.id, stage]),
+              scriptStages(this.run, this.view).map((stage) => [
+                stage.id,
+                stage,
+              ]),
             )
           : new Map();
     }
@@ -424,7 +423,7 @@ export class TaskGroupList extends LitElement {
       new Date(group.startTime),
     );
     const durationText = group.endTime
-      ? formatDuration(group.endTime - group.startTime)
+      ? formatCompactDuration(group.endTime - group.startTime)
       : '';
 
     const status = taskGroupDisplayStatus(

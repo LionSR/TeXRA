@@ -1,5 +1,5 @@
 {
-  "packages/harness/src/agent/codeSandbox/worker.ts": 2,
+  "packages/harness/src/agent/codeSandbox/worker.ts": 1,
   "packages/harness/src/agent/runtime/AgentRunLifecycle.ts": 1,
   "packages/harness/src/agent/runtime/agentToolResolution.ts": 1,
   "packages/harness/src/agent/runtime/FollowUps.ts": 1,

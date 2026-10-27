@@ -17,7 +17,7 @@ export class ToolUseRunContent extends BaseRunContent {
     if (!run || run.recipe) return nothing;
     // The follow-up line shows while the run can still take one, which is
     // the same rule Send and the run accelerator take (`acceptsFollowUp`).
-    const showComposer = acceptsFollowUp(run, { terminalBacked: true });
+    const showComposer = acceptsFollowUp(run);
     return html`
       <div class="conversation-content">
         ${this.renderApprovalDock()}

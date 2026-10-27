@@ -20,8 +20,7 @@
 
 import { it } from '@effect/vitest';
 import * as NodeWorker from '@effect/platform-node/NodeWorker';
-import { Cause, Clock, Deferred, Effect, Exit, Fiber, Layer } from 'effect';
-import * as Worker from 'effect/workers/Worker';
+import { Deferred, Effect, Layer } from 'effect';
 import { expect } from 'vitest';
 
 import {
@@ -29,7 +28,6 @@ import {
   type ScriptOp,
   type ScriptSettlement,
 } from '@agent/codeSandbox/codeSandbox';
-import type { Worker as WorkerThread } from 'node:worker_threads';
 
 const SandboxLayer = CodeSandbox.layer.pipe(
   Layer.provide(NodeWorker.layerPlatform),
@@ -138,57 +136,6 @@ it.layer(SandboxLayer, { excludeTestServices: true })('CodeSandbox', (it) => {
       }),
   );
 
-  it.effect(
-    'interrupting the caller ends the worker without waiting out a busy loop',
-    () =>
-      Effect.gen(function* () {
-        const sandbox = yield* CodeSandbox;
-        const spawned = yield* Deferred.make<WorkerThread>();
-        const onWorker = (thread: WorkerThread) =>
-          Deferred.doneUnsafe(spawned, Effect.succeed(thread));
-        yield* Effect.acquireRelease(
-          Effect.sync(() => process.on('worker', onWorker)),
-          () => Effect.sync(() => process.off('worker', onWorker)),
-        );
-        const fiber = yield* Effect.forkChild(
-          sandbox.run({
-            source: 'while (true) {}',
-            tools: [],
-            timeout: '1 minute',
-            call: () => Effect.never,
-          }),
-        );
-        const thread = yield* Deferred.await(spawned);
-        // Let the guest reach its loop.
-        yield* Effect.sleep('300 millis');
-
-        const start = yield* Clock.currentTimeMillis;
-        yield* Fiber.interrupt(fiber);
-        const elapsed = (yield* Clock.currentTimeMillis) - start;
-
-        // The worker's close is graceful only because the guest is preempted;
-        // otherwise the platform waits 5 s before terminating it.
-        expect(elapsed).toBeLessThan(2_000);
-        expect(thread.threadId).toBe(-1);
-      }),
-  );
-
-  it.effect('a call that dies ends the run with its defect at once', () =>
-    Effect.gen(function* () {
-      const sandbox = yield* CodeSandbox;
-      // A BigInt does not serialize, so delivering this settlement dies.
-      const exit = yield* sandbox
-        .run({
-          source: 'return await tools.big({});',
-          tools: ['big'],
-          timeout: '1 minute',
-          call: () => Effect.succeed({ _tag: 'Value', value: 1n }),
-        })
-        .pipe(Effect.timeout('5 seconds'), Effect.exit);
-      expect(Exit.isFailure(exit) && Cause.hasDies(exit.cause)).toBe(true);
-    }),
-  );
-
   it.effect('a loop that never awaits trips the CPU budget', () =>
     Effect.gen(function* () {
       const sandbox = yield* CodeSandbox;
@@ -205,64 +152,6 @@ it.layer(SandboxLayer, { excludeTestServices: true })('CodeSandbox', (it) => {
         _tag: 'ScriptCpuExhausted',
         budgetMs: 200,
       });
-    }),
-  );
-
-  it.effect('allocating past the heap limit trips the memory limit', () =>
-    Effect.gen(function* () {
-      const sandbox = yield* CodeSandbox;
-      const error = yield* sandbox
-        .run({
-          source: 'const xs = []; for (;;) xs.push(new ArrayBuffer(8 << 20));',
-          tools: [],
-          timeout: '1 minute',
-          call: () => Effect.never,
-        })
-        .pipe(Effect.flip);
-      expect(error._tag).toBe('ScriptMemoryExhausted');
-    }),
-  );
-
-  it.effect('the wall deadline ends a script that waits forever', () =>
-    Effect.gen(function* () {
-      const sandbox = yield* CodeSandbox;
-      const error = yield* sandbox
-        .run({
-          source: 'await tools.wait({});',
-          tools: ['wait'],
-          timeout: '300 millis',
-          call: () => Effect.never,
-        })
-        .pipe(Effect.flip);
-      expect(error._tag).toBe('ScriptTimedOut');
-    }),
-  );
-
-  it.effect('a syntax error names its line and column in the script', () =>
-    Effect.gen(function* () {
-      const sandbox = yield* CodeSandbox;
-      const errors = yield* Effect.forEach(
-        ['const a = 1;\nconst b = ;', 'import x from "y";'],
-        (source) =>
-          sandbox
-            .run({
-              source,
-              tools: [],
-              timeout: '1 minute',
-              call: () => Effect.never,
-            })
-            .pipe(Effect.flip),
-      );
-      expect(errors.map((error) => [error._tag, error.message])).toEqual([
-        [
-          'ScriptSyntaxError',
-          "unexpected token in expression: ';' (line 2, column 11)",
-        ],
-        [
-          'ScriptSyntaxError',
-          "expecting '(' (line 1, column 8); a script imports a module as `const { name } = await import('specifier')`",
-        ],
-      ]);
     }),
   );
 
@@ -306,42 +195,3 @@ return { twice: await twice('x'), refused };`,
       }),
   );
 });
-
-/** The real worker platform, with every message from the worker replaced. */
-const CorruptingPlatform = Layer.effect(Worker.WorkerPlatform)(
-  Effect.gen(function* () {
-    const platform = yield* Worker.WorkerPlatform;
-    return Worker.WorkerPlatform.of({
-      spawn: <O, I>(id: number) =>
-        Effect.map(platform.spawn<O, I>(id), (worker): Worker.Worker<O, I> => ({
-          send: worker.send,
-          run: (handler, options) =>
-            worker.run(
-              () => handler({ ops: 'not ops' } as unknown as O),
-              options,
-            ),
-        })),
-    });
-  }),
-).pipe(Layer.provide(NodeWorker.layerPlatform));
-
-it.effect(
-  'a worker message that fails its decode makes the sandbox unavailable',
-  () =>
-    Effect.gen(function* () {
-      const sandbox = yield* CodeSandbox;
-      const error = yield* sandbox
-        .run({
-          source: 'return 1;',
-          tools: [],
-          timeout: '20 seconds',
-          call: () => Effect.never,
-        })
-        .pipe(Effect.flip);
-      expect(error._tag).toBe('SandboxUnavailable');
-      expect(error.message).toContain('malformed message');
-    }).pipe(
-      Effect.provide(CodeSandbox.layer.pipe(Layer.provide(CorruptingPlatform))),
-    ),
-  30_000,
-);

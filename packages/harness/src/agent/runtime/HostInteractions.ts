@@ -1,6 +1,5 @@
 import { Cause, Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
-import type { LanguageModelPort } from '@platform/languageModel';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
 import type { ToolEditContent } from '@shared/session/runtimeRequest';
@@ -55,8 +54,6 @@ export interface HostInteractions {
    * nothing.
    */
   approvalDenied?(denial: ApprovalPolicyDenial, runId: RunId): void;
-  /** The host editor's language models, served to the session's runs. */
-  readonly languageModel?: LanguageModelPort;
   /**
    * Stage a tool edit's preview (its original and proposed content, which
    * the durable request payload does not carry) for the request the fold
@@ -226,10 +223,6 @@ export class SessionHostInteractions implements HostInteractions {
 
   approvalDenied(denial: ApprovalPolicyDenial, runId: RunId): void {
     this.activeAttachment?.interactions.approvalDenied?.(denial, runId);
-  }
-
-  get languageModel(): LanguageModelPort | undefined {
-    return this.activeAttachment?.interactions.languageModel;
   }
 
   /**

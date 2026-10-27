@@ -64,7 +64,7 @@ const STOPPED_SUBAGENT_INPUT_MESSAGE_START =
   // A retired notice; scenarios assert it never comes back.
   'This background task is no longer accepting follow-ups; press Tab to select a session';
 const STOPPED_SELECTED_BACKGROUND_TASK_MESSAGE =
-  // Keep in sync with FOCUSED_AGENT.selectedNoLongerAccepting.
+  // A retired notice; scenarios assert it never comes back.
   'The selected agent has finished and no longer takes messages.';
 const LONG_BASH_APPROVAL_COMMAND = [
   "python3 << 'EOF'",

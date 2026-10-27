@@ -2,27 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
 
-const WORKSPACE = '/tmp/workspace';
-
 describe('agent workspace options', () => {
-  it('defaults to the workspace root when no working directory is provided', () => {
-    expect(buildAgentWorkspaceOptions(WORKSPACE)).toEqual({
-      workingDirectory: '/tmp/workspace',
-    });
-  });
-
-  it('keeps the workspace root available for subdirectory runs', () => {
-    expect(
-      buildAgentWorkspaceOptions(WORKSPACE, '/tmp/workspace/packages/app'),
-    ).toEqual({
-      workingDirectory: '/tmp/workspace/packages/app',
-      additionalDirectories: ['/tmp/workspace'],
-    });
-  });
-
+  // An external CLI agent gets access to exactly the directories it names:
+  // a run in another worktree must not be granted the current workspace too.
   it('does not add the current workspace for external worktree paths', () => {
     expect(
-      buildAgentWorkspaceOptions(WORKSPACE, '/tmp/worktrees/feature-a'),
+      buildAgentWorkspaceOptions('/tmp/workspace', '/tmp/worktrees/feature-a'),
     ).toEqual({
       workingDirectory: '/tmp/worktrees/feature-a',
     });

@@ -76,7 +76,8 @@ export interface CliContext {
    * layer-build capture is for: it cannot change mid-process.
    */
   readonly minimumLogLevel: LogLevel.LogLevel;
-  readonly renderRunProgress?: boolean;
+  /** Whether a headless run prints progress lines; set by `buildHeadlessRunContext`. */
+  readonly renderRunProgress: boolean;
   readonly stdoutIsTty: boolean;
   readonly termIsDumb: boolean;
   readonly stderrIsTty: boolean;
@@ -143,7 +144,7 @@ export interface CliAmbientState {
  * answer "is color OK on *stderr*" — the gate `doctor` and the progress
  * renderer each need for their own destination.
  */
-export function resolveStreamColor(
+function resolveStreamColor(
   streamIsTty: boolean,
   options: {
     env?: Record<string, string | undefined>;
@@ -476,6 +477,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       approvalPolicy,
       ...(requestedApprovalPolicy !== undefined && { requestedApprovalPolicy }),
       quietLogs: init.globalArgs.quiet === true,
+      renderRunProgress: false,
       minimumLogLevel,
       stdoutIsTty: ambient.stdoutIsTty,
       termIsDumb: ambient.termIsDumb === true,

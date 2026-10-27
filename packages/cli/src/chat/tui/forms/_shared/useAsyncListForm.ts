@@ -3,7 +3,7 @@
 // lets `Esc` close the panel while it has nothing actionable to show.
 
 import { useInput } from 'ink';
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, type Fiber } from 'effect';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -190,8 +190,11 @@ export function useAsyncResource<T, R extends ProcessServices>(options: {
   );
 
   const { runtime } = options;
+  // The read `reload` forked last: a newer reload and the unmount interrupt it.
+  const reloading = useRef<Fiber.Fiber<void> | undefined>(undefined);
   const reload = useCallback(() => {
-    runtime.runFork(refresh());
+    reloading.current?.interruptUnsafe();
+    reloading.current = runtime.runFork(refresh());
   }, [runtime, refresh]);
 
   useEffect(() => {
@@ -199,6 +202,7 @@ export function useAsyncResource<T, R extends ProcessServices>(options: {
     reload();
     return () => {
       mounted.current = false;
+      reloading.current?.interruptUnsafe();
     };
   }, []);
 

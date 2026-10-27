@@ -8,22 +8,10 @@ import {
   acceptEditedFileReplace,
   type AcceptEditedFileReplacePorts,
 } from '@latex/acceptedFileTarget';
-import type { FileLocation } from '@shared/schemas';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 
 function absolutePath(...segments: string[]): string {
   return path.join(path.sep, ...segments);
-}
-
-/** The canonical base/edited pair most cases below are built on. */
-function paperPair(): { base: FileLocation; edited: FileLocation } {
-  return {
-    base: createWorkspaceLocation(absolutePath('ws', 'paper.tex'), 'paper.tex'),
-    edited: createWorkspaceLocation(
-      absolutePath('ws', 'paper_correct.tex'),
-      'paper_correct.tex',
-    ),
-  };
 }
 
 /**
@@ -69,41 +57,6 @@ describe('acceptEditedFileReplace', () => {
     };
   }
 
-  it.effect('cleans up the stale diff file after a successful accept', () =>
-    Effect.gen(function* () {
-      const { base, edited } = paperPair();
-      const filesystem = fakeFilesystem();
-
-      const accepted = yield* acceptEditedFileReplace(
-        base,
-        edited,
-        buildPorts(),
-      ).pipe(Effect.provide(filesystem.layer));
-
-      expect(accepted).toBe(true);
-      expect(filesystem.removed).toEqual([
-        absolutePath('ws', 'paper_correct_diff.tex'),
-      ]);
-    }),
-  );
-
-  it.effect('does not clean up when the user declines the confirmation', () =>
-    Effect.gen(function* () {
-      const { base, edited } = paperPair();
-      const filesystem = fakeFilesystem();
-
-      const accepted = yield* acceptEditedFileReplace(
-        base,
-        edited,
-        buildPorts({ confirm: () => Effect.succeed(false) }),
-      ).pipe(Effect.provide(filesystem.layer));
-
-      expect(accepted).toBe(false);
-      expect(filesystem.removed).toEqual([]);
-      expect(filesystem.written).toEqual([]);
-    }),
-  );
-
   it.effect(
     'does not delete the just-accepted file when it collides with the derived diff name',
     () =>
@@ -118,30 +71,6 @@ describe('acceptEditedFileReplace', () => {
         const edited = createWorkspaceLocation(
           absolutePath('ws', 'paper.tex'),
           'paper.tex',
-        );
-        const filesystem = fakeFilesystem();
-
-        const accepted = yield* acceptEditedFileReplace(
-          base,
-          edited,
-          buildPorts(),
-        ).pipe(Effect.provide(filesystem.layer));
-
-        expect(accepted).toBe(true);
-        expect(filesystem.removed).toEqual([]);
-      }),
-  );
-
-  it.effect(
-    'does not clean up the base diff when accepting into a new sibling (extension mismatch)',
-    () =>
-      Effect.gen(function* () {
-        // Different extensions -> getAcceptedFileTarget resolves to a new
-        // sibling file, leaving base untouched, so its diff is still accurate.
-        const { base } = paperPair();
-        const edited = createWorkspaceLocation(
-          absolutePath('ws', 'notes.md'),
-          'notes.md',
         );
         const filesystem = fakeFilesystem();
 

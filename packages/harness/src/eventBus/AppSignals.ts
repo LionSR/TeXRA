@@ -1,4 +1,4 @@
-import { Deferred, Effect, PubSub } from 'effect';
+import { Deferred, Effect, PubSub, Stream } from 'effect';
 
 /**
  * Cross-cutting, process-scoped app-lifecycle signals (subscriptions,
@@ -105,16 +105,6 @@ export interface AppSignalPayloads {
   workspaceAgentsChanged: undefined;
 
   /**
-   * The editor's language-model catalogue or access permissions changed.
-   *
-   * Extension-only by construction: the sole emitter follows the editor's
-   * native catalogue and access events. Desktop and CLI have no
-   * editor-provided model catalogue to change, so there is nothing to react
-   * to — not a missing subscription.
-   */
-  languageModelsChanged: undefined;
-
-  /**
    * The session's approval policy changed through a settings update.
    * Surfaces that re-paint the status-bar policy line.
    *
@@ -194,6 +184,34 @@ export function emitAppSignal<K extends AppSignal>(
   PubSub.publishUnsafe(hub, { signal, payload });
 }
 
+/** The payloads of `signal` among every signal a subscription reads. */
+const payloadsOf =
+  <K extends AppSignal>(signal: K) =>
+  (
+    events: Stream.Stream<AppSignalEvent>,
+  ): Stream.Stream<AppSignalPayloads[K]> =>
+    events.pipe(
+      Stream.filter((event) => event.signal === signal),
+      // The key matched, so the payload is the one this key declares; a
+      // generic key cannot carry that pairing through the hub's type.
+      Stream.map((event) => event.payload as AppSignalPayloads[K]),
+    );
+
+/**
+ * `signal`'s payloads, as a stream for a host to run where it holds the
+ * lifetime: each run subscribes when it starts and unsubscribes when it
+ * ends, so it reads what is published after it starts. A caller that must
+ * know the subscription is live before it reads the state the signal
+ * announces uses {@link onAppSignal} and its `subscribed`.
+ */
+export function appSignalStream<K extends AppSignal>(
+  signal: K,
+): Stream.Stream<AppSignalPayloads[K]> {
+  return Stream.unwrap(Effect.map(openHub, Stream.fromPubSub)).pipe(
+    payloadsOf(signal),
+  );
+}
+
 /**
  * Deliver `signal` to `listener` until the caller interrupts. The program a
  * host's run edge forks: its scope holds the subscription, so interrupting
@@ -211,21 +229,19 @@ export function onAppSignal<K extends AppSignal>(
     Effect.gen(function* () {
       const subscription = yield* PubSub.subscribe(yield* openHub);
       if (subscribed) yield* Deferred.succeed(subscribed, undefined);
-      while (true) {
-        const event = yield* PubSub.take(subscription);
-        if (event.signal !== signal) continue;
-        // The key matched, so the payload is the one this key declares; a
-        // generic key cannot carry that pairing through the hub's type.
-        const payload = event.payload as AppSignalPayloads[K];
-        yield* Effect.sync(() => listener(payload)).pipe(
-          Effect.catchCause((cause) =>
-            Effect.logWarning(
-              `An "${signal}" app-signal subscriber failed`,
-              cause,
+      yield* Stream.fromSubscription(subscription).pipe(
+        payloadsOf(signal),
+        Stream.runForEach((payload) =>
+          Effect.sync(() => listener(payload)).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning(
+                `An "${signal}" app-signal subscriber failed`,
+                cause,
+              ),
             ),
           ),
-        );
-      }
+        ),
+      );
     }),
   );
 }

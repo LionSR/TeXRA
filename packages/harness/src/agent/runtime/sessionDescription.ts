@@ -14,7 +14,6 @@ import { helperCall } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { LanguageModel } from '@platform/languageModel';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
@@ -113,7 +112,7 @@ export const generateSessionDescription = Effect.fn(
 ): Effect.fn.Return<
   void,
   never,
-  LanguageModel | HttpClient.HttpClient | UsageLog | RouteRetries
+  HttpClient.HttpClient | UsageLog | RouteRetries
 > {
   const instruction = getDisplayedInstruction(config);
   if (!instruction) return;

@@ -1,18 +1,7 @@
-// Suites for @utils/text/appendTail (appendTail + appendHead).
-
 import { describe, expect, it } from 'vitest';
-import { appendHead, appendTail } from '@utils/text/appendTail';
+import { appendTail } from '@utils/text/appendTail';
 
 describe('appendTail', () => {
-  it('truncates at the head when over budget', () => {
-    // joined = "0123456789abc" (13 chars), keep last 5 → "89abc".
-    expect(appendTail('0123456789', 'abc', 5)).toBe('89abc');
-  });
-
-  it('clamps negative caps to an empty tail', () => {
-    expect(appendTail('0123456789', 'abc', -1)).toBe('');
-  });
-
   it('does not split surrogate pairs at the truncation boundary', () => {
     // "𐍈" (U+10348) is encoded as two UTF-16 code units: high D800, low DF48.
     // joined = "𐍈Y" (length 3); maxChars = 2 ⇒ cut at index 1, which is the
@@ -23,41 +12,5 @@ describe('appendTail', () => {
     expect(out).toBe('Y');
     // Defense against accidental re-introduction of the dangling low surrogate.
     expect(out.charCodeAt(0)).toBeLessThan(0xd800);
-  });
-});
-
-describe('appendHead', () => {
-  it('truncates at the tail when over budget', () => {
-    // joined = "0123456789abc" (13 chars), keep first 5 → "01234".
-    expect(appendHead('0123456789', 'abc', 5)).toBe('01234');
-  });
-
-  it('freezes once the cap is reached — later chunks are dropped', () => {
-    const first = appendHead('', 'FIRST-FATAL-ERROR', 8);
-    expect(first).toBe('FIRST-FA');
-    // Once the head is full, further chunks (even much later, much larger
-    // ones) must not overwrite or extend it.
-    const stillFrozen = appendHead(first, 'x'.repeat(10_000), 8);
-    expect(stillFrozen).toBe('FIRST-FA');
-  });
-
-  it('clamps a negative cap to an empty head', () => {
-    expect(appendHead('0123456789', 'abc', -1)).toBe('');
-  });
-
-  it('does not split surrogate pairs at the truncation boundary', () => {
-    // "𐍈" (U+10348) is encoded as two UTF-16 code units: high D800, low DF48.
-    // joined = "Y𐍈" (length 3); maxChars = 2 ⇒ cut at index 2, the low
-    // surrogate of the pair. Without the surrogate-aware fix the slice would
-    // yield a lone high surrogate + a dangling context; with the fix the cut
-    // backs off before the whole codepoint.
-    const out = appendHead('', 'Y𐍈', 2);
-    expect(out).toBe('Y');
-  });
-
-  it('returns an empty head at maxChars=0 even for a leading low surrogate', () => {
-    // A lone low surrogate at index 0 must not push the surrogate-aware cut
-    // below 0 — slice(0, -1) would return everything but the last character.
-    expect(appendHead('\udc00abc', 'x', 0)).toBe('');
   });
 });

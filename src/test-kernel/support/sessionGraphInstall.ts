@@ -15,8 +15,7 @@ import { testProcessOptions } from './setupPlatform';
  * The test kernel's process runtime and session graph family (PRD
  * one-fold-three-renderers, 7.7): what a composition root installs with
  * `processLayer()`, over the plugin list the setup module a test
- * file imports passes (`sessionGraphTestSetup` for TeXRA's plugins,
- * `builtinSessionGraphTestSetup` for the harness's built-ins). Installed
+ * file imports passes (`sessionGraphTestSetup`, TeXRA's plugins). Installed
  * when that module is imported, in the importing test file's module graph,
  * so it lands after that file's `vi.mock` registrations and the graph is
  * built over the modules the test actually mocks. `setupFakePlatform.ts`
@@ -42,24 +41,6 @@ import { testProcessOptions } from './setupPlatform';
  */
 const { storageRoot } = createFakeWorkspaceRoots();
 
-/** Reads of this install's process start: the `ProcessIdentity` layer is a
- *  process service, so it builds once however many sessions open. */
-export const identityReads = { count: 0 };
-
-/** A second composition in this process, for a suite that needs one: the
- *  kernel's, under the storage root `root`, with a process start of its own.
- *  Fixed, as the install's is: reading the real one spawns PowerShell on
- *  Windows, seconds under CI load, and only the install's reads count in
- *  `identityReads`. */
-export const testProcessLayer = (
-  plugins: readonly Plugin[],
-  root: string,
-): ReturnType<typeof processLayer> =>
-  processLayer({
-    ...testProcessOptions(plugins, root),
-    processStart: Effect.succeed('vitest-second'),
-  });
-
 /** Install the harness's process runtime over `plugins` and build it. */
 export async function installTestSessionGraph(
   plugins: readonly Plugin[],
@@ -70,10 +51,7 @@ export async function installTestSessionGraph(
       // `Sessions` (provideMerge); the suites' root launches ask it.
       processLayer({
         ...testProcessOptions(plugins, storageRoot),
-        processStart: Effect.sync(() => {
-          identityReads.count += 1;
-          return 'vitest';
-        }),
+        processStart: Effect.succeed('vitest'),
       }) as Layer.Layer<ProcessServices | Sessions | SessionOwner>,
     ),
   );

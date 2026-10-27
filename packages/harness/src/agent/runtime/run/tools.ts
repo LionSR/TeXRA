@@ -55,10 +55,9 @@ export function parseCallArguments(
 }
 
 /**
- * The dispatch facts of one response's local calls (an editor turn's are its
- * host's to run, so it passes none), stamped at append time. Every
- * call gets its card id here: a slow tool's card opens under it before the
- * call runs; a fast tool's opens and closes with its settlement.
+ * The dispatch facts of one response's local calls, stamped at append
+ * time. Every call gets its card id here: a slow tool's card opens under it
+ * before the call runs; a fast tool's opens and closes with its settlement.
  */
 export function dispatchFactsFor(
   calls: readonly LocalCall[],

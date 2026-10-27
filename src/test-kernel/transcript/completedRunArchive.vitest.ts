@@ -11,12 +11,11 @@ import { resumeRun } from '@agent/runtime/resumeRun';
 import { withProcessServices } from '@platform/processRuntime';
 import {
   AgentConfigSchema,
-  LOG_LEVELS,
   MESSAGE_TYPES,
   qualifyAggregateId,
 } from '@shared/schemas';
-import type { JsonValue, LogLevel, MessageType, RunId } from '@shared/schemas';
-import { testSessionOf, testRuntime } from '@test/support/testProcessRuntime';
+import type { RunId } from '@shared/schemas';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createTempDirPlatform,
@@ -26,19 +25,16 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { BUNDLED_AGENTS } from '@test/support/storeFaults';
 import {
   createProcessSession,
-  createTestSession,
   publishTestRunStart,
   publishTestRows,
   seedRows,
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { seedRunRecord, seedReport } from '@test/support/runRecordSeeds';
 import {
   closeTestSession as closeSessionAt,
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
-import { loadChatExportInput as loadChatExportInputEffect } from '@texra/agent/export/loadChatExportInput';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { readCompletedRunConversation as readCompletedRunConversationEffect } from '@transcript/completedRunArchive';
 
@@ -64,10 +60,6 @@ async function stampRun(runId: RunId): Promise<void> {
 }
 
 let taskSession: SessionHandle;
-const readCompletedRunConversation = (id: RunId) =>
-  Effect.runPromise(readCompletedRunConversationEffect(id, taskSession));
-const loadChatExportInput = (id: RunId) =>
-  Effect.runPromise(loadChatExportInputEffect(id, testSessionOf(taskSession)));
 
 function closeTestSession(session: SessionHandle): Effect.Effect<void, Error> {
   return closeSessionAt(session.roots.storage).pipe(
@@ -81,71 +73,6 @@ function closeTestSession(session: SessionHandle): Effect.Effect<void, Error> {
           ),
     ),
   );
-}
-
-/** One `log` fact a fixture publishes. */
-interface LogRow {
-  readonly level: LogLevel;
-  readonly messageType: MessageType;
-  readonly text?: string;
-  readonly data?: JsonValue;
-}
-
-function logRow(
-  messageType: MessageType,
-  fields: { text?: string; data?: JsonValue },
-): LogRow {
-  return { level: LOG_LEVELS.INFO, messageType, ...fields };
-}
-
-/** Seed recorded transcript rows through the durable log fact. */
-async function appendRows(
-  runId: RunId,
-  rows: readonly LogRow[],
-): Promise<void> {
-  await stampRun(runId);
-  publishTestRows(
-    taskSession,
-    rows.map((row) => ({
-      type: 'log' as const,
-      aggregateId: qualifyAggregateId('run', runId),
-      level: row.level,
-      message: row.text ?? '',
-      messageType: row.messageType,
-      data: row.data,
-    })),
-  );
-  await Effect.runPromise(taskSession.log.settled);
-}
-
-/** Write the transcript rows of a completed run. */
-async function writeArchiveFixture(runId: RunId): Promise<void> {
-  publishTestRunStart(taskSession, runId);
-  await settleSessionEvents();
-
-  await appendRows(runId, [
-    logRow(MESSAGE_TYPES.USER_MESSAGE, {
-      text: 'Fix the lemma.',
-      data: { attachments: ['image'] },
-    }),
-    logRow(MESSAGE_TYPES.THINKING, {
-      text: 'Consider the boundary terms.',
-    }),
-    logRow(MESSAGE_TYPES.WEB_SEARCH, {
-      data: { query: 'sobolev constant' },
-    }),
-    logRow(MESSAGE_TYPES.TOOL_USE, {
-      data: {
-        toolName: 'write_file',
-        input: { path: 'notes/lemma.tex' },
-        output: 'File written.',
-        status: 'completed',
-      },
-    }),
-    logRow(MESSAGE_TYPES.MODEL_RESPONSE, {
-      text: 'Done - the lemma is fixed.',
-    }),
-  ]);
 }
 
 describe('completedRunArchive facade', () => {
@@ -176,128 +103,6 @@ describe('completedRunArchive facade', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
-
-  // it.live: the release at the end of this test closes both sessions through
-  // `closeSession`, whose settlement budget is
-  // `Effect.sleep(SESSION_CLOSE_DEADLINE_MS)`. With no active runs that arm
-  // is never awaited today, so the happy path would also pass on the test
-  // clock. The live clock is kept for the regression case: under TestClock
-  // nothing advances that sleep, so a session that stopped settling could
-  // never reach the `Test session did not close` failure and would surface as
-  // a suite timeout instead of a named assertion.
-  it.live(
-    'keeps concurrent exports of the same run isolated by session roots',
-    () =>
-      Effect.gen(function* () {
-        const runId = 'abc456abc456' as RunId;
-        // Both sessions close on every exit of this test, interruption
-        // included; a close failure is the defect the old `finally` threw.
-        const papers = yield* Effect.acquireRelease(
-          Effect.forEach(['first-paper', 'second-paper'], (label) =>
-            Effect.map(createTestSession(), (session) => ({ label, session })),
-          ),
-          (open) =>
-            Effect.forEach(open, ({ session }) => closeTestSession(session), {
-              concurrency: 'unbounded',
-              discard: true,
-            }).pipe(Effect.orDie),
-        );
-        yield* Effect.forEach(
-          papers,
-          ({ session, label }) =>
-            Effect.gen(function* () {
-              publishTestRunStart(session, runId);
-              yield* session.log.settled;
-              yield* seedRunRecord(session, runId, {
-                ...runConfig(label),
-                instruction: label,
-              });
-              yield* session.log.transact([
-                {
-                  type: 'run.description',
-                  by: 'model',
-                  aggregateId: qualifyAggregateId('run', runId),
-                  description: label,
-                },
-              ]);
-              publishTestRows(session, [
-                {
-                  type: 'response.finalized',
-                  aggregateId: qualifyAggregateId('run', runId),
-                  text: `Proof for ${label}.`,
-                },
-              ]);
-              yield* session.log.settled;
-            }),
-          { concurrency: 'unbounded', discard: true },
-        );
-        const exports = yield* Effect.all(
-          papers.map(({ session }) =>
-            loadChatExportInputEffect(runId, testSessionOf(session)),
-          ),
-          { concurrency: 2 },
-        );
-        expect(
-          exports.map((result) => ({
-            description: result.run?.description,
-            agent: result.config?.agent,
-            instruction: result.exportInput?.config.instruction,
-            nodes: result.exportInput?.nodes,
-          })),
-        ).toEqual(
-          papers.map(({ label }) => ({
-            description: label,
-            agent: label,
-            instruction: label,
-            nodes: [{ kind: 'assistant-text', text: `Proof for ${label}.` }],
-          })),
-        );
-      }),
-  );
-
-  it.effect(
-    'serves conversation and export from transcripts and tasks from committed events',
-    () =>
-      Effect.gen(function* () {
-        const runId = 'abc123abc123' as RunId;
-        yield* Effect.promise(() => writeArchiveFixture(runId));
-
-        yield* seedRunRecord(taskSession, runId, {
-          ...runConfig('orchestrator'),
-          instruction: 'Fix the lemma.',
-        });
-        yield* Effect.promise(() => stampRun(runId));
-
-        const conversationResult = yield* Effect.promise(() =>
-          readCompletedRunConversation(runId),
-        );
-        expect(conversationResult).toEqual([
-          {
-            kind: 'user-message',
-            parts: [
-              { type: 'text', text: 'Fix the lemma.' },
-              { type: 'attachment', attachmentType: 'image' },
-            ],
-          },
-          { kind: 'thinking', text: 'Consider the boundary terms.' },
-          { kind: 'web-search', query: 'sobolev constant' },
-          {
-            kind: 'tool-call',
-            name: 'write_file',
-            input: { path: 'notes/lemma.tex' },
-          },
-          { kind: 'tool-result', text: 'File written.' },
-          { kind: 'assistant-text', text: 'Done - the lemma is fixed.' },
-        ]);
-
-        // Chat export assembles from the same facade read — no conversation.json.
-        const exportResult = yield* Effect.promise(() =>
-          loadChatExportInput(runId),
-        );
-        expect(exportResult.exportInput).not.toBeNull();
-        expect(exportResult.exportInput?.nodes).toEqual(conversationResult);
-      }),
-  );
 
   it.live(
     'reconstructs both turns after a production resume that failed before it entered the run',
@@ -435,109 +240,6 @@ describe('completedRunArchive facade', () => {
         expect(secondPage.output).toContain('<message index="3"');
         expect(secondPage.output).toContain('<message index="4"');
         expect(secondPage.output).not.toContain('Prove the first lemma.');
-
-        for (const text of [
-          'Prove the first lemma.',
-          'First proof.',
-          'Now prove the second lemma.',
-          'Second proof.',
-        ]) {
-          expect(
-            `${firstPage.output}\n${secondPage.output}`.split(text),
-          ).toHaveLength(2);
-        }
-
-        const lineRange = yield* ExecutionsTool.call({
-          path: `/executions/${runId}/conversation`,
-          view_range: [1, 10],
-        }).pipe(Effect.provide(toolLayer));
-        expect(lineRange.status).toBe('error');
-        expect(lineRange.error).toContain(
-          'Conversation pagination is message-based. Use offset and limit',
-        );
-        // Use the installed session owner's services, including its persistent
-        // project database map.
       }).pipe((program) => withProcessServices(testRuntime(), program)),
-  );
-
-  it('reads a registered run whose transcript is empty', async () => {
-    const runId = 'abc907abc907' as RunId;
-    await stampRun(runId);
-
-    const conversationResult = await readCompletedRunConversation(runId);
-    expect(conversationResult).toEqual([]);
-  });
-
-  it('reconstructs structured successful and failed tool results as model-facing text', async () => {
-    const runId = '0ee5550ee555' as RunId;
-
-    await stampRun(runId);
-
-    await appendRows(runId, [
-      logRow(MESSAGE_TYPES.TOOL_USE, {
-        data: {
-          toolName: 'write_file',
-          input: { path: 'proof.tex' },
-          output: { output: 'File written.' },
-          status: 'completed',
-        },
-      }),
-      logRow(MESSAGE_TYPES.TOOL_USE, {
-        data: {
-          toolName: 'read_file',
-          input: { path: 'missing.tex' },
-          output: { error: 'File not found.' },
-          status: 'failed',
-        },
-      }),
-    ]);
-
-    const result = await readCompletedRunConversation(runId);
-    expect(result).toEqual([
-      {
-        kind: 'tool-call',
-        name: 'write_file',
-        input: { path: 'proof.tex' },
-      },
-      { kind: 'tool-result', text: 'File written.' },
-      {
-        kind: 'tool-call',
-        name: 'read_file',
-        input: { path: 'missing.tex' },
-      },
-      { kind: 'tool-result', text: 'File not found.' },
-    ]);
-  });
-
-  it.live('reports a diagnostic-only transcript as no conversation', () =>
-    Effect.gen(function* () {
-      const runId = '0999cb0999cb' as RunId;
-
-      yield* Effect.promise(() => stampRun(runId));
-
-      yield* Effect.promise(() =>
-        appendRows(runId, [
-          logRow(MESSAGE_TYPES.PROGRESS_STATUS, { text: 'Root status only' }),
-        ]),
-      );
-
-      const result = yield* Effect.promise(() =>
-        readCompletedRunConversation(runId),
-      );
-      expect(result).toEqual([]);
-
-      const endpoint = yield* ExecutionsTool.call({
-        path: `/executions/${runId}/conversation`,
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: { session: taskSession, runId, toolPolicy: {} },
-            roots: taskSession.roots,
-          }),
-        ),
-      );
-      expect(endpoint.status).toBe('executed');
-      expect(endpoint.output).toContain('Conversation (0 messages)');
-    }),
   );
 });

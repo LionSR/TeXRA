@@ -189,6 +189,41 @@ export const parseInboundToolArguments = (
   );
 
 /**
+ * A wire parser's failure shorthand: an `Effect.fail` carrying a `ModelError`.
+ * A provider's streamed output is the model's, so an event we cannot explain
+ * defaults to `malformed-output`; a recognized-but-unsupported one passes
+ * `unsupported`.
+ */
+export const wireFail = (
+  message: string,
+  kind: ModelError['kind'] = 'malformed-output',
+): Effect.Effect<never, ModelError> =>
+  Effect.fail(new ModelError({ kind, message }));
+
+/**
+ * Decodes one raw wire value with `schema`, failing as `malformed-output`
+ * with `message` when it does not match. The process did not author provider
+ * output, so a mismatch is the model's; the parse failure rides along as the
+ * surfaced error's cause.
+ */
+export const decodeWireOrFail = <A>(
+  schema: Schema.Codec<A, unknown>,
+  message: string,
+  raw: unknown,
+): Effect.Effect<A, ModelError> => {
+  const decoded = Schema.decodeUnknownResult(schema)(raw);
+  return Result.isSuccess(decoded)
+    ? Effect.succeed(decoded.success)
+    : Effect.fail(
+        new ModelError({
+          kind: 'malformed-output',
+          message,
+          cause: decoded.failure,
+        }),
+      );
+};
+
+/**
  * Waits out `pending` at scope close. A rejection is dropped only when it
  * repeats the cause the primary failure in `exit` already carries (typed, or
  * already a defect when an earlier cleanup died), or when `isExpected`
@@ -227,10 +262,10 @@ export const rejoin = (
  * dropped, and distinct cleanup defects stay in the scope's combined failure,
  * where Effect makes its typed failure a defect as well.
  */
-export const readerAbortSignal = (
-  reader: () => ReadableStreamDefaultReader<unknown> | undefined,
-): Effect.Effect<AbortSignal, never, Scope.Scope> =>
-  Effect.gen(function* () {
+export const readerAbortSignal = Effect.fn('transport.readerAbortSignal')(
+  function* (
+    reader: () => ReadableStreamDefaultReader<unknown> | undefined,
+  ): Effect.fn.Return<AbortSignal, never, Scope.Scope> {
     yield* Effect.addFinalizer((exit) => {
       const body = reader();
       if (body === undefined) return Effect.void;
@@ -242,7 +277,8 @@ export const readerAbortSignal = (
     });
     const signal = yield* Effect.abortSignal;
     return signal;
-  });
+  },
+);
 
 /**
  * Run a promise-returning provider request under Effect's own abort signal,

@@ -189,7 +189,7 @@ export function runCliExit<E>(exit: Effect.Effect<void, E>): Promise<void> {
   return Effect.runPromise(exit);
 }
 
-export function installCliShutdownSignalHandlers(quiet: boolean): void {
+function installCliShutdownSignalHandlers(quiet: boolean): void {
   if (shutdownHandlers) return;
   const handlers = new DisposableStore();
   shutdownHandlers = handlers;

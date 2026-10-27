@@ -282,7 +282,7 @@ export function rowReader<E>(
                 [])
             : [];
         });
-        if (refusal !== undefined) return yield* Effect.fail(refusal);
+        if (refusal !== undefined) return yield* refusal;
       }
       // The batch's blobs in one statement: a row carries addresses only.
       const texts: Blobs = yield* stored(blobDigests(rows));
@@ -299,7 +299,7 @@ export function rowReader<E>(
           continue;
         }
         if (whole || decoded.failure._tag === 'DatabaseStoreNewer')
-          return yield* Effect.fail(decoded.failure);
+          return yield* decoded.failure;
         yield* warnOnce(
           `${decoded.failure.commit}`,
           `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run is shown as unreadable and cannot be opened.`,

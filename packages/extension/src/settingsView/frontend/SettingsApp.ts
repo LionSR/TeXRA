@@ -53,7 +53,6 @@ import {
   childRunConcurrencyBudget,
   resumeOnOpen,
   compactionThresholdPercent,
-  copilotRouteInfos,
   customAgentDir,
   customAgentDirIsDefault,
   customAgentScanIssues,
@@ -314,7 +313,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
               .chatgptCodexContextWindow=${chatgptCodexContextWindow.get()}
               .subscriptionAuth=${subscriptionAuth.get()}
               .usage=${subscriptionUsage.get()}
-              .copilotModels=${copilotRouteInfos.get()}
             ></subscriptions-tab>
           </models-tab>
         `;

@@ -17,7 +17,6 @@ import type { AgentDirectoriesPort, AppStateStore } from '@platform/interfaces';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
-import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { canonicalConfigKey } from '@shared/config/configKeys';
@@ -259,8 +258,6 @@ export type FakeHostOverrides = Partial<FakeProcessPorts> &
   Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState' | 'globalState'>> & {
     /** The store the host's `Secrets` service reads, as a root's own local. */
     readonly secrets?: PlatformSecrets;
-    /** The language-model port, as `FakeHost` holds it. */
-    readonly languageModel?: LanguageModelPort;
     readonly setup?: SetupPlatformShape;
   };
 

@@ -14,7 +14,6 @@ import {
   ModelAccess,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { LanguageModel } from '@platform/languageModel';
 import type { UsageLog } from '@shared/usageLog';
 
 import { callModel } from './run/modelCall';
@@ -49,11 +48,7 @@ export const helperCall = Effect.fn('helperCall')(
   ): Effect.fn.Return<
     string,
     CallFailure | Error,
-    | Scope.Scope
-    | LanguageModel
-    | HttpClient.HttpClient
-    | UsageLog
-    | RouteRetries
+    Scope.Scope | HttpClient.HttpClient | UsageLog | RouteRetries
   > {
     const access = yield* Effect.provide(ModelAccess, modelAccessLayer(stores));
     // ScopedRef masks its acquisition; a caller's deadline must still

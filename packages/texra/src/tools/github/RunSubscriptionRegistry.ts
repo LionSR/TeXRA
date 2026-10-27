@@ -198,17 +198,15 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   list(
     keys: readonly K[] = this.opts.source.activeKeys(),
   ): SubscriptionBinding<K>[] {
-    const runIdsByKey = new Map<K, RunId[]>();
-    for (const [runId, bound] of this.perRun.groups()) {
-      for (const key of bound.keys()) {
-        const runIds = runIdsByKey.get(key);
-        if (runIds) runIds.push(runId);
-        else runIdsByKey.set(key, [runId]);
-      }
-    }
+    const bound = Map.groupBy(
+      [...this.perRun.groups()].flatMap(([runId, byKey]) =>
+        [...byKey.keys()].map((key) => ({ runId, key })),
+      ),
+      (entry) => entry.key,
+    );
     return keys.map((key) => ({
       key,
-      runIds: runIdsByKey.get(key) ?? [],
+      runIds: bound.get(key)?.map((entry) => entry.runId) ?? [],
     }));
   }
 

@@ -1,5 +1,5 @@
 import { decideRunModel, type RunModelDecisionReason } from '@texra-ai/harness';
-import { isImplicitDefaultEligible } from '@shared/constants/agents';
+import { isImplicitDefaultEligible } from '@texra-ai/harness';
 
 import { CLI_CHEAP_START_MODEL, cliCommandDefaults } from './cliConfig';
 import { pickDefaultToolUseAgent } from './defaultAgents';

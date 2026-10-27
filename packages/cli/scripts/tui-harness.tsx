@@ -21,7 +21,7 @@ import { nanoid } from 'nanoid';
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { AgentCatalog } from '@texra-ai/harness';
+import { AgentCatalog, describeFollowUpFailure } from '@texra-ai/harness';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
@@ -83,7 +83,6 @@ import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
-import { FOCUSED_AGENT } from '@ui/copy/nestedRuns';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
@@ -111,7 +110,6 @@ import {
 import {
   bindSessionView,
   currentView,
-  CLI_FOLLOW_UP_HOST,
   runningChildCount,
   sessionView,
   runViewOf,
@@ -263,6 +261,7 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   resourcesPath: HARNESS_RESOURCES_PATH,
   skillSourceOptions: {},
   stderrColorEnabled: HARNESS_COLOR_ENABLED,
+  renderRunProgress: false,
   stderrIsTty: true,
   stdoutColorEnabled: HARNESS_COLOR_ENABLED,
   stdoutIsTty: true,
@@ -1553,9 +1552,10 @@ function handleHarnessSubmit(line: string): void {
   const view = currentView();
   const focused = runViewOf(view, selectedRunId.get());
   if (focused && focused.parentId !== null) {
-    if (!acceptsFollowUp(focused, CLI_FOLLOW_UP_HOST)) {
+    // The session refuses a message to an agent that takes none.
+    if (!acceptsFollowUp(focused)) {
       appendHarnessAssistantTranscript(
-        FOCUSED_AGENT.selectedNoLongerAccepting,
+        describeFollowUpFailure('not_resumable'),
         focused.id,
       );
       return;

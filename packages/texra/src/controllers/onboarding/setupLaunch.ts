@@ -3,11 +3,10 @@ import { Effect } from 'effect';
 import {
   Cancelled,
   type PlatformSecrets,
-  type LanguageModel,
   presentRunFailure,
   type SessionHostInteractions,
 } from '@texra-ai/harness';
-import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { SETUP_AGENT_NAME } from '@texra-ai/harness';
 import { validateRunRequest } from '@texra/controllers/session/runRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
@@ -36,7 +35,7 @@ export const kickoffDesktopSetup = (options: {
   /** The project's launch path; none when no folder is open. */
   readonly run: Pick<HostRunActions, 'runValidated'> | undefined;
   readonly secrets: PlatformSecrets;
-}): Effect.Effect<void, never, LanguageModel> =>
+}): Effect.Effect<void> =>
   Effect.gen(function* () {
     if (!options.run) {
       return yield* Effect.fail(

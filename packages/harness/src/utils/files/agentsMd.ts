@@ -26,44 +26,43 @@ const AGENTS_FILE = 'AGENTS.md';
  * instructions file reads exactly like a run the user never wrote
  * instructions for.
  */
-export const loadAgentsMd = (
+export const loadAgentsMd = Effect.fn('agentsMd.loadAgentsMd')(function* (
   workspace: string | undefined,
-): Effect.Effect<string, Error, FileSystem.FileSystem> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    // Precedence order: the run's workspace, then the user's `~/.texra`. A
-    // root whose file is absent or blank falls through to the next one.
-    const candidates: Array<{ root: string; source: string }> = [];
-    if (workspace) candidates.push({ root: workspace, source: 'workspace' });
-    const homeDir = safeHomedir();
-    if (homeDir) {
-      candidates.push({ root: path.join(homeDir, '.texra'), source: 'user' });
-    }
+): Effect.fn.Return<string, Error, FileSystem.FileSystem> {
+  const fs = yield* FileSystem.FileSystem;
+  // Precedence order: the run's workspace, then the user's `~/.texra`. A
+  // root whose file is absent or blank falls through to the next one.
+  const candidates: Array<{ root: string; source: string }> = [];
+  if (workspace) candidates.push({ root: workspace, source: 'workspace' });
+  const homeDir = safeHomedir();
+  if (homeDir) {
+    candidates.push({ root: path.join(homeDir, '.texra'), source: 'user' });
+  }
 
-    for (const { root, source } of candidates) {
-      const file = path.join(root, AGENTS_FILE);
-      // Absent, a dangling link included, is '' and falls through.
-      const content = yield* Effect.gen(function* () {
-        if (!(yield* entryExists(fs, file))) return '';
-        return yield* readNormalizedFile(fs, file);
-      }).pipe(
-        Effect.catchIf(
-          (error) => error.reason._tag === 'NotFound',
-          () => Effect.succeed(''),
-        ),
-        Effect.mapError(
-          (error) =>
-            new Error(`Failed to load ${file}: ${toErrorMessage(error)}`, {
-              cause: error,
-            }),
-        ),
-      );
-      const trimmed = content.trim();
-      if (!trimmed) continue;
-      yield* Effect.logDebug(`Loaded ${source} ${AGENTS_FILE}`).pipe(
-        withLogChannel(CHANNEL),
-      );
-      return trimmed;
-    }
-    return '';
-  });
+  for (const { root, source } of candidates) {
+    const file = path.join(root, AGENTS_FILE);
+    // Absent, a dangling link included, is '' and falls through.
+    const content = yield* Effect.gen(function* () {
+      if (!(yield* entryExists(fs, file))) return '';
+      return yield* readNormalizedFile(fs, file);
+    }).pipe(
+      Effect.catchIf(
+        (error) => error.reason._tag === 'NotFound',
+        () => Effect.succeed(''),
+      ),
+      Effect.mapError(
+        (error) =>
+          new Error(`Failed to load ${file}: ${toErrorMessage(error)}`, {
+            cause: error,
+          }),
+      ),
+    );
+    const trimmed = content.trim();
+    if (!trimmed) continue;
+    yield* Effect.logDebug(`Loaded ${source} ${AGENTS_FILE}`).pipe(
+      withLogChannel(CHANNEL),
+    );
+    return trimmed;
+  }
+  return '';
+});

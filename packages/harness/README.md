@@ -22,17 +22,12 @@ package, is a peer too: the harness checks a model's failures with
 `instanceof ModelError`, so a model your program binds and the harness must
 share one copy of the package.
 
-`effect` is a peer dependency of both packages, and the
-harness also takes `@effect/platform-node` and `@effect/sql-sqlite-node` as
-peers: the bundles import all of them at runtime. Two copies of `effect` in
-one process do not work at all: Streams, Fibers and Context built by one copy
-do not interoperate with another's, and a peer dependency is how a consumer
-gets one copy rather than a second nested one. Effect's packages also release
-in patch lockstep: each `@effect/*` release peers `effect` at its own patch
-(`@effect/platform-node-shared@4.0.6` needs `effect ^4.0.6`), so the Effect
-set has to come from your one install, on caret ranges that let it resolve
-to one patch. Pinning `effect` exactly while an `@effect/*` package floats
-past it fails at startup.
+`effect` is a peer dependency of both packages, and the harness also takes
+`@effect/platform-node` and `@effect/sql-sqlite-node` as peers so the host
+process resolves a single copy of `effect` and `@effect/*` (duplicate copies
+break `ServiceMap.Service`, `FiberRef`, and `Stream` identity). Install them in
+the host package with matching caret ranges; do not pin `effect` to an exact
+patch while `@effect/*` packages float.
 
 ```jsonc
 {
@@ -52,11 +47,10 @@ The package's surface is Effect: `Sessions.layer({ platform, plugins })`
 composes the process and provides the session owner for one `Scope`, and the
 embedder runs the program at its own entry point. `plugins` is the list of
 what the runs can use: the harness's built-ins (`harnessBuiltins`) and any
-plugin of the embedder's own beside them. `session.start` runs an agent as a
-conversation. A plugin may own one more block of an agent file
-(`Plugin.agentBlock`, an `AgentBlock`): an agent carrying it is a task, which
-that plugin launches on its own recipe script. The package ships no such
-plugin.
+plugin of the embedder's own beside them. `session.start` runs an agent as a conversation. A plugin can also register a
+custom YAML task block via `Plugin.agentBlock` (an `AgentBlock`) and run agents
+that declare that block with its own recipe script; `@texra-ai/harness` ships
+no built-in task-block plugins.
 
 ```ts
 import { Effect, Fiber, Stream } from 'effect';
@@ -132,22 +126,23 @@ entry that runs the program.
 ### A persistent session, and resume
 
 `sessions.open(roots, { persistent: true })` keeps the session's history in
-the root's SQLite store, the same store every host keeps, under the
-platform's storage directory (`nodePlatform`'s `storageDir`). Without it the
-store is in memory and ends with the session. A later process opens the same
-root the same way and continues a run with `session.resume(runId)`, which
-continues it from its committed history through the resume path every
-host takes and hands back the same `Run` that `start` returns. A run that
-nothing can continue fails with `ResumeRefused`, whose `reason` says why:
-`finished`, `owned_elsewhere` (a live process holds it), `blocked` (an agent
-or plugin it needs is missing), `unusable_checkpoint`, or `not_resumable`
-(it is running here, or it was deleted). A child that an open call of its
-parent owns, as the child's records say, resumes with that parent: the
-`Run` is the parent's, and its `redirectedFrom` names the child asked for. A
-run that called a
-custom tool needs that tool again, so `resume` takes the same `tools` as
-`start`. A second `resume` of a run already resuming here joins the first
-and gets the same `Run`.
+the root's SQLite store under the platform's `storageDir`. Without
+`persistent: true`, the store is in memory and ends with the session. Reopening
+an already-open workspace root returns the existing session; passing a
+different `persistent` option fails with `SessionOptionsConflict` until the
+session is closed.
+
+A later process can open the same root and call `session.resume(runId)` to
+continue a run from its committed history, returning the same `Run` handle that
+`start` returns. A run that cannot continue fails with `ResumeRefused`, whose
+`reason` is `finished`, `owned_elsewhere` (a live process holds it), `blocked`
+(an agent or plugin it needs is missing), `unusable_checkpoint`, or
+`not_resumable` (it is running here, or it was deleted). If `runId` belongs to
+a child run owned by an active parent call, `session.resume` resumes the parent
+and sets `run.redirectedFrom` to the requested child `runId`. Pass the same
+custom `tools` to `resume` that were passed to `start`. Calling `resume` on a
+run already resuming in this process joins the active resume and returns the
+same `Run`.
 
 ```ts
 const program = Effect.gen(function* () {
@@ -161,25 +156,22 @@ const program = Effect.gen(function* () {
 
 ### Approvals
 
-A session no host answers answers no request: its policy denies every
-request a run raises, and a run is offered no tool that needs approval.
-`session.attach({ approve })` attaches a host with a handler for the
-caller's scope (a host's presentation surface rides the same value),
-an Effect function from a `PendingRequest` (which run asks, the request's
-id, and its `payload`, whose `kind` is a command, an edit, a plan, a retry
-or a question) to the `RequestDecision` it records. The handler is called
-once for each request a run waits on here, the requests every host
-lists from `SessionView.requests`, and its answer goes through the
-session's one `request.decide`. An embedder may instead answer a listed
-request itself, with `session.request({ kind: 'request.decide', ... })`;
-whichever answer lands first is the decision. A handler that fails, throws,
-or has not answered within ten minutes denies the request, and the cause is
-logged at warn: no run stays parked on a handler that went quiet.
+A session with no attached approval handler denies every request a run raises,
+and offers no tool that requires approval. `session.attach({ approve })`
+attaches a host with a handler for the caller's scope, an Effect function from
+a `PendingRequest` (which run asks, the request's id, and its `payload`, whose
+`kind` is a command, an edit, a plan, a retry, or a question) to the
+`RequestDecision` it records. The handler is called once for each request a run
+waits on (also listed in `SessionView.requests`), or an embedder can answer a
+listed request directly with `session.request({ kind: 'request.decide', ... })`;
+whichever answer lands first is the decision. A handler that fails, throws, or
+has not answered within ten minutes denies the request and logs a warning, so no
+run stays waiting on a handler that went quiet.
 
-A request is a row, so it survives the process. On a persistent session, a
-run killed while it waits for approval still waits after a restart: reopen
-the session, attach a handler, `resume` the run, and the handler is asked
-the same request, under the same id.
+A request is a stored row and survives restarts. On a persistent session, a run
+interrupted while waiting for approval still waits after a restart: reopen the
+session, attach a handler, and call `resume` to receive the same request under
+the same id.
 
 ```ts
 const program = Effect.gen(function* () {
@@ -202,27 +194,22 @@ const program = Effect.gen(function* () {
 });
 ```
 
-The store belongs to the open that builds the root's session. A later open
-of the same root gets that session, and must ask for the same store: one
-that asks for the other fails with `SessionOptionsConflict`; close the
-session first to open it differently.
-
-| Service    | What it is                                                                                                                                                                                                                                                                                                                                 |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root, through the same owner every host opens through. `processLayer`, the one every host builds, serves it; `Sessions.layer({ platform, plugins })` composes that process for the layer's lifetime. Build it once per process. |
-| `Session`  | `roots`; `view.current()`, `view.changes`, and `view.watch(set, from)`, a reader's fold inputs whose transcript interest lives as long as the stream; `start`, `resume`, `request`; `attach(host)`, a host for the caller's scope. A value, one per root, not a tag.                                                                       |
-| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`, and `redirectedFrom` on a resume that continued a child's parent. `start` succeeds at admission: the run exists in the session, its row published and its trace live.                                                                                                                    |
+| Service    | What it is                                                                                                                                                                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` serves it; `Sessions.layer({ platform, plugins })` composes that process for the layer's lifetime. Build it once per process.            |
+| `Session`  | `roots`; `view.current()`, `view.changes`, and `view.watch(set, from)`, a reader's view inputs whose transcript subscription lives as long as the stream; `start`, `resume`, `request`; `attach(host)`, a host for the caller's scope. A value, one per root, not a tag. |
+| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`, and `redirectedFrom` on a resume that continued a child's parent. `start` succeeds when accepted: the run exists in the session, its row published and its trace live.                                                 |
 
 `run.events` is the run's trace as a `Stream`. Trace events are buffered from
 the moment the run enters its session, so a reader begun right after `start`
 misses none of the launch events. Ending the stream's consumption detaches
-the event source while the run itself continues, and a run that settles
+the event source while the run itself continues, and a run that finishes
 without ever being read discards what it buffered. That buffer is only the
 handover to the first reader, and it is bounded: a run whose events pass the
 handover window with nobody reading has no reader, so it logs a warning
 naming the run and detaches its trace. Taking only `result` therefore never
 retains a long run's whole trace. A reader that attaches after that, or
-after the run settled unread, fails with `TraceUnavailable` (`truncated` or
+after the run finished unread, fails with `TraceUnavailable` (`truncated` or
 `ended`) rather than reading an empty trace; so does any reader of a run
 another process runs, which keeps its trace (`remote`). A reader that did attach in
 time is never dropped: past its first pull the buffer is that reader's, and
@@ -234,26 +221,25 @@ surface names (`AgentNotFound`, `ToolsRefused`); a run that fails after entering
 fails `run.result` and `run.events` with `RunFailure`, whose `cause` is
 exactly what the launch path threw.
 
-`run.view` is the folded session state every host renders, so run
+`run.view` is the derived session state every host renders, so run
 status, transcript rows, and pending approvals are read from it rather than
-re-folded from the trace. It yields the current view first, then subsequent
+rebuilt from the trace. It yields the current view first, then subsequent
 changes through the first view containing the run's durable outcome. That
 final view is included even when consumption starts after `result` completes,
 and the first view yielded always holds the run's row. `result` completes
-only once the final view has folded, independently of whether the caller
-reads it; if the session's fold dies first, `result` and every `view`
+only once the final view is applied, independently of whether the caller
+reads it; if the session's state reducer dies first, `result` and every `view`
 consumer die with its defect instead of waiting. A run that fails on its own
-fails `result` with its own error without waiting for the fold; the fold's
-defect then reaches `view` consumers only. Ending consumption stops that
+fails `result` with its own error without waiting for the view update; a
+reducer defect then reaches `view` consumers only. Ending consumption stops that
 reader while the run continues. If launch fails before the run enters the
 session, there is no `view` at all: `start` itself carries the failure.
 
-Every yielded view is a value: the fold publishes immutable levels with
+Every yielded view is a value: the state reducer publishes immutable levels with
 copy-on-touch structural sharing, so an older view stays exactly what it was
 for as long as it is held, and a branch the later level did not touch is the
-same object in both. An older view is stable to read; it is not a fold input,
-so nothing in the package folds onto anything but the latest level. The exported
-`SessionView`, `RunView`, and
+same object in both. An older view is stable to read; updates always apply to
+the latest level. The exported `SessionView`, `RunView`, and
 `TranscriptView` types are read-only all the way down (`ReadonlyMap`, readonly
 arrays); a write through a cast corrupts the session every later run in the
 process reads. A run is a row of `SessionView.runs`. The run's transcript rows
@@ -261,13 +247,10 @@ process reads. A run is a row of `SessionView.runs`. The run's transcript rows
 descendants as they appear, until the run's final view: a reader that needs
 them later watches them (`view.watch`).
 
-Runs share one session per workspace storage root. The runtime's session
-owner holds it, the same owner every host opens its sessions through, so
-opening a root twice resolves the one session already open there; a second
-root gets its own. A session's requests are answered by the hosts attached
-to it, or, without one that answers, denied by its policy (see
-[Approvals](#approvals)). A session ends through `sessions.close(roots)`: it refuses new runs on the
-root, interrupts the runs it owns and waits for them to settle within the
+Runs share one session per workspace storage root: opening a root twice
+resolves the session already open there, while a second root gets its own. A
+session ends through `sessions.close(roots)`: it refuses new runs on the
+root, interrupts the runs it owns and waits for them to finish within the
 runtime's shutdown budget, flushes its artifacts, and releases the session,
 returning `{ settled, abandoned }`. `settled` is true when every run ended in
 time; otherwise `abandoned` names the runs still live, and the session stays
@@ -291,7 +274,7 @@ The full protocol, with what each commit point guarantees, is specified in
 [`docs/spec.md`](./docs/spec.md).
 
 A run's next step comes from its committed history. The session publishes a
-whole batch through one inbox, and the run fold checks the batch before the
+whole batch through one inbox, and the run reducer checks the batch before the
 store commits it. Live trace chunks are transient; they are not recovery input.
 
 The repository's crash-conformance suite checks the following contracts: it
@@ -301,8 +284,8 @@ under both the harness built-ins and a full app's plugins:
 
 - **I1** Recovery reaches the clean run's outcome: its committed answers,
   tool results, owned children, and context edits are preserved.
-- **I2** A tool call has one settlement. A result committed before a crash
-  is reused, and a settled call is not executed again.
+- **I2** A tool call finishes once. A result committed before a crash
+  is reused, and a finished call is not executed again.
 - **I3** A model invocation has at most one committed response. Recovery
   does not append another answer for an invocation already answered.
 - **I4** A command subject to approval runs only after approval. An unfinished
@@ -312,7 +295,7 @@ under both the harness built-ins and a full app's plugins:
 - **I5** An owned child that ended cleanly answers its awaiting call on
   recovery. Relaunching a child for the same call requires a retry decision,
   and owned children are left with terminal rows.
-- **I6** A child's result delivery settles with the turn that produced it.
+- **I6** A child's result delivery commits with the turn that produced it.
   Recovery queues and consumes that delivery once, including results from
   detached agents, scripts, and commands.
 - **I7** Compaction and fork preserve the context they committed.
@@ -366,7 +349,7 @@ that owns the recipe's block reads it (`AgentBlock.result`, exported from
 files it changed). There is no category to switch on.
 
 `run.result` is terminal-only. A run of this package runs one cycle and
-ends; one parked on a request (an approval, a retry, a question) has no
+ends; one waiting on a request (an approval, a retry, a question) has no
 outcome yet, so its `result` waits until the request is answered (see
 [Approvals](#approvals)) and the run goes on to end. `SessionView.requests`
 lists what it waits for.
@@ -384,38 +367,21 @@ files.
 | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@texra-ai/harness`            | `Sessions`, `Session`, `Run`, the tagged errors, the tool-definition helper (`defineTool`) with its types, and `readSessionView`, a project's view read cold from its store                                    |
 | `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages |
-| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view folded over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them          |
+| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them           |
 | `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin is written with: `definePlugin`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`                  |
 | `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                                                                                            |
 
-Every entry needs the peers installed. See [Install](#install).
-
-## Effect
-
-The package's surface is Effect, in full: every decision the package makes is
-stated once, in Effect, on the services above, and nothing in the package
-calls `Effect.runPromise`, `runSync`, or `runFork`.
-
-Failures are `Data.TaggedError`s. Six come from the package itself —
-`PluginsRefused`, `AgentNotFound`, `ToolsRefused`, `ResumeRefused`,
-`TraceUnavailable`, and `RunFailure`, whose `cause` is exactly what the
-launch path threw — and three, `DatabaseOpenFailed`, `DatabaseReadFailed` and
-`SessionOptionsConflict` (the `SessionOpenError` union), reach the surface
-from the session store when it cannot open or read, or is open over the
-other store, for nine in the session lifecycle. The entry exports other
-tagged errors too; the package's type declarations list the whole surface. A
-`session.request` answers with the runtime's own `Outcome` or its
-`RequestError` union, the same values every host reads. Beyond these,
-no fold internals and no host widgets are exported.
-
-A runnable version of this program against a packed tarball is in
+Every entry needs the peers installed. See [Install](#install). Each entry's
+exports, with their TSDoc and declarations, are listed in its API reference
+under [`docs/api/`](./docs/api/index.md), generated from the source. A runnable
+version of the usage program against a packed tarball is in
 [`example/`](./example).
 
 ## The platform
 
 Every run needs an `AgentPlatform`: the process services the package
 composes (the agent directories, secrets, the resume
-and language-model ports, and an optional `toolMissingHandler` that surfaces
+port, and an optional `toolMissingHandler` that surfaces
 a missing external tool) plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
 process-wide global state). The tool registry reads the MCP servers of the
@@ -484,8 +450,6 @@ than failing quietly:
   a launch whose custom tools need approval with `ToolsRefused`.
 - **Runs are one cycle long** unless `interactive`: `start` and `resume`
   end the run after its cycle rather than waiting for a follow-up message.
-- **No language-model port.** `nodePlatform` wires the unavailable port, so a
-  host that needs host-provided models must supply its own.
 - **A persistent store may not carry across 0.x releases.** No row schema
   is frozen before 1.0, so a release can change a row kind's version with no
   upcaster. A run holding a row of a kind whose version changed is listed as

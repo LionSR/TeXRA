@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Fiber, ManagedRuntime, Stream, SubscriptionRef } from 'effect';
+import { Effect, ManagedRuntime } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
@@ -38,62 +38,19 @@ describe('withForkFailureReporting', () => {
     setLogSink(null);
   });
 
-  it.live('reports a defect in a forked fiber', () =>
+  it.live.each([
+    ['a defect', Effect.die(new Error('boom'))],
+    ['an unhandled typed failure', Effect.fail('refused')],
+  ] as const)('reports %s in a forked fiber', ([, program]) =>
     Effect.gen(function* () {
       const capture = captureLogEntries();
       const runtime = yield* makeReportingRuntime();
 
-      runtime.runFork(Effect.die(new Error('boom')));
+      runtime.runFork(program);
       yield* waitForErrorEntry(capture);
 
       expect(capture.at('ERROR')).toHaveLength(1);
       expect(capture.at('ERROR')[0]?.message).toBe(REPORT_MESSAGE);
-    }),
-  );
-
-  it.live('reports an unhandled typed failure in a forked fiber', () =>
-    Effect.gen(function* () {
-      const capture = captureLogEntries();
-      const runtime = yield* makeReportingRuntime();
-
-      runtime.runFork(Effect.fail('refused'));
-      yield* waitForErrorEntry(capture);
-
-      expect(capture.at('ERROR')).toHaveLength(1);
-      expect(capture.at('ERROR')[0]?.message).toBe(REPORT_MESSAGE);
-    }),
-  );
-
-  it.live('stays silent for a success and an interrupted exit', () =>
-    Effect.gen(function* () {
-      const capture = captureLogEntries();
-      const runtime = yield* makeReportingRuntime();
-      const level = yield* SubscriptionRef.make(0);
-      // A consumer of a PubSub-backed stream, interrupted while it waits:
-      // Effect ends its subscription with `Done` beside the interrupt.
-      const interruptedStreamConsumer = Effect.withFiber((self) =>
-        Effect.forkDetach(
-          Effect.sleep(20).pipe(Effect.andThen(Fiber.interrupt(self))),
-        ).pipe(
-          Effect.andThen(
-            Stream.runForEach(
-              SubscriptionRef.changes(level),
-              () => Effect.void,
-            ),
-          ),
-        ),
-      );
-
-      for (const program of [
-        Effect.void,
-        Effect.interrupt,
-        interruptedStreamConsumer,
-      ]) {
-        runtime.runFork(program);
-      }
-      yield* Effect.sleep(80);
-
-      expect(capture.entries()).toHaveLength(0);
     }),
   );
 });

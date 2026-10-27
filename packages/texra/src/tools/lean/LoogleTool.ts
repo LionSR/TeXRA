@@ -146,7 +146,9 @@ const fetchLoogle = Effect.fn('LoogleTool.fetchLoogle')((query: string) =>
       ).pipe(
         Effect.catchTag('SchemaError', (error) =>
           Effect.fail(
-            new Error(`Unexpected Loogle response shape: ${error.message}`),
+            new Error(`Unexpected Loogle response shape: ${error.message}`, {
+              cause: error,
+            }),
           ),
         ),
       );

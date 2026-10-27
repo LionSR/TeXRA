@@ -3,18 +3,24 @@ import * as path from 'node:path';
 import {
   getFileStem,
   type FileLocation,
-  ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 
 import * as vscode from 'vscode';
-import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
+import {
+  Effect,
+  FileSystem,
+  type Path,
+  type PlatformError,
+  type Scope,
+} from 'effect';
 
 import {
   withLogChannel,
   withSessionFs,
   pathToLocationIn,
 } from '@texra-ai/harness';
+import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -29,15 +35,6 @@ import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'OpenBuildUtils';
-
-/**
- * A VS Code editor call as an Effect. The editor's promises reject with an
- * arbitrary value and can throw synchronously, neither of which is a typed
- * failure, so this is the module's single adapter onto that API — the
- * programs below recover through ordinary combinators.
- */
-const vscodeCommand = <A>(call: () => Thenable<A>): Effect.Effect<A, Error> =>
-  Effect.tryPromise({ try: () => Promise.resolve(call()), catch: ensureError });
 
 /**
  * Resolve `latex-workshop.latex.outDir` by expanding all LaTeX Workshop
@@ -102,9 +99,7 @@ export const invokeLatexWorkshopBuild = (
   channel: string,
   warnLabel: string,
 ): Effect.Effect<void> =>
-  vscodeCommand(() =>
-    vscode.commands.executeCommand('latex-workshop.build', uri),
-  ).pipe(
+  executeVscodeCommand('latex-workshop.build', uri).pipe(
     Effect.catch((err) =>
       Effect.logWarning(`${warnLabel}: ${toErrorMessage(err)}`).pipe(
         withLogChannel(channel),
@@ -127,20 +122,25 @@ export const invokeLatexWorkshopBuild = (
  * build-failure UI in the editor, so the returned boolean reports the
  * viewer-open outcome that follows the build attempt.
  */
-export const openBuildDisplayIfTex = (
+export const openBuildDisplayIfTex = Effect.fn(
+  'openBuild.openBuildDisplayIfTex',
+)(function* (
   roots: WorkspaceRoots,
   fileLocation: FileLocation,
   options: { preserveFocus?: boolean } = {},
-): Effect.Effect<boolean, DisplayFailure, PreparedFileServices> =>
-  Effect.gen(function* () {
-    const prepared = yield* prepareFileForDisplay(
-      roots,
-      fileLocation,
-      options.preserveFocus ?? false,
-    );
-    if (prepared.kind !== 'latex-ready') return prepared.delivered;
-    return yield* scheduleViewerDisplay;
-  });
+): Effect.fn.Return<
+  boolean,
+  DisplayFailure,
+  PreparedFileServices | Scope.Scope
+> {
+  const prepared = yield* prepareFileForDisplay(
+    roots,
+    fileLocation,
+    options.preserveFocus ?? false,
+  );
+  if (prepared.kind !== 'latex-ready') return prepared.delivered;
+  return yield* scheduleViewerDisplay;
+});
 
 /**
  * Prepare a file for display (open, show, and build when TeX), optionally
@@ -153,12 +153,16 @@ export const openBuildDisplayIfTex = (
  * `scheduleViewerDisplay` once after the final file so LaTeX Workshop's
  * current document/root is the intended viewer target (#10553).
  */
-export const prepareBuildDisplay = (
-  roots: WorkspaceRoots,
-  fileLocation: FileLocation,
-  options: { preserveFocus?: boolean; scheduleViewer?: boolean } = {},
-): Effect.Effect<boolean, DisplayFailure, PreparedFileServices> =>
-  Effect.gen(function* () {
+export const prepareBuildDisplay = Effect.fn('openBuild.prepareBuildDisplay')(
+  function* (
+    roots: WorkspaceRoots,
+    fileLocation: FileLocation,
+    options: { preserveFocus?: boolean; scheduleViewer?: boolean } = {},
+  ): Effect.fn.Return<
+    boolean,
+    DisplayFailure,
+    PreparedFileServices | Scope.Scope
+  > {
     const prepared = yield* prepareFileForDisplay(
       roots,
       fileLocation,
@@ -167,16 +171,18 @@ export const prepareBuildDisplay = (
     if (prepared.kind !== 'latex-ready') return prepared.delivered;
 
     if (options.scheduleViewer !== false) {
-      // `scheduleViewerDisplay` never fails, so this is a deliberate detached
-      // fiber rather than work this caller waits for. It starts immediately,
-      // so its delay runs from here rather than from whenever a fiber next
-      // gets the scheduler.
-      yield* Effect.forkDetach(scheduleViewerDisplay, {
+      // `scheduleViewerDisplay` never fails, so this is a fiber of the
+      // caller's scope rather than work this caller waits for: closing that
+      // scope cancels an open still waiting. It starts immediately, so its
+      // delay runs from here rather than from whenever a fiber next gets the
+      // scheduler.
+      yield* Effect.forkScoped(scheduleViewerDisplay, {
         startImmediately: true,
       });
     }
     return true;
-  });
+  },
+);
 
 /** What the file-open/build phase takes from the runtime it is run on. */
 type PreparedFileServices =
@@ -188,16 +194,16 @@ type DisplayFailure = Error | PlatformError.PlatformError;
 type PrepareFileForDisplayResult =
   { kind: 'done'; delivered: boolean } | { kind: 'latex-ready' };
 
-const prepareFileForDisplay = (
-  roots: WorkspaceRoots,
-  fileLocation: FileLocation,
-  preserveFocus: boolean,
-): Effect.Effect<
-  PrepareFileForDisplayResult,
-  DisplayFailure,
-  PreparedFileServices
-> =>
-  Effect.gen(function* () {
+const prepareFileForDisplay = Effect.fn('openBuild.prepareFileForDisplay')(
+  function* (
+    roots: WorkspaceRoots,
+    fileLocation: FileLocation,
+    preserveFocus: boolean,
+  ): Effect.fn.Return<
+    PrepareFileForDisplayResult,
+    DisplayFailure,
+    PreparedFileServices
+  > {
     const absolutePath = fileLocation.absolutePath;
 
     const fs = yield* FileSystem.FileSystem;
@@ -211,11 +217,9 @@ const prepareFileForDisplay = (
     const uri = vscode.Uri.file(absolutePath);
 
     if (!isLatexFile(absolutePath)) {
-      yield* vscodeCommand(() =>
-        vscode.commands.executeCommand('vscode.open', uri, {
-          preserveFocus,
-        } satisfies vscode.TextDocumentShowOptions),
-      );
+      yield* executeVscodeCommand('vscode.open', uri, {
+        preserveFocus,
+      } satisfies vscode.TextDocumentShowOptions);
       return { kind: 'done', delivered: true };
     }
 
@@ -228,7 +232,8 @@ const prepareFileForDisplay = (
     return prepared
       ? { kind: 'latex-ready' }
       : { kind: 'done', delivered: false };
-  });
+  },
+);
 
 /**
  * Open a LaTeX file and run its build path, answering whether the PDF viewer
@@ -241,61 +246,58 @@ const prepareFileForDisplay = (
  * internal `compileLatex2Pdf` helper which sets TEXINPUTS to include the
  * workspace root, ensuring project-local .sty / .cls / .bib files are found.
  */
-const prepareLatexBuild = (
+const prepareLatexBuild = Effect.fn('openBuild.prepareLatexBuild')(function* (
   roots: WorkspaceRoots,
   uri: vscode.Uri,
   fileLocation: FileLocation,
   preserveFocus: boolean,
-): Effect.Effect<boolean, Error, PreparedFileServices> =>
-  Effect.gen(function* () {
-    yield* openFileInEditor(uri.fsPath, { preview: true, preserveFocus });
+): Effect.fn.Return<boolean, Error, PreparedFileServices> {
+  yield* openFileInEditor(uri.fsPath, { preview: true, preserveFocus });
 
-    if (fileLocation.kind === 'workspace') {
-      yield* invokeLatexWorkshopBuild(
-        uri,
-        CHANNEL,
-        'LaTeX Workshop build failed',
-      );
-      return true;
-    }
-
-    // Outside workspace — LaTeX Workshop cannot resolve project-local
-    // packages, so compile internally with TEXINPUTS set.
-    // Resolve the same outDir that LaTeX Workshop uses so the viewer finds the PDF.
-    const outDir = resolveLatexWorkshopOutDir(uri.fsPath);
-    const compiled = yield* withSessionFs(
-      roots,
-      compileLatex2Pdf(pathToLocationIn(roots.workspace, uri.fsPath), roots, {
-        outputDirectory: outDir,
-      }),
+  if (fileLocation.kind === 'workspace') {
+    yield* invokeLatexWorkshopBuild(
+      uri,
+      CHANNEL,
+      'LaTeX Workshop build failed',
     );
-    if (!compiled.ok) {
-      // Include the tail in the visible message itself, not just structured
-      // data, because this failure must be visible at the default log level.
-      yield* Effect.logWarning(
-        `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
-      ).pipe(
-        Effect.annotateLogs({
-          data: { sourceFile: uri.fsPath, logTail: compiled.logTail },
-        }),
-        withLogChannel(CHANNEL),
-      );
-      return false;
-    }
-
     return true;
-  });
+  }
+
+  // Outside workspace — LaTeX Workshop cannot resolve project-local
+  // packages, so compile internally with TEXINPUTS set.
+  // Resolve the same outDir that LaTeX Workshop uses so the viewer finds the PDF.
+  const outDir = resolveLatexWorkshopOutDir(uri.fsPath);
+  const compiled = yield* withSessionFs(
+    roots,
+    compileLatex2Pdf(pathToLocationIn(roots.workspace, uri.fsPath), roots, {
+      outputDirectory: outDir,
+    }),
+  );
+  if (!compiled.ok) {
+    // Include the tail in the visible message itself, not just structured
+    // data, because this failure must be visible at the default log level.
+    yield* Effect.logWarning(
+      `Internal LaTeX compilation failed for ${uri.fsPath}:\n${compiled.logTail}`,
+    ).pipe(
+      Effect.annotateLogs({
+        data: { sourceFile: uri.fsPath, logTail: compiled.logTail },
+      }),
+      withLogChannel(CHANNEL),
+    );
+    return false;
+  }
+
+  return true;
+});
 
 /**
  * The refresh that follows a successful viewer open, delayed so LaTeX Workshop
- * has rendered the PDF it was asked for. Detached when scheduled: it fires
- * long after the caller that scheduled it has moved on.
+ * has rendered the PDF it was asked for. Forked into the caller's scope when
+ * scheduled: it fires long after the caller that scheduled it has moved on.
  */
 const scheduleViewerRefresh: Effect.Effect<void> = Effect.gen(function* () {
   yield* Effect.sleep(LATEX_VIEWER_REFRESH_DELAY_MS);
-  yield* vscodeCommand(() =>
-    vscode.commands.executeCommand('latex-workshop.refresh-viewer'),
-  ).pipe(
+  yield* executeVscodeCommand('latex-workshop.refresh-viewer').pipe(
     Effect.catch((err) =>
       Effect.logWarning(`Viewer refresh failed: ${toErrorMessage(err)}`).pipe(
         withLogChannel(CHANNEL),
@@ -314,18 +316,16 @@ const scheduleViewerRefresh: Effect.Effect<void> = Effect.gen(function* () {
  * Settles to `true` when `latex-workshop.view` accepts the open request, and
  * `false` when it rejects, so the caller can report viewer non-delivery.
  */
-export const scheduleViewerDisplay: Effect.Effect<boolean> = Effect.gen(
-  function* () {
+export const scheduleViewerDisplay: Effect.Effect<boolean, never, Scope.Scope> =
+  Effect.gen(function* () {
     yield* Effect.sleep(LATEX_VIEWER_OPEN_DELAY_MS);
-    return yield* vscodeCommand(() =>
-      vscode.commands.executeCommand('latex-workshop.view'),
-    ).pipe(
+    return yield* executeVscodeCommand('latex-workshop.view').pipe(
       // The refresh is scheduled only once the open has settled: a viewer that
       // never opened has nothing to refresh (#10556). It starts immediately so
-      // its delay runs from the settlement, as the detached timer it replaces
-      // did, rather than from whenever a fiber next gets the scheduler.
+      // its delay runs from the settlement rather than from whenever a fiber
+      // next gets the scheduler.
       Effect.tap(() =>
-        Effect.forkDetach(scheduleViewerRefresh, { startImmediately: true }),
+        Effect.forkScoped(scheduleViewerRefresh, { startImmediately: true }),
       ),
       Effect.as(true),
       Effect.catch((err) =>
@@ -335,5 +335,4 @@ export const scheduleViewerDisplay: Effect.Effect<boolean> = Effect.gen(
         ),
       ),
     );
-  },
-);
+  });

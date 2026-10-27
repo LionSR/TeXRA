@@ -38,11 +38,12 @@ const SHOW_OF_MEMBER: Record<
 };
 
 /**
- * A quick pick or input box the calling fiber owns: the token source is
- * disposed on every path — the answer, a host fault, and interruption — and
- * cancelling it is what closes a list or box the user never answered.
+ * A cancellable VS Code call the calling fiber owns — a quick pick, an input
+ * box, a language server request: the token source is disposed on every
+ * path — the answer, a host fault, and interruption — and an interrupt
+ * cancels it, which is what closes a list or box the user never answered.
  */
-export const ownedPrompt = <A, E>(
+export const withCancellationToken = <A, E>(
   show: (token: vscode.CancellationToken) => Thenable<A>,
   failed: (cause: unknown) => E,
 ): Effect.Effect<A, E> =>
@@ -136,11 +137,11 @@ class VscodeUiHost implements MessageHost, PromptHost {
     );
   }
 
-  /** Ask for one line of text in a box {@link ownedPrompt} owns. */
+  /** Ask for one line of text in a box {@link withCancellationToken} owns. */
   input(
     options: PromptInputOptions,
   ): Effect.Effect<string | undefined, PromptFailed> {
-    return ownedPrompt(
+    return withCancellationToken(
       // A secret pasted from another window must not dismiss the box.
       (token) =>
         vscode.window.showInputBox({ ...options, ignoreFocusOut: true }, token),

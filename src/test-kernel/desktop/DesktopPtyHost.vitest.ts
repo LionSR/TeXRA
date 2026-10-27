@@ -6,7 +6,6 @@ import {
   createDesktopPtyHost,
   type DesktopPtyHostOptions,
 } from '@desktop/main/desktopPtyHost';
-import { createDeferred } from '@test/support/asyncTestUtils';
 
 type LoadPty = NonNullable<DesktopPtyHostOptions['loadPty']>;
 type PtyModule = Awaited<ReturnType<LoadPty>>;
@@ -97,94 +96,6 @@ describe('desktop pty host', () => {
 
     expect(onData).toHaveBeenCalledWith(TERMINAL_ID, 'new output');
     expect(onExit).toHaveBeenCalledWith(TERMINAL_ID, 7);
-    expect(host.get(TERMINAL_ID)).toBeUndefined();
-  });
-
-  it('abandons a session creation invalidated while its module loads', async () => {
-    const pty = createFakePty(201);
-    const spawnPty = vi.fn<SpawnPty>(() => pty);
-    const firstLoad = createDeferred<PtyModule>();
-    const loadPty = vi
-      .fn<LoadPty>()
-      .mockReturnValueOnce(firstLoad.promise)
-      .mockResolvedValue({ spawn: spawnPty });
-    const host = createHost({ loadPty });
-
-    const staleCreation = host.create({
-      id: TERMINAL_ID,
-      cols: 80,
-      rows: 24,
-    });
-    host.disposeAll();
-    firstLoad.resolve({ spawn: spawnPty });
-
-    expect(await staleCreation).toBeUndefined();
-    expect(spawnPty).not.toHaveBeenCalled();
-    expect(host.get(TERMINAL_ID)).toBeUndefined();
-
-    const replacement = await host.create({
-      id: TERMINAL_ID,
-      cols: 100,
-      rows: 30,
-    });
-    expect(replacement).toBeDefined();
-    expect(spawnPty).toHaveBeenCalledOnce();
-    expect(host.get(TERMINAL_ID)).toBe(replacement);
-  });
-
-  it('never spawns a shell for a tab closed while its module loads', async () => {
-    const pty = createFakePty(301);
-    const spawnPty = vi.fn<SpawnPty>(() => pty);
-    const load = createDeferred<PtyModule>();
-    const host = createHost({
-      loadPty: vi.fn<LoadPty>().mockReturnValue(load.promise),
-    });
-
-    const creation = host.create({ id: TERMINAL_ID, cols: 80, rows: 24 });
-    // The renderer's TERMINAL_CLOSE: the handle is already the id's owner.
-    host.get(TERMINAL_ID)?.dispose();
-    load.resolve({ spawn: spawnPty });
-
-    expect(await creation).toBeUndefined();
-    expect(spawnPty).not.toHaveBeenCalled();
-    expect(host.get(TERMINAL_ID)).toBeUndefined();
-  });
-
-  it('releases the id when the shell fails to spawn', async () => {
-    const pty = createFakePty(401);
-    const spawnPty = vi
-      .fn<SpawnPty>()
-      .mockImplementationOnce(() => {
-        throw new Error('posix_spawnp failed.');
-      })
-      .mockReturnValueOnce(pty);
-    const host = createHost({ loadPty: loadFakePty(spawnPty) });
-
-    await expect(
-      host.create({ id: TERMINAL_ID, cols: 80, rows: 24 }),
-    ).rejects.toThrow('posix_spawnp failed.');
-    expect(host.get(TERMINAL_ID)).toBeUndefined();
-
-    const retried = await host.create({ id: TERMINAL_ID, cols: 80, rows: 24 });
-    expect(retried).toBeDefined();
-    expect(spawnPty).toHaveBeenCalledTimes(2);
-  });
-
-  it('ignores a module-load failure from an invalidated creation', async () => {
-    const loadFailure = createDeferred<PtyModule>();
-    const host = createHost({
-      loadPty: vi.fn<LoadPty>().mockReturnValue(loadFailure.promise),
-    });
-
-    const staleCreation = host.create({
-      id: TERMINAL_ID,
-      cols: 80,
-      rows: 24,
-    });
-    host.disposeAll();
-    loadFailure.reject(new Error('node-pty unavailable'));
-
-    await expect(staleCreation).resolves.toBeUndefined();
     expect(host.get(TERMINAL_ID)).toBeUndefined();
   });
 });

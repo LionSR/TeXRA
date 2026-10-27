@@ -5,7 +5,7 @@ import DelegatedStreamHero from '../.vitepress/components/DelegatedStreamHero.vu
 
 # Agent integrations
 
-When a theoretical investigation requires external software execution—such as running a numerical verification of a derived bound or generating reproduction scripts for a figure—TeXRA can delegate the programming task to a dedicated coding agent running locally. Two are supported today:
+TeXRA agents can delegate programming tasks—such as running numerical checks or writing figure scripts—to a local coding agent. Two integrations are supported:
 
 - **OpenAI Codex**: a sandboxed coding agent on your ChatGPT Plus / Pro plan
   (or an OpenAI API key). TeXRA agents reach it through the `codex` tool.

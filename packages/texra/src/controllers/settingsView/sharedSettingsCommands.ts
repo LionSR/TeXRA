@@ -8,16 +8,15 @@
  *
  * A host spreads the body's `handlers` into its
  * `SettingsViewInboundHandlerRegistry`, keeps its own entries for the
- * commands only it answers (its account sign-in, the Copilot routes, and
- * installing a VS Code extension or writing VS Code's settings), and runs every message it has parsed at its own edge
- * through the body's `handleMessage`. The binding
+ * commands only it answers (its account sign-in, installing a VS Code
+ * extension or writing VS Code's settings), and runs every message it has
+ * parsed at its own edge through the body's `handleMessage`. The binding
  * table is `settingsHostBindings.ts`.
  */
 import { Cause, Effect } from 'effect';
 import { apiProviderOfSecretName } from '@texra-ai/llm';
 
 import {
-  CopilotRoutes,
   type PerKeyLane,
   readModelOptions,
   Settings,
@@ -125,7 +124,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     stores: roots,
     secrets,
     resolveModelOptions: readModelOptions,
-    copilotRoutes: CopilotRoutes.discover(),
   });
   const usage = new SubscriptionUsageService({ secrets, stores: roots });
   const memoryPage = settingsMemoryCommands({ bindings, present });
@@ -191,7 +189,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     usageProvider?: SubscriptionUsageProvider,
   ): HostEffect =>
     Effect.gen(function* () {
-      if (usageProvider) usage.invalidate(usageProvider);
+      if (usageProvider) yield* usage.invalidate(usageProvider);
       yield* bindings.refreshCredentialStatus;
       yield* allSettledVoid<Error, ProcessServices>([
         bindings.refreshCatalogs(),
@@ -466,7 +464,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
           ? undefined
           : refreshAfterProviderKeyChange(provider);
       },
-      languageModelsChanged: () => postModelSelection,
     },
   };
 }

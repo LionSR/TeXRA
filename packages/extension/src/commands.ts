@@ -14,23 +14,20 @@ import type {
   ProcessRuntime,
   Session,
   PlatformSecrets,
-  StateStore,
   WorkspaceRoots,
 } from '@texra-ai/harness';
 
 export function registerCommands(
   context: vscode.ExtensionContext,
-  globalState: StateStore,
   progressViewProvider: ProgressViewProvider,
   secrets: PlatformSecrets,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
   /** Where this window's runs run. */
   runSession: Session,
-): void {
+): SettingsViewProvider {
   const settingsViewProvider = new SettingsViewProvider(
     context,
-    globalState,
     secrets,
     runtime,
     roots,
@@ -63,4 +60,5 @@ export function registerCommands(
       },
     ),
   );
+  return settingsViewProvider;
 }

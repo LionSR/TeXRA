@@ -23,11 +23,7 @@ import { Effect, Schema, Semaphore } from 'effect';
 import { Settings, StateReadFailed } from '@texra-ai/harness';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
-import type {
-  StateStore,
-  StateWriteFailed,
-  LanguageModel,
-} from '@texra-ai/harness';
+import type { StateStore, StateWriteFailed } from '@texra-ai/harness';
 
 /** An onboarding flag: off until something sets it. */
 const OnboardingFlagSchema = Schema.Boolean.pipe(
@@ -99,7 +95,7 @@ interface OnboardingFunnelTransition {
  * consented action — the user clicks "Run setup assistant" on the setup card
  * (or invokes the command) to start it. There is deliberately no auto-kickoff.
  */
-export function planOnboardingFunnelTransition(
+function planOnboardingFunnelTransition(
   previous: OnboardingFunnelState | undefined,
   inputs: OnboardingFunnelInputs,
 ): OnboardingFunnelTransition {
@@ -122,7 +118,7 @@ interface OnboardingFunnelHost {
    * fails: it is not the fact "no credential", and reading it as one would
    * blank a user who has keys back down to the first-run welcome card.
    */
-  readonly hasCredential: () => Effect.Effect<boolean, Error, LanguageModel>;
+  readonly hasCredential: () => Effect.Effect<boolean, Error>;
   /** The user-scoped flag store; onboarding is a fact about the user. */
   readonly flags: StateStore;
   /**
@@ -213,11 +209,7 @@ export class OnboardingFunnelRefresher {
   /** Ask for a refresh. It fails when the credential probe or a flag read
    *  cannot be answered, or the write that clears a stale skip fails; the
    *  host publication cannot fail. */
-  run(): Effect.Effect<
-    void,
-    StateReadFailed | StateWriteFailed,
-    LanguageModel
-  > {
+  run(): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
     return Effect.suspend(() => {
       this.rerunRequested = true;
       return this.lane.withPermit(this.drain());
