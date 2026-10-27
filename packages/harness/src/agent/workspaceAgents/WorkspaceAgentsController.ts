@@ -1,7 +1,11 @@
 import { Effect, Schema } from 'effect';
 
 import { planTeamRun, type TeamRunPlan } from '@common/teams/TeamPlan';
-import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
+import {
+  findTeamPreset,
+  teamPresets,
+  type TeamPreset,
+} from '@common/teams/TeamPresets';
 import type {
   StateStore,
   StateWriteFailed,
@@ -21,6 +25,7 @@ import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   forgetHiddenAgent,
   readWorkspaceAgentsSelection,
+  resolveIdentifiers,
   selectedIdentifiers,
   recordCustomChoices,
   serializeWorkspaceWrite,
@@ -31,16 +36,19 @@ import {
 const DEFAULT_TEAM = GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID;
 const TeamIdSchema = Schema.optional(Schema.NonEmptyString);
 
+/** What the controller reads of a catalog entry: its name and source. */
 export interface WorkspaceAgentsEntry {
   readonly name: string;
   readonly source: AgentSource;
 }
 
+/** An unknown team id, or one that cannot be the user default. */
 export class InvalidAgentTeamError extends Schema.TaggedError<InvalidAgentTeamError>()(
   'InvalidAgentTeamError',
   { message: Schema.String },
 ) {}
 
+/** The stores and agent catalog one workspace's controller reads. */
 export interface WorkspaceAgentsControllerDeps<
   Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
 > {
@@ -59,10 +67,19 @@ export interface WorkspaceAgentsControllerDeps<
   readonly resolveAgent: (identifier: string) => Entry | undefined;
 }
 
+/** One workspace's agent selection: what it runs, read from workspace state
+ *  and the agent catalog, and every write that changes it. */
 export class WorkspaceAgentsController<
   Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
 > {
-  constructor(private readonly deps: WorkspaceAgentsControllerDeps<Entry>) {}
+  private readonly deps: WorkspaceAgentsControllerDeps<Entry>;
+  /** The resolver it was built with: the workspace agents' identity rule. */
+  readonly resolveAgent: WorkspaceAgentsControllerDeps<Entry>['resolveAgent'];
+
+  constructor(deps: WorkspaceAgentsControllerDeps<Entry>) {
+    this.deps = deps;
+    this.resolveAgent = deps.resolveAgent;
+  }
 
   /**
    * Every selectable team preset: the shared catalog (`teamPresets`) over the
@@ -70,7 +87,7 @@ export class WorkspaceAgentsController<
    * preset lookup reads — a form composing its own preset list can drift from
    * what {@link setTeam} accepts.
    */
-  allPresets() {
+  allPresets(): Effect.Effect<TeamPreset[], StateReadFailed> {
     return Effect.gen({ self: this }, function* () {
       return teamPresets(
         this.deps.getPresets ? yield* this.deps.getPresets() : undefined,
@@ -78,16 +95,12 @@ export class WorkspaceAgentsController<
     });
   }
 
-  /** Resolve one stored identifier by the workspace agents' identity rule. */
-  resolveAgent(identifier: string) {
-    return this.deps.resolveAgent(identifier);
-  }
-
   private getSelection() {
     return readWorkspaceAgentsSelection(this.deps.repoState);
   }
 
-  getDefaultTeamId() {
+  /** The user's default team, which a workspace that inherits runs. */
+  getDefaultTeamId(): Effect.Effect<string | undefined, StateReadFailed> {
     return Settings.state(this.deps.globalState, DEFAULT_TEAM, TeamIdSchema);
   }
 
@@ -99,14 +112,15 @@ export class WorkspaceAgentsController<
   }
 
   /** The team this workspace effectively runs, or null when it runs no team. */
-  getActiveTeamId() {
+  getActiveTeamId(): Effect.Effect<string | null, StateReadFailed> {
     return Effect.gen({ self: this }, function* () {
       const effective = yield* this.getEffectiveSelection();
       return effective.kind === 'team' ? effective.teamId : null;
     });
   }
 
-  getVisibleAgents() {
+  /** The selection's members, then the unlisted custom agents not hidden. */
+  getVisibleAgents(): Effect.Effect<Entry[], StateReadFailed> {
     return Effect.gen({ self: this }, function* () {
       const effective = yield* this.getEffectiveSelection();
       const identifiers = selectedIdentifiers(
@@ -116,7 +130,7 @@ export class WorkspaceAgentsController<
       if (identifiers === undefined) {
         return yield* visibleAgents(this.deps.repoState, this.deps.getAgents());
       }
-      const { entries } = this.resolveIdentifiers(identifiers);
+      const { entries } = resolveIdentifiers(identifiers, this.resolveAgent);
       return [
         ...entries,
         ...(yield* unlistedCustomAgents(
@@ -129,12 +143,14 @@ export class WorkspaceAgentsController<
   }
 
   /** Return the effective stored identifiers, including unavailable members. */
-  getEnabledAgentKeys() {
+  getEnabledAgentKeys(): Effect.Effect<string[] | undefined, StateReadFailed> {
     return Effect.gen({ self: this }, function* () {
       return yield* this.selectionKeys(yield* this.getEffectiveSelection());
     });
   }
 
+  /** The stored selection, what it resolves to now, and what is missing:
+   *  a team no preset has, the selected names no agent answers to. */
   snapshot() {
     return Effect.gen({ self: this }, function* () {
       const selection = yield* this.getSelection();
@@ -147,7 +163,9 @@ export class WorkspaceAgentsController<
       const unresolvedNames =
         identifiers === undefined
           ? []
-          : this.resolveIdentifiers(identifiers).missing.map(agentName);
+          : resolveIdentifiers(identifiers, this.resolveAgent).missing.map(
+              agentName,
+            );
       return {
         selection,
         effectiveSelection,
@@ -172,7 +190,7 @@ export class WorkspaceAgentsController<
       const keys =
         selection.kind === 'custom'
           ? [...new Set(identifiers)]
-          : this.resolveIdentifiers(identifiers).keys;
+          : resolveIdentifiers(identifiers, this.resolveAgent).keys;
       const unlisted = yield* unlistedCustomAgents(
         this.deps.repoState,
         this.deps.getAgents(),
@@ -180,30 +198,6 @@ export class WorkspaceAgentsController<
       );
       return [...keys, ...unlisted.map(agentKeyOf)];
     });
-  }
-
-  /**
-   * The one walk from stored identifiers to catalog entries. `entries` are the
-   * resolved members deduplicated by key; `missing` the identifiers with no
-   * entry; `keys` each identifier's canonical key, or the identifier itself
-   * when it does not resolve, deduplicated in stored order.
-   */
-  private resolveIdentifiers(identifiers: readonly string[]) {
-    const entries = new Map<string, Entry>();
-    const keys = new Set<string>();
-    const missing: string[] = [];
-    for (const identifier of identifiers) {
-      const entry = this.deps.resolveAgent(identifier);
-      if (entry) {
-        const key = agentKeyOf(entry);
-        entries.set(key, entry);
-        keys.add(key);
-      } else {
-        missing.push(identifier);
-        keys.add(identifier);
-      }
-    }
-    return { entries: [...entries.values()], missing, keys: [...keys] };
   }
 
   /**
@@ -257,7 +251,12 @@ export class WorkspaceAgentsController<
   }
 
   /** {@link applyTeam} refusing an unknown team; matches id, name or slug. */
-  setTeam(teamId: string) {
+  setTeam(
+    teamId: string,
+  ): Effect.Effect<
+    void,
+    StateReadFailed | StateWriteFailed | InvalidAgentTeamError
+  > {
     return this.applyTeam(teamId).pipe(
       Effect.filterOrFail(
         (result) => result.status === 'applied',
@@ -284,7 +283,7 @@ export class WorkspaceAgentsController<
       yield* this.setSelection({ kind: 'team', teamId: preset.id });
       const resolution: Pick<TeamRunPlan, 'agentKeys' | 'missingAgents'> =
         planTeamRun(preset, {
-          resolveAgent: (identifier) => this.deps.resolveAgent(identifier),
+          resolveAgent: this.deps.resolveAgent,
           rootAgentNames: [],
         });
       return { status: 'applied' as const, preset, resolution };
@@ -353,11 +352,8 @@ export class WorkspaceAgentsController<
         );
         const alreadyEnabled = index >= 0;
         if (input.enabled === alreadyEnabled) return;
-        if (input.enabled) {
-          target.push(key);
-        } else {
-          target.splice(index, 1);
-        }
+        if (input.enabled) target.push(key);
+        else target.splice(index, 1);
         yield* recordCustomChoices(
           this.deps.repoState,
           this.deps.getAgents(),

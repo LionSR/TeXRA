@@ -106,6 +106,8 @@ const COMPACTION_ACTIVITY_LOG_TEXT: Record<
   skipped: 'Conversation context compaction skipped',
 };
 
+/** One context-compaction operation in the trace, from its start to its one
+ *  terminal result. */
 export interface CompactionActivityOperation {
   readonly operationId: string;
   /** Emit the first terminal result; later calls are no-ops. */

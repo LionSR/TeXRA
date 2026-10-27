@@ -21,6 +21,7 @@ export const WorkerInputSchema = Schema.Struct({
   /** One Int32 the host sets to preempt guest code that never yields. */
   interrupt: Schema.instanceOf(SharedArrayBuffer),
 });
+/** The decoded start message of one worker. */
 export type WorkerInput = typeof WorkerInputSchema.Type;
 
 /** One settlement, delivered to the realm in the order the host chooses. */
@@ -38,6 +39,7 @@ export const SettleMessageSchema = Schema.Union([
     message: Schema.String,
   }),
 ]);
+/** One settlement of a guest op, as the worker receives it. */
 export type SettleMessage = typeof SettleMessageSchema.Type;
 
 /** JSON text from the realm, parsed into the value it encodes. */
@@ -68,6 +70,8 @@ const ScriptEndSchema = Schema.Union([
   Schema.TaggedStruct('CpuExhausted', {}),
   Schema.TaggedStruct('MemoryExhausted', {}),
 ]);
+/** How a guest script ended: returned a value, threw, failed to parse, or
+ *  ran out of CPU time or memory. */
 export type ScriptEnd = typeof ScriptEndSchema.Type;
 
 /**

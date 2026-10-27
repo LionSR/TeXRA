@@ -38,6 +38,10 @@ import type {
 
 const CHANNEL = 'TraceEmitter';
 
+/**
+ * The in-process {@link AgentTrace}: every event goes to the sinks it was
+ * built with, in order, until {@link TraceEmitter.close}.
+ */
 export class TraceEmitter implements AgentTrace {
   /** The sinks this trace was built with, in order; null once it closed. */
   private sinks: readonly AgentTraceSink[] | null;
@@ -200,11 +204,13 @@ class ToolCardHandleImpl implements ToolCardHandle {
 
 class StageHandleImpl implements StageHandle {
   private ended = false;
+  private readonly trace: TraceEmitter;
+  readonly id: string;
 
-  constructor(
-    private readonly trace: TraceEmitter,
-    readonly id: string,
-  ) {}
+  constructor(trace: TraceEmitter, id: string) {
+    this.trace = trace;
+    this.id = id;
+  }
 
   end(status?: RunOutcome): void {
     if (this.ended) return;
@@ -226,19 +232,26 @@ class StreamHandleImpl implements StreamHandle {
   // stream costs O(n) instead of repeated full-buffer string copies.
   private readonly chunks: string[] = [];
   private finalText: string | undefined;
+  private readonly trace: TraceEmitter;
+  readonly id: string;
+  /**
+   * Deferred `stream.start` emission (see `StreamOptions.deferStart`); null
+   * once started — eager runs are constructed already started. A deferred
+   * stream finalized without content emits no events at all, while a
+   * finalize that carries text emits the start/end pair so reasoning that
+   * only arrives in the final response still lands as a single entry.
+   */
+  private pendingStart: (() => void) | null;
 
   constructor(
-    private readonly trace: TraceEmitter,
-    readonly id: string,
-    /**
-     * Deferred `stream.start` emission (see `StreamOptions.deferStart`); null
-     * once started — eager runs are constructed already started. A deferred
-     * stream finalized without content emits no events at all, while a
-     * finalize that carries text emits the start/end pair so reasoning that
-     * only arrives in the final response still lands as a single entry.
-     */
-    private pendingStart: (() => void) | null,
-  ) {}
+    trace: TraceEmitter,
+    id: string,
+    pendingStart: (() => void) | null,
+  ) {
+    this.trace = trace;
+    this.id = id;
+    this.pendingStart = pendingStart;
+  }
 
   private start(): void {
     const pending = this.pendingStart;

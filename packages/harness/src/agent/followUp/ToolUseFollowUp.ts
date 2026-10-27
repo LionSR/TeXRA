@@ -86,6 +86,11 @@ export function describeFollowUpFailure(reason: FollowUpFailureReason): string {
   return FAILURE_MESSAGES[reason];
 }
 
+/**
+ * What a host or tool tells the sender about a submitted follow-up: a
+ * warning for a refusal, a note when it was queued but the run could not be
+ * resumed, and nothing otherwise.
+ */
 export function presentFollowUpResult(
   result: SubmitFollowUpResult,
 ): { severity: 'none' } | { severity: 'info' | 'warning'; message: string } {

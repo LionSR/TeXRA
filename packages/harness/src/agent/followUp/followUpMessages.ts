@@ -24,6 +24,10 @@ interface FollowUpDisplay {
   readonly scriptSummary?: ScriptDeliverySummary;
 }
 
+/**
+ * The text a follow-up shows in the transcript: its own display text, the
+ * summary of a child's delivery, or the text it was sent with.
+ */
 export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
   if (followUp.displayText != null) {
     return { text: followUp.displayText };

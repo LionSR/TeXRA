@@ -59,10 +59,17 @@ export interface AgentDirectoryServiceOptions {
   };
 }
 
+/**
+ * A host's agent directories: the bundled `builtIn` directory under its
+ * packaged resources, and the custom directory the user configured or the
+ * default one under global storage.
+ */
 export class AgentDirectoryService {
   readonly resourcesRoot?: string;
+  private readonly options: AgentDirectoryServiceOptions;
 
-  constructor(private readonly options: AgentDirectoryServiceOptions) {
+  constructor(options: AgentDirectoryServiceOptions) {
+    this.options = options;
     if (options.resourcesPath !== '')
       this.resourcesRoot = options.resourcesPath;
   }

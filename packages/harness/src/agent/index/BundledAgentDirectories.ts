@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { AppState } from '@platform/interfaces';
+import { AppState, type StateReadFailed } from '@platform/interfaces';
 import { readDisabledTools } from '@tools/plugins';
 
 /** The one bundled agent directory under a host's packaged resources. */
@@ -19,6 +19,10 @@ export const BUNDLED_AGENTS_DIRECTORY = 'agents' as const;
  */
 let pluginAgentDirectories: ReadonlyMap<string, string> = new Map();
 
+/**
+ * Record the tool plugins whose agent directories join the `builtIn` source,
+ * each at `<resourcesPath>/plugins/<id>/agents`. Replaces any earlier set.
+ */
 export function installPluginAgentDirectories(
   resourcesPath: string,
   pluginIds: readonly string[],
@@ -42,10 +46,12 @@ export function installPluginAgentDirectories(
  * process's, and a plugin's agents may be what helps the user set the
  * dependency up.
  */
-export const enabledBuiltInRoots = (coreDirectory: string) =>
+export const enabledBuiltInRoots = (
+  coreDirectory: string,
+): Effect.Effect<readonly string[], StateReadFailed, AppState> =>
   AppState.pipe(
     Effect.flatMap(readDisabledTools),
-    Effect.map((disabled): readonly string[] => [
+    Effect.map((disabled) => [
       coreDirectory,
       ...[...pluginAgentDirectories].flatMap(([id, directory]) =>
         disabled.has(id) ? [] : [directory],

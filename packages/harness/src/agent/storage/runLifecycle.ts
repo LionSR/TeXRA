@@ -195,6 +195,8 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
   }).pipe(defectAsFailure);
 });
 
+/** How a run ends: what {@link finalizeRun} and {@link endIn} commit as its
+ *  `run.end`. */
 export interface FinalizeRunInput {
   readonly runId: RunId;
   readonly outcome: RunOutcome;

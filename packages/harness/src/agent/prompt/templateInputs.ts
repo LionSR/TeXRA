@@ -78,12 +78,6 @@ export type TemplateInputs = typeof TemplateInputsSchema.Type;
  */
 export type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
 
-/** The fixed vocabulary as a runtime list; its reader builds a map from it,
- *  so its order is irrelevant. */
-const TEMPLATE_INPUT_TOKENS = Object.keys(
-  TemplateInputsSchema.fields,
-) as (keyof TemplateInputs)[];
-
 /**
  * Render the fixed runtime template variables as literal `{{ TOKEN }}` text.
  *
@@ -96,7 +90,10 @@ const TEMPLATE_INPUT_TOKENS = Object.keys(
 export function buildTemplatePassthrough(): Readonly<Record<string, string>> {
   return Object.freeze(
     Object.fromEntries(
-      TEMPLATE_INPUT_TOKENS.map((token) => [token, `{{ ${token} }}`]),
+      Object.keys(TemplateInputsSchema.fields).map((token) => [
+        token,
+        `{{ ${token} }}`,
+      ]),
     ),
   );
 }

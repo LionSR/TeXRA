@@ -16,6 +16,8 @@ import type { ExportNode } from '@agent/export/schemas';
 
 const HIDDEN_PROVIDER_REASONING_MARKER = '[provider reasoning hidden]';
 
+/** How a conversation's export nodes render as text: truncation limits and
+ *  which markers appear. */
 export interface ConversationFormatOptions {
   /** Truncate user/assistant text at this many chars. Omit for no limit. */
   readonly textLimit?: number;

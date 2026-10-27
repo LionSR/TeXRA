@@ -60,7 +60,7 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
   );
   if (!variantKey) return schema;
 
-  const rawVariants = schema[variantKey] as unknown[];
+  const rawVariants: readonly unknown[] = schema[variantKey] ?? [];
   const variants = rawVariants.filter(
     (v): v is JSONSchemaObject => Predicate.isObject(v) && v.type === 'object',
   );
@@ -232,6 +232,9 @@ export const inputSchema = (definition: ToolDefinition): unknown => {
 export function convertToolSchema(
   def: ToolDefinition,
 ): JSONSchemaObject | null {
+  // Effect's JSON Schema output and a tool's pre-built parameters are read
+  // below as the JSON Schema documents they are.
+  // cast: both sources are typed only as string-keyed records.
   const schema = inputSchema(def) as JSONSchemaObject | null | undefined;
   if (!schema) return null;
   return withArrayItems(stripDollarSchema(flattenTopLevelUnion(schema)));

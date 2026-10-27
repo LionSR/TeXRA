@@ -104,12 +104,12 @@ const parentEdge = Effect.fn('parentEdge')(function* (
 
 /** The run one attempt of a parent's call launches (an `agent` child, a
  *  background script), named by its response too: call ids repeat. */
-export const callChildRunId = (call: {
+export const callChildRunId: (call: {
   readonly parentRunId: RunId;
   readonly responseId: string;
   readonly callId: string;
   readonly attempt: number;
-}): RunId => deriveRunId(call);
+}) => RunId = deriveRunId;
 
 /** The runs the attempts so far of `runId`'s open calls launched under
  *  their derived ids (they may not exist), by call: a call no attempt of
@@ -255,8 +255,41 @@ export type RunResult =
   | Extract<ResultMeta, { producer: 'backgroundBash' }>
   | (Omit<RunEnd, 'outcome'> & { readonly outcome?: RunOutcome });
 
+/** One read of a run's committed rows. */
+type RunRead<A> = () => Effect.Effect<A, DatabaseReadFailed>;
+
+/** One run's named records; a closed (tombstoned) run reads as absent. */
+interface RunRecords {
+  /** The run has a `run.start` the database still lists. */
+  readonly exists: RunRead<boolean>;
+  readonly readRunRecord: RunRead<RunRecord | null>;
+  /** The latest `run.config` record when it is an agent's. */
+  readonly readConfig: RunRead<AgentConfig | null>;
+  readonly readReport: RunRead<string | null>;
+  /** The workspace files the run edited, folded from its settled calls
+   *  (`RunState.edited`). A run with no run history edited nothing here. */
+  readonly readWorkspaceFiles: RunRead<readonly string[]>;
+  /** The skills the run's latest `tools.offered` row listed. */
+  readonly readSkills: RunRead<readonly string[]>;
+  /** A model failure stopped the run's turn (its folded `lastError`). */
+  readonly readModelFailed: RunRead<boolean>;
+  readonly readResultMeta: RunRead<ResultMeta | null>;
+  /** The run's terminal result, or null while the lifecycle it is in has
+   *  not ended. */
+  readonly readRunEnd: RunRead<RunEnd | null>;
+  /** The run's result: its producer record joined to its terminal result,
+   *  the output as delivered (the subagent's reply, which only its record
+   *  holds, over the run's own output). A background
+   *  command's record is its own result, and an ended recipe's run (whose
+   *  value is its result) needs none. Null otherwise with no record. */
+  readonly readResult: RunRead<RunResult | null>;
+}
+
 /** Native access to named run metadata, with no file-backed read arm. */
-export function getRunRecords(session: SessionHandle, runId: RunId) {
+export function getRunRecords(
+  session: SessionHandle,
+  runId: RunId,
+): RunRecords {
   const id = qualifyAggregateId('run', runId);
   /**
    * The run's terminal result: the `run.end` row's outcome, error and
@@ -321,47 +354,30 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
   const readRecord = (): Effect.Effect<RunRecord | null, DatabaseReadFailed> =>
     read((rows) => latestOfType(rows, id, 'run.config')?.config ?? null);
   return {
-    /** The run has a `run.start` the database still lists: absent, or
-     *  closed by its tombstone, reads false. */
-    exists: (): Effect.Effect<boolean, DatabaseReadFailed> =>
+    exists: () =>
       read((rows) =>
         rows.some((row) => row.aggregateId === id && row.type === 'run.start'),
       ),
     readRunRecord: readRecord,
-    readConfig: (): Effect.Effect<AgentConfig | null, DatabaseReadFailed> =>
+    readConfig: () =>
       readRecord().pipe(
         Effect.map((record) =>
           record && isAgentRunRecord(record) ? record : null,
         ),
       ),
-    readReport: (): Effect.Effect<string | null, DatabaseReadFailed> =>
+    readReport: () =>
       read((rows) => latestOfType(rows, id, 'run.report')?.report ?? null),
-    /** The workspace files the run edited, folded from its settled calls
-     *  (`RunState.edited`). A run with no run history edited nothing here. */
-    readWorkspaceFiles: (): Effect.Effect<
-      readonly string[],
-      DatabaseReadFailed
-    > =>
+    readWorkspaceFiles: () =>
       Effect.map(folded, (state) =>
         Schema.decodeUnknownSync(RunWorkspaceFilesSchema)(state?.edited ?? []),
       ),
-    /** The skills the run's latest `tools.offered` row listed. */
-    readSkills: (): Effect.Effect<readonly string[], DatabaseReadFailed> =>
+    readSkills: () =>
       Effect.map(folded, (state) => state?.offeredWith.skills ?? []),
-    /** A model failure stopped the run's turn (its folded `lastError`). */
-    readModelFailed: (): Effect.Effect<boolean, DatabaseReadFailed> =>
+    readModelFailed: () =>
       Effect.map(folded, (state) => state?.lastError != null),
-    readResultMeta: (): Effect.Effect<ResultMeta | null, DatabaseReadFailed> =>
+    readResultMeta: () =>
       read((rows) => latestOfType(rows, id, 'run.result')?.result ?? null),
-    /** The run's terminal result ({@link runEndOf}), or null while the
-     *  lifecycle it is in has not ended. */
-    readRunEnd: (): Effect.Effect<RunEnd | null, DatabaseReadFailed> =>
-      runRows.pipe(Effect.flatMap(runEndOf)),
-    /** The run's result: its producer record joined to its terminal result,
-     *  the output as delivered (the subagent's reply, which only its record
-     *  holds, over the run's own output). A background
-     *  command's record is its own result, and an ended recipe's run (whose
-     *  value is its result) needs none. Null otherwise with no record. */
+    readRunEnd: () => runRows.pipe(Effect.flatMap(runEndOf)),
     readResult: Effect.fn('runRecords.readResult')(
       function* (): Effect.fn.Return<RunResult | null, DatabaseReadFailed> {
         const rows = yield* runRows;

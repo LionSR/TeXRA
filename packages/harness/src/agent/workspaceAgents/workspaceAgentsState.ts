@@ -39,6 +39,8 @@ import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
  */
 const workspaceWriteLanes = new Map<StateStore, PerKeyLane>();
 
+/** Run `write` in `store`'s workspace-agents write lane, after any write
+ *  already queued there. */
 export function serializeWorkspaceWrite<A, E>(
   store: StateStore,
   write: Effect.Effect<A, E>,
@@ -55,7 +57,9 @@ export function serializeWorkspaceWrite<A, E>(
  * overwrites the selection the mutation just committed. The mutations own
  * every durable write.
  */
-export function readWorkspaceAgentsSelection(repoState: StateStore) {
+export function readWorkspaceAgentsSelection(
+  repoState: StateStore,
+): Effect.Effect<WorkspaceAgentsSelection, StateReadFailed> {
   return Settings.state(
     repoState,
     WorkspaceStateKey.WORKSPACE_AGENTS,
@@ -195,6 +199,33 @@ export function selectedIdentifiers(
   if (selection.kind === 'custom') return selection.agentKeys;
   const preset = presets.find((candidate) => candidate.id === selection.teamId);
   return preset?.agents;
+}
+
+/**
+ * The one walk from stored identifiers to catalog entries. `entries` are the
+ * resolved members deduplicated by key; `missing` the identifiers with no
+ * entry; `keys` each identifier's canonical key, or the identifier itself
+ * when it does not resolve, deduplicated in stored order.
+ */
+export function resolveIdentifiers<Entry extends WorkspaceAgentEntry>(
+  identifiers: readonly string[],
+  resolveAgent: (identifier: string) => Entry | undefined,
+): { entries: Entry[]; missing: string[]; keys: string[] } {
+  const entries = new Map<string, Entry>();
+  const keys = new Set<string>();
+  const missing: string[] = [];
+  for (const identifier of identifiers) {
+    const entry = resolveAgent(identifier);
+    if (entry) {
+      const key = agentKeyOf(entry);
+      entries.set(key, entry);
+      keys.add(key);
+    } else {
+      missing.push(identifier);
+      keys.add(identifier);
+    }
+  }
+  return { entries: [...entries.values()], missing, keys: [...keys] };
 }
 
 /** `entries` less the custom agents the user hid. */

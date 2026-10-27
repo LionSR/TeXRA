@@ -20,6 +20,8 @@ import { WorkerRunnerPlatform } from 'effect/workers/WorkerRunner';
 import {
   type QuickJSContext,
   type QuickJSHandle,
+  type QuickJSRuntime,
+  type QuickJSWASMModule,
   newQuickJSWASMModuleFromVariant,
   newVariant,
 } from 'quickjs-emscripten-core';
@@ -101,20 +103,30 @@ interface Realm {
   readonly settle: (message: typeof SettleMessageSchema.Type) => StepReportWire;
 }
 
-const openRealm = Effect.fn('worker.openRealm')(function* (
+/** What the host side of a realm tracks across its steps: guest CPU time,
+ *  the current step's ops and log lines (reset as each report is taken),
+ *  how the script ended, and the next op's number. */
+class RealmState {
+  cpuUsedMs = 0;
+  /** When the running step began; undefined between steps. */
+  stepStartedAt: number | undefined = undefined;
+  cpuExhausted = false;
+  ops: StepReportWire['ops'][number][] = [];
+  logs: string[] = [];
+  logsDropped = 0;
+  end: ScriptEndWire | undefined = undefined;
+  nextSeq = 0;
+}
+
+/** A QuickJS runtime under the guest limits: it stops guest code once the
+ *  host sets the interrupt word or the CPU budget runs out, and loads only
+ *  the modules the host passed. */
+const openRuntime = Effect.fn('worker.openRuntime')(function* (
+  quickJs: QuickJSWASMModule,
   input: WorkerInput,
-): Effect.fn.Return<Realm, Error, Scope.Scope> {
-  const quickJs = yield* Effect.tryPromise({
-    try: () =>
-      newQuickJSWASMModuleFromVariant(
-        newVariant(quickJsReleaseVariant, { wasmModule: input.wasm }),
-      ),
-    catch: ensureError,
-  });
+  state: RealmState,
+): Effect.fn.Return<QuickJSRuntime, Error, Scope.Scope> {
   const interrupt = new Int32Array(input.interrupt);
-  let cpuUsedMs = 0;
-  let stepStartedAt: number | undefined;
-  let cpuExhausted = false;
   const runtime = yield* Effect.acquireRelease(
     Effect.try({
       try: () =>
@@ -123,11 +135,11 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
           maxStackSizeBytes: QUICKJS_STACK_LIMIT_BYTES,
           interruptHandler: () => {
             if (Atomics.load(interrupt, 0) !== 0) return true;
-            if (stepStartedAt === undefined) return false;
-            cpuExhausted ||=
-              cpuUsedMs + performance.now() - stepStartedAt >=
+            if (state.stepStartedAt === undefined) return false;
+            state.cpuExhausted ||=
+              state.cpuUsedMs + performance.now() - state.stepStartedAt >=
               input.cpuBudgetMs;
-            return cpuExhausted;
+            return state.cpuExhausted;
           },
         }),
       catch: ensureError,
@@ -149,63 +161,99 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
       }
     );
   });
+  return runtime;
+});
+
+/** Install the globals the bridge prelude calls (`__csIssue` issues an op,
+ *  `__csLog` keeps a log line, `__csDone` records how the script ended) and
+ *  `__csConfig`, the JSON the bridge configures itself from. */
+function installHostFunctions(
+  context: QuickJSContext,
+  input: WorkerInput,
+  state: RealmState,
+): void {
+  const hostFunctions: Record<
+    string,
+    (...args: QuickJSHandle[]) => QuickJSHandle | undefined
+  > = {
+    __csIssue: (name, json, phase) => {
+      const seq = state.nextSeq++;
+      state.ops.push({
+        seq,
+        name: context.getString(name),
+        input: context.getString(json),
+        phase:
+          context.typeof(phase) === 'string' ? context.getString(phase) : null,
+      });
+      return context.newNumber(seq);
+    },
+    __csLog: (text) => {
+      state.logs.push(
+        truncateSummary(context.getString(text), RUN_LOG_MAX_LINE_LENGTH),
+      );
+      if (state.logs.length > RUN_LOG_MAX_LINES) {
+        state.logs.shift();
+        state.logsDropped += 1;
+      }
+      return undefined;
+    },
+    __csDone: (ok, payload) => {
+      const json =
+        context.typeof(payload) === 'string'
+          ? context.getString(payload)
+          : undefined;
+      state.end ??= context.dump(ok)
+        ? { _tag: 'Returned', value: json }
+        : endFromThrown(JSON.parse(json ?? 'null'));
+      return undefined;
+    },
+  };
+  for (const [name, fn] of Object.entries(hostFunctions)) {
+    const handle = context.newFunction(name, fn);
+    context.setProp(context.global, name, handle);
+    handle.dispose();
+  }
+  const config = context.newString(
+    JSON.stringify({
+      tools: input.tools,
+      globals: input.globals,
+      maxFanout: MAX_FANOUT,
+    }),
+  );
+  context.setProp(context.global, '__csConfig', config);
+  config.dispose();
+}
+
+/** How a script that failed to evaluate ends: a syntax error, told where in
+ *  the script it is, or whatever else evaluation threw. */
+function evaluationFailureEnd(thrown: unknown, source: string): ScriptEndWire {
+  const end = endFromThrown(thrown);
+  return end._tag === 'Threw' && end.name === 'SyntaxError'
+    ? {
+        _tag: 'SyntaxError',
+        message: withLocation(end.message, end.stack, source),
+      }
+    : end;
+}
+
+const openRealm = Effect.fn('worker.openRealm')(function* (
+  input: WorkerInput,
+): Effect.fn.Return<Realm, Error, Scope.Scope> {
+  const quickJs = yield* Effect.tryPromise({
+    try: () =>
+      newQuickJSWASMModuleFromVariant(
+        newVariant(quickJsReleaseVariant, { wasmModule: input.wasm }),
+      ),
+    catch: ensureError,
+  });
+  const state = new RealmState();
+  const runtime = yield* openRuntime(quickJs, input, state);
   const context = yield* Effect.acquireRelease(
     Effect.try({ try: () => runtime.newContext(), catch: ensureError }),
     (context) => Effect.sync(() => context.dispose()),
   );
-
-  // What the current step collects; reset as each report is taken.
-  let ops: StepReportWire['ops'][number][] = [];
-  let logs: string[] = [];
-  let logsDropped = 0;
-  let end: ScriptEndWire | undefined;
-  let nextSeq = 0;
-
   yield* Effect.try({
-    try: () => {
-      defineHostFunction(context, '__csIssue', (name, json, phase) => {
-        const seq = nextSeq++;
-        ops.push({
-          seq,
-          name: context.getString(name),
-          input: context.getString(json),
-          phase:
-            context.typeof(phase) === 'string'
-              ? context.getString(phase)
-              : null,
-        });
-        return context.newNumber(seq);
-      });
-      defineHostFunction(context, '__csLog', (text) => {
-        logs.push(
-          truncateSummary(context.getString(text), RUN_LOG_MAX_LINE_LENGTH),
-        );
-        if (logs.length > RUN_LOG_MAX_LINES) {
-          logs.shift();
-          logsDropped += 1;
-        }
-        return undefined;
-      });
-      defineHostFunction(context, '__csDone', (ok, payload) => {
-        const json =
-          context.typeof(payload) === 'string'
-            ? context.getString(payload)
-            : undefined;
-        end ??= context.dump(ok)
-          ? { _tag: 'Returned', value: json }
-          : endFromThrown(JSON.parse(json ?? 'null'));
-        return undefined;
-      });
-      const config = context.newString(
-        JSON.stringify({
-          tools: input.tools,
-          globals: input.globals,
-          maxFanout: MAX_FANOUT,
-        }),
-      );
-      context.setProp(context.global, '__csConfig', config);
-      config.dispose();
-    },
+    try: () => installHostFunctions(context, input, state),
     catch: ensureError,
   });
   const bridge = yield* Effect.acquireRelease(
@@ -230,31 +278,32 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
 
   /** Run `body` and the job queue it leaves, then take the step's report. */
   const step = (body: () => void): StepReportWire => {
-    stepStartedAt = performance.now();
+    const startedAt = performance.now();
+    state.stepStartedAt = startedAt;
     try {
       body();
       const drained = runtime.executePendingJobs();
       if (drained.error) {
         const thrown: unknown = context.dump(drained.error);
         drained.error.dispose();
-        end ??= endFromThrown(thrown);
+        state.end ??= endFromThrown(thrown);
       }
     } catch (error) {
-      end ??= endFromThrown(error);
+      state.end ??= endFromThrown(error);
     } finally {
-      cpuUsedMs += performance.now() - stepStartedAt;
-      stepStartedAt = undefined;
+      state.cpuUsedMs += performance.now() - startedAt;
+      state.stepStartedAt = undefined;
     }
-    if (cpuExhausted) end = { _tag: 'CpuExhausted' };
+    if (state.cpuExhausted) state.end = { _tag: 'CpuExhausted' };
     const report: StepReportWire = {
-      ops,
-      logs,
-      logsDropped,
-      ...(end ? { end } : {}),
+      ops: state.ops,
+      logs: state.logs,
+      logsDropped: state.logsDropped,
+      ...(state.end ? { end: state.end } : {}),
     };
-    ops = [];
-    logs = [];
-    logsDropped = 0;
+    state.ops = [];
+    state.logs = [];
+    state.logsDropped = 0;
     return report;
   };
 
@@ -265,7 +314,7 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
     if (result.error) {
       const thrown: unknown = context.dump(result.error);
       result.error.dispose();
-      end ??= endFromThrown(thrown);
+      state.end ??= endFromThrown(thrown);
       return;
     }
     result.value.dispose();
@@ -282,19 +331,9 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
           { type: 'global', strict: true },
         );
         if (body.error) {
-          const thrown = endFromThrown(context.dump(body.error));
+          const thrown: unknown = context.dump(body.error);
           body.error.dispose();
-          end ??=
-            thrown._tag === 'Threw' && thrown.name === 'SyntaxError'
-              ? {
-                  _tag: 'SyntaxError',
-                  message: withLocation(
-                    thrown.message,
-                    thrown.stack,
-                    input.source,
-                  ),
-                }
-              : thrown;
+          state.end ??= evaluationFailureEnd(thrown, input.source);
           return;
         }
         callBridge(start, body.value);
@@ -317,16 +356,6 @@ const openRealm = Effect.fn('worker.openRealm')(function* (
       }),
   } satisfies Realm;
 });
-
-function defineHostFunction(
-  context: QuickJSContext,
-  name: string,
-  fn: (...args: QuickJSHandle[]) => QuickJSHandle | undefined,
-): void {
-  const handle = context.newFunction(name, fn);
-  context.setProp(context.global, name, handle);
-  handle.dispose();
-}
 
 function evaluate(
   context: QuickJSContext,

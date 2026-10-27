@@ -2,7 +2,10 @@
 // sandbox host and its worker. This module holds numbers only, so the worker
 // bundle stays free of the host-side WASM bytes.
 
+/** Heap a guest script's QuickJS runtime may allocate; past it the script
+ *  ends `MemoryExhausted`. */
 export const QUICKJS_MEMORY_LIMIT_BYTES = 64 * 1024 * 1024;
+/** Native stack a guest script's QuickJS runtime may use. */
 export const QUICKJS_STACK_LIMIT_BYTES = 1 * 1024 * 1024;
 /** Most operations one script may have outstanding at once. */
 export const MAX_FANOUT = 4096;
@@ -14,4 +17,6 @@ export const MAX_FANOUT = 4096;
 export const GUEST_CPU_BUDGET_MS = 30_000;
 /** The run-log tail a script result keeps: its last lines, each one line. */
 export const RUN_LOG_MAX_LINES = 80;
+/** Characters a kept run-log line holds, its whitespace collapsed; a longer
+ *  line is shortened to this length with an ellipsis. */
 export const RUN_LOG_MAX_LINE_LENGTH = 500;

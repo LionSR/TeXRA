@@ -44,4 +44,5 @@ export const ExportNodeSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('tool-result'), text: Schema.String }),
   Schema.Struct({ kind: Schema.Literal('web-search'), query: Schema.String }),
 ]);
+/** One node of a run's conversation as an export reads it. */
 export type ExportNode = typeof ExportNodeSchema.Type;

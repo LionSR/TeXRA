@@ -15,6 +15,11 @@ export interface RunWorkspaceFile {
   readonly isDirectory: boolean;
 }
 
+/**
+ * A path a run recorded, resolved against the run's working directory: its
+ * absolute path and its workspace-relative one. Undefined with no working
+ * directory, an empty path, or a path outside the workspace.
+ */
 export function resolveRunWorkspaceFilePath(
   config: Pick<AgentConfig, 'workingDirectory'> | null,
   filePath: string,
@@ -38,6 +43,8 @@ export function resolveRunWorkspaceFilePath(
   };
 }
 
+/** The workspace files a run recorded that still exist, deduplicated and
+ *  sorted by path. */
 export const listRunWorkspaceFiles = Effect.fn('storage.listRunWorkspaceFiles')(
   function* (
     config: Pick<AgentConfig, 'workingDirectory'> | null,
