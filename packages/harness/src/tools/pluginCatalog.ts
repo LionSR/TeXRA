@@ -95,9 +95,7 @@ export const pluginCatalogLayer = (
           }),
           warnings: [
             ...withheld,
-            ...loadable.flatMap(({ plugin }) =>
-              plugin.mcpServers.length > 0 ? plugin.warnings : [],
-            ),
+            ...loadable.flatMap(({ plugin }) => plugin.warnings),
           ],
         };
       });
