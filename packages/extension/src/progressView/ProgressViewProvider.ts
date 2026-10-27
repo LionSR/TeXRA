@@ -375,12 +375,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
       refreshApiKeyStatus: this.refreshApiKeyStatus,
     });
-    this.runtime.runSync(
-      Scope.addFinalizer(
-        this.scope,
-        Effect.sync(() => hostRequests.dispose()),
-      ),
-    );
     this.runValidated = hostRequests.runValidated;
 
     // Attached for the window's life, before the first run of this window
