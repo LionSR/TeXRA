@@ -297,8 +297,8 @@ export const admittedTurn = (
 /** Why the rows at `state` do not rebuild `sent`, or null when they do. */
 function mismatch(state: RunState, sent: ResolvedTurn): string | null {
   const { recorded, turn } = recordedTurn(state);
-  // A tool-use request sends the declarations its step recorded as sent
-  // (invariant 7): no adapter rewrites them on the way out.
+  // A tool-use request sends the declarations its step recorded as sent:
+  // no adapter rewrites them on the way out.
   if (
     state.offeredTools !== null &&
     stableStringify(recorded.tools) !==

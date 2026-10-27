@@ -1,7 +1,6 @@
 /**
  * The step: the one boundary where a run's tools and prompt contributions
- * change, and where the change is recorded (`2026-09-26-core-concepts.md`,
- * invariant 7).
+ * change, and where the change is recorded.
  *
  * Each model request opens a step, and so does a conversation's park. It
  * applies the user's plugin switches, and the installed plugins enabled and
