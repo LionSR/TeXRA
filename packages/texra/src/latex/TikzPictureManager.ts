@@ -7,6 +7,7 @@ import { Effect, FileSystem } from 'effect';
 // Local imports - log
 import { withLogChannel, pathToLocationIn } from '@texra-ai/harness';
 import { renderPrompt } from '@texra-ai/harness/plugins';
+import { readNormalizedFile } from '@texra-ai/harness/node';
 
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';
@@ -61,10 +62,9 @@ const createStandalone = Effect.fn('TikzPictureManager.createStandalone')(
 const extract = Effect.fn('TikzPictureManager.extract')(function* (
   latexFile: FileLocation,
 ) {
-  const fs = yield* FileSystem.FileSystem;
-  const content = (yield* fs.readFileString(latexFile.absolutePath)).replaceAll(
-    '\r\n',
-    '\n',
+  const content = yield* readNormalizedFile(
+    yield* FileSystem.FileSystem,
+    latexFile.absolutePath,
   );
 
   // Match each figure block first, then inspect labels inside the block. This

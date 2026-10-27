@@ -97,10 +97,9 @@ export class LaTeXdiffService {
   private read(
     absolutePath: string,
   ): Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem> {
-    return Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      return yield* readNormalizedFile(fs, absolutePath);
-    });
+    return FileSystem.FileSystem.use((fs) =>
+      readNormalizedFile(fs, absolutePath),
+    );
   }
 
   /** Read both diff inputs, returning null when either input no longer exists. */

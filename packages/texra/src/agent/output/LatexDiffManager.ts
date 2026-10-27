@@ -13,6 +13,7 @@ import {
   type RunStorageFileLocation,
 } from '@texra-ai/harness/schemas';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
+import { resolveLatexDir } from '@latex/latexParsingUtils';
 import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
 import {
   latexdiffPairs,
@@ -86,25 +87,6 @@ export class LatexDiffManager {
     private readonly roots: WorkspaceRoots,
   ) {
     this.latexdiffService = new LaTeXdiffService(runId, roots);
-  }
-
-  /**
-   * The directory latexdiff runs in: the revised file's own folder, with
-   * symlinks resolved so a mirrored dependency's relative `\input{}` still
-   * points at real siblings. A path the filesystem cannot canonicalize (it
-   * was removed under us, or a link cycle) falls back to the path as given —
-   * the same directory latexdiff would have used without resolution.
-   */
-  private getWorkingDirectory(
-    location: FileLocation,
-  ): Effect.Effect<string, never, FileSystem.FileSystem> {
-    return Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const resolved = yield* fs
-        .realPath(location.absolutePath)
-        .pipe(Effect.orElseSucceed(() => location.absolutePath));
-      return path.dirname(resolved);
-    });
   }
 
   private logLatexdiffResult(result: LaTeXdiffResult, operation: string): void {
@@ -214,7 +196,7 @@ export class LatexDiffManager {
       // agent whose declared output files are created by the run) has
       // nothing to diff against: that pair is skipped, the rest still run.
       const fs = yield* FileSystem.FileSystem;
-      const baseExists = yield* Effect.forEach(
+      const pairs = yield* Effect.filter(
         candidatePairs,
         (pair) =>
           pair.baseRound !== null
@@ -225,7 +207,6 @@ export class LatexDiffManager {
               ),
         { concurrency: 'unbounded' },
       );
-      const pairs = candidatePairs.filter((_, i) => baseExists[i]);
       if (pairs.length < candidatePairs.length) {
         this.logger.debug(
           `Skipping ${candidatePairs.length - pairs.length} latexdiff base pair(s): base file not present`,
@@ -310,7 +291,9 @@ export class LatexDiffManager {
       yield* this.ensureWorkspaceDependency(base);
       yield* this.ensureWorkspaceDependency(revised.location);
 
-      const cwd = yield* this.getWorkingDirectory(revised.location);
+      // The revised file's real folder, so a mirrored dependency's relative
+      // `\input{}` still points at real siblings.
+      const cwd = yield* resolveLatexDir(revised.location.absolutePath);
       const result = yield* this.latexdiffService.runDiff(
         base,
         revised.location,

@@ -184,16 +184,18 @@ export function commitAcceptedFile<E>(
   });
 }
 
-/** The file's content, or `undefined` for a file that is not there. */
-const contentOrMissing = Effect.fn('acceptedFileTarget.contentOrMissing')(
-  function* (
-    fs: FileSystem.FileSystem,
-    absolutePath: string,
-  ): Effect.fn.Return<string | undefined, PlatformError.PlatformError> {
-    if (!(yield* fs.exists(absolutePath))) return undefined;
-    return yield* fs.readFileString(absolutePath);
-  },
-);
+/** The file's content, or `undefined` for a file that is not there: one
+ *  read, its NotFound the answer, rather than a probe and then a read. */
+const contentOrMissing = (
+  fs: FileSystem.FileSystem,
+  absolutePath: string,
+): Effect.Effect<string | undefined, PlatformError.PlatformError> =>
+  fs.readFileString(absolutePath).pipe(
+    Effect.catchIf(
+      (error) => error.reason._tag === 'NotFound',
+      () => Effect.succeed(undefined),
+    ),
+  );
 
 /**
  * Resolve the accept target beside the base file, confirm the write, then
@@ -309,7 +311,7 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   // rather than dropping them silently. `force` keeps an already-absent
   // companion a success, as the platform delete this replaced did.
   const workspaceFs = yield* WorkspaceFs;
-  const removed = yield* Effect.forEach(
+  return yield* Effect.filter(
     stale,
     (relativePath) =>
       workspaceFs.remove(relativePath, { force: true }).pipe(
@@ -322,7 +324,6 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
       ),
     { concurrency: 8 },
   );
-  return stale.filter((_, index) => removed[index]);
 });
 
 export function getAcceptedFileTarget(

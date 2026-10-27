@@ -37,10 +37,10 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
   const call = yield* ToolContext;
   const { path, display } = yield* resolveLatexFile(texPath);
 
-  const figurePaths = yield* extractFigurePathsFromLatex(
+  // Already de-duplicated by the extractor.
+  const uniqueFigures = yield* extractFigurePathsFromLatex(
     pathToLocationIn(call.env.roots.workspace, path.absolute),
   );
-  const uniqueFigures = [...new Set(figurePaths)];
 
   if (uniqueFigures.length === 0) {
     return emptyExtractionResult('Figures', `No figures found in ${display}.`);
@@ -53,13 +53,10 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
     });
 
   const formattedList = yield* Effect.forEach(limitedPaths, (figurePath) =>
-    Effect.gen(function* () {
-      const { display: figureDisplay } = yield* resolveToolPath(
-        call.env,
-        figurePath,
-      );
-      return `- ${figureDisplay}`;
-    }),
+    Effect.map(
+      resolveToolPath(call.env, figurePath),
+      ({ display: figureDisplay }) => `- ${figureDisplay}`,
+    ),
   );
   const header = `Figures referenced in ${display}`;
   const output = formatToolOutput(header, formattedList);

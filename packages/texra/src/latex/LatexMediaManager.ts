@@ -185,8 +185,24 @@ export class LatexMediaManager {
         this.roots.workspace,
         compiled.pdfPath,
       );
-      const written = yield* fs.exists(pdfLocation.absolutePath);
-      if (!written) {
+      // One stat answers both: no file (null), or an existing-but-unreadable
+      // PDF, which is noisier because it likely means a permissions/IO bug.
+      const stats = yield* fs.stat(pdfLocation.absolutePath).pipe(
+        Effect.catchIf(
+          (err) => err.reason._tag === 'NotFound',
+          () => Effect.succeed(null),
+        ),
+        Effect.catch((err) =>
+          Effect.sync(() => {
+            this.logger.error(
+              `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${toErrorMessage(err)}`,
+              { data: { path: pdfLocation.absolutePath, error: err } },
+            );
+            return undefined;
+          }),
+        ),
+      );
+      if (stats === null) {
         this.logger.warn(
           'LaTeX reported success but no PDF was written; skipping',
           {
@@ -198,20 +214,6 @@ export class LatexMediaManager {
         );
         return undefined;
       }
-
-      // Stat failures are noisier than other compile failures because an
-      // existing-but-unreadable PDF likely indicates a permissions/IO bug.
-      const stats = yield* fs.stat(pdfLocation.absolutePath).pipe(
-        Effect.catch((err) =>
-          Effect.sync(() => {
-            this.logger.error(
-              `Failed to stat compiled PDF ${pdfLocation.absolutePath}: ${toErrorMessage(err)}`,
-              { data: { path: pdfLocation.absolutePath, error: err } },
-            );
-            return undefined;
-          }),
-        ),
-      );
       if (!stats) return undefined;
       if (Number(stats.size) === 0) {
         this.logger.warn('Compiled PDF is empty', {
@@ -450,33 +452,9 @@ export class LatexMediaManager {
           ),
         );
 
-        // A figure that no longer exists cannot be compiled into the PDF or
-        // attached to vision context, so it must not enter media. The
-        // resolution above re-derives baseDir (unlike
-        // extractFigurePathsFromLatex, whose paths were checked against the
-        // original latexDir), so this filter is a real gate, not a re-check of
-        // already-known data.
-        const fs = yield* FileSystem.FileSystem;
-        const probed = yield* Effect.forEach(
-          fileLocations,
-          (loc) =>
-            fs
-              .exists(loc.absolutePath)
-              .pipe(Effect.map((exists) => ({ loc, exists }))),
-          { concurrency: LATEX_CONCURRENCY },
-        );
-        const existingLocations: FileLocation[] = [];
-        for (const { loc, exists } of probed) {
-          if (!exists) {
-            this.logger.debug('Extracted figure path does not exist', {
-              data: { figurePath: loc.absolutePath, from: file.absolutePath },
-            });
-            continue;
-          }
-          existingLocations.push(loc);
-        }
-
-        media.push(...existingLocations);
+        // extractFigurePathsFromLatex returns only figures it found on disk,
+        // relative to this same resolved directory, so each one exists.
+        media.push(...fileLocations);
         mirrors.push(this.mirrorFigureDependencies(file, figures, baseDir));
       }
 
@@ -537,17 +515,11 @@ export class LatexMediaManager {
       }
 
       const fs = yield* FileSystem.FileSystem;
-      const probed = yield* Effect.forEach(
+      const existingFiles = yield* Effect.filter(
         inputFiles,
-        (file) =>
-          fs
-            .exists(file.absolutePath)
-            .pipe(Effect.map((exists) => ({ file, exists }))),
+        (file) => fs.exists(file.absolutePath),
         { concurrency: LATEX_CONCURRENCY },
       );
-      const existingFiles = probed
-        .filter((entry) => entry.exists)
-        .map((entry) => entry.file);
 
       if (existingFiles.length === 0) {
         return [];
