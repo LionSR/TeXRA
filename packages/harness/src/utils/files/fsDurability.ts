@@ -69,19 +69,20 @@ function systemErrorFrom(
  * gets the native call); the native call answers the same in one syscall.
  * Its errors classify as the library's do.
  */
-export const nodeFileSystem: Layer.Layer<FileSystem.FileSystem> = Layer.effect(
-  FileSystem.FileSystem,
-  Effect.map(FileSystem.FileSystem, (fs) =>
-    FileSystem.make({
-      ...fs,
-      realPath: (target) =>
-        Effect.tryPromise({
-          try: () => nodeFs.realpath(target),
-          catch: (cause) => systemErrorFrom('realPath', target, cause),
-        }),
-    }),
-  ),
-).pipe(Layer.provide(NodeFileSystem.layer));
+export const nodeFileSystemLayer: Layer.Layer<FileSystem.FileSystem> =
+  Layer.effect(
+    FileSystem.FileSystem,
+    Effect.map(FileSystem.FileSystem, (fs) =>
+      FileSystem.make({
+        ...fs,
+        realPath: (target) =>
+          Effect.tryPromise({
+            try: () => nodeFs.realpath(target),
+            catch: (cause) => systemErrorFrom('realPath', target, cause),
+          }),
+      }),
+    ),
+  ).pipe(Layer.provide(NodeFileSystem.layer));
 
 /**
  * Crash-safe replace, delegated to `write-file-atomic` rather than
