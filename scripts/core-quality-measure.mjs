@@ -119,7 +119,35 @@ export const RULES = {
     'The harness README must number its durable invariants (`**I1**`), and a conformance test must cite each (`invariant I1`).',
   'decision-codes':
     'Internal decision codes (`D6`, `F3`, `#1234`) in core comments: state the rule or link the doc by path. Measured only, pending an owner ruling.',
+  'pass-through-outside-core':
+    'The pass-through rule over the source outside the core (the rest of the harness, the app, the hosts).',
+  'shallow-modules-outside-core':
+    'The shallow-modules rule over the source outside the core (the rest of the harness, the app, the hosts).',
+  'wide-records-outside-core':
+    'The wide-records rule over the source outside the core (the rest of the harness, the app, the hosts).',
 };
+
+/**
+ * The depth rules, which hold everywhere: the source outside the core is
+ * measured by the same code under its own rule name, so the core's rows and
+ * the rest are budgeted apart.
+ */
+const OUTSIDE_CORE_RULES = {
+  'pass-through': 'pass-through-outside-core',
+  'shallow-modules': 'shallow-modules-outside-core',
+  'wide-records': 'wide-records-outside-core',
+};
+
+/** Every package's source; the part outside the core takes the depth rules. */
+const SOURCE_DIRS = [
+  'packages/harness/src',
+  'packages/llm/src',
+  'packages/texra/src',
+  'packages/extension/src',
+  'packages/desktop/src',
+  'packages/cli/src',
+  'packages/trace-viewer/src',
+];
 
 /**
  * Rules the report counts but the gate does not hold: rule 10 of the study
@@ -130,16 +158,18 @@ export const MEASURED_ONLY = new Set(['decision-codes']);
 const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
 const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
 
-/** The repo-relative core source files, sorted. */
-function coreFiles(rootDir) {
-  return CORE_QUALITY_DIRS.flatMap((dir) =>
-    dir.endsWith('.ts')
-      ? [dir]
-      : walkFiles(path.join(rootDir, dir), {
-          include: (file) => SOURCE_FILE.test(file) && !NOT_SOURCE.test(file),
-          prune: (dir) => dir.endsWith('node_modules'),
-        }).map(({ relativePath }) => `${dir}/${relativePath}`),
-  ).toSorted();
+/** The repo-relative source files under `dirs`, sorted. */
+function sourceFiles(rootDir, dirs) {
+  return dirs
+    .flatMap((dir) =>
+      dir.endsWith('.ts')
+        ? [dir]
+        : walkFiles(path.join(rootDir, dir), {
+            include: (file) => SOURCE_FILE.test(file) && !NOT_SOURCE.test(file),
+            prune: (dir) => dir.endsWith('node_modules'),
+          }).map(({ relativePath }) => `${dir}/${relativePath}`),
+    )
+    .toSorted();
 }
 
 function addSite(byRule, rule, file, line, detail) {
@@ -1470,10 +1500,20 @@ function measureInvariants(rootDir, byRule) {
  * carries ratios for every eligible module, including those above the cutoff.
  */
 export async function measure(rootDir) {
-  const files = coreFiles(rootDir);
+  const files = sourceFiles(rootDir, CORE_QUALITY_DIRS);
   const byRule = new Map(Object.keys(RULES).map((rule) => [rule, new Map()]));
   await measureEslint(rootDir, files, byRule);
   const moduleDepths = measureAst(rootDir, files, byRule);
+  const core = new Set(files);
+  const outside = new Map(Object.keys(RULES).map((rule) => [rule, new Map()]));
+  measureAst(
+    rootDir,
+    sourceFiles(rootDir, SOURCE_DIRS).filter((file) => !core.has(file)),
+    outside,
+  );
+  for (const [rule, outsideRule] of Object.entries(OUTSIDE_CORE_RULES)) {
+    byRule.set(outsideRule, outside.get(rule));
+  }
   await measureCycles(rootDir, files, byRule);
   measureReadmes(rootDir, byRule);
   // The repo's module resolution (its `paths` aliases), for the graph rules.
