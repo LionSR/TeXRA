@@ -244,15 +244,6 @@ export function createDesktopHostRequests(
             ),
           ),
       openDirectory: (directory) => host.openPath(directory),
-      // An accepted-edit backup names an absolute path the controller already
-      // resolved, so this reads through the process filesystem rather than a
-      // rooted view that would refuse a path outside the workspace.
-      readFile: (file) =>
-        Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
-          Effect.map(fs.readFileString(file), (text) =>
-            text.replaceAll('\r\n', '\n'),
-          ),
-        ),
       showInfo: (message) => host.showInfoMessage(message),
       showError: rejectRequestEffect,
     },

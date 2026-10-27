@@ -12,7 +12,7 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Effect, FiberHandle, FileSystem, Scope } from 'effect';
+import { Effect, FiberHandle, Scope } from 'effect';
 
 import {
   AgentDirectories,
@@ -306,16 +306,6 @@ export function createExtensionHostRequests(
           inViewScope(handleLatexdiff(roots, base, edited)),
         ),
       openDirectory: (directory) => revealFileInOS(directory),
-      // An accepted-edit backup names an absolute workspace path the
-      // controller already resolved, so this reads through the process
-      // filesystem rather than a rooted view that would refuse a path the
-      // user picked outside the workspace.
-      readFile: (file) =>
-        Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
-          Effect.map(fs.readFileString(file), (text: string) =>
-            text.replaceAll('\r\n', '\n'),
-          ),
-        ),
       showInfo: (message) => vscodeUi.showInfoMessage(message),
       showError: (message) => vscodeUi.showErrorMessage(message),
     },
