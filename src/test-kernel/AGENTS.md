@@ -1,8 +1,44 @@
 # Test suite guidelines
 
-Folder-scoped addition to the root [AGENTS.md](../../AGENTS.md), which holds the
-testing budget ("Testing discipline"). This file covers the test tiers, how to
-write a test that earns its place, and the shared fixtures and fakes.
+Folder-scoped addition to the root [AGENTS.md](../../AGENTS.md): the testing
+budget, test tiers, how to write a test that earns its place, and the shared
+fixtures and fakes.
+
+## Testing discipline
+
+Tests are production maintenance work, and this project breaks internal
+interfaces often and on purpose. A test pinned to a boundary about to churn is
+merge friction, not safety. The default for a PR is **zero new tests**; a test
+earns its place by protecting a consequential current contract, a difficult
+invariant, or a reproduced defect. Three rules override anything below:
+
+1. **Never write unit tests after the code.** A test fitted to existing code
+   asserts what it does, not what it should do. If the code is written, the
+   evidence is an E2E run. Keeping an existing test is not writing one: when a
+   cleanup deletes a suite, a live helper keeps its last direct test that
+   protects a real contract.
+2. **E2E is the default.** Drive the real app (the Playwright suite in
+   `packages/desktop/tests/e2e/`, or the real `texra` binary) through the
+   user-visible path, ending in a **verifiable, repeatable artifact** a
+   reviewer can re-run and inspect: a screenshot, a saved transcript, run
+   history, or an output file, written under
+   `packages/desktop/tests/e2e/test-results/` (gitignored). The committed
+   screenshot baselines live in `packages/desktop/tests/e2e/__screenshots__/`;
+   how to refresh them is in `packages/desktop/tests/e2e/README.md`.
+3. **An isolated test starts from a written list of failure modes**, before the
+   implementation: bad input, malformed persisted data, ordering and
+   cancellation races, partial writes, provider errors, boundary sizes, in the
+   PR body or at the top of the suite. Each test encodes one entry.
+
+So: a behavior-preserving refactor adds none; a bug fix gets at most one
+regression test at the narrowest boundary that shows the defect, written to
+fail first (E2E when reachable through the app); a feature gets E2E coverage
+of its user-visible path, plus isolated tests only under rule 3 at a durable
+boundary (wire contract, schema, parser). Delete tests that would not catch a
+real bug: mock echoes, call-count pins, snapshots of copy, "renders without
+crashing", re-asserted schema defaults. When code or a format is retired,
+delete its tests and fixtures. In review, ask for tests only when the diff
+leaves a consequential contract or reproduced defect unprotected.
 
 ## Test tiers
 
@@ -44,12 +80,12 @@ only by hand, never in CI or `npm test`, and skips a model whose key is not set.
 
 ## Scoping the test run
 
-The loop (`test:watch`, `test:changed [ref]`, `test:pure`, `npm test`) is in CLAUDE.md "Commands". `test:pure` includes the architecture ratchets, which read the repository from disk and are never selected by a module graph. Selection is only as good as that graph: a changed YAML resource or image selects nothing, and a change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`) is not covered; those are what `npm test` is for.
+The loop (`test:watch`, `test:changed [ref]`, `test:pure`, `npm test`) is in root `AGENTS.md` "Commands". `test:pure` includes the architecture ratchets, which read the repository from disk and are never selected by a module graph. Selection is only as good as that graph: a changed YAML resource or image selects nothing, and a change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`) is not covered; those are what `npm test` is for.
 
 ## Writing tests that earn a place
 
-How to write the tests that do earn a place (adapted from the testing guides
-in [opencode](https://github.com/sst/opencode/blob/dev/AGENTS.md)):
+Adapted from [opencode](https://github.com/sst/opencode/blob/dev/AGENTS.md)'s
+testing guides.
 
 - **Test the real implementation; avoid mocks.** Run the production code
   against real resources: a temp directory, a real git repo, a real SQLite

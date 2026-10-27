@@ -1,7 +1,8 @@
-This is TeXRA, a VS Code extension and desktop application written in
+This is TeXRA, a VS Code extension, desktop app and terminal CLI written in
 TypeScript. It uses Effect Schema, Effect, a platform abstraction layer, and several
 repo-specific webview and error-handling conventions. Review according to
-`AGENTS.md`, `CLAUDE.md`, and `.claude/skills/code-review/`; generic JavaScript
+`AGENTS.md` (and the nested `AGENTS.md` files it lists) and
+`.claude/skills/code-review/`; generic JavaScript
 review heuristics are insufficient.
 
 Never recommend new abstractions, factories, wrappers, or future-flexibility

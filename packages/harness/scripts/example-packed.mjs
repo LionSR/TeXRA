@@ -33,13 +33,11 @@ const run = (command, args, cwd) => {
   }
 };
 
-for (const file of [
-  'package.json',
-  'tsconfig.json',
-  'llm.ts',
-  'effectSession.ts',
-]) {
-  copyFileSync(join(packageRoot, 'example', file), join(consumer, file));
+const exampleDir = join(packageRoot, 'example');
+for (const file of readdirSync(exampleDir)) {
+  if (file.endsWith('.ts') || file.endsWith('.json')) {
+    copyFileSync(join(exampleDir, file), join(consumer, file));
+  }
 }
 // Each pack runs its package's `prepack`, which builds what it publishes.
 for (const [name, file] of [

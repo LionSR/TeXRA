@@ -1,13 +1,29 @@
 /**
- * `@texra-ai/llm` — the browser-safe entry: everything a caller reads to
- * choose a model and run a turn, with no Node module and no vendor SDK behind
- * it, so the webviews and the desktop renderer import it as freely as the
- * hosts do. Each name below has a consumer outside the package or is a type
- * a public signature names (`RouteFacts`); a file's other exports stay
- * package-internal.
+ * Browser-safe entry of `@texra-ai/llm`: the turn contract, model and provider
+ * catalogs, route decisions, reasoning selection, turn cost, and `ModelError`.
  *
- * Binding a model to its wire protocol, and the subscription sign-in flows,
- * run in Node and live at `@texra-ai/llm/node`.
+ * > **Guide:** Read [Model Layer (`@texra-ai/llm`)](/api/model-layer) for how
+ * > catalog selection, route resolution, `prepareTurn` / `streamTurn`, and
+ * > `ModelError` work together.
+ *
+ * ### Key exports by role
+ *
+ * - **Turn contract**: [`Model`](#model) (`prepareTurn`, `streamTurn`),
+ *   [`TurnRequest`](#turnrequest) ([`TurnRequestSchema`](#turnrequestschema)),
+ *   [`ResolvedTurn`](#resolvedturn), [`TurnEvent`](#turnevent),
+ *   [`TurnResult`](#turnresult), and [`completedTurn`](#completedturn).
+ * - **Model & provider catalogs**: [`selectModel`](#selectmodel),
+ *   [`MODEL_PROVIDER_PLUGINS`](#model_provider_plugins),
+ *   [`decideModelRoute`](#decidemodelroute),
+ *   [`resolveRouteEndpoint`](#resolverouteendpoint),
+ *   [`RouteFacts`](#routefacts) ([`OWN_KEY_ROUTE_FACTS`](#own_key_route_facts)),
+ *   [`chooseReasoning`](#choosereasoning), and [`turnCost`](#turncost).
+ * - **Structured failures & credentials**: [`ModelError`](#modelerror),
+ *   [`ModelErrorFields`](#modelerrorfields), and
+ *   [`CredentialStore`](#credentialstore).
+ *
+ * Binding a model to its wire protocol (`bindModel`) and running subscription
+ * OAuth flows live in [`@texra-ai/llm/node`](./node).
  */
 
 // The turn contract: request, result, events and the `Model` that runs a turn.

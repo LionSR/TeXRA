@@ -1,13 +1,26 @@
 /**
- * `@texra-ai/llm/node` — what runs only in Node: binding a catalog model to
- * its wire protocol, and the ChatGPT and Grok sign-in flows.
+ * Node.js entry of `@texra-ai/llm`: binding a catalog model to its wire
+ * protocol (`bindModel`) and running subscription OAuth sign-in flows.
  *
- * {@link bindModel} owns the wire: it turns a catalog model, its route and
- * plain options into the protocol's configuration, loads the protocol's
- * module on demand with a literal `import()` (a run loads only its own
- * provider's SDK), and judges every failure the model raises against the
- * vendor's reply. Nothing in its signature names a protocol module's type:
- * the declarations of this entry reach no vendor SDK.
+ * > **Guide:** Read [Model Layer (`@texra-ai/llm`)](/api/model-layer) for a
+ * > complete `selectModel` $\to$ `bindModel` $\to$ `prepareTurn` $\to$
+ * > `streamTurn` example.
+ *
+ * ### Key exports by role
+ *
+ * - **Protocol binding**: [`bindModel`](#bindmodel), [`BindSpec`](#bindspec),
+ *   [`Binding`](#binding), and [`ModelCredential`](#modelcredential) dynamically
+ *   load only the requested protocol (`anthropic-messages`, `openai-responses`,
+ *   `google-interactions`), manage scoped connections and file uploads in the
+ *   caller's `Scope`, and classify provider failures into `ModelError`.
+ * - **Subscription sign-in (`codex`, `xai`)**: ChatGPT
+ *   ([`codexCoordinator`](#codexcoordinator),
+ *   [`codexLoginWithLoopback`](#codexloginwithloopback),
+ *   [`codexLoginWithDeviceCode`](#codexloginwithdevicecode)) and Grok
+ *   ([`xaiCoordinator`](#xaicoordinator),
+ *   [`xaiLoginWithLoopback`](#xailoginwithloopback),
+ *   [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows, plus
+ *   [`SharedAttempt`](#sharedattempt) for coalescing concurrent refreshes.
  */
 import { Effect, type Scope } from 'effect';
 import { ModelError, type BillingRoute } from './errors.js';

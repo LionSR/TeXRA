@@ -2,6 +2,31 @@
 
 <!-- Generated from `packages/harness/src/schemas.ts` by `npm run docgen`; do not edit. -->
 
+Browser-safe Effect Schemas, derived types, and pure read helpers for
+`@texra-ai/harness`.
+
+> **Guide:** Read [Views, Transcripts & Renderers](/api/views-and-transcripts)
+> and [Durable Protocol & Recovery](/api/durable-protocol) for how views,
+> runtime requests, and approval policies work.
+
+- **Session & run views**: [`SessionView`](#sessionview), [`RunView`](#runview),
+  [`TranscriptView`](#transcriptview), [`PendingRequest`](#pendingrequest),
+  and pure queries ([`acceptsFollowUp`](#acceptsfollowup),
+  [`attentionOf`](#attentionof), [`sessionActivity`](#sessionactivity),
+  [`isLiveRun`](#isliverun), [`isWorkingRun`](#isworkingrun),
+  [`descendantRuns`](#descendantruns), [`runActionRefusal`](#runactionrefusal)).
+- **Commands & approvals**: [`RuntimeRequestSchema`](#runtimerequestschema)
+  ([`RuntimeRequest`](#runtimerequest)), [`RequestDecision`](#requestdecision),
+  [`OutcomeSchema`](#outcomeschema), [`RequestErrorSchema`](#requesterrorschema),
+  [`ApprovalPolicySchema`](#approvalpolicyschema), [`resolveBypass`](#resolvebypass).
+- **Agent definitions & run outcomes**: [`AgentConfigSchema`](#agentconfigschema),
+  [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
+  [`RunEndResult`](#runendresult), [`RunIdSchema`](#runidschema),
+  [`RunOutcomeSchema`](#runoutcomeschema).
+- **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
+  [`configTreeRows`](#configtreerows), [`GlobalStateKey`](#globalstatekey),
+  [`WorkspaceStateKey`](#workspacestatekey), [`TraceDocumentSchema`](#tracedocumentschema).
+
 ## acceptsFollowUp
 
 Whether a run takes a follow-up at all, the one rule every host reads (it
