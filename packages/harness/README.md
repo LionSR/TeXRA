@@ -41,6 +41,11 @@ patch while `@effect/*` packages float.
 }
 ```
 
+`nodePlatform()` reads provider API keys from the environment (`ANTHROPIC_API_KEY`, …).
+A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers)
+that an Anthropic API key can spend once you link a Console organization to
+the plan.
+
 ## Usage
 
 The package's surface is Effect: `Sessions.layer({ platform, plugins })`

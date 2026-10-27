@@ -11,7 +11,9 @@ TeXRA agents can delegate programming tasks—such as running numerical checks o
   (or an OpenAI API key). TeXRA agents reach it through the `codex` tool.
 - **Claude Code**: Anthropic's coding agent on your Claude Pro / Max plan
   (or an Anthropic API key). TeXRA agents reach it through the `claude_code`
-  tool.
+  tool. A Max or Team plan also includes
+  [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers)
+  for an Anthropic API key, which TeXRA's own Anthropic models can use.
 
 Each one is set up from its own row on **Settings → Plugins**. When a
 TeXRA agent uses the tool, the work runs in a side panel on the ProgressBoard
