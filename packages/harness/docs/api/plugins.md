@@ -133,7 +133,11 @@ function approvedWriteConflict(
   path: string,
   original: string | null,
   finalContent: string,
-)
+): Effect.Effect<
+  ApprovedEditConflictError | undefined,
+  Error,
+  ToolContext | FileSystem.FileSystem | WorkspaceFs
+>
 ```
 
 ## assertNoParentTraversal
@@ -187,6 +191,8 @@ interface BoundModel {
 
 ## buildApprovalRejectedResult
 
+The tool result the model gets when the user rejects or cancels a file edit's approval.
+
 ```ts
 function buildApprovalRejectedResult(
   path: string,
@@ -204,6 +210,8 @@ const buildFileAttachment: (args_0: BuildFileAttachmentOptions) => Effect<{ read
 ```
 
 ## BuildFileAttachmentOptions
+
+What `buildFileAttachment` reads: a workspace file, with an optional description and MIME type override.
 
 ```ts
 interface BuildFileAttachmentOptions {
@@ -469,6 +477,8 @@ const definePlugin: <ROut = never>(
 
 ## DefineToolOptions
 
+What `defineTool` takes: the tool's metadata, its input schema, its guard, and its body.
+
 ```ts
 type DefineToolOptions<T, R = never> = Required<
   Pick<ToolDefinition, 'name' | 'description'>
@@ -503,6 +513,10 @@ type DefineToolOptions<T, R = never> = Required<
 ```
 
 ## EditRecord
+
+One file edit a tool result reports: the path, the added and removed line
+counts, and the first edited line, so a host can open the file at the
+change.
 
 ```ts
 type EditRecord = typeof EditRecordSchema.Type;
@@ -737,6 +751,8 @@ function jitteredExponentialBackoffMs(
 
 ## JsonRpcConnection
 
+An open JSON-RPC connection to a peer: requests, notifications and its one close.
+
 ```ts
 interface JsonRpcConnection {
   readonly request: <T>(
@@ -837,6 +853,8 @@ type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
 ```
 
 ## makeJsonRpcConnection
+
+Open a JSON-RPC connection over `options`' streams; its reader and writer fibers live in the caller's scope.
 
 ```ts
 const makeJsonRpcConnection: (options: JsonRpcConnectionOptions) => Effect<JsonRpcConnection, never, Scope>
@@ -1343,6 +1361,10 @@ interface RouteOptions {
 
 ## RoutePolicy
 
+One route a model call goes through (a provider endpoint, or one model on
+it): the key its calls are gated under, which failures count against it,
+and which still prove it reachable.
+
 ```ts
 interface RoutePolicy {
   readonly key: string;
@@ -1358,6 +1380,8 @@ class RunFileService
 ```
 
 ## RunHistoryInconsistent
+
+A row that cannot be applied to the run's state: corrupt history.
 
 ```ts
 class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsistent>()(
@@ -1693,11 +1717,19 @@ type ToolEditProposal = Omit<
 
 ## ToolError
 
+The error a tool throws to fail its call with a message meant for the model,
+and optionally a shorter summary for the transcript. The tool definition's
+`run` wrapper turns it into an `error` {@link ToolResult}.
+
 ```ts
 class ToolError extends Error
 ```
 
 ## ToolFileAttachment
+
+A file a tool attaches to its result: a {@link FileReference} that may also
+carry the bytes inline (base64 or raw) or name them by the digest the
+session store already holds.
 
 ```ts
 type ToolFileAttachment = typeof ToolFileAttachmentSchema.Type;
@@ -1795,9 +1827,9 @@ prompt section and layers) is read off its value.
 interface ToolTable {
   /** Every plugin, in the order the app listed them. */
   readonly entries: ReadonlyMap<string, Plugin>;
-  /** The tool registered under `name` in any plugin, typed as plugins
-   *  declare their tools (`Plugin.tools`). */
-  readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined;
+  /** Every plugin's tools by name, typed as plugins declare them
+   *  (`Plugin.tools`). */
+  readonly tools: ReadonlyMap<string, ITool<Error, PluginToolServices>>;
   /** Each request kind's decision hook, from the plugin that owns it. */
   readonly decisions: ReadonlyMap<string, RequestDecisionHook>;
   /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */

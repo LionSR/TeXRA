@@ -1,13 +1,3 @@
 {
-  "packages/harness/src/agent/runtime/ModelRetryGate.ts": 1,
-  "packages/harness/src/shared/session/sessionView.ts": 1,
-  "packages/harness/src/shared/session/sessionViewUpdate.ts": 1,
-  "packages/harness/src/shared/session/transcriptState.ts": 2,
-  "packages/harness/src/tools/jsonRpc.ts": 1,
-  "packages/harness/src/tools/memory/MemoryTool.ts": 1,
-  "packages/llm/src/api/anthropicMessages.ts": 1,
-  "packages/llm/src/api/openaiResponses.ts": 1,
-  "packages/llm/src/api/openaiResponsesCodec.ts": 4,
-  "packages/llm/src/api/openaiResponsesWebSocket.ts": 1,
-  "packages/llm/src/api/transport.ts": 1
+  "packages/harness/src/tools/memory/MemoryTool.ts": 1
 }

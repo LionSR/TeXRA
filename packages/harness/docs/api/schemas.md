@@ -18,6 +18,9 @@ function acceptsFollowUp(run: ReadRunView): boolean
 
 ## ActiveSkillSourceScope
 
+The decoded shape of {@link ActiveSkillSourceScopeSchema}: where a skill was
+found.
+
 ```ts
 type ActiveSkillSourceScope =
   (typeof ActiveSkillSourceScopeSchema)['Type'];
@@ -46,11 +49,18 @@ const AGENT_MODE_PRESETS: AgentModePreset[]
 
 ## AGENT_SKILLS_CONFIG_KEY
 
+The setting key that turns skill discovery on for agents; the run loop and
+the CLI's `skills` command read it through `Settings`.
+
 ```ts
 const AGENT_SKILLS_CONFIG_KEY: "texra.skills.enabled"
 ```
 
 ## AGENT_SOURCE
+
+Where an agent definition comes from. A `custom` agent is the user's own
+YAML file in an agent directory; the other sources are read in place and are
+not the user's to edit.
 
 ```ts
 const AGENT_SOURCE: { readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }
@@ -58,11 +68,17 @@ const AGENT_SOURCE: { readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; r
 
 ## AgentConfig
 
+The configuration one agent run is launched with, as its `run.config`
+row stores it.
+
 ```ts
 type AgentConfig = typeof AgentConfigSchema.Type;
 ```
 
 ## AgentConfigInput
+
+An agent config as a launch request writes it, before decoding fills the
+defaults: what a host's run request carries to `session.runs.launch`.
 
 ```ts
 type AgentConfigInput = typeof AgentConfigObjectSchema.Encoded;
@@ -83,7 +99,7 @@ Canonical configuration: at most as many outputs as text/media inputs, and
 a persona exactly when the agent is inline, named as the agent is.
 
 ```ts
-const AgentConfigSchema: Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly agent: withDecodingDefault<String, never>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>>; readonly asCaller: optional<NullOr<Boolean>>; readonly model: withDecodingDefault<String, never>; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<NullOr<String>>; readonly displayInstruction: optional<NullOr<String>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly cli: optional<NullOr<Struct<{ readonly outputFile: optional<NullOr<String>>; readonly outputDirectory: optional<NullOr<String>>; readonly expectedOutputFiles: optional<NullOr<$Array<String>>>; readonly teamId: optional<NullOr<String>>; }>>>; readonly delegationAgentScope: optional<NullOr<$Array<Trim>>>; readonly outputSchema: optional<NullOr<$Record<String, Unknown>>>; readonly script: optional<NullOr<Union<readonly [Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"background">; }>, Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"recipe">; readonly block: String; readonly options: $Record<String, Codec<Json, Json, never, never>>; }>]>>>; }>
+const AgentConfigSchema: Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly agent: withDecodingDefault<String, never>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<NonEmptyString>>; }>>>; readonly asCaller: optional<NullOr<Boolean>>; readonly model: withDecodingDefault<String, never>; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<NullOr<String>>; readonly displayInstruction: optional<NullOr<String>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly cli: optional<NullOr<Struct<{ readonly outputFile: optional<NullOr<String>>; readonly outputDirectory: optional<NullOr<String>>; readonly expectedOutputFiles: optional<NullOr<$Array<String>>>; readonly teamId: optional<NullOr<String>>; }>>>; readonly delegationAgentScope: optional<NullOr<$Array<Trim>>>; readonly outputSchema: optional<NullOr<$Record<String, Unknown>>>; readonly script: optional<NullOr<Union<readonly [Struct<{ readonly code: NonEmptyString; readonly title: NonEmptyString; readonly tools: $Array<NonEmptyString>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"background">; }>, Struct<{ readonly code: NonEmptyString; readonly title: NonEmptyString; readonly tools: $Array<NonEmptyString>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"recipe">; readonly block: NonEmptyString; readonly options: $Record<String, Codec<Json, Json, never, never>>; }>]>>>; }>
 ```
 
 ## agentFileName
@@ -128,6 +144,9 @@ function agentMatchesIdentifier(
 
 ## AgentModePreset
 
+The decoded shape of {@link AgentModePresetSchema}: a team as the catalog
+and the settings view hold it.
+
 ```ts
 type AgentModePreset = typeof AgentModePresetSchema.Type;
 ```
@@ -152,11 +171,17 @@ function agentName(key: string): string
 
 ## AgentOptionData
 
+The decoded shape of {@link AgentOptionDataSchema}.
+
 ```ts
 type AgentOptionData = typeof AgentOptionDataSchema.Type;
 ```
 
 ## AgentOptionDataSchema
+
+One row of the agent picker: the agent key to send back as `value`, its
+label, whether it is an orchestrator, and the source it was loaded from. The
+documents plugin extends it with the fields a document task's row adds.
 
 ```ts
 const AgentOptionDataSchema: Struct<{ readonly value: String; readonly label: String; readonly isOrchestrator: optional<Boolean>; readonly source: optional<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>; }>
@@ -164,11 +189,16 @@ const AgentOptionDataSchema: Struct<{ readonly value: String; readonly label: St
 
 ## AgentProposal
 
+The decoded shape of {@link AgentProposalSchema}: a delegation as the
+approving surface and the launch read it.
+
 ```ts
 type AgentProposal = typeof AgentProposalSchema.Type;
 ```
 
 ## AgentProposalPermission
+
+The decoded shape of {@link AgentProposalPermissionSchema}.
 
 ```ts
 type AgentProposalPermission =
@@ -176,6 +206,9 @@ type AgentProposalPermission =
 ```
 
 ## AgentScanIssue
+
+The decoded shape of {@link AgentScanIssueSchema}; the agent catalog lists
+these so a settings view can show which files failed.
 
 ```ts
 type AgentScanIssue = typeof AgentScanIssueSchema.Type;
@@ -190,6 +223,9 @@ const AgentScanIssueSchema: Struct<{ readonly path: String; readonly message: St
 ```
 
 ## AgentSource
+
+The decoded shape of {@link AgentSourceSchema}: one of the
+{@link AGENT_SOURCE} values.
 
 ```ts
 type AgentSource = typeof AgentSourceSchema.Type;
@@ -228,11 +264,15 @@ type AggregateKind = typeof AggregateKindSchema.Type;
 
 ## AggregateState
 
+One aggregate's claim and existence as its state row holds them.
+
 ```ts
 type AggregateState = typeof AggregateStateSchema.Type;
 ```
 
 ## AnsweredInquiryTurn
+
+The decoded shape of an inquiry turn whose answer has been recorded.
 
 ```ts
 type AnsweredInquiryTurn = typeof AnsweredInquiryTurnSchema.Type;
@@ -379,11 +419,17 @@ function attentionOf<View extends ReadSessionView>(
 
 ## BASH_APPROVAL_CONFIG_KEY
 
+The setting key for whether a shell command a tool wants to run waits for
+the user's approval; the bash approval policy reads it, and the approval
+settings tab writes it.
+
 ```ts
 const BASH_APPROVAL_CONFIG_KEY: "texra.toolUse.requireBashApproval"
 ```
 
 ## BashPermission
+
+The decoded shape of {@link BashPermissionSchema}.
 
 ```ts
 type BashPermission = typeof BashPermissionSchema.Type;
@@ -437,12 +483,17 @@ const CHILD_RUN_CONCURRENCY_BUDGET_SETTING: Readonly<{ readonly auto: 0; readonl
 
 ## CompactionActivityData
 
+The decoded shape of {@link CompactionActivityDataSchema}.
+
 ```ts
 type CompactionActivityData =
   (typeof CompactionActivityDataSchema)['Type'];
 ```
 
 ## CompactionActivityOutcome
+
+How a compaction operation ended: every {@link CompactionActivityData} state
+except `started`.
 
 ```ts
 type CompactionActivityOutcome = Exclude<
@@ -486,11 +537,15 @@ function configTreeRows(
 
 ## ContextManagementData
 
+The decoded shape of {@link ContextManagementDataSchema}.
+
 ```ts
 type ContextManagementData = typeof ContextManagementDataSchema.Type;
 ```
 
 ## ContextStateData
+
+The decoded shape of {@link ContextStateDataSchema}.
 
 ```ts
 type ContextStateData = typeof ContextStateDataSchema.Type;
@@ -564,6 +619,8 @@ class DatabaseNotOwner extends Schema.TaggedError<DatabaseNotOwner>()(
 
 ## DeclinableUsageRoute
 
+The decoded shape of {@link DeclinableUsageRouteSchema}.
+
 ```ts
 type DeclinableUsageRoute = typeof DeclinableUsageRouteSchema.Type;
 ```
@@ -590,6 +647,9 @@ const DEFAULT_WORKFLOW_AGENT: "correct"
 
 ## DeletionMode
 
+How a run's deletion was asked for. Only an explicit single-run deletion
+may replace an unprovable owner.
+
 ```ts
 type DeletionMode = typeof DeletionModeSchema.Type;
 ```
@@ -610,6 +670,9 @@ function descendantRuns(
 
 ## DiffStats
 
+The decoded shape of {@link DiffStatsSchema}: a document output's added and
+removed line counts, either of which may be unknown.
+
 ```ts
 type DiffStats = typeof DiffStatsSchema.Type;
 ```
@@ -624,11 +687,15 @@ const DiffStatsSchema: Struct<{ readonly added: optional<Int>; readonly removed:
 
 ## DispatchFacts
 
+The decoded dispatch facts of one call, as a `response` row lists them.
+
 ```ts
 type DispatchFacts = typeof DispatchFactsSchema.Type;
 ```
 
 ## DisplaySessionEvent
+
+The decoded shape of {@link DisplaySessionEventSchema}.
 
 ```ts
 type DisplaySessionEvent = typeof DisplaySessionEventSchema.Type;
@@ -652,6 +719,9 @@ function ensureError(err: unknown): Error
 
 ## ErrorLogData
 
+The decoded shape of {@link ErrorLogDataSchema}: the payload of an `error`
+log row.
+
 ```ts
 type ErrorLogData = typeof ErrorLogDataSchema.Type;
 ```
@@ -674,17 +744,25 @@ function escapeText(s: string): string
 
 ## ExhaustionReason
 
+The decoded shape of the exhaustion reason: which credential or subscription
+quota ran out, so the retry prompt can offer the matching route switch.
+
 ```ts
 type ExhaustionReason = typeof ExhaustionReasonSchema.Type;
 ```
 
 ## ExternalFileLocation
 
+A file outside both the workspace and run storage; its absolute path is the
+only path it has.
+
 ```ts
 type ExternalFileLocation = typeof ExternalFileLocationSchema.Type;
 ```
 
 ## ExternalInquiryPermission
+
+The decoded shape of {@link ExternalInquiryPermissionSchema}.
 
 ```ts
 type ExternalInquiryPermission =
@@ -693,8 +771,12 @@ type ExternalInquiryPermission =
 
 ## ExternalInquiryTurnRecordSchema
 
+One turn of an inquiry thread as the inquiry record store keeps it: a
+question still open, or one with its answer. The `inquiry` tool writes a
+turn; the inquiry panel reads the thread.
+
 ```ts
-const ExternalInquiryTurnRecordSchema: Union<readonly [Struct<{ readonly kind: Literal<"open">; readonly turnIndex: Int; readonly timestamp: String; readonly question: String; readonly context: optional<NullOr<String>>; readonly suggestSearch: optional<NullOr<Boolean>>; readonly attachFiles: optional<NullOr<$Array<String>>>; }>, Struct<{ readonly kind: Literal<"answered">; readonly answer: String; readonly answeredAt: String; readonly sessionLinks: optional<NullOr<$Array<Trim>>>; readonly turnIndex: Int; readonly timestamp: String; readonly question: String; readonly context: optional<NullOr<String>>; readonly suggestSearch: optional<NullOr<Boolean>>; readonly attachFiles: optional<NullOr<$Array<String>>>; }>]>
+const ExternalInquiryTurnRecordSchema: Union<readonly [Struct<{ readonly kind: Literal<"open">; readonly turnIndex: Int; readonly timestamp: NonEmptyString; readonly question: String; readonly context: optional<NullOr<String>>; readonly suggestSearch: optional<NullOr<Boolean>>; readonly attachFiles: optional<NullOr<$Array<String>>>; }>, Struct<{ readonly kind: Literal<"answered">; readonly answer: String; readonly answeredAt: NonEmptyString; readonly sessionLinks: optional<NullOr<$Array<Trim>>>; readonly turnIndex: Int; readonly timestamp: NonEmptyString; readonly question: String; readonly context: optional<NullOr<String>>; readonly suggestSearch: optional<NullOr<Boolean>>; readonly attachFiles: optional<NullOr<$Array<String>>>; }>]>
 ```
 
 ## extractErrorMessage
@@ -711,11 +793,16 @@ function extractErrorMessage(err: unknown): string | undefined
 
 ## FileListEntry
 
+The decoded shape of {@link FileListEntrySchema}.
+
 ```ts
 type FileListEntry = typeof FileListEntrySchema.Type;
 ```
 
 ## FileLocation
+
+The decoded shape of {@link FileLocationSchema}: where a file a run read or
+wrote lives, so every surface can show and address it the same way.
 
 ```ts
 type FileLocation = typeof FileLocationSchema.Type;
@@ -766,11 +853,16 @@ function fileLocationShortDisplayPath(location: FileLocation): string
 
 ## FollowUpContent
 
+The decoded shape of {@link FollowUpContentSchema}.
+
 ```ts
 type FollowUpContent = typeof FollowUpContentSchema.Type;
 ```
 
 ## FollowUpSender
+
+The decoded sender of a follow-up: the user, another run with its relation
+to the recipient, or a host notification.
 
 ```ts
 type FollowUpSender = typeof FollowUpSenderSchema.Type;
@@ -835,6 +927,10 @@ function getModelLabel(model: string): string
 ```
 
 ## getProposalFileGroups
+
+Group a proposal's file fields for display, in the fixed order input,
+context, media, output, memories, leaving out the empty groups. Memory paths
+are virtual and marked not clickable.
 
 ```ts
 function getProposalFileGroups(
@@ -922,6 +1018,9 @@ const GOAL_MAX_COST_SETTING: Readonly<{ readonly configKey: "texra.goal.maxCostU
 
 ## HookEvent
 
+One of the {@link SUPPORTED_HOOK_EVENTS}: the Claude Code hook event an
+outcome was recorded for.
+
 ```ts
 type HookEvent = typeof HookEventSchema.Type;
 ```
@@ -954,10 +1053,12 @@ bundled original and no plugin's block (a task is its plugin's recipe);
 each is refused as an unrecognized key.
 
 ```ts
-const InlinePersonaSchema: Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>
+const InlinePersonaSchema: Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<NonEmptyString>>; }>
 ```
 
 ## InputHistoryRecord
+
+One CLI input history row: when it was entered, and the text.
 
 ```ts
 type InputHistoryRecord = typeof InputHistoryRecordSchema.Type;
@@ -965,11 +1066,16 @@ type InputHistoryRecord = typeof InputHistoryRecordSchema.Type;
 
 ## InquiryThreadId
 
+The decoded shape of {@link InquiryThreadIdSchema}.
+
 ```ts
 type InquiryThreadId = typeof InquiryThreadIdSchema.Type;
 ```
 
 ## InquiryThreadIdSchema
+
+An inquiry thread's id: `ei_` and twelve hex digits, lower-cased on decode
+so the same thread is never stored under two spellings.
 
 ```ts
 const InquiryThreadIdSchema: decodeTo<String, String, never, never>
@@ -992,7 +1098,7 @@ when the harness fetched the plugin with git and owns its directory; a local
 plugin is referenced in place and has none.
 
 ```ts
-const InstalledPluginSchema: Struct<{ readonly name: decodeTo<String, String, never, never>; readonly source: String; readonly ref: optional<String>; readonly commit: optional<String>; readonly path: String; readonly skills: $Array<String>; readonly version: optional<String>; readonly description: optional<String>; readonly enabled: Boolean; readonly trust: optional<Struct<{ readonly version: NullOr<String>; readonly digest: String; }>>; }>
+const InstalledPluginSchema: Struct<{ readonly name: decodeTo<String, String, never, never>; readonly source: NonEmptyString; readonly ref: optional<NonEmptyString>; readonly commit: optional<String>; readonly path: NonEmptyString; readonly skills: $Array<NonEmptyString>; readonly version: optional<String>; readonly description: optional<String>; readonly enabled: Boolean; readonly trust: optional<Struct<{ readonly version: NullOr<String>; readonly digest: String; }>>; }>
 ```
 
 ## INSTRUCTION_ACTION
@@ -1008,6 +1114,9 @@ const INSTRUCTION_ACTION: { readonly SET_API_KEY: "set-api-key"; readonly OPEN_C
 ```
 
 ## InstructionAction
+
+One of the {@link INSTRUCTION_ACTION} tokens: a button the host renders on
+an instruction message and maps to its own command.
 
 ```ts
 type InstructionAction =
@@ -1154,6 +1263,8 @@ function isWorkingRun(run: ReadRunView): boolean
 
 ## JsonValue
 
+The decoded shape of {@link JsonValueSchema}.
+
 ```ts
 type JsonValue = typeof JsonValueSchema.Type;
 ```
@@ -1179,20 +1290,9 @@ const LineCountSchema: Int
 
 ## listingTypeOf
 
-The listing types the fold keys `latest` by: every durable arm
-but the transcript tier. The request pair shares one entry because it
-folds to one set, the follow-up pair likewise, and the lifecycle pair (`run.start`, `run.removed`)
-shares one because it folds to one existence: a tombstone's commit then
-outranks a replayed `run.start` below it, which is what makes the
-tombstone final under every read. `run.position` is a
-listing key of its own: the phase is folded from it, so a cold listing
-that dropped it would paint every parked run as ready. `stage.start` is
-transcript tier alone: its display arm is a no-op and only the transcript
-fold reads it over the whole aggregate, so listing it would pull the latest
-one of every run into every renderer for no reader.
-
-`run.fact` and `plugin.fact` hold several families on one type, so they
-are read grouped by family as well (`listingKeyOf`, `Database`).
+The listing type the fold keys `latest` by, or null for an unlisted
+arm. `run.fact` and `plugin.fact` hold several families on one type, so
+they are read grouped by family as well (`listingKeyOf`, `Database`).
 
 ```ts
 function listingTypeOf(
@@ -1202,11 +1302,17 @@ function listingTypeOf(
 
 ## LoadedMediaMetadata
 
+What the media pipeline loaded for one file in a files-loaded list: whether
+the model sees it as an image or as audio, its MIME type and its size. The
+transcript's file-list row shows it.
+
 ```ts
 type LoadedMediaMetadata = typeof LoadedMediaMetadataSchema.Type;
 ```
 
 ## LocalRuntimeState
+
+The decoded shape of {@link LocalRuntimeStateSchema}.
 
 ```ts
 type LocalRuntimeState = typeof LocalRuntimeStateSchema.Type;
@@ -1225,6 +1331,8 @@ type LogicalId = string & {
 
 ## LogLevel
 
+The decoded shape of {@link LogLevelSchema}.
+
 ```ts
 type LogLevel = typeof LogLevelSchema.Type;
 ```
@@ -1238,6 +1346,8 @@ type McpToolOutput = typeof McpToolOutputSchema.Type;
 ```
 
 ## MediaAttachmentKind
+
+The decoded shape of {@link MediaAttachmentKindSchema}.
 
 ```ts
 type MediaAttachmentKind = typeof MediaAttachmentKindSchema.Type;
@@ -1257,11 +1367,19 @@ const MemoryViewItemSchema: Struct<{ readonly displayPath: String; readonly stor
 
 ## MESSAGE_TYPES
 
+What kind of card a `log` row draws in the transcript: streamed thinking or
+model text, a files-loaded list, a tool call, a web search, the user's
+message, a status line, a context-management notice, or an error. Each
+type's `data` payload has its own schema in `logPayload.ts`; `default` is a
+plain text line.
+
 ```ts
 const MESSAGE_TYPES: { readonly THINKING: "thinking"; readonly SCRATCHPAD: "scratchpad"; readonly FILE_LIST: "fileList"; readonly TOOL_USE: "toolUse"; readonly WEB_SEARCH: "webSearch"; readonly MODEL_RESPONSE: "modelResponse"; readonly USER_MESSAGE: "userMessage"; readonly PROGRESS_STATUS: "progressStatus"; readonly CONTEXT_COMPACTION_ACTIVITY: "contextCompactionActivity"; readonly ERROR: "error"; readonly CONTEXT_MANAGEMENT: "contextManagement"; readonly DEFAULT: "default"; }
 ```
 
 ## MessageType
+
+The decoded shape of {@link MessageTypeSchema}.
 
 ```ts
 type MessageType = typeof MessageTypeSchema.Type;
@@ -1334,11 +1452,18 @@ type ModelBackend = typeof ModelBackendSchema.Type;
 
 ## ModelOptionData
 
+The decoded shape of {@link ModelOptionDataSchema}.
+
 ```ts
 type ModelOptionData = typeof ModelOptionDataSchema.Type;
 ```
 
 ## ModelOptionDataSchema
+
+One row of the model picker: the model id to send back as `value`, its
+label, and the provider, context size, cost, reasoning setting and
+availability a host shows beside it. `readModelOptions` computes the rows
+once and every host's snapshot carries them unchanged.
 
 ```ts
 const ModelOptionDataSchema: Struct<{ readonly value: String; readonly label: String; readonly availability: optional<Literals<readonly ["provider-key", "missing-key", "key-unreadable", "retired", "unserved", "subscription-access", "xai-subscription-access", "unknown-model"]>>; readonly routeLabel: optional<String>; readonly provider: optional<String>; readonly context: optional<String>; readonly cost: optional<String>; readonly hint: optional<String>; readonly reasoning: optional<String>; }>
@@ -1410,11 +1535,15 @@ const NullableFileFieldsSchema: Struct<{ readonly editedFile: withDecodingDefaul
 
 ## OfferedTool
 
+The decoded shape of one offered tool as a `tools.offered` row lists it.
+
 ```ts
 type OfferedTool = typeof OfferedToolSchema.Type;
 ```
 
 ## OpenInquiryTurn
+
+The decoded shape of an inquiry turn that still awaits the user's answer.
 
 ```ts
 type OpenInquiryTurn = typeof OpenInquiryTurnSchema.Type;
@@ -1461,6 +1590,11 @@ type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 
 ## parseAgentModePresets
 
+Read the user's custom teams from the raw `texra.agentModes.custom` setting
+value. A value that is not an array, or an entry that is not a well-formed
+team, is logged and dropped from this read rather than failing the whole
+catalog.
+
 ```ts
 function parseAgentModePresets(raw: unknown): AgentModePreset[]
 ```
@@ -1483,6 +1617,9 @@ type PendingRequest = SessionView['requests'][number];
 
 ## PermissionPayload
 
+The decoded shape of {@link PermissionPayloadSchema}: one open request,
+discriminated by its `kind`.
+
 ```ts
 type PermissionPayload = typeof PermissionPayloadSchema.Type;
 ```
@@ -1497,11 +1634,16 @@ type Persona = typeof PersonaSchema.Type;
 
 ## Plan
 
+The decoded shape of {@link PlanSchema}: the plan document a plan-approval
+request shows and an approved run continues from.
+
 ```ts
 type Plan = typeof PlanSchema.Type;
 ```
 
 ## PlanApprovalPermission
+
+The decoded shape of {@link PlanApprovalPermissionSchema}.
 
 ```ts
 type PlanApprovalPermission =
@@ -1556,6 +1698,9 @@ interface ProposalFileFields {
 ```
 
 ## ProposalFileGroup
+
+One labelled group of a proposal's files as a file list shows it: input,
+context, media, output or memory paths.
 
 ```ts
 interface ProposalFileGroup {
@@ -1714,6 +1859,13 @@ class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
 
 ## requestAnswerability
 
+Whether this window can answer a pending request: the one rule the host's
+attention badge and the request card both read, matching what
+`SessionRequests.decide` accepts. A run this process may not act on
+(`readOnly`) takes no answer here. A request that blocks its caller is
+answered by the fiber waiting on it, so only while its run waits here; an
+interrupted run has to be resumed first. An inquiry, at any other time.
+
 ```ts
 function requestAnswerability(
   run: ReadRunView,
@@ -1723,18 +1875,15 @@ function requestAnswerability(
 
 ## RequestAnswerability
 
-Whether this window can answer a pending request: the one rule the host's
-attention badge and the request card both read, matching what
-`SessionRequests.decide` accepts. A run this process may not act on
-(`readOnly`) takes no answer here. A request that blocks its caller is
-answered by the fiber waiting on it, so only while its run waits here; an
-interrupted run has to be resumed first. An inquiry, at any other time.
+What `requestAnswerability` answers: `answerable`, or why not.
 
 ```ts
 type RequestAnswerability = 'answerable' | 'readOnly' | 'resume';
 ```
 
 ## RequestDecision
+
+The decoded shape of {@link RequestDecisionSchema}.
 
 ```ts
 type RequestDecision = typeof RequestDecisionSchema.Type;
@@ -1847,6 +1996,8 @@ function resolveBypass<Id>(
 
 ## ResultMeta
 
+The decoded shape of {@link ResultMetaSchema}.
+
 ```ts
 type ResultMeta = typeof ResultMetaSchema.Type;
 ```
@@ -1881,6 +2032,8 @@ type RetryApprovalDecision =
 ```
 
 ## RetryPermission
+
+The decoded shape of {@link RetryPermissionSchema}.
 
 ```ts
 type RetryPermission = typeof RetryPermissionSchema.Type;
@@ -1946,11 +2099,18 @@ const RUN_STATUS_KEYS: ["completed" | "cancelled" | "failed" | "paused" | "waiti
 
 ## RUN_SUBSTATE
 
+A finer state shown beside a run's phase: a run that was just activated is
+`starting` on its first activation and `resuming` on a later one until its
+first `run.position` row clears it; a child at rest is `paused` or holding a
+result for its parent.
+
 ```ts
 const RUN_SUBSTATE: { readonly STARTING: "starting"; readonly RESUMING: "resuming"; readonly PAUSED: "paused"; readonly RESULT_WAITING: "resultWaiting"; }
 ```
 
 ## RunAction
+
+The decoded shape of {@link RunActionSchema}.
 
 ```ts
 type RunAction = typeof RunActionSchema.Type;
@@ -1983,11 +2143,16 @@ function runBypasses<Id>(
 
 ## RunEndOutput
 
+The decoded output of a run: its final response text, the workspace files it
+edited, and the structured value its terminal tool or recipe returned.
+
 ```ts
 type RunEndOutput = typeof RunEndOutputSchema.Type;
 ```
 
 ## RunEndResult
+
+A run's report to its lifecycle (see `RunEndResultSchema` above).
 
 ```ts
 type RunEndResult = typeof RunEndResultSchema.Type;
@@ -2007,11 +2172,17 @@ const RunEndSchema: Struct<{ readonly outcome: Enum<{ readonly COMPLETED: "compl
 
 ## RunId
 
+The decoded shape of {@link RunIdSchema}: a branded string only a run id
+decode produces.
+
 ```ts
 type RunId = typeof RunIdSchema.Type;
 ```
 
 ## RunIdentity
+
+The decoded shape of {@link RunIdentitySchema}: a native agent run (with the
+external CLI driving it, if any), a process run, or a background script run.
 
 ```ts
 type RunIdentity = typeof RunIdentitySchema.Type;
@@ -2046,11 +2217,17 @@ const RunIdSchema: brand<String, "RunId">
 
 ## RunLifecycleStatus
 
+A run's status as a host reads it: a {@link RunPhase}, or `ready` for a run
+whose lifecycle has not started. The phase predicates in
+`shared/runs/runStatus.ts` branch on it.
+
 ```ts
 type RunLifecycleStatus = RunPhase | typeof RUN_LIFECYCLE_READY;
 ```
 
 ## RunOutcome
+
+The decoded shape of {@link RunOutcomeSchema}.
 
 ```ts
 type RunOutcome = typeof RunOutcomeSchema.Type;
@@ -2058,11 +2235,16 @@ type RunOutcome = typeof RunOutcomeSchema.Type;
 
 ## RunOutcomeSchema
 
+One of the {@link RUN_OUTCOME} values, as a run's end row and its task
+group's end record it.
+
 ```ts
 const RunOutcomeSchema: Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>
 ```
 
 ## RunPhase
+
+The decoded shape of {@link RunPhaseSchema}.
 
 ```ts
 type RunPhase = typeof RunPhaseSchema.Type;
@@ -2085,7 +2267,7 @@ type RunRecord = typeof RunRecordFieldsSchema.Type;
 Inputs have already passed launch validation; persisted records are canonical.
 
 ```ts
-const RunRecordFieldsSchema: Union<readonly [Struct<{ readonly name: String; readonly instruction: String; readonly workingDirectory: optional<String>; readonly model: optional<String>; }>, Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly agent: withDecodingDefault<String, never>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>>; readonly asCaller: optional<NullOr<Boolean>>; readonly model: withDecodingDefault<String, never>; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<NullOr<String>>; readonly displayInstruction: optional<NullOr<String>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly cli: optional<NullOr<Struct<{ readonly outputFile: optional<NullOr<String>>; readonly outputDirectory: optional<NullOr<String>>; readonly expectedOutputFiles: optional<NullOr<$Array<String>>>; readonly teamId: optional<NullOr<String>>; }>>>; readonly delegationAgentScope: optional<NullOr<$Array<Trim>>>; readonly outputSchema: optional<NullOr<$Record<String, Unknown>>>; readonly script: optional<NullOr<Union<readonly [Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"background">; }>, Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"recipe">; readonly block: String; readonly options: $Record<String, Codec<Json, Json, never, never>>; }>]>>>; }>]>
+const RunRecordFieldsSchema: Union<readonly [Struct<{ readonly name: NonEmptyString; readonly instruction: String; readonly workingDirectory: optional<String>; readonly model: optional<String>; }>, Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly agent: withDecodingDefault<String, never>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<NonEmptyString>>; }>>>; readonly asCaller: optional<NullOr<Boolean>>; readonly model: withDecodingDefault<String, never>; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<NullOr<String>>; readonly displayInstruction: optional<NullOr<String>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly cli: optional<NullOr<Struct<{ readonly outputFile: optional<NullOr<String>>; readonly outputDirectory: optional<NullOr<String>>; readonly expectedOutputFiles: optional<NullOr<$Array<String>>>; readonly teamId: optional<NullOr<String>>; }>>>; readonly delegationAgentScope: optional<NullOr<$Array<Trim>>>; readonly outputSchema: optional<NullOr<$Record<String, Unknown>>>; readonly script: optional<NullOr<Union<readonly [Struct<{ readonly code: NonEmptyString; readonly title: NonEmptyString; readonly tools: $Array<NonEmptyString>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"background">; }>, Struct<{ readonly code: NonEmptyString; readonly title: NonEmptyString; readonly tools: $Array<NonEmptyString>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"recipe">; readonly block: NonEmptyString; readonly options: $Record<String, Codec<Json, Json, never, never>>; }>]>>>; }>]>
 ```
 
 ## RunStatusKey
@@ -2097,6 +2279,9 @@ type RunStatusKey = keyof typeof RUN_STATUS_TONE_OF;
 ```
 
 ## RunStorageFileLocation
+
+A file inside a run's storage directory, named by its absolute path, its
+path relative to that directory, and the run that owns it.
 
 ```ts
 type RunStorageFileLocation =
@@ -2130,7 +2315,7 @@ Every request a surface issues to its session's runtime, one arm per
 `group.action` tag.
 
 ```ts
-const RuntimeRequestSchema: Union<readonly [Struct<{ readonly detachActiveChildren: optional<NullOr<Boolean>>; readonly reason: Literals<readonly ["user", "shutdown"]>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.stop">; }>, Struct<{ readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.delete">; }>, Struct<{ readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.compact">; }>, Struct<{ readonly title: Trim; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.rename">; }>, Struct<{ readonly at: optional<NullOr<Int>>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.fork">; }>, Struct<{ readonly model: String; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.model">; }>, Struct<{ readonly files: Union<readonly [Struct<{ readonly op: Literal<"copy">; readonly to: String; }>, Struct<{ readonly op: Literal<"remove">; }>]>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.files">; }>, Struct<{ readonly text: String; readonly displayText: optional<NullOr<String>>; readonly mediaFiles: optional<NullOr<$Array<String>>>; readonly holdUntil: optional<NullOr<Literal<"turn">>>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"followUp.send">; }>, Struct<{ readonly requestId: String; readonly decision: Union<readonly [Struct<{ readonly action: Literal<"approve">; readonly model: optional<NullOr<String>>; readonly agent: optional<NullOr<String>>; readonly instruction: optional<NullOr<String>>; readonly inputFiles: optional<NullOr<$Array<String>>>; readonly contextFiles: optional<NullOr<$Array<String>>>; readonly mediaFiles: optional<NullOr<$Array<String>>>; readonly options: optional<NullOr<$Record<String, Codec<Json, Json, never, never>>>>; readonly content: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"approve_and_goal">; readonly autoApproveAll: optional<NullOr<Literal<true>>>; }>, Struct<{ readonly action: Literal<"submit">; readonly answers: $Record<String, Union<readonly [String, $Array<String>]>>; }>, Struct<{ readonly action: Literal<"answer">; readonly answer: String; readonly sessionLinks: optional<NullOr<$Array<String>>>; }>, Struct<{ readonly action: Literal<"skip">; readonly feedback: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"retry">; readonly feedback: optional<NullOr<String>>; readonly credentials: optional<NullOr<Literals<readonly ["configured", "personal"]>>>; }>, Struct<{ readonly action: Literal<"reject">; readonly feedback: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"deny">; readonly reason: String; }>, Struct<{ readonly action: Literal<"cancel">; readonly cause: optional<NullOr<String>>; }>]>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"request.decide">; }>, Struct<{ readonly requestId: String; readonly runId: brand<String, "RunId">; readonly kind: Literal<"request.preview">; }>, Struct<{ readonly kind: Literal<"policy.set">; readonly change: Union<readonly [Struct<{ readonly bypass: Literals<readonly ["bash", "toolEdit", "superYolo"]>; readonly enabled: Boolean; readonly exceptRequestId: optional<String>; readonly runId: brand<String, "RunId">; readonly field: Literal<"bypass">; }>, Struct<{ readonly limit: Literals<readonly ["never", "ask"]>; readonly runId: brand<String, "RunId">; readonly field: Literal<"limit">; }>]>; }>]>
+const RuntimeRequestSchema: Union<readonly [Struct<{ readonly detachActiveChildren: optional<NullOr<Boolean>>; readonly reason: Literals<readonly ["user", "shutdown"]>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.stop">; }>, Struct<{ readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.delete">; }>, Struct<{ readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.compact">; }>, Struct<{ readonly title: Trim; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.rename">; }>, Struct<{ readonly at: optional<NullOr<Int>>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.fork">; }>, Struct<{ readonly model: NonEmptyString; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.model">; }>, Struct<{ readonly files: Union<readonly [Struct<{ readonly op: Literal<"copy">; readonly to: NonEmptyString; }>, Struct<{ readonly op: Literal<"remove">; }>]>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"run.files">; }>, Struct<{ readonly text: NonEmptyString; readonly displayText: optional<NullOr<String>>; readonly mediaFiles: optional<NullOr<$Array<String>>>; readonly holdUntil: optional<NullOr<Literal<"turn">>>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"followUp.send">; }>, Struct<{ readonly requestId: NonEmptyString; readonly decision: Union<readonly [Struct<{ readonly action: Literal<"approve">; readonly model: optional<NullOr<String>>; readonly agent: optional<NullOr<String>>; readonly instruction: optional<NullOr<String>>; readonly inputFiles: optional<NullOr<$Array<String>>>; readonly contextFiles: optional<NullOr<$Array<String>>>; readonly mediaFiles: optional<NullOr<$Array<String>>>; readonly options: optional<NullOr<$Record<String, Codec<Json, Json, never, never>>>>; readonly content: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"approve_and_goal">; readonly autoApproveAll: optional<NullOr<Literal<true>>>; }>, Struct<{ readonly action: Literal<"submit">; readonly answers: $Record<String, Union<readonly [String, $Array<String>]>>; }>, Struct<{ readonly action: Literal<"answer">; readonly answer: String; readonly sessionLinks: optional<NullOr<$Array<String>>>; }>, Struct<{ readonly action: Literal<"skip">; readonly feedback: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"retry">; readonly feedback: optional<NullOr<String>>; readonly credentials: optional<NullOr<Literals<readonly ["configured", "personal"]>>>; }>, Struct<{ readonly action: Literal<"reject">; readonly feedback: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"deny">; readonly reason: String; }>, Struct<{ readonly action: Literal<"cancel">; readonly cause: optional<NullOr<String>>; }>]>; readonly runId: brand<String, "RunId">; readonly kind: Literal<"request.decide">; }>, Struct<{ readonly requestId: NonEmptyString; readonly runId: brand<String, "RunId">; readonly kind: Literal<"request.preview">; }>, Struct<{ readonly kind: Literal<"policy.set">; readonly change: Union<readonly [Struct<{ readonly bypass: Literals<readonly ["bash", "toolEdit", "superYolo"]>; readonly enabled: Boolean; readonly exceptRequestId: optional<String>; readonly runId: brand<String, "RunId">; readonly field: Literal<"bypass">; }>, Struct<{ readonly limit: Literals<readonly ["never", "ask"]>; readonly runId: brand<String, "RunId">; readonly field: Literal<"limit">; }>]>; }>]>
 ```
 
 ## RunView
@@ -2138,14 +2323,7 @@ const RuntimeRequestSchema: Union<readonly [Struct<{ readonly detachActiveChildr
 One stream of the {@link SessionView}.
 
 ```ts
-type RunView = ReadonlyDeep<
-  (typeof SessionViewSchema.Type)['runs'] extends ReadonlyMap<
-    unknown,
-    infer Run
-  >
-    ? Run
-    : never
->;
+type RunView = ReadonlyDeep<FoldRunView>;
 ```
 
 ## safeParseJson
@@ -2164,6 +2342,8 @@ function safeParseJson(text: string): Result.Result<unknown, Error>
 ```
 
 ## ScriptDeliverySummary
+
+The decoded shape of {@link ScriptDeliverySummarySchema}.
 
 ```ts
 type ScriptDeliverySummary = typeof ScriptDeliverySummarySchema.Type;
@@ -2194,6 +2374,8 @@ function sessionActivity(view: ReadSessionView): SessionTitleState
 ```
 
 ## SessionEvent
+
+The decoded shape of {@link SessionEventSchema}.
 
 ```ts
 type SessionEvent = typeof SessionEventSchema.Type;
@@ -2237,7 +2419,7 @@ type SessionTitleState = 'idle' | 'running' | 'approval';
 One published level of the session's fold: an immutable value.
 
 ```ts
-type SessionView = ReadonlyDeep<typeof SessionViewSchema.Type>;
+type SessionView = ReadonlyDeep<FoldSessionView>;
 ```
 
 ## settingsCatalog
@@ -2381,6 +2563,8 @@ interface ShowAgentConfigBannerPayload {
 
 ## SkillDisplayIssue
 
+The decoded shape of {@link SkillDisplayIssueSchema}.
+
 ```ts
 type SkillDisplayIssue = typeof SkillDisplayIssueSchema.Type;
 ```
@@ -2394,6 +2578,8 @@ const SkillDisplayIssueSchema: Struct<{ readonly message: String; readonly path:
 ```
 
 ## SkillDisplayItem
+
+The decoded shape of {@link SkillDisplayItemSchema}.
 
 ```ts
 type SkillDisplayItem = typeof SkillDisplayItemSchema.Type;
@@ -2561,17 +2747,23 @@ type SurfacedSettingEntry = StateSettingEntry & {
 
 ## TaskGroup
 
+The decoded shape of {@link TaskGroupSchema}.
+
 ```ts
 type TaskGroup = typeof TaskGroupSchema.Type;
 ```
 
 ## TaskGroupStatus
 
+The decoded shape of {@link TaskGroupStatusSchema}.
+
 ```ts
 type TaskGroupStatus = typeof TaskGroupStatusSchema.Type;
 ```
 
 ## TeamOptionData
+
+The decoded shape of {@link TeamOptionDataSchema}.
 
 ```ts
 type TeamOptionData = typeof TeamOptionDataSchema.Type;
@@ -2612,6 +2804,8 @@ const toJsonValue: (value: unknown) => Json
 
 ## TokenUsageStats
 
+The decoded shape of {@link TokenUsageStatsSchema}.
+
 ```ts
 type TokenUsageStats = typeof TokenUsageStatsSchema.Type;
 ```
@@ -2628,18 +2822,17 @@ const TOOL_CALL_STATUS: { readonly IN_PROGRESS: "in_progress"; readonly COMPLETE
 
 ## TOOL_EDIT_APPROVAL_CONFIG_KEY
 
-Config keys, bounded schemas, and defaults shared by more than one reader.
-
-The settings themselves — schema, default, copy, honoring hosts, rendering
-surfaces — live as rows on the one catalog in `stateSettings.ts`. This module
-holds only what a runtime reader needs to name a key or reuse a bounded
-schema without importing the catalog.
+The setting key for whether a file-editing tool call waits for the user's
+approval before it writes; the edit approval policy reads it, and the
+approval settings tab writes it.
 
 ```ts
 const TOOL_EDIT_APPROVAL_CONFIG_KEY: "texra.toolUse.requireEditApproval"
 ```
 
 ## ToolCallStatus
+
+The decoded shape of {@link ToolCallStatusSchema}.
 
 ```ts
 type ToolCallStatus = typeof ToolCallStatusSchema.Type;
@@ -2694,11 +2887,18 @@ const ToolEditContentSchema: Struct<{ readonly originalContent: String; readonly
 
 ## ToolEditPermission
 
+The decoded shape of {@link ToolEditPermissionSchema}.
+
 ```ts
 type ToolEditPermission = typeof ToolEditPermissionSchema.Type;
 ```
 
 ## ToolEditPermissionSchema
+
+What a pending file-edit approval shows: the file (absolute and
+workspace-relative), the tool that proposed the edit, and the added and
+removed line counts of its diff. The edit approval policy opens it as a
+`request.opened` payload; the host's diff view renders it.
 
 ```ts
 const ToolEditPermissionSchema: Struct<{ readonly requestId: String; readonly allowBypass: Boolean; readonly runId: Union<readonly [brand<String, "RunId">, Literal<"">]>; readonly path: String; readonly relativePath: String; readonly sourceTool: String; readonly addedLines: Int; readonly removedLines: Int; }>
@@ -2713,6 +2913,8 @@ type ToolFact = typeof ToolFactSchema.Type;
 ```
 
 ## ToolUseLog
+
+The decoded shape of {@link ToolUseLogSchema}.
 
 ```ts
 type ToolUseLog = typeof ToolUseLogSchema.Type;
@@ -2736,7 +2938,7 @@ no owner, no parent, no checkpoint and no follow-up support, because an
 exported file has no producer, no siblings and no writable host.
 
 ```ts
-const TraceDocumentSchema: Struct<{ readonly runId: brand<String, "RunId">; readonly events: $Array<Union<readonly [Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.start">; readonly identity: Union<readonly [Struct<{ readonly kind: Literal<"agent">; readonly agent: String; readonly tool: optional<String>; }>, Struct<{ readonly kind: Literal<"process">; readonly tool: String; }>, Struct<{ readonly kind: Literal<"script">; readonly title: String; }>]>; readonly userFollowUpSupport: Enum<{ readonly UNSUPPORTED: "unsupported"; readonly NATIVE_INTERACTIVE: "nativeInteractive"; readonly TERMINAL_BACKED: "terminalBacked"; }>; readonly worktree: optional<NullOr<Struct<{ readonly workingDirectory: String; }>>>; readonly parent: NullOr<Struct<{ readonly id: brand<String, "RunId">; readonly uid: String; readonly callId: NullOr<String>; }>>; readonly provenance: NullOr<Union<readonly [Struct<{ readonly kind: Literal<"fork">; readonly from: Struct<{ readonly id: brand<String, "RunId">; readonly uid: String; }>; readonly at: Int; }>]>>; readonly parentCard: optional<NullOr<String>>; readonly approvalPolicy: optional<NullOr<Struct<{ readonly own: $Record<Literals<readonly ["bash", "toolEdit", "superYolo"]>, optionalKey<Literals<readonly ["on", "off", "parent"]>>>; readonly goal: $Array<Literals<readonly ["bash", "toolEdit", "superYolo"]>>; readonly limit: optional<Literals<readonly ["never", "ask"]>>; }>>>; readonly seq: Int; readonly commit: Int; readonly origin: NullOr<String>; readonly at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.removed">; readonly runIds: $Array<brand<String, "RunId">>; readonly seq: Int; readonly commit: Int; readonly origin: NullOr<String>; readonly at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.activate">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.config">; readonly config: Union<readonly [Struct<{ readonly name: String; readonly instruction: String; readonly workingDirectory: optional<String>; readonly model: optional<String>; }>, Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly agent: withDecodingDefault<String, never>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>>; readonly asCaller: optional<NullOr<Boolean>>; readonly model: withDecodingDefault<String, never>; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<NullOr<String>>; readonly displayInstruction: optional<NullOr<String>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly cli: optional<NullOr<Struct<{ readonly outputFile: optional<NullOr<String>>; readonly outputDirectory: optional<NullOr<String>>; readonly expectedOutputFiles: optional<NullOr<$Array<String>>>; readonly teamId: optional<NullOr<String>>; }>>>; readonly delegationAgentScope: optional<NullOr<$Array<Trim>>>; readonly outputSchema: optional<NullOr<$Record<String, Unknown>>>; readonly script: optional<NullOr<Union<readonly [Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"background">; }>, Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"recipe">; readonly block: String; readonly options: $Record<String, Codec<Json, Json, never, never>>; }>]>>>; }>]>; readonly binding: optional<NullOr<Struct<{ readonly backend: Literals<readonly ["validation", "openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope", "minimax", "glm", "meta"]>; readonly declinedRoutes: $Array<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>>; }>>>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.model">; readonly model: String; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.detach">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.end">; readonly error: optional<Union<readonly [Struct<{ readonly message: optional<String>; readonly partialText: optional<optional<String>>; readonly userRetryable: optional<Boolean>; readonly kind: Literals<readonly ["abort", "disk-full", "result-lost"]>; }>, Struct<{ readonly message: optional<String>; readonly statusCode: optional<optional<Int>>; readonly statusText: optional<optional<String>>; readonly provider: optional<optional<String>>; readonly classification: optional<optional<Struct<{ readonly kind: Union<readonly [Literal<"missing-api-key">, Literal<"context-window">, Literals<readonly ["upstream-credit", "chatgpt-subscription", "kimi-code-subscription", "glm-coding-plan", "xai-subscription"]>]>; }>>>; readonly requestId: optional<optional<String>>; readonly partialText: optional<optional<String>>; readonly userRetryable: optional<Boolean>; readonly kind: Literals<readonly ["context-window", "missing-api-key", "unexpected"]>; }>]>>; readonly outcome: Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>; readonly output: Struct<{ readonly response: withDecodingDefault<String, never>; readonly files: withDecodingDefault<$Array<String>, never>; readonly structured: optional<Codec<Json, Json, never, never>>; }>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"conversation.progress">; readonly progress: Struct<{ readonly toolCallCount: Number; }>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.fact">; readonly fact: Struct<{ readonly key: Literal<"plan">; readonly plan: NullOr<Struct<{ readonly objective: String; }>>; }>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"child.park">; readonly phase: Literals<readonly ["parked", "resumed", "paused"]>; readonly resumeId: optional<String>; readonly heldFor: optional<String>; readonly ends: optional<Literals<readonly ["completed", "failed"]>>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.description">; readonly description: String; readonly by: Literals<readonly ["model", "user"]>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly plugin: String; readonly kind: String; readonly parent: NullOr<brand<String, "RunId">>; readonly stageId: optional<String>; readonly type: Literal<"plugin.fact">; readonly value: Codec<Json, Json, never, never>; readonly version: Int; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"followup.queued">; readonly followUpId: String; readonly content: Struct<{ readonly text: String; readonly displayText: optional<NullOr<String>>; readonly mediaFiles: optional<NullOr<$Array<String>>>; readonly from: Union<readonly [Struct<{ readonly kind: Literal<"user">; }>, Struct<{ readonly kind: Literal<"run">; readonly runId: brand<String, "RunId">; readonly relation: Literals<readonly ["parent", "child", "ancestor", "descendant", "sibling", "peer"]>; }>, Struct<{ readonly kind: Literal<"notification">; readonly source: Literal<"github">; }>]>; }>; readonly holdUntil: optional<Literals<readonly ["instruction", "turn", "generation"]>>; readonly control: optional<Union<readonly [Struct<{ readonly kind: Literal<"compact">; }>, Struct<{ readonly kind: Literal<"model">; readonly model: String; }>]>>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"followup.consumed">; readonly followUpId: String; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"request.opened">; readonly requestId: String; readonly payload: Union<readonly [Struct<{ readonly kind: Literal<"toolEdit">; readonly data: Struct<{ readonly requestId: String; readonly allowBypass: Boolean; readonly runId: Union<readonly [brand<String, "RunId">, Literal<"">]>; readonly path: String; readonly relativePath: String; readonly sourceTool: String; readonly addedLines: Int; readonly removedLines: Int; }>; }>, Struct<{ readonly kind: Literal<"bash">; readonly data: Struct<{ readonly requestId: String; readonly allowBypass: Boolean; readonly runId: Union<readonly [brand<String, "RunId">, Literal<"">]>; readonly command: String; readonly cwd: optional<String>; }>; }>, Struct<{ readonly kind: Literal<"retry">; readonly data: Struct<{ readonly requestId: String; readonly runId: brand<String, "RunId">; readonly operation: String; readonly model: optional<String>; readonly errorMessage: optional<String>; readonly errorDetails: optional<Struct<{ readonly message: optional<String>; readonly statusCode: optional<optional<Int>>; readonly statusText: optional<optional<String>>; readonly provider: optional<optional<String>>; readonly classification: optional<optional<Struct<{ readonly kind: Union<readonly [Literal<"missing-api-key">, Literal<"context-window">, Literals<readonly ["upstream-credit", "chatgpt-subscription", "kimi-code-subscription", "glm-coding-plan", "xai-subscription"]>]>; }>>>; readonly requestId: optional<optional<String>>; readonly partialText: optional<optional<String>>; readonly userRetryable: optional<Boolean>; }>>; readonly credentialSwitch: optional<NullOr<Union<readonly [Struct<{ readonly kind: Literal<"decline-route">; readonly route: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>; readonly provider: Literals<readonly ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope", "minimax", "glm", "meta", "kimiCode"]>; readonly automatic: Boolean; }>, Struct<{ readonly kind: Literal<"new-key">; readonly provider: Literals<readonly ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope", "minimax", "glm", "meta", "kimiCode"]>; }>]>>>; }>; }>, Struct<{ readonly kind: Literal<"proposal">; readonly data: Struct<{ readonly agent: String; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>>; readonly model: String; readonly instruction: String; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly script: optional<NullOr<Struct<{ readonly title: NullOr<String>; readonly source: String; readonly calls: $Array<Struct<{ readonly toolName: String; readonly preview: String; }>>; }>>>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly options: optional<NullOr<$Record<String, Codec<Json, Json, never, never>>>>; readonly task: Boolean; readonly rootUserInstruction: optional<NullOr<String>>; readonly requestId: String; readonly runId: brand<String, "RunId">; }>; }>, Struct<{ readonly kind: Literal<"planApproval">; readonly data: Struct<{ readonly requestId: String; readonly runId: brand<String, "RunId">; readonly plan: Struct<{ readonly objective: String; }>; }>; }>, Struct<{ readonly kind: Literal<"externalInquiry">; readonly data: Struct<{ readonly requestId: String; readonly allowBypass: Boolean; readonly runId: Union<readonly [brand<String, "RunId">, Literal<"">]>; readonly question: String; readonly threadId: decodeTo<String, String, never, never>; readonly context: optional<NullOr<String>>; readonly suggestSearch: optional<NullOr<Boolean>>; readonly attachFiles: optional<NullOr<$Array<String>>>; readonly sessionLinks: optional<NullOr<$Array<Trim>>>; readonly transcript: optional<NullOr<$Array<Union<readonly [Struct<{ readonly kind: Literal<"open">; readonly turnIndex: Int; readonly timestamp: String; readonly question: String; readonly context: optional<NullOr<String>>; readonly suggestSearch: optional<NullOr<Boolean>>; readonly attachFiles: optional<NullOr<$Array<String>>>; }>, Struct<{ readonly kind: Literal<"answered">; readonly answer: String; readonly answeredAt: String; readonly sessionLinks: optional<NullOr<$Array<Trim>>>; readonly turnIndex: Int; readonly timestamp: String; readonly question: String; readonly context: optional<NullOr<String>>; readonly suggestSearch: optional<NullOr<Boolean>>; readonly attachFiles: optional<NullOr<$Array<String>>>; }>]>>>>; }>; }>, Struct<{ readonly kind: Literal<"userQuestion">; readonly data: Struct<{ readonly requestId: String; readonly allowBypass: Boolean; readonly runId: Union<readonly [brand<String, "RunId">, Literal<"">]>; readonly questions: $Array<Struct<{ readonly question: String; readonly header: optional<NullOr<String>>; readonly options: $Array<Struct<{ readonly label: String; readonly description: optional<NullOr<String>>; }>>; readonly multiSelect: optional<NullOr<Boolean>>; readonly allowFreeText: optional<NullOr<Boolean>>; }>>; readonly context: optional<NullOr<String>>; }>; }>]>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"request.decided">; readonly requestId: String; readonly decision: Union<readonly [Struct<{ readonly action: Literal<"approve">; readonly model: optional<NullOr<String>>; readonly agent: optional<NullOr<String>>; readonly instruction: optional<NullOr<String>>; readonly inputFiles: optional<NullOr<$Array<String>>>; readonly contextFiles: optional<NullOr<$Array<String>>>; readonly mediaFiles: optional<NullOr<$Array<String>>>; readonly options: optional<NullOr<$Record<String, Codec<Json, Json, never, never>>>>; readonly content: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"approve_and_goal">; readonly autoApproveAll: optional<NullOr<Literal<true>>>; }>, Struct<{ readonly action: Literal<"submit">; readonly answers: $Record<String, Union<readonly [String, $Array<String>]>>; }>, Struct<{ readonly action: Literal<"answer">; readonly answer: String; readonly sessionLinks: optional<NullOr<$Array<String>>>; }>, Struct<{ readonly action: Literal<"skip">; readonly feedback: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"retry">; readonly feedback: optional<NullOr<String>>; readonly credentials: optional<NullOr<Literals<readonly ["configured", "personal"]>>>; }>, Struct<{ readonly action: Literal<"reject">; readonly feedback: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"deny">; readonly reason: String; }>, Struct<{ readonly action: Literal<"cancel">; readonly cause: optional<NullOr<String>>; }>]>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"approval.policy">; readonly snapshot: Struct<{ readonly own: $Record<Literals<readonly ["bash", "toolEdit", "superYolo"]>, optionalKey<Literals<readonly ["on", "off", "parent"]>>>; readonly goal: $Array<Literals<readonly ["bash", "toolEdit", "superYolo"]>>; readonly limit: optional<Literals<readonly ["never", "ask"]>>; }>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.position">; readonly payload: Struct<{ readonly family: Literals<readonly ["toolUse"]>; readonly at: Literals<readonly ["turn.ready", "turn.begin", "turn.end", "response.ready", "results.ready", "waiting", "halted"]>; readonly turn: optional<NullOr<Int>>; readonly outcome: optional<NullOr<Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>>>; }>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"log">; readonly stageId: optional<String>; readonly level: Enum<{ readonly ERROR: "error"; readonly WARN: "warn"; readonly INFO: "info"; readonly DEBUG: "debug"; }>; readonly message: String; readonly data: optional<Codec<Json, Json, never, never>>; readonly messageType: optional<Enum<{ readonly THINKING: "thinking"; readonly SCRATCHPAD: "scratchpad"; readonly FILE_LIST: "fileList"; readonly TOOL_USE: "toolUse"; readonly WEB_SEARCH: "webSearch"; readonly MODEL_RESPONSE: "modelResponse"; readonly USER_MESSAGE: "userMessage"; readonly PROGRESS_STATUS: "progressStatus"; readonly CONTEXT_COMPACTION_ACTIVITY: "contextCompactionActivity"; readonly ERROR: "error"; readonly CONTEXT_MANAGEMENT: "contextManagement"; readonly DEFAULT: "default"; }>>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"stage.start">; readonly stageId: optional<String>; readonly id: String; readonly label: String; readonly parentId: optional<NullOr<String>>; readonly kind: optional<NullOr<Literals<readonly ["run", "session", "script"]>>>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"stage.end">; readonly stageId: optional<String>; readonly id: String; readonly status: Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"tool.start">; readonly stageId: optional<String>; readonly logId: String; readonly toolName: String; readonly input: Codec<Json, Json, never, never>; readonly phase: optional<String>; readonly attempt: optional<Int>; readonly card: optional<Struct<{ readonly title: String; readonly sections: $Array<Union<readonly [Struct<{ readonly kind: Literal<"text">; readonly label: String; readonly text: String; }>, Struct<{ readonly kind: Literal<"status">; readonly label: String; readonly status: String; }>, Struct<{ readonly kind: Literal<"identifier">; readonly label: String; readonly value: String; }>, Struct<{ readonly kind: Literal<"badges">; readonly label: String; readonly badges: $Array<String>; }>, Struct<{ readonly kind: Literal<"fileList">; readonly label: String; readonly files: $Array<Struct<{ readonly path: String; readonly note: optional<String>; }>>; }>]>>; }>>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"tool.end">; readonly stageId: optional<String>; readonly logId: String; readonly status: Enum<{ readonly IN_PROGRESS: "in_progress"; readonly COMPLETED: "completed"; readonly FAILED: "failed"; }>; readonly result: optional<Codec<Json, Json, never, never>>; readonly files: optional<$Array<Struct<{ readonly path: String; readonly ok: Boolean; readonly source: optional<String>; readonly sourceDisplay: optional<String>; readonly varName: optional<String>; readonly media: optional<Union<readonly [Struct<{ readonly kind: Literal<"image">; readonly mimeType: String; readonly sizeBytes: Int; }>, Struct<{ readonly kind: Literal<"audio">; readonly mimeType: String; readonly sizeBytes: Int; }>]>>; }>>>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"usage">; readonly stageId: optional<String>; readonly usage: Struct<{ readonly inputTokens: Int; readonly outputTokens: Int; readonly cost: Number; readonly cacheReadInputTokens: optional<Int>; readonly cacheMissInputTokens: optional<Int>; readonly cacheCreationInputTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly usagePlan: optional<String>; readonly elapsedTime: optional<Number>; readonly toolUseTokens: optional<Int>; }>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"context.state">; readonly stageId: optional<String>; readonly inputTokens: Int; readonly contextWindow: Int; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"stream.start">; readonly stageId: optional<String>; readonly id: String; readonly kind: Enum<{ readonly THINKING: "thinking"; readonly SCRATCHPAD: "scratchpad"; readonly FILE_LIST: "fileList"; readonly TOOL_USE: "toolUse"; readonly WEB_SEARCH: "webSearch"; readonly MODEL_RESPONSE: "modelResponse"; readonly USER_MESSAGE: "userMessage"; readonly PROGRESS_STATUS: "progressStatus"; readonly CONTEXT_COMPACTION_ACTIVITY: "contextCompactionActivity"; readonly ERROR: "error"; readonly CONTEXT_MANAGEMENT: "contextManagement"; readonly DEFAULT: "default"; }>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"stream.end">; readonly stageId: optional<String>; readonly id: String; readonly finalText: optional<String>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"response.finalized">; readonly stageId: optional<String>; readonly text: String; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>]>>; }>
+const TraceDocumentSchema: Struct<{ readonly runId: brand<String, "RunId">; readonly events: $Array<Union<readonly [Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.start">; readonly identity: Union<readonly [Struct<{ readonly kind: Literal<"agent">; readonly agent: NonEmptyString; readonly tool: optional<NonEmptyString>; }>, Struct<{ readonly kind: Literal<"process">; readonly tool: NonEmptyString; }>, Struct<{ readonly kind: Literal<"script">; readonly title: NonEmptyString; }>]>; readonly userFollowUpSupport: Enum<{ readonly UNSUPPORTED: "unsupported"; readonly NATIVE_INTERACTIVE: "nativeInteractive"; readonly TERMINAL_BACKED: "terminalBacked"; }>; readonly worktree: optional<NullOr<Struct<{ readonly workingDirectory: String; }>>>; readonly parent: NullOr<Struct<{ readonly id: brand<String, "RunId">; readonly uid: String; readonly callId: NullOr<NonEmptyString>; }>>; readonly provenance: NullOr<Union<readonly [Struct<{ readonly kind: Literal<"fork">; readonly from: Struct<{ readonly id: brand<String, "RunId">; readonly uid: String; }>; readonly at: Int; }>]>>; readonly parentCard: optional<NullOr<NonEmptyString>>; readonly approvalPolicy: optional<NullOr<Struct<{ readonly own: $Record<Literals<readonly ["bash", "toolEdit", "superYolo"]>, optionalKey<Literals<readonly ["on", "off", "parent"]>>>; readonly goal: $Array<Literals<readonly ["bash", "toolEdit", "superYolo"]>>; readonly limit: optional<Literals<readonly ["never", "ask"]>>; }>>>; readonly seq: Int; readonly commit: Int; readonly origin: NullOr<String>; readonly at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.removed">; readonly runIds: $Array<brand<String, "RunId">>; readonly seq: Int; readonly commit: Int; readonly origin: NullOr<String>; readonly at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.activate">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.config">; readonly config: Union<readonly [Struct<{ readonly name: NonEmptyString; readonly instruction: String; readonly workingDirectory: optional<String>; readonly model: optional<String>; }>, Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly agent: withDecodingDefault<String, never>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<NonEmptyString>>; }>>>; readonly asCaller: optional<NullOr<Boolean>>; readonly model: withDecodingDefault<String, never>; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<NullOr<String>>; readonly displayInstruction: optional<NullOr<String>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly cli: optional<NullOr<Struct<{ readonly outputFile: optional<NullOr<String>>; readonly outputDirectory: optional<NullOr<String>>; readonly expectedOutputFiles: optional<NullOr<$Array<String>>>; readonly teamId: optional<NullOr<String>>; }>>>; readonly delegationAgentScope: optional<NullOr<$Array<Trim>>>; readonly outputSchema: optional<NullOr<$Record<String, Unknown>>>; readonly script: optional<NullOr<Union<readonly [Struct<{ readonly code: NonEmptyString; readonly title: NonEmptyString; readonly tools: $Array<NonEmptyString>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"background">; }>, Struct<{ readonly code: NonEmptyString; readonly title: NonEmptyString; readonly tools: $Array<NonEmptyString>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"recipe">; readonly block: NonEmptyString; readonly options: $Record<String, Codec<Json, Json, never, never>>; }>]>>>; }>]>; readonly binding: optional<NullOr<Struct<{ readonly backend: Literals<readonly ["validation", "openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope", "minimax", "glm", "meta"]>; readonly declinedRoutes: $Array<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>>; }>>>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.model">; readonly model: NonEmptyString; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.detach">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.end">; readonly error: optional<Union<readonly [Struct<{ readonly message: optional<String>; readonly partialText: optional<optional<String>>; readonly userRetryable: optional<Boolean>; readonly kind: Literals<readonly ["abort", "disk-full", "result-lost"]>; }>, Struct<{ readonly message: optional<String>; readonly statusCode: optional<optional<Int>>; readonly statusText: optional<optional<String>>; readonly provider: optional<optional<String>>; readonly classification: optional<optional<Struct<{ readonly kind: Union<readonly [Literal<"missing-api-key">, Literal<"context-window">, Literals<readonly ["upstream-credit", "chatgpt-subscription", "kimi-code-subscription", "glm-coding-plan", "xai-subscription"]>]>; }>>>; readonly requestId: optional<optional<String>>; readonly partialText: optional<optional<String>>; readonly userRetryable: optional<Boolean>; readonly kind: Literals<readonly ["context-window", "missing-api-key", "unexpected"]>; }>]>>; readonly outcome: Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>; readonly output: Struct<{ readonly response: withDecodingDefault<String, never>; readonly files: withDecodingDefault<$Array<String>, never>; readonly structured: optional<Codec<Json, Json, never, never>>; }>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"conversation.progress">; readonly progress: Struct<{ readonly toolCallCount: Number; }>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.fact">; readonly fact: Struct<{ readonly key: Literal<"plan">; readonly plan: NullOr<Struct<{ readonly objective: NonEmptyString; }>>; }>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"child.park">; readonly phase: Literals<readonly ["parked", "resumed", "paused"]>; readonly resumeId: optional<String>; readonly heldFor: optional<NonEmptyString>; readonly ends: optional<Literals<readonly ["completed", "failed"]>>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.description">; readonly description: String; readonly by: Literals<readonly ["model", "user"]>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly plugin: NonEmptyString; readonly kind: NonEmptyString; readonly parent: NullOr<brand<String, "RunId">>; readonly stageId: optional<String>; readonly type: Literal<"plugin.fact">; readonly value: Codec<Json, Json, never, never>; readonly version: Int; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"followup.queued">; readonly followUpId: NonEmptyString; readonly content: Struct<{ readonly text: String; readonly displayText: optional<NullOr<String>>; readonly mediaFiles: optional<NullOr<$Array<String>>>; readonly from: Union<readonly [Struct<{ readonly kind: Literal<"user">; }>, Struct<{ readonly kind: Literal<"run">; readonly runId: brand<String, "RunId">; readonly relation: Literals<readonly ["parent", "child", "ancestor", "descendant", "sibling", "peer"]>; }>, Struct<{ readonly kind: Literal<"notification">; readonly source: Literal<"github">; }>]>; }>; readonly holdUntil: optional<Literals<readonly ["instruction", "turn", "generation"]>>; readonly control: optional<Union<readonly [Struct<{ readonly kind: Literal<"compact">; }>, Struct<{ readonly kind: Literal<"model">; readonly model: NonEmptyString; }>]>>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"followup.consumed">; readonly followUpId: NonEmptyString; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"request.opened">; readonly requestId: NonEmptyString; readonly payload: Union<readonly [Struct<{ readonly kind: Literal<"toolEdit">; readonly data: Struct<{ readonly requestId: String; readonly allowBypass: Boolean; readonly runId: Union<readonly [brand<String, "RunId">, Literal<"">]>; readonly path: String; readonly relativePath: String; readonly sourceTool: String; readonly addedLines: Int; readonly removedLines: Int; }>; }>, Struct<{ readonly kind: Literal<"bash">; readonly data: Struct<{ readonly requestId: String; readonly allowBypass: Boolean; readonly runId: Union<readonly [brand<String, "RunId">, Literal<"">]>; readonly command: String; readonly cwd: optional<String>; }>; }>, Struct<{ readonly kind: Literal<"retry">; readonly data: Struct<{ readonly requestId: String; readonly runId: brand<String, "RunId">; readonly operation: String; readonly model: optional<String>; readonly errorMessage: optional<String>; readonly errorDetails: optional<Struct<{ readonly message: optional<String>; readonly statusCode: optional<optional<Int>>; readonly statusText: optional<optional<String>>; readonly provider: optional<optional<String>>; readonly classification: optional<optional<Struct<{ readonly kind: Union<readonly [Literal<"missing-api-key">, Literal<"context-window">, Literals<readonly ["upstream-credit", "chatgpt-subscription", "kimi-code-subscription", "glm-coding-plan", "xai-subscription"]>]>; }>>>; readonly requestId: optional<optional<String>>; readonly partialText: optional<optional<String>>; readonly userRetryable: optional<Boolean>; }>>; readonly credentialSwitch: optional<NullOr<Union<readonly [Struct<{ readonly kind: Literal<"decline-route">; readonly route: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>; readonly provider: Literals<readonly ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope", "minimax", "glm", "meta", "kimiCode"]>; readonly automatic: Boolean; }>, Struct<{ readonly kind: Literal<"new-key">; readonly provider: Literals<readonly ["openai", "anthropic", "google", "xai", "deepseek", "moonshot", "dashscope", "minimax", "glm", "meta", "kimiCode"]>; }>]>>>; }>; }>, Struct<{ readonly kind: Literal<"proposal">; readonly data: Struct<{ readonly agent: String; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<NonEmptyString>>; }>>>; readonly model: String; readonly instruction: String; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly script: optional<NullOr<Struct<{ readonly title: NullOr<String>; readonly source: String; readonly calls: $Array<Struct<{ readonly toolName: String; readonly preview: String; }>>; }>>>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly options: optional<NullOr<$Record<String, Codec<Json, Json, never, never>>>>; readonly task: Boolean; readonly rootUserInstruction: optional<NullOr<String>>; readonly requestId: String; readonly runId: brand<String, "RunId">; }>; }>, Struct<{ readonly kind: Literal<"planApproval">; readonly data: Struct<{ readonly requestId: String; readonly runId: brand<String, "RunId">; readonly plan: Struct<{ readonly objective: NonEmptyString; }>; }>; }>, Struct<{ readonly kind: Literal<"externalInquiry">; readonly data: Struct<{ readonly requestId: String; readonly allowBypass: Boolean; readonly runId: Union<readonly [brand<String, "RunId">, Literal<"">]>; readonly question: String; readonly threadId: decodeTo<String, String, never, never>; readonly context: optional<NullOr<String>>; readonly suggestSearch: optional<NullOr<Boolean>>; readonly attachFiles: optional<NullOr<$Array<String>>>; readonly sessionLinks: optional<NullOr<$Array<Trim>>>; readonly transcript: optional<NullOr<$Array<Union<readonly [Struct<{ readonly kind: Literal<"open">; readonly turnIndex: Int; readonly timestamp: NonEmptyString; readonly question: String; readonly context: optional<NullOr<String>>; readonly suggestSearch: optional<NullOr<Boolean>>; readonly attachFiles: optional<NullOr<$Array<String>>>; }>, Struct<{ readonly kind: Literal<"answered">; readonly answer: String; readonly answeredAt: NonEmptyString; readonly sessionLinks: optional<NullOr<$Array<Trim>>>; readonly turnIndex: Int; readonly timestamp: NonEmptyString; readonly question: String; readonly context: optional<NullOr<String>>; readonly suggestSearch: optional<NullOr<Boolean>>; readonly attachFiles: optional<NullOr<$Array<String>>>; }>]>>>>; }>; }>, Struct<{ readonly kind: Literal<"userQuestion">; readonly data: Struct<{ readonly requestId: String; readonly allowBypass: Boolean; readonly runId: Union<readonly [brand<String, "RunId">, Literal<"">]>; readonly questions: $Array<Struct<{ readonly question: NonEmptyString; readonly header: optional<NullOr<String>>; readonly options: $Array<Struct<{ readonly label: NonEmptyString; readonly description: optional<NullOr<String>>; }>>; readonly multiSelect: optional<NullOr<Boolean>>; readonly allowFreeText: optional<NullOr<Boolean>>; }>>; readonly context: optional<NullOr<String>>; }>; }>]>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"request.decided">; readonly requestId: NonEmptyString; readonly decision: Union<readonly [Struct<{ readonly action: Literal<"approve">; readonly model: optional<NullOr<String>>; readonly agent: optional<NullOr<String>>; readonly instruction: optional<NullOr<String>>; readonly inputFiles: optional<NullOr<$Array<String>>>; readonly contextFiles: optional<NullOr<$Array<String>>>; readonly mediaFiles: optional<NullOr<$Array<String>>>; readonly options: optional<NullOr<$Record<String, Codec<Json, Json, never, never>>>>; readonly content: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"approve_and_goal">; readonly autoApproveAll: optional<NullOr<Literal<true>>>; }>, Struct<{ readonly action: Literal<"submit">; readonly answers: $Record<String, Union<readonly [String, $Array<String>]>>; }>, Struct<{ readonly action: Literal<"answer">; readonly answer: String; readonly sessionLinks: optional<NullOr<$Array<String>>>; }>, Struct<{ readonly action: Literal<"skip">; readonly feedback: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"retry">; readonly feedback: optional<NullOr<String>>; readonly credentials: optional<NullOr<Literals<readonly ["configured", "personal"]>>>; }>, Struct<{ readonly action: Literal<"reject">; readonly feedback: optional<NullOr<String>>; }>, Struct<{ readonly action: Literal<"deny">; readonly reason: String; }>, Struct<{ readonly action: Literal<"cancel">; readonly cause: optional<NullOr<String>>; }>]>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"approval.policy">; readonly snapshot: Struct<{ readonly own: $Record<Literals<readonly ["bash", "toolEdit", "superYolo"]>, optionalKey<Literals<readonly ["on", "off", "parent"]>>>; readonly goal: $Array<Literals<readonly ["bash", "toolEdit", "superYolo"]>>; readonly limit: optional<Literals<readonly ["never", "ask"]>>; }>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly aggregateId: brand<String, "AggregateId">; readonly stageId: optional<String>; readonly type: Literal<"run.position">; readonly payload: Struct<{ readonly family: Literals<readonly ["toolUse"]>; readonly at: Literals<readonly ["turn.ready", "turn.begin", "turn.end", "response.ready", "results.ready", "waiting", "halted"]>; readonly turn: optional<NullOr<Int>>; readonly outcome: optional<NullOr<Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>>>; }>; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"log">; readonly stageId: optional<String>; readonly level: Enum<{ readonly ERROR: "error"; readonly WARN: "warn"; readonly INFO: "info"; readonly DEBUG: "debug"; }>; readonly message: String; readonly data: optional<Codec<Json, Json, never, never>>; readonly messageType: optional<Enum<{ readonly THINKING: "thinking"; readonly SCRATCHPAD: "scratchpad"; readonly FILE_LIST: "fileList"; readonly TOOL_USE: "toolUse"; readonly WEB_SEARCH: "webSearch"; readonly MODEL_RESPONSE: "modelResponse"; readonly USER_MESSAGE: "userMessage"; readonly PROGRESS_STATUS: "progressStatus"; readonly CONTEXT_COMPACTION_ACTIVITY: "contextCompactionActivity"; readonly ERROR: "error"; readonly CONTEXT_MANAGEMENT: "contextManagement"; readonly DEFAULT: "default"; }>>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"stage.start">; readonly stageId: optional<String>; readonly id: String; readonly label: String; readonly parentId: optional<NullOr<String>>; readonly kind: optional<NullOr<Literals<readonly ["run", "session", "script"]>>>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"stage.end">; readonly stageId: optional<String>; readonly id: String; readonly status: Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"tool.start">; readonly stageId: optional<String>; readonly logId: String; readonly toolName: String; readonly input: Codec<Json, Json, never, never>; readonly phase: optional<String>; readonly attempt: optional<Int>; readonly card: optional<Struct<{ readonly title: String; readonly sections: $Array<Union<readonly [Struct<{ readonly kind: Literal<"text">; readonly label: String; readonly text: String; }>, Struct<{ readonly kind: Literal<"status">; readonly label: String; readonly status: String; }>, Struct<{ readonly kind: Literal<"identifier">; readonly label: String; readonly value: String; }>, Struct<{ readonly kind: Literal<"badges">; readonly label: String; readonly badges: $Array<String>; }>, Struct<{ readonly kind: Literal<"fileList">; readonly label: String; readonly files: $Array<Struct<{ readonly path: String; readonly note: optional<String>; }>>; }>]>>; }>>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"tool.end">; readonly stageId: optional<String>; readonly logId: String; readonly status: Enum<{ readonly IN_PROGRESS: "in_progress"; readonly COMPLETED: "completed"; readonly FAILED: "failed"; }>; readonly result: optional<Codec<Json, Json, never, never>>; readonly files: optional<$Array<Struct<{ readonly path: String; readonly ok: Boolean; readonly source: optional<String>; readonly sourceDisplay: optional<String>; readonly varName: optional<String>; readonly media: optional<Union<readonly [Struct<{ readonly kind: Literal<"image">; readonly mimeType: NonEmptyString; readonly sizeBytes: Int; }>, Struct<{ readonly kind: Literal<"audio">; readonly mimeType: NonEmptyString; readonly sizeBytes: Int; }>]>>; }>>>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"usage">; readonly stageId: optional<String>; readonly usage: Struct<{ readonly inputTokens: Int; readonly outputTokens: Int; readonly cost: Number; readonly cacheReadInputTokens: optional<Int>; readonly cacheMissInputTokens: optional<Int>; readonly cacheCreationInputTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly usagePlan: optional<String>; readonly elapsedTime: optional<Number>; readonly toolUseTokens: optional<Int>; }>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"context.state">; readonly stageId: optional<String>; readonly inputTokens: Int; readonly contextWindow: Int; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"stream.start">; readonly stageId: optional<String>; readonly id: String; readonly kind: Enum<{ readonly THINKING: "thinking"; readonly SCRATCHPAD: "scratchpad"; readonly FILE_LIST: "fileList"; readonly TOOL_USE: "toolUse"; readonly WEB_SEARCH: "webSearch"; readonly MODEL_RESPONSE: "modelResponse"; readonly USER_MESSAGE: "userMessage"; readonly PROGRESS_STATUS: "progressStatus"; readonly CONTEXT_COMPACTION_ACTIVITY: "contextCompactionActivity"; readonly ERROR: "error"; readonly CONTEXT_MANAGEMENT: "contextManagement"; readonly DEFAULT: "default"; }>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"stream.end">; readonly stageId: optional<String>; readonly id: String; readonly finalText: optional<String>; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>, Struct<{ readonly type: Literal<"response.finalized">; readonly stageId: optional<String>; readonly text: String; readonly aggregateId: brand<String, "AggregateId">; seq: Int; commit: Int; origin: NullOr<String>; at: Int; }>]>>; }>
 ```
 
 ## TraceFactArm
@@ -2807,11 +3009,15 @@ type UsageRoute = typeof UsageRouteSchema.Type;
 
 ## UserFollowUpSupport
 
+The decoded shape of {@link UserFollowUpSupportSchema}.
+
 ```ts
 type UserFollowUpSupport = typeof UserFollowUpSupportSchema.Type;
 ```
 
 ## UserQuestionAnswers
+
+The decoded shape of {@link UserQuestionAnswersSchema}.
 
 ```ts
 type UserQuestionAnswers = typeof UserQuestionAnswersSchema.Type;
@@ -2819,11 +3025,17 @@ type UserQuestionAnswers = typeof UserQuestionAnswersSchema.Type;
 
 ## UserQuestionAnswersSchema
 
+The user's answers to a question request, keyed by question text: one chosen
+label or free-text answer, or the chosen labels of a multi-select question.
+A `submit` decision carries them back to the tool.
+
 ```ts
 const UserQuestionAnswersSchema: $Record<String, Union<readonly [String, $Array<String>]>>
 ```
 
 ## UserQuestionPermission
+
+The decoded shape of {@link UserQuestionPermissionSchema}.
 
 ```ts
 type UserQuestionPermission =
@@ -2832,17 +3044,26 @@ type UserQuestionPermission =
 
 ## UserQuestionPrompt
 
+The decoded shape of {@link UserQuestionPromptSchema}.
+
 ```ts
 type UserQuestionPrompt = typeof UserQuestionPromptSchema.Type;
 ```
 
 ## UserQuestionPromptSchema
 
+One question the agent asks the user: its text, a short header, two to four
+options with descriptions, and whether several options or free text may be
+chosen. The user-question tool's input and the question panel share it.
+
 ```ts
-const UserQuestionPromptSchema: Struct<{ readonly question: String; readonly header: optional<NullOr<String>>; readonly options: $Array<Struct<{ readonly label: String; readonly description: optional<NullOr<String>>; }>>; readonly multiSelect: optional<NullOr<Boolean>>; readonly allowFreeText: optional<NullOr<Boolean>>; }>
+const UserQuestionPromptSchema: Struct<{ readonly question: NonEmptyString; readonly header: optional<NullOr<String>>; readonly options: $Array<Struct<{ readonly label: NonEmptyString; readonly description: optional<NullOr<String>>; }>>; readonly multiSelect: optional<NullOr<Boolean>>; readonly allowFreeText: optional<NullOr<Boolean>>; }>
 ```
 
 ## WorkspaceAgentsSelection
+
+The decoded shape of {@link WorkspaceAgentsSelectionSchema}: the
+`texra.workspaceAgents` workspace state.
 
 ```ts
 type WorkspaceAgentsSelection =
@@ -2850,6 +3071,9 @@ type WorkspaceAgentsSelection =
 ```
 
 ## WorkspaceFileLocation
+
+A file inside the workspace, named by its absolute path and its path
+relative to the workspace root.
 
 ```ts
 type WorkspaceFileLocation = typeof WorkspaceFileLocationSchema.Type;
@@ -2893,6 +3117,8 @@ enum WorkspaceStateKey {
 ```
 
 ## WorktreeInfo
+
+The decoded shape of {@link WorktreeInfoSchema}.
 
 ```ts
 type WorktreeInfo = typeof WorktreeInfoSchema.Type;

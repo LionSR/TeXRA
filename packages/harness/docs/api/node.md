@@ -38,7 +38,8 @@ the effect itself, so this port's members compose into any caller's program.
 
 ```ts
 interface ConfigStore {
-  get<T>(key: string): T | undefined;
+  /** The stored value, unchecked; `undefined` when the key is absent. */
+  get(key: string): unknown;
   set(key: string, value: unknown): Effect.Effect<void, Error>;
 }
 ```
@@ -103,6 +104,11 @@ const envFlag: (name: string, env?: Readonly<Record<string, string | undefined>>
 ```
 
 ## ExecResult
+
+What running a shell command produced: whether it succeeded, its output
+streams, its exit code and whether it timed out or overran the output limit.
+`executeCommand` in `@utils/system/execUtils` returns it, and the bash tool
+formats it for the model.
 
 ```ts
 type ExecResult = typeof ExecResultSchema.Type;
@@ -281,6 +287,8 @@ function initializeNodeRuntimeSkills(
 
 ## INPUT_HISTORY_LIMIT
 
+How many input history rows a root keeps; an append drops the oldest.
+
 ```ts
 const INPUT_HISTORY_LIMIT: 1000
 ```
@@ -298,6 +306,9 @@ class JsonConfigProvider implements ConfigProvider
 ```
 
 ## JsonConfigProviderOptions
+
+The three stores a {@link JsonConfigProvider} layers, one per
+{@link ConfigTarget}, and the catalog their keys resolve against.
 
 ```ts
 interface JsonConfigProviderOptions {
@@ -433,6 +444,10 @@ interface NodePlatformOptions {
 
 ## nodePlatformServices
 
+The Node filesystem, path and supervised child-process spawner, as one
+layer; `processLayer` serves it to every root, and a caller outside a
+runtime provides it per call.
+
 ```ts
 const nodePlatformServices: Layer.Layer<
   FileSystem.FileSystem | Path.Path | ChildProcessSpawner
@@ -440,6 +455,10 @@ const nodePlatformServices: Layer.Layer<
 ```
 
 ## NodeRuntimeSkillOptions
+
+What {@link initializeNodeRuntimeSkills} needs from its host: the
+packaged resources root the bundled skills ship under, and the CLI's
+optional extra skill sources.
 
 ```ts
 interface NodeRuntimeSkillOptions {

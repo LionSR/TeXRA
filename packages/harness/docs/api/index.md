@@ -146,6 +146,9 @@ class AgentCustomizeRefused extends Schema.TaggedError<AgentCustomizeRefused>()(
 
 ## AgentDelegationScope
 
+The decoded shape of {@link AgentDelegationScopeSchema}: the agent keys a
+run's delegation tools may launch, as its config carries them.
+
 ```ts
 type AgentDelegationScope = typeof AgentDelegationScopeSchema.Type;
 ```
@@ -230,6 +233,10 @@ interface AgentDirectoriesPort {
 ```
 
 ## AgentDirectoryService
+
+A host's agent directories: the bundled `builtIn` directory under its
+packaged resources, and the custom directory the user configured or the
+default one under global storage.
 
 ```ts
 class AgentDirectoryService
@@ -425,6 +432,9 @@ interface AgentRunListingEntry {
 ```
 
 ## AgentRuntimeEmitOptions
+
+How a presentation event is delivered when no host is attached, or when
+the host fails to present it.
 
 ```ts
 interface AgentRuntimeEmitOptions {
@@ -724,6 +734,9 @@ class ConfigWriteFailed extends Schema.TaggedError<ConfigWriteFailed>()(
 
 ## ConversationFormatOptions
 
+How a conversation's export nodes render as text: truncation limits and
+which markers appear.
+
 ```ts
 interface ConversationFormatOptions {
   /** Truncate user/assistant text at this many chars. Omit for no limit. */
@@ -768,11 +781,8 @@ function createWorkspaceLocation(
 
 ## CurrentValues
 
-A root's current values (`current_value`): one row per family and key,
-replaced in place, outside the event history, so an event-format bump
-leaves them. Every write is one `BEGIN IMMEDIATE` with no aggregate claim;
-a value decodes with its family's schema where it is read, and a row that
-no longer decodes fails that read.
+A root's current values, read and written by family and key. Every write
+is one `BEGIN IMMEDIATE` with no aggregate claim.
 
 ```ts
 interface CurrentValues {
@@ -984,6 +994,8 @@ type EventsRead = Effect.Effect<
 
 ## ExportNode
 
+One node of a run's conversation as an export reads it.
+
 ```ts
 type ExportNode = typeof ExportNodeSchema.Type;
 ```
@@ -1079,7 +1091,9 @@ The one resolution of the chain: every surface that shows or uses the
 helper model reads it here, from the setting slots the caller holds.
 
 ```ts
-function getHelperModelName(stores: SettingsStores)
+function getHelperModelName(
+  stores: SettingsStores,
+): Effect.Effect<string, StateReadFailed>
 ```
 
 ## getPathSegments
@@ -1302,6 +1316,8 @@ interface HostRequestFailure extends Error {
 
 ## InstalledPlugin
 
+The decoded shape of {@link InstalledPluginSchema}.
+
 ```ts
 type InstalledPlugin = typeof InstalledPluginSchema.Type;
 ```
@@ -1331,6 +1347,8 @@ class Internal extends Schema.TaggedError<Internal>()('Internal', {
 ```
 
 ## InvalidAgentTeamError
+
+An unknown team id, or one that cannot be the user default.
 
 ```ts
 class InvalidAgentTeamError extends Schema.TaggedError<InvalidAgentTeamError>()(
@@ -2074,6 +2092,8 @@ class PluginsRefused extends Schema.TaggedError<PluginsRefused>()(
 
 ## PluginTrust
 
+The decoded shape of the trust record kept on an {@link InstalledPlugin}.
+
 ```ts
 type PluginTrust = typeof PluginTrustSchema.Type;
 ```
@@ -2110,6 +2130,10 @@ type PresentationEventHandlers<
 ```
 
 ## presentFollowUpResult
+
+What a host or tool tells the sender about a submitted follow-up: a
+warning for a refusal, a note when it was queued but the run could not be
+resumed, and nothing otherwise.
 
 ```ts
 function presentFollowUpResult(
@@ -2621,6 +2645,8 @@ interface RunDeletion {
 
 ## RunEnd
 
+The decoded shape of {@link RunEndSchema}.
+
 ```ts
 type RunEnd = typeof RunEndSchema.Type;
 ```
@@ -2638,6 +2664,8 @@ class RunFailure extends Schema.TaggedError<RunFailure>()('RunFailure', {
 ```
 
 ## RunGeneratedFile
+
+A file or directory a run wrote into its storage directory.
 
 ```ts
 interface RunGeneratedFile {
@@ -2774,6 +2802,8 @@ type RunStopReason = typeof RunStopReasonSchema.Type;
 ```
 
 ## RuntimePresentationEvent
+
+The name of a presentation event the runtime asks a host to show.
 
 ```ts
 type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
@@ -2939,6 +2969,10 @@ const SESSION_CLOSE_DEADLINE_MS: 5000
 ```
 
 ## SessionCloseReport
+
+The decoded shape of the close report: `settled` when every live execution
+ended inside the close budget, otherwise the run ids still live in
+`abandoned`.
 
 ```ts
 type SessionCloseReport = typeof SessionCloseReportSchema.Type;
@@ -3499,6 +3533,8 @@ interface TeamRunPlan<T extends TeamCatalogAgent = TeamCatalogAgent> {
 
 ## ToolAvailability
 
+The process service holding each workspace's dependency probe results.
+
 ```ts
 class ToolAvailability extends Context.Service<
   ToolAvailability,
@@ -3796,6 +3832,8 @@ type ToolProbeServices =
 
 ## ToolResult
 
+The decoded shape of {@link ToolResultSchema}.
+
 ```ts
 type ToolResult = typeof ToolResultSchema.Type;
 ```
@@ -4026,6 +4064,9 @@ function withSessionFs<A, E, R>(
 
 ## WorkspaceAgentsController
 
+One workspace's agent selection: what it runs, read from workspace state
+and the agent catalog, and every write that changes it.
+
 ```ts
 class WorkspaceAgentsController<
   Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
@@ -4033,6 +4074,8 @@ class WorkspaceAgentsController<
 ```
 
 ## WorkspaceAgentsControllerDeps
+
+The stores and agent catalog one workspace's controller reads.
 
 ```ts
 interface WorkspaceAgentsControllerDeps<
@@ -4055,6 +4098,8 @@ interface WorkspaceAgentsControllerDeps<
 ```
 
 ## WorkspaceAgentsEntry
+
+What the controller reads of a catalog entry: its name and source.
 
 ```ts
 interface WorkspaceAgentsEntry {
