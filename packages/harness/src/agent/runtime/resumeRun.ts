@@ -55,9 +55,9 @@ export type ResumeRunResult =
       readonly started: true;
       readonly delivered: boolean;
       readonly outcome?: RunEndResult['outcome'] | typeof RUN_PHASE.WAITING;
-      /** A root's lifetime past its idle acknowledgement, ending with its
-       *  result; children have none. */
-      readonly completion?: ResumeRunCompletion;
+      /** The run's lifetime past its idle acknowledgement, ending with its
+       *  result. */
+      readonly completion: ResumeRunCompletion;
     }
   | { readonly failed: ResumeRefusal };
 
@@ -145,7 +145,12 @@ export const resumeOwnRun = Effect.fn('resumeOwnRun')(function* (
     Effect.gen(function* () {
       const heldBy = yield* holdClaim(session, runId);
       if (heldBy !== null) return { failed: 'owned_elsewhere' } as const;
-      yield* hook(runId);
+      // Joined at the activation the resume committed: the latest.
+      const id = qualifyAggregateId('run', runId);
+      const activation = (yield* session.log.rows(id, ['run.activate'])).at(-1);
+      if (activation === undefined)
+        return yield* Effect.die(new Error(`Run ${runId} has no activation.`));
+      yield* hook(runId, activation.commit);
       return result;
     }),
   );
@@ -212,10 +217,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
     blocker === null ? null : { reason: blocker, retry: true },
   );
   if (blocker !== null) return { failed: 'blocked' };
-  if (options.onAdmitted) {
-    yield* options.onAdmitted(runId);
-    if (cancelled()) return REFUSED;
-  }
+  // The launched run is admitted once its `run.activate` commits.
   return yield* resumeQueuedToolUse(
     session,
     { runId, agentConfig: config },
@@ -276,7 +278,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   // entry is a run whose fiber has not settled yet.
   if ((yield* Runs).get(resume.runId)?.live === true) return REFUSED;
 
-  let rootCompletion: ResumeRunCompletion | undefined;
   const admitted = new Set<string>();
   const isAdmitted = (input: { readonly followUpId: string }): boolean =>
     admitted.has(input.followUpId);
@@ -303,20 +304,22 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       const launchOptions = {
         session: options.session,
         isCancellationRequested: options.isCancellationRequested,
+        onAdmitted: options.onAdmitted,
         onRun: options.onRun,
         stopAfterCycle: options.stopAfterCycle,
         tools: options.tools,
       };
       const parentRunId = yield* persistedParentRunId(session, runId);
-      let completion: Fiber.Fiber<RunEndResult | undefined, Error>;
+      let launched: Fiber.Fiber<RunEndResult | undefined, Error>;
+      let completion: ResumeRunCompletion;
       if (parentRunId === undefined) {
         const root = yield* registryOf(session.runs).start(
           runId,
           resumeToolUseFromResumeData(resume, { ...launchOptions, onIdle }),
           (admitted) => admitted,
         );
-        rootCompletion = Fiber.join(root);
-        completion = root;
+        completion = Fiber.join(root);
+        launched = root;
       } else {
         const native = {
           ...launchOptions,
@@ -327,7 +330,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           resume: { identity: resume, options: { ...launchOptions, onIdle } },
         };
         const { script } = resume.agentConfig;
-        ({ fiber: completion } = yield* startChildRunLoop({
+        const { fiber } = yield* startChildRunLoop({
           session,
           runId,
           parentRunId,
@@ -336,14 +339,25 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
             script?.kind === 'background'
               ? createScriptRunStrategy({ ...native, title: script.title })
               : createNativeSubagentStrategy(native),
-        }));
+        });
+        // A child's turn is its result; one that ended with none, its
+        // `run.end`'s.
+        completion = Fiber.join(fiber).pipe(
+          Effect.flatMap((turn) =>
+            turn === undefined
+              ? childEnd(session, runId)
+              : Effect.succeed(turn),
+          ),
+        );
+        launched = fiber;
       }
       // Interrupting either observation below cannot interrupt the
       // launched run's lifetime.
-      return yield* Effect.raceFirst(
+      const settled = yield* Effect.raceFirst(
         idle.pipe(Effect.as(RUN_PHASE.WAITING), Effect.interruptible),
-        Fiber.join(completion).pipe(Effect.interruptible),
+        Fiber.join(launched).pipe(Effect.interruptible),
       );
+      return { settled, completion };
     }),
   );
   if (Result.isFailure(resumed)) {
@@ -351,13 +365,29 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     if (refusal) return refusal;
     return yield* Effect.fail(resumed.failure);
   }
-  const settled = resumed.success;
+  const { settled, completion } = resumed.success;
   const waiting = settled === RUN_PHASE.WAITING;
   const undelivered = !waiting && (yield* queuedInput).some(isAdmitted);
   return {
     started: true,
     delivered: !undelivered,
     outcome: waiting ? settled : settled?.outcome,
-    ...(rootCompletion && { completion: rootCompletion }),
+    completion,
   };
+});
+
+/** A resumed child whose loop ended with no turn (a stop, a turn that
+ *  threw): its result is what its `run.end` row recorded. */
+const childEnd = Effect.fn('resumeRun.childEnd')(function* (
+  session: SessionHandle,
+  runId: RunId,
+): Effect.fn.Return<RunEndResult, Error> {
+  const end = yield* getRunRecords(session, runId).readRunEnd();
+  if (end === null)
+    return yield* Effect.fail(new Error(`Run ${runId} ended with no run.end.`));
+  const { error, ...recorded } = end;
+  if (error === undefined) return { ...recorded, runId };
+  const { message = `Run ${runId} ${end.outcome}.`, userRetryable = false } =
+    error;
+  return { ...recorded, runId, error: { message, userRetryable } };
 });

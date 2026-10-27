@@ -8,6 +8,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
+  type CommitOrdinal,
   isTaskConfig,
   RunIdSchema,
   type RunId,
@@ -204,12 +205,13 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    *  born with its opening or not at all. */
   readonly registration: RegisterRunOptions;
   /**
-   * The one admission hook, once per caller, with the run admitted. A fresh
-   * launch runs it as its opening commits, which it holds: keep it short (a
-   * failure warns; the run goes on). A resume, or a joiner once the resume
-   * has the run, runs it under the claim; a failure aborts that one.
+   * The one admission hook, once per caller, with the run admitted and the
+   * commit of the batch that opened this activation (a fresh run's opening,
+   * a resume's `run.activate`). The run runs it as that batch commits,
+   * which it holds: keep it short. A joiner of a resume runs it once the
+   * resume has the run, under the claim.
    */
-  onAdmitted?: (runId: RunId) => Effect.Effect<void, Error>;
+  onAdmitted?: (runId: RunId, commit: CommitOrdinal) => Effect.Effect<void>;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
 }
@@ -232,14 +234,9 @@ export function executeAgent(
       definition,
       runId,
       registration: options.registration,
-      onAdmitted: (resolved) =>
+      onAdmitted: ({ commit }) =>
         Deferred.succeed(opened, undefined).pipe(
-          Effect.andThen(options.onAdmitted?.(resolved) ?? Effect.void),
-          Effect.catch((error) =>
-            Effect.logWarning(`Run ${resolved}'s admission failed`).pipe(
-              Effect.annotateLogs({ data: error }),
-            ),
-          ),
+          Effect.andThen(options.onAdmitted?.(runId, commit) ?? Effect.void),
         ),
       session: options.session,
       toolPolicy: { stopAfterCycle: options.stopAfterCycle },
@@ -365,6 +362,8 @@ export function resumeToolUseFromResumeData(
     const ctx = yield* buildAgentLaunchContext({
       definition,
       runId: identity.runId,
+      onAdmitted: ({ commit }) =>
+        options.onAdmitted?.(identity.runId, commit) ?? Effect.void,
       session: runSession,
       toolPolicy: { stopAfterCycle },
     });

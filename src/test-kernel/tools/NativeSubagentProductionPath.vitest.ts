@@ -702,6 +702,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           started: true,
           delivered: true,
           outcome: RUN_PHASE.WAITING,
+          completion: expect.anything(),
         });
         const recoveredHandle = session.runs.get(runId)?.handle;
         expect(recoveredHandle).toBeDefined();
@@ -738,6 +739,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           started: true,
           delivered: true,
           outcome: RUN_PHASE.WAITING,
+          completion: expect.anything(),
         });
         expect(session.runs.get(runId)?.handle).toBeDefined();
         yield* session.view.changes.pipe(
@@ -756,16 +758,21 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         parentTurns.push({ text: 'Parent received failed recovery.' });
         yield* queueRecovery(runId, 'Keep this unconsumed input.');
-        expect(
-          yield* withProcessServices(
-            testRuntime(),
-            resumeRun(runId, { session }),
-          ),
-        ).toEqual({
+        const failedRecovery = yield* withProcessServices(
+          testRuntime(),
+          resumeRun(runId, { session }),
+        );
+        expect(failedRecovery).toEqual({
           started: true,
           delivered: false,
           outcome: RUN_OUTCOME.FAILED,
+          completion: expect.anything(),
         });
+        // A resumed child's lifetime ends with its own result, as a root's.
+        if (!('started' in failedRecovery)) throw new Error('resume refused');
+        expect((yield* failedRecovery.completion).outcome).toBe(
+          RUN_OUTCOME.FAILED,
+        );
         yield* waitForParentTurns(5);
       }),
     60_000,

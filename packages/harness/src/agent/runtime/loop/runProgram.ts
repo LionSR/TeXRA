@@ -88,9 +88,12 @@ export const openRun = Effect.fn('runProgram.openRun')(function* (
         : { registration: Effect.sync(() => birthRows(run)) },
     )
     .pipe(
-      // A resume enters once its activation settled (a fresh run, with its
-      // opening batch); a stop lands before both or after both.
-      Effect.tap(() => (resume ? run.entry.entered : Effect.void)),
+      // A resume enters once its activation settled, with the state it
+      // opened on (a fresh run, with its opening batch); a stop lands before
+      // both or after both.
+      Effect.tap((cell) =>
+        resume ? run.entry.entered(cell.opened) : Effect.void,
+      ),
       Effect.uninterruptible,
     );
   if (!resume && (yield* cell.current).phase !== null)
