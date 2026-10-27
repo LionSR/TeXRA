@@ -166,11 +166,17 @@ export class SessionBridge {
   readonly key: string;
   private readonly ports = new Map<string, PortEntry>();
 
+  private readonly options: SessionBridgeOptions;
+  private readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>;
+  private readonly scope: Scope.Scope;
   private constructor(
-    private readonly options: SessionBridgeOptions,
-    private readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>,
-    private readonly scope: Scope.Scope,
+    options: SessionBridgeOptions,
+    host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>,
+    scope: Scope.Scope,
   ) {
+    this.options = options;
+    this.host = host;
+    this.scope = scope;
     this.key = options.session.roots.storage;
   }
 

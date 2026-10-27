@@ -197,6 +197,8 @@ export class PRPollingSource extends PollingSourceBase<
 > {
   private nextAnnotationDrainKey: string | undefined;
 
+  private readonly claimAnnotation: Effect.Effect<void, RateLimiterError>;
+
   /**
    * `claimAnnotation` takes one unit of the annotation-page budget shared by
    * every PR this source polls; the process layer builds the source, so the
@@ -204,7 +206,7 @@ export class PRPollingSource extends PollingSourceBase<
    */
   constructor(
     lifetime: PollingLifetime | undefined,
-    private readonly claimAnnotation: Effect.Effect<void, RateLimiterError>,
+    claimAnnotation: Effect.Effect<void, RateLimiterError>,
   ) {
     super(
       {
@@ -215,6 +217,7 @@ export class PRPollingSource extends PollingSourceBase<
       },
       lifetime,
     );
+    this.claimAnnotation = claimAnnotation;
   }
 
   subscribe(

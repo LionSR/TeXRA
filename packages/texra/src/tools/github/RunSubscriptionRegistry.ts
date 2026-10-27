@@ -67,7 +67,9 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   /** The polling source this registry binds runs to. */
   readonly source: PollingSourceLike<K, Input>;
 
-  constructor(private readonly opts: RunSubscriptionRegistryOptions<K, Input>) {
+  private readonly opts: RunSubscriptionRegistryOptions<K, Input>;
+  constructor(opts: RunSubscriptionRegistryOptions<K, Input>) {
+    this.opts = opts;
     this.source = opts.source;
     // Source-key changes are internal bookkeeping. The registry emits the UI
     // signal only after its binding map has reached the corresponding state.

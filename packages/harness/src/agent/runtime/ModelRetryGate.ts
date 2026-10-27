@@ -98,7 +98,10 @@ export class ModelRetryGate {
   private readonly routes = new Map<string, RouteState>();
   private closed = false;
 
-  private constructor(private readonly scope: Scope.Scope) {}
+  private readonly scope: Scope.Scope;
+  private constructor(scope: Scope.Scope) {
+    this.scope = scope;
+  }
 
   /**
    * Run `attempt` gated on every route in `routes`, narrowest first (see

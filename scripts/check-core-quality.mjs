@@ -251,7 +251,6 @@ function printReport(files, byRule, moduleDepths) {
     'entry-externals',
     'wide-records',
     'core-module-mocks',
-    'non-erasable-syntax',
     'ranged-dependencies',
     'durable-invariants',
     'decision-codes',

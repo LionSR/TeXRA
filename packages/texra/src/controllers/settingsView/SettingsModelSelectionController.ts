@@ -60,7 +60,10 @@ interface SettingsModelSelectionData {
 const MODEL_SELECTION_SOURCES = new Set<string>(MODEL_SOURCE_ORDER);
 
 export class SettingsModelSelectionController<R = never> {
-  constructor(private readonly deps: SettingsModelSelectionControllerDeps<R>) {}
+  private readonly deps: SettingsModelSelectionControllerDeps<R>;
+  constructor(deps: SettingsModelSelectionControllerDeps<R>) {
+    this.deps = deps;
+  }
 
   buildSelectionData(): Effect.Effect<SettingsModelSelectionData, Error, R> {
     return Effect.gen({ self: this }, function* () {

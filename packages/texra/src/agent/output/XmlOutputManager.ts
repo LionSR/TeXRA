@@ -61,15 +61,26 @@ const writeRoundOutput = Effect.fn('XmlOutputManager.writeRoundOutput')(
 const DOCUMENT_NAME_REGEX_GLOBAL = new RegExp(DOCUMENT_NAME_REGEX.source, 'g');
 
 export class XmlOutputManager {
+  private readonly agentConfig: AgentConfig;
+  private readonly logger: AgentTrace;
+  private readonly fileService: RunFileService;
+  private readonly outputState: OutputState;
+  private readonly config: ConfigProvider;
   constructor(
-    private readonly agentConfig: AgentConfig,
-    private readonly logger: AgentTrace,
-    private readonly fileService: RunFileService,
+    agentConfig: AgentConfig,
+    logger: AgentTrace,
+    fileService: RunFileService,
     /** The run's round map, where a missing-output report records the round. */
-    private readonly outputState: OutputState,
+    outputState: OutputState,
     /** The run's session configuration: the replacement rules it applies. */
-    private readonly config: ConfigProvider,
-  ) {}
+    config: ConfigProvider,
+  ) {
+    this.agentConfig = agentConfig;
+    this.logger = logger;
+    this.fileService = fileService;
+    this.outputState = outputState;
+    this.config = config;
+  }
 
   private extractMultipleDocumentsByRegex(
     outputContent: string,

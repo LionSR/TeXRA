@@ -55,15 +55,22 @@ export interface LatexTrace {
  * Handles LaTeX related media extraction and compilation for agents.
  */
 export class LatexMediaManager {
+  private readonly logger: LatexTrace;
+  private readonly roots: WorkspaceRoots;
+  private readonly fileService: RunFileService;
   constructor(
-    private readonly logger: LatexTrace,
+    logger: LatexTrace,
     /**
      * The session's roots: the settings a PDF or TikZ compile reads, and the
      * workspace every extracted or compiled path is located against.
      */
-    private readonly roots: WorkspaceRoots,
-    private readonly fileService: RunFileService,
-  ) {}
+    roots: WorkspaceRoots,
+    fileService: RunFileService,
+  ) {
+    this.logger = logger;
+    this.roots = roots;
+    this.fileService = fileService;
+  }
 
   /**
    * Run `task` over `items` at the LaTeX concurrency limit, keeping going when

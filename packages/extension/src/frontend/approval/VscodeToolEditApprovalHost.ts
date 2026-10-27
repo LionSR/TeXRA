@@ -46,13 +46,22 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
       Effect.provideService(Scope.Scope, this.scope),
     );
 
+  private readonly storageDirectory: string;
+  private readonly runtime: ProcessRuntime;
+  private readonly roots: WorkspaceRoots;
+  private readonly scope: Scope.Scope;
   constructor(
-    private readonly storageDirectory: string,
-    private readonly runtime: ProcessRuntime,
-    private readonly roots: WorkspaceRoots,
+    storageDirectory: string,
+    runtime: ProcessRuntime,
+    roots: WorkspaceRoots,
     /** The view's scope, which a scheduled PDF viewer open runs in. */
-    private readonly scope: Scope.Scope,
-  ) {}
+    scope: Scope.Scope,
+  ) {
+    this.storageDirectory = storageDirectory;
+    this.runtime = runtime;
+    this.roots = roots;
+    this.scope = scope;
+  }
 
   stagePreview(
     request: ToolEditApprovalRequest,
@@ -92,12 +101,20 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
 class VscodeToolEditPreview implements ToolEditPreview {
   private readonly diffSession: DiffSession;
 
+  private readonly diffViewHost: VscodeDiffViewHost;
+  private readonly request: ToolEditApprovalRequest;
+  private readonly context: ToolEditPreviewContext;
+  private readonly staged: ApprovalTempFiles;
   constructor(
-    private readonly diffViewHost: VscodeDiffViewHost,
-    private readonly request: ToolEditApprovalRequest,
-    private readonly context: ToolEditPreviewContext,
-    private readonly staged: ApprovalTempFiles,
+    diffViewHost: VscodeDiffViewHost,
+    request: ToolEditApprovalRequest,
+    context: ToolEditPreviewContext,
+    staged: ApprovalTempFiles,
   ) {
+    this.diffViewHost = diffViewHost;
+    this.request = request;
+    this.context = context;
+    this.staged = staged;
     this.diffSession = {
       original: { filePath: staged.originalPath },
       proposed: { filePath: staged.proposedPath },

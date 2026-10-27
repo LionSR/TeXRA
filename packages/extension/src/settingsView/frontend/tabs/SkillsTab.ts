@@ -83,8 +83,8 @@ export class SkillsTab extends LitElement {
    *  second switch before this one's snapshot returns cannot undo it. */
   private setEnabled(
     key:
-      | WorkspaceStateKey.DISABLED_SKILLS
-      | WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+      | typeof WorkspaceStateKey.DISABLED_SKILLS
+      | typeof WorkspaceStateKey.DISABLED_SKILL_SOURCES,
     item: string,
     enabled: boolean,
   ): void {

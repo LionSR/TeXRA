@@ -405,6 +405,11 @@ in review beyond this bar. Full rules: `src/test-kernel/AGENTS.md`.
 
 ESLint (`eslint.config.mjs`) and Prettier enforce most style. Beyond them:
 
+- Erasable TypeScript only: `erasableSyntaxOnly` (root and llm `tsconfig.json`)
+  refuses syntax type stripping cannot run. No `enum` (an `as const` table with
+  a same-named `(typeof X)[keyof typeof X]` type), no parameter properties
+  (declare the field, assign it in the constructor), no runtime `namespace`, no
+  `import =`. Type imports are top-level `import type`, never `import('pkg').T`.
 - Group imports by source, each block under a comment
   (`// Third-party imports`, `// Local imports - component`).
 - PascalCase for service singletons (`SessionEvents`, `ModelInvoker`),

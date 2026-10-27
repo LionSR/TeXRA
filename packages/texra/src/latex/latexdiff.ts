@@ -61,15 +61,17 @@ export class LaTeXdiffService {
   private readonly fileProcessor: DiffFileProcessor;
   private readonly commandExecutor: DiffCommandExecutor;
 
+  private readonly channel: string;
+  private readonly roots: WorkspaceRoots;
+
   /**
    * @param roots The roots of the workspace being diffed, held as data: the
    * diff's settings, replacement rules and output location all answer for that
    * project rather than for whichever roots the calling fiber carries.
    */
-  constructor(
-    private readonly channel: string,
-    private readonly roots: WorkspaceRoots,
-  ) {
+  constructor(channel: string, roots: WorkspaceRoots) {
+    this.channel = channel;
+    this.roots = roots;
     this.fileProcessor = new DiffFileProcessor(roots.config);
     this.commandExecutor = new DiffCommandExecutor(channel, roots);
   }

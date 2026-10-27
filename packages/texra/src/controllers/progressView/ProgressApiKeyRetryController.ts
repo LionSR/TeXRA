@@ -63,7 +63,10 @@ interface ProgressApiKeyRetryControllerDeps {
  * the retry is settled on it.
  */
 export class ProgressApiKeyRetryController {
-  constructor(private readonly deps: ProgressApiKeyRetryControllerDeps) {}
+  private readonly deps: ProgressApiKeyRetryControllerDeps;
+  constructor(deps: ProgressApiKeyRetryControllerDeps) {
+    this.deps = deps;
+  }
 
   /** Switch this retry onto the user's own key and relaunch it. The host
    *  arm that took the request runs this where it stands. */

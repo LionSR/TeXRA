@@ -63,10 +63,9 @@ export class CopyButtonController implements ReactiveController {
   private readonly _config: Required<CopyButtonConfig>;
   private readonly _resetTimer: FlushableDebounce;
 
-  constructor(
-    private readonly host: ReactiveControllerHost,
-    config: CopyButtonConfig = {},
-  ) {
+  private readonly host: ReactiveControllerHost;
+  constructor(host: ReactiveControllerHost, config: CopyButtonConfig = {}) {
+    this.host = host;
     this._config = {
       defaultTitle: config.defaultTitle ?? 'Copy to clipboard',
       successTitle: config.successTitle ?? 'Copied!',

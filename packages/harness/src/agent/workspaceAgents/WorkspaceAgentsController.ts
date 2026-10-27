@@ -62,7 +62,10 @@ export interface WorkspaceAgentsControllerDeps<
 export class WorkspaceAgentsController<
   Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
 > {
-  constructor(private readonly deps: WorkspaceAgentsControllerDeps<Entry>) {}
+  private readonly deps: WorkspaceAgentsControllerDeps<Entry>;
+  constructor(deps: WorkspaceAgentsControllerDeps<Entry>) {
+    this.deps = deps;
+  }
 
   /**
    * Every selectable team preset: the shared catalog (`teamPresets`) over the

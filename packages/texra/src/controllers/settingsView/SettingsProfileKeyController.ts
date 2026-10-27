@@ -33,7 +33,10 @@ export class ProviderKeyActionFailed extends Schema.TaggedError<ProviderKeyActio
 
 /** Shared provider-key policy; hosts present failures at their own entry. */
 export class SettingsProfileKeyController {
-  constructor(private readonly deps: SettingsProfileKeyControllerDeps) {}
+  private readonly deps: SettingsProfileKeyControllerDeps;
+  constructor(deps: SettingsProfileKeyControllerDeps) {
+    this.deps = deps;
+  }
 
   setProviderKey(
     provider: string,

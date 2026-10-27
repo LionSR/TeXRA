@@ -59,7 +59,10 @@ interface DesktopToolEditApprovalHostOptions {
 }
 
 export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
-  constructor(private readonly options: DesktopToolEditApprovalHostOptions) {}
+  private readonly options: DesktopToolEditApprovalHostOptions;
+  constructor(options: DesktopToolEditApprovalHostOptions) {
+    this.options = options;
+  }
 
   get openBuildDisplay(): BuildDisplayFn {
     return this.options.ui.openBuildDisplay;
@@ -133,11 +136,18 @@ interface DesktopStagedFiles {
 }
 
 class DesktopToolEditPreview implements ToolEditPreview {
+  private readonly ui: DesktopToolEditApprovalUi;
+  private readonly context: ToolEditPreviewContext;
+  private readonly staged: DesktopStagedFiles;
   constructor(
-    private readonly ui: DesktopToolEditApprovalUi,
-    private readonly context: ToolEditPreviewContext,
-    private readonly staged: DesktopStagedFiles,
-  ) {}
+    ui: DesktopToolEditApprovalUi,
+    context: ToolEditPreviewContext,
+    staged: DesktopStagedFiles,
+  ) {
+    this.ui = ui;
+    this.context = context;
+    this.staged = staged;
+  }
 
   get originalPath(): string {
     return this.staged.originalPath;

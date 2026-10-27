@@ -50,15 +50,14 @@ export class RunHandle {
    *  birth writes, never cut. A detach is the rows' (`parentOf`). */
   readonly launchParent: RunId | null;
 
-  constructor(
-    /**
-     * The run's birth facts, the same object its `run.start` published and its
-     * `run.end` row closes. Held whole rather than copied field by field,
-     * so the handle and the event plane cannot describe the run differently.
-     */
-    readonly run: RunFacts,
-    launchParent: RunId | null,
-  ) {
+  /**
+   * The run's birth facts, the same object its `run.start` published and its
+   * `run.end` row closes. Held whole rather than copied field by field,
+   * so the handle and the event plane cannot describe the run differently.
+   */
+  readonly run: RunFacts;
+  constructor(run: RunFacts, launchParent: RunId | null) {
+    this.run = run;
     this.launchParent = launchParent;
   }
 

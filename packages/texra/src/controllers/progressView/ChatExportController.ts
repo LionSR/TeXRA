@@ -128,7 +128,10 @@ interface ChatExportControllerDeps {
 }
 
 export class ChatExportController {
-  constructor(private readonly deps: ChatExportControllerDeps) {}
+  private readonly deps: ChatExportControllerDeps;
+  constructor(deps: ChatExportControllerDeps) {
+    this.deps = deps;
+  }
 
   /**
    * Load run data and construct the format-agnostic {@link ChatExportInput}.

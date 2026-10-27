@@ -108,7 +108,10 @@ interface CompileFixerInput {
 }
 
 export class ProgressFollowUpController {
-  constructor(private readonly deps: ProgressFollowUpControllerDeps) {}
+  private readonly deps: ProgressFollowUpControllerDeps;
+  constructor(deps: ProgressFollowUpControllerDeps) {
+    this.deps = deps;
+  }
 
   planCompileFixerForRun(
     runId: RunId,

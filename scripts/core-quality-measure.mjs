@@ -113,8 +113,6 @@ export const RULES = {
   'shallow-modules': `Modules with at least ${MIN_DEPTH_INTERFACE} interface elements and fewer than ${MIN_MODULE_DEPTH} non-comment lines per element: hide more work behind less interface.`,
   'core-module-mocks':
     '`vi.mock` of a core module in a test: path-keyed mocks break on every move; provide a layer instead.',
-  'non-erasable-syntax':
-    'Parameter properties, enums, runtime namespaces or `import =` in core: the packages ship `.ts` that type stripping must run.',
   'ranged-dependencies':
     'A core package dependency not pinned to an exact version: replay assumes the behaviour recorded at write time.',
   'durable-invariants':
@@ -359,27 +357,6 @@ const DECISION_CODE = /\b[A-Z]{1,2}\d{1,2}[a-z]?\b|#\d{3,6}\b/g;
 
 /** Public members an exported record may carry (study rule 11). */
 const WIDE_RECORD_MEMBERS = 20;
-
-const PARAMETER_PROPERTY = new Set([
-  ts.SyntaxKind.PublicKeyword,
-  ts.SyntaxKind.PrivateKeyword,
-  ts.SyntaxKind.ProtectedKeyword,
-  ts.SyntaxKind.ReadonlyKeyword,
-  ts.SyntaxKind.OverrideKeyword,
-]);
-
-/** Whether a namespace holds a value, so it compiles to runtime code. */
-function isInstantiated(node) {
-  const body = node.body;
-  if (body == null) return false;
-  if (ts.isModuleDeclaration(body)) return isInstantiated(body);
-  return body.statements.some(
-    (statement) =>
-      !ts.isInterfaceDeclaration(statement) &&
-      !ts.isTypeAliasDeclaration(statement) &&
-      !(ts.isModuleDeclaration(statement) && !isInstantiated(statement)),
-  );
-}
 
 const isHidden = (member) =>
   (member.name != null && ts.isPrivateIdentifier(member.name)) ||
@@ -919,15 +896,7 @@ function measureDepth(sourceFile, file, publicEntries, site, byRule) {
                 ts.SyntaxKind.ProtectedKeyword,
               ].includes(modifier.kind),
             );
-          elements +=
-            (publicConstructor ? 1 : 0) +
-            member.parameters.filter(
-              (parameter) =>
-                ts
-                  .getModifiers(parameter)
-                  ?.some((modifier) => PARAMETER_PROPERTY.has(modifier.kind)) &&
-                !isHidden(parameter),
-            ).length;
+          if (publicConstructor) elements += 1;
         }
       } else if (ts.isInterfaceDeclaration(node)) {
         // Each member, plus the parameters of its method, call or construct
@@ -1076,32 +1045,6 @@ function measureAst(rootDir, files, byRule) {
         node.exclamationToken != null
       ) {
         site('no-non-null-assertion', node, 'definite assignment `!`');
-      }
-      if (
-        ts.isParameter(node) &&
-        ts
-          .getModifiers(node)
-          ?.some((modifier) => PARAMETER_PROPERTY.has(modifier.kind))
-      ) {
-        site('non-erasable-syntax', node, 'parameter property');
-      } else if (
-        ts.isEnumDeclaration(node) &&
-        !ts
-          .getModifiers(node)
-          ?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword)
-      ) {
-        site('non-erasable-syntax', node, `enum ${node.name.text}`);
-      } else if (
-        ts.isModuleDeclaration(node) &&
-        ts.isIdentifier(node.name) &&
-        isInstantiated(node) &&
-        !ts
-          .getModifiers(node)
-          ?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword)
-      ) {
-        site('non-erasable-syntax', node, `namespace ${node.name.text}`);
-      } else if (ts.isImportEqualsDeclaration(node) && !node.isTypeOnly) {
-        site('non-erasable-syntax', node, 'import =');
       }
       if (
         ts.isAsExpression(node) &&
