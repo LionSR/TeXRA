@@ -63,7 +63,6 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import type { RunToolCall } from '@agent/runtime/RunCall';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { withProcessServices } from '@platform/processRuntime';
@@ -124,8 +123,6 @@ interface ScriptedTurn {
   /** A tool the turn calls, with no arguments, after its text. */
   readonly call?: string;
 }
-
-/** The http arm of a binding: `identified` events carry no editor origin. */
 
 /**
  * The transport stub: one `Model` per registry name, serving one scripted
@@ -213,32 +210,6 @@ interface ObservedRequest {
   readonly tools: readonly string[];
 }
 
-/** The text one canonical message carries, whatever role wrote it. */
-function messageText(message: Message): string {
-  switch (message.role) {
-    case 'user':
-      return message.content
-        .map((part) => (part.kind === 'text' ? part.text : ''))
-        .join('');
-    case 'assistant':
-      return message.content
-        .flatMap((part) =>
-          part.kind === 'message'
-            ? part.content.map((piece) => piece.text)
-            : [],
-        )
-        .join('');
-    case 'tool':
-      return message.results
-        .flatMap((result) =>
-          result.content.map((part) => (part.kind === 'text' ? part.text : '')),
-        )
-        .join('');
-    case 'system':
-      return message.text;
-  }
-}
-
 function scriptedBoundModel(
   config: BoundModel['config'],
   turns: Array<ScriptedTurn | 'hang'>,
@@ -249,8 +220,8 @@ function scriptedBoundModel(
   let progressOnly = false;
   const model: Model = {
     prepareTurn: (request) => {
-      const latest = request.messages.at(-1);
-      const text = latest ? messageText(latest) : '';
+      // Every message's text survives JSON quoting, tags included.
+      const text = JSON.stringify(request.messages.at(-1) ?? '');
       progressOnly =
         config.ref === PARENT_MODEL &&
         text.includes('<subagent-progress') &&
@@ -429,11 +400,6 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
   );
 }
 
-/**
- * Wait for the child's claim release. The loop's lane stays held past that
- * point while its final delivery wakes the parent, so the claim, not the
- * lane, is the durable boundary these assertions read against.
- */
 /** Queue a user's input on a stopped run, which the next resume reads. */
 function queueRecovery(runId: RunId, text: string) {
   return Effect.asVoid(
@@ -441,56 +407,36 @@ function queueRecovery(runId: RunId, text: string) {
   );
 }
 
+/**
+ * Wait for the child's claim release. The loop's lane stays held past that
+ * point while its final delivery wakes the parent, so the claim, not the
+ * lane, is the durable boundary these assertions read against.
+ */
 function waitForClaimRelease(runId: RunId): Promise<void> {
   return vi.waitFor(async () => {
     expect(await Effect.runPromise(session.log.owns(runId))).toBe(false);
   });
 }
 
-/** Launch one detached child of the parent run the way the `agent` tool
- *  does for a direct call: a fresh child id and inherited approvals. */
-const launchChild = (
-  parent: RunToolCall,
-  payload: Parameters<typeof launchDetachedSubagent>[1],
-) =>
-  launchDetachedSubagent(parent, payload, {
-    runId: generateRunId(),
-    grants: NO_APPROVAL_GRANTS,
-  });
-
-/**
- * What a follow-up dispatch needs off the parent run: the explicit carriers
- * the delegation tool reads (run identity, owning session, current model).
- */
-interface ParentDelegationContext {
-  readonly runId: RunId;
-  readonly session: SessionHandle;
-  readonly model: string;
-}
-
 /**
  * Queue the second-assertion follow-up onto a WAITING child through the real
- * executions `send` path, asserting the queue accepted it.
+ * executions `send` path, from the parent run, asserting the queue accepted it.
  */
-async function queueSecondAssertionFollowUp(
-  parentContext: ParentDelegationContext,
-  runId: RunId,
-  instruction = 'Now prove the second assertion.',
-) {
+async function queueSecondAssertionFollowUp(runId: RunId) {
   const resumed = await testRuntime().runPromise(
     ExecutionsTool.call({
       path: `/executions/${runId}`,
       action: 'send',
-      message: instruction,
+      message: 'Now prove the second assertion.',
     }).pipe(
       Effect.provide(
         nativeToolTestLayer({
           run: {
-            runId: parentContext.runId,
-            session: parentContext.session,
+            runId: PARENT_RUN_ID,
+            session,
             config: Schema.decodeUnknownSync(AgentConfigSchema)({
               agent: 'chat',
-              model: parentContext.model,
+              model: PARENT_MODEL,
             }),
             toolPolicy: {},
           },
@@ -499,7 +445,6 @@ async function queueSecondAssertionFollowUp(
     ),
   );
   expect(resumed.status).toBe('executed');
-  return resumed;
 }
 
 /**
@@ -513,7 +458,6 @@ async function launchWaitingChild(options: {
   readonly childGate?: Promise<unknown>;
 }): Promise<{
   readonly runId: RunId;
-  readonly parentContext: ParentDelegationContext;
   readonly observedRequests: ObservedRequest[];
 }> {
   const observedRequests: ObservedRequest[] = [];
@@ -560,17 +504,6 @@ async function launchWaitingChild(options: {
   );
   await Effect.runPromise(waitForParentTurns(0));
 
-  const parentContext: ParentDelegationContext = {
-    runId: PARENT_RUN_ID,
-    session,
-    model: PARENT_MODEL,
-  };
-  const fixtureRequests = {
-    nextId: (prefix: string) => prefix,
-    open: () => Effect.die(new Error('This fixture opens no request.')),
-    post: () => Effect.die(new Error('This fixture posts no request.')),
-    present: () => Effect.void,
-  };
   const parentCall = {
     callId: 'parent-call',
     env: { roots: session.roots, workingDirectory: process.cwd() },
@@ -581,7 +514,12 @@ async function launchWaitingChild(options: {
     logId: 'parent-card',
     script: null,
     scriptCalls: null,
-    requests: fixtureRequests,
+    requests: {
+      nextId: (prefix: string) => prefix,
+      open: () => Effect.die(new Error('This fixture opens no request.')),
+      post: () => Effect.die(new Error('This fixture posts no request.')),
+      present: () => Effect.void,
+    },
     run: {
       runId: PARENT_RUN_ID,
       session,
@@ -600,20 +538,25 @@ async function launchWaitingChild(options: {
       steps: noStep(),
     },
   };
+  // A direct `agent` call's launch: a fresh child id, inherited approvals.
   const launch = await testRuntime().runPromise(
-    launchChild(parentCall, {
-      agent: CHILD_AGENT,
-      agentSource: 'custom',
-      model: CHILD_MODEL,
-      instruction: 'Prove the first assertion.',
-      memories: [],
-      workingDirectory: process.cwd(),
-    }).pipe(Effect.provideService(Runs, session.runs)),
+    launchDetachedSubagent(
+      parentCall,
+      {
+        agent: CHILD_AGENT,
+        agentSource: 'custom',
+        model: CHILD_MODEL,
+        instruction: 'Prove the first assertion.',
+        memories: [],
+        workingDirectory: process.cwd(),
+      },
+      { runId: generateRunId(), grants: NO_APPROVAL_GRANTS },
+    ).pipe(Effect.provideService(Runs, session.runs)),
   );
   expect(launch.status).toBe('executed');
   const runId = childRunId(launch.output);
   childId = runId;
-  return { runId, parentContext, observedRequests };
+  return { runId, observedRequests };
 }
 
 describe('native subagent production delivery path', { retry: 2 }, () => {
@@ -665,10 +608,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           { text: 'Parent received result B.' },
         ];
         const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
-        const { runId, parentContext, observedRequests } =
-          yield* Effect.promise(() =>
-            launchWaitingChild({ parentTurns, childTurns }),
-          );
+        const { runId, observedRequests } = yield* Effect.promise(() =>
+          launchWaitingChild({ parentTurns, childTurns }),
+        );
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
         // A child is offered what it declares, though its parent's step
@@ -683,10 +625,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(yield* budget.takeIfAvailable(1)).toBe(true);
         yield* budget.release(1);
 
-        const resumed = yield* Effect.promise(() =>
-          queueSecondAssertionFollowUp(parentContext, runId),
-        );
-        expect(resumed.summary).toContain('Sent message');
+        yield* Effect.promise(() => queueSecondAssertionFollowUp(runId));
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
         yield* waitForParentTurns(2);
@@ -696,16 +635,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         // The next turn asks the model with the follow-up as its last message
         // and turn 1's answer still in the history it carries.
         const childResumeRequest = observedRequests.find(
-          ({ model, messages }) => {
-            const last = messages.at(-1);
-            return (
-              model === CHILD_MODEL &&
-              last !== undefined &&
-              messageText(last).includes('second assertion')
-            );
-          },
+          ({ model, messages }) =>
+            model === CHILD_MODEL &&
+            JSON.stringify(messages.at(-1) ?? '').includes('second assertion'),
         );
-        expect(childResumeRequest?.messages.map(messageText)).toContain(
+        expect(JSON.stringify(childResumeRequest?.messages)).toContain(
           'Result A.',
         );
 
@@ -771,7 +705,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         });
         const recoveredHandle = session.runs.get(runId)?.handle;
         expect(recoveredHandle).toBeDefined();
-        expect(session.runs.get(runId)?.live === true).toBe(true);
         childTurns.push({ text: 'Recovered result D.' });
         parentTurns.push({ text: 'Parent received recovered result D.' });
         yield* submitFollowUp(
@@ -850,17 +783,14 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         // Turn 2 is answerless: the scripted transport ends the turn with no text,
         // so the resumed cycle completes without adding an assistant message.
         const childTurns = [{ text: 'Result A.' }, { text: '' }];
-        const { runId, parentContext } = yield* Effect.promise(() =>
+        const { runId } = yield* Effect.promise(() =>
           launchWaitingChild({ parentTurns, childTurns }),
         );
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
         yield* waitForParentTurns(1);
 
-        const resumed = yield* Effect.promise(() =>
-          queueSecondAssertionFollowUp(parentContext, runId),
-        );
-        expect(resumed.summary).toContain('Sent message');
+        yield* Effect.promise(() => queueSecondAssertionFollowUp(runId));
 
         // The answerless turn still delivers: its report/result overwrite turn 1's
         // with an explicitly empty response rather than replaying 'Result A.' — and

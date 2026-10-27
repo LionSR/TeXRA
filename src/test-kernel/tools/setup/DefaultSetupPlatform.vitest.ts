@@ -12,19 +12,10 @@ import {
 } from '@test/support/setupPlatform';
 import { getChatGptSubscriptionStatus } from '@texra/tools/setup/platform';
 
-setupPlatform(
-  {
-    config: { 'texra.bib.defaultPath': 'references.bib' },
-    secrets: { 'apiKey.openai': 'sk-stored-key' },
-    env: { GITHUB_TOKEN: 'github-env-token' },
-  },
-  { setup: {} },
-);
+setupPlatform({}, { setup: {} });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.unstubAllEnvs();
-  vi.unstubAllGlobals();
 });
 
 describe('shared setup capabilities', () => {

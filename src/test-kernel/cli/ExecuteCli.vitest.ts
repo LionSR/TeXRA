@@ -65,7 +65,7 @@ const settle = Effect.promise(
 const tempDirs = useTempDirs();
 
 async function installFreshDefaultSession(): Promise<void> {
-  await installStoragePlatform();
+  await installFakeHost(await createTempDirPlatform('texra-run-', tempDirs));
   await import('@test/support/sessionGraphTestSetup');
   const { openTestDefaultSession, closeTestDefaultSession } =
     await import('@test/support/sessionEnd');
@@ -73,10 +73,6 @@ async function installFreshDefaultSession(): Promise<void> {
   await Effect.runPromise(
     openTestDefaultSession({ roots: testWorkspaceRoots() }),
   );
-}
-
-async function installStoragePlatform(): Promise<void> {
-  await installFakeHost(await createTempDirPlatform('texra-run-', tempDirs));
 }
 
 /** What the session's start receives: the request under the id the CLI
@@ -192,7 +188,6 @@ async function loadExecuteCli() {
   // scope in; here the process default this file installs stands in for the
   // first two and the installed host's shutdown scope for the third.
   return {
-    ...runtime,
     executeCliRequest: (
       request: Parameters<typeof runtime.executeCliRequest>[0],
       context: Parameters<typeof runtime.executeCliRequest>[1],
@@ -202,34 +197,6 @@ async function loadExecuteCli() {
     ) =>
       Effect.provide(
         runtime.executeCliRequest(request, context, {
-          services: testServices(),
-          ...options,
-        }),
-        fakeProcessServices(),
-      ),
-    executeCliConfig: (
-      config: Parameters<typeof runtime.executeCliConfig>[0],
-      context: Parameters<typeof runtime.executeCliConfig>[1],
-      options: WithoutSession<
-        Parameters<typeof runtime.executeCliConfig>[2]
-      > = {},
-    ) =>
-      Effect.provide(
-        runtime.executeCliConfig(config, context, {
-          services: testServices(),
-          ...options,
-        }),
-        fakeProcessServices(),
-      ),
-    executeCliToolUseConfig: (
-      config: Parameters<typeof runtime.executeCliToolUseConfig>[0],
-      context: Parameters<typeof runtime.executeCliToolUseConfig>[1],
-      options: WithoutSession<
-        Parameters<typeof runtime.executeCliToolUseConfig>[2]
-      > = {},
-    ) =>
-      Effect.provide(
-        runtime.executeCliToolUseConfig(config, context, {
           services: testServices(),
           ...options,
         }),
@@ -251,37 +218,26 @@ const runStartRow = (runId: RunId) => ({
 /**
  * Stubs the run to publish its admission through `published` and then hang
  * until the test resolves it: the shape the shutdown tests drive. Its stop
- * reaches the session as a `run.stop` request (`stopRequest`). Unless
- * `opened` is false, the run's loop has opened it (its `run.start` row), so
- * it can be resumed from its rows.
+ * reaches the session as a `run.stop` request (`stopRequest`). The run's
+ * loop has opened it (its `run.start` row), so it can be resumed from its
+ * rows.
  */
-function stubHangingRun(
-  published: Deferred.Deferred<void>,
-  { opened = true } = {},
-): {
+function stubHangingRun(published: Deferred.Deferred<void>): {
   resolve: (result: unknown) => void;
-  reject: (error: unknown) => void;
 } {
   let resolveRun!: (result: unknown) => void;
-  let rejectRun!: (error: unknown) => void;
   mocks.rootLaunch.mockImplementation((input: LaunchInput) => {
     // Committed before the run reports admission, so every later read
     // of its rows finds the opening.
-    const opening = opened
-      ? testRuntime().runPromise(
-          seedRows(testDefaultSession().log)([runStartRow(input.runId)]),
-        )
-      : Promise.resolve();
-    return new Promise((resolve, reject) => {
+    const opening = testRuntime().runPromise(
+      seedRows(testDefaultSession().log)([runStartRow(input.runId)]),
+    );
+    return new Promise((resolve) => {
       resolveRun = resolve;
-      rejectRun = reject;
       void opening.then(() => Deferred.doneUnsafe(published, Effect.void));
     });
   });
-  return {
-    resolve: (result: unknown) => resolveRun(result),
-    reject: (error: unknown) => rejectRun(error),
-  };
+  return { resolve: (result: unknown) => resolveRun(result) };
 }
 
 async function stubExecuteCliDeps(): Promise<void> {
@@ -318,21 +274,6 @@ async function stubExecuteCliDeps(): Promise<void> {
   mocks.stopRequest.mockReturnValue(undefined);
 }
 
-/** Queues one cancelled, persisted outcome read for the next resolution. */
-function mockCancelledOutcome(): void {
-  mocks.readCliRunOutcomeState.mockResolvedValueOnce({
-    outcome: RUN_OUTCOME.CANCELLED,
-    outcomePersisted: true,
-  });
-}
-
-/** Loads shutdown tests against the host that owns the current session. */
-async function loadExecuteCliOnInstalledHost() {
-  const host = installedHost();
-  const { executeCliRequest } = await loadExecuteCli();
-  return { platform: host.platform, executeCliRequest };
-}
-
 describe('executeCliRequest', () => {
   beforeEach(async () => {
     await stubExecuteCliDeps();
@@ -354,12 +295,7 @@ describe('executeCliRequest', () => {
       if (request.approval?.delegated) {
         publishTestRows(session, [
           {
-            type: 'run.start',
-            aggregateId: qualifyAggregateId('run', request.runId),
-            identity: { kind: 'agent', agent: 'chat' },
-            userFollowUpSupport: 'unsupported',
-            parent: null,
-            provenance: null,
+            ...runStartRow(request.runId),
             approvalPolicy: humanGrant(
               APPROVAL_BYPASS_KINDS,
               true,
@@ -429,9 +365,8 @@ describe('executeCliRequest', () => {
   // but the command's shutdown step settles on the process runtime.
   it.live('marks owned runs interrupted during platform shutdown', () =>
     Effect.gen(function* () {
-      const { platform, executeCliRequest } = yield* Effect.promise(
-        loadExecuteCliOnInstalledHost,
-      );
+      const { platform } = installedHost();
+      const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
       let settleRecoveryWrite!: () => void;
       const recoveryWrite = new Promise<void>((resolve) => {
         settleRecoveryWrite = resolve;
@@ -465,11 +400,13 @@ describe('executeCliRequest', () => {
         reason: 'shutdown',
       });
 
-      mockCancelledOutcome();
+      mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+        outcome: RUN_OUTCOME.CANCELLED,
+        outcomePersisted: true,
+      });
       hangingRun.resolve(STOPPED);
       yield* Deferred.await(finalized);
       yield* settle;
-      expect(onInterruptedRunFinalized).toHaveBeenCalledOnce();
       let shutdownResolved = false;
       shutdown.addObserver(() => {
         shutdownResolved = true;
@@ -492,9 +429,8 @@ describe('executeCliRequest', () => {
     'preserves a terminal outcome when shutdown cannot interrupt the finished run',
     () =>
       Effect.gen(function* () {
-        const { platform, executeCliRequest } = yield* Effect.promise(
-          loadExecuteCliOnInstalledHost,
-        );
+        const { platform } = installedHost();
+        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
         // The run has ended: the session refuses its stop.
         mocks.stopRequest.mockReturnValue(
           Effect.fail(new Error('The task is no longer open.')),

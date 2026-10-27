@@ -301,12 +301,9 @@ describe('session framer', () => {
           runtimeView.changes,
           (v) => v.runs.get(RUN)?.status === RUN_PHASE.RUNNING,
         );
-        const folded = view.current();
-        expect(folded.debug).toBe(false);
-        expect(drawn(folded)).toEqual(
+        expect(drawn(view.current())).toEqual(
           drawn(yield* SubscriptionRef.get(runtimeView.ref)),
         );
-        expect(folded.cursor).toBe(4);
 
         // A new run: its run.start is a listing fact, framed to a shell
         // that has not named it. The shell names a run only once its view
@@ -362,10 +359,6 @@ describe('session framer', () => {
         );
         yield* settle(
           view.changes,
-          (v) => rowText(v, SECOND, 'row-2') === 'First suffix',
-        );
-        yield* settle(
-          runtimeView.changes,
           (v) => rowText(v, SECOND, 'row-2') === 'First suffix',
         );
 

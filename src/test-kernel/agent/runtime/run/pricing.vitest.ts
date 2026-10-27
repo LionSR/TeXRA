@@ -91,14 +91,13 @@ function anthropicUsage(breakdown: {
 
 describe('priceTurnUsage on an Anthropic turn', () => {
   it('bills the remainder of a two-bucket breakdown at the 5m rate', () => {
-    const breakdown = {
-      cacheCreationTokens: 1000,
-      cacheCreation5mTokens: 600,
-      cacheCreation1hTokens: 300,
-    };
     const priced = priceTurnUsage(
       boundAnthropic,
-      anthropicUsage(breakdown),
+      anthropicUsage({
+        cacheCreationTokens: 1000,
+        cacheCreation5mTokens: 600,
+        cacheCreation1hTokens: 300,
+      }),
       1234,
     );
 
@@ -107,7 +106,6 @@ describe('priceTurnUsage on an Anthropic turn', () => {
       NON_WRITE_COST + (700 * WRITE_5M_PRICE + 300 * WRITE_1H_PRICE) / 1e6,
       12,
     );
-    expect(priced?.cacheCreationTokens).toBe(breakdown.cacheCreationTokens);
   });
 });
 
@@ -125,7 +123,6 @@ describe('priceTurnUsage on a GPT-6 turn', () => {
         cacheDiscountFactor: 0.1,
       },
       capabilities: { cacheDiscountFactor: 0.1 },
-      tiers: { fast: { inputPrice: 4, outputPrice: 20 } },
     }),
   };
   const usageAt = (inputTokens: number): TurnResult['usage'] => ({

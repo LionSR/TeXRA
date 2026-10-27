@@ -1,31 +1,14 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Exit, Scope } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
 
-const formatRetryRequestMessageMock = vi.hoisted(() => vi.fn());
 let detachHostInteractions = (): void => {};
-
-vi.mock('@cli/runtime/approval/approvalSummaries', async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import('@cli/runtime/approval/approvalSummaries')
-    >();
-  return {
-    ...actual,
-    formatRetryRequestMessage: formatRetryRequestMessageMock,
-  };
-});
 
 import { createHeadlessCliHostInteractions } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { type CliApprovalPromptHooks } from '@cli/runtime/approval/approvalPrompts';
-import {
-  type AgentProposalPermission,
-  type PermissionPayload,
-  type RequestDecision,
-  type RunId,
-} from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -37,15 +20,13 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
-  const ctx = createTestCliContext({
+  return createTestCliContext({
     cwd: '/tmp',
     mode: 'interactive',
     approvalPolicy: 'ask',
     version: 'test',
     ...overrides,
   });
-  setTestApprovalPolicy(ctx.approvalPolicy);
-  return ctx;
 }
 
 function useCliHostInteractions(
@@ -87,119 +68,34 @@ function ensureRun(runId: RunId) {
   });
 }
 
-function approvalLayer(runId: RunId) {
-  return nativeToolTestLayer({
-    workingDirectory: '/tmp',
-    run: {
-      runId,
-      session: testDefaultSession(),
-      toolPolicy: {},
-    },
-  });
-}
-
-function requestNewProofEdit() {
+/** A tool's edit approval request for `path` on the root run. */
+function requestEdit(path: string, proposedContent: string) {
   return Effect.gen(function* () {
     yield* ensureRun(ROOT_RUN);
     return yield* requestToolEditApproval({
-      path: '/tmp/new-proof.tex',
+      path,
       originalContent: '',
-      proposedContent: '\\section{Proof}\nA concise proof.\n',
+      proposedContent,
       sourceTool: 'write_file',
       runId: ROOT_RUN,
-    }).pipe(Effect.provide(approvalLayer(ROOT_RUN)));
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          workingDirectory: '/tmp',
+          run: {
+            runId: ROOT_RUN,
+            session: testDefaultSession(),
+            toolPolicy: {},
+          },
+        }),
+      ),
+    );
   });
 }
-
-/**
- * Ask through the protocol the headless host answers: `request.opened` on the
- * run, then the `request.decided` the attached host commits (one run model,
- * 3.7). The host must already be attached with {@link useCliHostInteractions}.
- */
-function openRequestOn(
-  runId: RunId,
-  payload: PermissionPayload,
-): Effect.Effect<RequestDecision, Error> {
-  return Effect.gen(function* () {
-    const session = testDefaultSession();
-    yield* ensureRun(runId);
-    return yield* session.requests.ask(runId, payload);
-  }).pipe(Effect.mapError((cause) => new Error(String(cause))));
-}
-
-function openRequest(
-  payload: PermissionPayload,
-): Effect.Effect<RequestDecision, Error> {
-  return openRequestOn(ROOT_RUN, payload);
-}
-
-/** A request id is opened once per run (`runRows.ts`), and this file opens
- *  every one of them on the same long-lived session, so each fixture mints
- *  its own. */
-let proposalOrdinal = 0;
-
-function agentProposal(
-  overrides: Partial<AgentProposalPermission> = {},
-): AgentProposalPermission {
-  const base = {
-    requestId: `proposal-${(proposalOrdinal += 1)}`,
-    runId: ROOT_RUN,
-    agent: 'review',
-    model: 'deepseek/deepseek-v4-flash',
-    instruction: 'Please check this proof.',
-    memories: [],
-  };
-  return {
-    ...base,
-    inputFiles: [],
-    contextFiles: [],
-    mediaFiles: [],
-    outputFiles: [],
-    task: false,
-    options: {},
-    ...overrides,
-  };
-}
-
-/** Records before-prompt/prompt ordering for approval-prompt hook tests. */
-function trackPromptEvents(): {
-  events: string[];
-  hooks: CliApprovalPromptHooks;
-  answerWith: (answer: string) => () => Effect.Effect<string>;
-} {
-  const events: string[] = [];
-  return {
-    events,
-    hooks: {
-      prompting: () => {
-        events.push('before');
-        return () => {
-          events.push('after');
-        };
-      },
-    },
-    answerWith: (answer) => () =>
-      Effect.sync(() => {
-        events.push('prompt');
-        return answer;
-      }),
-  };
-}
-
-beforeEach(async () => {
-  const actual = await vi.importActual<
-    typeof import('@cli/runtime/approval/approvalSummaries')
-  >('@cli/runtime/approval/approvalSummaries');
-  formatRetryRequestMessageMock.mockImplementation(
-    actual.formatRetryRequestMessage,
-  );
-});
 
 afterEach(() => {
   detachHostInteractions();
   detachHostInteractions = () => {};
-  formatRetryRequestMessageMock.mockReset();
-  vi.restoreAllMocks();
 });
 
 describe('approval prompt hooks', () => {
@@ -209,21 +105,44 @@ describe('approval prompt hooks', () => {
       Effect.gen(function* () {
         // A request opened before the host changed is listed pending; a
         // prompt on a closed stdin would never settle it.
-        const tracker = trackPromptEvents();
+        const prompted: string[] = [];
         useCliHostInteractions(
           context({
             mode: 'headless',
-            approvalPrompt: tracker.answerWith('y'),
+            approvalPrompt: () =>
+              Effect.sync(() => {
+                prompted.push('prompt');
+                return 'y';
+              }),
           }),
-          tracker.hooks,
+          {
+            prompting: () => {
+              prompted.push('before');
+              return () => {};
+            },
+          },
         );
-        const result = yield* openRequest({
+        yield* ensureRun(ROOT_RUN);
+        const result = yield* testDefaultSession().requests.ask(ROOT_RUN, {
           kind: 'proposal',
-          data: agentProposal(),
+          data: {
+            requestId: 'proposal-1',
+            runId: ROOT_RUN,
+            agent: 'review',
+            model: 'deepseek/deepseek-v4-flash',
+            instruction: 'Please check this proof.',
+            memories: [],
+            inputFiles: [],
+            contextFiles: [],
+            mediaFiles: [],
+            outputFiles: [],
+            task: false,
+            options: {},
+          },
         });
 
         expect(result).toMatchObject({ action: 'deny' });
-        expect(tracker.events).toEqual([]);
+        expect(prompted).toEqual([]);
       }),
   );
 });
@@ -237,7 +156,10 @@ describe('buildToolEditApprovalContent', () => {
         }),
       );
 
-      const result = yield* requestNewProofEdit();
+      const result = yield* requestEdit(
+        '/tmp/new-proof.tex',
+        '\\section{Proof}\nA concise proof.\n',
+      );
 
       // A prompt that never reached a person closes the request as an
       // automatic cancellation, never as that person's rejection.
@@ -258,14 +180,10 @@ describe('buildToolEditApprovalContent', () => {
         }),
       );
 
-      yield* ensureRun(ROOT_RUN);
-      const result = yield* requestToolEditApproval({
-        path: '/tmp/auto-approved.tex',
-        originalContent: '',
-        proposedContent: '\\section{Auto-approved}\n',
-        sourceTool: 'write_file',
-        runId: ROOT_RUN,
-      }).pipe(Effect.provide(approvalLayer(ROOT_RUN)));
+      const result = yield* requestEdit(
+        '/tmp/auto-approved.tex',
+        '\\section{Auto-approved}\n',
+      );
 
       expect(result).toMatchObject({
         action: 'apply',

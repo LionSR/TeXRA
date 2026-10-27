@@ -6,7 +6,6 @@ import {
   DisplaySessionEventSchema,
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
-  type RunIdentity,
 } from '@shared/schemas';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
@@ -62,12 +61,10 @@ function traceDocument(
   };
 }
 
-function runStart(
-  identity: RunIdentity = { kind: 'agent', agent: 'assistant' },
-): Record<string, unknown> {
+function runStart(): Record<string, unknown> {
   return {
     type: 'run.start',
-    identity,
+    identity: { kind: 'agent', agent: 'assistant' },
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
     worktree: null,
     parent: null,

@@ -1,7 +1,7 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports
 import { Secrets } from '@platform/secrets';
@@ -67,7 +67,7 @@ describe('GitHub run subscriptions', () => {
 
       yield* registry
         .bind('stream-a' as RunId, 'owner/repo', {
-          send: vi.fn(() => Effect.succeed({ status: 'sent' as const })),
+          send: () => Effect.succeed({ status: 'sent' as const }),
           onClosed: () => () => {},
         })
         .pipe(

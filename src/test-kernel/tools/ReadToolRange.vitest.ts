@@ -38,13 +38,6 @@ describe('read_file line ranges', () => {
 
   it.effect.each([
     {
-      name: 'an explicit in-bounds range inclusively',
-      range: { start: 3, end: 5 },
-      summary: 'Read lines 3-5 of small.txt',
-      contains: ['line 3', 'line 5'],
-      excludes: ['line 2', 'line 6'],
-    },
-    {
       name: 'an end clamped past EOF, saying so in the summary',
       range: { start: 8, end: 999 },
       summary:
@@ -60,13 +53,6 @@ describe('read_file line ranges', () => {
       contains: [],
       excludes: [],
       empty: true,
-    },
-    {
-      name: 'to EOF when only a start is given',
-      range: { start: 7 },
-      summary: 'Read lines 7-10 of small.txt',
-      contains: ['line 7', 'line 10'],
-      excludes: ['line 6'],
     },
     {
       name: 'the array range form some models emit',

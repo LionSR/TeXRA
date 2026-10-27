@@ -28,7 +28,7 @@ interface PromptInputEvent {
   options: PromptInputOptions;
 }
 
-export interface FakeUIHostsOptions {
+interface FakeUIHostsOptions {
   promptResponses?: readonly string[];
   confirmResponses?: readonly boolean[];
   inputResponses?: readonly (string | undefined)[];
@@ -114,7 +114,7 @@ class FakeExternalOpener implements ExternalOpener {
  * inject each port individually; this aggregate exists only so test support
  * can assemble and pass them as a single bundle.
  */
-export interface FakeUIHosts {
+interface FakeUIHosts {
   readonly prompt: FakePromptHost;
   readonly externalOpener: FakeExternalOpener;
 }

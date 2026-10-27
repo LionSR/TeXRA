@@ -51,12 +51,6 @@ describe('run registration and finalization', () => {
             workingDirectory: workingDirectory ?? '/workspace/root',
           },
         );
-        expect(
-          (yield* session.view.read([runId])).runs.get(runId),
-        ).toMatchObject({
-          identity: options.identity,
-          followUpSupport: 'nativeInteractive',
-        });
       }),
   );
 

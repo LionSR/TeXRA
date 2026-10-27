@@ -9,11 +9,9 @@ import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Effect, Exit, Scope } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { createDesktopWorkspaceIpc } from '@desktop/main/desktopWorkspaceIpc';
-import type { DesktopBrowserViews } from '@desktop/main/desktopBrowserViews';
-import type { DesktopPtyHost } from '@desktop/main/desktopPtyHost';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -22,46 +20,33 @@ let workspacePath = '';
 let externalPath = '';
 let missingExternalPath = '';
 
-function createPtyHost(): DesktopPtyHost {
-  return {
-    create: vi.fn(async () => {
-      throw new Error('Terminal is not used in this test.');
-    }),
-    get: vi.fn(() => undefined),
-    disposeAll: vi.fn(),
-  };
-}
-
-function createBrowserViews(): DesktopBrowserViews {
-  return {
-    open: vi.fn(),
-    show: vi.fn(),
-    hideAll: vi.fn(),
-    close: vi.fn(),
-    disposeAll: vi.fn(),
-  };
-}
-
-type WorkspaceIpcOptions = Parameters<typeof createDesktopWorkspaceIpc>[1];
-
-function createIpc(
-  postToRenderer: (message: unknown) => void,
-  overrides: Partial<WorkspaceIpcOptions> = {},
-) {
-  const runtime = testRuntime();
-  const options: WorkspaceIpcOptions = {
-    ptyHost: createPtyHost(),
-    browserViews: createBrowserViews(),
-    toWindowBounds: (bounds) => bounds,
-    getWorkspacePath: () => workspacePath,
-    ...overrides,
-  };
-  const ipc = createDesktopWorkspaceIpc({ postToRenderer }, options);
+function createIpc() {
+  const ipc = createDesktopWorkspaceIpc(
+    { postToRenderer: () => {} },
+    {
+      ptyHost: {
+        create: async () => {
+          throw new Error('Terminal is not used in this test.');
+        },
+        get: () => undefined,
+        disposeAll: () => {},
+      },
+      browserViews: {
+        open: () => {},
+        show: () => {},
+        hideAll: () => {},
+        close: () => {},
+        disposeAll: () => {},
+      },
+      toWindowBounds: (bounds) => bounds,
+      getWorkspacePath: () => workspacePath,
+    },
+  );
   // The IPC follows a process-global bus, so a fixture whose scope stayed
   // open would keep reacting to later tests' emits.
   const scope = Scope.makeUnsafe();
   liveScopes.push(scope);
-  runtime.runSync(
+  testRuntime().runSync(
     Effect.forkIn(ipc.followFilesWritten, scope, { startImmediately: true }),
   );
   return ipc;
@@ -78,15 +63,7 @@ describe('desktop workspace IPC', () => {
     externalPath = join(fixtureRoot, 'external.txt');
     missingExternalPath = join(fixtureRoot, 'missing-external.txt');
     mkdirSync(workspacePath);
-    mkdirSync(join(workspacePath, 'src', 'deep'), { recursive: true });
-    mkdirSync(join(workspacePath, 'node_modules'));
     writeFileSync(join(workspacePath, 'paper.tex'), 'inside', 'utf8');
-    writeFileSync(join(workspacePath, 'src', 'index.ts'), 'export {};', 'utf8');
-    writeFileSync(
-      join(workspacePath, 'src', 'deep', 'nested.ts'),
-      'export {};',
-      'utf8',
-    );
     writeFileSync(externalPath, 'outside', 'utf8');
     symlinkSync(externalPath, join(workspacePath, 'linked.tex'));
     symlinkSync(
@@ -106,7 +83,7 @@ describe('desktop workspace IPC', () => {
     'reads regular workspace files but rejects symlink targets outside the workspace',
     () =>
       Effect.gen(function* () {
-        const ipc = createIpc(vi.fn());
+        const ipc = createIpc();
         const context = yield* testRuntime().contextEffect;
 
         expect(
@@ -145,7 +122,7 @@ describe('desktop workspace IPC', () => {
     'refuses a save over a file that changed on disk since the editor read it',
     () =>
       Effect.gen(function* () {
-        const ipc = createIpc(vi.fn());
+        const ipc = createIpc();
         const context = yield* testRuntime().contextEffect;
         const save = (contents: string, base: string | null) =>
           ipc

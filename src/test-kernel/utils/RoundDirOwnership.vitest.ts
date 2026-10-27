@@ -1,7 +1,7 @@
 import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, type FileSystem, Schema } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import { MemoryStateStore } from '@platform/defaults/memoryState';
@@ -22,41 +22,30 @@ const tempDirs = useTempDirs();
 
 /** One of the file service's programs on the node `FileSystem` the process
  *  runtime serves it with in production. */
-const runFileServiceProgram = <A, E>(
+const onNodeFs = <A, E>(
   program: Effect.Effect<A, E, FileSystem.FileSystem>,
 ): Promise<A> =>
   Effect.runPromise(program.pipe(Effect.provide(nodePlatformLayer)));
-
-/**
- * Creates a temp workspace + storage pair backed by the real node filesystem
- * and installs a platform pointing at it. Returns the workspace directory.
- */
-async function installTempWorkspace(prefix: string): Promise<string> {
-  const tempDir = await makeTempDir(prefix, tempDirs);
-
-  const workspaceDir = path.join(tempDir, 'workspace');
-  const storageRoot = path.join(tempDir, 'storage');
-  await mkdir(workspaceDir, { recursive: true });
-  await installFakePlatform(
-    {
-      workspacePath: workspaceDir,
-      storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
-      globalStoragePath: resolveGlobalStoragePath(storageRoot),
-    },
-    {
-      globalState: new MemoryStateStore(),
-      workspaceState: new MemoryStateStore(),
-    },
-  );
-
-  return workspaceDir;
-}
 
 describe('round-dir ownership', () => {
   // Failure mode: a mirror created over an entry already at its path
   // removed whatever stood there, the run's own file included.
   it('never replaces a real file at the mirror path with a link', async () => {
-    const workspaceDir = await installTempWorkspace('texra-mirror-own-file-');
+    const tempDir = await makeTempDir('texra-mirror-own-file-', tempDirs);
+    const workspaceDir = path.join(tempDir, 'workspace');
+    const storageRoot = path.join(tempDir, 'storage');
+    await mkdir(workspaceDir, { recursive: true });
+    await installFakePlatform(
+      {
+        workspacePath: workspaceDir,
+        storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
+        globalStoragePath: resolveGlobalStoragePath(storageRoot),
+      },
+      {
+        globalState: new MemoryStateStore(),
+        workspaceState: new MemoryStateStore(),
+      },
+    );
     const stylePath = path.join(workspaceDir, 'macros.sty');
     await writeFile(stylePath, 'workspace\n');
 
@@ -69,7 +58,7 @@ describe('round-dir ownership', () => {
     await writeFile(runFile, 'the run wrote this\n');
 
     const fileService = new RunFileService(runId, testWorkspaceRoots());
-    await runFileServiceProgram(
+    await onNodeFs(
       fileService.mirrorWorkspaceFile(
         createWorkspaceLocation(stylePath, 'macros.sty'),
       ),

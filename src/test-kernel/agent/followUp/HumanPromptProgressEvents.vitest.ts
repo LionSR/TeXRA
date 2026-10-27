@@ -62,72 +62,60 @@ describe('human prompt progress events', () => {
       const decided = autoDecideRequests(testDefaultSession(), () => ({
         action: 'approve',
       }));
+      yield* Effect.addFinalizer(() => Effect.sync(decided.detach));
+      yield* testDefaultSession().approvals.change(
+        runId,
+        humanGrant(['toolEdit'], true),
+      );
 
-      try {
-        yield* testDefaultSession().approvals.change(
-          runId,
-          humanGrant(['toolEdit'], true),
-        );
+      const approval = yield* inToolContext(explicit.interactions, runId, () =>
+        requestBashApproval({ command: 'echo still asks', grant: 'shell' }),
+      );
 
-        const approval = yield* inToolContext(
-          explicit.interactions,
-          runId,
-          () =>
-            requestBashApproval({ command: 'echo still asks', grant: 'shell' }),
-        );
+      expect(approval).toMatchObject({ action: 'approve' });
+      expect(decided.opened.at(-1)?.payload).toMatchObject({
+        kind: 'bash',
+        data: { command: 'echo still asks' },
+      });
 
-        expect(approval).toMatchObject({ action: 'approve' });
-        expect(decided.opened.at(-1)?.payload).toMatchObject({
-          kind: 'bash',
-          data: { command: 'echo still asks' },
-        });
+      // A bash bypass answers without asking; the edit bypass above is not
+      // what silenced it.
+      yield* testDefaultSession().approvals.change(
+        runId,
+        humanGrant(['bash'], true),
+      );
 
-        // A bash bypass answers without asking; the edit bypass above is not
-        // what silenced it.
-        yield* testDefaultSession().approvals.change(
-          runId,
-          humanGrant(['bash'], true),
-        );
+      const bypassed = yield* inToolContext(explicit.interactions, runId, () =>
+        requestBashApproval({ command: 'echo bypassed', grant: 'shell' }),
+      );
 
-        const bypassed = yield* inToolContext(
-          explicit.interactions,
-          runId,
-          () =>
-            requestBashApproval({ command: 'echo bypassed', grant: 'shell' }),
-        );
+      expect(bypassed).toEqual({ action: 'approve' });
+      expect(decided.opened).toHaveLength(1);
 
-        expect(bypassed).toEqual({ action: 'approve' });
-        expect(decided.opened).toHaveLength(1);
+      yield* testDefaultSession().approvals.change(
+        runId,
+        humanGrant(['toolEdit'], false),
+      );
 
-        yield* testDefaultSession().approvals.change(
-          runId,
-          humanGrant(['toolEdit'], false),
-        );
+      const editApproval = yield* inToolContext(
+        explicit.interactions,
+        runId,
+        () =>
+          requestToolEditApproval({
+            path: 'draft.tex',
+            originalContent: 'old',
+            proposedContent: 'new',
+            sourceTool: 'test',
+          }),
+      );
 
-        const editApproval = yield* inToolContext(
-          explicit.interactions,
-          runId,
-          () =>
-            requestToolEditApproval({
-              path: 'draft.tex',
-              originalContent: 'old',
-              proposedContent: 'new',
-              sourceTool: 'test',
-            }),
-        );
-
-        expect(
-          decided.opened.filter(
-            (request) => request.payload.kind === 'toolEdit',
-          ),
-        ).toHaveLength(1);
-        expect(editApproval).toMatchObject({
-          action: 'apply',
-          appliedContent: 'new',
-        });
-      } finally {
-        decided.detach();
-      }
+      expect(
+        decided.opened.filter((request) => request.payload.kind === 'toolEdit'),
+      ).toHaveLength(1);
+      expect(editApproval).toMatchObject({
+        action: 'apply',
+        appliedContent: 'new',
+      });
     }).pipe(Effect.provide(nativeToolTestLayer())),
   );
 });

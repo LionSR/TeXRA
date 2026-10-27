@@ -2,18 +2,14 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, FileSystem, Layer } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { InboxItem, SendOptions } from '@agent/followUp/Inbox';
 import { type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { appendRow, rowAggregate, positionRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import type { RunControls } from '@agent/runtime/RunHandle';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
-import { type RunId } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import { type RunState } from '@shared/session/runState';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -40,36 +36,19 @@ import { sessionWithInteractions } from '../progressTestUtils';
 interface LoopInit extends ScriptedRunInit {
   readonly script: readonly ScriptedTurn[];
   readonly resume?: boolean;
-  /** The run history the run writes through; the session's own by default. */
-  readonly runHistory?: RunHistory['Service'];
-  /** Host wiring that is live while the loop can accept an interrupt. */
-  readonly attachment?: {
-    attach(controls: RunControls): void;
-    detach(controls: RunControls): void;
-  };
 }
 
-function loopProgram(
-  init: LoopInit,
-  requests: InvokeRequest[],
-  processFs?: FileSystem.FileSystem,
-) {
-  return runToolUse({
-    resume: init.resume === true,
-    ...(init.attachment ? { attachment: init.attachment } : {}),
-  }).pipe(
+function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
+  return runToolUse({ resume: init.resume === true }).pipe(
     Effect.provide(
       Layer.mergeAll(
         scriptedInvokerLayer(init.script, requests),
         nativeToolTestLayer({
           run: { runId: init.runId, session: init.session, toolPolicy: {} },
         }),
-        ...(processFs ? [Layer.succeed(FileSystem.FileSystem, processFs)] : []),
       ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
-        Layer.provideMerge(
-          Layer.succeed(RunHistory)(init.runHistory ?? init.session.runHistory),
-        ),
+        Layer.provideMerge(Layer.succeed(RunHistory)(init.session.runHistory)),
       ),
     ),
   );
@@ -123,20 +102,7 @@ const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
   return { fiber, requests, park };
 });
 
-const quietSession = (overrides: Record<string, unknown> = {}) =>
-  sessionWithInteractions({ emit: () => {}, ...overrides });
-
-/** Put input on the run's queue before the loop claims it. */
-const enqueue = Effect.fn('test.enqueue')(function* (
-  session: SessionHandle,
-  runId: RunId,
-  items: readonly (InboxItem & { readonly hold?: SendOptions['hold'] })[],
-) {
-  yield* session.log.settled;
-  for (const { hold, ...item } of items) {
-    yield* session.followUps.send(runId, item, { hold });
-  }
-});
+const quietSession = () => sessionWithInteractions({ emit: () => {} });
 
 /** The plain text of every user message the run recorded. */
 function userTexts(state: RunState | null): string[] {
@@ -265,13 +231,12 @@ describe('the batch a parked run consumes', () => {
         const runId = startedRun(session);
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
-        yield* enqueue(session, runId, [
-          {
-            text: 'use this diagram',
-            mediaFiles: ['/tmp/texra-unreadable-figure.png'],
-            from: { kind: 'user' as const },
-          },
-        ]);
+        yield* session.log.settled;
+        yield* session.followUps.send(runId, {
+          text: 'use this diagram',
+          mediaFiles: ['/tmp/texra-unreadable-figure.png'],
+          from: { kind: 'user' as const },
+        });
 
         const exit = yield* Effect.exit(
           runLoop({

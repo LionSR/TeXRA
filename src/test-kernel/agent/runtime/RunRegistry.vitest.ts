@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, type Scope, SubscriptionRef } from 'effect';
+import { Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -12,13 +12,11 @@ import type {
   SessionTransaction,
 } from '@agent/runtime/SessionHandle';
 import { runStateAppend } from '@shared/session/runHistory';
-import { type ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   aggregateTarget,
   RUN_PHASE,
   type RunId,
   type RunPhase,
-  type RunSubstate,
   type SessionEventDraft,
 } from '@shared/schemas';
 import type { RunView, SessionView } from '@shared/session/sessionView';
@@ -38,98 +36,41 @@ import { generateRunId } from '@utils/core';
 
 setupPlatform({ workspacePath: '/workspace' });
 
-type HandleOverrides = {
-  agentName?: string;
-};
-
 /** Builds a `RunHandle` for a toolUse test-subagent, the shape most tests need. */
-function createHandle(
-  runId: RunId,
-  parent: RunId | null = null,
-  overrides: HandleOverrides = {},
-): RunHandle {
-  const handle = testRunHandle({
-    runId,
-    parent,
-    agent: overrides.agentName ?? 'test-subagent',
-  });
-  return handle;
+function createHandle(runId: RunId, parent: RunId | null = null): RunHandle {
+  return testRunHandle({ runId, parent, agent: 'test-subagent' });
 }
 
 /**
- * The phase the registry reads, stated the way the fold carries it
- * (`RunView.status`, ruling A9-2). The registry holds no phase of its own, so
- * a test that needs one puts it here; the only half the registry owns is
- * being told that a run ended, which {@link FoldedPhases.set} does the way
- * the session's tail does (on every phase: the sweep reads the fold).
+ * Wires a registry over the default session. The registry holds no phase of
+ * its own: `setPhase` states the phase the fold carries (`RunView.status`)
+ * the way the session's tail does, and a committed `run.detach` folds the way
+ * the view's does: the child's edge is gone.
  */
-interface FoldedPhases {
-  readonly set: (
-    runId: RunId,
-    status: RunPhase,
-    extra?: {
-      readonly substate?: RunSubstate;
-      readonly runStartedAt?: number;
-    },
-  ) => void;
-}
-
-/** Wires the events/phases/registry trio most tests drive kills through. */
-function createRegistry(
-  options: {
-    commit?: (
-      drafts: readonly SessionEventDraft[],
-    ) => Effect.Effect<void, Error>;
-    holdRunClaim?: (runId: RunId) => Effect.Effect<void, Error, Scope.Scope>;
-    borrowRunClaim?: (runId: RunId) => Effect.Effect<void, Error, Scope.Scope>;
-  } = {},
-): {
-  events: PublishedEvents;
-  phases: FoldedPhases;
+function createRegistry(): {
+  setPhase: (runId: RunId, status: RunPhase) => void;
   registry: RunRegistry;
-  grants: {
-    readonly runs: Map<RunId, { readonly parentId: RunId | null }>;
-    readonly policy: Map<RunId, ApprovalGrants>;
-  };
 } {
-  // The session's publish path, in miniature: every draft the registry
-  // publishes is appended in order, and a phase the fold moved is what the
-  // registry reads of the run's view.
-  const events: PublishedEvents = { published: [] };
   const views = new Map<RunId, RunView>();
-  const phases: FoldedPhases = {
-    set: (runId, status, extra = {}) => {
-      // The fields the registry reads off a run's view (these runs are
-      // roots); the one assertion stands for the rest of the projection no
-      // reader here touches.
-      views.set(runId, {
-        status,
-        substate: extra.substate ?? null,
-        runStartedAt: extra.runStartedAt ?? null,
-        parentId: null,
-      } as RunView);
-    },
+  const setPhase = (runId: RunId, status: RunPhase) => {
+    // The fields the registry reads off a run's view (these runs are roots).
+    views.set(runId, {
+      status,
+      substate: null,
+      runStartedAt: null,
+      parentId: null,
+    } as RunView);
   };
   // What the registry reads of its session: the run's view, the grants a
-  // detached child keeps, the claims (no-ops unless a test passes its own),
-  // and its own `run.detach` batches, which land in `events`. Everything
-  // else, a run's end among it, is the default session's.
+  // detached child keeps, and its own `run.detach` batches. Everything else,
+  // a run's end among it, is the default session's.
   const real = testDefaultSession();
-  const grants = {
-    runs: new Map<RunId, { readonly parentId: RunId | null }>(),
-    policy: new Map<RunId, ApprovalGrants>(),
-  };
   const grantView = Effect.runSync(
-    SubscriptionRef.make(grants as unknown as SessionView),
+    SubscriptionRef.make({
+      runs: new Map(),
+      policy: new Map(),
+    } as unknown as SessionView),
   );
-  const commit =
-    options.commit ??
-    ((drafts: readonly SessionEventDraft[]) =>
-      Effect.sync(() => {
-        events.published.push(...drafts);
-      }));
-  // A committed `run.detach` folds the way the view's does: the child's
-  // edge is gone.
   const fold = (drafts: readonly SessionEventDraft[]) =>
     Effect.sync(() => {
       for (const draft of drafts)
@@ -147,33 +88,21 @@ function createRegistry(
     },
     log: {
       ...real.log,
-      // A detach job's batch lands in `events`; every other write (a run's
-      // end) is the default session's.
       transact: ((work: unknown) =>
         typeof work === 'function'
           ? real.log.transact((tx) =>
               (work as (tx: SessionTransaction) => Effect.Effect<unknown>)({
                 ...tx,
-                // cast: a refused detach fails as the test's own error.
                 append: ((drafts: readonly SessionEventDraft[]) =>
                   drafts.some((draft) => draft.type === 'run.detach')
-                    ? Effect.as(
-                        Effect.andThen(commit(drafts), fold(drafts)),
-                        [],
-                      )
+                    ? Effect.as(fold(drafts), [])
                     : runStateAppend(tx.append)(
                         drafts,
                       )) as SessionTransaction['append'],
               }),
             )
-          : Effect.as(
-              commit(work as readonly SessionEventDraft[]),
-              [],
-            )) as SessionLog['transact'],
-      hold: (runId: RunId, hold?: { readonly ends?: boolean }) =>
-        (hold?.ends === true ? options.holdRunClaim : options.borrowRunClaim)?.(
-          runId,
-        ) ?? Effect.void,
+          : Effect.succeed([])) as SessionLog['transact'],
+      hold: () => Effect.void,
     },
   } as SessionHandle;
   const registry = new RunRegistry({
@@ -182,29 +111,19 @@ function createRegistry(
     programs: testRunPrograms,
     wake: () => {},
   });
-  return { events, phases, registry, grants };
-}
-
-interface PublishedEvents {
-  readonly published: SessionEventDraft[];
+  return { setPhase, registry };
 }
 
 /** Tracks a handle whose run a stop reaches the way production stops a run:
- * a live generation fiber on the run registry, interrupted by run id. The
- * interrupt has observably landed once the stop's settlement resolves. */
+ * a live generation fiber on the run registry, interrupted by run id. */
 function trackInterruptibleHandle(
   registry: RunRegistry,
-  ids: {
-    runId: RunId;
-    parent?: RunId | null;
-  },
+  runId: RunId,
+  parent: RunId | null,
   interrupt: () => void,
-  overrides?: HandleOverrides,
-): RunHandle {
-  const handle = createHandle(ids.runId, ids.parent ?? null, overrides);
-  registry.track(handle);
-  admitInterruptibleRun(registry, ids.runId, interrupt);
-  return handle;
+): void {
+  registry.track(createHandle(runId, parent));
+  admitInterruptibleRun(registry, runId, interrupt);
 }
 
 describe('runRegistry', () => {
@@ -235,7 +154,6 @@ describe('runRegistry', () => {
         );
         yield* Deferred.await(untracked);
         yield* registry.stopAll();
-        expect(registry.get(runId)?.handle).toBeUndefined();
         expect(registry.get(runId)?.live === true).toBe(true);
         const drain = yield* Effect.forkChild(
           registry
@@ -243,12 +161,9 @@ describe('runRegistry', () => {
             .pipe(Effect.andThen(Deferred.succeed(drained, undefined))),
           { startImmediately: true },
         );
-        try {
-          yield* Effect.yieldNow;
-          expect(yield* Deferred.isDone(drained)).toBe(false);
-        } finally {
-          yield* Deferred.succeed(release, undefined);
-        }
+        yield* Effect.yieldNow;
+        expect(yield* Deferred.isDone(drained)).toBe(false);
+        yield* Deferred.succeed(release, undefined);
         // The close stopped the generation: it ends interrupted.
         yield* Fiber.await(generation);
         yield* Fiber.join(drain);
@@ -260,58 +175,54 @@ describe('runRegistry', () => {
     "refuses a child under a stopped parent from the stop's request to its fold and on (issue #12442)",
     () =>
       Effect.gen(function* () {
-        const { phases, registry } = createRegistry();
+        const { setPhase, registry } = createRegistry();
+        yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
         const rootRunId = generateRunId();
         const childRunId = generateRunId();
         const lateChildRunId = generateRunId();
         const postFoldChildRunId = generateRunId();
         const childInterrupt = vi.fn();
 
-        try {
-          trackInterruptibleHandle(registry, { runId: rootRunId }, vi.fn(), {
-            agentName: 'test-root',
-          });
-          trackInterruptibleHandle(
-            registry,
-            { runId: childRunId, parent: rootRunId },
-            childInterrupt,
-          );
-          phases.set(rootRunId, RUN_PHASE.RUNNING);
+        trackInterruptibleHandle(registry, rootRunId, null, vi.fn());
+        trackInterruptibleHandle(
+          registry,
+          childRunId,
+          rootRunId,
+          childInterrupt,
+        );
+        setPhase(rootRunId, RUN_PHASE.RUNNING);
 
-          // The detaching stop settles completely, its children severed,
-          // while the parent's `run.end` has not folded yet. The stop still
-          // stands on the parent's entry, so a child whose lineage read
-          // preceded the stop is refused as it registers.
-          yield* registry.stop(rootRunId, {
-            detachActiveChildren: true,
-            reason: 'user',
-          }).settlement;
-          expect(registry.parentOf(childRunId)).toBeNull();
-          expect(() =>
-            registry.track(createHandle(lateChildRunId, rootRunId)),
-          ).toThrow(/that run was stopped/);
-          expect(registry.get(lateChildRunId)?.handle).toBeUndefined();
+        // The detaching stop settles completely, its children severed,
+        // while the parent's `run.end` has not folded yet. The stop still
+        // stands on the parent's entry, so a child whose lineage read
+        // preceded the stop is refused as it registers.
+        yield* registry.stop(rootRunId, {
+          detachActiveChildren: true,
+          reason: 'user',
+        }).settlement;
+        expect(registry.parentOf(childRunId)).toBeNull();
+        expect(() =>
+          registry.track(createHandle(lateChildRunId, rootRunId)),
+        ).toThrow(/that run was stopped/);
+        expect(registry.get(lateChildRunId)?.handle).toBeUndefined();
 
-          // The fold changes nothing for the detached child: its sever stands.
-          phases.set(rootRunId, RUN_PHASE.CANCELLED);
-          expect(childInterrupt).not.toHaveBeenCalled();
-          expect(registry.parentOf(childRunId)).toBeNull();
+        // The fold changes nothing for the detached child: its sever stands.
+        setPhase(rootRunId, RUN_PHASE.CANCELLED);
+        expect(childInterrupt).not.toHaveBeenCalled();
+        expect(registry.parentOf(childRunId)).toBeNull();
 
-          // From the fold on, admission itself refuses the stopped parent.
-          expect(() =>
-            registry.track(createHandle(postFoldChildRunId, rootRunId)),
-          ).toThrow(/that run was stopped/);
-          expect(() =>
-            registry.reserveChildActivation({
-              runId: postFoldChildRunId,
-              launchParent: rootRunId,
-              interrupt: vi.fn(),
-            }),
-          ).toThrow(/that run was stopped/);
-          expect(registry.get(postFoldChildRunId)?.handle).toBeUndefined();
-        } finally {
-          registry.dispose();
-        }
+        // From the fold on, admission itself refuses the stopped parent.
+        expect(() =>
+          registry.track(createHandle(postFoldChildRunId, rootRunId)),
+        ).toThrow(/that run was stopped/);
+        expect(() =>
+          registry.reserveChildActivation({
+            runId: postFoldChildRunId,
+            launchParent: rootRunId,
+            interrupt: vi.fn(),
+          }),
+        ).toThrow(/that run was stopped/);
+        expect(registry.get(postFoldChildRunId)?.handle).toBeUndefined();
       }),
   );
 });
@@ -336,15 +247,12 @@ it.effect(
       );
       const remove = vi.fn();
       const removal = registry.withInactiveRunStep(runId, Effect.sync(remove));
-      try {
-        // Admission before the launch callback begins must already see its slot.
-        expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
-        yield* Deferred.await(started);
-        expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
-        expect(remove).not.toHaveBeenCalled();
-      } finally {
-        yield* Deferred.succeed(finish, undefined);
-      }
+      // Admission before the launch callback begins must already see its slot.
+      expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
+      yield* Deferred.await(started);
+      expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
+      expect(remove).not.toHaveBeenCalled();
+      yield* Deferred.succeed(finish, undefined);
       yield* Fiber.join(generation);
       yield* Effect.yieldNow;
 

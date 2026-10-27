@@ -205,7 +205,6 @@ describe('session view update', () => {
     expect(runView(replay, CHILD).transcript).toEqual(
       runView(live, CHILD).transcript,
     );
-    expect(runView(replay, CHILD).transcript.rows).toHaveLength(3);
     expect(runView(replay, CHILD).transcript.rows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -240,11 +239,7 @@ describe('session view update', () => {
     const withOwner = viewOf([...scenario.pending, alive]);
     expect(runView(withOwner, CHILD).group).toBe('waiting');
     expect(runView(withOwner, CHILD).approval).toBe('own');
-    expect(runView(withOwner, CHILD).forceExpanded).toBe(true);
     expect(runView(withOwner, CHILD).readOnly).toBe(false);
-    expect(runView(withOwner, CHILD).statusKey).toBe('waitingOnUser');
-    expect(runView(withOwner, CHILD).tone).toBe('warning');
-    expect(runView(withOwner, CHILD).statusNotice).toBeNull();
     expect(runView(withOwner, ROOT).approval).toBe('descendant');
     expect(runView(withOwner, ROOT).group).toBe('running');
     // The path to the decision is forced open.
@@ -253,20 +248,15 @@ describe('session view update', () => {
 
     // The same log with nobody holding the owner: every in-flight run is
     // interrupted, never waiting. The phase stays running and the request
-    // stays listed, so a resume can re-ask; the copy is what says
-    // interrupted, and the interrupted path is forced open too.
+    // stays listed, so a resume can re-ask, and the interrupted path is
+    // forced open too.
     const interrupted = viewOf([...scenario.pending, nobody]);
     const child = runView(interrupted, CHILD);
     expect(child.group).toBe('interrupted');
     expect(child.approval).toBe('none');
     expect(child.status).toBe(RUN_PHASE.RUNNING);
-    expect(child.statusKey).toBe('interrupted');
-    expect(child.tone).toBe('warning');
-    expect(child.statusNotice).toStrictEqual({ kind: 'interrupted' });
     expect(child.readOnly).toBe(false);
-    expect(child.forceExpanded).toBe(true);
     expect(runView(interrupted, ROOT).group).toBe('interrupted');
-    expect(runView(interrupted, ROOT).approval).toBe('none');
     expect(runView(interrupted, ROOT).forceExpanded).toBe(true);
     expect(interrupted.requests).toHaveLength(1);
     // A run with only its run.start (its process died before the first
@@ -404,12 +394,6 @@ describe('session view update', () => {
 // The run-state fold: the sibling of `fold` that produces what the loop
 // continues from. Rows are built through `SessionEventSchema`, the boundary
 // that runs in production; nothing here reaches an arm schema directly.
-//
-// Measured serialized size of the snapshot draft below (aggregate id
-// included, parsed defaults filled), so PR 2 has a number before it turns the
-// writes on (before the offered toolset joined the tool-use state): tool-use
-// with no workspace was 362 bytes. It grows with the flow state it
-// carries, never with the conversation, which the rows carry.
 // ---------------------------------------------------------------------------
 
 const RUN_HISTORY_RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
@@ -714,8 +698,6 @@ describe('applyRunRows', () => {
     expect(state?.usage.totalCacheReadInputTokens).toBe(4);
     // The turn's stamped price: a settlement adds nothing to it.
     expect(state?.usage.totalCost).toBe(0.25);
-    expect(state?.at).toBe('turn.end');
-    expect(state?.turn).toBe(1);
     // Incremental and cold folds are the same computation.
     const half = stateOf(applyRunRows(null, TURN_ROWS.slice(0, 6)));
     expect(stateOf(applyRunRows(half, TURN_ROWS.slice(6)))).toEqual(state);

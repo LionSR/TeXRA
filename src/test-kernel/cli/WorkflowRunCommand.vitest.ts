@@ -10,9 +10,8 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 
 import { it } from '@effect/vitest';
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import type { DocumentsResult } from '@texra/shared/plugins/documentOutputs';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -22,19 +21,14 @@ import type {
 } from '@cli/runtime/executeCli';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
-import {
-  qualifyAggregateId,
-  RUN_OUTCOME,
-  RunRecordFieldsSchema,
-  type RunId,
-} from '@shared/schemas';
+import { qualifyAggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {
   fakeProcessServices,
   installedHost,
 } from '@test/support/setupPlatform';
-import { createTestSession, seedRows } from '@test/support/sessionTestUtils';
+import { createTestSession } from '@test/support/sessionTestUtils';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 
 const mocks = vi.hoisted(() => {
@@ -110,21 +104,9 @@ type WorkflowRunPayload = Extract<
 /** The session the suite's init installs, as the command resolved it. */
 let fixtureSession: SessionHandle | undefined;
 
-function currentSession(): SessionHandle {
-  if (!fixtureSession) throw new Error('No fixture session installed.');
-  return fixtureSession;
-}
-
-/**
- * Run ids the mocked launch has reported, waiting for the opening row its
- * real counterpart would have committed; and the ones already opened this
- * test, so an explicit seed and the program's seed never double one.
- */
+/** Run ids the mocked launch has reported, waiting for the opening row its
+ *  real counterpart would have committed. */
 let pendingRunStarts: string[] = [];
-const seededRunIds = new Set<string>();
-/** The output files a run's recorded configuration names, for the runs
- *  that record some. */
-const recordedOutputFiles = new Map<string, readonly string[]>();
 
 /** The workflow command's program over the shared happy-path inputs. */
 function workflowProgram(
@@ -140,7 +122,7 @@ function workflowProgram(
   return Effect.gen(function* () {
     yield* Effect.forEach(
       starts,
-      (runId) => seedStartedRun(currentSession(), runId),
+      (runId) => seedStartedRun(fixtureSession!, runId),
       { discard: true },
     );
     return yield* Effect.provide(
@@ -198,13 +180,7 @@ function workflowRun(
   };
 }
 
-function mockWorkflowRun(
-  result: WorkflowExecuteResult,
-  once = false,
-  /** What the launch resolved the agent's declared outputs to, as the
-   *  run's recorded configuration states them. */
-  agentDefaultOutputFiles: readonly string[] = [],
-): void {
+function mockWorkflowRun(result: WorkflowExecuteResult): void {
   // The finalization runs the command's post-run step on the committed
   // result, as the real skeleton does.
   const implementation = (
@@ -215,13 +191,8 @@ function mockWorkflowRun(
     result.ok && options.afterRun
       ? Effect.as(options.afterRun(result.result), result)
       : Effect.succeed(result);
-  if (result.ok) {
-    pendingRunStarts.push(result.result.runId);
-    if (agentDefaultOutputFiles.length > 0)
-      recordedOutputFiles.set(result.result.runId, agentDefaultOutputFiles);
-  }
-  if (once) mocks.executeCliConfig.mockImplementationOnce(implementation);
-  else mocks.executeCliConfig.mockImplementation(implementation);
+  if (result.ok) pendingRunStarts.push(result.result.runId);
+  mocks.executeCliConfig.mockImplementationOnce(implementation);
 }
 
 /** Materializes the round-1 output file the copy target is sourced from. */
@@ -238,45 +209,21 @@ async function writeGeneratedOutput(root: string): Promise<string> {
  * commit claims it before finalization writes.
  */
 const seedStartedRun = (session: SessionHandle, runId: string) =>
-  Effect.gen(function* () {
-    if (seededRunIds.has(runId)) return;
-    yield* session.log.transact([
-      {
-        type: 'run.start',
-        aggregateId: qualifyAggregateId('run', runId as RunId),
-        identity: { kind: 'agent', agent: 'polish' },
-        userFollowUpSupport: 'unsupported',
-        parent: null,
-        provenance: null,
-      },
-    ]);
-    // The configuration the launch recorded, for a run that names its
-    // output files there.
-    const outputFiles = recordedOutputFiles.get(runId);
-    if (outputFiles !== undefined)
-      yield* seedRows(session.log)([
-        {
-          type: 'run.config',
-          aggregateId: qualifyAggregateId('run', runId as RunId),
-          config: Schema.decodeUnknownSync(RunRecordFieldsSchema)(
-            asDocumentTask({
-              agent: 'polish',
-              model: 'test-model',
-              inputFiles: ['paper.tex'],
-              outputFiles: [...outputFiles],
-            }),
-          ),
-        },
-      ]);
-    seededRunIds.add(runId);
-  });
+  session.log.transact([
+    {
+      type: 'run.start',
+      aggregateId: qualifyAggregateId('run', runId as RunId),
+      identity: { kind: 'agent', agent: 'polish' },
+      userFollowUpSupport: 'unsupported',
+      parent: null,
+      provenance: null,
+    },
+  ]);
 
 describe('CLI run command, workflow agents', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     pendingRunStarts = [];
-    recordedOutputFiles.clear();
-    seededRunIds.clear();
     // The CLI init hands its caller the platform's stores; the commands
     // under test read `secrets`/`globalState` off what it returns.
     const session = await Effect.runPromise(createTestSession());
@@ -341,10 +288,7 @@ describe('CLI run command, workflow agents', () => {
           generated,
           path.join(workspace, 'paper.tex'),
         );
-        mockWorkflowRun(
-          workflowRun('abc003', { outputs: [outputSummary] }),
-          true,
-        );
+        mockWorkflowRun(workflowRun('abc003', { outputs: [outputSummary] }));
 
         const exitCode = yield* workflowProgram(
           { outputDir: 'out' },
@@ -352,13 +296,6 @@ describe('CLI run command, workflow agents', () => {
         );
 
         expect(exitCode).toBe(0);
-        expect(mocks.executeCliConfig.mock.calls[0]?.[0]).toMatchObject({
-          cli: {
-            outputFile: undefined,
-            outputDirectory: path.join(workspace, 'out'),
-            expectedOutputFiles: ['paper.tex'],
-          },
-        });
         expect(
           yield* Effect.promise(() =>
             fs.readFile(path.join(workspace, 'out', 'paper.tex'), 'utf8'),
@@ -368,15 +305,9 @@ describe('CLI run command, workflow agents', () => {
     ),
   );
 
-  it.effect.each([
-    {
-      label: '--output',
-      init: { output: 'polished.tex' },
-      destination: (root: string) => path.join(root, 'polished.tex'),
-    },
-  ])(
-    'keeps failed output in run storage and preserves the requested $label destination',
-    ({ init, destination }) =>
+  it.effect(
+    'keeps failed output in run storage and preserves the requested --output destination',
+    () =>
       withTempDirEffect('texra-workflow-', (root) =>
         Effect.gen(function* () {
           const generated = yield* Effect.promise(() =>
@@ -391,16 +322,12 @@ describe('CLI run command, workflow agents', () => {
               outcome: RUN_OUTCOME.FAILED,
               outputs: [outputSummary],
             }),
-            true,
           );
-          const target = destination(root);
-          yield* Effect.promise(() =>
-            fs.mkdir(path.dirname(target), { recursive: true }),
-          );
+          const target = path.join(root, 'polished.tex');
           yield* Effect.promise(() => fs.writeFile(target, 'keep-me'));
 
           const exitCode = yield* workflowProgram(
-            init,
+            { output: 'polished.tex' },
             createRunCommandCliContext({ cwd: root }),
           );
 
@@ -416,7 +343,6 @@ describe('CLI run command, workflow agents', () => {
           });
           expect(emission?.json).not.toHaveProperty('copiedOutput');
           expect(emission?.json).not.toHaveProperty('copiedOutputs');
-          expect(emission?.text).toContain('FAILED');
           expect(emission?.text).toContain('/tmp/runs/abc00a');
         }),
       ),

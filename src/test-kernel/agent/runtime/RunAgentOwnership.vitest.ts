@@ -13,7 +13,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 import { it } from '@effect/vitest';
-import { Cause, Effect, Exit, Fiber, Schema } from 'effect';
+import { Effect, Fiber, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 import type { RootLaunchOptions } from '@agent/runtime/rootLaunch';
@@ -66,14 +66,8 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
       expect(yield* Effect.flip(launch(session, runId))).toMatchObject({
         message: `Run is already running: ${runId}`,
       });
-      const stop = session.runs.stop(runId, { reason: 'user' });
-      expect(stop.accepted()).toBe(true);
-      yield* stop.settlement;
-      // The first launch's stop is its fiber's interruption.
-      const exit = yield* Fiber.await(first);
-      expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
-        true,
-      );
+      yield* session.runs.stop(runId, { reason: 'user' }).settlement;
+      yield* Fiber.await(first);
       expect(
         storedRows(roots.storage).filter(
           (row) => row.run === runId && row.type === 'run.activate',

@@ -31,16 +31,13 @@ function usageEntry(model: string) {
   };
 }
 
-// The Effect fetch client passes (url, init); read each batch body from the
-// init.
-function stubBatchFetch(): { batches: unknown[]; fetchMock: Mock } {
-  const batches: unknown[] = [];
-  const fetchMock = vi.fn(async (_url: URL, init: RequestInit) => {
-    batches.push(await new Response(init.body).json());
-    return jsonResponse({ success: true, accepted: 1 });
-  });
+/** The usage endpoint; a case asserts it is never reached. */
+function stubBatchFetch(): Mock {
+  const fetchMock = vi.fn(async () =>
+    jsonResponse({ success: true, accepted: 1 }),
+  );
   vi.stubGlobal('fetch', fetchMock);
-  return { batches, fetchMock };
+  return fetchMock;
 }
 
 describe('UsageLogService', () => {
@@ -108,13 +105,12 @@ describe('UsageLogService', () => {
 
     // Optional entries must be discarded without a request.
     async function expectNoOptionalUsageSent(): Promise<void> {
-      const { batches, fetchMock } = stubBatchFetch();
+      const fetchMock = stubBatchFetch();
 
       logUsage(usageEntry('optional'), testWorkspaceRoots().config);
       await vi.advanceTimersByTimeAsync(0);
 
       expect(fetchMock).not.toHaveBeenCalled();
-      expect(batches).toEqual([]);
     }
 
     it.live('does not let a project opt in over a user-wide opt-out', () =>
@@ -142,7 +138,7 @@ describe('UsageLogService', () => {
           startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 }),
         );
 
-        const { batches, fetchMock } = stubBatchFetch();
+        const fetchMock = stubBatchFetch();
 
         logUsage(usageEntry('before-opt-out'), testWorkspaceRoots().config);
         yield* testWorkspaceRoots().config.update(
@@ -154,26 +150,23 @@ describe('UsageLogService', () => {
         yield* Effect.promise(() => vi.advanceTimersByTimeAsync(60_000));
 
         expect(fetchMock).not.toHaveBeenCalled();
-        expect(batches).toEqual([]);
       }),
     );
 
     // The environment kill switch is what a user has when editing settings is
     // awkward: a CI job, a shared machine, or a one-off `TEXRA_NO_TELEMETRY=1
     // texra run`. It overrides a stored `true` and cannot re-enable logging.
-    it.live.each([['TEXRA_NO_TELEMETRY', '1']])(
-      'sends nothing while %s=%s is set',
-      ([name, value]) =>
-        Effect.gen(function* () {
-          yield* testWorkspaceRoots().config.update(
-            TELEMETRY_ENABLED_KEY,
-            true,
-            'global',
-          );
-          vi.stubEnv(name, value);
+    it.live('sends nothing while TEXRA_NO_TELEMETRY=1 is set', () =>
+      Effect.gen(function* () {
+        yield* testWorkspaceRoots().config.update(
+          TELEMETRY_ENABLED_KEY,
+          true,
+          'global',
+        );
+        vi.stubEnv('TEXRA_NO_TELEMETRY', '1');
 
-          yield* Effect.promise(() => expectNoOptionalUsageSent());
-        }),
+        yield* Effect.promise(() => expectNoOptionalUsageSent());
+      }),
     );
   });
 

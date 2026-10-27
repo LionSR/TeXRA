@@ -9,7 +9,6 @@ import { Effect } from 'effect';
 import {
   buildCliContext,
   type BuildCliContextInit,
-  type CliAmbientState,
   type CliContext,
 } from '@cli/runtime/cliContext';
 import {
@@ -29,18 +28,6 @@ const ambient = {
   stderrColorEnabled: false,
 };
 
-function ttyAmbient(overrides: Partial<CliAmbientState> = {}): CliAmbientState {
-  return {
-    isCi: false,
-    stdinIsTty: true,
-    stdoutIsTty: true,
-    stderrIsTty: true,
-    stdoutColorEnabled: true,
-    stderrColorEnabled: true,
-    ...overrides,
-  };
-}
-
 const tempDirs = useTempDirs();
 
 /**
@@ -48,17 +35,12 @@ const tempDirs = useTempDirs();
  * developer's own `~/.texra/v1/global-storage/config.json` must never decide an
  * assertion. Tests that exercise the user layer pass their own `storageRoot`.
  */
-async function cliContext({
-  env,
-  ...init
-}: BuildCliContextInit & {
-  readonly env?: Record<string, string>;
-}): Promise<CliContext> {
+async function cliContext(init: BuildCliContextInit): Promise<CliContext> {
   return Effect.runPromise(
     buildCliContext({
       storageRoot: await makeTempDir('texra-cli-storage-', tempDirs),
       ...init,
-    }).pipe(withEnv(env ?? {}), Effect.provide(nodePlatformLayer)),
+    }).pipe(withEnv({}), Effect.provide(nodePlatformLayer)),
   );
 }
 
@@ -90,7 +72,6 @@ describe('CLI context config defaults', () => {
     );
     const projectContext = await cliContext({
       ambient,
-      env: {},
       globalArgs: { cwd: workspace },
       storageRoot,
     });
@@ -116,7 +97,6 @@ describe('CLI context config defaults', () => {
     await expect(
       cliContext({
         ambient,
-        env: {},
         globalArgs: { cwd: workspace },
         storageRoot,
       }),
@@ -127,7 +107,6 @@ describe('CLI context config defaults', () => {
     await expect(
       cliContext({
         ambient,
-        env: {},
         globalArgs: { cwd: tmpdir() },
         storageRoot,
       }),
@@ -139,8 +118,14 @@ describe('CLI color/no-input flag wiring', () => {
   it('--no-input forces headless mode and defaults approval policy to never', async () => {
     const context = await cliContext({
       // stdin is a TTY, so without --no-input this would be interactive.
-      ambient: ttyAmbient(),
-      env: {},
+      ambient: {
+        isCi: false,
+        stdinIsTty: true,
+        stdoutIsTty: true,
+        stderrIsTty: true,
+        stdoutColorEnabled: true,
+        stderrColorEnabled: true,
+      },
       globalArgs: { cwd: tmpdir(), noInput: true },
     });
     expect(context.mode).toBe('headless');

@@ -4,7 +4,6 @@ import { describe, expect } from 'vitest';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
-import type { CliContext } from '@cli/runtime/cliContext';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
@@ -13,22 +12,12 @@ import {
 } from '@shared/schemas';
 import { testSessionOf } from '@test/support/testProcessRuntime';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {
   createTestSession,
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-
-function context(overrides: Partial<CliContext> = {}): CliContext {
-  return createTestCliContext({
-    mode: 'interactive',
-    renderRunProgress: true,
-    stderrIsTty: true,
-    stdoutColorEnabled: true,
-    stderrColorEnabled: true,
-    ...overrides,
-  });
-}
 
 /** Let the renderer's fiber observe the latest view before a case reads
  *  the output: a few turns of the event loop cover the stream pipeline. */
@@ -39,12 +28,8 @@ async function settle(): Promise<void> {
 }
 /** A run on a real session: its `run.start`, the config the fold reads the
  *  inputs from, and the RUNNING transition, then the fold's own settle. */
-function publishRun(
-  session: SessionHandle,
-  overrides: { runId?: string; agent?: string; inputFiles?: string[] } = {},
-): Effect.Effect<void> {
-  const runId = (overrides.runId ?? 'e5e5e5') as RunId;
-  const agent = overrides.agent ?? 'polish';
+function publishRun(session: SessionHandle, runId: RunId): Effect.Effect<void> {
+  const agent = 'polish';
   publishTestRows(session, [
     {
       type: 'run.start',
@@ -64,7 +49,7 @@ function publishRun(
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent,
         model: 'deepseek/deepseek-v4-flash',
-        inputFiles: overrides.inputFiles ?? ['paper.tex'],
+        inputFiles: ['paper.tex'],
         contextFiles: [],
         mediaFiles: [],
         outputFiles: [],
@@ -95,26 +80,16 @@ function captureStreamWrites<E, R>(
   stream: NodeJS.WriteStream,
   action: Effect.Effect<unknown, E, R>,
 ): Effect.Effect<string, E, R> {
-  const capture = { output: '' };
-  const originalWrite = stream.write;
+  let output = '';
   return Effect.acquireUseRelease(
-    Effect.sync(() => {
-      stream.write = ((chunk: string | Uint8Array, ...args: unknown[]) => {
-        capture.output += decodeStreamChunk(chunk, args);
-        const callback = args.find(
-          (arg): arg is (error?: Error | null) => void =>
-            typeof arg === 'function',
-        );
-        callback?.();
-        return true;
-      }) as typeof stream.write;
-    }),
-    () => action,
-    () =>
-      Effect.sync(() => {
-        stream.write = originalWrite;
+    Effect.sync(() =>
+      spyOnStreamWrite(stream, (chunk) => {
+        output += chunk;
       }),
-  ).pipe(Effect.map(() => capture.output));
+    ),
+    () => action,
+    (spy) => Effect.sync(() => spy.mockRestore()),
+  ).pipe(Effect.map(() => output));
 }
 
 function ndjsonRecords(output: string): Record<string, unknown>[] {
@@ -122,18 +97,6 @@ function ndjsonRecords(output: string): Record<string, unknown>[] {
     .trim()
     .split('\n')
     .map((line) => JSON.parse(line) as Record<string, unknown>);
-}
-
-function decodeStreamChunk(
-  chunk: string | Uint8Array,
-  args: unknown[],
-): string {
-  if (typeof chunk === 'string') return chunk;
-
-  const encoding = args.find(
-    (arg): arg is BufferEncoding => typeof arg === 'string',
-  );
-  return Buffer.from(chunk).toString(encoding);
 }
 
 describe('CLI run progress renderer', () => {
@@ -148,17 +111,20 @@ describe('CLI run progress renderer', () => {
             Effect.gen(function* () {
               const session = yield* createTestSession();
               const host = createCliRuntimeHost(
-                context({
+                createTestCliContext({
+                  mode: 'interactive',
                   outputFormat: 'json',
-                  stderrColorEnabled: false,
                   renderRunProgress: true,
+                  stderrIsTty: true,
+                  stdoutColorEnabled: true,
+                  stderrColorEnabled: false,
                 }),
               );
               const scope = yield* Scope.make();
               yield* host
                 .attachRunProgressRenderer(testSessionOf(session))
                 .pipe(Scope.provide(scope));
-              yield* publishRun(session, { runId: 'd4d4d4' });
+              yield* publishRun(session, 'd4d4d4' as RunId);
               yield* Scope.close(scope, Exit.void);
               yield* host.close();
             }),

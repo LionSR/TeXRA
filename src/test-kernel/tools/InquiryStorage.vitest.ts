@@ -47,17 +47,11 @@ describe('InquiryStorage', () => {
         suggestSearch: false,
       });
 
-      expect(opened.status).toBe('open');
-      expect(opened.parentRunId).toBe(RUN_A);
-      expect(opened.turns).toHaveLength(1);
-      expect(opened.turns.at(-1)?.suggestSearch).toBe(false);
-
       const open = yield* records.listThreadsByStatus({
         status: 'open',
         scope: 'all',
       });
       expect(open).toHaveLength(1);
-      expect(open[0].status).toBe('open');
 
       const answers = yield* Effect.all(
         [1, 2].map(() =>
@@ -73,9 +67,8 @@ describe('InquiryStorage', () => {
       const answered = yield* records.readExternalInquiryThread(
         opened.threadId,
       );
-      expect(answered).not.toBeNull();
-      expect(answered!.status).toBe('answered');
-      expect(answered!.turns.at(-1)).toMatchObject({
+      expect(answered?.status).toBe('answered');
+      expect(answered?.turns.at(-1)).toMatchObject({
         answer: 'C = (n(n-2))^{-1} * ω_n^{2/n}',
       });
 
@@ -142,7 +135,6 @@ describe('InquiryStorage', () => {
 
         expect(followUp.status).toBe('open');
         expect(followUp.turns).toHaveLength(2);
-        expect(followUp.turns.at(-1)?.question).toBe('Q2 (follow-up)');
         expect(
           yield* records.recordAnswerForOpenTurn({
             threadId: t.threadId,

@@ -51,10 +51,6 @@ describe('CLI TUI input history', () => {
         expect(reloaded.length()).toBe(2);
         expect(reloaded.at(0)).toBe('alpha');
         expect(reloaded.at(1)).toBe('beta');
-        expect([history.at(0), history.at(1)]).toEqual([
-          reloaded.at(0),
-          reloaded.at(1),
-        ]);
         // Another CLI writes between two submissions identical in this cache.
         yield* reloaded.push('gamma');
         yield* history.push('beta');

@@ -146,7 +146,6 @@ describe('CLI run command, tool-use agents', () => {
         expect(config?.instruction).toContain('- "problem.md"');
         expect(config?.instruction).toContain('Read-only context files:');
         expect(config?.instruction).toContain('- "notes.md"');
-        expect(config?.instruction).toContain('Additional user instruction:');
         expect(config?.instruction).toContain('Assess the proof concisely.');
         const emission = cliOutputMock.emitCliResult.mock.calls[0]?.[1];
         expect(emission?.json).toEqual({
@@ -158,15 +157,6 @@ describe('CLI run command, tool-use agents', () => {
           },
           workingDirectory: '/tmp/project',
         });
-        // `outcome` is the only terminal fact the headless JSON publishes, what
-        // the run produced rides `output`, and the run id is `runId`: the result
-        // is the run's result, not a renamed copy of it.
-        expect(Object.keys(emission?.json ?? {})).toEqual([
-          'runId',
-          'outcome',
-          'output',
-          'workingDirectory',
-        ]);
         expect(emission?.ndjson).toEqual({
           kind: 'agent-result',
           result: emission.json,

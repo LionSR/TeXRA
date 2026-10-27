@@ -17,16 +17,6 @@ import {
 
 describe('runDailyUpdateCheck', () => {
   const nowMs = Date.UTC(2026, 0, 1);
-  type CheckOptions = Parameters<typeof runDailyUpdateCheck<never>>[0];
-  const checkOptions = (
-    overrides: Partial<CheckOptions> = {},
-  ): CheckOptions => ({
-    currentVersion: '1.0.0',
-    host: 'desktop',
-    fetchLatest: Effect.succeed({ version: '1.0.0', refreshed: true }),
-    notify: () => Effect.void,
-    ...overrides,
-  });
   const withRecords = <A, E>(
     program: Effect.Effect<A, E, UpdateCheckRecords | TestClock.TestClock>,
   ) =>
@@ -71,16 +61,16 @@ describe('runDailyUpdateCheck', () => {
           const records = yield* UpdateCheckRecords;
           const checking = yield* Effect.forkChild(
             Effect.withFiber((fiber) =>
-              runDailyUpdateCheck(
-                checkOptions({
-                  notifyOnce: true,
-                  fetchLatest: Effect.succeed({
-                    version: '1.1.0',
-                    refreshed: true,
-                  }),
-                  notify: () => Effect.sync(() => fiber.interruptUnsafe()),
+              runDailyUpdateCheck({
+                currentVersion: '1.0.0',
+                host: 'desktop',
+                notifyOnce: true,
+                fetchLatest: Effect.succeed({
+                  version: '1.1.0',
+                  refreshed: true,
                 }),
-              ),
+                notify: () => Effect.sync(() => fiber.interruptUnsafe()),
+              }),
             ),
           );
           expect(Exit.isFailure(yield* Fiber.await(checking))).toBe(true);

@@ -4,7 +4,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import { fileLocationDisplayPath, type RunId } from '@shared/schemas';
@@ -139,9 +139,4 @@ describe('workflow LaTeX compile input directories', () => {
       ]);
     }).pipe(Effect.provide(compileFsLayer)),
   );
-
-  beforeEach(() => {
-    mocks.compileLatex2Pdf.mockClear();
-    mocks.hasLatexCompiler.mockClear();
-  });
 });

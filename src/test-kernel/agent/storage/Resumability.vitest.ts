@@ -1,6 +1,6 @@
 import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { beforeEach, describe, expect } from 'vitest';
 
 import { deriveResumability } from '@agent/storage/resumability';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -11,7 +11,6 @@ import {
   emptyRunEndOutput,
   RUN_OUTCOME,
   type RunId,
-  type RunOutcome,
 } from '@shared/schemas';
 import {
   createProcessSession,
@@ -26,48 +25,40 @@ describe('deriveResumability', () => {
 
   let session: SessionHandle;
   beforeEach(async () => {
-    vi.restoreAllMocks();
     session = await Effect.runPromise(createProcessSession());
   });
 
+  const start = (runId: RunId) =>
+    Effect.sync(() => publishTestRunStart(session, runId)).pipe(
+      Effect.andThen(session.log.settled),
+    );
+
   /** Open the run aggregate the way the loop does: claim, then the
    *  position that opens it. */
-  async function writeOpening(runId: RunId): Promise<void> {
-    const cell = await Effect.runPromise(
-      session.runHistory.open(runId, { activation: () => Effect.succeed([]) }),
-    );
-    await Effect.runPromise(
-      cell.append([positionRow(runId, { turn: 0 }, 'turn.ready')]),
-    );
-  }
+  const open = (runId: RunId) =>
+    Effect.gen(function* () {
+      const cell = yield* session.runHistory.open(runId, {
+        activation: () => Effect.succeed([]),
+      });
+      yield* cell.append([positionRow(runId, { turn: 0 }, 'turn.ready')]);
+    });
 
-  async function writeMeta(
-    runId: RunId,
-    { outcome }: { outcome?: RunOutcome },
-  ): Promise<void> {
-    publishTestRunStart(session, runId);
-    await Effect.runPromise(session.log.settled);
-    if (outcome) {
-      await Effect.runPromise(
-        session.log.transact([
-          {
-            type: 'run.end',
-            aggregateId: qualifyAggregateId('run', runId),
-            outcome,
-            output: emptyRunEndOutput(),
-          },
-        ]),
-      );
-    }
-  }
+  const fail = (runId: RunId) =>
+    session.log.transact([
+      {
+        type: 'run.end',
+        aggregateId: qualifyAggregateId('run', runId),
+        outcome: RUN_OUTCOME.FAILED,
+        output: emptyRunEndOutput(),
+      },
+    ]);
 
   it.effect('keeps a failed run resumable while its rows stand', () =>
     Effect.gen(function* () {
       const runId = 'ac0000' as RunId;
-      yield* Effect.promise(() =>
-        writeMeta(runId, { outcome: RUN_OUTCOME.FAILED }),
-      );
-      yield* Effect.promise(() => writeOpening(runId));
+      yield* start(runId);
+      yield* fail(runId);
+      yield* open(runId);
 
       expect(yield* deriveResumability(runId, session)).toMatchObject({
         kind: 'checkpoint',
@@ -78,7 +69,7 @@ describe('deriveResumability', () => {
   it.effect('does not resume a document task that ended: it runs again', () =>
     Effect.gen(function* () {
       const runId = 'ac0001' as RunId;
-      yield* Effect.promise(() => writeMeta(runId, {}));
+      yield* start(runId);
       yield* seedRows(session.log)([
         {
           type: 'run.config',
@@ -88,15 +79,8 @@ describe('deriveResumability', () => {
           ),
         },
       ]);
-      yield* Effect.promise(() => writeOpening(runId));
-      yield* session.log.transact([
-        {
-          type: 'run.end',
-          aggregateId: qualifyAggregateId('run', runId),
-          outcome: RUN_OUTCOME.FAILED,
-          output: emptyRunEndOutput(),
-        },
-      ]);
+      yield* open(runId);
+      yield* fail(runId);
 
       expect(yield* deriveResumability(runId, session)).toEqual({
         kind: 'none',

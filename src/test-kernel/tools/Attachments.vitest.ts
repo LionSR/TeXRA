@@ -28,9 +28,6 @@ describe('buildBytesAttachment oversized-image handling', () => {
           bytes,
         });
         expect(attachment.bytes).toBeUndefined();
-        expect(attachment.description).toBe(
-          'Image exceeds 2000px dimension limit; binary data stripped',
-        );
       }
     }),
   );

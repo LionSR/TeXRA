@@ -16,7 +16,7 @@ import type { SettingHost } from '@shared/state/stateSettings';
 
 import { fakeConfig, FakeSecrets, FakeStateStore } from './FakePlatform';
 
-export interface FakeSettingsStores {
+interface FakeSettingsStores {
   readonly stores: SettingsStores;
   readonly config: MemoryConfigProvider;
   readonly workspaceState: FakeStateStore;

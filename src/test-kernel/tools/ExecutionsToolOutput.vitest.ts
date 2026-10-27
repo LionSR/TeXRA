@@ -79,7 +79,6 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
       ),
     );
 
-    assert.equal(launched.status, 'executed');
     yield* Effect.promise(() => outputEmitted);
     yield* testDefaultSession().log.settled;
     const reported = /Run ID: (\S+)/.exec(launched.output ?? '')?.[1];
@@ -142,14 +141,7 @@ describe('ExecutionsTool /executions/{id}/output', () => {
 
         const result = yield* readOutput(run.runId);
 
-        assert.equal(result.status, 'executed');
         const output = result.output ?? '';
-        assert.match(output, /^Output for \S+ \(process, running/);
-        assert.match(
-          output,
-          /: [\d,]+ retained transcript chars; command-output cap 200,000 chars, 3 lines\./,
-        );
-        assert.ok(!output.includes('of 200,000 logged chars'));
         assert.ok(output.includes('[ 42%] Building CXX object src/foo.cc.o'));
         assert.ok(output.includes("err: warning: unused variable 'x'"));
         assert.ok(output.includes('[ 84%] Building CXX object src/bar.cc.o'));

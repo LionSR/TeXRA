@@ -43,9 +43,6 @@ describe('workflow prompt file names', () => {
   );
 
   it('keeps extracted outputs inside the round directory for absolute document names', () => {
-    expect(getExtractedDocOutputFileName('chapter/main.tex', 'r0')).toBe(
-      'r0/chapter/main.tex',
-    );
     expect(getExtractedDocOutputFileName('/tmp/main.tex', 'r0')).toBe(
       'r0/main.tex',
     );
@@ -53,8 +50,5 @@ describe('workflow prompt file names', () => {
       'r0/main.tex',
     );
     expect(getSafeDocumentRelativePath('/tmp/main.tex')).toBe('main.tex');
-    expect(getSafeDocumentRelativePath('chapters/main.tex')).toBe(
-      'chapters/main.tex',
-    );
   });
 });

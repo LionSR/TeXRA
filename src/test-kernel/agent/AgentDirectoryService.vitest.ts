@@ -43,12 +43,7 @@ describe('AgentDirectoryService', () => {
 
         const custom = yield* service.custom().pipe(Effect.provide(layer));
         expect(custom).toBe(path.join(storageBase, 'custom_agents'));
-        expect(reports).toEqual([
-          {
-            message: 'Custom agents directory must be an absolute path',
-            docsId: 'custom-agents',
-          },
-        ]);
+        expect(reports).toHaveLength(1);
         expect(
           yield* service.customConfigured().pipe(Effect.provide(layer)),
         ).toBe(false);

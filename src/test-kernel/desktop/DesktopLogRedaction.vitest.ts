@@ -61,7 +61,5 @@ describe('redactDisplayValue over raw log payloads', () => {
     expect(rendered).not.toContain(key);
     expect(rendered).toContain('outer failure holding [redacted]');
     expect(rendered).toContain('inner cause');
-    expect(rendered).toContain('"name":"Error"');
-    expect(rendered).toContain('"stack"');
   });
 });

@@ -100,14 +100,15 @@ describe('JsonRpcConnection', () => {
           connection.request<{ ok: boolean }>('test/method', { x: 1 }),
         );
         const frames = yield* collectClientFrames;
-        expect(frames).toHaveLength(1);
-        expect(frames[0]).toMatchObject({
-          jsonrpc: '2.0',
-          method: 'test/method',
-          params: { x: 1 },
-        });
+        expect(frames).toEqual([
+          {
+            jsonrpc: '2.0',
+            id: expect.any(Number),
+            method: 'test/method',
+            params: { x: 1 },
+          },
+        ]);
         const id = frames[0]?.id;
-        expect(typeof id).toBe('number');
 
         serverSends({ jsonrpc: '2.0', id, result: { ok: true } });
         expect(yield* Fiber.join(pending)).toEqual({ ok: true });

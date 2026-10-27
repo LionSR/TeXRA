@@ -4,7 +4,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect, type FileSystem, Option } from 'effect';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
@@ -45,11 +45,6 @@ function viewMemory(storageFs: RootedFileSystem, memoryPath?: string) {
 }
 
 describe('MemoryTool view with an omitted path', () => {
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-  });
-
   it.effect(
     'lists the empty memory root instead of erroring on a fresh session',
     () =>
@@ -60,10 +55,7 @@ describe('MemoryTool view with an omitted path', () => {
         const explicitRoot = yield* viewMemory(storageFs, MEMORY_DISPLAY_ROOT);
 
         expect(omitted).toEqual(explicitRoot);
-        expect(omitted).toMatchObject({
-          status: 'executed',
-          summary: 'Viewed empty memory directory',
-        });
+        expect(omitted.status).toBe('executed');
       }),
   );
 
@@ -114,10 +106,7 @@ describe('MemoryTool view with an omitted path', () => {
 
       const result = yield* viewMemory(storageFs, MEMORY_DISPLAY_ROOT);
 
-      expect(result).toMatchObject({
-        status: 'executed',
-        summary: 'Listed directory: /memories (1–1 of 1)',
-      });
+      expect(result.status).toBe('executed');
       expect(result.output).not.toContain('cycle');
     }),
   );

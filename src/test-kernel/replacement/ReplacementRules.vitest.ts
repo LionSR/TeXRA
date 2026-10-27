@@ -12,16 +12,13 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 // ---------------------------------------------------------------------------
 
 describe('FENCED_LATEX_BLOCK_REPLACEMENTS', () => {
-  it.each([
-    {
-      name: 'preserves CRLF line endings',
-      input: '::: align*\r\n&= a + b\\\\\r\n:::\r\n',
-      expected: '\\begin{align*}\r\n&= a + b\\\\\r\n\\end{align*}\r\n',
-    },
-  ])('$name', ({ input, expected }) => {
+  it('preserves CRLF line endings', () => {
     assert.strictEqual(
-      applyReplacements(input, FENCED_LATEX_BLOCK_REPLACEMENTS).text,
-      expected,
+      applyReplacements(
+        '::: align*\r\n&= a + b\\\\\r\n:::\r\n',
+        FENCED_LATEX_BLOCK_REPLACEMENTS,
+      ).text,
+      '\\begin{align*}\r\n&= a + b\\\\\r\n\\end{align*}\r\n',
     );
   });
 

@@ -42,8 +42,6 @@ const TEST_REVISION_KEY = Effect.succeed('00'.repeat(32));
 const FIXTURE_SERVER = `
 const fs = require('node:fs');
 fs.writeFileSync(process.argv[2], String(process.pid));
-if (process.argv[3])
-  fs.writeFileSync(process.argv[3], JSON.stringify({ PATH: process.env.PATH, mark: process.env.FIXTURE_MARK }));
 const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n');
 require('node:readline')
   .createInterface({ input: process.stdin })
@@ -61,26 +59,6 @@ require('node:readline')
         description: 'Echo the text.',
         inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       }] } });
-    else if (method === 'tools/call' && process.env.FIXTURE_MODE === 'exit') {
-      // A grandchild holding stdout answers once this process is gone: it
-      // says it is up, this process exits, and the end of their IPC channel
-      // is its cue. Detached, since on Windows libuv puts a child that is not
-      // detached in a kill-on-close job, and it would die with this process
-      // unheard. Its stderr is not inherited, so only the stdout wait covers
-      // the late answer.
-      const answer = { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: 'late' }] } };
-      require('node:child_process')
-        .spawn(
-          process.execPath,
-          [
-            '-e',
-            "process.on('disconnect', () => process.stdout.write(process.argv[1])); process.send('up');",
-            JSON.stringify(answer) + '\\n',
-          ],
-          { stdio: ['ignore', 'inherit', 'ignore', 'ipc'], detached: true, windowsHide: true },
-        )
-        .once('message', () => process.exit(0));
-    }
     else if (method === 'tools/call')
       send({ jsonrpc: '2.0', id, result: { content: [{
         type: 'text',
@@ -148,9 +126,7 @@ describe('MCP server plugins', () => {
           Effect.sync(() => delete process.env.FIXTURE_API_KEY),
         );
 
-        const services = yield* Layer.build(
-          Layer.mergeAll(mcpToolTableLayer(dir)),
-        );
+        const services = yield* Layer.build(mcpToolTableLayer(dir));
         const open = (pin: Scope.Scope) =>
           resolveTestStep({
             tools: [{ name: 'mcp__fixture__*' }],

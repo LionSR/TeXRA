@@ -120,10 +120,9 @@ describe('tool availability service', () => {
             tools: named('token'),
             availability: {
               reprobeOnSecrets: ['token.key'],
-              probe: vi.fn(({ workspace }: ToolProbeInputs) =>
+              probe: ({ workspace }: ToolProbeInputs) =>
                 Effect.sync(() => probedRoots.push(workspace)),
-              ),
-              check: vi.fn(() => Effect.succeed(true)),
+              check: () => Effect.succeed(true),
             },
           },
         ];

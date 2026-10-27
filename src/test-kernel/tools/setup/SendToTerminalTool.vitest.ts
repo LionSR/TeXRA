@@ -14,7 +14,6 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import type { TerminalRunResult } from '@texra/hosts/uiHosts';
 import { SendToTerminalTool } from '@texra/tools/setup/SendToTerminalTool';
 
 // Local file imports
@@ -26,14 +25,8 @@ interface RunRecord {
   timeoutMs: number;
 }
 
-async function setupTool(
-  result: TerminalRunResult = {
-    exitCode: 0,
-    output: 'installed perl 5.38.2\n',
-    timedOut: false,
-  },
-): Promise<{
-  tool: typeof SendToTerminalTool;
+/** Install a host whose terminal runs the case reads back, and start a run. */
+async function setupTool(): Promise<{
   runs: RunRecord[];
   runId: ReturnType<typeof publishTestRunStart>;
 }> {
@@ -44,22 +37,21 @@ async function setupTool(
       setup: createFakeSetupPlatform({
         terminal: (args) => {
           runs.push(args);
-          return Effect.succeed(result);
+          return Effect.succeed({ exitCode: 0, output: '', timedOut: false });
         },
       }),
     },
   );
   const runId = publishTestRunStart(testDefaultSession());
   await Effect.runPromise(testDefaultSession().log.settled);
-  return { tool: SendToTerminalTool, runs, runId };
+  return { runs, runId };
 }
 
 const callTool = (
-  tool: typeof SendToTerminalTool,
   runId: ReturnType<typeof publishTestRunStart>,
   input: unknown,
 ) =>
-  tool.call(input).pipe(
+  SendToTerminalTool.call(input).pipe(
     Effect.provide(
       withSetup(
         nativeToolTestLayer({
@@ -72,14 +64,14 @@ const callTool = (
 describe('SendToTerminalTool', () => {
   it.effect('rejects commands containing newlines', () =>
     Effect.gen(function* () {
-      const { tool, runs, runId } = yield* Effect.tryPromise(() => setupTool());
+      const { runs, runId } = yield* Effect.tryPromise(setupTool);
 
       for (const command of [
         'sudo apt-get install -y perl\nrm -rf /tmp/leak',
         'sudo apt-get install -y perl\r\necho pwned',
         'first\rsecond',
       ]) {
-        const result = yield* callTool(tool, runId, { command });
+        const result = yield* callTool(runId, { command });
         assert.equal(
           result.status,
           'error',

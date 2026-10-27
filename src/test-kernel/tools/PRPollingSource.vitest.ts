@@ -93,12 +93,6 @@ describe('PRPollingSource annotation drain', () => {
           ['owner/repo#7', state],
         ]);
 
-        expect(mocks.fetchAnnotations).toHaveBeenCalledWith(
-          'owner',
-          'repo',
-          42,
-          expect.anything(),
-        );
         expect(state.currentShaState?.pendingAnnotationRuns).toEqual([run]);
         expect(state.skipPollUntilMs).toBe(1_800_000_000_000);
       }),

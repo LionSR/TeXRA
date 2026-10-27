@@ -12,37 +12,6 @@ import {
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
 
-function createPermission(
-  data: Partial<BashPermission>,
-): BashRequestPanel['permission'] {
-  return {
-    kind: 'bash',
-    data: {
-      requestId: 'bash-request-1',
-      allowBypass: false,
-      runId: '',
-      command: 'echo hi',
-      ...data,
-    },
-  };
-}
-
-function mountPanel(
-  permission: BashRequestPanel['permission'],
-): Promise<BashRequestPanel> {
-  return mountComponent<BashRequestPanel>('bash-request-panel', { permission });
-}
-
-/** The panel answers through the shell's `runtime-request` event; record
- *  each answer it sends, in order. */
-function recordPermissionActions(panel: EventTarget): RuntimeRequest[] {
-  const requests: RuntimeRequest[] = [];
-  panel.addEventListener('runtime-request', (event) => {
-    requests.push((event as CustomEvent<RuntimeRequest>).detail);
-  });
-  return requests;
-}
-
 // Every card shares one action row (BaseRequestPanel); the bash card is where
 // it guards the most, so these pin the row's keys here.
 describe('bash-request-panel', () => {
@@ -51,10 +20,21 @@ describe('bash-request-panel', () => {
   );
 
   it('rejects on one "n", sends an opened note with it, and never answers on Escape', async () => {
-    const element = await mountPanel(
-      createPermission({ runId: 'run-1' as RunId }),
+    const permission: BashPermission = {
+      requestId: 'bash-request-1',
+      allowBypass: false,
+      runId: 'run-1' as RunId,
+      command: 'echo hi',
+    };
+    const element = await mountComponent<BashRequestPanel>(
+      'bash-request-panel',
+      { permission: { kind: 'bash', data: permission } },
     );
-    const actions = recordPermissionActions(element);
+    // The panel answers through the shell's `runtime-request` event.
+    const actions: RuntimeRequest[] = [];
+    element.addEventListener('runtime-request', (event) => {
+      actions.push((event as CustomEvent<RuntimeRequest>).detail);
+    });
 
     expect(element.handleKeyboardShortcut('escape')).toBe(false);
     element.shadowRoot
