@@ -28,18 +28,6 @@ export function interactiveTerminalFailure(
   return undefined;
 }
 
-function dumbTerminalMessage(
-  command: string,
-  options: { commandName?: string; nonInteractiveFallback?: string } = {},
-): string {
-  const commandName = options.commandName || 'texra';
-  const fallback =
-    options.nonInteractiveFallback == null
-      ? ''
-      : ` For non-interactive runs, use ${options.nonInteractiveFallback}.`;
-  return `${commandName} ${command} needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with \`TERM=xterm-256color\`.${fallback}`;
-}
-
 export function formatInteractiveTerminalFailure(
   reason: InteractiveTerminalFailureReason,
   options: {
@@ -52,8 +40,9 @@ export function formatInteractiveTerminalFailure(
   },
 ): string {
   if (reason === 'headless') return options.headlessMessage;
-  return dumbTerminalMessage(
-    options.dumbTerminalCommand,
-    options.dumbTerminalOptions,
-  );
+  const commandName = options.dumbTerminalOptions?.commandName || 'texra';
+  const fallback = options.dumbTerminalOptions?.nonInteractiveFallback;
+  const fallbackHint =
+    fallback == null ? '' : ` For non-interactive runs, use ${fallback}.`;
+  return `${commandName} ${options.dumbTerminalCommand} needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with \`TERM=xterm-256color\`.${fallbackHint}`;
 }
