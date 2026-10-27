@@ -43,7 +43,7 @@ import type {
   ToolServices,
 } from '@agent/runtime/ToolServices';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
-import { appendRow, positionRow, rowAggregate } from '@agent/runtime/loop/rows';
+import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -263,7 +263,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
   const state = yield* cell.append([
     {
       type: 'model.message',
-      aggregateId: rowAggregate(runId),
+      aggregateId: qualifyAggregateId('run', runId),
       payload: {
         kind: 'attempt',
         request: '0'.repeat(64),
@@ -274,7 +274,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     },
     {
       type: 'model.message',
-      aggregateId: rowAggregate(runId),
+      aggregateId: qualifyAggregateId('run', runId),
       payload: {
         kind: 'response',
         responseId: RESPONSE_ID,
@@ -480,7 +480,7 @@ describe('tool-use dispatch', () => {
         ],
       });
       const recorded = recordSessionEvents(kit.session, {
-        aggregateId: rowAggregate(kit.runId),
+        aggregateId: qualifyAggregateId('run', kit.runId),
       });
 
       const fiber = yield* Effect.forkChild(dispatch(kit));

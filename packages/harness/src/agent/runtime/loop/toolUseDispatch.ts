@@ -64,7 +64,11 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
-import { SettledToolResultSchema, toJsonValue } from '@shared/schemas';
+import {
+  qualifyAggregateId,
+  SettledToolResultSchema,
+  toJsonValue,
+} from '@shared/schemas';
 import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
 import { consumedRow } from '@shared/session/runFacts';
 import { type RunHistoryDraft, type RunState } from '@shared/session/runState';
@@ -106,13 +110,7 @@ import {
 } from '../run/toolResultText';
 import { callRequests, guardedToolCall } from './toolGuard';
 import { callHookText, preToolUse } from './hooks';
-import {
-  appendRow,
-  displayRow,
-  rowAggregate,
-  positionRow,
-  type Message,
-} from './rows';
+import { appendRow, displayRow, positionRow, type Message } from './rows';
 import { Runs } from '../runRegistry';
 import type { StepTools } from './step';
 import type { InvokeError } from '../ModelInvoker';
@@ -300,7 +298,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
 > {
   const run = yield* AgentRun;
   const { runId, logger } = run;
-  const aggregateId = rowAggregate(runId);
+  const aggregateId = qualifyAggregateId('run', runId);
   const initial = yield* cell.current;
   const pending = initial.pendingResponse;
   if (pending === null) return { state: initial, endTurn: false };

@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Effect, Schema } from 'effect';
 
-import { appendRow, positionRow, rowAggregate } from '@agent/runtime/loop/rows';
+import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { freshRunState } from '@shared/session/runState';
@@ -70,7 +70,7 @@ export const seedEditedFiles = (
       positionRow(runId, freshRunState(0), 'turn.ready'),
       {
         type: 'model.message',
-        aggregateId: rowAggregate(runId),
+        aggregateId: qualifyAggregateId('run', runId),
         payload: {
           kind: 'handed-down',
           responseId,
@@ -87,7 +87,7 @@ export const seedEditedFiles = (
       },
       {
         type: 'tool.result',
-        aggregateId: rowAggregate(runId),
+        aggregateId: qualifyAggregateId('run', runId),
         payload: {
           responseId,
           callId,

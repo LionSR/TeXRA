@@ -11,7 +11,7 @@ import { Effect, Layer, Schema, type Scope, SynchronizedRef } from 'effect';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
-import { rowAggregate, positionRow } from '@agent/runtime/loop/rows';
+import { positionRow } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { turnText } from '@agent/runtime/run/turnText';
@@ -29,6 +29,7 @@ import {
   AgentConfigSchema,
   PersonaSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  qualifyAggregateId,
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
@@ -169,7 +170,7 @@ function scriptedInvoker(
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const aggregateId = rowAggregate(run.runId);
+      const aggregateId = qualifyAggregateId('run', run.runId);
       return {
         call: () => Effect.die(new Error('No compaction in this scenario.')),
         invoke: (cell: RunCell, request: InvokeRequest) =>

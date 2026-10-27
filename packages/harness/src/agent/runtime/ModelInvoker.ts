@@ -56,6 +56,7 @@ import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   MESSAGE_TYPES,
+  qualifyAggregateId,
   type FailedNext,
   type InvocationRef,
   type RetryErrorInfo,
@@ -87,7 +88,7 @@ import {
 } from './run/requestContext';
 import { providerMessages } from './storedTurn';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
-import { rowAggregate, positionRow } from './loop/rows';
+import { positionRow } from './loop/rows';
 
 /** The answer the invoker gives itself for an automatic quota fallback. */
 const PERSONAL_RETRY = {
@@ -181,7 +182,7 @@ export const modelInvokerLayer = (): Layer.Layer<
     Effect.gen(function* () {
       const run = yield* AgentRun;
       const { runId, session, logger } = run;
-      const aggregateId = rowAggregate(runId);
+      const aggregateId = qualifyAggregateId('run', runId);
       const usageLog = yield* UsageLog;
       const access = yield* ModelAccess;
       const gate = yield* Effect.context<RouteRetries>();

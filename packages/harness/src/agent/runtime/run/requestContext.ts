@@ -30,6 +30,7 @@ import {
 import { contextUpdate } from '@agent/prompt/PromptBuilder';
 import {
   JsonValueSchema,
+  qualifyAggregateId,
   RunContextSchema,
   Sha256Schema,
   type RunContext,
@@ -43,8 +44,6 @@ import { delegationSection } from '@tools/delegation/delegationAvailability';
 import { sha256 } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { envFlag } from '@utils/system/envFlags';
-
-import { rowAggregate } from '../loop/rows';
 import { addressedMessages, providerMessages } from '../storedTurn';
 import type { AgentRunShape } from './AgentRun';
 
@@ -96,7 +95,7 @@ export function blobRows(
     return [
       {
         type: 'context.blob',
-        aggregateId: rowAggregate(runId),
+        aggregateId: qualifyAggregateId('run', runId),
         payload: { digest, value: JSON.parse(stableStringify(value) ?? '') },
       },
     ];
@@ -153,7 +152,7 @@ export function attemptRows(
     ]),
     {
       type: 'model.message',
-      aggregateId: rowAggregate(run.runId),
+      aggregateId: qualifyAggregateId('run', run.runId),
       payload: {
         kind: 'attempt',
         invocation,

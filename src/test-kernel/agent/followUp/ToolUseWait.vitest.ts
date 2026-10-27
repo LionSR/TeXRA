@@ -7,9 +7,10 @@ import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
-import { appendRow, rowAggregate, positionRow } from '@agent/runtime/loop/rows';
+import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { TraceEmitter } from '@agent/trace';
+import { qualifyAggregateId } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import { type RunState } from '@shared/session/runState';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -137,7 +138,7 @@ describe('a parked child run', () => {
         // and nothing else: no process holds the follow-up in memory.
         const queued = {
           type: 'followup.queued' as const,
-          aggregateId: rowAggregate(runId),
+          aggregateId: qualifyAggregateId('run', runId),
           followUpId: 'follow-up-1',
           content: { text: asked, from: { kind: 'user' as const } },
         };
