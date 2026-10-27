@@ -58,12 +58,13 @@ import {
 import type { SessionHandle } from './SessionHandle';
 
 /** A resumed child's loop ended without a result of its own: a stop
- *  landed before its run returned one. */
+ *  landed, or a turn failed, before its run returned one. The child's
+ *  `run.end` row records which. */
 class ResumedChildWithoutResult extends Schema.TaggedError<ResumedChildWithoutResult>()(
   'ResumedChildWithoutResult',
   { runId: Schema.String },
 ) {
-  override readonly message = `Resumed child run ${this.runId} ended without a result of its own`;
+  override readonly message = `Resumed child run ${this.runId} ended without a result of its own (stopped, or a turn failed); its run.end records the cause`;
 }
 
 /** A resume settles at the run's idle turn or at run termination, after admitted input is consumed. */
