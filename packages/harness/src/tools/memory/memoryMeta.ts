@@ -9,7 +9,7 @@
 import * as yaml from 'yaml';
 
 import { Result, Schema } from 'effect';
-import { parseYamlWith } from '@common/parsing/safeParseYaml';
+import { safeParseYaml } from '@common/parsing/safeParseYaml';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 
 /**
@@ -56,7 +56,10 @@ export function parseFrontmatter(raw: string): {
     return { meta: null, content: raw };
   }
 
-  const parsed = parseYamlWith(split.frontmatterText, MemoryFileMetaSchema);
+  const parsed = Result.flatMap(
+    safeParseYaml(split.frontmatterText),
+    Schema.decodeUnknownResult(MemoryFileMetaSchema),
+  );
   if (Result.isFailure(parsed)) {
     return { meta: null, content: raw };
   }
