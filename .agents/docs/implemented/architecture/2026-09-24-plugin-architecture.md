@@ -208,8 +208,8 @@ unregister) covers:
   `SkillSourceContribution`s by tier; a tool plugin's bundled skills are at
   `resources/plugins/<id>/skills` and its switch gates them.
 - **Bundled agent directories.** A tool plugin's bundled agents are at
-  `resources/plugins/<id>/agents`, installed by
-  `installPluginAgentDirectories`
+  `resources/plugins/<id>/agents`, read from the process's `ToolRegistry`
+  by `enabledBuiltInRoots`
   (`packages/harness/src/agent/index/BundledAgentDirectories.ts`); they are
   `builtIn`-source agents in the same YAML, listed while the plugin is on.
 
