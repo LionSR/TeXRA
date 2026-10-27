@@ -260,12 +260,27 @@ function declarationText(checker, symbol) {
   return `const ${symbol.name}: ${type}`;
 }
 
-/** Each export's heading, TSDoc and declaration. */
-const referenceText = (checker, entry, source, exports) =>
-  [
+/** The entry file's leading `/** ... * /` comment, stripped to markdown. */
+function moduleDocText(sourceFile) {
+  const full = sourceFile.getFullText();
+  const range = ts.getLeadingCommentRanges(full, 0)?.[0];
+  if (range == null || !full.startsWith('/**', range.pos)) return '';
+  return full
+    .slice(range.pos + 3, range.end - 2)
+    .split('\n')
+    .map((line) => line.replace(/^\s*\*\s?/, '').trimEnd())
+    .join('\n')
+    .trim();
+}
+
+/** The module comment and each export's heading, TSDoc and declaration. */
+const referenceText = (checker, sourceFile, entry, source, exports) => {
+  const intro = moduleDocText(sourceFile);
+  return [
     `# \`${entry}\``,
     '',
     `<!-- Generated from \`${source}\` by \`npm run docgen\`; do not edit. -->`,
+    ...(intro === '' ? [] : ['', intro]),
     ...exports.flatMap((symbol) => {
       const doc = docText(checker, exportTarget(checker, symbol).target);
       return [
@@ -280,6 +295,7 @@ const referenceText = (checker, entry, source, exports) =>
     }),
     '',
   ].join('\n');
+};
 
 /** Directories (repo-relative) whose files `apiReports` writes in full. */
 export const GENERATED_DIRS = [
@@ -326,7 +342,7 @@ export function apiReports(rootDir) {
             '',
           ].join('\n'),
         ],
-        [reference, referenceText(checker, entry, source, exports)],
+        [reference, referenceText(checker, sourceFile, entry, source, exports)],
       ];
     }),
   );

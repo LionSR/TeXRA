@@ -2,6 +2,29 @@
 
 <!-- Generated from `packages/llm/src/node.ts` by `npm run docgen`; do not edit. -->
 
+Node.js entry of `@texra-ai/llm`: binding a catalog model to its wire
+protocol (`bindModel`) and running subscription OAuth sign-in flows.
+
+> **Guide:** Read [Model Layer (`@texra-ai/llm`)](/api/model-layer) for a
+> complete `selectModel` $\to$ `bindModel` $\to$ `prepareTurn` $\to$
+> `streamTurn` example.
+
+### Key exports by role
+
+- **Protocol binding**: [`bindModel`](#bindmodel), [`BindSpec`](#bindspec),
+  [`Binding`](#binding), and [`ModelCredential`](#modelcredential) dynamically
+  load only the requested protocol (`anthropic-messages`, `openai-responses`,
+  `google-interactions`), manage scoped connections and file uploads in the
+  caller's `Scope`, and classify provider failures into `ModelError`.
+- **Subscription sign-in (`codex`, `xai`)**: ChatGPT
+  ([`codexCoordinator`](#codexcoordinator),
+  [`codexLoginWithLoopback`](#codexloginwithloopback),
+  [`codexLoginWithDeviceCode`](#codexloginwithdevicecode)) and Grok
+  ([`xaiCoordinator`](#xaicoordinator),
+  [`xaiLoginWithLoopback`](#xailoginwithloopback),
+  [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows, plus
+  [`SharedAttempt`](#sharedattempt) for coalescing concurrent refreshes.
+
 ## Binding
 
 A bound model and the facts its configuration fixed.

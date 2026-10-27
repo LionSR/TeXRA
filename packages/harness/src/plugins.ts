@@ -1,27 +1,34 @@
 /**
- * `@texra-ai/harness/plugins`: the harness's built-in plugins, as the values
- * an embedder lists for `Sessions.layer({ platform, plugins })`.
- * `harnessBuiltins` is every built-in. An embedder adds its own plugins
- * beside them.
+ * Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
+ * `@texra-ai/harness`.
  *
- * A plugin's tool reads the run its call works for through `ToolContext`:
- * `requireRun` (the run, or the shared refusal) and `callerRun` (the run,
- * if any), typed `ToolRun`. A plugin's tool may require `PluginToolServices`
- * (never the harness's own call services), and reaches the session's runs
- * only through `ChildRuns`: it launches a child, and sends a run its input
- * (`RunInbox`). A plugin that owns a block of an agent file (`AgentBlock`)
- * reads an agent's block with `agentBlockOf`.
+ * > **Guide:** Read [Plugins, Tools & Codemode](/api/plugins-and-codemode) for
+ * > how to author tools and plugins, how step-pinned catalogs work, and how the
+ * > `script` (Codemode) sandbox replays across crashes.
  *
- * An app defines a plugin with `definePlugin`; its tools return `executed` or
- * `errorResult`, give an omitted input field its default with
- * `nullishWithDefault`, resolve a path the model names against the call's
- * roots with `resolveToolPath`, and read a request's answer they do not
- * accept as its refusal with `refusalOf`. A plugin's process services are its
- * `ProcessPluginLayer`; work that outlives its step holds the session layer
- * with `PluginHold`; a plugin that records the decisions on a request kind
- * is that kind's `RequestDecisionHook`. The process's plugin table is the
- * `ToolRegistry` service. A tool refuses a call by failing with `ToolError`;
- * `fileOps` takes the `WriteFilter` its `write_file` applies.
+ * ### Key exports by role
+ *
+ * - **Built-in plugins**: [`harnessBuiltins`](#harnessbuiltins) bundles
+ *   [`codemode`](#codemode), [`fileOps`](#fileops), [`goal`](#goal),
+ *   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
+ *   ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
+ *   `Sessions.layer({ platform, plugins })`.
+ * - **Plugin & tool authoring**: [`definePlugin`](#defineplugin),
+ *   [`executed`](#executed), [`errorResult`](#errorresult),
+ *   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
+ *   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
+ *   ([`requestToolEditApproval`](#requesttooleditapproval),
+ *   [`buildApprovalRejectedResult`](#buildapprovalrejectedresult),
+ *   [`approvedWriteConflict`](#approvedwriteconflict)).
+ * - **Runtime callbacks inside a tool**: [`requireRun`](#requirerun),
+ *   [`callerRun`](#callerrun), [`ChildRuns`](#childruns), and
+ *   [`RunInbox`](#runinbox).
+ * - **Lifetimes, prompt sections & durable rows**:
+ *   [`ALWAYS_AVAILABLE`](#always_available), [`PromptSection`](#promptsection),
+ *   [`ProcessPluginLayer`](#processpluginlayer),
+ *   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
+ *   [`RequestDecisionHook`](#requestdecisionhook), [`PluginArm`](#pluginarm),
+ *   and [`AgentBlock`](#agentblock) ([`agentBlockOf`](#agentblockof)).
  */
 export {
   codemode,
