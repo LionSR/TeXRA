@@ -2064,6 +2064,12 @@ type RunLifecycleStatus = RunPhase | typeof RUN_LIFECYCLE_READY;
 type RunOutcome = typeof RunOutcomeSchema.Type;
 ```
 
+## RunOutcomeSchema
+
+```ts
+const RunOutcomeSchema: Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>
+```
+
 ## RunPhase
 
 ```ts
