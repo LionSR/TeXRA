@@ -206,7 +206,7 @@ if (externalPackages.has('openai')) {
   );
 }
 
-await checkForgottenExports({
+checkForgottenExports({
   repositoryRoot,
   packageRoot,
   distRoot,

@@ -73,12 +73,12 @@ Things the tree won't tell you:
   the app or a host, type-only included), `core-quality/core-module-mocks`,
   `architecture-edges`, plus `refuted-candidates`. ESLint's
   `no-restricted-syntax` fails an `Effect.run*` call outside
-  `packages/{extension,desktop,cli}/src/`, the SDK entry files
-  (`HARNESS_ENTRY_FILES`) and `packages/harness/src/effect/` (webview
-  frontends excluded) or a named runtime entry (`EFFECT_RUN_ENTRIES`,
-  whole-file; the receiver is checked in review), as does
-  `new AbortController()` outside its two ledger residents, and
-  `no-warning-comments` fails on any `@adapter-until` marker, since the owner
+  `packages/{extension,desktop,cli}/src/` (webview frontends excluded) or a
+  named runtime entry (`EFFECT_RUN_ENTRIES`, whole-file; the receiver is
+  checked in review; the SDK's entry files run nothing either), and
+  `new AbortController()` outside its two ledger residents. In the core
+  (`CORE_QUALITY_DIRS`) it also fails `new Promise` and `.then(`, and no
+  disable comment applies there. `no-warning-comments` fails on any `@adapter-until` marker, since the owner
   ruled there are no temporary adapters. AGENTS.md "Directory organization"
   has the rules. The invariant to hold is "never widen a baseline"; the open
   work is the public surface in the harness general-package design

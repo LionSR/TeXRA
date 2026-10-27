@@ -3,11 +3,8 @@
 // import it to annotate a value, implement an interface, or catch an error.
 // Walked from each entry's exports through every type reference into the
 // package's own declarations; a name a dependency defines is that
-// dependency's surface. Held per source file to
-// config/ratchets/forgotten-exports.json, shrink-only: a file whose count
-// rises, or that is absent with one, fails, and so does a count that fell
-// and was not lowered.
-import { readFile } from 'node:fs/promises';
+// dependency's surface. Held at zero, with no baseline file
+// (scripts/ratchet-zero-rules.mjs): any forgotten export fails.
 import path from 'node:path';
 
 import ts from 'typescript';
@@ -107,28 +104,18 @@ function leftmost(name) {
 }
 
 /**
- * Hold the package's forgotten exports to the baseline: throws naming each
- * source file whose count differs from its row. Rows are keyed by the source
- * file (`packages/<name>/src/…ts`) that declares the forgotten name.
+ * Hold the package's forgotten exports at zero: throws naming each source
+ * file (`packages/<name>/src/…ts`) that declares a forgotten name.
  */
-export async function checkForgottenExports({
+export function checkForgottenExports({
   repositoryRoot,
   packageRoot,
   distRoot,
   entries,
 }) {
-  const baselineFile = path.join(
-    repositoryRoot,
-    'config/ratchets/forgotten-exports.json',
-  );
   const sourceRoot = path
     .relative(repositoryRoot, path.join(packageRoot, 'src'))
     .replaceAll('\\', '/');
-  const baseline = Object.fromEntries(
-    Object.entries(JSON.parse(await readFile(baselineFile, 'utf8'))).filter(
-      ([file]) => file.startsWith(`${sourceRoot}/`),
-    ),
-  );
   const found = new Map();
   for (const { name, file } of forgottenExports(
     path.join(distRoot, 'types'),
@@ -137,21 +124,10 @@ export async function checkForgottenExports({
     const source = `${sourceRoot}/${file.replaceAll('\\', '/').replace(/\.d\.ts$/u, '.ts')}`;
     found.set(source, [...(found.get(source) ?? []), name]);
   }
-  const problems = [
-    ...new Set([...Object.keys(baseline), ...found.keys()]),
-  ].flatMap((source) => {
-    const names = (found.get(source) ?? []).toSorted();
-    const allowed = baseline[source] ?? 0;
-    if (names.length > allowed)
-      return [
-        `${source}: ${names.length} forgotten exports (baseline ${allowed}): ${names.join(', ')}; export each name from an entry, or keep it off the public signatures`,
-      ];
-    if (names.length < allowed)
-      return [
-        `${source}: ${names.length} forgotten exports, below its baseline of ${allowed}; lower its row in config/ratchets/forgotten-exports.json (remove it at zero)`,
-      ];
-    return [];
-  });
+  const problems = [...found].map(
+    ([source, names]) =>
+      `${source}: ${names.length} forgotten exports: ${names.toSorted().join(', ')}; export each name from an entry, or keep it off the public signatures`,
+  );
   if (problems.length > 0) {
     throw new Error(`Forgotten exports:\n  ${problems.join('\n  ')}`);
   }

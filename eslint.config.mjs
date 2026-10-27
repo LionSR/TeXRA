@@ -123,15 +123,10 @@ const HARNESS_ENTRY_FILES = [
   'packages/harness/src/schemas.ts',
   'packages/harness/src/transcriptEntry.ts',
 ];
-const HARNESS_ENTRY_GLOBS = [
-  ...HARNESS_ENTRY_FILES,
-  'packages/harness/src/effect/**/*.{ts,tsx,mts}',
-];
 
 // The named runtime entries that may call `Effect.run*` outside a host
-// package (the no-restricted-syntax block below); the core-quality ratchet
-// reads the same list.
-export const EFFECT_RUN_ENTRIES = [
+// package (the no-restricted-syntax block below).
+const EFFECT_RUN_ENTRIES = [
   'packages/extension/src/progressView/frontend/sessionTransport.ts',
   'packages/texra/src/shared/signals.ts',
   'packages/harness/src/platform/processRuntime.ts',
@@ -141,10 +136,10 @@ export const EFFECT_RUN_ENTRIES = [
 
 // The core the quality bar holds (owner, 2026-10-03: "super high coding
 // quality like pi"): the harness side of the package split (PR #13639,
-// harness-package-split.md §1) plus the model package. `no-explicit-any` is a
-// hard lint error here; the rest is the shrink-only ratchet in
-// scripts/check-core-quality.mjs over config/ratchets/core-quality/. M8
-// re-keys it to packages/harness and packages/llm.
+// harness-package-split.md §1) plus the model package. `any`, `new Promise`,
+// `.then(` and `Effect.run*` outside a named entry are hard lint errors here
+// (the blocks below); the rest is the shrink-only ratchet in
+// scripts/check-core-quality.mjs over config/ratchets/core-quality/.
 export const CORE_QUALITY_DIRS = [
   'packages/harness/src/agent',
   'packages/harness/src/shared/session',
@@ -156,6 +151,9 @@ export const CORE_QUALITY_DIRS = [
   ...HARNESS_ENTRY_FILES,
   'packages/llm/src',
 ];
+const CORE_QUALITY_GLOBS = CORE_QUALITY_DIRS.map((entry) =>
+  entry.endsWith('.ts') ? entry : `${entry}/**/*.{ts,tsx,mts}`,
+);
 
 const HOST_LAYER_RESTRICTED_IMPORT_PATHS = [
   {
@@ -760,12 +758,12 @@ export default tseslint.config(
   },
 
   // The core holds no `any` (count 0 at 2026-10-03), so it is a lint error
-  // rather than a ratchet row.
+  // rather than a ratchet row. No disable comment reaches past the core's
+  // lint errors, so a site cannot hide behind one.
   {
-    files: CORE_QUALITY_DIRS.map((entry) =>
-      entry.endsWith('.ts') ? entry : `${entry}/**/*.{ts,tsx,mts}`,
-    ),
+    files: CORE_QUALITY_GLOBS,
     ignores: ['**/*.vitest.ts'],
+    linterOptions: { noInlineConfig: true },
     rules: { '@typescript-eslint/no-explicit-any': 'error' },
   },
 
@@ -1035,7 +1033,7 @@ export default tseslint.config(
     },
   },
 
-  // Effect runs belong at a host entry (packages/{extension,desktop,cli}/src, or the SDK entry files and packages/harness/src/effect)
+  // Effect runs belong at a host entry (packages/{extension,desktop,cli}/src)
   // or at a webview/runtime composition root that owns its runtime (owner
   // ruling 2026-09-06, Effect 4 migration R1; 2026-09-14 for the named
   // entries, which are exempt whole-file: that the run is on the entry's own
@@ -1044,7 +1042,10 @@ export default tseslint.config(
   // entry. `new AbortController()` is held to its two permanent residents
   // (rulings ledger, "permanent AbortController residents"). Flat config
   // replaces the `no-restricted-syntax` array for a file, so each file group
-  // below lists every selector that applies to it.
+  // below lists every selector that applies to it. The core
+  // (CORE_QUALITY_DIRS) runs nothing itself, the SDK's entry files included
+  // (the harness README), and holds no `new Promise` or `.then(`: Effect
+  // owns async there.
   ...(() => {
     const waIcon = {
       selector: 'TemplateElement[value.raw=/<wa-icon[\\s>\\/]/]',
@@ -1052,9 +1053,10 @@ export default tseslint.config(
         'Build <wa-icon> markup via waIcon() from @ui/wa/webAwesomeIcons instead of a hand-rolled template.',
     };
     const runMessage =
-      'Effect runs belong at a host entry (packages/{extension,desktop,cli}/src, or the SDK entry files and packages/harness/src/effect) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.';
+      'Effect runs belong at a host entry (packages/{extension,desktop,cli}/src) or a named runtime entry in eslint.config.mjs. Convert this file and its callers so the run moves there.';
     // `runMain` is `NodeRuntime.runMain`, the run of a process or worker entry.
-    const runNames = '/^run(Promise|PromiseExit|Sync|Fork|Callback|Main)$/';
+    const runNames =
+      '/^run(Promise|PromiseExit|Sync|SyncExit|Fork|Callback|Main)$/';
     const run = [
       {
         selector: `CallExpression[callee.property.name=${runNames}]`,
@@ -1070,6 +1072,21 @@ export default tseslint.config(
       message:
         'No new AbortController: the two permanent residents are named in eslint.config.mjs (rulings ledger). Use fiber interruption or Effect.abortSignal.',
     };
+    const promise = [
+      {
+        selector: "NewExpression[callee.name='Promise']",
+        message:
+          '`new Promise` in core: Effect owns async (Effect.callback at a foreign edge).',
+      },
+      {
+        selector: "CallExpression[callee.property.name='then']",
+        message: '`.then(` chains in core: compose with Effect instead.',
+      },
+    ];
+    const inCore = (file) =>
+      CORE_QUALITY_DIRS.some(
+        (dir) => file === dir || file.startsWith(`${dir}/`),
+      );
     const entries = EFFECT_RUN_ENTRIES;
     const residents = [
       'packages/harness/src/agent/runtime/childRunLoop.ts',
@@ -1088,7 +1105,6 @@ export default tseslint.config(
           'packages/extension/src/**/*.{ts,tsx,mts}',
           'packages/desktop/src/**/*.{ts,tsx,mts}',
           'packages/cli/src/**/*.{ts,tsx,mts}',
-          ...HARNESS_ENTRY_GLOBS,
         ],
         ['**/*.vitest.ts', iconFile, ...entries],
         waIcon,
@@ -1112,7 +1128,6 @@ export default tseslint.config(
           iconFile,
           ...entries,
           ...residents,
-          ...HARNESS_ENTRY_GLOBS,
         ],
         waIcon,
         ...run,
@@ -1121,6 +1136,16 @@ export default tseslint.config(
       block(entries, [], waIcon, abort),
       block(residents, [], waIcon, ...run),
       block([iconFile], [], ...run, abort),
+      block(
+        CORE_QUALITY_GLOBS,
+        ['**/*.vitest.ts', ...entries, ...residents],
+        waIcon,
+        ...run,
+        abort,
+        ...promise,
+      ),
+      block(entries.filter(inCore), [], waIcon, abort, ...promise),
+      block(residents.filter(inCore), [], waIcon, ...run, ...promise),
     ];
   })(),
 );
