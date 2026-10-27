@@ -75,12 +75,16 @@ export class HistoryQueryFailed extends Schema.TaggedError<HistoryQueryFailed>()
 ) {}
 
 const CellSchema = Schema.Union([Schema.String, Schema.Number, Schema.Null]);
+/** One value of a query result or a bound parameter: text, a number or SQL
+ *  `NULL`. */
 export type HistoryCell = typeof CellSchema.Type;
 const PageSchema = Schema.Struct({
   columns: Schema.Array(Schema.String),
   rows: Schema.Array(Schema.Array(CellSchema)),
   more: Schema.Boolean,
 });
+/** One query's result: its column names, its rows, and whether the query
+ *  matched more rows than the page holds. */
 export type HistoryPage = typeof PageSchema.Type;
 const ReplySchema = Schema.Union([
   Schema.Struct({ ok: Schema.Literal(true), value: Schema.Unknown }),
@@ -217,13 +221,7 @@ const openStore = Effect.fn('HistoryQuery.open')(function* (
       )
       .pipe(
         Scope.provide(scope),
-        Effect.mapError(
-          (cause) =>
-            new HistoryQueryFailed({
-              message: 'The history query process could not start.',
-              cause,
-            }),
-        ),
+        failedWith('The history query process could not start.'),
       );
     const requests = yield* Queue.unbounded<string>();
     const replies = yield* Queue.unbounded<
@@ -255,6 +253,10 @@ const openStore = Effect.fn('HistoryQuery.open')(function* (
   }).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
 });
 
+/**
+ * The session's read-only SQL over its own history (`SessionHandle.history`):
+ * one store process per session, rebuilt after a timeout or interruption.
+ */
 export class HistoryQuery {
   /** Built in the session's scope: the store's process closes with it. */
   static readonly make = (
@@ -271,11 +273,19 @@ export class HistoryQuery {
   private readonly lane = Semaphore.makeUnsafe(1);
   private store: Store | undefined;
 
+  private readonly session: () => HistorySession;
+  private readonly scope: Scope.Scope;
+  private readonly spawner: ChildProcessSpawner['Service'];
+
   private constructor(
-    private readonly session: () => HistorySession,
-    private readonly scope: Scope.Scope,
-    private readonly spawner: ChildProcessSpawner['Service'],
-  ) {}
+    session: () => HistorySession,
+    scope: Scope.Scope,
+    spawner: ChildProcessSpawner['Service'],
+  ) {
+    this.session = session;
+    this.scope = scope;
+    this.spawner = spawner;
+  }
 
   /** Run one read over the session's history as of this call. */
   query(

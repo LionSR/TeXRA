@@ -25,6 +25,7 @@ export interface RuntimePresentationEventPayloads {
   requestEnsureProgressView: RequestEnsureProgressViewPayload;
 }
 
+/** The name of a presentation event the runtime asks a host to show. */
 export type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
 
 /** Every event name, as {@link HostPresentationFailed} records it. */
@@ -36,6 +37,8 @@ const RuntimePresentationEventSchema = Schema.Literals([
   'requestEnsureProgressView',
 ] as const satisfies readonly RuntimePresentationEvent[]);
 
+/** How a presentation event is delivered when no host is attached, or when
+ *  the host fails to present it. */
 export interface AgentRuntimeEmitOptions {
   /** Retain a presentation event until a temporarily detached UI returns. */
   readonly replayWhenAttached?: boolean;

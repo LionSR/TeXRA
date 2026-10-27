@@ -291,11 +291,12 @@ class ChildLoop<TTurn, R> {
   /** Why the child failed; the cause may itself be `undefined`. */
   failure: { readonly cause: unknown } | undefined;
   end: ChildEnd = { kind: 'open' };
+  readonly params: ChildRunLoopParams<TTurn, R>;
+  readonly runs: RunRegistry;
 
-  constructor(
-    readonly params: ChildRunLoopParams<TTurn, R>,
-    readonly runs: RunRegistry,
-  ) {
+  constructor(params: ChildRunLoopParams<TTurn, R>, runs: RunRegistry) {
+    this.params = params;
+    this.runs = runs;
     this.trace = params.childRun?.logger;
   }
 
@@ -310,10 +311,6 @@ class ChildLoop<TTurn, R> {
     this.userStopped ||= this.runs.get(runId)?.stopReason === 'user';
     this.controller.abort();
     if (childRun === undefined) this.runs.interrupt(runId);
-  }
-
-  isInterrupted(): boolean {
-    return this.controller.signal.aborted;
   }
 
   /** The one signal every turn of this child runs under: no turn starts
@@ -375,7 +372,7 @@ function attemptTurn<TTurn, R, RTurn>(
     );
     if (Exit.isSuccess(attempt)) return attempt.value;
     const caught = Cause.squash(attempt.cause);
-    if (loop.isInterrupted() || isUserAbort(caught)) return undefined;
+    if (loop.signal.aborted || isUserAbort(caught)) return undefined;
     yield* loop.log('error', toErrorMessage(caught));
     return { turn: null, err: caught, turnIsError: false };
   });
@@ -462,7 +459,7 @@ const deliveryTarget = <TTurn, R>(
     params.strategy.deliveryMode === 'persistOnly'
   )
     return null;
-  if (loop.isInterrupted()) {
+  if (loop.signal.aborted) {
     loop.releaseOwnership();
     return loop.process?.deliverAfterInterrupt === true ? target : null;
   }
@@ -553,7 +550,7 @@ function nativeTurns<TTurn, R>(
   const { session } = loop.params;
   return {
     turnPermit: Effect.fn('childRunLoop.turnPermit')(function* (turn) {
-      if (loop.isInterrupted()) return yield* Effect.interrupt;
+      if (loop.signal.aborted) return yield* Effect.interrupt;
       yield* beginTurn(loop, false);
       return yield* loop.budget ? loop.budget.withPermit(turn) : turn;
     }),
@@ -608,12 +605,12 @@ const finishInterimTurn = Effect.fn('childRunLoop.finishInterimTurn')(
   ): Effect.fn.Return<void, Error, R> {
     const { session, runId } = loop.params;
     const { result } = yield* buildTurnResult(loop, turned);
-    const wait = loop.isInterrupted() ? undefined : waitingRow(runId, 'parked');
+    const wait = loop.signal.aborted ? undefined : waitingRow(runId, 'parked');
     yield* commitPart(
       session,
       turnResultPart(session, result, loop.trace, wait),
     );
-    if (wait && turned.turn !== null && !loop.isInterrupted())
+    if (wait && turned.turn !== null && !loop.signal.aborted)
       loop.process?.onTurnSuccess?.(turned.turn);
     yield* wakeParent(session, result.delivery, loop.trace);
   },
@@ -630,7 +627,7 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
 ): Effect.fn.Return<TTurn | undefined, Error, R> {
   const { session, runId } = loop.params;
   // A stop that landed during the setup: the run never launches.
-  if (loop.isInterrupted()) return undefined;
+  if (loop.signal.aborted) return undefined;
   const turns = nativeTurns(loop, strategy, yield* Effect.context<R>());
   loop.turnStart = yield* Clock.currentTimeMillis;
   const turned = yield* attemptTurn(
@@ -678,7 +675,7 @@ const driveProcess = Effect.fn('childRunLoop.driveProcess')(function* <
   let next = () => strategy.launch(loop.signal);
   let result: TTurn | undefined;
   let resumed = false;
-  while (!loop.isInterrupted()) {
+  while (!loop.signal.aborted) {
     yield* beginTurn(loop, resumed);
     const turned = yield* attemptTurn(loop, Effect.suspend(next));
     if (turned === undefined) break;
@@ -691,7 +688,7 @@ const driveProcess = Effect.fn('childRunLoop.driveProcess')(function* <
       break;
     }
     yield* finishInterimTurn(loop, turned);
-    const batch = loop.isInterrupted()
+    const batch = loop.signal.aborted
       ? null
       : yield* Effect.raceFirst(
           input.next('idle'),
@@ -701,7 +698,7 @@ const driveProcess = Effect.fn('childRunLoop.driveProcess')(function* <
             ),
           ),
         ).pipe(Effect.interruptible);
-    if (!batch || loop.isInterrupted()) break;
+    if (!batch || loop.signal.aborted) break;
     // The batch ends the wait: the turn it starts is the current one.
     loop.consumed = batch.kind === 'synthetic' ? [] : batch.followUps;
     resumed = true;
@@ -770,7 +767,7 @@ const writeEnd = <TTurn, R>(
   const { params, end } = loop;
   // Re-read: a stop landing after the body's exit is still the run's
   // terminal verdict.
-  const stoppedAtExit = stopped || loop.isInterrupted();
+  const stoppedAtExit = stopped || loop.signal.aborted;
   const outcome = deriveRunOutcome({
     failed: loop.failure !== undefined,
     cancelled: stoppedAtExit,
@@ -804,7 +801,7 @@ const endChildLoop = <TTurn, R>(
   Effect.uninterruptible(
     Effect.gen(function* () {
       const stopped =
-        loop.isInterrupted() ||
+        loop.signal.aborted ||
         (Exit.isFailure(body) && Cause.hasInterrupts(body.cause));
       if (Exit.isFailure(body) && !Cause.hasInterruptsOnly(body.cause)) {
         const error = Cause.squash(body.cause);

@@ -150,8 +150,10 @@ export const HISTORY_TEXT_LIMIT = 16 * 1024;
  *  longer one (many values, a large object) keeps only its length. */
 export const HISTORY_ROW_LIMIT = 64 * 1024;
 
+/** The statement the store copies one display row into `events` with. */
 export const HISTORY_INSERT_SQL =
   'INSERT INTO events (run_id, type, at, data) VALUES (?, ?, ?, ?)';
+/** The statement the store drops a deleted run's rows from `events` with. */
 export const HISTORY_REMOVE_SQL = 'DELETE FROM events WHERE run_id = ?';
 
 /** What the tool description tells the model it can query. */

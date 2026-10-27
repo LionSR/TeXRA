@@ -53,6 +53,9 @@ export interface RouteFailure {
   readonly retryAfterMs?: number;
 }
 
+/** One route a model call goes through (a provider endpoint, or one model on
+ *  it): the key its calls are gated under, which failures count against it,
+ *  and which still prove it reachable. */
 export interface RoutePolicy {
   readonly key: string;
   readonly classifyFailure: (error: Error) => RouteFailure | undefined;
@@ -150,9 +153,8 @@ export class ModelRetryGate {
             failure,
           );
         }
-        if (entry.isReachableFailure?.(error)) {
+        if (entry.isReachableFailure?.(error))
           return this.markReachable(entry.key, entry.permit);
-        }
         if (entry.permit.probe) {
           // An unclassified failure does not prove that a recovering route is
           // reachable. Keep the cohort closed and hand probe ownership to one
@@ -329,9 +331,7 @@ export class ModelRetryGate {
         // window that fits one probe rarely fits the herd). Resetting on probe
         // success would cap the shared backoff at its base forever in exactly
         // that cycle.
-        if (permit.version === state.version) {
-          state.failures = 0;
-        }
+        if (permit.version === state.version) state.failures = 0;
         return Effect.void;
       }
       if (permit.version !== state.version) return Effect.void;

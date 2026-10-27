@@ -12,15 +12,6 @@ import { runIdentityName } from '@shared/schemas';
 import type { Effect } from 'effect';
 
 /**
- * The run's immutable birth facts, the same values `run.start` publishes and
- * `registerRun` persists.
- */
-export interface RunFacts {
-  readonly runId: RunId;
-  readonly identity: RunIdentity;
-}
-
-/**
  * What a host can ask of a running tool-use loop: the members something
  * reads, and nothing else. The loop attaches them to its handle while it can
  * act on them; a stop is the run fiber's interruption, not a control.
@@ -45,46 +36,42 @@ export interface RunControls {
  * edge is not the handle's: it is the run's rows (`RunRegistry.parentOf`).
  */
 export class RunHandle {
-  private liveControls?: RunControls;
+  /** The run's id and identity: the same values its `run.start` publishes
+   *  and `registerRun` persists, fixed for the run's life. */
+  readonly runId: RunId;
+  readonly identity: RunIdentity;
   /** The run that launched this one, as its launch named it: the parent its
    *  birth writes, never cut. A detach is the rows' (`parentOf`). */
   readonly launchParent: RunId | null;
+  private liveControls?: RunControls;
 
   constructor(
-    /**
-     * The run's birth facts, the same object its `run.start` published and its
-     * `run.end` row closes. Held whole rather than copied field by field,
-     * so the handle and the event plane cannot describe the run differently.
-     */
-    readonly run: RunFacts,
+    run: Pick<RunHandle, 'runId' | 'identity'>,
     launchParent: RunId | null,
   ) {
+    this.runId = run.runId;
+    this.identity = run.identity;
     this.launchParent = launchParent;
   }
 
-  get runId(): RunId {
-    return this.run.runId;
-  }
-
-  get identity(): RunIdentity {
-    return this.run.identity;
-  }
-
   get agentName(): string {
-    return runIdentityName(this.run.identity);
-  }
-
-  attachControls(controls: RunControls): void {
-    this.liveControls = controls;
-  }
-
-  detachControls(controls: RunControls): void {
-    if (this.liveControls !== controls) return;
-    this.liveControls = undefined;
+    return runIdentityName(this.identity);
   }
 
   /** The loop's controls while it runs; `undefined` while none does. */
   get controls(): RunControls | undefined {
     return this.liveControls;
+  }
+
+  /** The running loop attaches its controls as it starts. */
+  attach(controls: RunControls): void {
+    this.liveControls = controls;
+  }
+
+  /** The loop detaches its controls as it ends; controls a later loop
+   *  attached are kept. */
+  detach(controls: RunControls): void {
+    if (this.liveControls !== controls) return;
+    this.liveControls = undefined;
   }
 }

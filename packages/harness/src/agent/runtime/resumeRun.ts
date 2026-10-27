@@ -66,6 +66,8 @@ export type ResumeRunResult =
  *  in the job, so it resumes with that parent. */
 export type ResumeAttempt = ResumeRunResult | { readonly ownedBy: RunId };
 
+/** How a caller resumes a persisted run: its session, the launch hooks it
+ *  shares with a fresh run, and its cancellation signal. */
 export interface ResumeRunOptions extends Pick<
   ResumeToolUseFromResumeDataOptions,
   'onRun' | 'onAdmitted' | 'stopAfterCycle' | 'tools'

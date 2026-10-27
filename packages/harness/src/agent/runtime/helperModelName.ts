@@ -7,6 +7,7 @@ import {
   readModelOptions,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
+import type { StateReadFailed } from '@platform/interfaces';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { Settings } from '@shared/config/settings';
@@ -24,7 +25,9 @@ const CHANNEL = 'helperModel';
  * The one resolution of the chain: every surface that shows or uses the
  * helper model reads it here, from the setting slots the caller holds.
  */
-export function getHelperModelName(stores: SettingsStores) {
+export function getHelperModelName(
+  stores: SettingsStores,
+): Effect.Effect<string, StateReadFailed> {
   return Effect.gen(function* () {
     const configured = (yield* Settings.get<string>(
       stores,

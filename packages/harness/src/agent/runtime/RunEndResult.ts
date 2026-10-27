@@ -27,6 +27,7 @@ const RunEndResultSchema = RunEndSchema.mapFields(
   }),
 );
 
+/** A run's report to its lifecycle (see `RunEndResultSchema` above). */
 export type RunEndResult = typeof RunEndResultSchema.Type;
 
 /** The report of a run that ended before its loop produced an output. */

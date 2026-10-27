@@ -69,22 +69,26 @@ const mapEvidence = (
   );
 };
 
+/** A continuation's origin, read for the protocol storage files it under. */
+const decodeOrigin = Schema.decodeUnknownSync(
+  Schema.Struct({ protocol: Schema.String }),
+);
+
 /** Evidence as storage keeps it: a continuation under its protocol, any
  *  other under its own `kind`. */
 const stored = (value: unknown) =>
   toJsonValue(
     mapEvidence(value, ({ kind, ...data }, key) =>
       key === 'continuation'
-        ? { kind: (data.origin as { protocol: string }).protocol, data }
+        ? { kind: decodeOrigin(data.origin).protocol, data }
         : { kind, data },
     ),
   );
 const live = (value: unknown) =>
-  mapEvidence(value, (evidence, key) =>
-    key === 'continuation'
-      ? evidence.data
-      : { kind: evidence.kind, ...(evidence.data as object) },
-  );
+  mapEvidence(value, ({ kind, data }, key) => {
+    if (key === 'continuation') return data;
+    return Predicate.isObject(data) ? { kind, ...data } : { kind };
+  });
 
 const storedOperation = ({
   origin,

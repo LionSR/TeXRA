@@ -179,10 +179,13 @@ export const generateSessionDescription = Effect.fn(
  * committed after `run.end` reads as a fact of a run that has already ended.
  */
 export const settleDescriptionOnExit =
-  (description: Fiber.Fiber<void>, opened: Deferred.Deferred<void>) =>
-  <A extends { readonly outcome: RunOutcome }, E, R>(
+  (
+    description: Fiber.Fiber<void>,
+    opened: Deferred.Deferred<void>,
+  ): (<A extends { readonly outcome: RunOutcome }, E, R>(
     flow: Effect.Effect<A, E, R>,
-  ) =>
+  ) => Effect.Effect<A, E, R>) =>
+  (flow) =>
     Effect.onExit(flow, (exit) =>
       Effect.flatMap(Deferred.isDone(opened), (exists) =>
         // A run that never opened has no row to describe.

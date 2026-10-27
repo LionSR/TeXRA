@@ -1,7 +1,7 @@
 import { Effect, Fiber, SubscriptionRef } from 'effect';
 
 // Local imports
-import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
+import { RunHandle } from '@agent/runtime/RunHandle';
 import {
   registryOf,
   RunRegistry,
@@ -23,8 +23,8 @@ export const testRunFork: RunRegistryInit['fork'] = (effect) =>
 /**
  * A live run handle for tests.
  *
- * The run struct is assembled here and typed as the canonical
- * {@link RunFacts}, so a schema change breaks every fixture in one place.
+ * The handle is built here, so a change to its constructor breaks every
+ * fixture in one place.
  */
 export function testRunHandle(input: {
   runId: RunId;
@@ -34,11 +34,13 @@ export function testRunHandle(input: {
   /** Defaults to a native agent identity for `agent`. */
   identity?: RunIdentity;
 }): RunHandle {
-  const run: RunFacts = {
-    runId: input.runId,
-    identity: input.identity ?? { kind: 'agent', agent: input.agent },
-  };
-  return new RunHandle(run, input.parent ?? null);
+  return new RunHandle(
+    {
+      runId: input.runId,
+      identity: input.identity ?? { kind: 'agent', agent: input.agent },
+    },
+    input.parent ?? null,
+  );
 }
 
 /** A registry over an empty fold: no run has a view, which is what a

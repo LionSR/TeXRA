@@ -66,6 +66,8 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
       }
   );
 
+/** The child-run driver's strategy for a native child: each turn launches
+ *  or resumes the child's tool-use run and formats its result for delivery. */
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
 ): NativeChildStrategy<RunEndResult, AgentRunServices> {

@@ -172,8 +172,10 @@ export class RunRegistry implements RunsShape {
   readonly programs: RunPrograms;
   /** Resume one persisted run on this session (`resumeRun`). */
   readonly resume: RunPrograms['resume'];
+  private readonly init: RunRegistryInit;
 
-  constructor(private readonly init: RunRegistryInit) {
+  constructor(init: RunRegistryInit) {
+    this.init = init;
     this.programs = init.programs;
     this.resume = init.programs.resume;
   }
@@ -260,11 +262,8 @@ export class RunRegistry implements RunsShape {
   private isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);
     if (entry === undefined) return false;
-    return (
-      entry.fiber !== undefined ||
-      entry.hold !== undefined ||
-      entry.launches > 0
-    );
+    const { fiber, hold, launches } = entry;
+    return fiber !== undefined || hold !== undefined || launches > 0;
   }
 
   /** A handle or a child activation this session still retains for `runId`. */
@@ -375,7 +374,9 @@ export class RunRegistry implements RunsShape {
   }
 
   /** {@link start}'s fork, admitting no run: a resume attempt admits its own. */
-  readonly fork = <A, E>(program: Effect.Effect<A, E, AgentRunServices>) =>
+  readonly fork = <A, E>(
+    program: Effect.Effect<A, E, AgentRunServices>,
+  ): Effect.Effect<Fiber.Fiber<A, E>> =>
     Effect.sync(() =>
       this.init.fork(program.pipe(Effect.provideService(Runs, this))),
     );
@@ -831,9 +832,8 @@ export class RunRegistry implements RunsShape {
     const disposal = new Error(
       'Cannot register run work after session disposal.',
     );
-    for (const refusal of this.waiting) {
+    for (const refusal of this.waiting)
       Deferred.doneUnsafe(refusal, Effect.fail(disposal));
-    }
     this.waiting.clear();
     this.entries.clear();
     for (const key of [...this.drains.keys()]) this.completeDrain(key);

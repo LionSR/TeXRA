@@ -193,11 +193,12 @@ const inconsistent = (runId: RunId, cause: RunHistoryInconsistent) =>
 const applyStored = (state: RunState | null, rows: readonly SessionEvent[]) =>
   Result.flatMap(runHistoryRows(rows), (live) => applyRunRows(state, live));
 
-/** `load`'s answer for a run's applied rows, which a resume shares. */
+/** `load`'s answer for a run's applied rows, which a resume shares; its
+ *  history is checked as prepared from message `checkFrom` (null: not). */
 const loaded = Effect.fn('RunHistory.loaded')(function* (
   run: RunId,
   applied: ReturnType<typeof applyRunRows>,
-  prepared = true,
+  checkFrom: number | null = 0,
 ): Effect.fn.Return<RunState | null, RunHistoryRefused> {
   if (Result.isFailure(applied))
     return yield* inconsistent(run, applied.failure);
@@ -216,8 +217,8 @@ const loaded = Effect.fn('RunHistory.loaded')(function* (
       }),
     );
   }
-  if (prepared && state.messages.length > 0) {
-    const refusal = unprepared(run, state.messages);
+  if (checkFrom !== null && state.messages.length > 0) {
+    const refusal = unprepared(run, state.messages, checkFrom);
     if (refusal !== null) return yield* refusal;
   }
   return state;
@@ -257,21 +258,16 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
   const batch = applyRunRows(state, candidates(state, rows));
   if (Result.isFailure(batch) && batch.failure.reason === 'mismatched-delivery')
     return yield* broken(batch.failure.detail);
-  const after = yield* loaded(run, batch, false);
   // The history `load` checks with `PreparedHistorySchema`, checked here
   // from where the batch changes it (an edit's range start, else the
   // already-checked history's end); re-checking all is quadratic.
-  const assembled = after?.messages ?? [];
-  if (rows.some(isMessageBearing) && assembled.length > 0) {
-    const edit = rows.find((row) => row.type === 'context.edit');
-    const held = state.messages.length;
-    const kept =
-      edit?.type === 'context.edit'
-        ? Math.min(edit.payload.range.from, held)
-        : held;
-    const refusal = unprepared(run, assembled, kept);
-    if (refusal !== null) return yield* refusal;
-  }
+  const edit = rows.find((row) => row.type === 'context.edit');
+  const from =
+    edit?.type === 'context.edit' ? edit.payload.range.from : Infinity;
+  const changedFrom = rows.some(isMessageBearing)
+    ? Math.min(from, state.messages.length)
+    : null;
+  yield* loaded(run, batch, changedFrom);
   const target = qualifyAggregateId('run', run);
   const job = (append: Append) =>
     Effect.gen(function* () {
@@ -315,12 +311,12 @@ export function makeRunHistory(
   const stored = (run: RunId) =>
     sessionLog.rows(qualifyAggregateId('run', run));
 
-  /** `load`, and a read inside a job (`prepared` false: a batch that
+  /** `load`, and a read inside a job (`checkFrom` null: a batch that
    *  changes the history is checked from where it changes). */
-  const read = (run: RunId, through = Infinity, prepared = true) =>
+  const read = (run: RunId, through = Infinity, checkFrom: number | null = 0) =>
     Effect.flatMap(stored(run), (rows) => {
       const kept = rows.filter((r) => r.seq <= through);
-      return loaded(run, applyStored(null, kept), prepared);
+      return loaded(run, applyStored(null, kept), checkFrom);
     });
   const load = Effect.fn('RunHistory.load')((run: RunId, through?: number) =>
     read(run, through),
@@ -371,7 +367,7 @@ export function makeRunHistory(
     const { within, activation } = opening;
     const seeded =
       (activation === undefined
-        ? yield* read(run, Infinity, within === undefined)
+        ? yield* read(run, Infinity, within === undefined ? 0 : null)
         : yield* activate(run, activation)) ?? freshRunState(0);
     const ref = yield* SynchronizedRef.make(seeded);
     let registration = opening.registration ?? none; // the first append's

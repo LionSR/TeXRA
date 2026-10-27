@@ -124,6 +124,8 @@ export type PluginToolServices = CallServices;
 /** What the runtime supplies to the harness's built-in tools: a plugin
  *  tool's services and the session's runs. */
 export type ToolServices = PluginToolServices | Runs;
+/** A tool as the runtime runs it: by default it may read any of the
+ *  built-in tools' services. */
 export type RuntimeTool<E = Error, R = ToolServices> = ITool<E, R>;
 /** The tools a run offers, by name. */
 export type RuntimeToolRegistry = ReadonlyMap<string, RuntimeTool>;

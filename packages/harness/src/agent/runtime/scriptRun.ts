@@ -35,6 +35,8 @@ type ScriptCallStatus =
   /** No settlement yet: running while the run is, cut short after. */
   | 'unsettled';
 
+/** One call a script issued, as its rows record it: the tool, its attempt,
+ *  how it settled and the value the script received. */
 export interface ScriptCallCard {
   readonly seq: number;
   readonly toolName: string;

@@ -5,13 +5,7 @@ import { selectModel } from '@texra-ai/llm';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { agentEntryOf } from '@agent/index/agentYamlScanner';
 import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
-import {
-  logUserMessage,
-  TraceEmitter,
-  type AgentEvent,
-  type AgentTrace,
-  type StageHandle,
-} from '@agent/trace';
+import { logUserMessage, TraceEmitter, type AgentEvent } from '@agent/trace';
 import { runEventDraft } from '@agent/trace/TraceEmitter';
 import {
   registrationRows,
@@ -70,6 +64,8 @@ type LaunchResolvedRunFacts = Pick<
 > &
   Pick<AgentRunShape['toolInputs'], 'stores'>;
 
+/** Everything a launch resolved before its run starts: the run's facts, the
+ *  model config it binds and the selected agent's description. */
 export interface AgentLaunchContext extends LaunchResolvedRunFacts {
   /** The launch model's registry config, which `AgentRun` binds (or a
    *  resumed run's snapshot's); a mid-run switch rebinds there. */
@@ -144,21 +140,11 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
 );
 
 /**
- * Create a root "Run:" stage, logging a user instruction first so it has no
- * group and renders before the run group; a root never inherits a parent
- * run's stage.
+ * Resolve a launch's agent before any run exists: the persona (inline or
+ * from the catalog), a refusal for a declared tool this build lacks, and the
+ * model's registry config. A failure is presented once, as a toast, unless
+ * the caller suppresses it.
  */
-function beginRunStage(
-  agentLogger: AgentTrace,
-  label: string,
-  instruction: string | undefined,
-): StageHandle {
-  if (instruction) {
-    logUserMessage(agentLogger, instruction);
-  }
-  return agentLogger.openStage(label, { kind: 'run' });
-}
-
 export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   function* (input: {
     config: AgentConfig;
@@ -246,6 +232,8 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       ),
     ),
 );
+/** What {@link prepareAgentDefinition} resolved: the stamped config, the
+ *  persona, its catalog entry and the model config. */
 export type PreparedAgentDefinition = Effect.Success<
   ReturnType<typeof prepareAgentDefinition>
 >;
@@ -342,13 +330,14 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       config.mediaFiles.length > 0 && supportsMediaInMessage;
 
     const parentStage = yield* Effect.acquireRelease(
-      Effect.sync(() =>
-        beginRunStage(
-          agentLogger,
-          `Run: ${config.agent}`,
-          initialMediaMayBeInserted ? undefined : initialInstruction,
-        ),
-      ),
+      // A root "Run:" stage, the instruction logged first so it has no
+      // group and renders before the run group; a root never inherits a
+      // parent run's stage.
+      Effect.sync(() => {
+        if (!initialMediaMayBeInserted && initialInstruction)
+          logUserMessage(agentLogger, initialInstruction);
+        return agentLogger.openStage(`Run: ${config.agent}`, { kind: 'run' });
+      }),
       // A scope that fails before the run's terminal row closes the stage
       // as failed; `end` is idempotent, so a published verdict stands.
       (stage, exit) =>

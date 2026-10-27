@@ -73,6 +73,11 @@ export interface ConsumeOptions {
   readonly position?: boolean;
 }
 
+/**
+ * One run's reader on its follow-up queue, opened in the run's own scope:
+ * what is pending, the next batch readable at a point, and the one write
+ * that consumes a batch.
+ */
 export interface FollowUps {
   /** Whether `next` would return now: a message readable at `at`, or a
    *  `/compact`. */
@@ -104,6 +109,48 @@ export interface FollowUps {
   >;
 }
 
+/** The canonical user message of one batch: every item's text as its
+ *  own part, media parts after it; `kinds[i]` is item i's badges. */
+const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
+  run: AgentRunShape,
+  followUps: readonly QueuedFollowUp[],
+): Effect.fn.Return<
+  { message: Message; kinds: readonly (readonly MediaAttachmentKind[])[] },
+  Error,
+  FileSystem.FileSystem | ChildProcessSpawner
+> {
+  const bound = yield* SynchronizedRef.get(run.model);
+  const parts: InputPart[] = [];
+  const kinds: (readonly MediaAttachmentKind[])[] = [];
+  for (const { content } of followUps) {
+    parts.push({ kind: 'text', text: content.text });
+    const files = content.mediaFiles ?? [];
+    const media = yield* mediaInputParts(
+      files.map((path) => run.fileService.createLocation(path)),
+      bound.config.capabilities,
+      run.logger,
+      run.session.roots.config,
+    );
+    parts.push(...media.parts);
+    kinds.push(media.kinds);
+  }
+  return { message: { role: 'user', content: parts }, kinds };
+});
+
+/** Each item of a batch on the run's transcript, with its badges. */
+const logFollowUps = (
+  logger: AgentRunShape['logger'],
+  followUps: readonly QueuedFollowUp[],
+  kinds: readonly (readonly MediaAttachmentKind[])[] = [],
+): void => {
+  for (const [i, { content }] of followUps.entries()) {
+    const { text, scriptSummary } = followUpDisplay(content);
+    const { mediaFiles } = content;
+    const attachments = kinds[i];
+    logUserMessage(logger, text, { attachments, mediaFiles, scriptSummary });
+  }
+};
+
 /** Open `run`'s own reader for the enclosing scope. */
 export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   run: AgentRunShape,
@@ -112,45 +159,6 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   // Ended with the scope; the run's settleRun arm ends it first, saying
   // whether the run takes more input.
   const input = yield* session.followUps.open(runId);
-
-  /** The canonical user message of one batch: every item's text as its
-   *  own part, media parts after it; `kinds[i]` is item i's badges. */
-  const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
-    followUps: readonly QueuedFollowUp[],
-  ): Effect.fn.Return<
-    { message: Message; kinds: readonly (readonly MediaAttachmentKind[])[] },
-    Error,
-    FileSystem.FileSystem | ChildProcessSpawner
-  > {
-    const bound = yield* SynchronizedRef.get(run.model);
-    const parts: InputPart[] = [];
-    const kinds: (readonly MediaAttachmentKind[])[] = [];
-    for (const { content } of followUps) {
-      parts.push({ kind: 'text', text: content.text });
-      const files = content.mediaFiles ?? [];
-      const media = yield* mediaInputParts(
-        files.map((path) => run.fileService.createLocation(path)),
-        bound.config.capabilities,
-        logger,
-        run.session.roots.config,
-      );
-      parts.push(...media.parts);
-      kinds.push(media.kinds);
-    }
-    return { message: { role: 'user', content: parts }, kinds };
-  });
-
-  const logFollowUps = (
-    followUps: readonly QueuedFollowUp[],
-    kinds: readonly (readonly MediaAttachmentKind[])[] = [],
-  ): void => {
-    for (const [i, { content }] of followUps.entries()) {
-      const { text, scriptSummary } = followUpDisplay(content);
-      const { mediaFiles } = content;
-      const attachments = kinds[i];
-      logUserMessage(logger, text, { attachments, mediaFiles, scriptSummary });
-    }
-  };
 
   /** The rows that consume one batch: its `followup.consumed` rows, the one
    *  user message they become, and the instruction and skill activations
@@ -176,8 +184,10 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
             } satisfies Message,
             kinds: [],
           })
-        : batchMessage(followUps)
-    ).pipe(Effect.tapCause(() => Effect.sync(() => logFollowUps(followUps))));
+        : batchMessage(run, followUps)
+    ).pipe(
+      Effect.tapCause(() => Effect.sync(() => logFollowUps(logger, followUps))),
+    );
     if (stale.length > 0) {
       logger.debug(
         `Consumed ${stale.length} progress notice(s) of ended subagents without delivering them.`,
@@ -249,7 +259,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
         ...(turn ? [appendRow(runId, [message], { input })] : []),
       ],
       // The user's rows are durable; the transcript shows what was asked.
-      delivered: () => logFollowUps(followUps, built.kinds),
+      delivered: () => logFollowUps(logger, followUps, built.kinds),
     };
   });
 

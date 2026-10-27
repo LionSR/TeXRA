@@ -110,6 +110,53 @@ export const declaredToolNames = (tools: Persona['tools']): readonly string[] =>
     typeof toolConfig === 'string' ? toolConfig : toolConfig.name,
   );
 
+/** The names the plugins inject into a step (step 2): each whose
+ *  `injectedWhen` setting is on, and every tool of an installed plugin. */
+const injectedNames = Effect.fn('injectedNames')(function* (
+  table: ToolRegistry['Service'],
+  catalog: ReadonlyMap<string, ToolEntry>,
+  input: StepToolInputs,
+) {
+  const injected: string[] = [];
+  if (input.injectTools)
+    for (const { injectedWhen } of table.entries.values())
+      for (const [name, setting] of Object.entries(injectedWhen ?? {}))
+        if (
+          setting === true ||
+          (yield* Settings.get<boolean>(input.stores, setting))
+        )
+          injected.push(name);
+  if (input.injectInstalled)
+    for (const [name, entry] of catalog)
+      if (isInstalledPluginId(entry.plugin)) injected.push(name);
+  return injected;
+});
+
+/** Why this host withholds `tool`: a host it does not run on, or a host
+ *  capability this host does not serve. */
+const hostRefusal = (
+  tool: ITool | undefined,
+  input: StepToolInputs,
+): string | undefined => {
+  if (tool?.unavailableHosts?.includes(input.host))
+    return `it does not run on the ${input.host} host.`;
+  if (
+    tool?.hostCapability !== undefined &&
+    !input.hostCapabilities.has(tool.hostCapability)
+  )
+    return `this host does not serve "${tool.hostCapability}".`;
+  return undefined;
+};
+
+/** The built-in code mode plugin's tool behind `entry`
+ *  (`builtinPlugins.ts`): an app plugin that takes the id is not code mode. */
+const codeModeTool = (entry: ToolEntry | undefined): ITool | undefined =>
+  entry?.plugin === 'codemode' && builtinTools.has(entry.tool)
+    ? entry.tool
+    : undefined;
+const isScript = (entry: ToolEntry | undefined): boolean =>
+  codeModeTool(entry)?.describe !== undefined;
+
 /** Resolve the tools one step offers from the catalog entries it pinned. */
 export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   catalog: ReadonlyMap<string, ToolEntry>,
@@ -117,21 +164,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
 ) {
   const table = yield* ToolRegistry;
   const warnings: string[] = [];
-  const injected: string[] = [];
-  if (input.injectTools) {
-    for (const { injectedWhen } of table.entries.values()) {
-      for (const [name, setting] of Object.entries(injectedWhen ?? {})) {
-        if (
-          setting === true ||
-          (yield* Settings.get<boolean>(input.stores, setting))
-        )
-          injected.push(name);
-      }
-    }
-  }
-  if (input.injectInstalled)
-    for (const [name, entry] of catalog)
-      if (isInstalledPluginId(entry.plugin)) injected.push(name);
+  const injected = yield* injectedNames(table, catalog, input);
   // A plugin whose dependency the workspace's last probe found missing is
   // off. Before any probe has answered for the workspace, nothing is
   // withheld on its account.
@@ -147,66 +180,14 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const enabled = new Map(
     [...catalog].filter(([, e]) => !probedOff.has(e.plugin)),
   );
-  // The built-in code mode plugin's tools (`builtinPlugins.ts`): an app
-  // plugin that takes the id is not code mode.
-  const codeMode = (name: string) => {
-    const entry = enabled.get(name);
-    return entry?.plugin === 'codemode' && builtinTools.has(entry.tool);
-  };
-  const isScript = (name: string) =>
-    codeMode(name) && enabled.get(name)?.tool.describe !== undefined;
-  const scriptOnly = (name: string) =>
-    codeMode(name) && enabled.get(name)?.tool.scriptGlobal?.withScript === true;
-
-  const withheldForApproval: string[] = [];
-  // A declared tool a gate withholds says so; an injected one goes quietly,
-  // as the run never asked for it by name.
-  const withheld = (
-    name: string,
-    source: 'declared' | 'injected',
-    reason: string,
-  ): false => {
-    if (source === 'declared')
-      warnings.push(`Declared tool "${name}" is not offered: ${reason}`);
-    return false;
-  };
-  const passesRuntimeGates = (
-    name: string,
-    source: 'declared' | 'injected',
-  ): boolean => {
-    const tool = enabled.get(name)?.tool ?? table.get(name);
-    const excluded = tool?.unavailableHosts ?? [];
-    if (excluded.includes(input.host))
-      return withheld(
-        name,
-        source,
-        `it does not run on the ${input.host} host.`,
-      );
-    if (
-      tool?.hostCapability !== undefined &&
-      !input.hostCapabilities.has(tool.hostCapability)
-    )
-      return withheld(
-        name,
-        source,
-        `this host does not serve "${tool.hostCapability}".`,
-      );
-    if (tool?.requiresApproval && input.approvalPromptsUnavailable) {
-      // One whose plugin is off is withheld for that, silently.
-      if (enabled.has(name)) withheldForApproval.push(name);
-      return false;
-    }
-    return true;
-  };
 
   // A declared MCP name reaches its server's plugin: `mcp__<server>__*` is
   // every tool the server listed, in its order. A server the run names but
   // could not get (not configured, or failed to start) is reported once.
   const reportedServers = new Set<string>();
   const reportServer = (server: string, message: string): void => {
-    if (reportedServers.has(server)) return;
+    if (!reportedServers.has(server)) warnings.push(message);
     reportedServers.add(server);
-    warnings.push(message);
   };
   const expandDeclared = (name: string): readonly string[] => {
     const server = mcpServerOfToolName(name);
@@ -243,6 +224,23 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
 
   const definitions: ToolDefinition[] = [];
   const resolvedNames = new Set<string>();
+  const withheldForApproval: string[] = [];
+  // A declared tool a gate withholds says so; an injected one goes quietly,
+  // as the run never asked for it by name.
+  const gated = (name: string, source: 'declared' | 'injected'): boolean => {
+    const tool = enabled.get(name)?.tool ?? table.get(name);
+    const refusal = hostRefusal(tool, input);
+    if (refusal !== undefined) {
+      if (source === 'declared')
+        warnings.push(`Declared tool "${name}" is not offered: ${refusal}`);
+      return true;
+    }
+    if (!tool?.requiresApproval || !input.approvalPromptsUnavailable)
+      return false;
+    // One whose plugin is off is withheld for that, silently.
+    if (enabled.has(name)) withheldForApproval.push(name);
+    return true;
+  };
   const offer = (name: string, source: 'declared' | 'injected'): void => {
     if (resolvedNames.has(name)) return;
     // A missing dependency says so where the run declared the tool, before
@@ -256,7 +254,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         );
       return;
     }
-    if (!passesRuntimeGates(name, source)) return;
+    if (gated(name, source)) return;
     const entry = enabled.get(name);
     if (!entry) {
       // A name with no registration is a configuration error (typo, or a
@@ -280,27 +278,45 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     offer(name, 'declared');
   for (const name of injected) offer(name, 'injected');
   // A script's functions come with the script tool.
-  if ([...resolvedNames].some(isScript))
-    for (const name of enabled.keys())
-      if (scriptOnly(name)) offer(name, 'injected');
+  const scripted = [...resolvedNames].some((name) =>
+    isScript(enabled.get(name)),
+  );
+  if (scripted)
+    for (const [name, entry] of enabled)
+      if (codeModeTool(entry)?.scriptGlobal?.withScript === true)
+        offer(name, 'injected');
 
   const overlay = new Map<string, ITool>();
   for (const tool of input.runTools) {
     const { name } = tool.definition;
     const index = definitions.findIndex((entry) => entry.name === name);
-    if (overlay.has(name) || table.get(name) || index !== -1) {
+    if (overlay.has(name) || table.get(name) || index !== -1)
       warnings.push(`Run-scoped tool "${name}" shadows an existing tool.`);
-    }
     overlay.set(name, tool);
     if (index === -1) definitions.push(tool.definition);
     else definitions[index] = tool.definition;
   }
   // Which tools the requests send (`OfferedTool.sent`), recorded per tool.
   const scriptAlone =
-    [...resolvedNames].some(isScript) &&
+    scripted &&
     (yield* Settings.get<boolean>(input.stores, GlobalStateKey.SCRIPT_ONLY));
-  // Dispatch answers only the names the model was offered.
-  const offeredTools = new Map<string, ITool>();
+  return {
+    definitions,
+    ...recordOffered(definitions, overlay, enabled, scriptAlone),
+    warnings,
+    withheldForApproval,
+  };
+});
+
+/** What a step offers, as dispatch and the run's record read it: the
+ *  registry holds the offered tools only, and each gets its `OfferedTool`. */
+function recordOffered(
+  definitions: readonly ToolDefinition[],
+  overlay: ReadonlyMap<string, ITool>,
+  enabled: ReadonlyMap<string, ToolEntry>,
+  scriptAlone: boolean,
+): { readonly registry: Map<string, ITool>; readonly offered: OfferedTool[] } {
+  const registry = new Map<string, ITool>();
   const offered: OfferedTool[] = [];
   // Recorded as shown: the definition sent.
   for (const definition of definitions) {
@@ -309,7 +325,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     const entry = enabled.get(name);
     if (own) {
       // A tool only this run holds; `definition` is its own.
-      offeredTools.set(name, own);
+      registry.set(name, own);
       offered.push({
         name,
         ...toolDigests(own),
@@ -318,25 +334,19 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         sent: true,
       });
     } else if (entry) {
-      offeredTools.set(name, entry.tool);
+      registry.set(name, entry.tool);
       offered.push({
         name,
         digest: entry.digest,
         shown: toolDigests({ definition }).shown,
         plugin: entry.plugin,
         revision: entry.revision,
-        sent: !scriptAlone || isScript(name),
+        sent: !scriptAlone || isScript(entry),
       });
     }
   }
-  return {
-    definitions,
-    registry: offeredTools,
-    offered,
-    warnings,
-    withheldForApproval,
-  };
-});
+  return { registry, offered };
+}
 
 /** The tools a step resolves from its pin. */
 export interface ResolvedTools {
