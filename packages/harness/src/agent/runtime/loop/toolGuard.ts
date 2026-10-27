@@ -12,7 +12,11 @@
  */
 import { Effect, Result, Schema } from 'effect';
 
-import { ToolContext, type CallRequests } from '@agent/core/tools/ToolTypes';
+import {
+  ToolContext,
+  type CallRequests,
+  type ToolEnv,
+} from '@agent/core/tools/ToolTypes';
 import { qualifyAggregateId, type ToolResult } from '@shared/schemas';
 import { callRequestId, type AttemptRequests } from '@shared/session/inFlight';
 import type { CellError, RunCell } from '@shared/session/runHistory';
@@ -63,6 +67,8 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   // below re-reads it and returns the validation error, which is the report.
   const parsed = Schema.decodeUnknownResult(schema)(rawInput);
   if (!Result.isSuccess(parsed)) return undefined;
+  // A tool's guard is stored with its input type erased (`ToolGuard<never>`).
+  // cast: this is what the tool's own schema decoded, its guard's input type.
   const input = parsed.success as never;
   const call = yield* ToolContext;
 
@@ -78,7 +84,20 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
     yield* assertWritable(path, path.display);
   }
 
-  if (!asks) return undefined;
+  return asks ? yield* approvalRefusal(tool, input, call.env) : undefined;
+});
+
+/**
+ * Ask the session's one approval queue about the call, spelled as its guard
+ * spells it: the result that replaces the call when the person declines it,
+ * `undefined` when it is approved.
+ */
+const approvalRefusal = Effect.fn('toolUse.approval')(function* (
+  tool: RuntimeTool,
+  input: never,
+  env: ToolEnv,
+): Effect.fn.Return<ToolResult | undefined, Error, ToolServices> {
+  const guard = tool.guard;
   // The call as the prompt shows it: the guard's spelling, else the tool's
   // name and the arguments it was called with.
   const command = guard?.bash
@@ -93,7 +112,7 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
   // in.
   const cwd =
     guard?.bash && guard.cwd !== 'unknown'
-      ? (call.env.workingDirectory ?? call.env.roots.workspace)
+      ? (env.workingDirectory ?? env.roots.workspace)
       : undefined;
 
   // Only the shell's own commands take the run's command grant; every other

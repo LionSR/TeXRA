@@ -13,6 +13,7 @@ import type { RunState } from '@shared/session/runState';
 import type { RunCell } from '@shared/session/runHistory';
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { configRow, consumedRows } from './rows';
+import type { RunControls } from '../RunHandle';
 
 /** Apply the model switches the run's input queues (the latest wins): the
  *  `run.config` naming the new model and the requests' `followup.consumed`,
@@ -78,7 +79,7 @@ const control = { kind: 'compact' } as const;
 export function modelSwitchPort(
   run: AgentRunShape,
   access: ModelAccess['Service'],
-) {
+): Omit<RunControls, 'oneShot'> {
   /** Why `model` cannot replace the run's, decided as the next bind will. */
   const admission = (model: string) =>
     access.admit(

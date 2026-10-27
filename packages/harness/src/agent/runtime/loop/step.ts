@@ -49,7 +49,7 @@ import {
   type OfferedTool,
   type SkillCatalogEntry,
 } from '@shared/schemas';
-import type { RunHistoryDraft, RunState } from '@shared/session/runState';
+import type { RunState } from '@shared/session/runState';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
 import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
@@ -66,7 +66,7 @@ import {
 } from '../agentToolResolution';
 import { hostCapabilitiesOf, liveToolGates } from '../requestPolicy';
 import { blobRows, contextAt, stored } from '../run/requestContext';
-import { appendRow, rowAggregate, SCRIPT_TOOL_NAME } from './rows';
+import { appendRow, offeredRow, SCRIPT_TOOL_NAME } from './rows';
 import { stepHooks, type StepHook } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
 
@@ -188,7 +188,7 @@ const openStep = Effect.fn('Step.open')(function* (
   holding: boolean,
   isChild: boolean,
   openingSystem: string | undefined,
-  recordedHooks: readonly string[] | null = null,
+  recordedHooks: readonly string[] | null,
 ) {
   const { roots } = run.session;
   const scope = yield* Scope.fork(run.scope);
@@ -385,18 +385,14 @@ const openStep = Effect.fn('Step.open')(function* (
             ...toolDefinitionsFor(step.tools.definitions),
             ...Object.values(step.tools.modules),
           ]),
-          {
-            type: 'tools.offered',
-            aggregateId: rowAggregate(run.runId),
-            payload: {
-              tools: step.tools.offered,
-              skills,
-              system: system === undefined ? null : sha256(system),
-              context: sha256(context),
-              hooks: step.hooks,
-              modules,
-            },
-          } satisfies RunHistoryDraft,
+          offeredRow(run.runId, {
+            tools: step.tools.offered,
+            skills,
+            system: system === undefined ? null : sha256(system),
+            context: sha256(context),
+            hooks: step.hooks,
+            modules,
+          }),
           ...(update === ''
             ? []
             : [appendRow(run.runId, [{ role: 'system', text: update }])]),
@@ -443,7 +439,9 @@ export const stepFor = Effect.fn('Step.for')(function* (
 
 /** What `run`'s current step offers: the tools a background script it
  *  launches now declares. */
-export const offeredBy = (run: Pick<AgentRunShape, 'steps'>) =>
+export const offeredBy = (
+  run: Pick<AgentRunShape, 'steps'>,
+): Effect.Effect<readonly OfferedTool[]> =>
   Effect.map(
     SynchronizedRef.get(run.steps),
     (open) => open?.tools.offered ?? [],

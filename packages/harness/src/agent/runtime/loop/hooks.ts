@@ -96,7 +96,7 @@ const staleHook = (identity: string): StepHook => {
 export function stepHooks(
   installed: ReadonlyMap<string, LoadablePlugin>,
   held: readonly string[] | null,
-) {
+): { hooks: StepHook[]; identities: string[]; notes: string[] } {
   const current = [...installed]
     .toSorted(([a], [b]) => Number(a > b) - Number(a < b))
     .flatMap(([plugin, { record, plugin: resolved, trust }]) =>

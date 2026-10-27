@@ -15,14 +15,21 @@ import { Effect, SynchronizedRef } from 'effect';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
   qualifyAggregateId,
+  toJsonValue,
+  type AggregateId,
+  type DispatchFacts,
+  type FileListEntry,
   type PositionAt,
   type RunBinding,
   type RunId,
   type RunInput,
   type RunOutcome,
+  type ScriptCallPayload,
   type SessionEvent,
-  type SessionEventDraft,
+  type ToolCallStatus,
 } from '@shared/schemas';
+import type { DraftBlob } from '@shared/session/historyTurns';
+import type { CallResult } from '@shared/session/inFlight';
 import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
@@ -31,11 +38,13 @@ import { dispatchFactsFor } from '../run/tools';
 import { addressedMessages, type AppendedMessage } from '../storedTurn';
 
 import type { AgentRunShape } from '../run/AgentRun';
+import type { RuntimeTool } from '../ToolServices';
 
 /** A message the loop appends (`addressedMessages`). */
 export type Message = AppendedMessage;
 
-export function rowAggregate(runId: RunId) {
+/** The aggregate id every row of run `runId`'s history is filed under. */
+export function rowAggregate(runId: RunId): AggregateId {
   return qualifyAggregateId('run', runId);
 }
 
@@ -128,18 +137,119 @@ export function configRow(
   };
 }
 
-/** Each arm of a draft union keeps its own required fields. */
-type Unqualified<T> = T extends unknown ? Omit<T, 'aggregateId'> : never;
-
-/** A display row the loop commits atomically with a run history row: the card a
- *  tool call opens, closes, or both, in the batch that settles it. */
-export function displayRow(
+/** The `tools.offered` row recording what a step offers, written when it
+ *  differs from what the run last recorded (`step.ts`). */
+export function offeredRow(
   runId: RunId,
-  draft: Unqualified<
-    Extract<SessionEventDraft, { type: 'tool.start' | 'tool.end' }>
-  >,
+  payload: Extract<RunHistoryDraft, { type: 'tools.offered' }>['payload'],
 ): RunHistoryDraft {
-  return { ...draft, aggregateId: rowAggregate(runId) };
+  return { type: 'tools.offered', aggregateId: rowAggregate(runId), payload };
+}
+
+/** What a tool call's rows name of it, whichever origin issued it: a
+ *  response's dispatch fact, or a script's `script.call`, which commits
+ *  with the call's first row. */
+export type CallFacts =
+  | Pick<DispatchFacts, 'callId' | 'toolName' | 'replay' | 'logId'>
+  | ScriptCallPayload;
+
+/** The `script.call` a call carries, or null for a response's own. */
+export const scriptOf = (fact: CallFacts): ScriptCallPayload | null =>
+  'scriptCallId' in fact ? fact : null;
+
+/** The display row that opens a call's card at `attempt`, shown as `tool`
+ *  renders the call's input; it commits in the batch with a run history
+ *  row (a slow tool's intent, or the result). */
+export function cardStartRow(
+  runId: RunId,
+  fact: CallFacts,
+  input: unknown,
+  attempt: number,
+  tool: RuntimeTool | undefined,
+): RunHistoryDraft {
+  const script = scriptOf(fact);
+  return {
+    type: 'tool.start',
+    aggregateId: rowAggregate(runId),
+    logId: fact.logId,
+    toolName: fact.toolName,
+    input: toJsonValue(input),
+    card: tool?.definition.card?.(input),
+    ...(script?.phase != null ? { phase: script.phase } : {}),
+    ...(attempt > 1 ? { attempt } : {}),
+    ...(script !== null ? { stageId: script.stageId } : {}),
+  };
+}
+
+/** The display row that closes a call's card, in the batch of its result. */
+export function cardEndRow(
+  runId: RunId,
+  fact: CallFacts,
+  status: ToolCallStatus,
+  files: readonly FileListEntry[],
+): RunHistoryDraft {
+  const script = scriptOf(fact);
+  return {
+    type: 'tool.end',
+    aggregateId: rowAggregate(runId),
+    logId: fact.logId,
+    status,
+    ...(files.length > 0 ? { files: [...files] } : {}),
+    ...(script !== null ? { stageId: script.stageId } : {}),
+  };
+}
+
+/** The `script.call` that issues a script's call: it commits with the
+ *  call's first row, whichever that is. */
+export function scriptCallRow(
+  runId: RunId,
+  script: ScriptCallPayload,
+): RunHistoryDraft {
+  return {
+    type: 'script.call',
+    aggregateId: rowAggregate(runId),
+    payload: script,
+  };
+}
+
+/** The `tool.result` that settles call `callId` of response `responseId` at
+ *  `attempt`, with the attachment bytes it stores or links (`blobs`). */
+export function toolResultRow(
+  runId: RunId,
+  responseId: string,
+  callId: string,
+  attempt: number,
+  result: Omit<CallResult, 'attempt'>,
+  blobs: readonly DraftBlob[],
+): RunHistoryDraft {
+  return {
+    type: 'tool.result',
+    aggregateId: rowAggregate(runId),
+    payload: { responseId, callId, attempt, ...result },
+    ...(blobs.length > 0 && { blobs }),
+  };
+}
+
+/** The `tool.intent` that says `fact`'s body starts `attempt`. */
+export function intentRow(
+  runId: RunId,
+  responseId: string,
+  fact: CallFacts,
+  attempt: number,
+): RunHistoryDraft {
+  const script = scriptOf(fact);
+  return {
+    type: 'tool.intent',
+    aggregateId: rowAggregate(runId),
+    payload: {
+      origin:
+        script === null
+          ? { kind: 'response', responseId }
+          : { kind: 'script', scriptCallId: script.scriptCallId },
+      callId: fact.callId,
+      attempt,
+    },
+  };
 }
 
 /** The tool a script's run calls: `script`, whatever launched the run. */

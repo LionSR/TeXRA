@@ -1,15 +1,21 @@
 /**
- * The run program's scaffolding: the run's entry, which opens its one cell,
- * and the exit protocol every run settles. What the loop does between them
- * stays in `toolUse.ts`. There is no hook record: the surface is values and
- * total functions, and the loop writes its own three-argument
- * `Effect.acquireUseRelease`.
+ * The run program's scaffolding: the run's entry, which opens its one cell
+ * and writes a fresh run's opening batch, and the exit protocol every run
+ * settles. What the loop does between them stays in `toolUse.ts`. There is
+ * no hook record: the surface is values and total functions, and the loop
+ * writes its own three-argument `Effect.acquireUseRelease`.
  */
 
-import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
+import { Cause, Effect, Exit, SubscriptionRef, SynchronizedRef } from 'effect';
 
+import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { activationRows } from '@agent/storage/runLifecycle';
-import type { AgentTrace, StageHandle } from '@agent/trace';
+import {
+  logUserMessage,
+  type AgentTrace,
+  type StageHandle,
+} from '@agent/trace';
+import type { ProcessServices } from '@platform/processRuntime';
 import { grantsKept, NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   RUN_OUTCOME,
@@ -20,10 +26,15 @@ import {
 import { outcomeFromCause } from '@shared/runs/runStatus';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
+import { sha256 } from '@utils/core/idHash';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
+import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { registryOf, Runs } from '../runRegistry';
+import { openingHooks } from './hooks';
+import { appendRow, configRow, handedDown, positionRow } from './rows';
+import { stepFor } from './step';
 import type { FollowUps } from '../FollowUps';
 
 /**
@@ -99,6 +110,129 @@ export const openRun = Effect.fn('runProgram.openRun')(function* (
         `Run ${runId} already has run history state; resume it instead.`,
       ),
     );
+  return cell;
+});
+
+/**
+ * A fresh run's opening batch, on the cell `openRun` opened: its message
+ * and input, the rows of its first step, its `run.config` binding and
+ * `turn.ready`; a script's run opens on its handed-down call instead of a
+ * prompt, and a fork is born on the history it was cut from. The system
+ * text the first step renders is stored with the batch, which every later
+ * step reads it from.
+ */
+export const openFresh = Effect.fn('toolUse.open')(function* (
+  cell: RunCell,
+  isChild: () => boolean,
+): Effect.fn.Return<RunCell, Error, AgentRun | ProcessServices> {
+  const run = yield* AgentRun;
+  const { runId, session, logger } = run;
+  const bound = yield* SynchronizedRef.get(run.model);
+  // The state its first step opens on: what the opening batch records.
+  const { backend } = bound;
+  const binding = { backend, declinedRoutes: run.declinedRoutes };
+  const opening: RunState = {
+    ...(yield* cell.current),
+    ...{ modelId: bound.modelId, ...binding },
+  };
+  // A fork is born on the history it was cut from, its turn ready.
+  const { seed } = run.entry;
+  if (seed != null) {
+    const born = [
+      ...seed,
+      configRow(runId, run.config, bound.modelId, binding),
+      positionRow(runId, opening, 'turn.ready'),
+    ];
+    yield* cell
+      .append(born, run.entry.opening)
+      .pipe(Effect.andThen(run.entry.entered), Effect.uninterruptible);
+    run.callbacks.onProgress?.({ kind: 'started' });
+    return cell;
+  }
+  // The system text a fresh run renders, until its opening batch records it.
+  let openingSystem: string | undefined;
+  // Keep preparation interruptible inside the masked acquire.
+  const { content, offered, handed } = yield* Effect.interruptible(
+    Effect.gen(function* () {
+      // A script's run renders no prompt: what it runs is its call.
+      const { script } = run.config;
+      if (script != null) {
+        const step = yield* stepFor(run, opening, 'request', isChild());
+        const content: InputPart[] = [
+          { kind: 'text', text: `Run the script "${script.title}".` },
+        ];
+        const handed = [yield* handedDown(run, script)];
+        return { content, offered: step.rows, handed };
+      }
+      const prompts = yield* buildInitialToolUsePrompts(
+        run.persona.prompt,
+        run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`))),
+        {
+          workspace: session.roots.workspace,
+          settings: session.roots,
+          textOnly: bound.textOnly,
+        },
+      );
+      openingSystem = [prompts.systemPrompt, prompts.instructionSuffix]
+        .filter(Boolean)
+        .join('\n');
+      // The first step renders the prompt, and stores its base text.
+      const step = yield* stepFor(
+        run,
+        opening,
+        'request',
+        isChild(),
+        openingSystem,
+      );
+      // The user's task is the user message.
+      const userRequest = run.config.instruction.trim();
+      if (!userRequest)
+        return yield* Effect.fail(
+          new Error('A conversation requires a non-empty task.'),
+        );
+      const content: InputPart[] = [];
+      const media = yield* Effect.exit(
+        run.config.mediaFiles.length
+          ? mediaInputParts(
+              run.config.mediaFiles.map((p) => run.fileService.locateSource(p)),
+              bound.config.capabilities,
+              logger,
+              run.session.roots.config,
+            )
+          : Effect.succeed({ parts: [], kinds: [] }),
+      );
+      if (run.entry.initialUserMessage) {
+        logUserMessage(logger, run.entry.initialUserMessage, {
+          attachments: Exit.isSuccess(media) ? media.value.kinds : [],
+        });
+      }
+      if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
+      content.push(...media.value.parts, { kind: 'text', text: userRequest });
+      const hooked = yield* openingHooks(run, opening, userRequest);
+      content.push(...hooked.parts);
+      return { content, offered: [...step.rows, ...hooked.rows], handed: [] };
+    }),
+  );
+  const { activated = [], attachedMemoryMisses: misses = [] } =
+    run.opening ?? {};
+  const input = {
+    ...(openingSystem !== undefined && { system: sha256(openingSystem) }),
+    ...(activated.length > 0 && { activated: [...activated] }),
+    ...(misses.length > 0 && { memoryMisses: misses }),
+  };
+  // The opening (registration, held trace), then the entry once it
+  // settled: a stop lands before the opening or after both.
+  const rows = [
+    appendRow(runId, [{ role: 'user', content }], { input }),
+    ...offered,
+    configRow(runId, run.config, bound.modelId, binding),
+    positionRow(runId, opening, 'turn.ready'),
+    ...handed,
+  ];
+  yield* cell
+    .append(rows, run.entry.opening)
+    .pipe(Effect.andThen(run.entry.entered), Effect.uninterruptible);
+  run.callbacks.onProgress?.({ kind: 'started' });
   return cell;
 });
 
