@@ -5,15 +5,19 @@
  * through `@texra-ai/harness/schemas`.
  */
 import type { ReadonlyDeep } from './readonlyDeep';
-import type {
-  RunView as FoldRunView,
-  SessionView as FoldSessionView,
-} from './sessionView';
+import type { SessionViewSchema } from './sessionView';
 
 /** One published level of the session's fold: an immutable value. */
-export type SessionView = ReadonlyDeep<FoldSessionView>;
+export type SessionView = ReadonlyDeep<typeof SessionViewSchema.Type>;
 /** One stream of the {@link SessionView}. */
-export type RunView = ReadonlyDeep<FoldRunView>;
+export type RunView = ReadonlyDeep<
+  (typeof SessionViewSchema.Type)['runs'] extends ReadonlyMap<
+    unknown,
+    infer Run
+  >
+    ? Run
+    : never
+>;
 /** A stream's transcript slice: what hosts paint. */
 export type TranscriptView = RunView['transcript'];
 /** A request a run waits on a person for, as {@link SessionView} lists it:
