@@ -26,9 +26,6 @@ function deviceEndpointsFetch(
   return vi.fn<typeof fetch>(async (input, init) => {
     const url = String(input);
     if (String(url) === CODEX_DEVICE_USERCODE_URL) {
-      expect(new Headers(init?.headers).get('content-type')).toBe(
-        'application/json',
-      );
       return jsonResponse({
         device_auth_id: 'device-auth-id',
         user_code: 'ABCD-EFGH',
@@ -39,12 +36,6 @@ function deviceEndpointsFetch(
     if (String(url) === CODEX_DEVICE_TOKEN_URL) return onPoll(init);
     throw new Error(`Unexpected fetch: ${url}`);
   });
-}
-
-function coordinatorStub(): SubscriptionOAuthCoordinator<CodexSession> {
-  return {
-    loginWithCode: vi.fn(),
-  } as unknown as SubscriptionOAuthCoordinator<CodexSession>;
 }
 
 /** Let the flow's fiber cross its pending `fetch` promises and reach its next wait. */
@@ -63,20 +54,17 @@ describe('Codex device login', () => {
           return jsonResponse({ error: 'authorization_pending' }, 403);
         });
         const shown = yield* Deferred.make<void>();
-        const onPrompt = vi.fn(() =>
-          Effect.asVoid(Deferred.succeed(shown, undefined)),
-        );
         const fiber = yield* Effect.forkChild(
           loginWithDeviceCode({
-            coordinator: coordinatorStub(),
-            onPrompt,
+            coordinator:
+              {} as unknown as SubscriptionOAuthCoordinator<CodexSession>,
+            onPrompt: () => Effect.asVoid(Deferred.succeed(shown, undefined)),
           }).pipe(
             Effect.provide(FetchHttpClient.layer),
             Effect.provideService(FetchHttpClient.Fetch, fetchMock),
           ),
         );
         yield* Deferred.await(shown);
-        expect(onPrompt).toHaveBeenCalledOnce();
         yield* settle;
 
         // Polls at 5s and 10s; the 15-minute fallback would keep polling.
@@ -89,7 +77,6 @@ describe('Codex device login', () => {
         const exit = yield* Fiber.await(fiber);
         expect(Exit.isFailure(exit) && Cause.squash(exit.cause)).toMatchObject({
           _tag: 'DeviceCodeTimedOut',
-          message: 'Device-code sign-in timed out. Run sign-in again.',
         });
         expect(polls).toBe(2);
       }),

@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { afterEach, beforeEach, describe, expect } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   MODEL_CONFIGS,
@@ -11,10 +11,10 @@ import {
 import { Effect } from 'effect';
 import { codexBackendModelId, routeConfig } from '@texra-ai/llm';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
+import { hostStores, installPlatform } from '@test/support/setupPlatform';
 
 /** The input window the Codex backend grants the fixture model. */
 const CODEX_INPUT_LIMIT = 272_000;
-import { hostStores, installPlatform } from '@test/support/setupPlatform';
 
 /** The config a model runs with on the ChatGPT subscription. */
 const chatgptConfig = (config: ModelConfig) =>
@@ -52,34 +52,26 @@ const gpt55Config: ModelConfig = {
 };
 
 describe('provider capabilities', () => {
-  beforeEach(() =>
-    installPlatform({
-      config: { 'texra.chatgptCodex.preferSubscription': true },
-    }),
+  afterEach(() => installPlatform());
+
+  it.effect(
+    'falls back when the configured context window is out of range',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          installPlatform({
+            config: {
+              'texra.chatgptCodex.preferSubscription': true,
+              'texra.chatgptCodex.contextWindowK': 900,
+            },
+          }),
+        );
+
+        expect(yield* chatgptConfig(gpt55Config)).toMatchObject({
+          contextWindow: CODEX_INPUT_LIMIT + gpt55Config.maxOutputTokens,
+        });
+      }),
   );
-
-  describe('context window override', () => {
-    afterEach(() => installPlatform());
-
-    it.effect(
-      'falls back when the configured context window is out of range',
-      () =>
-        Effect.gen(function* () {
-          yield* Effect.promise(() =>
-            installPlatform({
-              config: {
-                'texra.chatgptCodex.preferSubscription': true,
-                'texra.chatgptCodex.contextWindowK': 900,
-              },
-            }),
-          );
-
-          expect(yield* chatgptConfig(gpt55Config)).toMatchObject({
-            contextWindow: CODEX_INPUT_LIMIT + gpt55Config.maxOutputTokens,
-          });
-        }),
-    );
-  });
 });
 
 describe('codexBackendModelId', () => {

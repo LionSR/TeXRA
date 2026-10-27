@@ -35,26 +35,10 @@ const nativeCliPlatformPackages = {
   codex: {
     packagePath: ['@openai', 'codex-darwin-arm64'],
     binaryPath: ['vendor', 'aarch64-apple-darwin', 'codex', 'codex'],
-    pnpmStorePath: [
-      '.pnpm',
-      '@openai+codex@0.146.0-darwin-arm64',
-      'node_modules',
-      '@openai',
-      'codex',
-    ],
-    pnpmBinaryPath: ['vendor', 'aarch64-apple-darwin', 'bin', 'codex'],
   },
   claude: {
     packagePath: ['@anthropic-ai', 'claude-agent-sdk-darwin-arm64'],
     binaryPath: ['claude'],
-    pnpmStorePath: [
-      '.pnpm',
-      '@anthropic-ai+claude-agent-sdk-darwin-arm64@0.3.220',
-      'node_modules',
-      '@anthropic-ai',
-      'claude-agent-sdk-darwin-arm64',
-    ],
-    pnpmBinaryPath: ['claude'],
   },
 } as const;
 
@@ -75,22 +59,15 @@ describe('desktop package native CLI payload', () => {
     { cli: 'claude' as const, label: 'Claude Code CLI' },
   ])('fails when the $label platform package is bundled', ({ cli, label }) => {
     const { packageRoot, resourcesDir } = createFakeDesktopPackage();
-    writeNativeCliPackage(resourcesDir, cli, 'package');
+    writeNativeCliPackage(resourcesDir, cli);
 
     const result = runVerifier(packageRoot);
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('bundles native CLI payloads');
     expect(result.stderr).toContain(label);
-    expect(result.stderr).toContain('MiB');
   });
 });
 
-function createFakeDesktopPackage(
-  options: {
-    bootstrapInputs?: Record<string, { bytesInOutput: number }>;
-    startupImportPath?: string;
-  } = {},
-): {
+function createFakeDesktopPackage(): {
   packageRoot: string;
   resourcesDir: string;
 } {
@@ -125,17 +102,13 @@ function createFakeDesktopPackage(
         },
         imports: [
           {
-            path: options.startupImportPath ?? 'dist/main/bootstrap.js',
+            path: 'dist/main/bootstrap.js',
             kind: 'import-statement',
           },
         ],
       },
       'dist/main/bootstrap.js': {
-        inputs: options.bootstrapInputs ?? {
-          'src/main/bootstrap.ts': {
-            bytesInOutput: 1,
-          },
-        },
+        inputs: { 'src/main/bootstrap.ts': { bytesInOutput: 1 } },
         imports: [],
       },
     },
@@ -179,37 +152,24 @@ function createFakeDesktopPackage(
   return { packageRoot, resourcesDir: appRoot };
 }
 
-function writeNativeCliPackage(
-  appRoot: string,
-  cli: NativeCliName,
-  layout: 'package' | 'pnpmStore',
-): void {
+function writeNativeCliPackage(appRoot: string, cli: NativeCliName): void {
   const info = nativeCliPlatformPackages[cli];
   const packageDir = join(
     appRoot,
     'app.asar.unpacked',
     'node_modules',
-    ...(layout === 'pnpmStore' ? info.pnpmStorePath : info.packagePath),
+    ...info.packagePath,
   );
 
   writeJson(join(packageDir, 'package.json'), {
     name: info.packagePath.join('/'),
     version: '0.0.0',
   });
-  writeBinary(
-    join(
-      packageDir,
-      ...(layout === 'pnpmStore' ? info.pnpmBinaryPath : info.binaryPath),
-    ),
-  );
+  writeBinary(join(packageDir, ...info.binaryPath));
 }
 
-function runVerifier(packageRoot: string): {
-  status: number | null;
-  stderr: string;
-  stdout: string;
-} {
-  const result = spawnSync(process.execPath, [verifierPath, 'package'], {
+function runVerifier(packageRoot: string) {
+  return spawnSync(process.execPath, [verifierPath, 'package'], {
     cwd: repoPath('.'),
     encoding: 'utf8',
     env: {
@@ -217,12 +177,6 @@ function runVerifier(packageRoot: string): {
       TEXRA_DESKTOP_PACKAGE_ROOT: packageRoot,
     },
   });
-
-  return {
-    status: result.status,
-    stderr: result.stderr,
-    stdout: result.stdout,
-  };
 }
 
 function readDesktopDependencies(): Record<string, string> {

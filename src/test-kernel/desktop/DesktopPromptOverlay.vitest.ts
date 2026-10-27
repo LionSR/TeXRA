@@ -7,10 +7,6 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - test support
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
-type DesktopPromptOverlay = ReturnType<
-  typeof import('@desktop/renderer/promptOverlay').createDesktopPromptOverlay
->;
-
 async function loadDesktopPromptOverlay(): Promise<
   typeof import('@desktop/renderer/promptOverlay')
 > {
@@ -23,23 +19,15 @@ async function flushDialogTicks(times = 5): Promise<void> {
 
 const REQUEST_ID = '87db1d8b-81ed-4407-9414-984168ed4890';
 
-async function mountOverlay(): Promise<{
-  appRoot: HTMLElement;
-  overlay: DesktopPromptOverlay;
-  send: ReturnType<typeof vi.fn>;
-}> {
-  const { createDesktopPromptOverlay } = await loadDesktopPromptOverlay();
-  const appRoot = document.createElement('main');
-  document.body.append(appRoot);
-  const send = vi.fn();
-  return { appRoot, overlay: createDesktopPromptOverlay(appRoot, send), send };
-}
-
 describe('desktop prompt overlay', () => {
   useLitComponentTestDom(loadDesktopPromptOverlay);
 
   it('settles cancel and replacement requests exactly once', async () => {
-    const { appRoot, overlay, send } = await mountOverlay();
+    const { createDesktopPromptOverlay } = await loadDesktopPromptOverlay();
+    const appRoot = document.createElement('main');
+    document.body.append(appRoot);
+    const send = vi.fn();
+    const overlay = createDesktopPromptOverlay(appRoot, send);
     overlay.open({
       command: 'desktop:showPrompt',
       requestId: REQUEST_ID,

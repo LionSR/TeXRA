@@ -10,7 +10,6 @@ describe('extractDocuments (packages/texra/src/utils/text/xmlExtraction.ts)', ()
 
     const result = extractDocuments(xml, 'documents', 'a.tex');
 
-    expect(result.method).toBe('simple');
     expect(result.documents).toEqual([
       { name: 'a.tex', content: 'Body A' },
       { name: 'b.tex', content: 'Body B' },

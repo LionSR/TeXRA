@@ -1,23 +1,6 @@
 import { JSDOM } from 'jsdom';
 import { afterAll, beforeAll, beforeEach } from 'vitest';
 
-type TestElementInternals = {
-  validity?: ValidityState;
-  validationMessage?: string;
-  willValidate?: boolean;
-  form?: HTMLFormElement | null;
-  setValidity?: (flags?: ValidityStateFlags) => void;
-  setFormValue?: (value: unknown, state?: unknown) => void;
-  checkValidity?: () => boolean;
-  reportValidity?: () => boolean;
-};
-
-type TestDomWindow = JSDOM['window'] & {
-  ElementInternals?: {
-    prototype: TestElementInternals;
-  };
-};
-
 /**
  * Minimal ResizeObserver stub: jsdom doesn't implement it, and Web Awesome
  * controls (e.g. wa-textarea, used by the rejection-feedback box) construct one
@@ -72,62 +55,7 @@ const DEFAULT_VALIDITY = {
   valueMissing: false,
 } satisfies ValidityState;
 
-function installAnimationPolyfill(window: JSDOM['window']): void {
-  // jsdom doesn't implement Element.getAnimations; wa-dialog's
-  // animateWithClass calls it to detect when no CSS animation is running and
-  // resolve immediately. Returning [] means "no animations" — animateWithClass
-  // resolves on the next raf, which matches the visible behavior in tests.
-  const proto = window.Element?.prototype as
-    (Element & { getAnimations?: () => unknown[] }) | undefined;
-  if (!proto) return;
-  if (typeof proto.getAnimations !== 'function') {
-    proto.getAnimations = () => [];
-  }
-  // jsdom also doesn't implement the Web Animations API (Element.animate).
-  // wa-details' internal animate() helper (used to drive its open/close
-  // transition) calls `el.animate(keyframes, options).finished` directly —
-  // without this, toggling a <wa-details> open/closed throws. Resolve
-  // immediately so the open/close state settles synchronously enough for
-  // tests to observe without waiting on a real animation. The stub's shape
-  // intentionally doesn't match the real `Animation` return type — only
-  // `.finished` is ever read by the code under test.
-  if (typeof proto.animate !== 'function') {
-    proto.animate = (() => ({
-      finished: Promise.resolve(),
-    })) as unknown as Element['animate'];
-  }
-}
-
-function installDialogPolyfill(window: JSDOM['window']): void {
-  // jsdom (as of 24.x) does not implement HTMLDialogElement's showModal/close.
-  // wa-dialog calls these in firstUpdated; without them, attaching wa-dialog
-  // throws and tests can't render the component. Provide a minimal polyfill
-  // that only flips the `open` attribute.
-  const proto = window.HTMLDialogElement?.prototype as
-    | (HTMLDialogElement & { showModal?: () => void; close?: () => void })
-    | undefined;
-  if (!proto) return;
-  if (typeof proto.showModal !== 'function') {
-    proto.showModal = function showModal(this: HTMLDialogElement) {
-      this.setAttribute('open', '');
-    };
-  }
-  if (typeof proto.show !== 'function') {
-    (proto as HTMLDialogElement & { show: () => void }).show = function show(
-      this: HTMLDialogElement,
-    ) {
-      this.setAttribute('open', '');
-    };
-  }
-  if (typeof proto.close !== 'function') {
-    proto.close = function close(this: HTMLDialogElement) {
-      this.removeAttribute('open');
-      this.dispatchEvent(new window.Event('close'));
-    };
-  }
-}
-
-function installAttachInternalsFallback(window: TestDomWindow): void {
+function installAttachInternalsFallback(window: JSDOM['window']): void {
   // jsdom's attachInternals() exists but returns an ElementInternals stub
   // without setValidity / setFormValue / etc. Web Awesome's
   // WebAwesomeFormAssociatedElement (used by wa-button etc.) calls
@@ -157,63 +85,6 @@ function installAttachInternalsFallback(window: TestDomWindow): void {
   };
 }
 
-function defineGetterIfMissing(
-  prototype: object,
-  name: string,
-  get: (this: object) => unknown,
-): void {
-  if (name in prototype) return;
-  Object.defineProperty(prototype, name, { configurable: true, get });
-}
-
-function installElementInternalsPolyfill(window: TestDomWindow): void {
-  installAttachInternalsFallback(window);
-  const ElementInternalsCtor = window.ElementInternals;
-  if (!ElementInternalsCtor) {
-    return;
-  }
-
-  const validityByInternals = new WeakMap<object, ValidityState>();
-  const prototype = ElementInternalsCtor.prototype;
-
-  defineGetterIfMissing(prototype, 'validity', function () {
-    return validityByInternals.get(this) ?? DEFAULT_VALIDITY;
-  });
-  defineGetterIfMissing(prototype, 'validationMessage', () => '');
-  defineGetterIfMissing(prototype, 'willValidate', () => true);
-  defineGetterIfMissing(prototype, 'form', () => null);
-
-  if (!prototype.setValidity) {
-    prototype.setValidity = function setValidity(
-      this: object,
-      flags?: ValidityStateFlags,
-    ) {
-      const invalid = Object.values(flags ?? {}).some(Boolean);
-      validityByInternals.set(this, {
-        ...DEFAULT_VALIDITY,
-        ...(flags ?? {}),
-        valid: !invalid,
-      });
-    };
-  }
-
-  if (!prototype.setFormValue) {
-    prototype.setFormValue = () => {
-      /* jsdom does not implement form-associated custom element state. */
-    };
-  }
-
-  if (!prototype.checkValidity) {
-    prototype.checkValidity = function checkValidity(this: object) {
-      return (validityByInternals.get(this) ?? DEFAULT_VALIDITY).valid;
-    };
-  }
-
-  if (!prototype.reportValidity) {
-    prototype.reportValidity = prototype.checkValidity;
-  }
-}
-
 /**
  * Install the browser globals Lit components need, import the component module,
  * and reset the document between tests. Suites that import the module under
@@ -222,7 +93,6 @@ function installElementInternalsPolyfill(window: TestDomWindow): void {
  */
 export function useLitComponentTestDom(
   importComponents?: () => Promise<unknown>,
-  hookTimeout?: number,
 ): void {
   let dom: JSDOM;
   const previousGlobals = new Map<
@@ -298,11 +168,10 @@ export function useLitComponentTestDom(
       });
     }
 
-    installElementInternalsPolyfill(dom.window);
-    installDialogPolyfill(dom.window);
-    installAnimationPolyfill(dom.window);
+    installAttachInternalsFallback(dom.window);
+
     await importComponents?.();
-  }, hookTimeout);
+  });
 
   beforeEach(() => {
     document.body.replaceChildren();

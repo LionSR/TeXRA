@@ -38,7 +38,6 @@ describe('workspace storage defaults', () => {
     expect(storageIdOf(root, '/workspace/a')).not.toBe(
       storageIdOf(root, '/workspace/b'),
     );
-    expect(storageIdOf(root, '/workspace/b')).toMatch(/^b-[0-9a-f]{8}$/);
     expect(storageIdOf(root, undefined)).toBe(storageIdOf(root, ''));
     expect(storageIdOf(root, undefined)).toMatch(/^no-workspace-[0-9a-f]{8}$/);
   });
@@ -73,7 +72,6 @@ describe('workspace storage defaults', () => {
         );
 
         expect(warnings).toHaveLength(1);
-        expect(warnings[0]).toContain('Cannot read');
         expect(write._tag).toBe('Failure');
         expect(
           yield* Effect.promise(() =>

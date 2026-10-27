@@ -4,8 +4,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
-import type { ExecResult } from '@shared/schemas';
+import { compileLatex2Pdf } from '@latex/texTools';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
@@ -24,29 +23,6 @@ vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => {
 
 const workspacePath = fakePath('workspace');
 
-function execResult(success: boolean): ExecResult {
-  return {
-    success,
-    stdout: '',
-    stderr: '',
-    timedOut: false,
-    exitCode: success ? 0 : 1,
-  };
-}
-
-/** Compile over the installed host's roots, as a session would hand them. */
-function compile(
-  sourceFile = 'main.tex',
-  outputDirectory = path.join(workspacePath, 'build'),
-): Effect.Effect<CompileLatex2PdfResult> {
-  const roots = testWorkspaceRoots();
-  return compileLatex2Pdf(
-    pathToLocationIn(roots.workspace, path.join(workspacePath, sourceFile)),
-    roots,
-    { outputDirectory },
-  ).pipe(Effect.provide(rootedFsLayer(roots)));
-}
-
 // Exercises the real production code; only the subprocess call is mocked.
 describe('compileLatex2Pdf structured return', () => {
   beforeEach(async () => {
@@ -59,10 +35,25 @@ describe('compileLatex2Pdf structured return', () => {
     () =>
       Effect.gen(function* () {
         mocks.runToolWithCheck.mockReturnValue(
-          Effect.succeed(execResult(true)),
+          Effect.succeed({
+            success: true,
+            stdout: '',
+            stderr: '',
+            timedOut: false,
+            exitCode: 0,
+          }),
         );
 
-        const result = yield* compile();
+        // Compile over the installed host's roots, as a session hands them.
+        const roots = testWorkspaceRoots();
+        const result = yield* compileLatex2Pdf(
+          pathToLocationIn(
+            roots.workspace,
+            path.join(workspacePath, 'main.tex'),
+          ),
+          roots,
+          { outputDirectory: path.join(workspacePath, 'build') },
+        ).pipe(Effect.provide(rootedFsLayer(roots)));
 
         expect(result).toEqual({
           ok: true,

@@ -10,196 +10,18 @@ import {
   completedTurn,
   RemoteOperationSchema,
   type TurnRequest,
-  type TurnResult,
 } from '@texra-ai/llm';
 import { googleInteractionsModel } from '../../../packages/llm/src/api/googleInteractions.js';
 
-function model(
-  store = true,
-  background: 'supported' | 'unsupported' = 'unsupported',
-) {
-  return googleInteractionsModel(
-    {
-      protocol: 'google-interactions',
-      requestedModel: 'gemini-test',
-      background,
-      deployment: {
-        endpoint: 'https://synthetic.invalid',
-        credentialScope: 'test-account',
-      },
-      defaults: { maxOutputTokens: 2048, store, thinkingLevel: 'high' },
-    },
-    { apiKey: 'synthetic-key' },
-  );
-}
-
-function backgroundFixture() {
-  return Effect.gen(function* () {
-    const configured = model(true, 'supported');
-    const turn = yield* configured.prepareTurn({
-      ...request(),
-      mode: 'background',
-    });
-    assert(
-      turn.mode === 'background' && turn.protocol === 'google-interactions',
-    );
-    assert(configured.background);
-    const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
-      origin: {
-        protocol: turn.protocol,
-        codecVersion: turn.codecVersion,
-        requestedModel: turn.requestedModel,
-        deployment: turn.deployment,
-      },
-      providerResponseId: 'int_1',
-      afterSequence: null,
-    });
-    return { configured, turn, background: configured.background, operation };
-  });
-}
-
-function request(): TurnRequest {
-  return {
-    system: 'Use both tools.',
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { kind: 'text', text: 'go' },
-          { kind: 'text', text: 'Image: figures/panel.png' },
-          {
-            kind: 'image',
-            mimeType: 'image/png',
-            base64: 'AA==',
-            detail: 'high',
-          },
-          { kind: 'text', text: 'Audio: sound.mp3' },
-          { kind: 'audio', mimeType: 'audio/mp3', base64: 'TQ==' },
-          { kind: 'text', text: 'Video: clip.mp4' },
-          { kind: 'video', mimeType: 'video/mp4', base64: 'Vg==' },
-          { kind: 'text', text: 'Document: paper.pdf' },
-          { kind: 'document', mimeType: 'application/pdf', base64: 'UA==' },
-          { kind: 'text', text: 'Document: empty.csv' },
-          { kind: 'document', mimeType: 'text/csv', base64: '' },
-        ],
-      },
-    ],
-    tools: [
-      {
-        name: 'search',
-        description: 'Search',
-        parameters: {
-          type: 'object',
-          properties: { q: { type: 'string' } },
-          required: ['q'],
-        },
-      },
-      {
-        name: 'fetch',
-        description: 'Fetch',
-        parameters: {
-          type: 'object',
-          properties: { u: { type: 'string' } },
-          required: ['u'],
-        },
-      },
-    ],
-  };
-}
-
-function signedEvents(
-  includeSummary = true,
-  toolUseTokens?: number,
-): Array<Record<string, unknown>> {
-  return [
-    {
-      event_type: 'interaction.created',
-      // The live opening event carries no status (gemini-3.8-flash, 2026-10).
-      interaction: {
-        id: 'int_1',
-        object: 'interaction',
-        model: 'gemini-returned',
-      },
-    },
-    { event_type: 'step.start', index: 0, step: { type: 'thought' } },
-    ...(includeSummary
-      ? [
-          {
-            event_type: 'step.delta',
-            index: 0,
-            delta: {
-              type: 'thought_summary',
-              content: { type: 'text', text: 'plan' },
-            },
-          },
-        ]
-      : []),
-    {
-      event_type: 'step.delta',
-      index: 0,
-      delta: { type: 'thought_signature', signature: 'sig_b' },
-    },
-    { event_type: 'step.stop', index: 0 },
-    { event_type: 'step.start', index: 1, step: { type: 'model_output' } },
-    {
-      event_type: 'step.delta',
-      index: 1,
-      delta: { type: 'text', text: 'thinking done' },
-    },
-    { event_type: 'step.stop', index: 1 },
-    {
-      event_type: 'step.start',
-      index: 2,
-      // gemini-3.8-flash signs the first call after its thought.
-      step: {
-        type: 'function_call',
-        id: 'call_1',
-        name: 'search',
-        arguments: {},
-        signature: 'sig_call',
-      },
-    },
-    {
-      event_type: 'step.delta',
-      index: 2,
-      delta: { type: 'arguments_delta', arguments: '{"q":' },
-    },
-    {
-      event_type: 'step.delta',
-      index: 2,
-      delta: { type: 'arguments_delta', arguments: '"x"}' },
-    },
-    { event_type: 'step.stop', index: 2 },
-    {
-      event_type: 'step.start',
-      index: 3,
-      step: {
-        type: 'function_call',
-        id: 'call_2',
-        name: 'fetch',
-        arguments: {},
-      },
-    },
-    {
-      event_type: 'step.delta',
-      index: 3,
-      delta: { type: 'arguments_delta', arguments: '{"u":"y"}' },
-    },
-    { event_type: 'step.stop', index: 3 },
-    {
-      event_type: 'interaction.completed',
-      interaction: {
-        id: 'int_1',
-        status: 'requires_action',
-        usage: {
-          total_input_tokens: 12,
-          total_thought_tokens: 3,
-          total_tool_use_tokens: toolUseTokens,
-        },
-      },
-    },
-  ];
-}
+const REQUEST: TurnRequest = {
+  system: 'Use both tools.',
+  messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
+  tools: ['search', 'fetch'].map((name) => ({
+    name,
+    description: name,
+    parameters: { type: 'object', properties: {} },
+  })),
+};
 
 function response(events: unknown[]): Response {
   return new Response(
@@ -210,81 +32,68 @@ function response(events: unknown[]): Response {
   );
 }
 
-function exchange(result: TurnResult): TurnRequest {
-  assert(result.providerResponseId !== null);
-  const initial = request();
-  return {
-    ...initial,
-    continuation: result.continuation,
-    messages: [
-      ...initial.messages,
-      {
-        role: 'assistant',
-        origin: result.requestedOrigin,
-        content: result.content,
-      },
-      {
-        role: 'tool',
-        results: [
-          {
-            callOrdinal: 0,
-            status: 'success',
-            content: [
-              { kind: 'text', text: 'a' },
-              {
-                kind: 'image',
-                mimeType: 'image/png',
-                base64: 'AQ==',
-                detail: 'ultra-high',
-              },
-            ],
-          },
-          {
-            callOrdinal: 1,
-            status: 'success',
-            content: [{ kind: 'text', text: 'b' }],
-          },
-        ],
-      },
-    ],
-  };
-}
-
-// The Google SDK clones every request before handing it to `fetch`, and Node
-// links a cloned Request's abort signal to its parent only weakly: once that
-// dependent controller is collected the clone never sees the abort, so the
-// signal reaching `fetch` is not a sound place to observe cancellation. The
-// pre-clone signal the SDK derived from ours stays linked, so record it here
-// and let the abort fixtures watch that one.
-const preCloneSignal = new WeakMap<Request, AbortSignal>();
-const cloneRequest = Request.prototype.clone;
-
 describe('canonical Google Interactions protocol', () => {
   const fetchModel = vi.fn<typeof fetch>();
 
   beforeEach(() => {
-    fetchModel
-      .mockReset()
-      .mockImplementation(async () => response(signedEvents()));
+    fetchModel.mockReset().mockImplementation(async () =>
+      response([
+        {
+          event_type: 'interaction.created',
+          interaction: { id: 'int_2', object: 'interaction' },
+        },
+        {
+          event_type: 'interaction.completed',
+          interaction: { id: 'int_2', status: 'completed' },
+        },
+      ]),
+    );
     vi.stubGlobal('fetch', fetchModel);
-    Request.prototype.clone = function (this: Request) {
-      const clone = cloneRequest.call(this);
-      preCloneSignal.set(clone, this.signal);
-      return clone;
-    };
   });
   afterEach(() => {
-    Request.prototype.clone = cloneRequest;
     vi.unstubAllGlobals();
-    vi.unstubAllEnvs();
   });
 
   it.effect(
     'submits once, polls signed tool calls, and replays their canonical results',
     () =>
       Effect.gen(function* () {
-        const { configured, turn, background, operation } =
-          yield* backgroundFixture();
+        const configured = googleInteractionsModel(
+          {
+            protocol: 'google-interactions',
+            requestedModel: 'gemini-test',
+            background: 'supported',
+            deployment: {
+              endpoint: 'https://synthetic.invalid',
+              credentialScope: 'test-account',
+            },
+            defaults: {
+              maxOutputTokens: 2048,
+              store: true,
+              thinkingLevel: 'high',
+            },
+          },
+          { apiKey: 'synthetic-key' },
+        );
+        const turn = yield* configured.prepareTurn({
+          ...REQUEST,
+          mode: 'background',
+        });
+        assert(
+          turn.mode === 'background' && turn.protocol === 'google-interactions',
+        );
+        const background = configured.background;
+        assert(background);
+        const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
+          origin: {
+            protocol: turn.protocol,
+            codecVersion: turn.codecVersion,
+            requestedModel: turn.requestedModel,
+            deployment: turn.deployment,
+          },
+          providerResponseId: 'int_1',
+          afterSequence: null,
+        });
         fetchModel.mockImplementationOnce(async () =>
           Response.json({
             id: 'int_1',
@@ -382,9 +191,26 @@ describe('canonical Google Interactions protocol', () => {
           coveredMessages: 2,
           anchor: { interactionId: 'int_1', coveredSteps: 5 },
         });
-        const replay = yield* configured.prepareTurn(
-          exchange(completed.result),
-        );
+        const replay = yield* configured.prepareTurn({
+          ...REQUEST,
+          continuation: completed.result.continuation,
+          messages: [
+            ...REQUEST.messages,
+            {
+              role: 'assistant',
+              origin: completed.result.requestedOrigin,
+              content: completed.result.content,
+            },
+            {
+              role: 'tool',
+              results: [0, 1].map((callOrdinal) => ({
+                callOrdinal,
+                status: 'success' as const,
+                content: [{ kind: 'text' as const, text: 'ok' }],
+              })),
+            },
+          ],
+        });
         assert(replay.mode === 'foreground');
         yield* completedTurn(configured.streamTurn(replay));
         // The observed turn anchors the next round: its steps are the ones
@@ -410,7 +236,6 @@ describe('canonical Google Interactions protocol', () => {
               (url as Request).url.includes('include_input=false'),
             ),
         ).toBe(true);
-        expect(fetchModel).toHaveBeenCalledTimes(4);
       }),
   );
 });

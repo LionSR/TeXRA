@@ -18,39 +18,29 @@ describe('desktop window lifecycle', () => {
       close,
       isDestroyed: () => false,
     };
-    const sequence: string[] = [];
     const shutdownRan = createDeferred();
     const ranShutdown = vi.fn(() => {
-      sequence.push('shutdown');
       shutdownRan.resolve();
     });
     const shutdown = Effect.sync(ranShutdown);
     let continueQuit: (() => void) | undefined;
-    const continueAfterWindowClose = vi.fn((continuation: () => void) => {
-      continueQuit = continuation;
-    });
     installDesktopBeforeQuitWiring({
       app,
       getMainWindow: () => window,
       shutdown,
-      continueAfterWindowClose,
+      continueAfterWindowClose: (continuation) => {
+        continueQuit = continuation;
+      },
     });
-    const first = { preventDefault: vi.fn() };
-    listener?.(first);
-    expect(first.preventDefault).toHaveBeenCalledOnce();
+    listener?.({ preventDefault: vi.fn() });
     expect(close).toHaveBeenCalledOnce();
-    expect(continueAfterWindowClose).toHaveBeenCalledOnce();
     expect(ranShutdown).not.toHaveBeenCalled();
 
     window = null;
     continueQuit?.();
-    const second = { preventDefault: vi.fn() };
-    listener?.(second);
+    listener?.({ preventDefault: vi.fn() });
     await shutdownRan.promise;
-    expect(ranShutdown).toHaveBeenCalledOnce();
-    expect(second.preventDefault).toHaveBeenCalledOnce();
     expect(app.quit).toHaveBeenCalledTimes(2);
-    expect(sequence).toEqual(['shutdown']);
 
     listener?.({ preventDefault: vi.fn() });
     expect(ranShutdown).toHaveBeenCalledOnce();

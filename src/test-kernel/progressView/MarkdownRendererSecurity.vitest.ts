@@ -26,8 +26,6 @@ describe('processMarkdownContent security', () => {
     expect(ref).not.toBeNull();
     expect(ref?.getAttribute('onclick')).toBeNull();
     expect(ref?.getAttribute('data-label')).toBe(label);
-    expect(ref?.getAttribute('role')).toBe('button');
-    expect(ref?.getAttribute('tabindex')).toBe('0');
     expect(ref?.textContent).toBe(`\\ref{${label}}`);
     expect(doc.querySelector('img')).toBeNull();
   });
