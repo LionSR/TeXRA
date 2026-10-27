@@ -38,8 +38,14 @@ describe('LaTeXdiffService shadow output', () => {
       const storageRoot = path.join(tempDir, 'storage');
       yield* Effect.promise(async () => {
         await mkdir(sourceDir, { recursive: true });
-        await writeFile(path.join(sourceDir, 'base.tex'), 'old\n');
-        await writeFile(path.join(sourceDir, 'revised.tex'), 'new\n');
+        await writeFile(
+          path.join(sourceDir, 'base.tex'),
+          '\\documentclass{article}\n\\begin{document}\nold\n\\end{document}\n',
+        );
+        await writeFile(
+          path.join(sourceDir, 'revised.tex'),
+          '\\documentclass{article}\n\\begin{document}\nnew\n\\end{document}\n',
+        );
         await installPlatform(
           {
             workspacePath: sourceDir,
@@ -81,6 +87,9 @@ describe('LaTeXdiffService shadow output', () => {
       );
 
       expect(result.success).toBe(false);
+      // The failure must come from the scrubbed subprocess path, not an
+      // earlier input guard.
+      expect(result.message).toContain('Failed to run');
       expect(result.message).not.toContain('sk-abcdefghijklmnop1234');
       expect(result.message).not.toContain('tok.en-123');
     }).pipe(Effect.provide(nodePlatformLayer)),
