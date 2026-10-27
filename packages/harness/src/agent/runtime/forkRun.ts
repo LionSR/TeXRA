@@ -28,7 +28,7 @@ import { Rejected } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { generateRunId } from '@utils/core';
 
-import { configRow, positionRow, rowAggregate } from './loop/rows';
+import { configRow, positionRow } from './loop/rows';
 import { addressedMessages } from './storedTurn';
 import type { SessionHandle } from './SessionHandle';
 
@@ -156,7 +156,7 @@ const viewRows = (
   return [
     {
       type: 'context.edit',
-      aggregateId: rowAggregate(runId),
+      aggregateId: qualifyAggregateId('run', runId),
       payload: {
         cause: 'fork',
         trigger: null,
@@ -170,7 +170,7 @@ const viewRows = (
     },
     ...named.map((digest): RunHistoryDraft => ({
       type: 'context.blob',
-      aggregateId: rowAggregate(runId),
+      aggregateId: qualifyAggregateId('run', runId),
       payload: { digest, value: state.contents[digest] },
     })),
   ];

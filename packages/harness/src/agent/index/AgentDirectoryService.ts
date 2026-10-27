@@ -67,8 +67,21 @@ export class AgentDirectoryService {
       this.resourcesRoot = options.resourcesPath;
   }
 
+  /**
+   * The bundled agent directory itself. It ships read-only with the host
+   * and every consumer registers it `writable: false`, so there is nothing
+   * to create.
+   */
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed> {
-    return this.packagedDir(BUNDLED_AGENTS_DIRECTORY);
+    return Effect.suspend(() => {
+      const basePath = path.join(
+        this.options.resourcesPath,
+        BUNDLED_AGENTS_DIRECTORY,
+      );
+      return Effect.logDebug(
+        `Using built-in ${BUNDLED_AGENTS_DIRECTORY} directory: ${basePath}`,
+      ).pipe(withLogChannel(this.options.channel), Effect.as(basePath));
+    });
   }
 
   custom(): Effect.Effect<
@@ -116,19 +129,6 @@ export class AgentDirectoryService {
           }),
       ),
     );
-  }
-
-  /**
-   * The packaged directory itself. It ships read-only with the host and every
-   * consumer registers it `writable: false`, so there is nothing to create.
-   */
-  private packagedDir(dirName: string): Effect.Effect<string> {
-    return Effect.suspend(() => {
-      const basePath = path.join(this.options.resourcesPath, dirName);
-      return Effect.logDebug(
-        `Using built-in ${dirName} directory: ${basePath}`,
-      ).pipe(withLogChannel(this.options.channel), Effect.as(basePath));
-    });
   }
 
   private ensureDefaultCustomDir(): Effect.Effect<

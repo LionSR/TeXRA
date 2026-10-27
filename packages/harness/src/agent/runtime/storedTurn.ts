@@ -42,6 +42,8 @@ import {
 import { blobAddress } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+import type { InputPart } from './run/mediaInput';
+
 /** The keys whose value is provider evidence, wherever a turn or a history
  *  entry holds one. */
 const EVIDENCE = new Set([
@@ -221,12 +223,8 @@ export function runHistoryRows(
 // back into addresses to compare them with the rows.
 
 type ProviderMessage = typeof MessageSchema.Type;
-type ProviderInputPart = Extract<
-  ProviderMessage,
-  { readonly role: 'user' }
->['content'][number];
-type ImageDetail = Extract<ProviderInputPart, { kind: 'image' }>['detail'];
-type AppendedPart = ProviderInputPart | StoredInputPart;
+type ImageDetail = Extract<InputPart, { kind: 'image' }>['detail'];
+type AppendedPart = InputPart | StoredInputPart;
 /** A message the loop appends: its media parts with their bytes (the
  *  package's), by address (the history's), or both. */
 export type AppendedMessage =
@@ -264,9 +262,7 @@ export function addressedMessages(messages: readonly AppendedMessage[]): {
   readonly blobs: readonly DraftBlob[];
 } {
   const blobs = new Map<string, DraftBlob>();
-  const addressed = (
-    part: ProviderInputPart | StoredInputPart,
-  ): StoredInputPart => {
+  const addressed = (part: InputPart | StoredInputPart): StoredInputPart => {
     if (part.kind === 'text') return part;
     if ('digest' in part) {
       if (!blobs.has(part.digest))
@@ -315,7 +311,7 @@ export const providerMessages = <E>(
   const resolved = (
     part: StoredInputPart,
     texts: ReadonlyMap<string, string>,
-  ): ProviderInputPart => {
+  ): InputPart => {
     if (part.kind === 'text') return part;
     const { digest, ...rest } = part;
     const base64 = texts.get(digest);

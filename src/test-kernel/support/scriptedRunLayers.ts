@@ -9,8 +9,9 @@ import { randomUUID } from 'node:crypto';
 import { Effect, Layer, Schema, type Scope, SynchronizedRef } from 'effect';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
-import { rowAggregate, positionRow } from '@agent/runtime/loop/rows';
+import { ModelInvoker } from '@agent/runtime/ModelInvoker';
+import type { InvokeRequest } from '@agent/runtime/run/requestContext';
+import { positionRow } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { turnText } from '@agent/runtime/run/turnText';
@@ -28,6 +29,7 @@ import {
   AgentConfigSchema,
   PersonaSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  qualifyAggregateId,
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
@@ -37,7 +39,7 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 import { untrackRun } from '@test/support/sessionEnd';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores } from '@test/support/setupPlatform';
-import { generateRunId, generateShortId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
 import type { Model, TurnResult } from '@texra-ai/llm';
@@ -168,7 +170,7 @@ function scriptedInvoker(
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const aggregateId = rowAggregate(run.runId);
+      const aggregateId = qualifyAggregateId('run', run.runId);
       return {
         call: () => Effect.die(new Error('No compaction in this scenario.')),
         invoke: (cell: RunCell, request: InvokeRequest) =>
@@ -249,7 +251,6 @@ function scriptedInvoker(
                     turn.kind === 'http' ? localCallsOf(turn.content) : [],
                     (yield* SynchronizedRef.get(run.steps))?.tools.registry,
                     run.logger,
-                    generateShortId,
                   ),
                   usage: null,
                 },

@@ -26,18 +26,10 @@ import {
 import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import { generateShortId } from '@utils/core';
 import { dispatchFactsFor } from '../run/tools';
 import { addressedMessages, type AppendedMessage } from '../storedTurn';
 
 import type { AgentRunShape } from '../run/AgentRun';
-
-/** A message the loop appends (`addressedMessages`). */
-export type Message = AppendedMessage;
-
-export function rowAggregate(runId: RunId) {
-  return qualifyAggregateId('run', runId);
-}
 
 /** The row making `text` the response shown as final: a row of the run's
  *  history, awaited, never a detached trace row. */
@@ -45,21 +37,22 @@ export const finalizedRows = (
   runId: RunId,
   text: string,
 ): RunHistoryDraft[] => [
-  { type: 'response.finalized', aggregateId: rowAggregate(runId), text },
+  {
+    type: 'response.finalized',
+    aggregateId: qualifyAggregateId('run', runId),
+    text,
+  },
 ];
-
-/** The coordinates a `run.position` row is stamped with. */
-export type PositionCoordinates = Pick<RunState, 'turn'>;
 
 /** Where the loop stands; a run's first one opens it. */
 export function positionRow(
   runId: RunId,
-  state: PositionCoordinates,
+  state: Pick<RunState, 'turn'>,
   at: Exclude<PositionAt, 'halted'>,
 ): RunHistoryDraft {
   return {
     type: 'run.position',
-    aggregateId: rowAggregate(runId),
+    aggregateId: qualifyAggregateId('run', runId),
     payload: { family: 'toolUse', at, turn: state.turn },
   };
 }
@@ -84,7 +77,7 @@ export function haltedPositionRow(
  *  itself (`model.message` `append`). */
 export function appendRow(
   runId: RunId,
-  messages: readonly Message[],
+  messages: readonly AppendedMessage[],
   options: {
     readonly sourceResponse?: string | null;
     readonly input?: RunInput;
@@ -96,7 +89,7 @@ export function appendRow(
   const addressed = addressedMessages(messages);
   return {
     type: 'model.message',
-    aggregateId: rowAggregate(runId),
+    aggregateId: qualifyAggregateId('run', runId),
     payload: {
       kind: 'append',
       messages: addressed.messages,
@@ -122,7 +115,7 @@ export function configRow(
 ): RunHistoryDraft {
   return {
     type: 'run.config',
-    aggregateId: rowAggregate(runId),
+    aggregateId: qualifyAggregateId('run', runId),
     config: { ...config, model },
     binding,
   };
@@ -139,7 +132,7 @@ export function displayRow(
     Extract<SessionEventDraft, { type: 'tool.start' | 'tool.end' }>
   >,
 ): RunHistoryDraft {
-  return { ...draft, aggregateId: rowAggregate(runId) };
+  return { ...draft, aggregateId: qualifyAggregateId('run', runId) };
 }
 
 /** The tool a script's run calls: `script`, whatever launched the run. */
@@ -165,13 +158,12 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
     [{ callId: SCRIPT_CALL_ID, name: SCRIPT_TOOL_NAME, argumentsText }],
     (yield* SynchronizedRef.get(run.steps))?.tools.registry,
     run.logger,
-    generateShortId,
   );
   if (facts === undefined)
     return yield* Effect.die(new Error('One call in, one dispatch fact out.'));
   return {
     type: 'model.message',
-    aggregateId: rowAggregate(runId),
+    aggregateId: qualifyAggregateId('run', runId),
     payload: {
       kind: 'handed-down',
       responseId: randomUUID(),

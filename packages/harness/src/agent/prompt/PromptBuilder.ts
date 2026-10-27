@@ -113,7 +113,7 @@ export function contextUpdate(told: RunContext, now: RunContext): string {
  * task's writer) goes without. What each step's plugins add is
  * appended per request (`stepInstructions`).
  */
-export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
+export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
   function* (
     personaPrompt: string,
     { inputs, attachedMemories }: TemplateOpening,
@@ -126,7 +126,7 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
       textOnly: boolean;
     },
   ): Effect.fn.Return<
-    { readonly systemPrompt: string; readonly instructionSuffix: string },
+    string,
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
@@ -145,11 +145,11 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
       rendered,
       ...[agentsMd, attachedMemories].filter(Boolean),
     ].join('\n');
-    if (options.textOnly) return { systemPrompt, instructionSuffix: '' };
-    const suffixParts = [TOOL_USE_INSTRUCTIONS, workspaceInfo];
-    return {
-      systemPrompt,
-      instructionSuffix: yield* renderPrompt(suffixParts.join('\n'), inputs),
-    };
+    if (options.textOnly) return systemPrompt;
+    const suffix = yield* renderPrompt(
+      [TOOL_USE_INSTRUCTIONS, workspaceInfo].join('\n'),
+      inputs,
+    );
+    return [systemPrompt, suffix].filter(Boolean).join('\n');
   },
 );

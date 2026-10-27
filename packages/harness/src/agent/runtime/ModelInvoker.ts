@@ -56,6 +56,7 @@ import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   MESSAGE_TYPES,
+  qualifyAggregateId,
   type FailedNext,
   type InvocationRef,
   type RetryErrorInfo,
@@ -87,7 +88,7 @@ import {
 } from './run/requestContext';
 import { providerMessages } from './storedTurn';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
-import { rowAggregate, positionRow } from './loop/rows';
+import { positionRow } from './loop/rows';
 
 /** The answer the invoker gives itself for an automatic quota fallback. */
 const PERSONAL_RETRY = {
@@ -124,8 +125,6 @@ const INTERRUPTED_RETRY_MESSAGE =
  * bound keeps a long generation out of the error and off the run history row.
  */
 const PARTIAL_TEXT_TAIL_MAX = 4096;
-
-export type { InvokeRequest } from './run/requestContext';
 
 interface InvocationResponse {
   readonly kind: 'response';
@@ -183,7 +182,7 @@ export const modelInvokerLayer = (): Layer.Layer<
     Effect.gen(function* () {
       const run = yield* AgentRun;
       const { runId, session, logger } = run;
-      const aggregateId = rowAggregate(runId);
+      const aggregateId = qualifyAggregateId('run', runId);
       const usageLog = yield* UsageLog;
       const access = yield* ModelAccess;
       const gate = yield* Effect.context<RouteRetries>();
@@ -360,7 +359,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           localCallsOf(turn.content),
           (yield* SynchronizedRef.get(run.steps))?.tools.registry,
           logger,
-          generateShortId,
         );
         // The completed turn, committed once before any local tool runs; it
         // closes the invocation and retires its failure in the fold.
