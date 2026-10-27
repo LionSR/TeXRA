@@ -593,8 +593,10 @@ streams: `run.events.pipe(responseText)`.
 A `stream.chunk` names only its stream, and a run streams more than its
 answer: the model's thinking and what a running tool prints are chunks
 too. This keeps the chunks of the streams that opened as a model response
-and drops the rest. A model call that fails and is retried has already
-streamed its partial answer; the retry's answer follows it.
+and drops the rest. A response that arrives whole, with no chunks (a
+background or non-streaming model call), comes out as its `stream.end`'s
+final text. A model call that fails and is retried has already streamed
+its partial answer; the retry's answer follows it.
 
 ```ts
 const responseText: <E, R>(events: Stream<AgentEvent, E, R>) => Stream<string, E, R>

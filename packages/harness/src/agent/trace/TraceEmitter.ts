@@ -293,28 +293,39 @@ export function runEventDraft(
  * A `stream.chunk` names only its stream, and a run streams more than its
  * answer: the model's thinking and what a running tool prints are chunks
  * too. This keeps the chunks of the streams that opened as a model response
- * and drops the rest. A model call that fails and is retried has already
- * streamed its partial answer; the retry's answer follows it.
+ * and drops the rest. A response that arrives whole, with no chunks (a
+ * background or non-streaming model call), comes out as its `stream.end`'s
+ * final text. A model call that fails and is retried has already streamed
+ * its partial answer; the retry's answer follows it.
  */
 export const responseText = <E, R>(
   events: Stream.Stream<AgentEvent, E, R>,
 ): Stream.Stream<string, E, R> =>
   events.pipe(
     Stream.mapAccum(
-      () => new Set<string>(),
-      (answers, event): readonly [Set<string>, readonly string[]] => {
-        if (
-          event.type === 'stream.start' &&
-          event.kind === MESSAGE_TYPES.MODEL_RESPONSE
-        )
-          answers.add(event.id);
-        if (event.type === 'stream.end') answers.delete(event.id);
-        return [
-          answers,
-          event.type === 'stream.chunk' && answers.has(event.id)
-            ? [event.text]
-            : [],
-        ];
+      // Each open response stream, and whether it has streamed a chunk.
+      () => new Map<string, boolean>(),
+      (answers, event): readonly [Map<string, boolean>, readonly string[]] => {
+        switch (event.type) {
+          case 'stream.start':
+            if (event.kind === MESSAGE_TYPES.MODEL_RESPONSE)
+              answers.set(event.id, false);
+            return [answers, []];
+          case 'stream.chunk':
+            if (!answers.has(event.id)) return [answers, []];
+            answers.set(event.id, true);
+            return [answers, [event.text]];
+          case 'stream.end': {
+            const streamed = answers.get(event.id);
+            answers.delete(event.id);
+            return [
+              answers,
+              streamed === false && event.finalText ? [event.finalText] : [],
+            ];
+          }
+          default:
+            return [answers, []];
+        }
       },
     ),
   );
