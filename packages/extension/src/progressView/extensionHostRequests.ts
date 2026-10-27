@@ -23,7 +23,7 @@ import {
   Rejected,
   type HostRequestFailure,
   type RequestRefusal,
-  PlatformSecrets,
+  Secrets,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
@@ -136,8 +136,6 @@ interface ExtensionHostRequestsOptions {
   /** The extension's id, which names its getting-started walkthrough. */
   readonly extensionId: string;
   readonly globalState: StateStore;
-  /** The process secret store the extension root holds (model availability). */
-  readonly secrets: PlatformSecrets;
   readonly snapshot: HostSnapshotSource;
   readonly draftRequests: HostDraftRequests;
   readonly toolEditApprovals: ToolEditApprovalController;
@@ -223,7 +221,6 @@ export function createExtensionHostRequests(
     runSession,
     snapshot,
     toolEditApprovals,
-    secrets,
     globalState,
     runtime,
   } = options;
@@ -249,7 +246,12 @@ export function createExtensionHostRequests(
           openFinalOutputIfAvailable(roots, config)(result),
         ),
       loadModelOptions: () =>
-        withProcessServices(runtime, loadModelOptions({ ...roots, secrets })),
+        withProcessServices(
+          runtime,
+          Effect.flatMap(Secrets, (secrets) =>
+            loadModelOptions({ ...roots, secrets }),
+          ),
+        ),
       // The set-key prompt either runs or faults, so its failure is the one
       // failure, as `ApiKeyPromptFailed`.
       promptForApiKey: (provider) =>
@@ -548,7 +550,7 @@ export function createExtensionHostRequests(
       case 'createSampleProject':
         return createSampleProject(options.extensionPath);
       case 'cloneOverleaf':
-        return cloneOverleafProject(secrets);
+        return cloneOverleafProject();
       case 'downloadArxiv':
         return downloadArXivSource(roots);
     }
@@ -631,7 +633,6 @@ export function createExtensionHostRequests(
         yield* runHandler(
           'runSetupAssistant',
           launchSetupAssistant(
-            secrets,
             roots,
             runSession,
             (runId) => Effect.sync(() => options.presentLaunchedRun(runId)),

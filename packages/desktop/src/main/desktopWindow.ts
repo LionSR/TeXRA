@@ -15,12 +15,7 @@ import {
 } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 
-import {
-  AgentDirectories,
-  Secrets,
-  withPerKeyLane,
-  type PerKeyLane,
-} from '@texra-ai/harness';
+import { Secrets, withPerKeyLane, type PerKeyLane } from '@texra-ai/harness';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   DESKTOP_PROJECT_COMMANDS,
@@ -176,7 +171,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     runtime,
     projects,
     secrets,
-    agentDirectories: yield* AgentDirectories,
     resourcesPath: options.resourcesPath,
     draftRequests: options.draftRequests,
     onboarding,

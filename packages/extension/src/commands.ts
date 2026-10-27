@@ -91,7 +91,6 @@ export function registerCommands(
     // completed a first task, so the onboarding funnel recomputes then.
     runSetupAssistant: () =>
       launchSetupAssistant(
-        secrets,
         roots,
         runSession,
         (runId) =>
@@ -119,7 +118,7 @@ export function registerCommands(
       latexFixCompilation(roots, progressViewProvider.runValidated),
     getTeXCount: () => latexGetTeXCount(roots),
     compileTikzFigures: () => latexCompileTikzFigures(roots),
-    cloneOverleafProject: () => gitCloneOverleafProject(secrets),
+    cloneOverleafProject: () => gitCloneOverleafProject(),
     removeApiKey: () => apiRemoveApiKey(roots),
     showProgressView: (inPlace) =>
       progressViewProvider.showProgressView({ inPlace }),

@@ -362,7 +362,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       showConnectModel: () => this.showConnectModel(),
       showProgressView: () => this.showProgressView(),
       globalState,
-      secrets,
       snapshot: this.snapshot,
       draftRequests: this.draftRequests,
       toolEditApprovals: this.toolEditApprovals,
