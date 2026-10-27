@@ -748,7 +748,7 @@ function isTransportReason(
 ## jitteredExponentialBackoffMs
 
 Compute a jittered exponential backoff delay: `baseMs * 2^(failures-1)`,
-capped at `maxMs`, then randomized by `+/-jitterFraction` and capped again
+capped at `maxMs`, then randomized by +/-20% and capped again
 so jitter can never push the result past `maxMs`. Shared by every retry/
 backoff loop in the codebase so the jitter formula only exists once.
 
@@ -762,7 +762,6 @@ function jitteredExponentialBackoffMs(
   failures: number,
   maxMs: number,
   unitRandom: number,
-  jitterFraction = 0.2,
 ): number
 ```
 

@@ -47,29 +47,4 @@ export const contextManagementStyles: CSSResult = css`
     overflow-wrap: anywhere;
     font-variant-numeric: tabular-nums;
   }
-
-  .summary-block {
-    margin-block-start: var(--wa-space-2xs);
-    display: block;
-    width: 100%;
-  }
-
-  .summary-title {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--wa-space-3xs);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    margin-bottom: var(--wa-space-3xs);
-  }
-
-  .summary-text {
-    margin: 0;
-    padding: var(--wa-space-2xs);
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    border: var(--border-thin) solid var(--wa-color-surface-border);
-    border-radius: var(--border-radius-small);
-    background: var(--wa-color-surface-raised);
-  }
 `;
