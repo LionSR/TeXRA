@@ -610,12 +610,18 @@ const resolveWorkspaceRoot = Effect.fn('LeanServerPool.resolveWorkspaceRoot')(
     let dir = path.dirname(path.resolve(filePath));
     const root = path.parse(dir).root;
     for (;;) {
-      if (
-        (yield* pathExists(fs, path.join(dir, 'lakefile.lean'))) ||
-        (yield* pathExists(fs, path.join(dir, 'lakefile.toml')))
-      ) {
+      // Both lakefiles are probed at once; the answer is read as the
+      // sequential `lean || toml` would, so a failed `.toml` probe counts
+      // only when there is no `lakefile.lean`.
+      const [lean, toml] = yield* Effect.all(
+        [
+          pathExists(fs, path.join(dir, 'lakefile.lean')),
+          pathExists(fs, path.join(dir, 'lakefile.toml')),
+        ],
+        { concurrency: 2, mode: 'result' },
+      );
+      if ((yield* Effect.fromResult(lean)) || (yield* Effect.fromResult(toml)))
         return dir;
-      }
       if (dir === root) return null;
       dir = path.dirname(dir);
     }

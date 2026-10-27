@@ -5,6 +5,7 @@ import { LRUCache } from 'lru-cache';
 
 import { withLogChannel } from '@logger/effectLog';
 import { hasExtension } from '@utils/core/pathCore';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { executeCommand } from './execUtils';
 import {
   IS_WINDOWS,
@@ -54,6 +55,8 @@ const MISS_TTL_MS = 60_000;
 const findToolCache = new LRUCache<string, { readonly path: string | null }>({
   max: 64,
 });
+
+const findToolLanes = new Map<string, PerKeyLane>();
 
 /**
  * Drop every remembered miss, so the next lookup of a tool the user may have
@@ -132,13 +135,22 @@ const findTool = Effect.fn('findTool')(function* (
   const cached = findToolCache.get(tool);
   if (cached !== undefined && !(fresh && cached.path === null))
     return cached.path;
-  const result = yield* findToolUncached(tool);
-  findToolCache.set(
-    tool,
-    { path: result },
-    result === null ? { ttl: MISS_TTL_MS } : undefined,
-  );
-  return result;
+  // Lookups of one tool run one at a time, and a caller that waited reads
+  // the answer the one before it cached, so racing misses search once.
+  return yield* Effect.suspend(() => {
+    const settled = findToolCache.get(tool);
+    if (settled !== undefined && !(fresh && settled.path === null))
+      return Effect.succeed(settled.path);
+    return Effect.tap(findToolUncached(tool), (result) =>
+      Effect.sync(() => {
+        findToolCache.set(
+          tool,
+          { path: result },
+          result === null ? { ttl: MISS_TTL_MS } : undefined,
+        );
+      }),
+    );
+  }).pipe(withPerKeyLane(findToolLanes, tool));
 });
 
 /**
