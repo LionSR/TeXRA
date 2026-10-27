@@ -333,36 +333,32 @@ export class WorkspaceAgentsController<
 
   setAgentEnabled(input: {
     readonly source: AgentSource;
-    readonly name: string;
+    readonly name: string | readonly string[];
     readonly enabled: boolean;
   }): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
     return serializeWorkspaceWrite(
       this.deps.repoState,
       Effect.gen({ self: this }, function* () {
-        const keys = yield* this.getEnabledAgentKeys();
-        const target =
-          keys === undefined
-            ? (yield* visibleAgents(
-                this.deps.repoState,
-                this.deps.getAgents(),
-              )).map(agentKeyOf)
-            : [...keys];
-        const key = agentKeyOf(input);
-        const index = target.findIndex((candidate) =>
-          agentMatchesIdentifier(input, candidate),
-        );
-        const alreadyEnabled = index >= 0;
-        if (input.enabled === alreadyEnabled) return;
-        if (input.enabled) {
-          target.push(key);
-        } else {
-          target.splice(index, 1);
+        const { repoState } = this.deps;
+        const target = [
+          ...((yield* this.getEnabledAgentKeys()) ??
+            (yield* visibleAgents(repoState, this.deps.getAgents())).map(
+              agentKeyOf,
+            )),
+        ];
+        // Every name flips the same way, so the length says if any changed.
+        const before = target.length;
+        for (const name of [input.name].flat()) {
+          const agent = { source: input.source, name };
+          const index = target.findIndex((candidate) =>
+            agentMatchesIdentifier(agent, candidate),
+          );
+          if (input.enabled === index >= 0) continue;
+          if (input.enabled) target.push(agentKeyOf(agent));
+          else target.splice(index, 1);
         }
-        yield* recordCustomChoices(
-          this.deps.repoState,
-          this.deps.getAgents(),
-          target,
-        );
+        if (target.length === before) return;
+        yield* recordCustomChoices(repoState, this.deps.getAgents(), target);
         return yield* this.writeSelection({
           kind: 'custom',
           agentKeys: target,
