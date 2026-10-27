@@ -267,8 +267,15 @@ function markdownFiles(
               .toSorted()
               .map((name) => path.join(resolved, name))
           : [resolved];
-      for (const entry of entries) {
-        const file = yield* containedPath(dir, path.relative(dir, entry));
+      // Every entry is checked together; the first failure in listing order
+      // is the one reported.
+      const checked = yield* Effect.forEach(
+        entries,
+        (entry) => Effect.result(containedPath(dir, path.relative(dir, entry))),
+        { concurrency: 16 },
+      );
+      for (const result of checked) {
+        const file = yield* Effect.fromResult(result);
         if (file !== undefined) files.add(path.relative(dir, file));
       }
     }

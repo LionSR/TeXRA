@@ -368,7 +368,9 @@ function removePlugin(name: string, env: PluginEnv) {
         Result.isSuccess(canonical) &&
         canonical.success === name &&
         (yield* FileSystem.FileSystem.use((fs) =>
-          Effect.all([pathExists(fs, dir), pathExists(fs, dataDir)]),
+          Effect.all([pathExists(fs, dir), pathExists(fs, dataDir)], {
+            concurrency: 2,
+          }),
         ).pipe(
           Effect.map((found) => found.some(Boolean)),
           Effect.mapError(ioError),
