@@ -253,9 +253,9 @@ media or evidence it cannot represent. The current explicit failures:
 
 Two tiers, deliberately separate.
 
-`src/test-kernel/llm/` is about 9 700 lines of synthetic-transport suites: they
-pin lowering, decoding, ordering and every explicit failure, against fixtures.
-They stay hermetic and free, so no suite in them calls a provider, and they run
+`src/test-kernel/llm/` is three synthetic-transport suites, one per protocol
+family, about 1 500 lines and eight cases: they pin lowering, decoding, ordering
+and the explicit failures they name, against fixtures. They stay hermetic and free, so no suite in them calls a provider, and they run
 in `npm test`.
 
 `test-live/` is the wire evidence: one key-gated suite per HTTP provider route,
