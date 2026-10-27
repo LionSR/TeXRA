@@ -174,12 +174,18 @@ const partitionFolders = Effect.fn('desktopProjects.partitionFolders')(
     const missing: string[] = [];
     const unreadable: { readonly root: string; readonly reason: string }[] = [];
     const kept: string[] = [];
-    const seen = new Set<string>();
-    for (const candidate of candidates) {
-      const root = canonicalizeWorkspacePath(candidate);
-      if (seen.has(root)) continue;
-      seen.add(root);
-      const stat = yield* fs.stat(root).pipe(Effect.result);
+    const unique = [...new Set(candidates.map(canonicalizeWorkspacePath))];
+    // Stat every folder at once; the results are classified in list order.
+    const stats = yield* Effect.forEach(
+      unique,
+      (root) =>
+        fs.stat(root).pipe(
+          Effect.result,
+          Effect.map((stat) => ({ root, stat })),
+        ),
+      { concurrency: 8 },
+    );
+    for (const { root, stat } of stats) {
       if (Result.isSuccess(stat)) {
         if (stat.success.type === 'Directory') {
           roots.push(root);

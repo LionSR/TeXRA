@@ -590,10 +590,10 @@ export function createChatSessionController(
       const attemptResume = Effect.gen(function* () {
         // The durable record carries the config the TUI adopts before the run.
         const store = init.records(id);
-        const [config, exists] = yield* Effect.all([
-          store.readConfig(),
-          store.exists(),
-        ]);
+        const [config, exists] = yield* Effect.all(
+          [store.readConfig(), store.exists()],
+          { concurrency: 2 },
+        );
         const refuseResume = (reason: string): void =>
           endResumeUnstarted(() => appendLocalErrorTranscript(reason));
         if (!config || !exists) {

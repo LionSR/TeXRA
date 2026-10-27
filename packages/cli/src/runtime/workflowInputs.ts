@@ -229,14 +229,21 @@ const prepareWorkflowInputExpansion = Effect.fn(
   Error,
   FileSystem.FileSystem
 > {
-  const entries: WorkflowInputExpansionEntry[] = [];
-  for (const spec of inputSpecs) {
-    entries.push(
-      isStdinWorkflowInputSpec(spec)
-        ? 'stdin'
-        : yield* expandWorkflowInputSpec(spec, cwd, flagLabel, options),
-    );
-  }
+  // The specs expand at once (stats and globs only read); the first failing
+  // spec in argument order is the one reported.
+  const expanded = yield* Effect.forEach(
+    inputSpecs,
+    (spec) =>
+      Effect.result<WorkflowInputExpansionEntry, Error, FileSystem.FileSystem>(
+        isStdinWorkflowInputSpec(spec)
+          ? Effect.succeed('stdin')
+          : expandWorkflowInputSpec(spec, cwd, flagLabel, options),
+      ),
+    { concurrency: 8 },
+  );
+  const entries = yield* Effect.forEach(expanded, (entry) =>
+    Effect.fromResult(entry),
+  );
   return { entries, flagLabel };
 });
 

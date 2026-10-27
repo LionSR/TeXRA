@@ -277,12 +277,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // The banner says a credential stopped working, so it is raised only
       // once a task has finished; before that the card is the one prompt.
       apiKeyBanner: () =>
-        Effect.all([
-          hasUsableSetupCredential(this.roots, this.secrets).pipe(
-            withLogChannel('Setup Credentials'),
-          ),
-          getFirstRunDone(globalState),
-        ]).pipe(
+        Effect.all(
+          [
+            hasUsableSetupCredential(this.roots, this.secrets).pipe(
+              withLogChannel('Setup Credentials'),
+            ),
+            getFirstRunDone(globalState),
+          ],
+          { concurrency: 2 },
+        ).pipe(
           Effect.tap(([usable]) =>
             Effect.sync(() => {
               this.credentialUsable = usable;
