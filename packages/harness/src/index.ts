@@ -228,11 +228,7 @@ export {
   type RunModelFallbackMode,
 } from '@model/runModelDecision';
 export { SubscriptionPreference } from '@model/subscriptionAccess';
-export {
-  reasoningEffortOverrides,
-  type RouteReasoning,
-  type SentReasoning,
-} from '@model/reasoningLevel';
+export type { RouteReasoning, SentReasoning } from '@model/reasoningLevel';
 export { helperCall, type HelperPrompt } from '@agent/runtime/helperModel';
 // The process's retry gate every model call (a helper call's too) waits on.
 export type { RouteRetries } from '@agent/runtime/run/invocation';
