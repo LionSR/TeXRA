@@ -12,10 +12,16 @@ three questions: does it cause open bugs today, does every new feature pay
 for it again, and does it get more expensive once the storage format freezes
 (#13736). Line numbers point into `d8a4f66`.
 
+The design for each item, Effect-native and with one mechanism per
+concern, is in
+[the target designs note](../architecture/2026-10-27-tech-debt-target-designs.md).
+It corrects this survey in places; the corrections are marked below.
+
 The first four share one cause. A run's identity, liveness, parent and end
-each have several owners, and the stored rows don't say which activation of
-a run a fact belongs to. Fixing that changes stored shapes, so those four
-should land before the freeze.
+each have several owners. Correction: only item 2's shape cleanups change
+stored bytes. An activation is already identified by the commit number of
+its opening row, so items 1, 3 and 4 are refactors that need not wait for,
+or block, the freeze.
 
 ## 1. A run's activations have no identity, and "is it live" has many answers
 
@@ -26,7 +32,8 @@ should land before the freeze.
   `packages/harness/src/tools/ExecutionsTool.ts:422,448`.
 - One process-liveness check
   (`packages/harness/src/agent/storage/leaseOwnerLiveness.ts`) is run and
-  cached separately in four places. These are the claim read in
+  cached separately in five places (the design pass found
+  `prepareRunRemoval`, `Database.ts:905-910`). The others are the claim read in
   `packages/harness/src/controllers/session/Database.ts:198-202`, the
   write-time proof in `packages/harness/src/controllers/session/storeAside.ts:89-110`,
   the 5-second checker in `packages/harness/src/controllers/session/ownerLiveness.ts`
@@ -39,11 +46,11 @@ should land before the freeze.
   the first `durableOutcome` it sees. That can be the previous activation's
   outcome (#13994).
 
-Fix direction: put an activation id on `run.activate` and `run.start`, and
-carry it on `run.end` and the view's outcome. Then the registry and
-`handOver` wait on the pair (run, activation). Use one session-scoped
+Fix direction: `handOver` and the registry wait on the activation's
+commit number, which the rows already carry. `lostResultId` already uses
+it that way (`runLifecycle.ts:364-365`). Use one session-scoped
 owner-liveness map, filled by the checker and read by the claim and the
-write proof. This is a row change, so it belongs before the freeze.
+write proof. No row changes.
 
 ## 2. Code outside the owners reads rows: 88 entries in 45 files
 
@@ -68,9 +75,10 @@ Several pre-freeze shape cleanups are still open:
   #14258).
 - The golden store, the freeze's "every later build must read this" check,
   regenerates differently each time (#14260). That makes a real format
-  change hard to see in review.
-  `packages/cli/scripts/generate-golden-store.mjs:51` runs steps in a
-  `Promise.all`, which is the likely cause (inferred).
+  change hard to see in review. The cause is the guest script the generator
+  drives, not the generator. `GOLDEN_SCRIPT_SOURCE`
+  (`packages/harness/src/agent/runtime/run/validationModel.ts:62`) runs two
+  tools in a `Promise.all`, so their rows commit in finishing order.
 
 Fix direction: move the `agent/storage/*` readers and `sweepLeftoverRuns`
 onto `packages/harness/src/shared/session/runFacts.ts` or `RunView` until
@@ -159,7 +167,7 @@ capabilities from each host. Move the run-action policy (resume, fork,
 refusal mapping) out of `HostRunActions` so the CLI calls it too, and keep
 all route labels in `@ui/copy`.
 
-## 6. Tool-edit approval staging is written three times
+## 6. Tool-edit approval staging is written three times (four, counting the service's)
 
 The GUI uses `packages/texra/src/controllers/approval/ToolEditApprovalController.ts`
 (679 lines). Each GUI host also keeps its own backing file. The CLI's
@@ -265,9 +273,11 @@ consumers depend on `@texra-ai/llm` alone.
 about 14 inner functions that share local state. The script path
 (`:703-951`) is a complete second dispatcher inside it, with its own
 scheduler, replay ordering and a shared-value map (the file's two
-`type-assertions` entries). #14254, where an interrupted script's in-flight
-nested call gets no terminal row, has no single place to fix because the
-abandoned call's last row has no one owner.
+`type-assertions` entries). A call's terminal row is reached four ways: a
+hand-called sweep, resume skips, the sandbox interrupting calls, and the
+transcript marking open cards at read time. Correction: #14254 is fixed
+(#14253). What stays open after an interrupt is open by design, for the
+resume.
 
 Fix direction: a module-level per-call program over an explicit call
 record. The response path and the script path are two real callers, so
