@@ -10,8 +10,8 @@ This skill turns a broad "find things to simplify" request into evidence-backed 
 ## Start With Repo Context
 
 - Read `AGENTS.md` — especially "Design guardrails" (with its "Flattening abstraction layers" and "Discouraged factory patterns" rules), "Compatibility and format retirement", and "Testing discipline". These are the standing rules a simplification proposal is judged against.
-- Read the review-checklist sections that encode past over-corrections: [§13 abstraction-cost guardrails](../code-review/references/review-checklist.md) (the Refactor-LOC lesson: 22 "reduction" PRs netted +5,046 LoC) and §14 fewer-elements rulings (R1, R5–R8). A proposal that would net-add elements needs its justification built in from the start.
-- Skim `docs/architecture/` before judging anything under `packages/harness/src/agent/`, `packages/harness/src/platform/`, or the run loops; simplifications that fight the host/agnostic split or the event-ownership model need extra evidence. `.agents/docs/implemented/` records settled design decisions — check them before proposing to collapse a seam. Notes under `proposed/` or `rejected/` are history, not current justification.
+- Read the review-checklist sections that encode past over-corrections: [§13 abstraction-cost guardrails](../code-review/references/review-checklist.md) and §14 fewer-elements rulings (R1, R5–R8). A proposal that would net-add elements needs its justification built in from the start.
+- Skim `docs/architecture/` before judging anything under `packages/harness/src/agent/`, `packages/harness/src/platform/`, or the run loop; simplifications that fight the host/agnostic split or the event-ownership model need extra evidence. `.agents/docs/implemented/` records settled design decisions — check them before proposing to collapse a seam. Notes under `proposed/` are not current justification.
 - Search `is:issue label:tech-debt` (open and closed) and the relevant per-proposal `Tracking:` issues before writing anything new — a recently rejected or already-filed candidate is a duplicate, not a find.
 
 ## Settled Surfaces — Do Not Propose Collapsing
@@ -19,9 +19,9 @@ This skill turns a broad "find things to simplify" request into evidence-backed 
 Treat these as intentional by default; removing an unused method _inside_ one can still be valid, but collapsing the seam itself must beat the recorded rationale:
 
 - The checked-in architectural ratchets under `config/ratchets/` (listed in `AGENTS.md` → "Layout"). Baselines freeze remaining edges or public surface — they shrink, never widen. Proposing to _shrink_ one is a good candidate; proposing to delete the ratchet mechanism is not.
-- The frozen `@agent/*` SDK surface (`packages/harness/`). There is no `@texra/core` workspace package (deleted by #7099); do not propose recreating it.
+- The frozen harness SDK surface (`@texra-ai/harness`, `packages/harness/`). There is no `@texra/core` workspace package (deleted by #7099); do not propose recreating it.
 - The one run program (`packages/harness/src/agent/runtime/loop/toolUse.ts`; a document task is a run of it on the recipe script in `packages/texra/src/agent/output/documentRecipe.ts`) over the run history. There is deliberately no flow engine, cursor, or services bag — do not propose reintroducing one, and do not propose a second writer of the run history.
-- The four hosts (extension, desktop, CLI, trace-viewer) and the platform-ports composition root. Desktop has had no public release, which makes desktop state a _simplification_ source (no migration machinery allowed), not a target.
+- The three hosts (extension, desktop, CLI), the trace viewer, and each host's composition root over `processLayer()`. Desktop has had no public release, which makes desktop state a _simplification_ source (no migration machinery allowed), not a target.
 - The two browser entries (`@texra-ai/harness/schemas`, `@texra-ai/harness/transcript`), whose closure the browser build proves; the webview frontends import no `@utils/*`. Adding Node built-ins to that closure is a regression.
 
 ## What Counts As A Strong Candidate
@@ -43,11 +43,11 @@ Thin candidates are not enough: deleting one typo, a single `knip` run's raw out
 
 Use parallel subagents when the user asks for breadth or many candidates. Give each agent a domain and require evidence, not guesses. Useful domains for this repo:
 
-- Agent runtime: the run loops, `ModelInvoker` retry, session resume paths, `packages/harness/src/agent/runtime/`.
+- Agent runtime: the run loop, the model-call retry loop (`run/invocation.ts`), session resume paths, `packages/harness/src/agent/runtime/`.
 - Model protocol and binding: `packages/llm/src/`, `packages/harness/src/agent/runtime/modelAccess/`.
 - Tools: `packages/harness/src/tools/`, delegation, tool schema defaults.
 - Platform and hosts: port interfaces versus their actual consumers, `packages/texra/src/hosts/`, per-host wiring in `packages/*/`.
-- Webviews: the three parallel view trees (`webview`, `progressView`, `settingsView`) — duplicated manager or slice logic across them is a recurring find, but keep their directory structures aligned.
+- Webviews and renderers: the extension's `progressView` and `settingsView` trees and the desktop renderer — duplicated logic across them is a recurring find; the shared kit is `packages/texra/src/ui/`.
 - Storage and compatibility: `packages/harness/src/common/storage/`, persisted-state schemas, format readers with introduction dates.
 - Packages, scripts, resources: `packages/extension/resources/`, `scripts/`, `supabase/functions/` — splits and inventories that outlived their consumer.
 
@@ -78,13 +78,13 @@ Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config k
 Reject or downgrade a candidate when:
 
 - A production caller exists and the simplification would be a feature decision rather than a cleanup.
-- The design is explicitly justified by a dated note in `.agents/docs/implemented/`, a ratchet, or a hard-won rule in `AGENTS.md`/the review checklist, and the new evidence does not beat that reason. Proposed and rejected notes are not current authority.
+- The design is explicitly justified by a dated note in `.agents/docs/implemented/`, a ratchet, or a hard-won rule in `AGENTS.md`/the review checklist, and the new evidence does not beat that reason. Proposed notes are not current authority.
 - The removal would force unrelated churn without actually reducing the public API or required behavior (churn-class ban, checklist §14 R5).
 - The idea is correct but tiny — batch it with related finds in one proposal or issue instead of standing alone.
 
 ## Record The Candidate
 
-This repo has no inline-TODO convention and no notes tree; durable findings go to one of two places:
+This repo has no inline-TODO convention; durable findings go to one of two places:
 
 - **A dated proposal** under `.agents/docs/proposed/simplification/`, named yyyy-mm-dd-topic.md, for a design-level simplification (collapsing a seam, retiring a format, replacing machinery). Follow the existing proposals' style: problem with consumer evidence, exact proposal, what we give up, acceptance criteria, risks.
 - **A GitHub issue** labeled `tech-debt` for a bounded deletion, in the style of #8746: title, evidence with `path:line` citations and grepped consumer counts, estimated net LoC and element delta, risk level. Dedupe against existing `label:tech-debt` issues (open _and_ closed) first; consolidate into the existing issue that owns the topic rather than filing a duplicate.
