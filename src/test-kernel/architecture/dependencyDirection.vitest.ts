@@ -18,7 +18,7 @@ import {
 /**
  * Architecture ratchet: the platform-independent ("VS Code-free") source zones
  * must never import the `vscode` module. They reach host services through
- * process-runtime services / host adapters instead (see CLAUDE.md "Separation of Concerns").
+ * process-runtime services / host adapters instead (see AGENTS.md "Separation of concerns: VS Code coupling").
  *
  * This duplicates the guard already enforced by the `local/no-vscode-import-in-
  * free-zones` ESLint rule, on purpose: a stray `// eslint-disable` line can

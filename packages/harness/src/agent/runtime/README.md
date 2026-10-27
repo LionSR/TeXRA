@@ -1,59 +1,77 @@
 # Agent runtime modules
 
-`agent/runtime` is the host-agnostic execution layer that sits on top of
-`agent/core`'s domain model: it launches, tracks, resumes, and reports on
-agent runs. Where `core` is addressed entirely through module paths
-(`definition/`, `state/`, `tools/` — see `packages/harness/src/agent/core/README.md`), this
-directory is about 40 files at its top level plus the two subdirectories the
-Effect-4 cutover earned, `run/` and `loop/` — see
-[Why most of this stays flat](#why-most-of-this-stays-flat). So this README is
-the module map the top level would otherwise lack: it documents the logical
-groupings by concern so the shape is visible without opening every file.
+`agent/runtime` is the host-agnostic execution layer over `agent/core`: it
+launches, tracks, resumes and reports on runs. Its top level is flat, so this
+is the module map by concern. Run-loop rules are in
+`packages/harness/AGENTS.md` "Run loop architecture".
 
-| Group                             | Concern                                                          | Files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| --------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Launch & configuration**        | Resolve what a run should do before it starts                    | `AgentLaunchContext`, `agentToolResolution` (effective tool list, built from the run's tool composition), `runLaunchGuard` (the terminal a run's launch owns: backstop `run.end` and claim; a held child's end, delivered by whoever next admits its parent), the run programs (`RunRegistryInit.programs`: the recursive entry points, given by the session layer to break the import cycle)                                                                                                                                                                                                                                                                                         |
-| **Run orchestration & resume**    | Entry points that start or resume a run, and their result shapes | `rootLaunch` (what a session's `Runs.launch({ request, options })` runs: assigns the `runId`, registers, runs), `executeAgent` (lower-level execution + tool-use resume), `AgentRunLifecycle` (completion side effects, error classification), `RunEndResult` (a flow's `run.end` payload, still an in-memory hand-off, used for post-flow chaining), `resumeRun` (the cross-host resume entry: a root or a recovered child, with its queued input), `forkRun` (a new root run seeded from another run's view), `resumeBlocker` (what a resume waits for: a missing or untrusted agent), `resumeToolUseFromResumeData` (persisted tool-use session resume, defined in `executeAgent`) |
-| **Run registry & live handles**   | Track, interrupt, and tear down in-flight runs                   | `RunHandle` (the live handle: identity, launch parent, live controls), `runs` (the session's `Runs` as hosts and tools reach them), `runRegistry` (one entry per run — fiber, handle, child activation, serial lane — the single in-process liveness authority, with admission, registration, lookup and the stop gestures), `detachSubagentsOnStop` (detach-vs-cascade policy)                                                                                                                                                                                                                                                                                                       |
-| **Session, event hub & emission** | The per-session event contract and its direct host paths         | `runtimePresentationEvents` (typed presentation events and emit options), `SessionHandle` (one composition record per session), `SessionEvents` (the session's event plane: one publisher under one permit, the three reads, and the trace-to-fact translation), `terminalResultToast`                                                                                                                                                                                                                                                                                                                                                                                                |
-| **Host interactions**             | Session-scoped host capabilities                                 | `HostInteractions` / `SessionHostInteractions` (session-owned host interaction and presentation port: diagnostics, manual criticism, unavailable-tool notices, plan approval, agent proposal, retry, bash, tool-edit, user question, external inquiry)                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| **Run history & services**        | What the loop takes from context to read, write and call         | `RunHistory` (claims through `Database`, reads and writes through the session's `SessionLog`), `RunCell` (`loop/runProgram.ts`, the run's one state holder and its only writer), `FollowUps` (pending follow-up input and its one-batch consume), `ModelInvoker` (the one service that calls the llm `Model`), `storedTurn` (turn and history conversion at the run history boundary), `RunCall` and `ToolServices` (capabilities scoped to one tool invocation)                                                                                                                                                                                                                      |
-| **Child runs & model cells**      | Drive a child run's turns and the model instance each turn uses  | `childRunLoop` (the single driver for every child-run type), `childTurnResult` (a child turn's rows and its parent's delivery, in one transaction), `childRunBudget` (per-session child-run concurrency budget), `ModelRetryGate` (process-shared recovery probes for a model route), `nativeSubagentStrategy` (native launch options and result formatting), `scriptRun` (a background script's strategy and summary), `recipeResult` (what a recipe run's value reads as), `subagentResults` and `deliveryEnvelope` (the XML delivery envelope every child path builds)                                                                                                             |
-| **Classification & control**      | Classify what a persisted run was and queue control over it      | `runClassification` (`runRejection`, a `LocalSession` record read), `runApprovalQueue` (per-run approval queueing), `requestPolicy` (what the session's approval policy settles when a request opens)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| **Model resolution**              | Turn a model name/config into a bound llm `Model`                | `modelAccess/ModelAccess` (the one model path: settings, route, credential, binding), `run/validationModel` (the CI-only canned model and its gate), `helperModel` (`helperCall`, the one-shot helper path through `ModelAccess`, gated, priced and usage-logged like every model call), `helperModelName` (the helper model a helper call runs on)                                                                                                                                                                                                                                                                                                                                   |
-| **Content helpers**               | One-shot content generation built on the helper model            | `sessionDescription` (AI session summary)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+## Subdirectories
 
-Native children keep one run scope and live handle across follow-ups. The shared
-child-run driver admits and delivers each turn; its concurrency permit covers
-active work and is released while the child waits for input. Recovery from a
-persisted run enters that same driver.
+- `loop/`: the run program. `toolUse` and `toolUseDispatch` (the loop),
+  `runProgram` (`RunCell`, the run's one state holder and writer), `rows`
+  (every draft the loop appends), `step` (where tools and prompt contributions
+  change, and the change is recorded), `hooks` (plugin hooks at loop points),
+  `toolGuard` (path checks and command approval before a tool body),
+  `modelSwitch` (a host's model switch, applied at the next model call).
+- `run/`: the per-run services the loop takes from context. `AgentRun`,
+  `invocation` (the one model-call retry loop), `modelCall`, `pricing`,
+  `compaction`, `contextTokens`, `mediaInput`, `tools`, `turnText`,
+  `toolResultText`, `requestContext`, `backgroundTurn`, and `validationModel`
+  (the CI-only canned model).
+- `modelAccess/`: the one path from settings to a bound llm `Model`
+  (`ModelAccess`, `binding`, `credentials`, `routeDecision`, `failureInfo`).
+- `historyQuery/`: the model's read-only SQL over a session's display rows, in
+  a child-process store holding only copied rows.
 
-## Why most of this stays flat
+## Top-level modules
 
-`core`'s split works because each module's files are addressed through the
-module path (`@agent/core/<module>/<File>`), so moving a file only means
-updating the few imports that reference it. Most runtime files still have many
-direct consumers inside `packages/harness/src/agent`, the agent SDK package, and tests. Moving
-them into subdirectories would therefore create mechanical churn
-disproportionate to a documentation change. The CLI, desktop, and extension
-hosts are decoupled from that layout by the public `LocalSession`, but the
-internal direct imports remain a reason to keep the rest of this directory
-flat.
+- **Launch and configuration**: `AgentLaunchContext`; `agentToolResolution`
+  (the effective tool list); `runLaunchGuard` (the run's terminal `run.end`
+  and claim, including a held child's end).
+- **Start and resume**: `rootLaunch` (what `Runs.launch({ request, options })`
+  runs: assigns the `runId`, registers, runs); `executeAgent` (lower-level
+  execution and `resumeToolUseFromResumeData`); `AgentRunLifecycle`
+  (completion side effects, error classification); `RunEndResult`;
+  `resumeRun` (the cross-host resume entry, root or recovered child);
+  `forkRun` (a new root seeded from another run's view); `resumeBlocker` (a
+  missing or untrusted agent).
+- **Registry and live handles**: `runRegistry` (one entry per run: fiber,
+  handle, child activation, serial lane; the single in-process liveness
+  authority, with admission, lookup and stop); `runs` (the session's `Runs`
+  as hosts and tools see them); `RunHandle`; `detachSubagentsOnStop`.
+- **Session events**: `SessionHandle` (one composition record per session);
+  `SessionEvents` (one publisher, the reads, and trace-to-fact translation);
+  `runtimePresentationEvents`; `terminalResultToast`; `HostInteractions` /
+  `SessionHostInteractions` (the session's host port: diagnostics, approvals,
+  retries, user questions, external inquiry, and other notices).
+- **History and per-call services**: `RunHistory` (claims through
+  `Database`, reads and writes through `SessionLog`); `FollowUps` (pending
+  follow-up input, consumed one batch at a time); `ModelInvoker` (the one
+  caller of the llm `Model`); `storedTurn` (turn conversion at the history
+  boundary); `RunCall` and `ToolServices` (one tool invocation's
+  capabilities).
+- **Child runs**: `childRunLoop` (the single driver for every child-run
+  type); `childTurnResult` (a child turn's rows and its delivery to the
+  parent, in one transaction); `childRunBudget` (per-session concurrency);
+  `ModelRetryGate` (process-shared recovery probes per model route);
+  `nativeSubagentStrategy`; `scriptRun`; `recipeResult`; `subagentResults` and
+  `deliveryEnvelope` (the XML envelope every child path builds).
+- **Classification and control**: `runClassification`; `runApprovalQueue`;
+  `requestPolicy` (what the approval policy decides when a request opens).
+- **Helper model**: `helperModel` (`helperCall`, the gated, priced and logged
+  one-shot path through `ModelAccess`); `helperModelName`;
+  `sessionDescription` (the AI session summary).
 
-The exception this section has always named — "if a future refactor touches a
-whole group's internal call sites anyway, revisit turning that group into a
-real subdirectory" — is what produced the two subdirectories. The Effect-4
-cutover rewrote those call sites wholesale, so the run program
-(`loop/toolUse`, over `loop/runProgram`, `loop/rows` and
-`loop/toolUseDispatch`) and the per-run services it takes from context (`run/AgentRun`,
-`run/invocation`, `run/pricing`, `run/turnText`, …) became real
-subdirectories rather than more top-level files. That same bar — a refactor
-already touching the whole group — governs any further one.
+A native child keeps one run scope and live handle across follow-ups. The
+child-run driver accepts and delivers each turn; its concurrency permit is
+released while the child waits for input, and recovery of a persisted run
+enters the same driver.
 
-## Importing
+## Why the top level stays flat
 
-CLI, desktop, and extension host code holds the public `LocalSession`
-(`@texra-ai/harness`) and imports nothing from here. Code inside
-`packages/harness/src/agent`, the agent SDK package, and tests import the
-specific `@agent/runtime/<File>` module, so internal dependency edges stay
-explicit; there is no barrel.
+Most of these files have many direct importers in the harness and the tests,
+so moving them is churn without a design gain. A group becomes a
+subdirectory only when a refactor already rewrites its call sites, as the
+Effect 4 cutover did for `loop/` and `run/`. Hosts import nothing from here:
+they hold the public `LocalSession` (`@texra-ai/harness`). Harness code
+imports the specific `@agent/runtime/<File>` module; there is no barrel.
