@@ -44,6 +44,12 @@ run the affected ones while developing. `typecheck:harness` is the full harness
 build and regenerates `packages/harness/dist/`. `build:initial` validates a
 full initial build (desktop app and VSIX).
 
+The pre-commit hook (`scripts/format-staged.mjs`) formats and stages what you
+staged, and never overwrites unstaged edits: when they overlap the reformat it
+keeps the working-tree copy and asks you to run `npm run format` after the
+commit. Use `git add -p` for a partially staged file, and re-run
+`npm run hooks:install` after any manual `pre-commit install`.
+
 Commits use [Conventional Commits](https://www.conventionalcommits.org)
 (`fix:`, `feat:`, `docs:`), a present-tense summary under 72 characters. Changes
 land on `main` through one PR per change; a `refactor:` / `simplify:` /
