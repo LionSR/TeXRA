@@ -12,7 +12,8 @@
  *    from `./plugins`, plus any plugin of your own.
  * 2. `sessions.open(roots)` gives the {@link Session} of one workspace.
  * 3. `session.start({ agent, instruction })` gives a {@link Run}: read
- *    `run.events` for its progress and `run.result` for how it ended.
+ *    `run.events` for its progress (`run.events.pipe(responseText)` for
+ *    just the answer's text) and `run.result` for how it ended.
  * 4. `session.resume(runId)` continues a run a persistent session stored.
  * 5. `session.attach({ approve })` answers the approvals a run asks for.
  *
@@ -53,6 +54,7 @@ export type {
 
 // What a run reports while it runs, and how it ended.
 export type { AgentEvent, StreamChunkEvent } from '@agent/trace';
+export { responseText } from '@agent/trace/TraceEmitter';
 export type { RunEnd } from '@shared/schemas';
 
 // A session's stored runs: their listing, records, and deletion.

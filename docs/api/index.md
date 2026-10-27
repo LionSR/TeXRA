@@ -72,7 +72,7 @@ npm install @texra-ai/harness @texra-ai/llm effect @effect/platform-node @effect
 
 ```ts
 import { Effect, Stream } from 'effect';
-import { Sessions } from '@texra-ai/harness';
+import { responseText, Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
@@ -96,10 +96,8 @@ const program = Effect.gen(function* () {
     instruction: 'Summarize the findings in notes.md.',
   });
 
-  yield* Stream.runForEach(run.events, (event) =>
-    Effect.sync(() => {
-      if (event.type === 'stream.chunk') process.stdout.write(event.text);
-    }),
+  yield* Stream.runForEach(run.events.pipe(responseText), (text) =>
+    Effect.sync(() => process.stdout.write(text)),
   );
 
   return yield* run.result;
@@ -123,7 +121,7 @@ corepack pnpm --filter @texra-ai/harness run example:packed
 | Example                                                                                                                               | What it exercises                                                                                                                                  |
 | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`01-llm-turn.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/01-llm-turn.ts)                                 | `@texra-ai/llm` standalone: `selectModel`, `decideModelRoute`, `resolveRouteEndpoint`, `bindModel`, `prepareTurn`, `streamTurn`, and `ModelError`. |
-| [`02-session-and-events.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/02-session-and-events.ts)             | `Sessions.layer`, `sessions.open`, `InlinePersonaSchema`, `AgentNotFound`, `run.events` (`stream.chunk`), and `run.result`.                        |
+| [`02-session-and-events.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/02-session-and-events.ts)             | `Sessions.layer`, `sessions.open`, `InlinePersonaSchema`, `AgentNotFound`, `run.events` with `responseText`, and `run.result`.                     |
 | [`03-custom-tools-and-plugins.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/03-custom-tools-and-plugins.ts) | `defineTool`, `nullishWithDefault`, `executed`, `definePlugin`, and a multi-turn tool call loop.                                                   |
 | [`04-approvals-and-requests.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/04-approvals-and-requests.ts)     | `requiresApproval: true`, `session.attach({ approve })`, interactive `waiting` state, `followUp.send`, and `run.stop`.                             |
 | [`05-durable-resume-and-fork.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/05-durable-resume-and-fork.ts)   | Persistent SQLite store (`{ persistent: true }`), `run.fork`, resuming a forked conversation via `followUp.send`, `listRuns()`, and `records()`.   |

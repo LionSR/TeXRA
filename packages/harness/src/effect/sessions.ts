@@ -101,14 +101,16 @@ export interface OpenOptions {
    *  ends with the session. */
   readonly persistent?: boolean;
   /**
-   * The opener is an interactive host, whose surfaces answer the runs'
-   * requests from the view (a `request.decide`), attached or not; absent,
-   * nobody can answer until a host that does attaches
-   * ({@link Session.attach}), so the session's policy denies every request.
-   * A window sets `interruptedTasks`: it resumes a task whose resume was
-   * blocked once what it needs is back, and with `offer` also lists at open,
-   * or under `texra.resumeOnOpen: auto` continues, the tasks a closed or
-   * crashed process left interrupted.
+   * Set when a person is present to answer the runs' requests from the
+   * view (`request.decide`), as in an editor window. Absent, nobody can
+   * answer until a host with an `approve` handler attaches
+   * ({@link Session.attach}), so every request is denied.
+   *
+   * `interruptedTasks` handles runs that a closed or crashed process left
+   * unfinished. Both values resume such a run once what it was missing (an
+   * agent, a plugin) is back. `offer` also lists them when the session
+   * opens, and continues them when the `texra.resumeOnOpen` setting is
+   * `auto`.
    */
   readonly host?: { readonly interruptedTasks?: 'offer' | 'retry' };
 }
@@ -125,9 +127,11 @@ export interface SessionHost extends Omit<HostInteractions, 'dispose'> {
   readonly approve?: ApprovalHandler;
 }
 
-/** What starting a run on a session takes: the agent, by name or written
- *  inline (`InlinePersonaSchema`, recorded so a resume needs no file), or
- *  a host's whole configuration; then the launch's facts. */
+/** What starting a run takes: an agent (a name from the agent
+ *  directories, or a persona written inline, which the run stores so a
+ *  resume needs no file) and the instruction to give it. Everything else
+ *  is optional. `config` replaces both with a complete configuration an
+ *  application host has already resolved. */
 export type StartInput = (
   | {
       readonly agent: string | InlinePersona;
@@ -136,78 +140,82 @@ export type StartInput = (
     }
   | { readonly config: AgentConfig }
 ) & {
-  /** The id to admit the run under; one is minted when absent. */
+  /** The run's id. Absent, one is generated. */
   readonly runId?: RunId;
-  /** The chat's previous root: the run starts with the grants it held. */
+  /** The earlier run this one continues in a chat: the new run starts with
+   *  the approvals the person granted there. */
   readonly continues?: RunId;
   /** Run on the configured helper model instead of the selected one. */
   readonly helperModel?: boolean;
-  /** The policy the launch asked for (it only ever narrows the project's),
-   *  and whether delegated work starts approved (Auto-approve). */
+  /** A stricter approval policy for this run (it can only narrow the
+   *  project's), and whether work it delegates to other agents starts
+   *  approved. */
   readonly approval?: {
     readonly policy?: ApprovalPolicy;
     readonly delegated?: boolean;
   };
-  /** A window's run, which parks for input after each cycle; absent, the
-   *  run ends with its first cycle. */
+  /** Keep the run open for follow-up messages after each answer, as a chat
+   *  window does. Absent, the run ends after its first answer. */
   readonly interactive?: boolean;
+  /** Tools for this run only, made with `defineTool`. A resume needs the
+   *  same tools passed again. */
   readonly tools?: readonly ITool[];
 };
 
-/** What a resume takes beside its run: the custom tools the run needs
- *  again, and whether it is a window's. */
+/** What a resume takes besides the run's id: the same custom tools the
+ *  run was started with, and whether it stays open for follow-ups. */
 export type ResumeInput = Pick<StartInput, 'tools' | 'interactive'>;
 
 /** One run of an agent, from the moment it exists in its session. */
 export interface Run {
-  /** The run's id, minted here and handed to the launcher, so it
-   *  identifies the run before its first model call. */
+  /** The run's id, known before its first model call. */
   readonly runId: RunId;
-  /** Set when a resume asked for a child an open call of this run owns:
-   *  the child resumes with this run, its parent, and this names it. */
+  /** Set when you resumed a child run that its parent was still waiting
+   *  on: the parent resumes instead (this handle is the parent's), and
+   *  this names the child you asked for. */
   readonly redirectedFrom?: RunId;
   /**
-   * The run's own outcome first: on failure the fold's fate never replaces
-   * it; on success this waits for the level holding the durable outcome.
+   * How the run ended. A failed run fails this with its own
+   * {@link RunFailure}. A finished run's result arrives once the session
+   * view shows its stored outcome, so a view read afterwards includes it.
    */
   readonly result: Effect.Effect<RunEndResult, RunFailure>;
   /**
-   * The session's levels sliced to this run: from the first level holding
-   * its stream through the first holding its durable outcome. Typed error
-   * `never`: a dead fold is a defect, as `SessionViewService.changes`
-   * publishes it.
+   * The session view while this run lasts: from the first snapshot that
+   * shows the run to the first that shows its stored outcome. It cannot
+   * fail; if the code that maintains the view crashes, that is a defect.
    */
   readonly view: Stream.Stream<SessionView>;
   /**
-   * The run's trace, buffered from the moment the run enters the session so
-   * that no launch event is lost to a reader that has yet to attach. Ends
-   * when the run settles and fails with {@link RunFailure} when the run
-   * failed. Running it once is the contract: ending the iteration detaches
-   * the trace while the run continues. The pre-reader buffer is bounded: a
-   * run that passes it with nobody reading detaches its trace, and a reader
-   * that attaches after that, or after the run settled unread, fails with
-   * {@link TraceUnavailable} rather than reading an empty trace.
+   * What the run does as it does it: streamed text, tool calls, stages,
+   * usage. Pipe it through `responseText` for just the answer's text.
+   * Ends when the run ends, and fails with {@link RunFailure} if the run
+   * failed. Read it once, from the moment `start` returns: events wait
+   * for you only briefly, and stopping early stops your reading, not the
+   * run. A reader that comes too late fails with {@link TraceUnavailable}
+   * instead of seeing nothing.
    */
   readonly events: Stream.Stream<AgentEvent, RunFailure | TraceUnavailable>;
-  /** Before the runtime hands over the live handle this aborts the launch;
-   *  after, it interrupts the run. */
+  /** Stop the run. */
   readonly interrupt: Effect.Effect<void>;
 }
 
-/** One session: a root's runs, its view, and the hosts attached to it,
- *  whether this process holds it ({@link LocalSession}) or a window drives
- *  the background service's. */
+/** One workspace's runs, the view of them, and the hosts attached to it.
+ *  `Sessions.open` gives the {@link LocalSession} this process holds; a
+ *  window connected to a background process holds a plain `Session`. */
 export interface Session {
   readonly roots: WorkspaceRoots;
-  /** The fold's levels, each an immutable value. */
+  /** The session's state as immutable snapshots: its runs, their status,
+   *  and the requests waiting on a person. */
   readonly view: {
-    /** The current level. */
+    /** The latest snapshot. */
     readonly current: () => SessionView;
+    /** Every new snapshot, as the session changes. */
     readonly changes: Stream.Stream<SessionView>;
     /**
-     * The ordered fold inputs for one reader: a complete replay of the
-     * runs `set` names, then events from `from.cursor` before live text.
-     * The reader's transcript interest lives as long as the stream.
+     * What a remote reader needs to build the view itself: a full replay of
+     * the runs `set` names, then every change after `from.cursor`. Those
+     * runs' transcripts stay up to date while the stream is read.
      */
     readonly watch: (
       set: readonly TranscriptSubscription[],
@@ -215,101 +223,98 @@ export interface Session {
     ) => Stream.Stream<readonly SessionViewInput[]>;
   };
   /**
-   * Admission: succeeds when the run exists in the session, with its stream
-   * published and its trace live. Interrupting the caller before admission
-   * aborts the launch; interrupting it during the handoff that follows ends
-   * the run too, so a caller that does not receive a {@link Run} has none
-   * running. A failure before admission is the caller's to present: `start`
-   * presents nothing.
+   * Start a run. Succeeds once the run exists: it is in the view and its
+   * events are flowing. A caller that does not get a {@link Run} back has
+   * none running, even if interrupted halfway. A failure before then is
+   * returned to you and shown to no host.
    */
   readonly start: (
     input: StartInput,
   ) => Effect.Effect<Run, LaunchError | RunFailure>;
   /**
-   * Continue a persisted run of this session through the one resume path
-   * every host takes, from its committed history: the same handle and the
-   * same admission as {@link start}, and the same custom `tools`, which a
-   * persisted run needs again to continue a call to one. A child an open
-   * call of its parent owns resumes with that parent
-   * ({@link Run.redirectedFrom}). A resume of a run already resuming here
-   * joins it, with the same handle. A run nothing can continue fails with
-   * {@link ResumeRefused}.
+   * Continue a stored run from where its history stops, with the same kind
+   * of handle {@link start} gives. Pass the custom `tools` it was started
+   * with. Resuming a run already resuming here returns the same handle; a
+   * run that cannot continue fails with {@link ResumeRefused}, whose
+   * `reason` says why.
    */
   readonly resume: (
     runId: RunId,
     input?: ResumeInput,
   ) => Effect.Effect<Run, ResumeRefused | ToolsRefused | RunFailure>;
-  /** The one handler of every request a surface issues to this session:
-   *  answered exactly once, an outcome or a request error. */
+  /** Everything else you ask of the session, as one typed request
+   *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
+   *  approval, stop, fork or delete a run, switch its model, and so on).
+   *  Answered exactly once, with an outcome or a {@link RequestError}. */
   readonly request: (
     request: RuntimeRequest,
   ) => Effect.Effect<Outcome, RequestError>;
-  /** Attach `host` for the caller's scope: the newest attached host
-   *  presents, and its `approve` answers the runs' requests. */
+  /** Attach `host` until the caller's scope closes. The most recently
+   *  attached host shows notices, and its `approve` answers the runs'
+   *  approval requests. */
   readonly attach: (
     host: SessionHost,
   ) => Effect.Effect<void, never, Scope.Scope>;
 }
 
 /**
- * A session this process holds (`Sessions.open`): every {@link Session}'s
- * members, and the reads of its store, the runs it holds here and the
- * notices it presents.
+ * A session this process holds, as `Sessions.open` returns it: everything
+ * a {@link Session} has, plus direct reads of its store (run listing,
+ * records, deletion) and of the runs this process is running.
  */
 export interface LocalSession extends Session {
-  /** Set when opening the store moved an older build's or a damaged store
-   *  aside; the host that opened the session presents it once. */
+  /** Set when opening found a store from an older build, or a damaged one,
+   *  and moved it aside to start fresh; tell the person once. */
   readonly storeMovedAside: SessionStoreMovedAside | null;
   readonly view: Session['view'] & {
-    /** Fold the transcripts of the runs `set` names, beside every other
-     *  reader's, for the caller's scope. */
+    /** Keep the transcripts of the runs `set` names in the view until the
+     *  caller's scope closes. */
     readonly subscribe: (
       set: readonly TranscriptSubscription[],
     ) => Effect.Effect<void, never, Scope.Scope>;
-    /** The view folded cold from the store as of this call: every run's
-     *  listing, and the whole history of the runs named. */
+    /** A one-off snapshot built from the store: every run's summary, and
+     *  the full transcript of the runs named. */
     readonly read: (runIds: readonly RunId[]) => Effect.Effect<SessionView>;
-    /** The store's head: the last commit, where a reader attaching now
-     *  starts {@link events} to see only what commits from here on. A
-     *  level's `cursor` can sit far behind it right after open. */
+    /** The position of the store's latest write. Pass it to
+     *  {@link events} to see only what is written from now on. */
     readonly head: () => CommitOrdinal;
     /**
-     * Every display row committed past `from` ({@link head}, or a level's
-     * `cursor`), every run's, in commit order, then each as it commits. `drained` receives
-     * the commit each forward read covered, a row the store no longer
-     * holds included.
+     * Every displayable event of every run written after `from` (from
+     * {@link head}, or a snapshot's `cursor`), in write order, then each
+     * new one as it is written. `drained`, if given, is updated to the
+     * position each read reached.
      */
     readonly events: (
       from: CommitOrdinal,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
     ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
   };
-  /** One run's committed records. */
+  /** One run's stored records. */
   readonly records: (runId: RunId) => RunRecords;
-  /** The runs a user started (agent runs with no parent), newest first,
-   *  each with its saved setup. */
+  /** The runs a person started (not child runs), newest first, each with
+   *  its saved setup. */
   readonly listRuns: () => Effect.Effect<AgentRunListingEntry[], Error>;
-  /** What this process holds of `runId`, or of every run it holds. */
+  /** The run `runId` if this process is running it, or every run it is
+   *  running. */
   readonly held: {
     (runId: RunId): HeldRun | undefined;
     (): readonly HeldRun[];
   };
   /**
-   * Delete one run, or every run the store lists (`'all'`), through the
-   * run's claim: a run a live owner holds is left (`active`). Only a
-   * single run's deletion may take over an owner that cannot be proved
-   * alive or dead.
+   * Delete one run, or every stored run (`'all'`). A run another live
+   * process is running is skipped and reported as `active`. Deleting a
+   * single run may take it from a process that cannot be proved alive or
+   * dead; `'all'` never does.
    */
   readonly deleteRuns: (
     target: RunId | 'all',
   ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
-  /** Present a notice through the newest attached host; with
-   *  `replayWhenAttached`, a notice raised while none is attached waits
-   *  for the next. */
+  /** Show a notice through the most recently attached host. With
+   *  `replayWhenAttached`, a notice raised while no host is attached waits
+   *  for the next one. */
   readonly emit: SessionHostInteractions['emit'];
-  /** A barrier: every write enqueued before it has run, the view has
-   *  folded what it committed, and the session's own consumers of those
-   *  rows have run over them: a failed run's end has been presented to the
-   *  attached host (or queued for the next one) by the time it returns. */
+  /** Wait until everything already sent to the session is written, shown
+   *  in the view, and handled: for example, a failed run's end has been
+   *  shown to the attached host (or queued for the next one). */
   readonly settled: Effect.Effect<void>;
 }

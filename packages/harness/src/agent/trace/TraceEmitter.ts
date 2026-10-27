@@ -5,12 +5,18 @@
  * is the only product vocabulary it takes. Product-specific helpers are plain
  * functions in `helpers.ts` that operate on the emitted event stream.
  *
+ * It also owns how its streams read back: `responseText` picks the answer's
+ * text out of the chunks it emits.
+ *
  * Responsibilities at the emit boundary (one place, not many):
  *   - fan out to the sinks it was built with
  *   - swallow per-sink exceptions so one bad sink can't break the run
  */
+import { Stream } from 'effect';
+
 import { writeLogLine } from '@logger/logSink';
 import {
+  MESSAGE_TYPES,
   qualifyAggregateId,
   RUN_OUTCOME,
   toJsonValue,
@@ -279,3 +285,36 @@ export function runEventDraft(
   if (event.type === 'stream.chunk') return null;
   return { ...event, aggregateId: qualifyAggregateId('run', runId) };
 }
+
+/**
+ * The model's answer text out of a run's events, chunk by chunk as it
+ * streams: `run.events.pipe(responseText)`.
+ *
+ * A `stream.chunk` names only its stream, and a run streams more than its
+ * answer: the model's thinking and what a running tool prints are chunks
+ * too. This keeps the chunks of the streams that opened as a model response
+ * and drops the rest. A model call that fails and is retried has already
+ * streamed its partial answer; the retry's answer follows it.
+ */
+export const responseText = <E, R>(
+  events: Stream.Stream<AgentEvent, E, R>,
+): Stream.Stream<string, E, R> =>
+  events.pipe(
+    Stream.mapAccum(
+      () => new Set<string>(),
+      (answers, event): readonly [Set<string>, readonly string[]] => {
+        if (
+          event.type === 'stream.start' &&
+          event.kind === MESSAGE_TYPES.MODEL_RESPONSE
+        )
+          answers.add(event.id);
+        if (event.type === 'stream.end') answers.delete(event.id);
+        return [
+          answers,
+          event.type === 'stream.chunk' && answers.has(event.id)
+            ? [event.text]
+            : [],
+        ];
+      },
+    ),
+  );

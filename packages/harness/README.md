@@ -58,8 +58,8 @@ that declare that block with its own recipe script; `@texra-ai/harness` ships
 no built-in task-block plugins.
 
 ```ts
-import { Effect, Fiber, Stream } from 'effect';
-import { Sessions } from '@texra-ai/harness';
+import { Effect, Stream } from 'effect';
+import { responseText, Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
@@ -75,18 +75,12 @@ const program = Effect.gen(function* () {
     agent: 'polish',
     instruction: 'Tighten the summary in notes.md.',
   });
-  const events = yield* Effect.forkScoped(
-    Stream.runForEach(run.events, (event) =>
-      Effect.sync(() => {
-        if (event.type === 'stream.chunk') process.stdout.write(event.text);
-      }),
-    ),
+  // The events end when the run does; `responseText` keeps the answer's
+  // text and drops the model's thinking and tool output.
+  yield* Stream.runForEach(run.events.pipe(responseText), (text) =>
+    Effect.sync(() => process.stdout.write(text)),
   );
-  const result = yield* run.result;
-  // The run's trace ends with it; join so the consumer drains what the
-  // result may have outrun instead of being interrupted with the scope.
-  yield* Fiber.join(events);
-  return result;
+  return yield* run.result;
 }).pipe(
   Effect.scoped,
   Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
@@ -199,11 +193,11 @@ const program = Effect.gen(function* () {
 });
 ```
 
-| Service    | What it is                                                                                                                                                                                                                                                               |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` (`./host`) serves it; `Sessions.layer({ platform, plugins })` composes that process for the layer's lifetime. Build it once per process. |
-| `Session`  | `roots`; `view.current()`, `view.changes`, and `view.watch(set, from)`, a reader's view inputs whose transcript subscription lives as long as the stream; `start`, `resume`, `request`; `attach(host)`, a host for the caller's scope. A value, one per root, not a tag. |
-| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`, and `redirectedFrom` on a resume that continued a child's parent. `start` succeeds when accepted: the run exists in the session, its row published and its trace live.                                                 |
+| Service    | What it is                                                                                                                                                                                                                                                                                                        |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` (`./host`) serves it; `Sessions.layer({ platform, plugins })` composes that process for the layer's lifetime. Build it once per process.                                          |
+| `Session`  | One workspace's runs: `start` and `resume` give a `Run`; `request` sends everything else (follow-ups, approvals, stop, fork); `attach(host)` answers approvals until the caller's scope closes; `view.current()` and `view.changes` read the session's state as immutable snapshots. `roots` names the workspace. |
+| `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts; `interrupt`. `start` returns once the run exists, before its first model call.                                                        |
 
 `run.events` is the run's trace as a `Stream`. Trace events are buffered from
 the moment the run enters its session, so a reader begun right after `start`
