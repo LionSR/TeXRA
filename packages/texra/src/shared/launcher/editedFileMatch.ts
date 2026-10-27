@@ -1,5 +1,5 @@
 /**
- * Which files count as edited versions of a base file (PRD 12.1): the
+ * Which files count as edited versions of a base file: the
  * Tools sheet derives its edited-file list from the host's catalog and the
  * surface's base with this rule, so a base change never leaves a file of
  * another base selected. Shared because the sheet is a browser renderer.

@@ -3,8 +3,8 @@
  *
  * The agent dispatches a self-contained question; the user later pastes
  * the external model's answer back via the inquiry panel. The question is a
- * request like any other (`request.opened { kind: 'externalInquiry' }`, one
- * run model, 3.7), whose payload names its thread (`threadId`); dispatch is non-blocking: the tool returns immediately with `dispatched`
+ * request like any other (`request.opened { kind: 'externalInquiry' }`),
+ * whose payload names its thread (`threadId`); dispatch is non-blocking: the tool returns immediately with `dispatched`
  * and the cycle continues. When the decision arrives, even hours later,
  * even after a restart, `recordInquiryDecision` records it on the thread and
  * delivers a `[inquiry]` follow-up that wakes or resumes the run.

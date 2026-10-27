@@ -1,5 +1,5 @@
 /**
- * The webview's Effect graphs (PRD one-fold-three-renderers, 7.3, 7.7):
+ * The webview's Effect graphs:
  * one per session key, in a `LayerMap`, built on the one `ManagedRuntime`
  * a webview entry makes with `installWebviewRuntime`. SessionInputs is fed
  * directly by the ordered frames; the harness's `RemoteSessionView` folds
@@ -69,8 +69,8 @@ export class WebviewSessions extends LayerMap.Service<WebviewSessions>()(
 type WebviewRuntime = ManagedRuntime.ManagedRuntime<WebviewSessions, never>;
 
 /**
- * Make the one Effect runtime of this webview over its session family (PRD
- * 7.7): called by the webview transport exactly once per module evaluation
+ * Make the one Effect runtime of this webview over its session family:
+ * called by the webview transport exactly once per module evaluation
  * and disposed by it, on the one shutdown path the entry drives. Fork
  * reporting applies here as it does to the process runtime; the logger
  * layer is the harness's view logger (the redacting sink), not the
