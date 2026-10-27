@@ -92,6 +92,12 @@ const mcpToolTableLayer = (dir: string) =>
     ),
   ).pipe(Layer.provide(nodePlatformLayer));
 
+/** A temporary directory, removed when the test's scope closes. */
+const tempDir = Effect.acquireRelease(
+  Effect.sync(() => mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-'))),
+  (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+);
+
 describe('MCP server plugins', () => {
   // it.live: a real child process answers over stdio, and the approval's
   // `request.opened` row is delivered by a consumer on the process runtime.
@@ -99,10 +105,7 @@ describe('MCP server plugins', () => {
     'offers a configured server tools, gates each call on approval, and stops the server with the composition',
     () =>
       Effect.gen(function* () {
-        const dir = mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-'));
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
-        );
+        const dir = yield* tempDir;
         const pidFile = path.join(dir, 'pid');
         writeFileSync(path.join(dir, 'server.cjs'), FIXTURE_SERVER);
         const writeConfig = (mode: string) =>
@@ -216,10 +219,7 @@ describe('MCP server plugins', () => {
 
   it.live('reports an invalid config without quoting its text', () =>
     Effect.gen(function* () {
-      const dir = mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-'));
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
-      );
+      const dir = yield* tempDir;
       const file = path.join(dir, 'mcp.json');
       // An unquoted value: V8's message for it quotes the surrounding text.
       writeFileSync(
@@ -241,10 +241,7 @@ describe('MCP server plugins', () => {
   // `foo`: a trailing `_` is refused with a warning, never dropped quietly.
   it.live('skips a server whose name ends in "_" with a warning', () =>
     Effect.gen(function* () {
-      const dir = mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-'));
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
-      );
+      const dir = yield* tempDir;
       const file = path.join(dir, 'mcp.json');
       writeFileSync(file, '{"mcpServers": {"foo_": {"command": "x"}}}');
       const fs = yield* FileSystem.FileSystem;
