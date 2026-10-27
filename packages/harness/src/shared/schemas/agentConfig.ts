@@ -162,4 +162,6 @@ export const AgentConfigSchema = AgentConfigObjectSchema.check(
     return issues;
   }),
 );
+/** An agent config as a launch request writes it, before decoding fills the
+ *  defaults: what a host's run request carries to `session.runs.launch`. */
 export type AgentConfigInput = typeof AgentConfigObjectSchema.Encoded;

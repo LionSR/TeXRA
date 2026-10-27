@@ -18,6 +18,10 @@ export const INSTRUCTION_ACTION = {
   OPEN_MODELS_DOC: 'open-models-doc',
 } as const;
 
+/**
+ * One of the {@link INSTRUCTION_ACTION} tokens: a button the host renders on
+ * an instruction message and maps to its own command.
+ */
 export type InstructionAction =
   (typeof INSTRUCTION_ACTION)[keyof typeof INSTRUCTION_ACTION];
 

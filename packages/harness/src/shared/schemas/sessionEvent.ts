@@ -25,6 +25,7 @@ import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
 import {
   AggregateIdSchema,
   OwnerIdSchema,
+  RunIdSchema,
   aggregateTarget,
   qualifyAggregateId,
   type AggregateId,
@@ -36,7 +37,6 @@ import {
   RunRecordFieldsSchema,
   ResultMetaSchema,
 } from './runRecords';
-import { RunIdSchema } from './identifiers';
 import { FollowUpContentSchema } from './followUp';
 import { PermissionPayloadSchema } from './progressView/data';
 import { RunFactSchema } from './rowValues';
@@ -67,6 +67,7 @@ const SeqSchema = Schema.Int.check(Schema.isGreaterThan(0));
 export const CommitOrdinalSchema = Schema.Int.check(
   Schema.isGreaterThanOrEqualTo(0),
 );
+/** The decoded shape of {@link CommitOrdinalSchema}. */
 export type CommitOrdinal = typeof CommitOrdinalSchema.Type;
 
 /**
@@ -150,6 +151,8 @@ const RunParentSchema = Schema.Struct({
    *  null for a child no call launched. */
   callId: Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
 });
+/** The decoded parent edge of a `run.start` row: the launching run, its
+ *  incarnation, and the tool call that launched the child. */
 export type RunParent = typeof RunParentSchema.Type;
 
 /**
@@ -165,6 +168,8 @@ const RunProvenanceSchema = Schema.Union([
     at: Schema.Int.check(Schema.isGreaterThan(0)),
   }),
 ]);
+/** The decoded provenance of a run whose history was copied from another
+ *  run: today only a fork. */
 export type RunProvenance = typeof RunProvenanceSchema.Type;
 
 /**
@@ -381,6 +386,9 @@ const RunHistoryEventDraftSchema = Schema.Union([
     phase: Schema.Literals(['accepted', 'settled']),
   }),
 ]);
+/** Every event a publisher may hand `SessionEvents.publish`, before the
+ *  envelope is stamped: display rows, the run's private records and the run
+ *  history. A `run.start` draft names its parent by run id only. */
 export const SessionEventDraftSchema = Schema.Union([
   ...DisplaySessionEventDraftSchema.members,
   ...RunRecordEventDraftSchema.members,
@@ -388,17 +396,25 @@ export const SessionEventDraftSchema = Schema.Union([
 ]);
 /** Every member of a draft union with the envelope columns added. */
 const withEnvelope = Tuple.map(Schema.fieldsAssign(envelope));
+/** The committed rows a renderer folds into its `SessionView`: the lifecycle
+ *  pair and the display rows between them, with their envelope columns. The
+ *  display transport carries only these. */
 export const DisplaySessionEventSchema = Schema.Union([
   RunStartEventSchema.mapFields(Struct.assign(envelope)),
   RunRemovedEventSchema.mapFields(Struct.assign(envelope)),
   ...DisplayRowDraftSchema.mapMembers(withEnvelope).members,
 ]);
+/** The decoded shape of {@link DisplaySessionEventSchema}. */
 export type DisplaySessionEvent = typeof DisplaySessionEventSchema.Type;
+/** Every committed row of the session event table with its envelope: the
+ *  display rows, the run's private records and the run history. The store
+ *  decodes a row with it once; `isDisplaySessionEvent` picks a renderer's. */
 export const SessionEventSchema = Schema.Union([
   ...DisplaySessionEventSchema.members,
   ...RunRecordEventDraftSchema.mapMembers(withEnvelope).members,
   ...RunHistoryEventDraftSchema.mapMembers(withEnvelope).members,
 ]);
+/** The decoded shape of {@link SessionEventSchema}. */
 export type SessionEvent = typeof SessionEventSchema.Type;
 
 /**
@@ -435,6 +451,10 @@ export interface AggregateEdges {
   readonly closes: boolean;
 }
 
+/** The {@link AggregateEdges} one draft declares: a `run.start` names its
+ *  parent, a plugin's own aggregate hangs under its `parent` run and borrows
+ *  that run's claim for the append, and a `run.removed` closes its aggregate.
+ *  The store applies them in the transaction that appends the draft. */
 export function edgesOf(draft: SessionEventDraft): AggregateEdges {
   switch (draft.type) {
     case 'run.start':
@@ -556,6 +576,8 @@ export function pendingKeyOf(
   }
 }
 
+/** The `type` of every display row, so a read can select rows by type
+ *  without decoding them; `isDisplaySessionEvent` is the typed form. */
 export const DISPLAY_EVENT_TYPES: readonly string[] = Object.freeze(
   DisplaySessionEventDraftSchema.members.map(
     (schema) => schema.fields.type.literal,

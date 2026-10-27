@@ -6,6 +6,7 @@ import { Schema } from 'effect';
  * same contract instead of re-declaring it per module.
  */
 export const JsonValueSchema = Schema.Json;
+/** The decoded shape of {@link JsonValueSchema}. */
 export type JsonValue = typeof JsonValueSchema.Type;
 
 /** A value as a stored row keeps it: what `JSON.stringify` writes, read

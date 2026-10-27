@@ -7,9 +7,19 @@
  * schema without importing the catalog.
  */
 
+/**
+ * The setting key for whether a file-editing tool call waits for the user's
+ * approval before it writes; the edit approval policy reads it, and the
+ * approval settings tab writes it.
+ */
 export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
   'texra.toolUse.requireEditApproval';
 
+/**
+ * The setting key for whether a shell command a tool wants to run waits for
+ * the user's approval; the bash approval policy reads it, and the approval
+ * settings tab writes it.
+ */
 export const BASH_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireBashApproval';
 
 /** Canonical config key for the per-session child-run concurrency budget. */
@@ -108,6 +118,7 @@ export const RESUME_ON_OPEN_SETTING = Object.freeze({
     'On opening, when tasks stopped before they finished: list them so you can choose, or continue them all.',
 } as const);
 
+/** One of the {@link RESUME_ON_OPEN_SETTING} values: `ask` or `auto`. */
 export type ResumeOnOpen = (typeof RESUME_ON_OPEN_SETTING.values)[number];
 
 /**

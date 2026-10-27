@@ -22,6 +22,10 @@ export const WorkspaceAgentsSelectionSchema = Schema.Union([
   }),
 ]);
 
+/**
+ * The decoded shape of {@link WorkspaceAgentsSelectionSchema}: the
+ * `texra.workspaceAgents` workspace state.
+ */
 export type WorkspaceAgentsSelection =
   (typeof WorkspaceAgentsSelectionSchema)['Type'];
 
@@ -33,6 +37,10 @@ export type WorkspaceAgentsSelection =
  */
 export const HiddenCustomAgentKeysSchema = AgentKeyListSchema;
 
+/**
+ * The selection a workspace has until the user chooses one: it inherits the
+ * global agents.
+ */
 export const INHERITED_WORKSPACE_AGENTS: WorkspaceAgentsSelection =
   Object.freeze({
     kind: 'inherit',
@@ -41,4 +49,8 @@ export const INHERITED_WORKSPACE_AGENTS: WorkspaceAgentsSelection =
 /** Exact delegation catalog attached to a run, independent of durable UI state. */
 export const AgentDelegationScopeSchema = AgentKeyListSchema;
 
+/**
+ * The decoded shape of {@link AgentDelegationScopeSchema}: the agent keys a
+ * run's delegation tools may launch, as its config carries them.
+ */
 export type AgentDelegationScope = typeof AgentDelegationScopeSchema.Type;

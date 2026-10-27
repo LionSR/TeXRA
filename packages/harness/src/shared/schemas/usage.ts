@@ -1,9 +1,18 @@
 import { Effect, Schema, Struct, type Types } from 'effect';
 
+/**
+ * A token count: a non-negative integer, as every usage field and context
+ * gauge records it.
+ */
 export const TokenCountSchema = Schema.Int.check(
   Schema.isGreaterThanOrEqualTo(0),
 );
 
+/**
+ * The route a request was billed through: one of the subscription or
+ * coding-plan routes, or the provider's API key. Model access stamps it on
+ * each usage row.
+ */
 export const UsageRouteSchema = Schema.Literals([
   'chatgpt-subscription',
   'xai-subscription',
@@ -30,8 +39,15 @@ export const DeclinableUsageRouteSchema = UsageRouteSchema.pick([
   'glm-coding-plan-subscription',
 ]);
 
+/** The decoded shape of {@link DeclinableUsageRouteSchema}. */
 export type DeclinableUsageRoute = typeof DeclinableUsageRouteSchema.Type;
 
+/**
+ * The token counts and cost of one model request, with the cache and reasoning
+ * breakdowns a provider reports and the route and plan it was billed through.
+ * Model access produces one per response; the run's usage is the sum of its
+ * rows.
+ */
 export const TokenUsageStatsSchema = Schema.Struct({
   inputTokens: TokenCountSchema,
   outputTokens: TokenCountSchema,
@@ -47,6 +63,7 @@ export const TokenUsageStatsSchema = Schema.Struct({
   usagePlan: Schema.optional(Schema.String),
 });
 
+/** The decoded shape of {@link TokenUsageStatsSchema}. */
 export type TokenUsageStats = typeof TokenUsageStatsSchema.Type;
 
 /** A usage total under construction: every counter present and writable. */
@@ -113,6 +130,11 @@ export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.mapFields(
   }),
 );
 
+/**
+ * The decoded shape of {@link ExtendedTokenUsageStatsSchema}: a `usage`
+ * transcript row's payload, with the turn's response time and tool-use prompt
+ * tokens beside the counts.
+ */
 export type ExtendedTokenUsageStats =
   (typeof ExtendedTokenUsageStatsSchema)['Type'];
 
@@ -153,6 +175,7 @@ export const RunUsageTotalsSchema = Schema.Struct({
   ),
 });
 
+/** The decoded shape of {@link RunUsageTotalsSchema}. */
 export type RunUsageTotals = typeof RunUsageTotalsSchema.Type;
 
 /** A run's usage before its first turn: every counter at its zero. */

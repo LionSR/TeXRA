@@ -32,6 +32,7 @@ import { SettledAttachmentSchema, SettledToolResultSchema } from './toolResult';
 /* ------------------------------------------------------------------ ids */
 
 const RunFamilySchema = Schema.Literals(['toolUse']);
+/** The loop a `run.position` row belongs to: `toolUse`, the one run program. */
 export type RunFamily = typeof RunFamilySchema.Type;
 
 /**
@@ -50,6 +51,7 @@ const InvocationRefSchema = Schema.Struct({
   invocationId: Schema.String.check(Schema.isUUID()),
   attempt: Schema.Int.check(Schema.isGreaterThan(0)),
 });
+/** The decoded invocation reference: its id and the attempt this row is of. */
 export type InvocationRef = typeof InvocationRefSchema.Type;
 
 /** Why an invocation is made: a run's turn, or a compaction's summary,
@@ -92,6 +94,8 @@ const PositionAtSchema = Schema.Literals([
   'waiting',
   'halted',
 ]);
+/** Where the loop stands at a `run.position` row: before, inside or after a
+ *  turn, holding a response or its results, waiting on a person, or halted. */
 export type PositionAt = typeof PositionAtSchema.Type;
 
 /** Where the loop stands (`at`, not "step": a step is one model call) and
@@ -136,8 +140,17 @@ const DispatchFactsSchema = Schema.Struct({
    *  settlement, and a resumed settlement closes the same card. */
   logId: Schema.String.check(Schema.isMinLength(1)),
 });
+/** The decoded dispatch facts of one call, as a `response` row lists them. */
 export type DispatchFacts = typeof DispatchFactsSchema.Type;
 
+/**
+ * The payload of a `model.message` row: one step in the life of a model
+ * call. An `attempt` leaves the process, the provider is `identified`, the
+ * operation is `accepted`, and the call ends as a `response`, as `failed`
+ * with the next move, or `cancelled` by the user; an `append` adds messages
+ * to the history and `handed-down` records the call the app gives a script's
+ * run. The run loop writes every arm; the run state fold reads them back.
+ */
 export const ModelMessagePayloadSchema = Schema.Union([
   /** A billed request is about to leave the process. Carries no history,
    *  only the address of the rest it sends (`requestContext.ts`). */
@@ -358,6 +371,7 @@ export const ScriptCallPayloadSchema = Schema.Struct({
     message: 'A script call is named by its script and its issue order.',
   }),
 );
+/** The decoded shape of {@link ScriptCallPayloadSchema}. */
 export type ScriptCallPayload = typeof ScriptCallPayloadSchema.Type;
 
 /* ------------------------------------------------------------ tool.intent */
@@ -438,4 +452,5 @@ export const ToolResultPayloadSchema = Schema.Struct({
     return issues;
   }),
 );
+/** The decoded shape of {@link ToolResultPayloadSchema}. */
 export type ToolResultPayload = typeof ToolResultPayloadSchema.Type;

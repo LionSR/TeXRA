@@ -22,6 +22,7 @@ const RunRelationSchema = Schema.Literals([
   'sibling',
   'peer',
 ]);
+/** The decoded relation value: what a sending run is to the run it writes to. */
 export type RunRelation = typeof RunRelationSchema.Type;
 
 /**
@@ -44,6 +45,10 @@ const FollowUpSenderSchema = Schema.Union([
     source: Schema.Literal('github'),
   }),
 ]);
+/**
+ * The decoded sender of a follow-up: the user, another run with its relation
+ * to the recipient, or a host notification.
+ */
 export type FollowUpSender = typeof FollowUpSenderSchema.Type;
 
 /**
@@ -60,6 +65,7 @@ export const FollowUpContentSchema = Schema.Struct({
   mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
   from: FollowUpSenderSchema,
 });
+/** The decoded shape of {@link FollowUpContentSchema}. */
 export type FollowUpContent = typeof FollowUpContentSchema.Type;
 
 /**

@@ -4,6 +4,13 @@ import { AgentSourceSchema, InlinePersonaSchema } from './agent';
 import { NullableFileFieldsSchema } from './fileFields';
 import { JsonValueSchema } from './jsonValue';
 
+/**
+ * What every delegation proposal names, chat or task: the agent (with its
+ * resolved source, or an inline persona), the model, the instruction, the
+ * memory files it carries, a working directory override, and the script whose
+ * calls the request approves together. The delegation tools build it; an agent
+ * proposal request and the launched run's config both carry it.
+ */
 export const BaseProposalFieldsSchema = Schema.Struct({
   agent: Schema.String,
   /**
@@ -65,6 +72,10 @@ export interface ProposalFileFields {
   readonly memories?: readonly string[];
 }
 
+/**
+ * One labelled group of a proposal's files as a file list shows it: input,
+ * context, media, output or memory paths.
+ */
 export interface ProposalFileGroup {
   label: string;
   files: readonly string[];
@@ -72,6 +83,11 @@ export interface ProposalFileGroup {
   clickable: boolean;
 }
 
+/**
+ * Group a proposal's file fields for display, in the fixed order input,
+ * context, media, output, memories, leaving out the empty groups. Memory paths
+ * are virtual and marked not clickable.
+ */
 export function getProposalFileGroups(
   data: ProposalFileFields,
 ): ProposalFileGroup[] {

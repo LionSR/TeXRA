@@ -31,6 +31,12 @@ const ExecResultSchema = Schema.Struct({
   noExitCode: Schema.optional(Schema.Boolean),
 });
 
+/**
+ * What running a shell command produced: whether it succeeded, its output
+ * streams, its exit code and whether it timed out or overran the output limit.
+ * `executeCommand` in `@utils/system/execUtils` returns it, and the bash tool
+ * formats it for the model.
+ */
 export type ExecResult = typeof ExecResultSchema.Type;
 
 /**
@@ -47,4 +53,9 @@ const SessionCloseReportSchema = Schema.Struct({
   abandoned: Schema.Array(Schema.String),
 });
 
+/**
+ * The decoded shape of the close report: `settled` when every live execution
+ * ended inside the close budget, otherwise the run ids still live in
+ * `abandoned`.
+ */
 export type SessionCloseReport = typeof SessionCloseReportSchema.Type;

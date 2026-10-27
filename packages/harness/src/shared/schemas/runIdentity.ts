@@ -29,6 +29,10 @@ export const RunIdentitySchema = Schema.Union([
   }),
 ]);
 
+/**
+ * The decoded shape of {@link RunIdentitySchema}: a native agent run (with the
+ * external CLI driving it, if any), a process run, or a background script run.
+ */
 export type RunIdentity = typeof RunIdentitySchema.Type;
 
 /** Whether an identity denotes a native agent rather than an external CLI. */

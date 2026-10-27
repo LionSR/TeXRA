@@ -27,8 +27,18 @@ export const AgentModePresetSchema = Schema.Struct({
   agents: Schema.Array(Schema.String),
 });
 
+/**
+ * The decoded shape of {@link AgentModePresetSchema}: a team as the catalog
+ * and the settings view hold it.
+ */
 export type AgentModePreset = typeof AgentModePresetSchema.Type;
 
+/**
+ * Read the user's custom teams from the raw `texra.agentModes.custom` setting
+ * value. A value that is not an array, or an entry that is not a well-formed
+ * team, is logged and dropped from this read rather than failing the whole
+ * catalog.
+ */
 export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
   const parsedRecords = Schema.decodeUnknownResult(
     Schema.Array(Schema.Unknown).pipe(

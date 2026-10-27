@@ -16,6 +16,10 @@ export const PlanSchema = Schema.Struct({
       'The plan document: what to achieve, the approach, and a verifiable stopping condition',
   }),
 });
+/**
+ * The decoded shape of {@link PlanSchema}: the plan document a plan-approval
+ * request shows and an approved run continues from.
+ */
 export type Plan = typeof PlanSchema.Type;
 
 const MARKDOWN_HEADING_RE = /^#{1,6}\s+/;

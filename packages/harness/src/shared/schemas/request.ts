@@ -18,6 +18,14 @@ import { Schema } from 'effect';
 import { JsonValueSchema } from './jsonValue';
 import { UserQuestionAnswersSchema } from './prompts';
 
+/**
+ * The answer to a request a run opened, one arm per way of answering: approve
+ * (a proposal's edited launch or an edited file may ride along), approve as an
+ * autonomous goal, submit a question's answers, answer an inquiry, skip,
+ * retry, or the three refusals (`reject` by a person, `deny` by policy,
+ * `cancel` by an automatic close). A surface writes it as the
+ * `request.decided` row; the tool that opened the request reads it.
+ */
 export const RequestDecisionSchema = Schema.Union([
   /** A plain approval. A proposal's approve may carry what the person
    *  changed in the launch form (its agent, model, instruction, files and
@@ -74,6 +82,7 @@ export const RequestDecisionSchema = Schema.Union([
     cause: Schema.optional(Schema.NullOr(Schema.String)),
   }),
 ]);
+/** The decoded shape of {@link RequestDecisionSchema}. */
 export type RequestDecision = typeof RequestDecisionSchema.Type;
 
 /** The arms that decline a request, whatever the provenance. */

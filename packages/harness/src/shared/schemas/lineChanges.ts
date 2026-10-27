@@ -22,4 +22,8 @@ export const LineChangesSchema = Schema.Struct({
 export const DiffStatsSchema = LineChangesSchema.mapFields(
   Struct.map(Schema.optional),
 );
+/**
+ * The decoded shape of {@link DiffStatsSchema}: a document output's added and
+ * removed line counts, either of which may be unknown.
+ */
 export type DiffStats = typeof DiffStatsSchema.Type;

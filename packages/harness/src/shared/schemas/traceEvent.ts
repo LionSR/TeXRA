@@ -93,6 +93,10 @@ export const TranscriptEventSchema = Schema.Union([
   trace('response.finalized', { text: Schema.String }),
 ]);
 
+/**
+ * The decoded shape of {@link TranscriptEventSchema}: one transcript row
+ * before it is qualified with its run's aggregate.
+ */
 export type TranscriptEvent = typeof TranscriptEventSchema.Type;
 
 const TRANSCRIPT_EVENT_TYPES = new Set<string>(

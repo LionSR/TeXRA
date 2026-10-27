@@ -2,6 +2,11 @@ import { Effect, Result, Schema, SchemaGetter, Struct } from 'effect';
 
 import { ToolDefinitionSchema, type ToolDefinition } from './toolDefinition';
 
+/**
+ * Where an agent definition comes from. A `custom` agent is the user's own
+ * YAML file in an agent directory; the other sources are read in place and are
+ * not the user's to edit.
+ */
 export const AGENT_SOURCE = {
   CUSTOM: 'custom',
   /** Shipped with the host: the bundled agent directories and those of the
@@ -16,6 +21,10 @@ export const AGENT_SOURCE = {
 /** Single source of truth for agent source identifiers. */
 export const AgentSourceSchema = Schema.Enum(AGENT_SOURCE);
 
+/**
+ * The decoded shape of {@link AgentSourceSchema}: one of the
+ * {@link AGENT_SOURCE} values.
+ */
 export type AgentSource = typeof AgentSourceSchema.Type;
 
 /**
@@ -31,6 +40,11 @@ export function isPackagedAgentSource(source: AgentSource): boolean {
 
 const AGENT_NAME_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_-]*$/u;
 
+/**
+ * An agent's name as a YAML file or a plugin manifest declares it: trimmed,
+ * non-empty, and made of letters, digits, `_` and `-`, so it is safe as a file
+ * stem and as the name half of an `agentKey`.
+ */
 export const AgentNameSchema = Schema.Trim.check(Schema.isMinLength(1)).check(
   Schema.isPattern(AGENT_NAME_IDENTIFIER),
 );
@@ -90,6 +104,10 @@ export const AgentScanIssueSchema = Schema.Struct({
   path: Schema.String,
   message: Schema.String,
 });
+/**
+ * The decoded shape of {@link AgentScanIssueSchema}; the agent catalog lists
+ * these so a settings view can show which files failed.
+ */
 export type AgentScanIssue = typeof AgentScanIssueSchema.Type;
 
 // ------------------------------------------------- the definition format

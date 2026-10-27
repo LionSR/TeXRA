@@ -3,7 +3,15 @@ import { Schema } from 'effect';
 import { Sha256Schema } from './offeredTools';
 import { SkillNameSchema } from './skillName';
 
+/**
+ * The setting key that turns skill discovery on for agents; the run loop and
+ * the CLI's `skills` command read it through `Settings`.
+ */
 export const AGENT_SKILLS_CONFIG_KEY = 'texra.skills.enabled';
+/**
+ * The value of {@link AGENT_SKILLS_CONFIG_KEY} when the user has not set it:
+ * skills stay off until opted into.
+ */
 export const AGENT_SKILLS_ENABLED_DEFAULT = false;
 
 /** Whether agents receive the skills discovered from every source. */
@@ -23,6 +31,7 @@ const PluginTrustSchema = Schema.Struct({
   version: Schema.NullOr(Schema.String),
   digest: Sha256Schema,
 });
+/** The decoded shape of the trust record kept on an {@link InstalledPlugin}. */
 export type PluginTrust = typeof PluginTrustSchema.Type;
 
 /**
@@ -68,4 +77,5 @@ export const InstalledPluginSchema = Schema.Struct({
    *  one write changes both, and removing the plugin removes its trust. */
   trust: Schema.optional(PluginTrustSchema),
 });
+/** The decoded shape of {@link InstalledPluginSchema}. */
 export type InstalledPlugin = typeof InstalledPluginSchema.Type;

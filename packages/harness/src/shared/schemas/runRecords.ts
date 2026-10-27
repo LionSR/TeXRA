@@ -9,6 +9,13 @@ import { RetryErrorInfoSchema } from './errors';
 import { RunOutcomeSchema } from './run';
 import { RunUsageTotalsSchema } from './usage';
 
+/**
+ * The `run.config` of a run no agent drives, such as a background command or
+ * an external CLI's process: what it is called, the instruction it was given,
+ * and the directory and model it runs with. Kept strict and first in
+ * `RunRecordFieldsSchema` so an agent config's defaults cannot be read into
+ * it.
+ */
 export const NonAgentRunRecordSchema = Schema.Struct({
   name: Schema.String.check(Schema.isMinLength(1)),
   instruction: Schema.String,
@@ -77,6 +84,10 @@ const RunEndOutputSchema = Schema.Struct({
    *  `AgentBlock.result`). */
   structured: Schema.optional(JsonValueSchema),
 });
+/**
+ * The decoded output of a run: its final response text, the workspace files it
+ * edited, and the structured value its terminal tool or recipe returned.
+ */
 export type RunEndOutput = typeof RunEndOutputSchema.Type;
 
 /** The output of a run that ended before its flow produced one. */
@@ -97,6 +108,7 @@ export const RunEndSchema = Schema.Struct({
   usage: Schema.optional(RunUsageTotalsSchema),
   output: RunEndOutputSchema,
 });
+/** The decoded shape of {@link RunEndSchema}. */
 export type RunEnd = typeof RunEndSchema.Type;
 
 /**
@@ -128,6 +140,7 @@ export const ResultMetaSchema = Schema.Union([
     output: RunEndOutputSchema,
   }),
 ]);
+/** The decoded shape of {@link ResultMetaSchema}. */
 export type ResultMeta = typeof ResultMetaSchema.Type;
 
 /** Canonical workspace paths at the record boundary. */

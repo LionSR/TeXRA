@@ -22,6 +22,11 @@ const FileReferenceSchema = Schema.StructWithRest(
   FileReferenceFieldsSchema,
   anyExtraKeys,
 );
+/**
+ * A file a tool result names without its bytes: its path, MIME type and
+ * description, plus whatever else the tool attached. The form a file reference
+ * takes once binary data has been stripped for logging or transport.
+ */
 export type FileReference = typeof FileReferenceSchema.Type;
 
 /**
@@ -43,6 +48,11 @@ const ToolFileAttachmentSchema = Schema.StructWithRest(
   ToolFileAttachmentFieldsSchema,
   anyExtraKeys,
 );
+/**
+ * A file a tool attaches to its result: a {@link FileReference} that may also
+ * carry the bytes inline (base64 or raw) or name them by the digest the
+ * session store already holds.
+ */
 export type ToolFileAttachment = typeof ToolFileAttachmentSchema.Type;
 
 /**
@@ -54,6 +64,11 @@ const EditRecordSchema = Schema.Struct({
   /** 1-based line number where the edit starts (for navigation) */
   startLine: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
 });
+/**
+ * One file edit a tool result reports: the path, the added and removed line
+ * counts, and the first edited line, so a host can open the file at the
+ * change.
+ */
 export type EditRecord = typeof EditRecordSchema.Type;
 
 // ============================================================================
@@ -88,6 +103,7 @@ export const ValidationErrorDiagnosticsSchema = Schema.Struct({
   type: Schema.Literal(DIAGNOSTIC_TYPE_VALIDATION_ERROR),
   formatted: Schema.Array(FormattedIssueSchema),
 });
+/** The decoded shape of {@link ValidationErrorDiagnosticsSchema}. */
 export type ValidationErrorDiagnostics =
   (typeof ValidationErrorDiagnosticsSchema)['Type'];
 
@@ -203,12 +219,24 @@ const ErrorToolResultSchema = Schema.Struct({
  *  output through: its settled result's `value` is the run's output. */
 export const STRUCTURED_OUTPUT_TOOL_NAME = 'submit_output';
 
+/**
+ * What a tool's `run` returns: an `executed` result with its output, summary,
+ * edits, attachments, structured value and the facts it states, or an `error`
+ * result with its message. Every tool produces one; the loop stores it as the
+ * settled form and formats it for the model.
+ */
 export const ToolResultSchema = Schema.Union([
   ExecutedToolResultSchema,
   ErrorToolResultSchema,
 ]);
+/** The decoded shape of {@link ToolResultSchema}. */
 export type ToolResult = typeof ToolResultSchema.Type;
 
+/**
+ * The error a tool throws to fail its call with a message meant for the model,
+ * and optionally a shorter summary for the transcript. The tool definition's
+ * `run` wrapper turns it into an `error` {@link ToolResult}.
+ */
 export class ToolError extends Error {
   /** Brief human-facing summary carried through to the ToolResult, when set. */
   readonly summary?: string;
@@ -278,6 +306,12 @@ const SettledFileSchema = ToolFileAttachmentSchema.pipe(
   }),
   Schema.decodeTo(SettledFileMetadataSchema),
 );
+/**
+ * A {@link ToolResultSchema} as a `tool.result` row stores it: attachments
+ * keep their metadata and extra keys but lose their bytes, consumed follow-ups
+ * and facts are committed as rows of their own, and `diagnostics` is narrowed
+ * to JSON so the row always serializes.
+ */
 export const SettledToolResultSchema = Schema.Union([
   ExecutedToolResultSchema.mapFields(
     Struct.omit(['files', 'consumedFollowUps', 'facts']),

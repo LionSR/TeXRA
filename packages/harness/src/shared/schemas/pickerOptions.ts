@@ -109,6 +109,12 @@ export const ModelAvailabilityFieldsSchema = Schema.Struct({
   /** Effective request route for a model that can use multiple backends. */
   routeLabel: Schema.optional(Schema.String),
 });
+/**
+ * One row of the model picker: the model id to send back as `value`, its
+ * label, and the provider, context size, cost, reasoning setting and
+ * availability a host shows beside it. `readModelOptions` computes the rows
+ * once and every host's snapshot carries them unchanged.
+ */
 export const ModelOptionDataSchema = PickerOptionBaseSchema.mapFields(
   Struct.assign({
     provider: Schema.optional(Schema.String),
@@ -120,6 +126,7 @@ export const ModelOptionDataSchema = PickerOptionBaseSchema.mapFields(
     ...ModelAvailabilityFieldsSchema.fields,
   }),
 );
+/** The decoded shape of {@link ModelOptionDataSchema}. */
 export type ModelOptionData = typeof ModelOptionDataSchema.Type;
 
 /**
@@ -135,6 +142,11 @@ export function isModelOptionAvailable(model: ModelOptionData): boolean {
   );
 }
 
+/**
+ * One row of the agent picker: the agent key to send back as `value`, its
+ * label, whether it is an orchestrator, and the source it was loaded from. The
+ * documents plugin extends it with the fields a document task's row adds.
+ */
 export const AgentOptionDataSchema = PickerOptionBaseSchema.mapFields(
   Struct.assign({
     isOrchestrator: Schema.optional(Schema.Boolean),
@@ -142,6 +154,7 @@ export const AgentOptionDataSchema = PickerOptionBaseSchema.mapFields(
     source: Schema.optional(AgentSourceSchema),
   }),
 );
+/** The decoded shape of {@link AgentOptionDataSchema}. */
 export type AgentOptionData = typeof AgentOptionDataSchema.Type;
 
 /**
@@ -170,4 +183,5 @@ export const TeamOptionDataSchema = PickerOptionBaseSchema.mapFields(
     disabledReason: Schema.optional(Schema.NullOr(Schema.String)),
   }),
 );
+/** The decoded shape of {@link TeamOptionDataSchema}. */
 export type TeamOptionData = typeof TeamOptionDataSchema.Type;

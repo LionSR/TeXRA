@@ -15,7 +15,12 @@ export const RUN_OUTCOME = {
   FAILED: 'failed',
 } as const;
 
+/**
+ * One of the {@link RUN_OUTCOME} values, as a run's end row and its task
+ * group's end record it.
+ */
 export const RunOutcomeSchema = Schema.Enum(RUN_OUTCOME);
+/** The decoded shape of {@link RunOutcomeSchema}. */
 export type RunOutcome = typeof RunOutcomeSchema.Type;
 
 /** Runtime support declared by the launch source, independent of UI policy. */
@@ -25,7 +30,15 @@ export const USER_FOLLOW_UP_SUPPORT = {
   TERMINAL_BACKED: 'terminalBacked',
 } as const;
 
+/**
+ * One of the {@link USER_FOLLOW_UP_SUPPORT} values: whether a run takes the
+ * user's follow-up messages. A conversation run launched by a person is
+ * `nativeInteractive`; a detached child reached through a terminal is
+ * `terminalBacked`; a recipe or a single-cycle run is `unsupported`. The
+ * `run.start` row records it and the session view shows it per run.
+ */
 export const UserFollowUpSupportSchema = Schema.Enum(USER_FOLLOW_UP_SUPPORT);
+/** The decoded shape of {@link UserFollowUpSupportSchema}. */
 export type UserFollowUpSupport = typeof UserFollowUpSupportSchema.Type;
 
 /**
@@ -41,7 +54,12 @@ export const RUN_PHASE = {
   FAILED: RUN_OUTCOME.FAILED,
 } as const;
 
+/**
+ * One of the {@link RUN_PHASE} values: a run's live status as the session view
+ * holds it, running or waiting on a person, or ended with its outcome.
+ */
 export const RunPhaseSchema = Schema.Enum(RUN_PHASE);
+/** The decoded shape of {@link RunPhaseSchema}. */
 export type RunPhase = typeof RunPhaseSchema.Type;
 
 /**
@@ -58,8 +76,15 @@ export const TaskGroupStatusSchema = Schema.Literals([
   RUN_PHASE.CANCELLED,
   RUN_PHASE.FAILED,
 ]);
+/** The decoded shape of {@link TaskGroupStatusSchema}. */
 export type TaskGroupStatus = typeof TaskGroupStatusSchema.Type;
 
+/**
+ * A finer state shown beside a run's phase: a run that was just activated is
+ * `starting` on its first activation and `resuming` on a later one until its
+ * first `run.position` row clears it; a child at rest is `paused` or holding a
+ * result for its parent.
+ */
 export const RUN_SUBSTATE = {
   STARTING: 'starting',
   RESUMING: 'resuming',
@@ -71,7 +96,12 @@ export const RUN_SUBSTATE = {
   RESULT_WAITING: 'resultWaiting',
 } as const;
 
+/**
+ * One of the {@link RUN_SUBSTATE} values, as the session view carries it per
+ * run.
+ */
 export const RunSubstateSchema = Schema.Enum(RUN_SUBSTATE);
+/** The decoded shape of {@link RunSubstateSchema}. */
 export type RunSubstate = typeof RunSubstateSchema.Type;
 
 /** A child's park as its substate: a pause, a result held for its parent,
@@ -98,12 +128,23 @@ export const RESTING_SUBSTATES: ReadonlySet<RunSubstate | null> = new Set([
  */
 export const RUN_LIFECYCLE_READY = 'ready' as const;
 
+/**
+ * A run's status as a host reads it: a {@link RunPhase}, or `ready` for a run
+ * whose lifecycle has not started. The phase predicates in
+ * `shared/runs/runStatus.ts` branch on it.
+ */
 export type RunLifecycleStatus = RunPhase | typeof RUN_LIFECYCLE_READY;
 
+/**
+ * The git worktree a run was launched into, when it was given one: the
+ * `run.start` row records it and the session view shows it, so a host can open
+ * the run's files where it actually wrote them.
+ */
 export const WorktreeInfoSchema = Schema.Struct({
   /** Absolute path of the worktree the agent is operating in. */
   workingDirectory: Schema.String,
 });
+/** The decoded shape of {@link WorktreeInfoSchema}. */
 export type WorktreeInfo = typeof WorktreeInfoSchema.Type;
 
 /**
@@ -135,5 +176,10 @@ const RUN_ACTIONS = [
   'export',
   'copy',
 ] as const;
+/**
+ * One of the actions a host can offer on a run; see the list above for what
+ * each does.
+ */
 export const RunActionSchema = Schema.Literals(RUN_ACTIONS);
+/** The decoded shape of {@link RunActionSchema}. */
 export type RunAction = typeof RunActionSchema.Type;

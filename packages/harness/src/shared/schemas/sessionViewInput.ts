@@ -34,6 +34,7 @@ export const TextChunkSchema = Schema.TaggedStruct('chunk', {
   to: Schema.Int.check(Schema.isGreaterThan(0)),
   text: Schema.String,
 });
+/** The decoded shape of {@link TextChunkSchema}. */
 export type TextChunk = typeof TextChunkSchema.Type;
 
 /**
@@ -47,6 +48,7 @@ export const ResumeBlockerSchema = Schema.Struct({
   /** The agent or plugin it names. */
   name: Schema.String.check(Schema.isMinLength(1)),
 });
+/** The decoded shape of {@link ResumeBlockerSchema}. */
 export type ResumeBlocker = typeof ResumeBlockerSchema.Type;
 
 /** Why this build cannot open a run's rows: one does not decode
@@ -93,6 +95,7 @@ export const LocalRuntimeStateSchema = Schema.Struct({
     }),
   ),
 });
+/** The decoded shape of {@link LocalRuntimeStateSchema}. */
 export type LocalRuntimeState = typeof LocalRuntimeStateSchema.Type;
 
 /**
@@ -105,6 +108,7 @@ export const TranscriptSubscriptionSchema = Schema.Struct({
   id: AggregateIdSchema,
   fromSeq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
+/** The decoded shape of {@link TranscriptSubscriptionSchema}. */
 export type TranscriptSubscription =
   (typeof TranscriptSubscriptionSchema)['Type'];
 
@@ -121,6 +125,7 @@ export const ExistenceReconciliationSchema = Schema.Struct({
     }),
   ),
 });
+/** The decoded shape of {@link ExistenceReconciliationSchema}. */
 export type ExistenceReconciliation =
   (typeof ExistenceReconciliationSchema)['Type'];
 
@@ -144,4 +149,11 @@ const SessionViewInputSchema = Schema.Union([
     existence: ExistenceReconciliationSchema,
   }),
 ]);
+/**
+ * One input to the session view fold: a durable row with the read it came
+ * from, a live text chunk, the debug toggle, the local runtime state, the
+ * transcript subscription set, or a replay or drain marker with the claims it
+ * checked. The session view controller feeds these in; the fold applies each
+ * to the view.
+ */
 export type SessionViewInput = typeof SessionViewInputSchema.Type;

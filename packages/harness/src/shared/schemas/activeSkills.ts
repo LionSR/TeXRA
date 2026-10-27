@@ -18,5 +18,9 @@ export const ActiveSkillSourceScopeSchema = Schema.Literals([
   'custom',
 ]);
 
+/**
+ * The decoded shape of {@link ActiveSkillSourceScopeSchema}: where a skill was
+ * found.
+ */
 export type ActiveSkillSourceScope =
   (typeof ActiveSkillSourceScopeSchema)['Type'];

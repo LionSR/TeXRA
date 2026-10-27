@@ -11,6 +11,10 @@ const ScriptTallySchema = Schema.Struct({
   /** Skipped by the user. */
   skipped: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
 });
+/**
+ * The decoded shape of the tally: how many of a background script's calls
+ * ended ok, failed, were cancelled or were skipped.
+ */
 export type ScriptTally = typeof ScriptTallySchema.Type;
 
 /** A file the script's calls wrote, by the workspace path it replaces, with
@@ -35,4 +39,5 @@ export const ScriptDeliverySummarySchema = Schema.Struct({
   errorCause: Schema.NullOr(Schema.String),
 });
 
+/** The decoded shape of {@link ScriptDeliverySummarySchema}. */
 export type ScriptDeliverySummary = typeof ScriptDeliverySummarySchema.Type;

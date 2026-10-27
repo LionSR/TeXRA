@@ -36,6 +36,7 @@ const OfferedToolSchema = Schema.Struct({
    *  inside a script alone. Not part of the identity. */
   sent: Schema.Boolean,
 });
+/** The decoded shape of one offered tool as a `tools.offered` row lists it. */
 export type OfferedTool = typeof OfferedToolSchema.Type;
 
 /**
@@ -85,6 +86,11 @@ const DelegationTargetsSchema = Schema.Struct({
   models: Schema.NullOr(Schema.Array(Schema.String)),
   worktree: Schema.NullOr(Schema.Boolean),
 });
+/**
+ * The decoded delegation targets a {@link RunContext} records: the agents,
+ * models and worktree setting the run's delegation tools could launch with
+ * when its system text was rendered.
+ */
 export type DelegationTargets = typeof DelegationTargetsSchema.Type;
 
 /** The context a run's model has been told, as a `tools.offered` row names
@@ -95,6 +101,7 @@ export const RunContextSchema = Schema.Struct({
   tools: Schema.Array(Schema.String),
   delegation: Schema.optional(DelegationTargetsSchema),
 });
+/** The decoded shape of {@link RunContextSchema}. */
 export type RunContext = typeof RunContextSchema.Type;
 
 /**

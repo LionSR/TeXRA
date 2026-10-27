@@ -28,10 +28,26 @@ export const FileLocationSchema = Schema.Union([
   ExternalFileLocationSchema,
 ]);
 
+/**
+ * A file inside the workspace, named by its absolute path and its path
+ * relative to the workspace root.
+ */
 export type WorkspaceFileLocation = typeof WorkspaceFileLocationSchema.Type;
+/**
+ * A file inside a run's storage directory, named by its absolute path, its
+ * path relative to that directory, and the run that owns it.
+ */
 export type RunStorageFileLocation =
   (typeof RunStorageFileLocationSchema)['Type'];
+/**
+ * A file outside both the workspace and run storage; its absolute path is the
+ * only path it has.
+ */
 export type ExternalFileLocation = typeof ExternalFileLocationSchema.Type;
+/**
+ * The decoded shape of {@link FileLocationSchema}: where a file a run read or
+ * wrote lives, so every surface can show and address it the same way.
+ */
 export type FileLocation = typeof FileLocationSchema.Type;
 
 // ============================================================================

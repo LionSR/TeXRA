@@ -22,6 +22,12 @@ const PermissionBaseSchema = Schema.Struct({
   runId: RunSelectionSchema,
 });
 
+/**
+ * What a pending file-edit approval shows: the file (absolute and
+ * workspace-relative), the tool that proposed the edit, and the added and
+ * removed line counts of its diff. The edit approval policy opens it as a
+ * `request.opened` payload; the host's diff view renders it.
+ */
 export const ToolEditPermissionSchema = PermissionBaseSchema.mapFields(
   Struct.assign({
     path: Schema.String,
@@ -31,14 +37,21 @@ export const ToolEditPermissionSchema = PermissionBaseSchema.mapFields(
     removedLines: LineCountSchema,
   }),
 );
+/** The decoded shape of {@link ToolEditPermissionSchema}. */
 export type ToolEditPermission = typeof ToolEditPermissionSchema.Type;
 
+/**
+ * What a pending shell-command approval shows: the command and the directory
+ * it would run in. The bash approval policy opens it; a host renders the
+ * command for the user to allow or reject.
+ */
 export const BashPermissionSchema = PermissionBaseSchema.mapFields(
   Struct.assign({
     command: Schema.String,
     cwd: Schema.optional(Schema.String),
   }),
 );
+/** The decoded shape of {@link BashPermissionSchema}. */
 export type BashPermission = typeof BashPermissionSchema.Type;
 
 /**
@@ -85,8 +98,15 @@ export const CredentialSwitchSchema = Schema.Union([
     provider: ApiKeyProviderIdSchema,
   }),
 ]);
+/** The decoded shape of {@link CredentialSwitchSchema}. */
 export type CredentialSwitch = typeof CredentialSwitchSchema.Type;
 
+/**
+ * What a model-request retry prompt shows once the automatic retries are
+ * spent: the operation and model that failed, the error as recorded, and the
+ * credential move the retry can take, if any. The retry loop opens it from the
+ * failed attempt's row; the user's `retry` or `reject` decision answers it.
+ */
 export const RetryPermissionSchema = Schema.Struct({
   requestId: Schema.String,
   runId: RunIdSchema,
@@ -99,6 +119,7 @@ export const RetryPermissionSchema = Schema.Struct({
   /** Null or absent when the failure offers no credential move. */
   credentialSwitch: Schema.optional(Schema.NullOr(CredentialSwitchSchema)),
 });
+/** The decoded shape of {@link RetryPermissionSchema}. */
 export type RetryPermission = typeof RetryPermissionSchema.Type;
 
 /**
@@ -115,14 +136,24 @@ export const AgentProposalSchema = BaseProposalFieldsSchema.mapFields(
     rootUserInstruction: Schema.optional(Schema.NullOr(Schema.String)),
   }),
 );
+/**
+ * The decoded shape of {@link AgentProposalSchema}: a delegation as the
+ * approving surface and the launch read it.
+ */
 export type AgentProposal = typeof AgentProposalSchema.Type;
 
+/**
+ * An {@link AgentProposalSchema} as a pending request: the proposal with the
+ * request id and the run that asked. The delegation tools open it; the
+ * approval panel lets the user edit the launch before approving.
+ */
 export const AgentProposalPermissionSchema = AgentProposalSchema.mapFields(
   Struct.assign({
     requestId: Schema.String,
     runId: RunIdSchema,
   }),
 );
+/** The decoded shape of {@link AgentProposalPermissionSchema}. */
 export type AgentProposalPermission =
   (typeof AgentProposalPermissionSchema)['Type'];
 
@@ -155,6 +186,7 @@ const ExternalInquiryHydrationFieldsSchema = Schema.Struct({
 export const ExternalInquiryPermissionSchema = PermissionBaseSchema.mapFields(
   Struct.assign(CommonExternalInquiryFieldsSchema.fields),
 ).mapFields(Struct.assign(ExternalInquiryHydrationFieldsSchema.fields));
+/** The decoded shape of {@link ExternalInquiryPermissionSchema}. */
 export type ExternalInquiryPermission =
   (typeof ExternalInquiryPermissionSchema)['Type'];
 
@@ -167,6 +199,11 @@ const UserQuestionOptionSchema = Schema.Struct({
   description: Schema.optional(Schema.NullOr(Schema.String)),
 });
 
+/**
+ * One question the agent asks the user: its text, a short header, two to four
+ * options with descriptions, and whether several options or free text may be
+ * chosen. The user-question tool's input and the question panel share it.
+ */
 export const UserQuestionPromptSchema = Schema.Struct({
   question: Schema.String.check(Schema.isMinLength(1)),
   header: Schema.optional(
@@ -178,14 +215,26 @@ export const UserQuestionPromptSchema = Schema.Struct({
   multiSelect: Schema.optional(Schema.NullOr(Schema.Boolean)),
   allowFreeText: Schema.optional(Schema.NullOr(Schema.Boolean)),
 });
+/** The decoded shape of {@link UserQuestionPromptSchema}. */
 export type UserQuestionPrompt = typeof UserQuestionPromptSchema.Type;
 
+/**
+ * The user's answers to a question request, keyed by question text: one chosen
+ * label or free-text answer, or the chosen labels of a multi-select question.
+ * A `submit` decision carries them back to the tool.
+ */
 export const UserQuestionAnswersSchema = Schema.Record(
   Schema.String,
   Schema.Union([Schema.String, Schema.Array(Schema.String)]),
 );
+/** The decoded shape of {@link UserQuestionAnswersSchema}. */
 export type UserQuestionAnswers = typeof UserQuestionAnswersSchema.Type;
 
+/**
+ * What a pending user-question request shows: one to three
+ * {@link UserQuestionPromptSchema} questions and the context the agent gave
+ * for asking. The user-question tool opens it; a `submit` decision answers it.
+ */
 export const UserQuestionPermissionSchema = PermissionBaseSchema.mapFields(
   Struct.assign({
     questions: Schema.Array(UserQuestionPromptSchema)
@@ -194,6 +243,7 @@ export const UserQuestionPermissionSchema = PermissionBaseSchema.mapFields(
     context: Schema.optional(Schema.NullOr(Schema.String)),
   }),
 );
+/** The decoded shape of {@link UserQuestionPermissionSchema}. */
 export type UserQuestionPermission =
   (typeof UserQuestionPermissionSchema)['Type'];
 
@@ -201,10 +251,16 @@ export type UserQuestionPermission =
 // Plan Approval
 // ============================================================================
 
+/**
+ * What a pending plan approval shows: the plan document the agent wrote. The
+ * plan tool opens it; the user approves it, approves it as an autonomous goal,
+ * or rejects it with feedback.
+ */
 export const PlanApprovalPermissionSchema = Schema.Struct({
   requestId: Schema.String,
   runId: RunIdSchema,
   plan: PlanSchema,
 });
+/** The decoded shape of {@link PlanApprovalPermissionSchema}. */
 export type PlanApprovalPermission =
   (typeof PlanApprovalPermissionSchema)['Type'];

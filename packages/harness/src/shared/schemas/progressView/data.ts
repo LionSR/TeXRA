@@ -26,6 +26,7 @@ import { ScriptDeliverySummarySchema } from '../scriptDelivery';
  * `normalizeConversationForExport` turns into export attachment parts.
  */
 export const MediaAttachmentKindSchema = Schema.Literals(['image', 'document']);
+/** The decoded shape of {@link MediaAttachmentKindSchema}. */
 export type MediaAttachmentKind = typeof MediaAttachmentKindSchema.Type;
 
 /**
@@ -55,7 +56,12 @@ export const TOOL_CALL_STATUS = {
   COMPLETED: 'completed',
   FAILED: 'failed',
 } as const;
+/**
+ * One of the {@link TOOL_CALL_STATUS} values, as a tool card's `status`
+ * records it.
+ */
 export const ToolCallStatusSchema = Schema.Enum(TOOL_CALL_STATUS);
+/** The decoded shape of {@link ToolCallStatusSchema}. */
 export type ToolCallStatus = typeof ToolCallStatusSchema.Type;
 
 /**
@@ -120,6 +126,14 @@ export const McpToolOutputSchema = Schema.Struct({
 /** The output an MCP tool call reports (`McpToolOutputSchema`). */
 export type McpToolOutput = typeof McpToolOutputSchema.Type;
 
+/**
+ * The payload of a `toolUse` log row: the fields a tool card is drawn from, in
+ * the shape the trace writes them: the tool's name, its input and output, a
+ * one-line summary, an error, the user's instruction on a denied call, a
+ * command's exit code, the call's status, and a card the tool states itself.
+ * Fields a tool adds beyond these pass through; `decodeToolUseLog` reads a row
+ * once at the transcript fold.
+ */
 export const ToolUseLogSchema = Schema.Struct({
   toolName: Schema.optional(Schema.String),
   input: Schema.optional(Schema.Unknown),
@@ -133,6 +147,7 @@ export const ToolUseLogSchema = Schema.Struct({
   status: Schema.optional(ToolCallStatusSchema),
   card: Schema.optional(ToolCardSchema),
 });
+/** The decoded shape of {@link ToolUseLogSchema}. */
 export type ToolUseLog = typeof ToolUseLogSchema.Type;
 
 /**
@@ -154,6 +169,10 @@ export type NormalizedToolUse = {
   card?: ToolCard;
 };
 
+/**
+ * The payload of a `webSearch` log row: the query a model-side web search ran,
+ * when the provider reports it. The transcript labels the row with it.
+ */
 export const WebSearchPayloadSchema = Schema.Struct({
   query: Schema.optional(Schema.String),
 });
@@ -184,6 +203,10 @@ export const PermissionPayloadSchema = Schema.Union([
     data: UserQuestionPermissionSchema,
   }),
 ]);
+/**
+ * The decoded shape of {@link PermissionPayloadSchema}: one open request,
+ * discriminated by its `kind`.
+ */
 export type PermissionPayload = typeof PermissionPayloadSchema.Type;
 /**
  * The one request kind vocabulary, read off the payload union. The

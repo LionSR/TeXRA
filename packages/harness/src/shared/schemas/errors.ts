@@ -29,6 +29,10 @@ const ExhaustionReasonSchema = Schema.Literals([
    *  subscription" so xAI models re-route through the stored xAI API key. */
   'xai-subscription',
 ]);
+/**
+ * The decoded shape of the exhaustion reason: which credential or subscription
+ * quota ran out, so the retry prompt can offer the matching route switch.
+ */
 export type ExhaustionReason = typeof ExhaustionReasonSchema.Type;
 
 /** Mutually exclusive provider-error classifications. The two runtime kinds
@@ -41,6 +45,12 @@ const ProviderErrorClassificationSchema = Schema.Struct({
     ExhaustionReasonSchema,
   ]),
 });
+/**
+ * The one classification a provider failure carries on its
+ * {@link ProviderError}: a missing API key, an overflowed context window, or
+ * an {@link ExhaustionReason}. Model access assigns it from the provider's
+ * response; the retry loop and the retry prompt branch on it.
+ */
 export type ProviderErrorClassification =
   (typeof ProviderErrorClassificationSchema)['Type'];
 
@@ -73,6 +83,10 @@ const ProviderErrorObjectSchema = Schema.Struct({
  *  with `onExcessProperty: 'error'`, so a legacy or mixed record never
  *  enters it. */
 export const ProviderErrorSchema = ProviderErrorObjectSchema;
+/**
+ * The decoded shape of {@link ProviderErrorSchema}: the details of one failed
+ * provider request as the run records and the retry prompt shows them.
+ */
 export type ProviderError = typeof ProviderErrorSchema.Type;
 
 /**
@@ -88,6 +102,10 @@ export type ProviderError = typeof ProviderErrorSchema.Type;
 export const RetryErrorInfoSchema = ProviderErrorObjectSchema.mapFields(
   Struct.omit(['rawErrorBody']),
 );
+/**
+ * The decoded shape of {@link RetryErrorInfoSchema}: a {@link ProviderError}
+ * without its raw response body.
+ */
 export type RetryErrorInfo = typeof RetryErrorInfoSchema.Type;
 
 /** Context about where/when the error occurred */
@@ -95,6 +113,10 @@ const ErrorContextSchema = Schema.Struct({
   operation: Schema.optional(Schema.String),
   model: Schema.optional(Schema.String),
 });
+/**
+ * Where an error happened: the operation under way and the model it was sent
+ * to, as the trace's error events and the formatted error message carry it.
+ */
 export type ErrorContext = typeof ErrorContextSchema.Type;
 
 /**
@@ -113,6 +135,10 @@ export const ErrorLogDataSchema = RetryErrorInfoSchema.mapFields(
     rawMessage: Schema.optional(Schema.String),
   }),
 );
+/**
+ * The decoded shape of {@link ErrorLogDataSchema}: the payload of an `error`
+ * log row.
+ */
 export type ErrorLogData = typeof ErrorLogDataSchema.Type;
 
 /** Recover the actionable exhaustion reason from the canonical classification. */

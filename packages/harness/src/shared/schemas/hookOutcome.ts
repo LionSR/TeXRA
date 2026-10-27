@@ -17,6 +17,10 @@ export const SUPPORTED_HOOK_EVENTS = [
   'SubagentStop',
 ] as const;
 const HookEventSchema = Schema.Literals(SUPPORTED_HOOK_EVENTS);
+/**
+ * One of the {@link SUPPORTED_HOOK_EVENTS}: the Claude Code hook event an
+ * outcome was recorded for.
+ */
 export type HookEvent = typeof HookEventSchema.Type;
 
 /** How a hook invocation ended: `blocked` is exit code 2, `failed` any other
@@ -30,8 +34,18 @@ const HookStatusSchema = Schema.Literals([
   'malformed',
   'unstartable',
 ]);
+/**
+ * How one hook invocation ended; see the status schema above for what each
+ * value means.
+ */
 export type HookStatus = typeof HookStatusSchema.Type;
 
+/**
+ * What one invocation of a plugin's hook did: where it ran, which plugin and
+ * handler, how it ended, and what it told the model. The run loop commits it
+ * as a `hook.outcome` row after the hook runs; a resume reads the recorded
+ * point instead of running the hook again.
+ */
 export const HookOutcomePayloadSchema = Schema.Struct({
   /** The site the hook ran at (`PreToolUse:<call id>`, `Stop:<turn>`, …):
    *  every hook of one point commits in one batch, and a recorded point is
@@ -55,6 +69,7 @@ export const HookOutcomePayloadSchema = Schema.Struct({
   /** The start of stderr, on a failure only. */
   stderr: Schema.NullOr(Schema.String),
 });
+/** The decoded shape of {@link HookOutcomePayloadSchema}. */
 export type HookOutcomePayload = typeof HookOutcomePayloadSchema.Type;
 
 /** A run's recorded hook outcomes by point, in commit order. */

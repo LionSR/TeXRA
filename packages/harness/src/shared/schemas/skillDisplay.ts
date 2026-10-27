@@ -15,6 +15,7 @@ export const SkillDisplayItemSchema = Schema.Struct({
   enabled: Schema.Boolean,
 });
 
+/** The decoded shape of {@link SkillDisplayItemSchema}. */
 export type SkillDisplayItem = typeof SkillDisplayItemSchema.Type;
 
 /** Discovery problem safe to carry to settings UIs. */
@@ -23,4 +24,5 @@ export const SkillDisplayIssueSchema = Schema.Struct({
   path: Schema.optional(Schema.String),
 });
 
+/** The decoded shape of {@link SkillDisplayIssueSchema}. */
 export type SkillDisplayIssue = typeof SkillDisplayIssueSchema.Type;

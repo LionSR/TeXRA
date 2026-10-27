@@ -9,6 +9,10 @@ import { Result, Schema } from 'effect';
 export const RunIdSchema = Schema.String.check(Schema.isMinLength(6))
   .check(Schema.isPattern(/^[0-9a-f][-0-9a-f]*$/i))
   .pipe(Schema.brand('RunId'));
+/**
+ * The decoded shape of {@link RunIdSchema}: a branded string only a run id
+ * decode produces.
+ */
 export type RunId = typeof RunIdSchema.Type;
 /** Whether a string is a run id, as {@link RunIdSchema} reads it. */
 export const isRunId = Schema.is(RunIdSchema);

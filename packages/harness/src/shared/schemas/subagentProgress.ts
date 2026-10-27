@@ -27,5 +27,11 @@ interface StartedProgressUpdate {
   readonly kind: 'started';
 }
 
+/**
+ * What a run reports through its `onProgress` callback while it works: that it
+ * started, a periodic overview of its tool calls, changed files and cost, or a
+ * change to its plan. A parent run's delegation tool and the session's
+ * progress row read it.
+ */
 export type SubagentProgressUpdate =
   PlanProgressUpdate | OverviewProgressUpdate | StartedProgressUpdate;
