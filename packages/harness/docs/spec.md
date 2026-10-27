@@ -689,7 +689,7 @@ A process MAY:
 - create a new run, which it then owns
   (`controllers/session/Database.ts:118-125`)
 - fork a conversation another process holds, at a settled turn end
-  (`controllers/session/SessionRequests.ts:160-163`,
+  (`controllers/session/SessionRequests.ts:162-165`,
   `agent/runtime/forkRun.ts:78-81`, `:92-122`)
 - take over a run whose owner is proven dead
   (`controllers/session/storeAside.ts:70-84`)
@@ -699,7 +699,7 @@ A process MUST NOT:
 - append to an aggregate another process holds
   (`controllers/session/Database.ts:615-627`)
 - answer a request of a run a live process holds (`NotOwner`)
-  (`controllers/session/SessionRequests.ts:159-171`)
+  (`controllers/session/SessionRequests.ts:161-173`)
 - resume a run a live process holds (`agent/runtime/resumeRun.ts:195-196`)
 - write rows to a store a newer build wrote (giving back its own claims is
   allowed) (`controllers/session/Database.ts:439-442`)
@@ -764,7 +764,7 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   it parks no caller, so no attempt re-enters it and it is not unbound; it stays
   open until its `request.decided` commits, or until `run.removed` closes the
   run, which retires it with no decision row
-  (`controllers/session/SessionRequests.ts:145-156`). Delivering the answer (or
+  (`controllers/session/SessionRequests.ts:147-158`). Delivering the answer (or
   the drop) as a follow-up is a separate, best-effort step
   (`shared/session/runState.ts:243-264`).
 

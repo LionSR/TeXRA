@@ -43,12 +43,10 @@ import {
   Stream,
 } from 'effect';
 
-import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { ToolRegistry } from '@tools/toolTable';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { fileWatchRetrySchedule } from '@utils/files/fsEntryExists';
@@ -189,10 +187,6 @@ export const agentCatalogFollower = Layer.effectDiscard(
         ],
         { discard: true },
       );
-      // Each plugin's directory, which holds agents when it ships any.
-      installPluginAgentDirectories(resourcesRoot, [
-        ...(yield* ToolRegistry).entries.keys(),
-      ]);
     }
     const reload = reloadAgentCatalog.pipe(
       // A transient read failure is tried again: 200 ms doubling, six times.

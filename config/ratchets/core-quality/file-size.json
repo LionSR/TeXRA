@@ -13,7 +13,7 @@
   "packages/harness/src/agent/runtime/RunHistory.ts": 409,
   "packages/harness/src/agent/runtime/runRegistry.ts": 863,
   "packages/harness/src/agent/runtime/SessionHandle.ts": 405,
-  "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 409,
+  "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 408,
   "packages/harness/src/controllers/session/Database.ts": 1064,
   "packages/harness/src/controllers/session/sessionLayer.ts": 723,
   "packages/harness/src/controllers/session/SessionRequests.ts": 492,

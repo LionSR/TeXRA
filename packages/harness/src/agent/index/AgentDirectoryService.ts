@@ -19,6 +19,7 @@ import { GlobalStorageFs } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { AgentSource } from '@shared/schemas';
+import type { ToolRegistry } from '@tools/toolTable';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { entryExists } from '@utils/files/fsEntryExists';
 
@@ -263,13 +264,15 @@ export function agentSourceRoots(
 ): Effect.Effect<
   readonly string[],
   AgentDirectoriesFailed | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AppState
+  GlobalStorageFs | FileSystem.FileSystem | AppState | ToolRegistry
 > {
   switch (source) {
     case 'custom':
       return Effect.map(directories.custom(), (dir) => [dir]);
     case 'builtIn':
-      return Effect.flatMap(directories.builtIn(), enabledBuiltInRoots);
+      return Effect.flatMap(directories.builtIn(), (core) =>
+        enabledBuiltInRoots(core, directories.resourcesRoot),
+      );
     case 'plugin':
     case 'inline':
       return Effect.succeed([]);

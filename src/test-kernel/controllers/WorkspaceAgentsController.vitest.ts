@@ -8,7 +8,7 @@ import {
   type WorkspaceAgentsEntry,
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import type { StateStore } from '@platform/interfaces';
-import { agentMatchesIdentifier, type AgentModePreset } from '@shared/schemas';
+import { agentMatchesIdentifier } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
@@ -19,14 +19,6 @@ const agents: WorkspaceAgentsEntry[] = [
   { source: 'custom', name: 'search' },
 ];
 
-const preset: AgentModePreset = {
-  id: 'test-team',
-  name: 'Test team',
-  description: 'A deterministic test workspaceAgents.',
-  icon: 'bookmark',
-  agents: ['write', 'lead'],
-};
-
 function controller(
   workspaceState: StateStore,
   overrides: Partial<WorkspaceAgentsControllerDeps> = {},
@@ -36,7 +28,6 @@ function controller(
     repoState: workspaceState,
     globalState: new FakeStateStore(),
     getAgents,
-    getPresets: () => Effect.succeed([preset]),
     resolveAgent: (identifier) =>
       getAgents().find((entry) => agentMatchesIdentifier(entry, identifier)),
     ...overrides,
