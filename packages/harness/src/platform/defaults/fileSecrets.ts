@@ -46,9 +46,10 @@ const fileNameOf = (key: string): string =>
   encodeURIComponent(key).replace(/^\./, '%2E');
 
 /**
- * A host's handle on the credential directory. `onChanged` is the host's
- * "re-read this key" signal (`credentialChanged`), told after every write
- * of this process and, through {@link FileSecrets.watch}, of every other.
+ * A host's handle on the credential directory. `onChanged` is told "re-read
+ * this key" after every write of this handle: the process's store announces
+ * it (`credentialChanged`, `Secrets.announcing`), as
+ * {@link FileSecrets.watch} does every other process's.
  */
 export class FileSecrets implements PlatformSecrets {
   private readonly directory: string;
@@ -120,25 +121,28 @@ export class FileSecrets implements PlatformSecrets {
   }
 
   /**
-   * Tell `onChanged` about every key another process writes, for as long as
-   * the caller's fiber runs: once for every stored key when the watch is up
-   * (what changed before it began), then per key as its file changes. A
-   * watch that fails is retried with backoff before it is given up, loudly.
+   * `announce` every key another process writes under `directory`, for as
+   * long as the caller's fiber runs: once for every stored key when the
+   * watch is up (what changed before it began), then per key as its file
+   * changes. A watch that fails is retried with backoff before it is given
+   * up, loudly.
    */
-  watch(): Effect.Effect<void, never, FileSystem.FileSystem> {
-    const { directory, onChanged } = this;
+  static watch<R>(
+    directory: string,
+    announce: (key: string) => Effect.Effect<void, never, R>,
+  ): Effect.Effect<void, never, FileSystem.FileSystem | R> {
     const stopped = (reason: string) =>
       Effect.logWarning(
         `Stopped watching ${directory}: keys another process saves apply here after a restart (${reason})`,
       );
-    const announceAll = this.listStoredKeys().pipe(
-      Effect.flatMap((keys) =>
-        Effect.sync(() => {
-          for (const key of keys) onChanged(key);
-        }),
-      ),
-      Effect.catch((error) => stopped(error.message)),
-    );
+    // The watch only lists the directory, so its handle writes nothing.
+    const announceAll = new FileSecrets(directory, () => {})
+      .listStoredKeys()
+      .pipe(
+        Effect.flatMap((keys) => Effect.forEach(keys, announce)),
+        Effect.asVoid,
+        Effect.catch((error) => stopped(error.message)),
+      );
     return Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       yield* fs.makeDirectory(directory, {
@@ -153,7 +157,7 @@ export class FileSecrets implements PlatformSecrets {
         Stream.runForEach((name) =>
           name.startsWith(STAGED_PREFIX)
             ? announceAll
-            : Effect.sync(() => onChanged(decodeURIComponent(name))),
+            : announce(decodeURIComponent(name)),
         ),
         // fs.watch can also throw synchronously (EMFILE, ENOSPC): a defect.
         Effect.catchCause((cause) =>

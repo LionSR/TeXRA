@@ -7,14 +7,14 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Effect, Fiber, Result, Schema, Stream } from 'effect';
+import { Effect, Fiber, Result, Schema } from 'effect';
 
 import { Skills, hasExtension } from '@texra-ai/harness/host';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   ensureError,
 } from '@texra-ai/harness/schemas';
-import { appSignalStream, emitAppSignal } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@texra-ai/harness/host';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -158,9 +158,7 @@ export class SettingsViewMessageHandler {
         // view's round-trip, so it follows the policy on its own signal.
         stateSettingApplied: (key) => {
           if (key !== APPROVAL_POLICY_CONFIG_KEY) return Effect.void;
-          return Effect.sync(() =>
-            emitAppSignal('approvalPolicyChanged', undefined),
-          );
+          return emitAppSignal('approvalPolicyChanged', undefined);
         },
         runInTerminal: (name, command) =>
           Effect.sync(() => {
@@ -177,26 +175,12 @@ export class SettingsViewMessageHandler {
       ...vscodeLatexSettingsHandlers(this.body),
     };
 
-    // One fiber owns the tool-availability follower and every repaint
-    // subscription; each child starts at once so it is subscribed before the
-    // constructor returns, and disposing interrupts them all.
-    const { repaintOn, settle } = this.body;
+    // One fiber owns every repaint follower, and each repaint is its child:
+    // disposing interrupts them all.
     const following = runtime.runFork(
-      Effect.forEach(
-        [
-          this.body.followToolAvailability,
-          ...(Object.keys(repaintOn) as Array<keyof typeof repaintOn>).map(
-            (signal) =>
-              Stream.runForEach(appSignalStream(signal), (payload) => {
-                const work = repaintOn[signal](payload as never);
-                return work ? Effect.forkChild(settle(work)) : Effect.void;
-              }),
-          ),
-        ],
-        (subscription) =>
-          Effect.forkChild(subscription, { startImmediately: true }),
-        { discard: true },
-      ).pipe(Effect.andThen(Effect.never)),
+      this.body.followRepaints((repaint) =>
+        Effect.asVoid(Effect.forkChild(repaint)),
+      ),
     );
     context.subscriptions.push({
       dispose: () => runtime.runFork(Fiber.interrupt(following)),

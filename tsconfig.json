@@ -124,11 +124,6 @@
         "./packages/harness/src/tools/*.ts",
         "./packages/harness/src/tools/*/index.ts"
       ],
-      "@eventBus/*": [
-        "./packages/harness/src/eventBus/*",
-        "./packages/harness/src/eventBus/*.ts",
-        "./packages/harness/src/eventBus/*/index.ts"
-      ],
       "@platform/*": [
         "./packages/harness/src/platform/*",
         "./packages/harness/src/platform/*.ts",

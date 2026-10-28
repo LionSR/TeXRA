@@ -27,7 +27,7 @@ import {
   type AgentDirectoriesPort,
   type StateStore,
 } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
+import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { GlobalDatabase, type CurrentValues } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
@@ -105,7 +105,7 @@ export const testProcessOptions = (
   // rather than the developer's `~/.texra/mcp.json`.
   storageRoot: root,
   plugins,
-  secrets: fakeHostSecrets,
+  secrets: Secrets.layer(fakeHostSecrets),
   appState: AppState.layer(fakeHostAppState),
   agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
   toolAvailability: unprobedToolAvailability,

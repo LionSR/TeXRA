@@ -127,6 +127,17 @@ export {
   type ToolMissingHandler,
 } from '@platform/interfaces';
 export { Secrets, type PlatformSecrets } from '@platform/secrets';
+// App-lifecycle signals: the process's hub, which `ProcessServices` serves,
+// and what hosts and the app publish and follow on it.
+export {
+  AppSignals,
+  appSignalStream,
+  emitAppSignal,
+  onAppSignal,
+  type AppSignal,
+  type AppSignalEvent,
+  type AppSignalPayloads,
+} from '@platform/appSignals';
 // The budget a session close waits for its runs: a plugin's drain fits it.
 export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 // Model access outside a run: the user's key and endpoint (transcription).

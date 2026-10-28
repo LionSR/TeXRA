@@ -28,7 +28,7 @@ import {
   entryTypeIn,
   readDirectoryTypedTolerant,
 } from '@texra-ai/harness/node';
-import { onAppSignal } from '@eventBus/AppSignals';
+import { onAppSignal, type AppSignals } from '@texra-ai/harness/host';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
@@ -97,7 +97,7 @@ interface DesktopWorkspaceIpc {
    * this project, until interrupted. The window forks it into the project
    * binding's scope, which a renderer reload replaces along with this IPC.
    */
-  readonly followFilesWritten: Effect.Effect<void>;
+  readonly followFilesWritten: Effect.Effect<void, never, AppSignals>;
 }
 
 /**

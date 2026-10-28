@@ -23,8 +23,8 @@ import { resumeBlocker } from '@agent/runtime/resumeBlocker';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage/runRecords';
 import type { AgentCatalog } from '@agent/index/agentCatalog';
-import { onAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
+import { onAppSignal } from '@platform/appSignals';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import {
   RESUME_ON_OPEN_SETTING,
