@@ -201,44 +201,28 @@ export const confirmCancelled = (
       );
 
 /**
- * Rebuild a `ModelError` with `patch` applied over the fields it already
- * carries. `message` and `cause` live on `Error` as own non-enumerable
- * properties, so the spread that carries every other field silently drops
- * both; restating them keeps a re-thrown error's text and origin.
- *
- * `patch` is spread last, so one of its keys wins even when its value is
- * `undefined`: a computed `requestId: undefined` erases the id the failure
- * mapping already read. Pass only the keys the call site observed.
- */
-export const enrichModelError = (
-  error: ModelError,
-  patch: Partial<ModelErrorFields>,
-): ModelError =>
-  new ModelError({
-    ...error,
-    message: error.message,
-    cause: error.cause,
-    ...patch,
-  });
-
-/**
  * A `ModelError` completed with what an outer scope knows. A field the error
  * already carries is never overwritten: the scope nearest the failure, such
  * as the turn assembly that learned the returned model, recorded it first.
+ * `message` and `cause` live on `Error` as own non-enumerable properties, so
+ * the spread that carries every other field would drop both; restating them
+ * keeps a re-thrown error's text and origin.
  */
 export const fillModelError = (
   error: ModelError,
   known: Partial<ModelErrorFields>,
 ): ModelError =>
-  enrichModelError(
-    error,
-    Object.fromEntries(
+  new ModelError({
+    ...error,
+    message: error.message,
+    cause: error.cause,
+    ...Object.fromEntries(
       Object.entries(known).filter(
         ([key, value]) =>
           value !== undefined && Reflect.get(error, key) === undefined,
       ),
     ),
-  );
+  });
 
 /**
  * Every provider's failure mapping treats HTTP 401/403 (or the equivalent

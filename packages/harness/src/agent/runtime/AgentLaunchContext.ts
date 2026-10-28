@@ -87,8 +87,8 @@ interface AgentLaunchInput {
    * activates it, and the initial instruction is not logged again.
    */
   registration?: RegisterRunOptions;
-  /** A fresh run's admission, once its opening committed: it never waits. */
-  onAdmitted?: (runId: RunId) => Effect.Effect<void>;
+  /** The run's admission, once its activation's batch committed: no wait. */
+  onAdmitted?: AgentRunShape['entry']['entered'];
   /** Session owning this run's coordination state. */
   session: SessionHandle;
   /** Immutable per-run tool policy carried on the launch context for cycle flows. */
@@ -153,9 +153,7 @@ function beginRunStage(
   label: string,
   instruction: string | undefined,
 ): StageHandle {
-  if (instruction) {
-    logUserMessage(agentLogger, instruction);
-  }
+  if (instruction) logUserMessage(agentLogger, instruction);
   return agentLogger.openStage(label, { kind: 'run' });
 }
 
@@ -286,10 +284,11 @@ const enterRun = Effect.fn('enterRun')(function* (
       .slice(0, carried)
       .flatMap((e) => runEventDraft(runId, e) ?? []);
   });
-  const entered = Effect.sync(() => {
-    for (const e of (held ?? []).slice(carried)) session.log.publish(runId, e);
-    held = null;
-  }).pipe(Effect.andThen(input.onAdmitted?.(runId) ?? Effect.void));
+  const entered: AgentRunShape['entry']['entered'] = (state) =>
+    Effect.sync(() => {
+      for (const e of held?.slice(carried) ?? []) session.log.publish(runId, e);
+      held = null;
+    }).pipe(Effect.andThen(input.onAdmitted?.(state) ?? Effect.void));
   const seed = input.registration?.seed ?? null;
   return { logger, entry: { registration, seed, opening, entered } };
 });

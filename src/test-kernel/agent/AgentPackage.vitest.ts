@@ -1,6 +1,15 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Exit, Stream, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Queue,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - package API under test
@@ -16,7 +25,10 @@ import type { AgentPlatform } from '../../../packages/harness/src/index';
 
 interface RootLaunchOptions {
   readonly onRun?: (handle: unknown) => Effect.Effect<void>;
-  readonly onAdmitted?: (runId: string) => Effect.Effect<void, Error>;
+  readonly onAdmitted?: (
+    runId: string,
+    commit: number,
+  ) => Effect.Effect<void, Error>;
 }
 
 /** A session view run entry as the package's fold keys it. */
@@ -50,7 +62,7 @@ class FakeSession {
     interrupt: () => false,
     launch: ({ options }: { readonly options: RootLaunchOptions }) =>
       Effect.gen({ self: this }, function* () {
-        yield* options.onAdmitted?.(RUN_ID) ?? Effect.void;
+        yield* options.onAdmitted?.(RUN_ID, 0) ?? Effect.void;
         yield* SubscriptionRef.update(this.viewRef, (current) => ({
           ...current,
           runs: new Map(current.runs).set(RUN_ID, {
@@ -96,6 +108,67 @@ class FakeSession {
   }
 }
 
+/**
+ * A session whose run's previous activation completed, as a same-session
+ * resume meets it: the view still holds that outcome when the launch admits
+ * the run at commit 1, and the new activation folds once the run's two
+ * readers (the handle's drain and the test's) have read that level. The start's
+ * own check reads no run, so the launch seeds the old outcome.
+ */
+class RelaunchedSession extends FakeSession {
+  readonly readers = Effect.runSync(Queue.unbounded<void>());
+  override readonly view: FakeSession['view'] = {
+    ...this.view,
+    changes: this.view.changes.pipe(
+      Stream.tap(() => Queue.offer(this.readers, undefined)),
+    ),
+  };
+  override readonly runs: FakeSession['runs'] = {
+    ...this.runs,
+    launch: ({ options }: { readonly options: RootLaunchOptions }) =>
+      Effect.gen({ self: this }, function* () {
+        yield* this.fold(0, 'completed');
+        yield* options.onAdmitted?.(RUN_ID, 1) ?? Effect.void;
+        yield* Queue.takeN(this.readers, 2);
+        yield* this.fold(1, null);
+        yield* this.fold(2, 'completed');
+        return { outcome: 'completed' } as never;
+      }),
+  };
+
+  constructor(foldDeath: Deferred.Deferred<never, Error>) {
+    super({ storage: '/storage' }, foldDeath);
+  }
+
+  /** The level at `cursor`, the run's durable outcome `outcome`. */
+  fold(cursor: number, outcome: FakeRunView['durableOutcome']) {
+    return SubscriptionRef.update(this.viewRef, (current) => ({
+      ...current,
+      cursor,
+      runs: new Map(current.runs).set(RUN_ID, {
+        id: RUN_ID,
+        ancestors: [],
+        childIds: [],
+        durableOutcome: outcome,
+      }),
+    }));
+  }
+}
+
+/** The package's session over `fake`, as the process's owner opens it. */
+const openPackageSession = (fake: FakeSession) =>
+  Effect.gen(function* () {
+    const sessions = yield* makeSessions(
+      { open: () => Effect.succeed(fake) } as never,
+      yield* testRuntime().contextEffect,
+      yield* Effect.scope,
+    );
+    return yield* sessions.open({
+      storage: '/storage',
+      globalState: new MemoryStateStore(),
+    } as unknown as AgentPlatform['roots']);
+  });
+
 describe('agent package sessions', () => {
   beforeEach(async () => {
     // Every named agent resolves to a custom `assistant` in the kernel
@@ -120,19 +193,9 @@ describe('agent package sessions', () => {
       // rather than wait on a level that never comes.
       Effect.gen(function* () {
         const foldDeath = yield* Deferred.make<never, Error>();
-        const owner = {
-          open: (init: { readonly roots: { readonly storage: string } }) =>
-            Effect.succeed(new FakeSession(init.roots, foldDeath)),
-        };
-        const sessions = yield* makeSessions(
-          owner as never,
-          yield* testRuntime().contextEffect,
-          yield* Effect.scope,
+        const session = yield* openPackageSession(
+          new FakeSession({ storage: '/storage' }, foldDeath),
         );
-        const session = yield* sessions.open({
-          storage: '/storage',
-          globalState: new MemoryStateStore(),
-        } as unknown as AgentPlatform['roots']);
         const run = yield* session.start({
           agent: 'assistant',
           instruction: 'Test instruction',
@@ -151,6 +214,34 @@ describe('agent package sessions', () => {
             Exit.isFailure(exit) && Cause.squash(exit.cause),
           ).toMatchObject({ message: 'fold died' });
         }
+      }).pipe(Effect.scoped),
+  );
+
+  it.live(
+    "ends a relaunched run's view at its own activation's outcome, not the one before",
+    () =>
+      Effect.gen(function* () {
+        const fake = new RelaunchedSession(
+          yield* Deferred.make<never, Error>(),
+        );
+        const session = yield* openPackageSession(fake);
+        const run = yield* session.start({
+          agent: 'assistant',
+          instruction: 'Test instruction',
+          runId: RUN_ID as RunId,
+        });
+        const levels = yield* Effect.forkChild(Stream.runCollect(run.view));
+
+        yield* run.result;
+        expect(
+          (yield* Fiber.join(levels)).map((level) => [
+            level.cursor,
+            level.runs.get(RUN_ID as RunId)?.durableOutcome,
+          ]),
+        ).toEqual([
+          [1, null],
+          [2, 'completed'],
+        ]);
       }).pipe(Effect.scoped),
   );
 });

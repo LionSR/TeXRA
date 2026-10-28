@@ -204,6 +204,17 @@ export function lastLifecycleRow(
   );
 }
 
+/** The commit of run `runId`'s latest `run.activate` in `rows`. */
+export const lastActivationCommit = (
+  rows: readonly SessionEvent[],
+  runId: RunId,
+): number | undefined => {
+  const id = qualifyAggregateId('run', runId);
+  return rows.findLast(
+    (row) => row.aggregateId === id && row.type === 'run.activate',
+  )?.commit;
+};
+
 /** The run's terminal fact for its current lifecycle, or null: the scope
  *  `finalizeRun`, the row's one writer, and every reader share. */
 export function runEndFromEvents(

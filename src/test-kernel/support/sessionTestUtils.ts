@@ -144,7 +144,7 @@ export function publishTestRunStart(
       identity: { kind: 'agent', agent: 'chat' },
       userFollowUpSupport: 'unsupported',
       parent:
-        options.parent == null ? null : { id: options.parent, callId: null },
+        options.parent == null ? null : { id: options.parent, call: null },
       provenance: null,
     },
   ]);
