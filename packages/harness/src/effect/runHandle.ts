@@ -19,10 +19,7 @@ import {
 } from 'effect';
 
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  buildTerminalRunEndResult,
-  type RunEndResult,
-} from '@agent/runtime/RunEndResult';
+import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type { AgentEvent } from '@agent/trace';
 import { withLogChannel } from '@logger/effectLog';
@@ -33,6 +30,7 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
+import { runEndFromEvents } from '@shared/session/runFacts';
 import { descendantRuns } from '@shared/session/sessionView';
 
 import { RunFailure, TraceUnavailable } from './errors.js';
@@ -44,23 +42,41 @@ import type { Run } from './sessions.js';
  *  must hear it. */
 const NEVER_ENTERED = 'The run ended without entering the session.';
 
+const CHANNEL = 'agentPackage';
+
 /**
- * A run's exit as its handle reports it. A stop interrupts the run's fiber,
- * which re-raises the interruption once its `cancelled` end commits: the run
- * ended, and passing the interruption on would interrupt whoever reads it.
- * A handle that `left` a run it joined keeps its own interruption: the run
- * goes on without it.
+ * A run's end as its handle reports it. A stop interrupts the run's fiber,
+ * which re-raises the interruption once the run's end commits: that stored
+ * end is how the run ended, and the interruption, passed on, would interrupt
+ * whoever reads it. With none stored, or a failed one, the interruption
+ * stays: a joiner that left a run still going, an end that did not save.
  */
-const readerExit = (
+const reportedEnd = (
+  session: RuntimeSessionHandle,
   runId: RunId,
   exit: Exit.Exit<RunEndResult, RunFailure>,
-  left: boolean,
-): Exit.Exit<RunEndResult, RunFailure> =>
-  !left && Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)
-    ? Exit.succeed(buildTerminalRunEndResult(RUN_OUTCOME.CANCELLED, runId))
-    : exit;
-
-const CHANNEL = 'agentPackage';
+): Effect.Effect<RunEndResult, RunFailure> =>
+  Exit.isSuccess(exit) || !Cause.hasInterruptsOnly(exit.cause)
+    ? exit
+    : session.log.records(runId).pipe(
+        Effect.map((rows) => runEndFromEvents(rows, runId)),
+        Effect.catch((error) =>
+          Effect.logWarning(`Run ${runId}'s stored end could not be read`).pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+            Effect.as(null),
+          ),
+        ),
+        Effect.flatMap((end) =>
+          end === null || end.outcome === RUN_OUTCOME.FAILED
+            ? exit
+            : Effect.succeed({
+                runId,
+                outcome: end.outcome,
+                output: end.output,
+              }),
+        ),
+      );
 
 /**
  * How many trace events a run holds for a reader that has yet to attach.
@@ -201,8 +217,6 @@ export function handOver(
     const unlisten = session.trace.listen(runId, trace.offer);
     const admitted = yield* Deferred.make<CommitOrdinal, RunFailure>();
     let joined = false;
-    // A joiner's `interrupt` ends its own wait, not the run it joined.
-    let left = false;
     // Settling a run that was admitted changes nothing here; one that never
     // was fails its admission with its own failure, its result's error, or
     // the launcher's broken contract.
@@ -210,7 +224,8 @@ export function handOver(
       exit: Exit.Exit<RunEndResult, RunFailure>,
     ): Effect.Effect<void> =>
       Effect.sync(unlisten).pipe(
-        Effect.andThen(trace.settle(readerExit(runId, exit, left))),
+        Effect.andThen(Effect.exit(reportedEnd(session, runId, exit))),
+        Effect.flatMap(trace.settle),
         Effect.andThen(
           Effect.suspend(() => {
             if (Exit.isFailure(exit))
@@ -310,16 +325,16 @@ export function handOver(
         return {
           runId,
           result: Fiber.await(runFiber).pipe(
-            Effect.flatMap((exit) => readerExit(runId, exit, left)),
+            Effect.flatMap((exit) => reportedEnd(session, runId, exit)),
             Effect.flatMap((value) => Effect.as(Fiber.join(drain), value)),
           ),
           view,
           events: trace.events,
-          interrupt: Effect.suspend(() => {
-            if (!joined && interruptLaunch()) return Effect.void;
-            left = joined;
-            return Fiber.interrupt(runFiber);
-          }),
+          interrupt: Effect.suspend(() =>
+            !joined && interruptLaunch()
+              ? Effect.void
+              : Fiber.interrupt(runFiber),
+          ),
         };
       }),
     ).pipe(

@@ -180,7 +180,8 @@ export interface Run {
   /**
    * How the run ended. A failed run fails this with its own
    * {@link RunFailure}; a stopped one (`interrupt`, a `run.stop` request)
-   * ends `cancelled`. A finished run's result arrives once the session
+   * gets the end it stored, `cancelled`, unless the stop met a failure,
+   * which fails it. A finished run's result arrives once the session
    * view shows its stored outcome, so a view read afterwards includes it.
    */
   readonly result: Effect.Effect<RunEndResult, RunFailure>;
