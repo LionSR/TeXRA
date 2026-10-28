@@ -1059,9 +1059,6 @@ interface HostInteractions {
    * the decision (a failed read of the edit included, left pending).
    */
   approveToolEdit?(requestId: string): Effect.Effect<boolean>;
-  /** What {@link presentToolEdit} staged for a pending request, or null:
-   *  the answer to a `request.preview`. */
-  preview?(requestId: string): Effect.Effect<ToolEditContent | null>;
   dispose?(): void;
 }
 ```

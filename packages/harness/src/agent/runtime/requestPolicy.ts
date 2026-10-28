@@ -323,9 +323,6 @@ export function requestAsks({
   ): Effect.Effect<RequestDecision, LogWriteError | E> => {
     const requestId = payload.data.requestId;
     const aggregateId = qualifyAggregateId('run', runId);
-    const releaseUncommitted = Effect.uninterruptible(
-      options.onNeverCommitted ?? Effect.void,
-    );
     const open: (
       opened: readonly RequestRow[],
     ) => Effect.Effect<CommitOrdinal, E | LogWriteError> =
@@ -347,9 +344,7 @@ export function requestAsks({
         },
         ...policyDecidedRows(session(), runId, payload),
       ];
-      const from = yield* open(rows).pipe(
-        Effect.tapError(() => releaseUncommitted),
-      );
+      const from = yield* open(rows);
       return yield* decision(runId, requestId, from).pipe(
         Effect.map((row) => row.decision),
         Effect.catch((cause) =>
@@ -376,11 +371,8 @@ export function requestAsks({
               cause: 'Run interrupted.',
             }).pipe(
               // `false` is the interruption that landed before the open
-              // committed: no row exists, so this cancellation writes none
-              // either and the caller's staging has no decision coming.
-              Effect.flatMap((cancelled) =>
-                cancelled ? Effect.void : releaseUncommitted,
-              ),
+              // committed: no row exists, so this cancellation writes none.
+              Effect.asVoid,
               // A session draining under it refuses even as a defect.
               Effect.catchCause((cause) =>
                 Effect.logWarning(

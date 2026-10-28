@@ -210,6 +210,7 @@ export {
   ToolEditContentSchema,
   type RequestError,
   type RuntimeRequest,
+  type StagedToolEdit,
   type ToolEditContent,
 } from '@shared/session/runtimeRequest';
 // A memory as a memory list shows it.

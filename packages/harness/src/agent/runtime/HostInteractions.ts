@@ -2,7 +2,6 @@ import { Cause, Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
-import type { ToolEditContent } from '@shared/session/runtimeRequest';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { HostPresentationFailed } from './runtimePresentationEvents';
 import type {
@@ -81,9 +80,6 @@ export interface HostInteractions {
    * the decision (a failed read of the edit included, left pending).
    */
   approveToolEdit?(requestId: string): Effect.Effect<boolean>;
-  /** What {@link presentToolEdit} staged for a pending request, or null:
-   *  the answer to a `request.preview`. */
-  preview?(requestId: string): Effect.Effect<ToolEditContent | null>;
   dispose?(): void;
 }
 
@@ -253,14 +249,6 @@ export class SessionHostInteractions implements HostInteractions {
     return (
       this.activeAttachment?.interactions.approveToolEdit?.(requestId) ??
       Effect.succeed(false)
-    );
-  }
-
-  /** The preview the attached host staged for `requestId`, else null. */
-  preview(requestId: string): Effect.Effect<ToolEditContent | null> {
-    return (
-      this.activeAttachment?.interactions.preview?.(requestId) ??
-      Effect.succeed(null)
     );
   }
 

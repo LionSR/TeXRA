@@ -12,7 +12,7 @@
  * The union carries the arms the runtime answers today; a lane that routes
  * another retained command adds its arm with its handler.
  */
-import { Schema } from 'effect';
+import { type HashMap, Schema, Struct } from 'effect';
 
 import {
   APPROVAL_BYPASS_KINDS,
@@ -118,12 +118,21 @@ export const RuntimeRequestSchema = Schema.Union([
     requestId: Schema.String.check(Schema.isMinLength(1)),
     decision: RequestDecisionSchema,
   }),
-  /** A pending tool edit's preview, as the session's host staged it beside
-   *  the request: answered `preview`, null when none is staged. */
+  /** A pending tool edit's preview, as the session staged it beside the
+   *  request: answered `preview`, null when none is staged. */
   Schema.Struct({
     kind: Schema.Literal('request.preview'),
     ...runScoped,
     requestId: Schema.String.check(Schema.isMinLength(1)),
+  }),
+  /** The user's edit of a pending tool edit's proposed file: an approval
+   *  that names no content applies it. Refused once the request is no
+   *  longer pending. */
+  Schema.Struct({
+    kind: Schema.Literal('request.edit'),
+    ...runScoped,
+    requestId: Schema.String.check(Schema.isMinLength(1)),
+    content: Schema.String,
   }),
   /** The field-level mutation, not a snapshot: the authority applies it and
    *  publishes the resulting `approval.policy`. */
@@ -177,8 +186,19 @@ export const ToolEditContentSchema = Schema.Struct({
     Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   ),
 });
-/** A pending tool edit's staged content (`request.preview`). */
+/** A pending tool edit's staged content. */
 export type ToolEditContent = typeof ToolEditContentSchema.Type;
+
+/** A pending tool edit as the session holds it while the request waits
+ *  (`request.preview`): its content, and the user's edit of the proposed
+ *  file (`request.edit`), null until there is one. */
+const StagedToolEditSchema = ToolEditContentSchema.mapFields(
+  Struct.assign({ edited: Schema.NullOr(Schema.String) }),
+);
+/** A pending tool edit as the session holds it. */
+export type StagedToolEdit = typeof StagedToolEditSchema.Type;
+/** Every pending tool edit the session holds, by request id. */
+export type StagedToolEdits = HashMap.HashMap<string, StagedToolEdit>;
 
 /**
  * Hunks as unified-diff text lines, each preceded by its header. One header
@@ -218,7 +238,7 @@ export const OutcomeSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('forked'), runId: RunIdSchema }),
   Schema.Struct({
     kind: Schema.Literal('preview'),
-    preview: Schema.NullOr(ToolEditContentSchema),
+    preview: Schema.NullOr(StagedToolEditSchema),
   }),
   Schema.Struct({
     kind: Schema.Literal('runFiles'),

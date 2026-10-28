@@ -16,7 +16,14 @@ import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
 import { render } from 'ink';
-import { Context, Effect, Fiber, Schema, SubscriptionRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Fiber,
+  HashMap,
+  Schema,
+  SubscriptionRef,
+} from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
@@ -62,6 +69,7 @@ import {
   type UserQuestionPermission,
   aggregateTarget,
 } from '@shared/schemas';
+import type { StagedToolEdit } from '@shared/session/runtimeRequest';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   isInFlightPhase,
@@ -487,7 +495,7 @@ HARNESS_DISPOSERS.push(
   Effect.runSync(
     session().interactions.use(
       createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
-        requests: session().requests,
+        requests: { request: session().requests.request, view: session().view },
         settings: HARNESS_PLATFORM_SERVICES,
         runtime: harnessRuntime,
       }),
@@ -1347,18 +1355,19 @@ if (SHOW_EDIT_APPROVAL) {
         request,
         relativePath: request.path,
       });
-    // The preview the durable payload cannot carry is staged on the host,
-    // exactly as `requestToolEditApproval` stages it. Staging hands back the
-    // release for an open that never commits; this request is opened right
-    // below, so the harness holds that program and never runs it.
-    const _releaseStagedPreview = harnessRuntime.runSync(
-      session().interactions.presentToolEdit({
-        ...request,
-        roots: session().roots,
-        permission,
-        hunks,
-        firstChangedLine,
-      }),
+    // The preview the durable payload cannot carry is held in the session's
+    // store, exactly as `requestToolEditApproval` holds it.
+    harnessRuntime.runSync(
+      SubscriptionRef.update(
+        session().view.toolEdits,
+        HashMap.set<string, StagedToolEdit>(permission.requestId, {
+          originalContent: request.originalContent,
+          proposedContent: request.proposedContent,
+          hunks,
+          firstChangedLine,
+          edited: null,
+        }),
+      ),
     );
     requestHarnessApproval(
       request.runId,

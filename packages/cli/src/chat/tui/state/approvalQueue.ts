@@ -278,30 +278,6 @@ export function promoteApprovalsForRun(runId: RunId): void {
   promoted.set(runId);
 }
 
-/** Staged presentations whose request the fold has listed at least once. A
- *  host stages a tool edit's preview before its `request.opened` commits, so
- *  "not listed" alone cannot mean "settled". */
-const stagedSeenListed = new Set<string>();
-
-/**
- * Forget what this surface holds for requests the fold no longer lists: a
- * settled request leaves with its staged presentation. Called for every
- * level of pending requests, not only for the decisions taken here: a
- * request settled by a run interruption or by another surface takes its
- * staged edit contents with it too.
- */
-export function forgetSettledRequests(live: ReadonlySet<string>): void {
-  const staged = stagedPresentations.get();
-  for (const id of staged.keys()) if (live.has(id)) stagedSeenListed.add(id);
-  const remaining = [...staged].filter(
-    ([id]) => live.has(id) || !stagedSeenListed.has(id),
-  );
-  if (remaining.length !== staged.size) {
-    stagedPresentations.set(new Map(remaining));
-  }
-  pruneToLive(live, stagedSeenListed, presentedOrder);
-}
-
 function markDecided(requestId: string): void {
   const live = new Set(
     attentionRequests.get().map((request) => request.requestId),
@@ -309,14 +285,12 @@ function markDecided(requestId: string): void {
   const next = new Set([...decided.get()].filter((id) => live.has(id)));
   next.add(requestId);
   decided.set(next);
-  forgetSettledRequests(live);
+  pruneToLive(live, presentedOrder);
 }
 
 /**
- * Publish the presentation a host prepared for one request: the payload the
- * modal renders from here on. A tool edit stages before its request opens
- * and a retry's key lookup lands after, so this takes either order; the
- * entry leaves when the fold drops the request it names.
+ * Publish the presentation a host prepared for one listed request: the
+ * payload the modal renders from here on, until the host drops it.
  */
 export function stagePresentation(payload: ApprovalPayload): void {
   stagedPresentations.set(
@@ -324,13 +298,7 @@ export function stagePresentation(payload: ApprovalPayload): void {
   );
 }
 
-/**
- * Drop what one request staged, by id. {@link forgetSettledRequests} reads
- * the fold, so it never drops a presentation whose request the fold never
- * listed; a request whose `request.opened` did not commit is released
- * through here instead. An `Effect`, because that release is the TUI half of
- * the `releaseToolEdit` port: the session composes it and runs it itself.
- */
+/** Drop what one request staged, once the view no longer lists it. */
 export function dropPresentation(requestId: string): Effect.Effect<void> {
   return Effect.sync(() => {
     const staged = stagedPresentations.get();
@@ -338,7 +306,7 @@ export function dropPresentation(requestId: string): Effect.Effect<void> {
     const remaining = new Map(staged);
     remaining.delete(requestId);
     stagedPresentations.set(remaining);
-    stagedSeenListed.delete(requestId);
+    presentedOrder.delete(requestId);
   });
 }
 
@@ -469,7 +437,6 @@ export function landRequestDecision(
  *  runs they belong to. */
 function resetApprovalSurface(): void {
   stagedPresentations.set(new Map());
-  stagedSeenListed.clear();
   decided.set(new Set());
   promoted.set(undefined);
   presentedOrder.clear();

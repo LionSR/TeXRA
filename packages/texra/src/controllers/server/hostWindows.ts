@@ -45,7 +45,6 @@ import {
   type HostFrame,
   type Notice,
 } from './hostCalls';
-import type { ToolEditContent } from '@texra-ai/harness/schemas';
 import type { Session, SessionHost } from '@texra-ai/harness';
 
 /** Why a call a run waited on got no answer from a window. */
@@ -109,16 +108,6 @@ interface Staged {
   window: Window | undefined;
   seen: boolean;
 }
-
-const previewOf = (entry: Staged | undefined): ToolEditContent | null =>
-  entry === undefined
-    ? null
-    : {
-        originalContent: entry.request.originalContent,
-        proposedContent: entry.request.proposedContent,
-        hunks: entry.request.hunks,
-        firstChangedLine: entry.request.firstChangedLine,
-      };
 
 /** The project folder a session holds, or its store for a session with
  *  no folder. */
@@ -289,17 +278,8 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             call: { kind: 'approvalDenied', denial, runId },
           });
       },
-      // The staged preview of a request the session still lists.
-      preview: (requestId) =>
-        Effect.sync(() =>
-          session.view
-            .current()
-            .requests.some((request) => request.requestId === requestId)
-            ? previewOf(staged.get(key, requestId))
-            : null,
-        ),
-      // The service keeps every preview for `request.preview`; the window
-      // that stages it as well is the one asked to release or approve it.
+      // The window that stages a preview is the one asked to release or
+      // approve it.
       presentToolEdit: (request) => {
         const { requestId } = request.permission;
         const entry: Staged = {

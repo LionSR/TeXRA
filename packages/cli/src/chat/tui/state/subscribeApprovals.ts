@@ -10,8 +10,8 @@
 // behind the capability is `ProgressApiKeyRetryController`'s, shared with the
 // extension and desktop.
 //
-// The attached host answers nothing: it stages a tool edit's preview,
-// mirrors bypass state onto its wire, and presents events.
+// The attached host answers nothing: it stages each listed tool edit's
+// preview and retry card for the modal, and presents events.
 
 import { Cause, Effect } from 'effect';
 
@@ -19,13 +19,14 @@ import { providerDisplayName } from '@texra-ai/llm';
 import { withLogChannel, type HostInteractions } from '@texra-ai/harness/host';
 import {
   toErrorMessage,
+  type PendingRequest,
   type RetryPermission,
-  type RunId,
 } from '@texra-ai/harness/schemas';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
+import { followPendingRequests } from '@texra/controllers/session/followPendingRequests';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
   ApiKeyPromptFailed,
@@ -38,17 +39,15 @@ import {
   attentionRequests,
   currentApproval,
   dropPresentation,
-  forgetSettledRequests,
   landRequestDecision,
   pruneToLive,
   reopenRequest,
   stagePresentation,
-  type SessionRequests,
   useHostCapability,
 } from './approvalQueue';
 import { appendLocalNotice } from './transcript';
+import type { Session } from '@texra-ai/harness';
 import type { ProcessRuntime, SettingsStores } from '@texra-ai/harness/host';
-import type { ToolEditContent } from '@texra-ai/harness/schemas';
 
 /**
  * What this host holds for its lifetime: the session its denial notices read
@@ -58,15 +57,11 @@ import type { ToolEditContent } from '@texra-ai/harness/schemas';
  * the chat session's caller, which holds them already.
  */
 interface TuiApprovalStores {
-  /** Where its decisions land: the chat's session, here or in the
-   *  service. */
-  readonly requests: SessionRequests;
-  /** A tool edit's preview, when another process (the background service)
-   *  runs the tool and so stages it there; absent when this one does. */
-  readonly preview?: (
-    runId: RunId,
-    requestId: string,
-  ) => Effect.Effect<ToolEditContent | null, Error>;
+  /** Where its decisions land and its pending requests are read: the
+   *  chat's session, here or in the service. */
+  readonly requests: Pick<Session, 'request'> & {
+    readonly view: Pick<Session['view'], 'changes'>;
+  };
   /** The settings slots a key prompt reads a provider's display name and key
    *  URL from, so a retry that has to ask for a credential words the ask the
    *  same way `/key` does. */
@@ -75,6 +70,14 @@ interface TuiApprovalStores {
    *  the host's lifetime rather than looked up per decision. */
   readonly runtime: ProcessRuntime;
 }
+
+/** A request this host stages a card for until the view drops it. */
+type StagedRequest = PendingRequest & {
+  readonly payload: Extract<
+    PendingRequest['payload'],
+    { readonly kind: 'retry' | 'toolEdit' }
+  >;
+};
 
 /** Create the TUI's presentation host. */
 export function createTuiHostInteractions(
@@ -85,19 +88,13 @@ export function createTuiHostInteractions(
   /** Set by `dispose`: an attachment that is gone answers for nobody, so it
    *  must not decide a request the next owner will. */
   let disposed = false;
-  /** Requests this attachment has already acted on, pruned as they settle. */
-  const acted = new Set<string>();
   /** Retries this host has already landed a personal-credential decision
    *  for. The fold lags the decision, so this is what tells the switch's own
    *  program that it landed rather than fell through to a denial. */
   const switched = new Set<string>();
   /** The undo this guard hands every decision it sends: a refused
-   *  `request.decide` answered nothing, and the queue drops its own decided
-   *  entry, so this entry must go too or no later level acts on the request
-   *  again — and an automatically settled plan, question, or retry has no
-   *  staged modal the user could answer it through. */
+   *  `request.decide` answered nothing, so the retry is no longer switched. */
   const actAgainOnRefusal = (requestId: string) => (): void => {
-    acted.delete(requestId);
     switched.delete(requestId);
   };
   const pendingRetry = (requestId: string): RetryPermission | undefined => {
@@ -219,57 +216,59 @@ export function createTuiHostInteractions(
   };
 
   /**
-   * What this host does with each newly listed request: a retry's card is
-   * staged for the modal. The session decided everything its policy settles
-   * before the request was listed, so what is listed waits for a person.
+   * What this host stages for each listed request until the view drops it:
+   * a retry's card, and a tool edit's card with its preview. The session
+   * decided everything its policy settles before the request was listed, so
+   * what is listed waits for a person. A preview that could not be fetched
+   * is said on the card itself, so the user never approves a write they
+   * cannot see.
    */
-  const answerPendingRequests = (): void => {
-    const pending = attentionRequests.get();
-    const live = new Set(pending.map((request) => request.requestId));
-    // Every level prunes what this host staged for requests that have left
-    // it, however they settled: a decision taken on another surface or a run
-    // interruption drops the fact without passing through this surface.
-    forgetSettledRequests(live);
-    pruneToLive(live, acted, switched);
-    for (const request of pending) {
-      if (acted.has(request.requestId)) continue;
-      const { payload } = request;
-      if (payload.kind === 'retry') {
-        acted.add(request.requestId);
-        stagePresentation({ kind: 'retry', data: payload.data });
-      } else if (payload.kind === 'toolEdit' && stores.preview) {
-        // The service ran the tool: its preview is fetched, once. A fetch
-        // that failed, or a preview no host staged, is said on the card
-        // itself, so the user never approves a write they cannot see.
-        acted.add(request.requestId);
-        stores.runtime.runFork(
-          stores.preview(request.runId, request.requestId).pipe(
-            Effect.matchCause({
-              onFailure: (cause) => ({
-                kind: 'unavailable' as const,
-                reason: `the service did not send it (${toErrorMessage(Cause.squash(cause))})`,
+  const stage = (request: StagedRequest): Effect.Effect<void> => {
+    const { payload, runId, requestId } = request;
+    const staged =
+      payload.kind === 'retry'
+        ? Effect.sync(() =>
+            stagePresentation({ kind: 'retry', data: payload.data }),
+          )
+        : stores.requests
+            .request({ kind: 'request.preview', runId, requestId })
+            .pipe(
+              Effect.matchCause({
+                onFailure: (cause) => ({
+                  kind: 'unavailable' as const,
+                  reason: `the session did not send it (${toErrorMessage(Cause.squash(cause))})`,
+                }),
+                onSuccess: (outcome) =>
+                  outcome.kind === 'preview' && outcome.preview !== null
+                    ? { kind: 'preview' as const, content: outcome.preview }
+                    : {
+                        kind: 'unavailable' as const,
+                        reason: 'the session holds no preview of this edit',
+                      },
               }),
-              onSuccess: (content) =>
-                content === null
-                  ? {
-                      kind: 'unavailable' as const,
-                      reason: "no host staged this edit's preview",
-                    }
-                  : { kind: 'preview' as const, content },
-            }),
-            Effect.map((tui) =>
-              stagePresentation({ kind: 'toolEdit', data: payload.data, tui }),
-            ),
-          ),
-        );
-      }
-    }
+              Effect.map((tui) =>
+                stagePresentation({
+                  kind: 'toolEdit',
+                  data: payload.data,
+                  tui,
+                }),
+              ),
+            );
+    return staged.pipe(
+      Effect.andThen(Effect.never),
+      Effect.ensuring(dropPresentation(requestId)),
+    );
   };
-
-  answerPendingRequests();
-  const unsubscribe = subscribeToSignalChanges(
-    [attentionRequests],
-    answerPendingRequests,
+  const follower = stores.runtime.runFork(
+    Effect.scoped(
+      followPendingRequests(
+        stores.requests.view,
+        (request): request is StagedRequest =>
+          request.payload.kind === 'retry' ||
+          request.payload.kind === 'toolEdit',
+        stage,
+      ),
+    ),
   );
   const releaseCapability = useHostCapability(performHostCapability);
 
@@ -281,21 +280,9 @@ export function createTuiHostInteractions(
     emit: (event, payload) => {
       host.emit(event, payload);
     },
-    /** The preview a tool edit's durable payload cannot carry. */
-    presentToolEdit(request) {
-      stagePresentation({
-        kind: 'toolEdit',
-        data: request.permission,
-        tui: { kind: 'preview', content: request },
-      });
-    },
-    // `forgetSettledRequests` only drops a presentation whose request the
-    // fold listed at least once, so a request whose `request.opened` never
-    // committed is released by id here.
-    releaseToolEdit: dropPresentation,
     dispose() {
       disposed = true;
-      unsubscribe();
+      follower.interruptUnsafe();
       releaseCapability();
     },
   };

@@ -148,10 +148,8 @@ export function nativeToolTestLayer(
         // loop to bind them to.
         requests: {
           nextId: (prefix: string) => `${prefix}-${generateShortId()}`,
-          open: (
-            payload: PermissionPayload,
-            opened?: { readonly onNeverCommitted?: Effect.Effect<void> },
-          ) => toolRun.session.requests.ask(toolRun.runId, payload, opened),
+          open: (payload: PermissionPayload) =>
+            toolRun.session.requests.ask(toolRun.runId, payload),
           post: (requestId: string, payload: PermissionPayload) =>
             toolRun.session.runHistory.open(toolRun.runId).pipe(
               Effect.flatMap((cell) =>

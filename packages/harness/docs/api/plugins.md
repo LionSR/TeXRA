@@ -302,7 +302,6 @@ interface CallRequests {
    *  decision, as `SessionRequests.ask` does. */
   readonly open: (
     payload: PermissionPayload,
-    options?: { readonly onNeverCommitted?: Effect.Effect<void> },
   ) => Effect.Effect<RequestDecision, DatabaseNotOwner | CellError>;
 }
 ```

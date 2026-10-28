@@ -1,4 +1,4 @@
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, HashMap, Option, SubscriptionRef } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireRun, sessionOf } from '@agent/runtime/RunCall';
@@ -18,7 +18,10 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
-import type { ToolEditContent } from '@shared/session/runtimeRequest';
+import type {
+  StagedToolEdit,
+  ToolEditContent,
+} from '@shared/session/runtimeRequest';
 import { Settings } from '@shared/config/settings';
 import { errorResult } from '@tools/core/result';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
@@ -221,54 +224,59 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     yield* reportDiffTimeout(diffTimeout);
     const staged: ToolEditApprovalRequest = { ...preparedRequest, ...prompt };
     const { permission } = prompt;
+    const { requestId } = permission;
+    const { toolEdits } = session.view;
     return yield* session.approvals.enqueue('toolEdit', runId, {
-      // The preview is staged before the request opens, and stays staged
-      // until that request's `request.decided` releases it on every host:
-      // a surface reading the committed row must never find the request
-      // listed with nothing to show for it. Staging hands back the release
-      // for what it staged, bound to the host it staged on; the one case no
-      // decision ever reaches is an open that never committed, which
-      // `requests.ask` owns and runs this for.
-      prompt: session.interactions.presentToolEdit(staged).pipe(
-        Effect.flatMap((releaseStaged) =>
-          requests
-            .open(
-              { kind: 'toolEdit', data: permission },
-              {
-                // The host's own cleanup program, composed into the open:
-                // this call waits for it, and a host that fails to release
-                // says so here rather than through the refusal this tool
-                // reports, so cleanup never masks the caller's outcome.
-                onNeverCommitted: releaseStaged
-                  ? releaseStaged.pipe(
-                      Effect.catchCause((cause) =>
-                        Effect.logWarning(
-                          `Failed to release the tool-edit preview staged for request ${permission.requestId}`,
-                        ).pipe(
-                          Effect.annotateLogs({ data: Cause.squash(cause) }),
-                          withLogChannel(CHANNEL),
-                        ),
-                      ),
-                    )
-                  : Effect.void,
-              },
-            )
-            .pipe(
-              Effect.flatMap(
-                (decided): Effect.Effect<ToolEditApprovalResult> => {
-                  if (decided.action !== 'approve') {
-                    return Effect.succeed(refusalOf('toolEdit', decided));
-                  }
-                  return finalizeApprovalResult(
-                    (
-                      decided.content ?? preparedRequest.proposedContent
-                    ).replaceAll('\r\n', '\n'),
-                    preparedRequest,
-                  );
-                },
+      // The content is held in the session's store from before the request
+      // opens until this call stops waiting on it, however it stops: a
+      // surface reading the committed row never finds the request listed
+      // with nothing to show for it, and nothing is left behind. A host that
+      // stages its own preview releases it at the same point.
+      prompt: Effect.acquireUseRelease(
+        SubscriptionRef.update(
+          toolEdits,
+          HashMap.set<string, StagedToolEdit>(requestId, {
+            originalContent: staged.originalContent,
+            proposedContent: staged.proposedContent,
+            hunks: staged.hunks,
+            firstChangedLine: staged.firstChangedLine,
+            edited: null,
+          }),
+        ).pipe(Effect.andThen(session.interactions.presentToolEdit(staged))),
+        () =>
+          requests.open({ kind: 'toolEdit', data: permission }).pipe(
+            Effect.flatMap((decided): Effect.Effect<ToolEditApprovalResult> =>
+              decided.action !== 'approve'
+                ? Effect.succeed(refusalOf('toolEdit', decided))
+                : // An approval naming no content applies the user's edit
+                  // of the proposal, when a surface sent one.
+                  Effect.flatMap(SubscriptionRef.get(toolEdits), (held) =>
+                    finalizeApprovalResult(
+                      (
+                        decided.content ??
+                        Option.getOrUndefined(HashMap.get(held, requestId))
+                          ?.edited ??
+                        preparedRequest.proposedContent
+                      ).replaceAll('\r\n', '\n'),
+                      preparedRequest,
+                    ),
+                  ),
+            ),
+          ),
+        (releaseStaged) =>
+          SubscriptionRef.update(toolEdits, HashMap.remove(requestId)).pipe(
+            Effect.andThen(releaseStaged ?? Effect.void),
+            // A host that fails to release says so here, never through the
+            // outcome this tool reports.
+            Effect.catchCause((cause) =>
+              Effect.logWarning(
+                `Failed to release the tool-edit preview staged for request ${requestId}`,
+              ).pipe(
+                Effect.annotateLogs({ data: Cause.squash(cause) }),
+                withLogChannel(CHANNEL),
               ),
             ),
-        ),
+          ),
       ),
       bypassed: Effect.suspend(acceptProposedAsIs),
     });

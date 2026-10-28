@@ -57,6 +57,7 @@ import type { ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runFiles, type RunFilesServices } from './deletionCleanup';
+import { answerToolEditRequest } from './SessionView';
 
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
 type RequestServices = GlobalValues | RunFilesServices;
@@ -405,13 +406,12 @@ const handle = (
     case 'request.decide':
       return decideRequest(deps, req, heldHere);
     case 'request.preview':
-      // A request of another run: its staged content is not this caller's.
-      return pendingOf(deps, req.runId, req.requestId) === undefined
-        ? Effect.succeed({ kind: 'preview', preview: null })
-        : Effect.map(
-            deps.session().interactions.preview(req.requestId),
-            (preview): Outcome => ({ kind: 'preview', preview }),
-          );
+    case 'request.edit':
+      return answerToolEditRequest(
+        deps.session().view,
+        req,
+        settled(req.runId),
+      );
     case 'policy.set':
       return withRunClaim(
         deps,

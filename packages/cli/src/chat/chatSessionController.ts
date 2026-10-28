@@ -436,25 +436,7 @@ export function createChatSessionController(
     presentationHost,
     sessionContext,
     {
-      requests,
-      preview: !served
-        ? undefined
-        : (runId, requestId) =>
-            requests
-              .request({ kind: 'request.preview', runId, requestId })
-              .pipe(
-                // `request.preview` answers with a preview, null included;
-                // any other outcome is a broken protocol, not a missing one.
-                Effect.flatMap((outcome) =>
-                  outcome.kind === 'preview'
-                    ? Effect.succeed(outcome.preview)
-                    : Effect.die(
-                        new Error(
-                          `request.preview answered with a ${outcome.kind} outcome`,
-                        ),
-                      ),
-                ),
-              ),
+      requests: runSession,
       settings: stores,
       runtime,
     },

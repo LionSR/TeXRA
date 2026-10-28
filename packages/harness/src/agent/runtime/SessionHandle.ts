@@ -42,7 +42,10 @@ import type {
   SessionOpenError,
   SessionStoreMovedAside,
 } from '@shared/session/database';
-import type { RequestError } from '@shared/session/runtimeRequest';
+import type {
+  RequestError,
+  StagedToolEdits,
+} from '@shared/session/runtimeRequest';
 import type { RunHistory } from '@shared/session/runHistory';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft } from '@shared/session/runState';
@@ -197,6 +200,9 @@ export interface SessionViewAccess {
   ): Effect.Effect<void>;
   /** The runs a resume found blocked here, with what each waits for. */
   resumeBlocks(): LocalRuntimeState['resumeBlocked'];
+  /** Each pending tool edit's content and the user's edit of it, held while
+   *  the call that opened the request waits on it: local, never a row. */
+  readonly toolEdits: SubscriptionRef.SubscriptionRef<StagedToolEdits>;
 }
 
 /** A streaming row's closing fact, as the run history commits it. */
@@ -266,15 +272,6 @@ export interface AskOptions<E> {
   readonly open?: (
     rows: readonly RequestRow[],
   ) => Effect.Effect<CommitOrdinal, E>;
-  /**
-   * Cleanup for what the caller staged before the request opened, run once
-   * and uninterruptibly in the two cases that leave no row behind: the
-   * `request.opened` append was refused, or an interruption's cancellation
-   * found nothing open. A committed request always ends in a
-   * `request.decided`, the release every surface follows, so it is never
-   * released here.
-   */
-  readonly onNeverCommitted?: Effect.Effect<void>;
 }
 
 /**

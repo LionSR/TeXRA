@@ -22,6 +22,7 @@ import {
   Effect,
   Exit,
   Fiber,
+  HashMap,
   Layer,
   Option,
   type Scope,
@@ -37,6 +38,11 @@ import {
 } from '@shared/schemas';
 import { Database, type DatabaseReadFailed } from '@shared/session/database';
 import type { SessionView as ReadonlySessionView } from '@shared/session/readonlyViews';
+import type {
+  Outcome,
+  RuntimeRequest,
+  StagedToolEdits,
+} from '@shared/session/runtimeRequest';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { SessionView } from '@shared/session/sessionView';
@@ -285,5 +291,43 @@ export const makeSessionViewAccess = Effect.fn(
         };
       }),
     resumeBlocks: () => SubscriptionRef.getUnsafe(local.ref).resumeBlocked,
+    toolEdits: yield* SubscriptionRef.make<StagedToolEdits>(HashMap.empty()),
   };
 });
+
+/**
+ * Answer a surface's `request.preview` or `request.edit` from the session's
+ * tool-edit store, for a request the view lists on the run the surface
+ * named: another run's staged content is not that caller's. An edit fails
+ * with `refusal` once the request no longer waits.
+ */
+export function answerToolEditRequest<E>(
+  view: Pick<SessionViewAccess, 'ref' | 'toolEdits'>,
+  req: Extract<RuntimeRequest, { kind: 'request.preview' | 'request.edit' }>,
+  refusal: E,
+): Effect.Effect<Outcome, E> {
+  const pending = SubscriptionRef.getUnsafe(view.ref).requests.some(
+    (row) => row.runId === req.runId && row.requestId === req.requestId,
+  );
+  if (req.kind === 'request.preview')
+    return Effect.map(SubscriptionRef.get(view.toolEdits), (held) => ({
+      kind: 'preview',
+      preview: pending
+        ? Option.getOrNull(HashMap.get(held, req.requestId))
+        : null,
+    }));
+  // The host read these bytes itself, so they may be CRLF.
+  const edited = req.content.replaceAll('\r\n', '\n');
+  return SubscriptionRef.modify(view.toolEdits, (held) => {
+    const entry = HashMap.get(held, req.requestId);
+    return pending && Option.isSome(entry)
+      ? [true, HashMap.set(held, req.requestId, { ...entry.value, edited })]
+      : [false, held];
+  }).pipe(
+    Effect.filterOrFail(
+      (stored) => stored,
+      () => refusal,
+    ),
+    Effect.as({ kind: 'done' }),
+  );
+}
