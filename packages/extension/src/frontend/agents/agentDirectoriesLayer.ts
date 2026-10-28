@@ -9,7 +9,7 @@ import {
   AgentDirectories,
   AgentDirectoryService,
   AppState,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 
 const CHANNEL = 'AgentLoad';

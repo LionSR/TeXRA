@@ -19,7 +19,7 @@ import {
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { withLogChannel, type HostInteractions } from '@texra-ai/harness';
+import { withLogChannel, type HostInteractions } from '@texra-ai/harness/host';
 import { toErrorMessage, toJsonValue } from '@texra-ai/harness/schemas';
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { EditorCapabilities } from '@texra/tools/editorHost';

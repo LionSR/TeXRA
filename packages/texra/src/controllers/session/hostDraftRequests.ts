@@ -4,15 +4,13 @@ import { Buffer } from 'node:buffer';
 import { Deferred, Effect, Fiber, FileSystem } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
+import { Cancelled, Rejected, type WorkspaceRoots } from '@texra-ai/harness';
 import {
   AppState,
-  Cancelled,
   ownKeyCredential,
-  Rejected,
   Secrets,
   withLogChannel,
-  type WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
@@ -28,7 +26,7 @@ import {
   sweepStaleFiles,
   type PastedImageSaveFailed,
 } from '@texra/utils/files/pastedImageUtils';
-import type { StorageFs } from '@texra-ai/harness';
+import type { StorageFs } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'HostDraftRequests';
@@ -59,21 +57,26 @@ export class HostDraftRequests {
   private takeFiber: Fiber.Fiber<void> | null = null;
   private readonly listeners = new Set<(recording: Recording | null) => void>();
 
-  /** Bind one session's requests, recorder level, and disposal together. */
+  /** Bind one session's requests and recorder level for the caller's scope;
+   *  closing it stops observing and discards the session's take. */
   attach(
     roots: WorkspaceRoots,
     onRecording: (recording: Recording | null) => void,
   ) {
-    const stopObserving = this.subscribe(onRecording);
-    return {
-      handle: (request: DraftRequest, port: string) =>
-        this.handle(roots, request, port),
-      closePort: (port: string) => this.cancel(roots, port),
-      dispose: () => {
-        stopObserving();
-        this.cancel(roots);
-      },
-    };
+    return Effect.acquireRelease(
+      Effect.sync(() => this.subscribe(onRecording)),
+      (stopObserving) =>
+        Effect.sync(() => {
+          stopObserving();
+          this.cancel(roots);
+        }),
+    ).pipe(
+      Effect.as({
+        handle: (request: DraftRequest, port: string) =>
+          this.handle(roots, request, port),
+        closePort: (port: string) => this.cancel(roots, port),
+      }),
+    );
   }
 
   /** Every open paper observes the same recorder and its destination. */

@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
-import { withLogChannel, hasExtension } from '@texra-ai/harness';
+import { withLogChannel, hasExtension } from '@texra-ai/harness/host';
 import {
   readDirectoryTypedTolerant,
   entryTypeIn,

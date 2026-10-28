@@ -1,6 +1,6 @@
 import { Effect, FileSystem } from 'effect';
 
-import { AgentCatalog } from '@texra-ai/harness';
+import { AgentCatalog } from '@texra-ai/harness/host';
 import { pathExists } from '@texra-ai/harness/node';
 import { workspaceTexraConfigPath } from '@texra/platform/defaults/nodeStorage';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';

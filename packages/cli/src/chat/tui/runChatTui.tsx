@@ -17,7 +17,10 @@ import {
 } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import { AgentCatalog, SESSION_CLOSE_DEADLINE_MS } from '@texra-ai/harness';
+import {
+  AgentCatalog,
+  SESSION_CLOSE_DEADLINE_MS,
+} from '@texra-ai/harness/host';
 import {
   type RuntimeRequest,
   qualifyAggregateId,

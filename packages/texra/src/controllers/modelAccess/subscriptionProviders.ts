@@ -36,7 +36,7 @@ import {
   Secrets,
   SubscriptionPreference,
   withLogChannel,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   codexAccountLabel,
@@ -46,7 +46,7 @@ import {
 import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 import type { SecretsFailed } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 const CHANNEL = 'subscriptionProviders';
 

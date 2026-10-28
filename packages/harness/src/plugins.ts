@@ -66,7 +66,23 @@ export {
 export type { DefineToolOptions } from '@tools/core/definition';
 // A plugin's availability: the check of one that needs nothing installed,
 // and the one failure a probe raises.
-export { ALWAYS_AVAILABLE, ToolProbeFailed } from '@tools/toolProbes';
+export {
+  ALWAYS_AVAILABLE,
+  ToolProbeFailed,
+  type ToolAvailabilityChecks,
+  type ToolProbeError,
+  type ToolProbeInputs,
+  type ToolProbeServices,
+} from '@tools/toolProbes';
+// What a tool's body reads from its call: the run, its roots and its
+// requests (`ToolContext`), and the guard that may refuse a call first.
+export {
+  ToolContext,
+  type CallRequests,
+  type ToolContextShape,
+  type ToolEnv,
+  type ToolGuard,
+} from '@agent/core/tools/ToolTypes';
 export { errorResult, executed } from '@tools/core/result';
 // A listing's output text: its header over its lines, or a note for none.
 export { formatToolOutput } from '@tools/formatting';

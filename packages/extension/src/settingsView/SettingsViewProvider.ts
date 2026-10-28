@@ -6,7 +6,6 @@ import * as vscode from 'vscode';
 import { BundledViewContentProvider } from '@common/webview';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
-import { DisposableStore } from '@texra/platform/disposable';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 
@@ -15,17 +14,18 @@ import {
   postToWebview,
   SettingsViewMessageHandler,
 } from './SettingsViewMessageHandler';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ProcessRuntime,
   ProcessServices,
   PlatformSecrets,
-  WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 export class SettingsViewProvider {
   public static readonly viewType = 'texra.settingsView';
   private _view?: vscode.WebviewPanel;
-  private _viewDisposables = new DisposableStore();
+  /** The open panel's message and dispose listeners. */
+  private viewListeners?: vscode.Disposable;
   /** Whether the panel's frontend has posted `WEBVIEW_READY`. Until then a
    *  message posted to it is dropped, since its document may not have
    *  loaded or mounted a listener yet (#12495). */
@@ -92,8 +92,8 @@ export class SettingsViewProvider {
 
         this.cleanupView();
         this._view = panel;
-        this._viewDisposables.add(this.setupWebviewContent(panel));
-        this._viewDisposables.add(
+        this.viewListeners = vscode.Disposable.from(
+          this.setupWebviewContent(panel),
           panel.onDidDispose(this.cleanupView.bind(this)),
         );
       }
@@ -112,7 +112,7 @@ export class SettingsViewProvider {
   /**
    * Render this provider's HTML into `panel` and route the panel's inbound
    * messages to this provider's handler. The returned disposable removes that
-   * listener; the caller keeps it in the view disposable store.
+   * listener; the caller keeps it with the view's listeners.
    */
   private setupWebviewContent(panel: vscode.WebviewPanel): vscode.Disposable {
     // The template is read off this tick (it never rejects: a failed render
@@ -156,10 +156,10 @@ export class SettingsViewProvider {
   }
 
   private cleanupView(): void {
-    const disposables = this._viewDisposables;
-    this._viewDisposables = new DisposableStore();
+    const listeners = this.viewListeners;
+    this.viewListeners = undefined;
     try {
-      disposables.dispose();
+      listeners?.dispose();
     } finally {
       this._view = undefined;
       this.viewReady = false;

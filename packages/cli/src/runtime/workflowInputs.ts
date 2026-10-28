@@ -1,5 +1,9 @@
 import * as path from 'node:path';
-import { isPathWithin, isStrictlyWithin, toPosixPath } from '@texra-ai/harness';
+import {
+  isPathWithin,
+  isStrictlyWithin,
+  toPosixPath,
+} from '@texra-ai/harness/host';
 
 import { glob, hasMagic } from 'glob';
 import { Effect, FileSystem, Scope } from 'effect';

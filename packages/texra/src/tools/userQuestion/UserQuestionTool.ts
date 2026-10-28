@@ -1,6 +1,7 @@
 import { Effect, Schema } from 'effect';
 
-import { defineTool, withLogChannel } from '@texra-ai/harness';
+import { defineTool } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { requireRun, executed, refusalOf } from '@texra-ai/harness/plugins';
 import {
   UserQuestionAnswersSchema,

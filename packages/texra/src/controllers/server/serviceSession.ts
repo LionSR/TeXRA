@@ -32,19 +32,21 @@ import {
   Rejected,
   ResumeRefused,
   RunFailure,
-  StateReadFailed,
-  StateWriteFailed,
   ToolsRefused,
   TraceUnavailable,
   type ITool,
   type Run,
   type Session,
-  type StateStore,
   type WorkspaceRoots,
+} from '@texra-ai/harness';
+import {
+  StateReadFailed,
+  StateWriteFailed,
+  type StateStore,
   agentErrorPresentation,
   attachErrorPresentationClaimed,
   describeFollowUpFailure,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
 

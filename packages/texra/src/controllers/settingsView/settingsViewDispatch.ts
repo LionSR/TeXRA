@@ -8,7 +8,7 @@ import {
   type HandlerRegistry,
 } from '@texra/shared/utils/dispatcher';
 import type { SettingsViewInboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 /** Settings commands are programs; only the native host entry executes them. */
 export type SettingsViewInboundHandlerRegistry<R = ProcessServices> =

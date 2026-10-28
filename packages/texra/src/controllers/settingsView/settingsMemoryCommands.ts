@@ -4,11 +4,11 @@
  */
 import { Effect } from 'effect';
 
-import { StorageFs } from '@texra-ai/harness';
+import { StorageFs } from '@texra-ai/harness/host';
 import { MemoryStore } from '@texra-ai/harness/plugins';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 import type {
   SettingsHostBindings,

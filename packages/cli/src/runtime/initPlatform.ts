@@ -3,26 +3,27 @@ import { Cause, Effect, Exit, Scope } from 'effect';
 
 // Local imports
 import {
-  AppState,
   Sessions,
+  type WorkspaceRoots,
+  type LocalSession,
+  type SessionOpenError,
+} from '@texra-ai/harness';
+import {
+  AppState,
   setLogSink,
   type StateStore,
   type StateWriteFailed,
   Secrets,
   type PlatformSecrets,
-  type WorkspaceRoots,
-  type LocalSession,
-  type SessionOpenError,
   withProcessServices,
   StateStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   createNodeWorkspaceRoots,
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { ensureError, GlobalStateKey } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
-import { DisposableStore } from '@texra/platform/disposable';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -43,7 +44,7 @@ import {
 import { CliExitCode } from './exitCodes';
 import { terminalForegroundHeld } from './foregroundCommand';
 import type { CliContext } from './cliContext';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 // Removers for the listeners installCliShutdownSignalHandlers put on the
@@ -51,7 +52,7 @@ type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 // (not every SIGINT/SIGTERM listener on the process) once an exclusive owner
 // (the chat TUI) is about to install its own. Undefined means no platform
 // handlers are currently installed.
-let shutdownHandlers: DisposableStore | undefined;
+let shutdownHandlers: (() => void)[] | undefined;
 // What the first init installed, set in one assignment once its fallible
 // setup has succeeded; later inits return it rather than building a second
 // set. `session` is the one memoized open of the process session
@@ -189,7 +190,7 @@ export function runCliExit<E>(exit: Effect.Effect<void, E>): Promise<void> {
 
 function installCliShutdownSignalHandlers(quiet: boolean): void {
   if (shutdownHandlers) return;
-  const handlers = new DisposableStore();
+  const handlers: (() => void)[] = [];
   shutdownHandlers = handlers;
 
   const install = (signal: CliShutdownSignal, exitCode: number) => {
@@ -210,7 +211,7 @@ function installCliShutdownSignalHandlers(quiet: boolean): void {
       process.exit(exitCode);
     };
     process.once(signal, handler);
-    handlers.add(() => process.removeListener(signal, handler));
+    handlers.push(() => process.removeListener(signal, handler));
   };
 
   install('SIGINT', CliExitCode.Interrupted);
@@ -238,7 +239,7 @@ function installCliShutdownSignalHandlers(quiet: boolean): void {
  * call after an earlier handoff already ran).
  */
 export function handOffCliShutdownSignalHandlers(): void {
-  shutdownHandlers?.dispose();
+  for (const remove of shutdownHandlers ?? []) remove();
   shutdownHandlers = undefined;
 }
 

@@ -7,7 +7,8 @@
  */
 import { Effect, Predicate, Schema } from 'effect';
 
-import { defineTool, type ToolResult, AgentCatalog } from '@texra-ai/harness';
+import { defineTool, type ToolResult } from '@texra-ai/harness';
+import { AgentCatalog } from '@texra-ai/harness/host';
 import {
   requireRun,
   errorResult,

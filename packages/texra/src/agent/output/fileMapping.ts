@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { getPathSegments, toPosixPath } from '@texra-ai/harness';
+import { getPathSegments, toPosixPath } from '@texra-ai/harness/host';
 
 import { Effect, FileSystem } from 'effect';
 

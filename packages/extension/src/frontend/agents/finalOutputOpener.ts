@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { Effect, Result } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
 import type { RunEndResult, AgentConfig } from '@texra-ai/harness/schemas';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 const CHANNEL = 'FinalOutputOpener';
 

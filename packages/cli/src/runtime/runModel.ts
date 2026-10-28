@@ -11,7 +11,7 @@ import { CliUsageError, type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
 import { selectCliRunnableModel, type CliModelStores } from './modelAccess';
 import { shouldRenderRunProgress } from './runProgressRenderer';
-import type { RunModelCandidate } from '@texra-ai/harness';
+import type { RunModelCandidate } from '@texra-ai/harness/host';
 
 /** Trim `-m`; throw a Usage error for unknown ids; undefined when absent. */
 export function assertExplicitModelKnown(

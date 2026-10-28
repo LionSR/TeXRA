@@ -34,11 +34,8 @@ import {
 } from 'effect';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 
-import {
-  GlobalValues,
-  type ProcessServices,
-  type Sessions,
-} from '@texra-ai/harness';
+import { type Sessions } from '@texra-ai/harness';
+import { GlobalValues, type ProcessServices } from '@texra-ai/harness/host';
 import {
   probeService,
   ServiceUnavailable,

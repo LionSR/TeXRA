@@ -23,12 +23,9 @@
 
 // Third-party imports
 import { Effect, type FileSystem, Schema, Stream } from 'effect';
-import {
-  defineTool,
-  Secrets,
-  ToolContext,
-  type ToolResult,
-} from '@texra-ai/harness';
+import { defineTool, type ToolResult } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
+import { Secrets } from '@texra-ai/harness/host';
 
 // Local imports
 import {

@@ -7,12 +7,8 @@ import {
   type ActiveSkillSourceScope,
   type SkillDisplayItem,
 } from '@texra-ai/harness/schemas';
-import {
-  Settings,
-  Skills,
-  type ProcessRuntime,
-  type WorkspaceRoots,
-} from '@texra-ai/harness';
+import { type WorkspaceRoots } from '@texra-ai/harness';
+import { Settings, Skills, type ProcessRuntime } from '@texra-ai/harness/host';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 
 import { AsyncListForm } from './_shared/ListForm';

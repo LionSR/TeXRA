@@ -1,11 +1,7 @@
 import { Effect } from 'effect';
 
-import {
-  InstalledPlugins,
-  type DatabaseReadFailed,
-  type LocalSession,
-  type SettingsStores,
-} from '@texra-ai/harness';
+import { type DatabaseReadFailed, type LocalSession } from '@texra-ai/harness';
+import { InstalledPlugins, type SettingsStores } from '@texra-ai/harness/host';
 import {
   type RunEndResult,
   toErrorMessage,

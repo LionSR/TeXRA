@@ -24,7 +24,7 @@ import {
   type ProcessRuntime,
   type ProcessServices,
   ToolAvailability,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { linkOutage } from '@texra/controllers/server/client';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
@@ -54,7 +54,7 @@ import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { desktopSpawner, type DesktopSpawn } from './desktopWindows.js';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import type { PlatformSecrets } from '@texra-ai/harness/host';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type {
   DesktopProject,
@@ -345,7 +345,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         // launch includes AgentRunLifecycle's firstRunDone write.
         onRunCompleted: options.refreshFunnelAfterLaunch,
       });
-      const hostRequests = createDesktopHostRequests({
+      const hostRequests = yield* createDesktopHostRequests({
         runtime,
         spawn,
         project,
@@ -365,9 +365,8 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
             Effect.asVoid(tools.refresh(project.roots)),
           ),
       });
-      yield* Effect.addFinalizer(() => Effect.sync(hostRequests.dispose));
       // Registered after the host requests, so a port's release (its map
-      // entry, its transcript set, `onPortClosed`) precedes their disposal, as
+      // entry, its transcript set, `onPortClosed`) precedes their release, as
       // the extension's `dispose` orders them; awaited, unlike the bridge's.
       const port = yield* Effect.acquireRelease(
         bridge.attach({

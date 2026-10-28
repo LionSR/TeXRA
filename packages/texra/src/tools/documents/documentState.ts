@@ -35,7 +35,7 @@ import {
   pathToLocationIn,
   type AgentEntry,
   Settings,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import {
@@ -67,7 +67,7 @@ import {
   documentTaskOf,
   taskFileVars,
 } from '@texra/tools/documents/documentTask';
-import type { CallRequests, ToolEnv } from '@texra-ai/harness';
+import type { CallRequests, ToolEnv } from '@texra-ai/harness/plugins';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** What the documents read of the run their tool call serves. */

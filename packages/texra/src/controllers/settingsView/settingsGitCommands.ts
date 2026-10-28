@@ -18,7 +18,7 @@ import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@texra/tools/github/githubAuth';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import type { PlatformSecrets } from '@texra-ai/harness/host';
 
 import type {
   SettingsHostBindings,

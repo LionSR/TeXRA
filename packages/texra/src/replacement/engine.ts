@@ -5,7 +5,7 @@
 import { Effect, Result, absurd, Array as Arr } from 'effect';
 import { LRUCache } from 'lru-cache';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type {
   NonRegexReplacementCategory,

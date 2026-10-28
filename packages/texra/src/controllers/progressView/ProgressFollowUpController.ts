@@ -6,7 +6,7 @@ import {
   decideRunModel,
   type ModelHostFactUnreadable,
   type StateReadFailed,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   toErrorMessage,
   isTaskConfig,

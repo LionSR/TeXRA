@@ -1,7 +1,10 @@
 import { Effect } from 'effect';
 
 import { type ApiKeyProviderId } from '@texra-ai/llm';
-import { quotaFallbackRouteFor, type PlatformSecrets } from '@texra-ai/harness';
+import {
+  quotaFallbackRouteFor,
+  type PlatformSecrets,
+} from '@texra-ai/harness/host';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
@@ -14,7 +17,7 @@ import {
   type SlashCommandContext,
   transcriptSlashCommandOutput,
 } from './slashContext';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * Save a provider key through the shared key controller and answer the extra

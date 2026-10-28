@@ -17,7 +17,8 @@
 
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Cause, Effect, Schema } from 'effect';
-import { defineTool, withLogChannel, type ToolResult } from '@texra-ai/harness';
+import { defineTool, type ToolResult } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import {
   callerRun,
   ChildRuns,

@@ -1,7 +1,7 @@
 import { defineCommand, type ArgsDef, type CommandDef } from 'citty';
 import { Cause, Effect, Exit, Result } from 'effect';
 
-import { setLogSink } from '@texra-ai/harness';
+import { setLogSink } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
 import {
   installCliProcessRuntime,

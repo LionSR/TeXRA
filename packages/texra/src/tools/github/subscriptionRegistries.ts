@@ -61,39 +61,30 @@ export const gitHubSubscriptionsLayer: Layer.Layer<GitHubSubscriptions> =
           key: 'github-annotations',
         })
         .pipe(Effect.asVoid);
-      const pr = new PRPollingSource(lifetimes[0], claimAnnotation);
-      const repo = new RepoPollingSource(lifetimes[1]);
-      const issue = new IssuePollingSource(lifetimes[2]);
-      return yield* Effect.acquireRelease(
-        Effect.sync(() => ({
-          pr: new RunSubscriptionRegistry<string, PRSubscribeInput>({
-            name: 'PRRunSubscriptionRegistry',
-            source: pr,
-            keyOf: prKeyToString,
-          }),
-          repo: new RunSubscriptionRegistry<RepoKey, RepoSubscribeInput>({
-            name: 'RepoRunSubscriptionRegistry',
-            source: repo,
-            keyOf: repoKeyToString,
-          }),
-          issue: new RunSubscriptionRegistry<string, IssueKey>({
-            name: 'IssueRunSubscriptionRegistry',
-            source: issue,
-            keyOf: issueKeyToString,
-          }),
-          drainDeliveries: Effect.forEach(
-            lifetimes,
-            (lifetime) => lifetime.drain,
-            { concurrency: 'unbounded', discard: true },
-          ),
-        })),
-        (registries) =>
-          Effect.sync(() => {
-            registries.pr.dispose();
-            registries.repo.dispose();
-            registries.issue.dispose();
-          }),
-      );
+      // Each registry releases its bindings in this scope, after the
+      // lifetimes opened above, so it closes before they do.
+      return {
+        pr: yield* RunSubscriptionRegistry.make<string, PRSubscribeInput>({
+          name: 'PRRunSubscriptionRegistry',
+          source: new PRPollingSource(lifetimes[0], claimAnnotation),
+          keyOf: prKeyToString,
+        }),
+        repo: yield* RunSubscriptionRegistry.make<RepoKey, RepoSubscribeInput>({
+          name: 'RepoRunSubscriptionRegistry',
+          source: new RepoPollingSource(lifetimes[1]),
+          keyOf: repoKeyToString,
+        }),
+        issue: yield* RunSubscriptionRegistry.make<string, IssueKey>({
+          name: 'IssueRunSubscriptionRegistry',
+          source: new IssuePollingSource(lifetimes[2]),
+          keyOf: issueKeyToString,
+        }),
+        drainDeliveries: Effect.forEach(
+          lifetimes,
+          (lifetime) => lifetime.drain,
+          { concurrency: 'unbounded', discard: true },
+        ),
+      };
     }),
   ).pipe(
     Layer.provide(

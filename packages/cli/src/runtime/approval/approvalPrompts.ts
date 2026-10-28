@@ -4,7 +4,7 @@ import {
   withLogChannel,
   type PerKeyLane,
   withPerKeyLane,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   type RequestDecision,
   ensureError,

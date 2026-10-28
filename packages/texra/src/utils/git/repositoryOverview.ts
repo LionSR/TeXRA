@@ -26,7 +26,7 @@ import {
   splitCommitLines,
 } from '@texra/utils/git/commitLogFormat';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * Hard upper bound on git output bytes (8 MiB). Commit subjects and numstat

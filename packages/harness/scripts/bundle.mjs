@@ -15,6 +15,7 @@ await build({
     schemas: 'src/schemas.ts',
     transcript: 'src/transcriptEntry.ts',
     plugins: 'src/plugins.ts',
+    host: 'src/host.ts',
     node: 'src/node.ts',
   },
   format: 'esm',

@@ -284,6 +284,29 @@ The run the current call works for; none for a standalone host call.
 const callerRun: Effect.Effect<ToolRun | undefined, never, ToolContext>
 ```
 
+## CallRequests
+
+The requests one tool call raises, opened through its run's loop. Each
+carries an id its attempt derives, so a person's pending approval outlives
+the process that asked: a resume re-enters the call, and the call opens
+that same request again, joining it instead of asking twice.
+
+```ts
+interface CallRequests {
+  /** The id the call's next request of `kind` opens under: the request a
+   *  resumed call left standing, when it is of this kind, else the
+   *  attempt's next derived id. A request is staged under this id before
+   *  it opens. */
+  readonly nextId: (kind: PermissionPayload['kind']) => string;
+  /** Open the request (or re-enter the standing one) and wait for its
+   *  decision, as `SessionRequests.ask` does. */
+  readonly open: (
+    payload: PermissionPayload,
+    options?: { readonly onNeverCommitted?: Effect.Effect<void> },
+  ) => Effect.Effect<RequestDecision, DatabaseNotOwner | CellError>;
+}
+```
+
 ## CallServices
 
 The runtime's services a call reads: the process's, the rooted
@@ -528,8 +551,10 @@ type DefineToolOptions<T, R = never> = Required<
      * tool already has, it never sets it.
      */
     guard?: ToolGuard<T, NoInfer<R>>;
-    /** The run body. */
-    execute: (input: T) => Effect.Effect<ToolResult, Error, R>;
+    /** The run body. Succeed with the text the model reads back, or with a
+     *  whole `ToolResult` for a summary, attachments or facts; fail with
+     *  an `Error` and the model reads its message as the tool's error. */
+    execute: (input: T) => Effect.Effect<ToolResult | string, Error, R>;
   };
 ```
 
@@ -903,7 +928,7 @@ The memory tree's host-facing reads and edits, over the caller's
 `StorageFs`.
 
 ```ts
-const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<string, Error, never>; displayPath: (storagePath: string) => string; list: Effect<{ readonly size: number; readonly displayPath: string; readonly storagePath: string; readonly mtime: string; readonly preview?: string | undefined; readonly lineCount?: number | undefined; readonly previewError?: boolean | undefined; readonly modifiedBy?: string | undefined; readonly pinned?: boolean | undefined; }[], PlatformError, StorageFs>; preview: (input: string) => Effect<MemoryPreview, Error | PlatformError, StorageFs>; delete: (input: string) => Effect<void, Error | PlatformError, StorageFs>; pin: (input: string, pinned: boolean) => Effect<MemoryPinResult, Error | PlatformError, StorageFs>; }
+const MemoryStore: { folder: "memories"; storagePath: (input: string) => Effect<string, Error, never>; displayPath: (storagePath: string) => string; list: Effect<{ readonly displayPath: string; readonly storagePath: string; readonly size: number; readonly mtime: string; readonly preview?: string | undefined; readonly lineCount?: number | undefined; readonly previewError?: boolean | undefined; readonly modifiedBy?: string | undefined; readonly pinned?: boolean | undefined; }[], PlatformError, StorageFs>; preview: (input: string) => Effect<MemoryPreview, Error | PlatformError, StorageFs>; delete: (input: string) => Effect<void, Error | PlatformError, StorageFs>; pin: (input: string, pinned: boolean) => Effect<MemoryPinResult, Error | PlatformError, StorageFs>; }
 ```
 
 ## memoryWorkflow
@@ -1667,6 +1692,45 @@ custom keys beside the fixed ones.
 type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
 ```
 
+## ToolAvailabilityChecks
+
+How a plugin with an external dependency answers "is it available": an
+optional shared `probe` whose result the availability layer caches and
+hands back to `check` (availability), `statusLabel` (dashboard badge) and
+`detailCheck` (the line below the description).
+
+```ts
+interface ToolAvailabilityChecks<R = ToolProbeServices> {
+  /**
+   * Optional shared probe result passed to check/status/detail callbacks.
+   * Takes the asking workspace as data: a probe may ask whether that folder
+   * is a git repository, or read a port out of that workspace's
+   * configuration.
+   */
+  readonly probe?: (
+    inputs: ToolProbeInputs,
+  ) => Effect.Effect<unknown, ToolProbeError, R>;
+  /** Returns true if the external dependency is available. */
+  readonly check: (
+    probeResult?: unknown,
+  ) => Effect.Effect<boolean, ToolProbeError, R>;
+  /** Optional detailed status string resolved at check time (shown below description). */
+  readonly detailCheck?: (
+    probeResult?: unknown,
+  ) => Effect.Effect<string | undefined, ToolProbeError, R>;
+  /** Optional short status label for the dashboard badge. */
+  readonly statusLabel?: (
+    probeResult?: unknown,
+  ) => Effect.Effect<string | undefined, ToolProbeError, R>;
+  /**
+   * The secret-store keys this plugin's answer reads. A committed write to any
+   * of them (`credentialChanged`) re-probes every open workspace, so a plugin
+   * gated on a credential declares it here instead of each host naming it.
+   */
+  readonly reprobeOnSecrets?: readonly string[];
+}
+```
+
 ## ToolCardHandle
 
 Handle returned by `openToolCard`: one tool call's card, for a caller that
@@ -1687,6 +1751,35 @@ interface ToolCardHandle {
    * is left as it closed.
    */
   failIfOpen(): void;
+}
+```
+
+## ToolContext
+
+The tool call the running tool serves.
+
+```ts
+class ToolContext extends Context.Service<
+  ToolContext,
+  ToolContextShape
+>()('@texra-ai/harness/agent/ToolContext')
+```
+
+## ToolContextShape
+
+What every tool call knows of itself.
+
+```ts
+interface ToolContextShape {
+  /** The call's id, as the model (or the host) issued it. */
+  readonly callId: string;
+  /** Where the call works. */
+  readonly env: ToolEnv;
+  /** Where the call's requests to a person open; absent for a standalone
+   *  host invocation outside an agent run, which has nobody to ask. */
+  readonly requests?: CallRequests;
+  /** Transient output for the call's card while it runs, never a row. */
+  readonly emit: (text: string) => void;
 }
 ```
 
@@ -1721,6 +1814,25 @@ type ToolEditProposal = Omit<
 >;
 ```
 
+## ToolEnv
+
+Where a call works: the session's roots (its workspace folder, the
+setting slots and its storage), the run's working directory, and the
+read-only roots the call's step admits (the skills it lists or its user
+activated). A tool's paths resolve against it.
+`workingDirectory` is already absolute or absent: the run decides it once
+where it is launched (`buildAgentLaunchContext`).
+
+```ts
+interface ToolEnv {
+  readonly roots: WorkspaceRoots;
+  readonly workingDirectory?: string;
+  readonly stepRoots?: readonly StepRoot[];
+  /** The run the call works for; absent for a standalone host invocation. */
+  readonly run?: ToolRun;
+}
+```
+
 ## ToolError
 
 ```ts
@@ -1731,6 +1843,42 @@ class ToolError extends Error
 
 ```ts
 type ToolFileAttachment = typeof ToolFileAttachmentSchema.Type;
+```
+
+## ToolGuard
+
+The guard the run loop applies before a tool's body runs, declared on the
+tool instead of called inside it: the paths the call writes and the command
+it must get approved. `agent/runtime/loop/toolGuard.ts` is the one place
+either is asked for, so no tool body opens its own approval prompt or
+re-checks its own roots.
+
+```ts
+interface ToolGuard<T, R = never> {
+  /**
+   * The paths this call writes, read from its arguments. Each is resolved
+   * against the call's workspace and working directory — which refuses a path
+   * outside either — and refused when it lands in a read-only external root.
+   */
+  readonly writes?: (input: T) => readonly string[];
+  /**
+   * The command this call runs, spelled as the approval prompt shows it. The
+   * loop puts it through the session's bash approval before the body runs.
+   * Only the `bash` tool's commands take the run's command grant; any other
+   * tool's call is asked about per call.
+   * An Effect because the spelling can depend on settings the prompt must
+   * show (a Codex sandbox mode, a Claude permission mode).
+   */
+  readonly bash?: (input: T) => Effect.Effect<string, Error, R>;
+  /**
+   * Where the approved command actually runs, when that is not the call's own
+   * directory. Omitted: the call's working directory, else the workspace,
+   * which is what a shell-shaped tool uses. `'unknown'`: the executor cannot name one, so the
+   * prompt names none rather than a directory the command may not run in
+   * (`send_to_terminal` reuses a terminal whose shell has its own directory).
+   */
+  readonly cwd?: 'unknown';
+}
 ```
 
 ## ToolPathCall
@@ -1776,6 +1924,14 @@ interface ToolPolicy {
 }
 ```
 
+## ToolProbeError
+
+What a plugin's availability callbacks may fail with.
+
+```ts
+type ToolProbeError = ToolProbeFailed | SecretsFailed;
+```
+
 ## ToolProbeFailed
 
 The one failure of this module's probes: the native binary lookup a CLI's
@@ -1792,6 +1948,37 @@ class ToolProbeFailed extends Schema.TaggedError<ToolProbeFailed>()(
     cause: Schema.optional(Schema.Defect()),
   },
 )
+```
+
+## ToolProbeInputs
+
+The asking workspace, carried into a plugin's probe as data rather than read
+from an ambient scope: the folder a probe asks whether it is a git
+repository, the configuration a probe reads a port from, and the host a
+probe asks whether the editor drives a tool for it: three fields of the
+roots every caller of the availability surface opened.
+
+```ts
+type ToolProbeInputs = Pick<
+  WorkspaceRoots,
+  'workspace' | 'config' | 'host'
+>;
+```
+
+## ToolProbeServices
+
+The process services a plugin's availability callbacks read: provider
+credentials, the HTTP client a localhost probe requests through, the
+spawner every probe runs its child processes on, and the filesystem the
+CLI binary probes look in. All four are `ProcessServices` arms, so every
+caller of the availability surface already holds them. A plugin's probe
+may also read its own process services (`definePlugin`), which it is
+served while its layer is up; what its host passes it (an editor's
+extensions) it closes over.
+
+```ts
+type ToolProbeServices =
+  Secrets | FileSystem.FileSystem | HttpClient.HttpClient | ChildProcessSpawner;
 ```
 
 ## ToolRegistry

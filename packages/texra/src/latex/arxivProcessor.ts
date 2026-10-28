@@ -28,7 +28,7 @@ import { Headers, HttpClient } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 import * as tar from 'tar';
 
-import { withLogChannel, hasExtension } from '@texra-ai/harness';
+import { withLogChannel, hasExtension } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
 import {

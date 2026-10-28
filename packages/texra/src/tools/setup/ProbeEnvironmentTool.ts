@@ -11,12 +11,9 @@ import {
   apiProviderOfSecretName,
   lookupApiKeyOrigin,
 } from '@texra-ai/llm';
-import {
-  defineTool,
-  Secrets,
-  ToolContext,
-  withLogChannel,
-} from '@texra-ai/harness';
+import { defineTool } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
+import { Secrets, withLogChannel } from '@texra-ai/harness/host';
 import { homeDirectory, withExtendedPath } from '@texra-ai/harness/node';
 import { executed, ToolError } from '@texra-ai/harness/plugins';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';

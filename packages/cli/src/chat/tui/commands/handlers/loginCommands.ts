@@ -34,7 +34,7 @@ import type {
   Secrets,
   PlatformSecrets,
   SettingsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 const CHAT_LOGIN_USAGE = [
   'Usage: /login chatgpt [--no-browser] [--device]',

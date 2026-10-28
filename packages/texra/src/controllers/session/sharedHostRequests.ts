@@ -41,12 +41,12 @@ import {
   type WorkflowFileOperationResult,
 } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ProcessServices,
   StorageFs,
   WorkspaceFs,
-  WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The kinds {@link handleSharedHostRequest} answers. */
@@ -176,7 +176,9 @@ export interface SharedHostRequestPorts {
   readonly snapshot: HostSnapshotSource;
   /** This session's take on the one process recorder, as
    *  {@link HostDraftRequests.attach} bound it. */
-  readonly draftRequests: ReturnType<HostDraftRequests['attach']>;
+  readonly draftRequests: Effect.Success<
+    ReturnType<HostDraftRequests['attach']>
+  >;
   readonly toolEditApprovals: ToolEditApprovalController;
   readonly roots: WorkspaceRoots;
   readonly host: SharedHostRequestBindings;
