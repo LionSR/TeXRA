@@ -670,7 +670,7 @@ any took its answer stops it (`agent/runtime/resumeRun.ts`,
 process is refused. A child an open call
 of its parent owns resumes through that parent
 (`agent/runtime/resumeRun.ts:193-196`; a wake follows it itself,
-`agent/followUp/ToolUseFollowUp.ts:250-251`, and the package's resume through
+`agent/followUp/ToolUseFollowUp.ts:256-257`, and the package's resume through
 `effect/sessionPrograms.ts:222`).
 
 The resume first takes the run's claim in its own transaction, before its

@@ -1,4 +1,4 @@
-import { Cause, Deferred, Effect, Exit } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import { runRejection } from '@agent/storage/resumability';
@@ -18,6 +18,7 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
+import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { InboxItem } from './Inbox';
 
@@ -130,6 +131,10 @@ export interface RunAttempt {
   /** A caller took its answer, or none holds it (a wake): only a stop or
    *  the session's close ends the run now. */
   handedOff: boolean;
+  /** The activation it opened (`RunRegistry.start` links it): the one
+   *  record of a stop's reason, which its generation's exit and its own
+   *  read, and which outlives the registry's entry. */
+  activation?: { readonly stopReason?: RunStopReason };
 }
 
 /**
@@ -181,17 +186,15 @@ export const openResume = (
       handedOff: false,
     };
     const { session } = options;
-    let ran = false;
     // A stop recorded before this fiber ran had no fiber to interrupt: the
     // decision reads it first, under its exit's handler.
-    const decided = Effect.suspend(() => {
-      ran = true;
-      return session.runs.get(runId)?.stopReason === undefined
+    const decided = Effect.suspend(() =>
+      attempt.activation?.stopReason === undefined
         ? runs.programs.resume(runId, options, (commit) =>
             Deferred.succeed(attempt.admitted, commit),
           )
-        : Effect.interrupt;
-    }).pipe(Effect.onExit(stoppedUnadmitted(session, runId, attempt)));
+        : Effect.interrupt,
+    ).pipe(Effect.onExit(stoppedUnadmitted(session, runId, attempt)));
     const fiber = yield* runs.start(
       runId,
       wake ? woken(runId, session, decided) : decided,
@@ -199,9 +202,12 @@ export const openResume = (
       null,
       attempt,
     );
-    // Not opened (it has not run and is not the activation's): join.
-    if (!ran && runs.attemptOf(runId) !== attempt)
+    // Another resume holds the activation: this one's launch is refused
+    // (`RunLive`), and it joins that one.
+    if (attempt.activation === undefined) {
+      yield* Effect.exit(Fiber.join(fiber));
       return yield* openResume(runId, options, wake);
+    }
     fiber.addObserver((exit) => Deferred.doneUnsafe(done, exit));
     return { attempt, joined: false };
   });
@@ -214,7 +220,7 @@ const stoppedUnadmitted =
     if (
       !Exit.hasInterrupts(exit) ||
       Deferred.isDoneUnsafe(attempt.admitted) ||
-      session.runs.get(runId)?.stopReason !== 'user'
+      attempt.activation?.stopReason !== 'user'
     )
       return Effect.void;
     const cancelled = {

@@ -362,6 +362,7 @@ export class RunRegistry implements RunsShape {
           ? { unbornParent: launchParent, stopped: false, attempt }
           : (!attempt && activation.deciding && activation) || undefined;
       if (own) own.deciding = undefined;
+      if (attempt && own) attempt.activation = own;
       entry.activation ??= own;
       const body = attempt ? program : this.admit(runId, program, false);
       const fiber = this.init.fork(

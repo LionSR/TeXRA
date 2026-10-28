@@ -99,12 +99,12 @@ type Launch = (
  * there; a launch that fails first fails this with its own error.
  *
  * The handoff is all-or-nothing for its caller: this either returns a
- * `Run`, or it ends every fiber it started. A launch's caller is one of the
- * resume's callers, so abandoning the handoff stops the launch unless
- * another caller still waits on it (`resumeRun`); once a `Run` is returned
- * only a stop or the session's close ends the run. A caller that joined a
- * resume already in flight is an observer: its `interrupt` ends only its
- * own wait and its events, never the run.
+ * `Run`, or it ends every fiber it started. Each caller of a resume waits
+ * on it (`resumeRun`): abandoning the handoff before a `Run` is returned
+ * stops the run only when no other caller still waits on it, and once any
+ * caller holds a `Run` only a stop or the session's close ends the run. A
+ * `Run` whose caller joined a resume in flight is an observer: its
+ * `interrupt` ends only its own wait and its events.
  */
 export function handOver(
   session: RuntimeSessionHandle,

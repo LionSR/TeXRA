@@ -325,6 +325,44 @@ describe(
     );
 
     it.live(
+      "a user's stop after a resume launched its generation, before admission, ends the run cancelled once",
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          const faults = yield* sessionStoreFaults(storage);
+          // The resume reads the run's input and lineage, then launches its
+          // generation, whose first read the stop lands on.
+          const claim = yield* faults.holdNext('acquireClaims');
+          const resumed = yield* Effect.forkChild(
+            Effect.exit(resume(runId, { session })),
+          );
+          yield* claim.reached;
+          const input = yield* faults.holdNext('readAggregate');
+          yield* claim.release;
+          yield* input.reached;
+          const lineage = yield* faults.holdNext('readRunRecords');
+          yield* input.release;
+          yield* lineage.reached;
+          const launched = yield* faults.holdNext('readRunRecords');
+          yield* lineage.release;
+          yield* launched.reached;
+          // Its generation holds the run here, not yet admitted.
+          expect(session.runs.get(runId)?.live).toBe(true);
+
+          session.runs.stop(runId, {
+            reason: 'user',
+            detachActiveChildren: false,
+          });
+          expect(session.runs.get(runId)?.stopReason).toBe('user');
+          yield* launched.release;
+          yield* Fiber.join(resumed);
+
+          expect(endsOf(storage, runId)).toEqual(['cancelled']);
+          expect(activations(storage, runId)).toBe(1);
+        }),
+    );
+
+    it.live(
       'a second SDK resumer is handed the run when the first leaves before admission',
       () =>
         Effect.gen(function* () {
