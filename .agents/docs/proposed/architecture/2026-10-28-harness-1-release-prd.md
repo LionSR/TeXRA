@@ -9,7 +9,7 @@ Harness 1.0 提供一个可以独立使用、允许模型编写策略、能够�
 
 本次发布要兑现三个承诺：**模型有编程自由，运行有明确所有者，正式发布的数据可以持续使用。** 内核维护调用、权限、资源和持久化契约；goal、研究流程和领域策略由脚本及插件表达。实现应让普通功能只表达自身的行为，少量既有边界负责记录、恢复和资源释放；新增功能不应重复编写这些协议。
 
-状态：产品需求提案。下文“必须”是建议纳入 1.0 的验收要求，不表示实现已经完成。已合入代码基线为 `main` 的 `f4c9efd355e148b7507354713e1db7b86655b7d2`。以下计划把相关 open PR 按预期会合入处理，但区分现有实现、待整合改动与剩余工作；预期合入不等于已经通过组合验证。
+状态：产品需求提案，首批实现已开始。下文“必须”是建议纳入 1.0 的验收要求，不表示实现已经完成。已合入代码基线为 `main` 的 `fa6fb1e04f0a9812fa5cdfd17684c31c13d8a790`。以下计划把相关 open PR 按预期会合入处理，但区分现有实现、待整合改动与剩余工作；预期合入不等于已经通过组合验证。
 
 ## 目标用户和使用场景
 
@@ -62,28 +62,28 @@ Harness 1.0 提供一个可以独立使用、允许模型编写策略、能够�
 
 ## 与当前 open PR 的协调
 
-2026-10-28 核对了以下 9 个 open PR 的源码 head。它们共同构成后续实现的预计基线，不重复另做同一项清理。`#14347` 的 AppSignals 服务化已经在上述 main 中。
+2026-10-28 首次核对了以下 9 个 PR，并在实施前刷新状态和 head。`#14344` 已合入，`#14342`、`#14346` 已关闭且未合并；其余六项仍为预计基线，不重复另做同一项清理。`#14347` 的 AppSignals 服务化也已在上述 main 中。
 
-| PR / 核对的 head                                                    | 预计纳入的内容                                                                                | 本 PRD 的处理                                                                                           |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [#14340](https://github.com/LionSR/TeXRA/pull/14340) / `35d7c2f997` | 文档输出根据报告的 source 复用同一配对规则，修复同名文件的 input 改写                         | 作为 TeXRA 应用正确性基线；不扩展 harness 内核职责                                                      |
-| [#14342](https://github.com/LionSR/TeXRA/pull/14342) / `296554c0bd` | attached child 经 SDK 恢复的集成回归场景                                                      | 必需 completion 与 SDK 直接等待已被 #14335 吸收；只整合仍有效的测试和剩余证据，保留 main 的终结结果恢复 |
-| [#14343](https://github.com/LionSR/TeXRA/pull/14343) / `fe0ae8437e` | 单一 `homeDirectory` Effect，替换重复查找与静默失败                                           | 作为已有能力消费；与 skills 来源改动一起保留，避免重复实现目录探测                                      |
-| [#14344](https://github.com/LionSR/TeXRA/pull/14344) / `0095a2e8f0` | `erasableSyntaxOnly` 编译器约束，替代本地语法检查；字段声明等机械改写                         | 纳入代码规范基线；不算完成 resume、registry 或 SQL 的职责简化                                           |
-| [#14346](https://github.com/LionSR/TeXRA/pull/14346) / `c4d777f7ca` | API 生成页的成员顺序修复                                                                      | 部分已在 main，其余被新类型形状取代；在最终源码上重新生成，不回填旧生成行                               |
-| [#14348](https://github.com/LionSR/TeXRA/pull/14348) / `3df88d0fe1` | `Secrets` 从 Effect context 读取，删除 `ModelOptionStores` 与手工传递                         | 公开示例和后续实现使用新服务要求；不再计划一轮同样的参数清理                                            |
-| [#14349](https://github.com/LionSR/TeXRA/pull/14349) / `43fb8a5755` | 预期失败保留在 typed error channel，删除 `runCliMemory` 等转成 defect 的包装                  | 作为错误处理基线；不误认为已经去掉正常 parent redirect 的异常往返                                       |
-| [#14350](https://github.com/LionSR/TeXRA/pull/14350) / `0bd092d991` | 修正现有转换链的索引与首发支持检查；当前为 draft                                              | 独立正确性依赖；合入后只做历史与当前执行的解耦，不另建迁移框架                                          |
-| [#14351](https://github.com/LionSR/TeXRA/pull/14351) / `7c8090c1de` | `HostSkillSources` 由 `processLayer` 提供，删除 process global、安装 setter 和 bootstrap 步骤 | 公开初始化示例采用新 `skills` 配置；不再新增另一套 skills 初始化或全局状态清理                          |
+| PR / 核对的 head                                                    | 预计纳入的内容                                                                                | 本 PRD 的处理                                                                   |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [#14340](https://github.com/LionSR/TeXRA/pull/14340) / `35d7c2f997` | 文档输出根据报告的 source 复用同一配对规则，修复同名文件的 input 改写                         | 作为 TeXRA 应用正确性基线；不扩展 harness 内核职责                              |
+| [#14342](https://github.com/LionSR/TeXRA/pull/14342) / `296554c0bd` | 已关闭，被 #14335 替代；独立 crash-copy 回归未移入 main                                       | 保留 main 的 completion 与 durable 终结结果恢复；未移入的回归不算已有覆盖       |
+| [#14343](https://github.com/LionSR/TeXRA/pull/14343) / `26cafbddea` | 单一 `homeDirectory` Effect，替换重复查找与静默失败                                           | 已刷新 main；与 skills 来源改动一起保留，避免重复实现目录探测                   |
+| [#14344](https://github.com/LionSR/TeXRA/pull/14344) / `fa6fb1e04f` | 已合入：`erasableSyntaxOnly` 编译器约束与字段声明等机械改写                                   | 已是代码规范基线；不算完成 resume、registry 或 SQL 的职责简化                   |
+| [#14346](https://github.com/LionSR/TeXRA/pull/14346) / `c4d777f7ca` | 已关闭：旧 API 生成物被 main 替代                                                             | 在最终源码上重新生成，不回填旧生成行                                            |
+| [#14348](https://github.com/LionSR/TeXRA/pull/14348) / `e9f992ea1e` | `Secrets` 从 Effect context 读取，删除 `ModelOptionStores` 与手工传递                         | 已解决 #14344 构造函数冲突；删除 extension 中剩余的无用读取，不重复参数清理     |
+| [#14349](https://github.com/LionSR/TeXRA/pull/14349) / `6bc32a228c` | 预期失败保留在 typed error channel，删除 `runCliMemory` 等转成 defect 的包装                  | 已刷新 main；不误认为已经去掉正常 parent redirect 的异常往返                    |
+| [#14350](https://github.com/LionSR/TeXRA/pull/14350) / `0bd092d991` | 修正现有转换链的索引与首发支持检查；当前为 draft                                              | 独立正确性依赖；历史与当前执行的解耦独立推进，不另建迁移框架                    |
+| [#14351](https://github.com/LionSR/TeXRA/pull/14351) / `1158c2e114` | `HostSkillSources` 由 `processLayer` 提供，删除 process global、安装 setter 和 bootstrap 步骤 | 已正确保留 #14347 的 AppSignals 与 Secrets 初始化；公开示例采用新 `skills` 配置 |
 
 ### 整合时必须保留的语义
 
-- **#14342 先按当前 main 缩减。** main 已在 child fiber 不返回 turn 时读取 durable `run.end`，还原 cancelled/failed 及其详情。不能用该 PR 的 `ResumedChildWithoutResult` 无条件替换；缺少内存返回值不等于没有持久结果。新增 crash 用例中的旧 `parent.callId` 要改为当前 `parent.call?.callId`，并保留现有 child completion 断言。该 PR 不能关闭共享归属、parent redirect 或输入回执的剩余任务。
-- **#14351 在 #14347 之上整合。** 保留 main 的 `AppSignals.layer`、`Secrets.announcing(...)` 和 Secrets layer 需求，再加入 `HostSkillSources`；不能带回旧的裸 Secrets 初始化。与 #14343 冲突的 `runtimeSkills.ts` 同时保留 `homeDirectory` 和 `HostSkillSources` 的读取。
-- **#14348 与 #14344 一起核对构造函数。** `ProgressViewProvider.ts` 和 `SettingsViewProvider.ts` 有实际文本冲突：先保留删除 secrets 传递的功能意图，再使剩余字段符合 erasable syntax；不能因机械声明恢复已删除字段。语法改写不会替代所有权清理。
-- **生成物以组合后的源码为准。** #14343、#14346、#14348、#14351 之间或与 main 的 API 文档/报告冲突，统一在最终源码上生成。#14346 不再作为必须原样合入的独立代码前提。
+- **保留 main 的 child 终结结果恢复。** main 已在 child fiber 不返回 turn 时读取 durable `run.end`，还原 cancelled/failed 及其详情。不能从已关闭的 #14342 带回 `ResumedChildWithoutResult` 的无条件失败；缺少内存返回值不等于没有持久结果。该 PR 的关闭不能关闭共享归属或输入回执的剩余任务。
+- **#14343 与 #14351 同时保留两种来源。** `runtimeSkills.ts` 的冲突仍需保留 `homeDirectory` 和 `HostSkillSources` 的读取，不能恢复 process global `installed`。#14351 与 #14347 的初始化冲突已解决，保留该结果。
+- **保留 #14348 已解决的构造函数。** 当前 head 已同时满足 erasable syntax 和删除 secrets 传递；不再把旧的机械冲突列为待办。语法改写不会替代所有权清理。
+- **生成物以组合后的源码为准。** #14343、#14348、#14351 之间或与实施分支的 API 文档/报告冲突，统一在最终源码上生成。#14346 不再作为必须原样合入的独立代码前提。
 
-建议先收敛 #14342 的有效差异；服务初始化按已合入的 #14347 → #14343/#14351 整合，#14348 的参数删除与 #14344 的语法转换一起核对。#14340、#14349、#14350 可独立推进；全部来源变化稳定后再生成 API 报告和文档，随后开始下方的增量清理与完整路径验收。这是冲突处理顺序，不要求制造新的串行依赖。
+服务初始化按已合入的 #14347 → #14343/#14351 整合，保留 #14348 已解决的参数删除。#14340、#14349、#14350 可独立推进；增量实现可以同步推进，全部来源变化稳定后再生成 API 报告和文档并运行组合验收。这是冲突处理顺序，不要求制造新的串行依赖。
 
 #14344 对五项 file-size baseline 合计增加 12 行，PR/commit 将其描述为已批准的机械声明例外；本次只核对了差异，没有独立核实批准来源。它不构成本 PRD 后续工作放宽质量 baseline 的许可。该 PR 用编译器替代一项检查的收益，与新增的 core 外检查覆盖分别记录，不作为运行时复杂度已经下降的证据。
 
@@ -154,7 +154,7 @@ Harness 1.0 提供一个可以独立使用、允许模型编写策略、能够�
 
 ### Resume 的职责和删除顺序
 
-当前 `ResumeRunResult` 同时返回 `started`、`delivered`、`outcome` 和另一个 `completion`；SDK 又通过 `joined`、`cancelled`、启动的 fibers 和回调参与执行归属判断。问题是跨层协议，不是这些字段天然重复。首次启动与恢复已经共用运行循环，成功启动的 root/child 也都已有必需的 completion，继续保留这两点；#14342 按上节整合集成回归证据，不重复实现 completion。
+当前 `ResumeRunResult` 同时返回 `started`、`delivered`、`outcome` 和另一个 `completion`；SDK 又通过 `joined`、`cancelled`、启动的 fibers 和回调参与执行归属判断。问题是跨层协议，不是这些字段天然重复。首次启动与恢复已经共用运行循环，成功启动的 root/child 也都已有必需的 completion，继续保留这两点；#14342 已关闭，不重复实现 completion，未移入的回归证据仍需单独验收。
 
 | 职责               | 唯一负责的边界                      | 对外含义                                      |
 | ------------------ | ----------------------------------- | --------------------------------------------- |
@@ -286,22 +286,34 @@ Prompt 模板与脚本代码是两种组合方式。1.0 保留参数化 prompt �
 
 ### Verified：本轮已核查的范围
 
-此前数据库、resume、codemode/plugin 三项基线审查并行完成；现有 `resumeRun`、`AgentPackage`、`RunRegistry` 三个套件共 10 项测试通过。该结果不代表待合入 PR 的组合已经通过测试。
+首批实施已分别提交为 draft PR，均基于 `fa6fb1e04f`，尚未合入：
 
-本次协调核对了表中 9 个 PR 的实际 head、共同祖先与差异，使用 `git merge-tree --write-tree --name-only --no-messages` 检查它们对 main 的合并，并额外检查有源码交集的 PR 对。对 main，#14342 和 #14351 有源码冲突；#14343、#14346、#14348 的冲突在生成文档或报告；其余四项无文本冲突。PR 两两检查另确认了 #14343/#14351 的 skills 冲突和 #14344/#14348 的两个构造函数冲突。无文本冲突不等于语义兼容。
+| 实施 PR                                                              | 已实现和本地验证                                                                                              | 尚未覆盖                                                    |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| [#14353](https://github.com/LionSR/TeXRA/pull/14353) SQL 结构化结果  | 脚本直接接收 `columns/rows/more`；持久结果保留完整单元格；独立查询进程拒绝超过 4 MiB 的 JSON 页               | SQL 数据与写权限范围；其他 codemode/goal 验收               |
+| [#14354](https://github.com/LionSR/TeXRA/pull/14354) 历史协议身份    | 撤下执行协议后，原调用、usage 和重建投影仍可读；严格执行转换拒绝不支持的协议；不改写原行、不新增版本或迁移    | 旧 run config、缺插件事实读取和完整升级矩阵                 |
+| [#14355](https://github.com/LionSR/TeXRA/pull/14355) Resume 首轮删除 | 删除手建嵌套 claim scope 与正常 parent redirect 的错误往返；复用 admission Deferred；3 个源码文件净减少 23 行 | SDK 共享 attempt 的归属判断、取消回调和 `onIdle` 输入回执链 |
 
-本次没有实际合并这些 PR 或运行组合后的测试，也未据各 PR 描述中的历史 CI 宣称当前可合入。完整外部包、故障恢复组合及两条真实模型路线仍待执行；R1–R14 仍是待验收要求。
+三个分支各自通过完整 typecheck、lint、`gate:invariants` 和 275 个测试文件：SQL 与存储各 672 项通过、1 项跳过；resume 671 项通过、1 项跳过。两个修复各新增一个已先复现失败的回归用例；resume 未新增提交到仓库的测试。没有放宽质量 baseline。
+
+Resume 另用真实 SQLite 和仓库的确定性 validation model 执行两项可重跑验收：child 跟随 parent 后各自只产生一次 activation，返回父 Run，释放全部 trace/claim；在 child trace 清理边界中断调用者时，没有 activation 或遗留 trace/claim。脚本、日志及 clean/resumed SQLite 保存在实施 worktree 的 ignored `packages/desktop/tests/e2e/test-results/resume-redirect/`。这验证了一个具体取消时点，没有穷举所有返回边界调度，也没有调用真实模型服务。
+
+数据库、resume、codemode/plugin 三项基线审查及首批实施交叉复核已并行完成；现有 `resumeRun`、`AgentPackage`、`RunRegistry` 三个套件共 10 项测试通过。该结果不代表待合入 PR 的组合已经通过测试。
+
+协调核对了表中 PR 的实际 head、共同祖先与差异，并刷新 #14343、#14348、#14349、#14351 的更新。使用 `git merge-tree --write-tree --name-only --no-messages` 检查后，首批 SQL 与 resume 实施分支对四项均无文本冲突；存储分支与 #14343 的冲突仅在生成报告。四项之间仍有 #14343/#14351 的 skills 来源冲突，以及生成物冲突。旧的初始化与构造函数冲突已解决。无文本冲突不等于语义兼容。
+
+本次没有实际合并这些 PR 或运行组合后的测试，也未据各 PR 描述中的历史 CI 宣称当前可合入。完整外部包、故障恢复组合及两条真实模型路线仍待执行；首批实施的局部证据不能将 R1–R14 整体标为完成。
 
 ## 实现前需要收敛的选择
 
-| 选择                         | 本 PRD 的默认范围                                                            | 必须确认的阶段   |
-| ---------------------------- | ---------------------------------------------------------------------------- | ---------------- |
-| SQL 的数据与读写范围         | 尚未决定；完整调用事实查询与业务表读写分别评估，不将选项视为已确认需求       | C 的 SQL 切片前  |
-| 工作区 import 和模板 include | 本次推迟；如提升为 P0，需单独定义来源、权限、循环及恢复验收                  | 调整范围时       |
-| 模块或插件更新后如何恢复     | 沿用已开始的 step/脚本固定源码、新 step 可更新的边界；兼容判断与历史读取分开 | C 的恢复切片     |
-| 已发布存储与执行协议的边界   | 保留存储词汇和原调用含义，执行适配器决定是否可续跑；不引入第二套日志         | A 的首个设计切片 |
-| 已有 controller 是否可以删除 | 保留既有外部协议约束；只有取消、投递和收尾验证通过才修订裁决                 | B 对应切片       |
-| 包名与产品名                 | 沿用现有名字；若发布前改名，公开包名与持久化身份分开审查                     | D 冻结前         |
+| 选择                         | 本 PRD 的默认范围                                                            | 必须确认的阶段          |
+| ---------------------------- | ---------------------------------------------------------------------------- | ----------------------- |
+| SQL 的数据与读写范围         | 尚未决定；完整调用事实查询与业务表读写分别评估，不将选项视为已确认需求       | 扩大 SQL 数据或写能力前 |
+| 工作区 import 和模板 include | 本次推迟；如提升为 P0，需单独定义来源、权限、循环及恢复验收                  | 调整范围时              |
+| 模块或插件更新后如何恢复     | 沿用已开始的 step/脚本固定源码、新 step 可更新的边界；兼容判断与历史读取分开 | C 的恢复切片            |
+| 已发布存储与执行协议的边界   | 保留存储词汇和原调用含义，执行适配器决定是否可续跑；不引入第二套日志         | A 的首个设计切片        |
+| 已有 controller 是否可以删除 | 保留既有外部协议约束；只有取消、投递和收尾验证通过才修订裁决                 | B 对应切片              |
+| 包名与产品名                 | 沿用现有名字；若发布前改名，公开包名与持久化身份分开审查                     | D 冻结前                |
 
 ## 相关设计与代码
 
