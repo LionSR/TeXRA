@@ -224,7 +224,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   }).pipe(Effect.forkScoped);
 
   const prepareTurn: Model['prepareTurn'] = (request) =>
-    prepareResponsesTurn(config, origin, transport, request, null);
+    prepareResponsesTurn(config, origin, transport, request, null, undefined);
   const streamTurn: Model['streamTurn'] = (input) =>
     Stream.suspend(() => {
       let responseId: string | undefined;

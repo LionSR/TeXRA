@@ -72,6 +72,7 @@ export function openaiResponsesModel(
     });
   }
   const origin = originOf(config);
+  const http = { kind: 'http' } as const;
   const authentication = responseAuthentication(transport.authentication);
   const client = openaiClient(
     config.deployment.endpoint,
@@ -110,7 +111,7 @@ export function openaiResponsesModel(
         })
       : null;
   const prepareTurn: Model['prepareTurn'] = (request) =>
-    prepareResponsesTurn(config, origin, { kind: 'http' }, request, uploads);
+    prepareResponsesTurn(config, origin, http, request, uploads, background);
 
   const createResponse = Effect.fn('llm.responses.create')(function* (
     input: ResolvedTurn,
@@ -119,7 +120,7 @@ export function openaiResponsesModel(
     const { turn, parameters } = yield* responseParameters(
       config,
       origin,
-      { kind: 'http' },
+      http,
       input,
       mode,
       uploads,
@@ -381,6 +382,7 @@ export function openaiResponsesModel(
     // submitted turn chains on `previous_response_id` too.
     finalize: (turn, result) => withResponsesContinuation(config, turn, result),
   });
+  const background = backgroundCapable(config) ? lifecycle : undefined;
 
   return Object.freeze({
     prepareTurn,
@@ -391,6 +393,6 @@ export function openaiResponsesModel(
           releaseUploads: uploads.releaseUploads,
         }
       : {}),
-    ...(backgroundCapable(config) ? { background: lifecycle } : {}),
+    ...(background === undefined ? {} : { background }),
   });
 }

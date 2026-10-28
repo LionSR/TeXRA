@@ -7,7 +7,6 @@ import { prefixFingerprint } from './prefixFingerprint.js';
 import {
   completedTurn,
   decodeModelConfiguration,
-  ResolvedTurnSchema,
   TurnResultSchema,
   type GoogleInteractionsConfiguration,
   type Model,
@@ -15,7 +14,7 @@ import {
   type TurnResult,
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
-import { decodeTurnRequest } from './turnInput.js';
+import { resolveTurn } from './turnInput.js';
 import {
   COMPLETED_STATUSES,
   IN_FLIGHT_STATUSES,
@@ -566,7 +565,6 @@ export function googleInteractionsModel(
     );
   }
   const origin = originOf(config);
-  const background = backgroundCapable(config);
   const client = new GoogleGenAI({
     enterprise: false,
     apiKey: transport.apiKey,
@@ -577,51 +575,38 @@ export function googleInteractionsModel(
     },
   });
 
-  const prepareTurn: Model['prepareTurn'] = Effect.fn('llm.google.prepareTurn')(
-    function* (request) {
-      const authored = yield* decodeTurnRequest(
-        request,
-        'The canonical Google input is invalid.',
-      );
-      if (
-        authored.continuation !== undefined &&
-        authored.continuation.origin.protocol !== 'google-interactions'
-      ) {
-        return yield* new ModelError({
-          kind: 'unsupported',
-          message: 'Google does not support the supplied protocol controls.',
-        });
-      }
-      const mode = authored.mode ?? 'foreground';
-      if (
-        mode === 'background' &&
-        (!background || !(authored.store ?? config.defaults.store))
-      ) {
-        return yield* new ModelError({
-          kind: 'unsupported',
-          message:
-            'Google background execution requires an enabled route and store:true.',
-        });
-      }
-      const turn = Schema.decodeUnknownSync(ResolvedTurnSchema)({
-        ...origin,
-        mode,
-        system: authored.system,
-        messages: authored.messages,
-        tools: authored.tools ?? [],
-        continuation: authored.continuation,
-        controls: {
-          toolChoice: authored.toolChoice ?? 'auto',
-          maxOutputTokens:
-            authored.maxOutputTokens ?? config.defaults.maxOutputTokens,
-          store: authored.store ?? config.defaults.store,
-          thinkingLevel: config.defaults.thinkingLevel,
-        },
-      });
-      yield* invocationInput(turn, origin);
-      return turn;
-    },
-  );
+  const prepareTurn: Model['prepareTurn'] = (request) =>
+    resolveTurn(
+      request,
+      origin,
+      background,
+      (input) => {
+        const store = input.store ?? config.defaults.store;
+        return input.mode === 'background' && !store
+          ? Effect.fail(
+              new ModelError({
+                kind: 'unsupported',
+                message: 'Google background execution requires store:true.',
+              }),
+            )
+          : Effect.succeed({
+              ...origin,
+              mode: input.mode ?? 'foreground',
+              system: input.system,
+              messages: input.messages,
+              tools: input.tools ?? [],
+              continuation: input.continuation,
+              controls: {
+                toolChoice: input.toolChoice ?? 'auto',
+                maxOutputTokens:
+                  input.maxOutputTokens ?? config.defaults.maxOutputTokens,
+                store,
+                thinkingLevel: config.defaults.thinkingLevel,
+              },
+            });
+      },
+      (turn) => invocationInput(turn, origin),
+    );
 
   const streamTurn: Model['streamTurn'] = (turn) =>
     Stream.unwrap(
@@ -830,9 +815,10 @@ export function googleInteractionsModel(
       ),
     finalize: withContinuation,
   });
+  const background = backgroundCapable(config) ? lifecycle : undefined;
   return Object.freeze({
     prepareTurn,
     streamTurn,
-    ...(background ? { background: lifecycle } : {}),
+    ...(background === undefined ? {} : { background }),
   });
 }
