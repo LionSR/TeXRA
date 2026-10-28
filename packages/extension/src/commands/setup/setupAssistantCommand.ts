@@ -1,23 +1,15 @@
 // Third-party imports
 import { Secrets, withLogChannel } from '@texra-ai/harness/host';
-import { Cause, Effect, Schema } from 'effect';
+import { Cause, Effect } from 'effect';
 
 // Local imports
-import {
-  AgentConfigSchema,
-  agentName,
-  type RunId,
-  isLiveRun,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   announce,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import { SETUP_INSTRUCTION } from '@texra/controllers/onboarding/setupLaunch';
-import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
-import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
+import { launchSetup } from '@texra/controllers/onboarding/setupLaunch';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
@@ -46,19 +38,18 @@ export function launchSetupAssistant(
 ) {
   return Effect.gen(function* () {
     // Every setup entry point funnels through here (command, status pill,
-    // walkthrough, onboarding setup card), so one guard covers them all:
-    // a second concurrent setup conversation would race the first one's
-    // installs and config writes. The launcher's manual Execute path is
-    // deliberately not gated — an explicit user action wins.
-    const running = runSession.view.current().runs.values();
-    if (
-      [...running].some(
-        (run) =>
-          isLiveRun(run) &&
-          run.identity.kind === 'agent' &&
-          agentName(run.identity.agent) === SETUP_AGENT_NAME,
-      )
-    ) {
+    // walkthrough, onboarding setup card). The launcher's manual Execute
+    // path is deliberately not gated: an explicit user action wins.
+    const outcome = yield* launchSetup({
+      session: runSession,
+      roots,
+      secrets: yield* Secrets,
+      start: (request) =>
+        runSession
+          .start({ config: request.config, interactive: true })
+          .pipe(Effect.tap((run) => onAdmitted(run.runId))),
+    });
+    if (outcome === 'already-running') {
       yield* Effect.forkDetach(
         showLoggedInfoMessage(
           CHANNEL,
@@ -68,39 +59,13 @@ export function launchSetupAssistant(
       yield* showTasks.pipe(
         Effect.ignore({ log: 'Warn', message: 'Revealing the task list' }),
       );
-      return 'already-running' as const;
+      return outcome;
     }
-
-    // The launch model the credential predicate every host shares decides:
-    // adapter-level checks, so a blank env key does not count and fail later
-    // as "No model is available". No model is the missing-credential case; a
-    // check that cannot be answered fails to the launch-failure report below.
-    const model = yield* resolveSetupLaunchModel(roots, yield* Secrets);
-    if (model === null) {
+    if (outcome === 'no-model') {
       yield* connectModel;
       return 'not-started' as const;
     }
-
-    const config = Schema.decodeUnknownSync(AgentConfigSchema)({
-      agent: 'setup',
-      model,
-      instruction: SETUP_INSTRUCTION,
-    });
-
-    // The conversation, from its start through its end. A failure once it
-    // started is its result row's to show, not a failure to launch.
-    yield* runSession.start({ config, interactive: true }).pipe(
-      Effect.tap((run) => onAdmitted(run.runId)),
-      Effect.flatMap((run) =>
-        run.result.pipe(
-          Effect.asVoid,
-          Effect.catch((failure) =>
-            Effect.logDebug(`The setup run failed: ${failure.message}`),
-          ),
-        ),
-      ),
-    );
-    return 'launched' as const;
+    return outcome;
   }).pipe(
     Effect.catchCause((cause) => {
       // Shutdown interrupts this fiber while it waits on a host prompt.
