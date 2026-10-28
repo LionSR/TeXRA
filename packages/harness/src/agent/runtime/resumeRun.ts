@@ -317,11 +317,11 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         const native = {
           session,
           runId,
-          parentRunId,
           startedAt: yield* Clock.currentTimeMillis,
           workingDirectory: config.workingDirectory ?? undefined,
-          // What a resumed run takes from the resume's caller.
-          resume: { ...options, config, parent: parentRunId },
+          // What a resumed run takes from the resume's caller; its parent was
+          // read under the claim this resume holds until the loop takes it.
+          resume: { ...options, config, parent: Effect.succeed(parentRunId) },
         };
         const { script } = config;
         ({ fiber: launched } = yield* startChildRunLoop({

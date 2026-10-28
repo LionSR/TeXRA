@@ -125,7 +125,6 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
             grants,
           },
           runId,
-          parentRunId,
           session: parentSession,
           startedAt,
           workingDirectory,
