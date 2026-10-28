@@ -64,22 +64,6 @@ export class ResumeRefused extends Schema.TaggedError<ResumeRefused>()(
   },
 ) {}
 
-/**
- * A run's trace that no reader can take any more: `ended` (the run settled
- * with nobody reading, so its buffered trace went with it), `truncated`
- * (it passed the handover buffer before a reader attached, so the trace
- * was detached) or `remote` (the run runs in another process, which keeps
- * its trace). The run itself is unaffected: its `result` still answers.
- */
-export class TraceUnavailable extends Schema.TaggedError<TraceUnavailable>()(
-  'TraceUnavailable',
-  {
-    runId: Schema.String,
-    reason: Schema.Literals(['ended', 'truncated', 'remote']),
-    message: Schema.String,
-  },
-) {}
-
 /** What a launch refuses before any model work: the two an embedder
  *  branches on. A run that fails after admission fails with
  *  {@link RunFailure} instead. */

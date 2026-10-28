@@ -4,7 +4,8 @@
  * Composes `Sessions.layer({ platform, plugins: harnessBuiltins })`, opens a
  * session, checks an `InlinePersonaSchema` definition, handles an `AgentNotFound`
  * refusal on a missing agent, and runs an inline persona while streaming its
- * `run.events` (through `responseText`) and awaiting `run.result` (`RunEndResult`).
+ * `run.events` (through `responseText`) and awaiting `run.result` (`RunEndResult`),
+ * then reads the ended run's events again, replayed from the session.
  */
 import { Effect, Result, Schema, Stream } from 'effect';
 import { responseText, Sessions } from '@texra-ai/harness';
@@ -59,9 +60,21 @@ const program = Effect.gen(function* () {
   );
 
   const end = yield* run.result;
+
   console.log(
     `[02] run ended: outcome=${end.outcome} streamed="${chunks.join('')}"`,
   );
+
+  // 4. A second reader, after the run has ended, reads its trace back from
+  // the session's rows: the same answer text, whole.
+  const replayed = yield* Stream.runCollect(run.events.pipe(responseText));
+  if ([...replayed].join('') !== chunks.join(''))
+    return yield* Effect.fail(
+      new Error(
+        `replayed "${[...replayed].join('')}" differs from streamed "${chunks.join('')}"`,
+      ),
+    );
+  console.log(`[02] replayed after the end: "${[...replayed].join('')}"`);
 }).pipe(
   Effect.scoped,
   Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),

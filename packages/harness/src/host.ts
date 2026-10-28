@@ -15,6 +15,9 @@
 
 // The process every host composes: one `processLayer`, built once.
 export { processLayer } from './effect/processLayer.js';
+// A run's trace read back from a session's rows, for a session whose runs
+// run elsewhere (a window over the background service).
+export { replayTrace } from '@controllers/session/runTrace';
 // A project's view read cold from its store, for a multi-project listing.
 export { readSessionView } from '@controllers/session/readSessionView';
 export type { RunRejection } from '@agent/runtime/runClassification';

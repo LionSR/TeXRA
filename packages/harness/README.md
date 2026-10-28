@@ -199,20 +199,21 @@ const program = Effect.gen(function* () {
 | `Session`  | One workspace's runs: `start` and `resume` give a `Run`; `request` sends everything else (follow-ups, approvals, stop, fork); `attach(host)` answers approvals until the caller's scope closes; `view.current()` and `view.changes` read the session's state as immutable snapshots. `roots` names the workspace. |
 | `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts; `interrupt`. `start` returns once the run exists, before its first model call.                                                        |
 
-`run.events` is the run's trace as a `Stream`. Trace events are buffered from
-the moment the run enters its session, so a reader begun right after `start`
-misses none of the launch events. Ending the stream's consumption detaches
-the event source while the run itself continues, and a run that finishes
-without ever being read discards what it buffered. That buffer is only the
-handover to the first reader, and it is bounded: a run whose events pass the
-handover window with nobody reading has no reader, so it logs a warning
-naming the run and detaches its trace. Taking only `result` therefore never
-retains a long run's whole trace. A reader that attaches after that, or
-after the run finished unread, fails with `TraceUnavailable` (`truncated` or
-`ended`) rather than reading an empty trace; so does any reader of a run
-another process runs, which keeps its trace (`remote`). A reader that did attach in
-time is never dropped: past its first pull the buffer is that reader's, and
-nothing discards what it has yet to read.
+`run.events` is the run's trace as a `Stream`, and any number of readers
+can read it at any time. Each gets the run's events from the start of its
+current activation, then follows the run until it ends, and fails with
+`RunFailure` if the run failed. Ending a read stops that reader, not the run.
+
+The first reader is served from memory: events are buffered from the moment
+the run enters its session, so a reader begun right after `start` misses
+none of them, chunks included. The buffer only bridges that handover and is
+bounded, so taking only `result` never keeps a long run's trace in memory.
+Every other reader, including one that comes after the buffer is gone, a
+second reader, and a window whose run the background service runs, reads
+the trace back from the session's stored rows. Every event except
+`stream.chunk` is stored. A stream that finished streaming before such a
+reader came arrives as one chunk holding its final text, so a reader's
+chunks always add up to each stream's final text.
 
 Every failure is a typed error on the effect that owns it. A refusal before
 any model work fails `session.start` with one of the tagged errors the

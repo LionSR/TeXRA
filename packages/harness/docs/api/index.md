@@ -655,12 +655,12 @@ interface Run {
    * What the run does as it does it: streamed text, tool calls, stages,
    * usage. Pipe it through `responseText` for just the answer's text.
    * Ends when the run ends, and fails with {@link RunFailure} if the run
-   * failed. Read it once, from the moment `start` returns: events wait
-   * for you only briefly, and stopping early stops your reading, not the
-   * run. A reader that comes too late fails with {@link TraceUnavailable}
-   * instead of seeing nothing.
+   * failed. Read it as often as you like and whenever you like: every
+   * reader gets the run's events from its start, and stopping early stops
+   * your reading, not the run. A reader that comes after the run's text
+   * has streamed gets each stream's text whole, as one chunk.
    */
-  readonly events: Stream.Stream<AgentEvent, RunFailure | TraceUnavailable>;
+  readonly events: Stream.Stream<AgentEvent, RunFailure>;
   /** Stop the run. */
   readonly interrupt: Effect.Effect<void>;
 }
@@ -974,25 +974,6 @@ class ToolsRefused extends Schema.TaggedError<ToolsRefused>()(
   'ToolsRefused',
   {
     tools: Schema.Array(Schema.String),
-    message: Schema.String,
-  },
-)
-```
-
-## TraceUnavailable
-
-A run's trace that no reader can take any more: `ended` (the run settled
-with nobody reading, so its buffered trace went with it), `truncated`
-(it passed the handover buffer before a reader attached, so the trace
-was detached) or `remote` (the run runs in another process, which keeps
-its trace). The run itself is unaffected: its `result` still answers.
-
-```ts
-class TraceUnavailable extends Schema.TaggedError<TraceUnavailable>()(
-  'TraceUnavailable',
-  {
-    runId: Schema.String,
-    reason: Schema.Literals(['ended', 'truncated', 'remote']),
     message: Schema.String,
   },
 )

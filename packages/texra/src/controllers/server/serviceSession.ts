@@ -33,7 +33,6 @@ import {
   ResumeRefused,
   RunFailure,
   ToolsRefused,
-  TraceUnavailable,
   type ITool,
   type Run,
   type Session,
@@ -46,6 +45,7 @@ import {
   agentErrorPresentation,
   attachErrorPresentationClaimed,
   describeFollowUpFailure,
+  replayTrace,
 } from '@texra-ai/harness/host';
 import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
@@ -434,10 +434,72 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           ),
         ),
     );
+  // The watch names its runs to this window's own view too, so the view
+  // folds their transcripts while it runs; each service the link holds
+  // serves it from the cursor it last delivered.
+  const watch: Session['view']['watch'] = (set, from) =>
+    Stream.unwrap(
+      Effect.gen(function* () {
+        yield* Effect.acquireRelease(
+          Effect.suspend(() => {
+            const id = (watchIds += 1);
+            watches.set(id, set);
+            return Effect.as(resubscribe, id);
+          }),
+          (id) =>
+            Effect.suspend(() => {
+              watches.delete(id);
+              return resubscribe;
+            }),
+        );
+        const cursor = yield* Ref.make(from.cursor);
+        return SubscriptionRef.changes(link.client).pipe(
+          Stream.switchMap((client) =>
+            client === null
+              ? Stream.empty
+              : Stream.unwrap(
+                  Effect.map(Ref.get(cursor), (at) =>
+                    client['task.watch']({
+                      workspace,
+                      subscribe: {
+                        kind: 'subscribe',
+                        session: key,
+                        generation: 0,
+                        debug: from.debug,
+                        cursor: at,
+                        aggregates: [...set],
+                      },
+                    }),
+                  ),
+                ).pipe(
+                  Stream.tap((frame) => Ref.set(cursor, frame.cursor)),
+                  Stream.map(frameInputs),
+                  Stream.filter((inputs) => inputs.length > 0),
+                  // A lost service's stream fails, or is interrupted
+                  // when the link closes its connection: either ends
+                  // this service's part, and the next one takes over.
+                  Stream.catchCause((cause) =>
+                    Cause.hasInterruptsOnly(cause)
+                      ? Stream.empty
+                      : Stream.fromEffect(
+                          Effect.logWarning(
+                            `The TeXRA service stopped sending ${workspace}; the watch resumes when the service is back`,
+                          ).pipe(
+                            Effect.annotateLogs({
+                              data: Cause.squash(cause),
+                            }),
+                          ),
+                        ).pipe(Stream.drain),
+                  ),
+                ),
+          ),
+        );
+      }),
+    );
   /** The run the service admitted, as this window holds it: its end is the
    *  service's answer (asked once), held until this window's fold shows it
    *  too; its view this window's fold sliced to this activation; and its
-   *  trace stays in the service. */
+   *  trace read back from the service's rows through the watch. */
   const runOf = (runId: RunId, redirectedFrom?: RunId): Effect.Effect<Run> =>
     Effect.map(Effect.cached(ended(runId)), (result) => ({
       runId,
@@ -455,12 +517,10 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         ),
         Stream.haltWhen(Effect.exit(result)),
       ),
-      events: Stream.fail(
-        new TraceUnavailable({
-          runId,
-          reason: 'remote',
-          message: `Task ${runId} runs in the TeXRA service, which keeps its trace.`,
-        }),
+      events: replayTrace(
+        (set, cursor, debug) => watch(set, { cursor, debug }),
+        runId,
+        result,
       ),
       interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
         Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
@@ -483,68 +543,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     view: {
       current: graph.view.current,
       changes: graph.view.changes,
-      // The watch names its runs to this window's own view too, so the
-      // view folds their transcripts while it runs; each service the link
-      // holds serves it from the cursor it last delivered.
-      watch: (set, from) =>
-        Stream.unwrap(
-          Effect.gen(function* () {
-            yield* Effect.acquireRelease(
-              Effect.suspend(() => {
-                const id = (watchIds += 1);
-                watches.set(id, set);
-                return Effect.as(resubscribe, id);
-              }),
-              (id) =>
-                Effect.suspend(() => {
-                  watches.delete(id);
-                  return resubscribe;
-                }),
-            );
-            const cursor = yield* Ref.make(from.cursor);
-            return SubscriptionRef.changes(link.client).pipe(
-              Stream.switchMap((client) =>
-                client === null
-                  ? Stream.empty
-                  : Stream.unwrap(
-                      Effect.map(Ref.get(cursor), (at) =>
-                        client['task.watch']({
-                          workspace,
-                          subscribe: {
-                            kind: 'subscribe',
-                            session: key,
-                            generation: 0,
-                            debug: from.debug,
-                            cursor: at,
-                            aggregates: [...set],
-                          },
-                        }),
-                      ),
-                    ).pipe(
-                      Stream.tap((frame) => Ref.set(cursor, frame.cursor)),
-                      Stream.map(frameInputs),
-                      Stream.filter((inputs) => inputs.length > 0),
-                      // A lost service's stream fails, or is interrupted
-                      // when the link closes its connection: either ends
-                      // this service's part, and the next one takes over.
-                      Stream.catchCause((cause) =>
-                        Cause.hasInterruptsOnly(cause)
-                          ? Stream.empty
-                          : Stream.fromEffect(
-                              Effect.logWarning(
-                                `The TeXRA service stopped sending ${workspace}; the watch resumes when the service is back`,
-                              ).pipe(
-                                Effect.annotateLogs({
-                                  data: Cause.squash(cause),
-                                }),
-                              ),
-                            ).pipe(Stream.drain),
-                      ),
-                    ),
-              ),
-            );
-          }),
-        ),
+      watch,
     },
     request,
     start: (input) => {

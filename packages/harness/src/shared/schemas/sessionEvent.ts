@@ -1,8 +1,7 @@
 /**
- * The durable session events every process applies to its `SessionView`
- * (.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md
- * sections 5.2 and 6). The other view inputs, which never carry a seq, are
- * in `sessionViewInput.ts`.
+ * The durable session events every process applies to its `SessionView`.
+ * The other view inputs, which never carry a seq, are in
+ * `sessionViewInput.ts`.
  *
  * Every durable arm rides one envelope: the aggregate it belongs to, its
  * per-aggregate `seq`, the store-local `commit` cursor, the writing `origin`
@@ -10,7 +9,7 @@
  * its `seq`. The arms mirror the trace (`AgentEvent`) shapes field for field
  * where the fold reads them, so a publisher translates by naming fields.
  *
- * One run owns one aggregate, `('run', runId)` (one run model, section 3.1):
+ * One run owns one aggregate, `('run', runId)`:
  * display rows and the run's private records land on the same aggregate, and
  * whether a row reaches a renderer is a property of its type
  * (`isDisplaySessionEvent`), not of a second aggregate.
@@ -135,7 +134,7 @@ const onRunAggregate = Struct.lambda<OnRunAggregate>((schema) =>
 );
 
 /**
- * The parent edge (one run model, section 3.2): the whole of it. `id` is the
+ * The parent edge: the whole of it. `id` is the
  * launching run; `uid` is that run's incarnation, stamped by the database
  * inside the child's creation transaction so a logical id a retry reuses
  * can never redirect the child to a later incarnation of its parent. Any other spelling of the edge is `parent !== null`, computed from
@@ -245,9 +244,8 @@ const DisplayRowDraftSchema = Schema.Union([
    *  fact after `run.start` that moves the edge. */
   durable('run.detach', {}),
   /**
-   * The terminal fact (one run model, section 3.3): outcome, the classified
-   * error behind a failure, and a tool-use run's reply (usage and workflow
-   * files have their own rows). Written once per lifecycle, by the storage
+   * The terminal fact: outcome, the classified error behind a failure, and
+   * a tool-use run's reply (usage and workflow files have their own rows). Written once per lifecycle, by the storage
    * finalizer, after the run's last transcript row; the fold derives the
    * terminal phase from it and from nothing else.
    */
@@ -277,9 +275,9 @@ const DisplayRowDraftSchema = Schema.Union([
     by: Schema.Literals(['model', 'user']),
   }),
   PluginFactDraftSchema,
-  /** Input a run has not taken yet (one run model, section 3.7), whole, so
-   *  a crash loses nothing; `followUpId` is the producer's delivery id or
-   *  minted. Pending is queued without consumed. */
+  /** Input a run has not taken yet, whole, so a crash loses nothing;
+   *  `followUpId` is the producer's delivery id or minted. Pending is
+   *  queued without consumed. */
   durable('followup.queued', {
     followUpId: Schema.String.check(Schema.isMinLength(1)),
     content: FollowUpContentSchema,
@@ -303,10 +301,8 @@ const DisplayRowDraftSchema = Schema.Union([
   durable('followup.consumed', {
     followUpId: Schema.String.check(Schema.isMinLength(1)),
   }),
-  /**
-   * A run asking a person (one run model, section 3.7): what the UI shows,
-   * never host handles. Pending is opened without decided.
-   */
+  /** A run asking a person: what the UI shows, never host handles.
+   *  Pending is opened without decided. */
   durable('request.opened', {
     requestId: Schema.String.check(Schema.isMinLength(1)),
     payload: PermissionPayloadSchema,
@@ -549,6 +545,10 @@ export function pendingKeyOf(
       return null;
   }
 }
+
+/** The rows a run's trace (`AgentEvent`) is, besides its text chunks. */
+// prettier-ignore
+export const TRACE_ROW_TYPES = ['log', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'conversation.progress', 'run.fact', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplaySessionEvent['type'][];
 
 export const DISPLAY_EVENT_TYPES: readonly string[] = Object.freeze(
   DisplaySessionEventDraftSchema.members.map(

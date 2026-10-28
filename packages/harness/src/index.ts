@@ -77,7 +77,6 @@ export {
   ResumeRefused,
   RunFailure,
   ToolsRefused,
-  TraceUnavailable,
 } from './effect/errors.js';
 export type { LaunchError } from './effect/errors.js';
 export { AgentNotFound } from '@agent/index/agentCatalog';

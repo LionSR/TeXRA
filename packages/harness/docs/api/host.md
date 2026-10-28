@@ -2068,6 +2068,33 @@ follower runs it for a change written anywhere else.
 const registerCustomAgentRoot: Effect<void, never, FileSystem | GlobalStorageFs | AgentDirectories>
 ```
 
+## replayTrace
+
+A run's trace read back from its session's view inputs:
+the trace rows of its latest activation, then each as it commits, until
+its `run.end`; then `result`'s failure, if it fails. For a reader that
+comes after a run's buffered trace is gone, a second reader, or a window
+whose run another process runs.
+
+A stream's text arrives as chunks as the session sees it. A stream that
+ends with text no chunk carried, because it streamed before the reader
+came, gets that text as one chunk before its `stream.end`, so a reader's
+chunks always add up to each stream's final text.
+
+```ts
+function replayTrace<E>(
+  /** The session's ordered view inputs for one reader: a session handle's
+   *  `view.inputs`, or a `Session.view.watch` with its arguments spread. */
+  read: (
+    set: readonly TranscriptSubscription[],
+    fromCommit: CommitOrdinal,
+    debug: boolean,
+  ) => Stream.Stream<readonly SessionViewInput[]>,
+  runId: RunId,
+  result: Effect.Effect<unknown, E>,
+): Stream.Stream<AgentEvent, E>
+```
+
 ## resolveTeamLaunch
 
 ```ts
