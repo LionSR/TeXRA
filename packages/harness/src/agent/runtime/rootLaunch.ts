@@ -2,7 +2,6 @@ import { Effect, Fiber, SubscriptionRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { SessionOwner } from '@platform/processRuntime';
-import { Secrets } from '@platform/secrets';
 import {
   APPROVAL_BYPASS_KINDS,
   inheritedGrants,
@@ -132,14 +131,10 @@ const admittedRun = Effect.fn('admittedRun')(function* (
   } = options;
   const runSession = options.session;
   // Resolve the selected model before registering the run. The helper
-  // model swap reads the enabled-model list, the routing switches and the
-  // provider keys, so it takes this session's setting slots and the
-  // process secret store.
+  // model swap reads the enabled-model list and the routing switches, so it
+  // takes this session's setting slots.
   const config = preferHelperModel
-    ? yield* applyHelperModelPreference(request.config, {
-        ...runSession.roots,
-        secrets: yield* Secrets,
-      })
+    ? yield* applyHelperModelPreference(request.config, runSession.roots)
     : request.config;
   const definition = yield* prepareAgentDefinition({
     config,

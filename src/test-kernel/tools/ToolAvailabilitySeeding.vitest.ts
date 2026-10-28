@@ -9,7 +9,7 @@ import { waitForCondition } from '@test/support/asyncTestUtils';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import {
   fakeProcessServices,
-  hostStores,
+  installedHost,
   installPlatform,
 } from '@test/support/setupPlatform';
 import { wolfram } from '@texra/tools/integrationPlugins';
@@ -32,12 +32,14 @@ describe('seedDisabledToolDefaults', () => {
         );
 
         yield* seedDisabledToolDefaults(
-          hostStores().globalState,
+          installedHost().roots.globalState,
           texraPlugins(),
         );
 
         expect(
-          yield* hostStores().globalState.get(GlobalStateKey.DISABLED_TOOLS),
+          yield* installedHost().roots.globalState.get(
+            GlobalStateKey.DISABLED_TOOLS,
+          ),
         ).toEqual([]);
       }),
   );

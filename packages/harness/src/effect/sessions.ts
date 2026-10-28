@@ -21,6 +21,7 @@ import type {
 } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { HostSkillOptions } from '@platform/processRuntime';
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
 import type {
   CommitOrdinal,
@@ -69,12 +70,14 @@ export interface AgentPlatform {
   readonly secrets: PlatformSecrets;
 }
 
-/** What an embedder composes the process from: its platform and its
- *  plugins (the harness's built-ins among them). The setting rows its
- *  plugins read travel with the platform's config (`ConfigProvider.catalog`). */
+/** What an embedder composes the process from: its platform, its plugins
+ *  (the harness's built-ins among them) and its skill sources, without
+ *  which it discovers no skills. The setting rows its plugins read travel
+ *  with the platform's config (`ConfigProvider.catalog`). */
 export interface Composition {
   readonly platform: AgentPlatform;
   readonly plugins: readonly Plugin[];
+  readonly skills?: HostSkillOptions;
 }
 
 /**

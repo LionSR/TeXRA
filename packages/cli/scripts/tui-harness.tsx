@@ -21,7 +21,11 @@ import { nanoid } from 'nanoid';
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { AgentCatalog, describeFollowUpFailure } from '@texra-ai/harness/host';
+import {
+  AgentCatalog,
+  describeFollowUpFailure,
+  Secrets,
+} from '@texra-ai/harness/host';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
@@ -1431,9 +1435,8 @@ if (SHOW_RETRY_APPROVAL) {
     // every read of it (`prepareRetry`'s card lookup, the retry gate,
     // `/model`'s access rows) is driven by the approval requested below or by
     // a keypress after it, so nothing can have cached `openai` as absent.
-    HARNESS_PLATFORM_SERVICES.secrets.set(
-      apiKeySecretName('openai'),
-      'sk-harness-openai-key',
+    Effect.flatMap(Secrets, (secrets) =>
+      secrets.set(apiKeySecretName('openai'), 'sk-harness-openai-key'),
     ),
   );
   // The credential the retry lands on is the decision's own field: the TUI
@@ -1662,7 +1665,6 @@ function handleHarnessSlashCommand(line: string): boolean {
 const harnessSession = new TuiSession();
 
 registerBuiltinSlashCommands({
-  secrets: HARNESS_PLATFORM_SERVICES.secrets,
   stores: HARNESS_PLATFORM_SERVICES,
   runtime: HARNESS_PLATFORM_SERVICES.runtime,
   runtimeSession: harnessRunSession,
@@ -1756,7 +1758,6 @@ function handleHarnessCtrlC(): void {
 function renderHarnessApp(): React.JSX.Element {
   return (
     <App
-      secrets={HARNESS_PLATFORM_SERVICES.secrets}
       stores={HARNESS_PLATFORM_SERVICES}
       runtime={harnessRuntime}
       session={harnessRunSession}

@@ -45,7 +45,7 @@ import type {
   RuntimeToolRegistry,
 } from '@agent/runtime/ToolServices';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
-import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { SettingsStores } from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
 import {
@@ -96,7 +96,7 @@ export interface StepToolInputs {
    *  unless it is a plugin agent that names its own tools. */
   readonly injectInstalled: boolean;
   /** The run's stores, which the injections' settings read. */
-  readonly stores: ModelOptionStores;
+  readonly stores: SettingsStores;
   /** The run's workspace root: the tool-availability probes answer per
    *  workspace. */
   readonly workspaceRoot: string | undefined;

@@ -31,15 +31,12 @@ export {
 } from '@platform/defaults/sdkPlatform';
 
 // The Node building blocks `nodePlatform` is made of, for a host that
-// composes its own platform: workspace roots over Node, the runtime skill
-// sources it registers once, the Node services a process serves (the file
-// system, paths and a supervised child-process spawner), the canonical
-// spelling of a workspace path, a path's workspace-relative form, and the
-// storage layout under a root.
+// composes its own platform: workspace roots over Node, the Node services a
+// process serves (the file system, paths and a supervised child-process
+// spawner), the canonical spelling of a workspace path, a path's
+// workspace-relative form, and the storage layout under a root.
 export {
   createNodeWorkspaceRoots,
-  initializeNodeRuntimeSkills,
-  type NodeRuntimeSkillOptions,
   type NodeWorkspaceRootsInit,
 } from '@platform/defaults/nodeHost';
 export { nodePlatformServices } from '@platform/defaults/nodePlatform';
@@ -69,6 +66,7 @@ export {
 export { WORKSPACE_STORES } from '@shared/session/valueFamily';
 // Running a program on this machine: find it, run it, tell whether it is
 // installed, and give any other child the PATH the harness resolves tools on.
+// The home directory, logged at warn where none resolves.
 export {
   executeCommand,
   type ExecuteCommandBaseOptions,
@@ -77,6 +75,7 @@ export type { ExecResult } from '@shared/schemas';
 export { findCommand, type FoundCommand } from '@utils/system/binaryResolver';
 export { probeTool, type ToolProbe } from '@utils/system/toolUtils';
 export {
+  homeDirectory,
   whichOnExtendedPath,
   withExtendedPath,
 } from '@utils/system/platformPaths';

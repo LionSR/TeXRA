@@ -13,8 +13,6 @@ import {
   setLogSink,
   type StateStore,
   type StateWriteFailed,
-  Secrets,
-  type PlatformSecrets,
   withProcessServices,
   StateStores,
 } from '@texra-ai/harness/host';
@@ -110,14 +108,6 @@ export type CliPlatformServices = SettingsStores & {
    * that run programs at a Promise edge, instead of looking it up.
    */
   readonly runtime: CliProcessRuntime;
-  /**
-   * The stores this root opened, handed over rather than read back. `config`,
-   * `workspaceState`, `repoState` and `globalState` are the slots a catalog setting
-   * resolves against, so a read or write through `Settings.get` /
-   * `Settings.set` answers for this process's project, from the record
-   * the caller holds rather than any process-wide lookup.
-   */
-  readonly secrets: PlatformSecrets;
   /**
    * The process roots this init installed: one process, one project (the
    * `--cwd` workspace), built by the first init and found by every later
@@ -298,6 +288,7 @@ export function initCliPlatform(
       try: () =>
         installCliProcessRuntime(context.storageRoot, {
           resourcesPath: context.resourcesPath,
+          skillSourceOptions: context.skillSourceOptions,
           minimumLogLevel: context.minimumLogLevel,
           workspace: context.cwd,
         }),
@@ -387,18 +378,11 @@ export function initCliPlatform(
             ),
           );
 
-          // Everything this process installs once beside its roots, in the
-          // order the shared bootstrap owns for all three hosts. Before the
-          // roots are published below, not after: its one fallible step (the
-          // first-install tool seed) must fail while they are still private,
-          // as the seed did when this body owned it.
-          yield* bootstrapHost({
-            roots,
-            skills: {
-              resourcesPath: context.resourcesPath,
-              skillSourceOptions: context.skillSourceOptions,
-            },
-          });
+          // The once-per-process write the shared bootstrap owns for all
+          // three hosts. Before the roots are published below, not after: its
+          // one fallible step (the first-install tool seed) must fail while
+          // they are still private, as the seed did when this body owned it.
+          yield* bootstrapHost({ roots });
 
           // The one-time telemetry notice: a single stderr line, then a state
           // flag. A quiet run neither prints it nor marks it shown.
@@ -444,13 +428,6 @@ export function initCliPlatform(
 
     const { roots } = platform;
 
-    // The stores this root opened, handed back rather than read off a
-    // process-wide singleton: the secret store and the application state are
-    // the ones the process runtime serves.
-    const secrets = yield* withProcessServices(
-      runtime,
-      Effect.service(Secrets),
-    );
     const cliServices: CliPlatformServices = {
       runtime,
       host: roots.host,
@@ -458,7 +435,6 @@ export function initCliPlatform(
       workspaceState: roots.workspaceState,
       repoState: roots.repoState,
       globalState,
-      secrets,
       session: platform.session,
       shutdownScope: platform.shutdownScope,
       roots,

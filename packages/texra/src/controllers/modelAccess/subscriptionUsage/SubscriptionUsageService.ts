@@ -1,5 +1,5 @@
 import { Cache, Cause, Clock, Duration, Effect } from 'effect';
-import { Settings, withLogChannel } from '@texra-ai/harness/host';
+import { Secrets, Settings, withLogChannel } from '@texra-ai/harness/host';
 import { HttpClientError } from 'effect/http';
 
 import { codexCoordinator, SubscriptionOAuthError } from '@texra-ai/llm/node';
@@ -20,11 +20,15 @@ import {
   GLM_CODING_PLAN_USAGE_URL,
 } from './glmCodingPlanUsageAdapter';
 import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
-import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/host';
 import type { ParsedSubscriptionUsage } from './subscriptionUsageParsing';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'SubscriptionUsage';
+
+/** A coding plan's stored key, from the process `Secrets`. */
+const lookupStoredKey = (provider: 'kimiCode' | 'glm') =>
+  Effect.flatMap(Secrets, (secrets) => lookupApiKey(secrets, provider));
 
 const CACHE_TTL = Duration.seconds(30);
 /** The one deadline over a usage request and its body read. */
@@ -51,9 +55,9 @@ const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
   ...mapCodingPlanSubscriptions('displayName'),
 };
 
-/** The credential stores this service reads. */
+/** The setting slots this service reads; credentials come from the process
+ *  `Secrets`. */
 interface SubscriptionUsageServiceInit {
-  readonly secrets: PlatformSecrets;
   readonly stores: SettingsStores;
 }
 
@@ -74,7 +78,7 @@ interface SubscriptionUsageAdapter {
   ) => Effect.Effect<
     ParsedSubscriptionUsage | null,
     Error,
-    HttpClient.HttpClient
+    HttpClient.HttpClient | Secrets
   >;
 }
 
@@ -86,7 +90,6 @@ interface SubscriptionUsageAdapter {
  * has no error arm to write.
  */
 export class SubscriptionUsageService {
-  private readonly secrets: PlatformSecrets;
   private readonly stores: SettingsStores;
   private readonly adapters: Readonly<
     Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
@@ -96,12 +99,11 @@ export class SubscriptionUsageService {
         UsageCacheKey,
         SubscriptionUsageSnapshot,
         never,
-        HttpClient.HttpClient
+        HttpClient.HttpClient | Secrets
       >
     | undefined;
 
   constructor(init: SubscriptionUsageServiceInit) {
-    this.secrets = init.secrets;
     this.stores = init.stores;
     this.adapters = this.createAdapters();
   }
@@ -160,9 +162,11 @@ export class SubscriptionUsageService {
                       error.reason._tag === 'StatusCodeError' &&
                       error.reason.response.status === 401,
                     () =>
-                      codexCoordinator(this.secrets)
-                        .refreshRejected(sent.accessToken)
-                        .pipe(Effect.andThen(fetchOnce)),
+                      Effect.flatMap(Secrets, (secrets) =>
+                        codexCoordinator(secrets).refreshRejected(
+                          sent.accessToken,
+                        ),
+                      ).pipe(Effect.andThen(fetchOnce)),
                   ),
                 ),
           );
@@ -170,7 +174,7 @@ export class SubscriptionUsageService {
       },
       kimiCode: {
         fetch: () =>
-          Effect.flatMap(lookupApiKey(this.secrets, 'kimiCode'), (apiKey) =>
+          Effect.flatMap(lookupStoredKey('kimiCode'), (apiKey) =>
             apiKey
               ? fetchKimiCodeUsage(apiKey, REQUEST_TIMEOUT_MS)
               : Effect.succeed(null),
@@ -180,7 +184,7 @@ export class SubscriptionUsageService {
         resolveVariant: () =>
           Settings.get<boolean>(this.stores, GlobalStateKey.GLM_USE_CHINA),
         fetch: (useChina) =>
-          Effect.flatMap(lookupApiKey(this.secrets, 'glm'), (apiKey) =>
+          Effect.flatMap(lookupStoredKey('glm'), (apiKey) =>
             apiKey
               ? fetchGlmCodingPlanUsage(
                   apiKey,
@@ -203,8 +207,8 @@ export class SubscriptionUsageService {
    */
   private readonly loadChatGptCredential = Effect.fn(
     'SubscriptionUsage.loadChatGptCredential',
-  )(function* (this: SubscriptionUsageService) {
-    const coordinator = codexCoordinator(this.secrets);
+  )(function* () {
+    const coordinator = codexCoordinator(yield* Secrets);
     if ((yield* coordinator.loadSession()) === null) return null;
     const session = yield* coordinator.getFreshSession();
     return {
@@ -230,7 +234,11 @@ export class SubscriptionUsageService {
   getUsage(
     provider: SubscriptionUsageProvider,
     options: { readonly forceRefresh?: boolean } = {},
-  ): Effect.Effect<SubscriptionUsageSnapshot, never, HttpClient.HttpClient> {
+  ): Effect.Effect<
+    SubscriptionUsageSnapshot,
+    never,
+    HttpClient.HttpClient | Secrets
+  > {
     const adapter = this.adapters[provider];
     return Effect.matchCauseEffect(
       Effect.suspend(
@@ -257,7 +265,11 @@ export class SubscriptionUsageService {
   /** One snapshot per subscription provider, for a settings-view refresh. */
   getAllUsage(
     options: { readonly forceRefresh?: boolean } = {},
-  ): Effect.Effect<SubscriptionUsageSnapshots, never, HttpClient.HttpClient> {
+  ): Effect.Effect<
+    SubscriptionUsageSnapshots,
+    never,
+    HttpClient.HttpClient | Secrets
+  > {
     // Each snapshot key is the provider id itself, so key and provider can
     // never drift apart the way a positional destructure would allow.
     return Effect.map(
@@ -279,7 +291,11 @@ export class SubscriptionUsageService {
     provider: SubscriptionUsageProvider,
     variant: boolean | undefined,
     options: { readonly forceRefresh?: boolean },
-  ): Effect.Effect<SubscriptionUsageSnapshot, never, HttpClient.HttpClient> {
+  ): Effect.Effect<
+    SubscriptionUsageSnapshot,
+    never,
+    HttpClient.HttpClient | Secrets
+  > {
     const key: UsageCacheKey = [provider, variant];
     return Effect.flatMap(this.usageCache, (cache) =>
       options.forceRefresh
@@ -318,7 +334,11 @@ export class SubscriptionUsageService {
   private fetchUsage(
     provider: SubscriptionUsageProvider,
     variant: boolean | undefined,
-  ): Effect.Effect<SubscriptionUsageSnapshot, never, HttpClient.HttpClient> {
+  ): Effect.Effect<
+    SubscriptionUsageSnapshot,
+    never,
+    HttpClient.HttpClient | Secrets
+  > {
     return Effect.suspend(() => this.adapters[provider].fetch(variant)).pipe(
       Effect.flatMap((parsed) => {
         if (parsed === null) {
