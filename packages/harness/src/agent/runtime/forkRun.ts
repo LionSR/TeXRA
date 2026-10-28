@@ -188,21 +188,17 @@ export const forkRun = Effect.fn('forkRun')(function* (
   at: number | null,
 ): Effect.fn.Return<RunId, Rejected | Error> {
   const { seq: cut, state, start, record } = yield* cutOf(session, from.id, at);
-  // The title the source shows: its newest user title over any later model
-  // title, as the run state reads it, with its authorship.
-  const titles = (yield* session.log.rows(qualifyAggregateId('run', from.id), [
-    'run.description',
-  ])).flatMap((row) => (row.type === 'run.description' ? [row] : []));
-  const title =
-    titles.findLast((row) => row.by === 'user') ?? titles.at(-1) ?? null;
+  // The title the source shows, with its authorship, from the view as the
+  // log holds it: the live view may not have applied a rename just made.
+  const source = (yield* session.view.read([])).runs.get(from.id);
   const runId = generateRunId();
   const registration = yield* registrationRows(session, runId, record, {
     identity: start.identity,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     provenance: { kind: 'fork', from, at: cut },
-    ...(title !== null && {
-      description: title.description,
-      descriptionBy: title.by,
+    ...(source?.description != null && {
+      description: source.description,
+      descriptionBy: source.descriptionBy ?? 'model',
     }),
   });
   // Registration and history are one commit, through the fork's cell: a

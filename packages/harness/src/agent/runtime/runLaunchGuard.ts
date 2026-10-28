@@ -188,21 +188,34 @@ export const deliverHeld = Effect.fn('runLaunchGuard.deliverHeld')(function* (
       );
 });
 
-/** The child's parks in its current lifecycle, each held one with the
- *  report its turn settled with just before it; none once it ended. */
-const heldParks = (rows: readonly SessionEvent[], child: RunId) => {
-  const since = lastLifecycleRow(rows, child);
+/** Run `runId`'s parks in its current lifecycle, oldest first; none once
+ *  it ended. A park with `heldFor` holds a result its parent has not had:
+ *  the delivery below and the leftover-run sweep both keep to this rule. */
+export const lifecycleParks = (
+  rows: readonly SessionEvent[],
+  runId: RunId,
+): Extract<SessionEvent, { type: 'child.park' }>[] => {
+  const since = lastLifecycleRow(rows, runId);
   if (since?.type === 'run.end') return [];
-  return rows.flatMap((park) => {
-    if (park.type !== 'child.park' || park.commit <= (since?.commit ?? 0))
-      return [];
+  const id = qualifyAggregateId('run', runId);
+  return rows.filter(
+    (row): row is Extract<SessionEvent, { type: 'child.park' }> =>
+      row.type === 'child.park' &&
+      row.aggregateId === id &&
+      row.commit > (since?.commit ?? 0),
+  );
+};
+
+/** The child's parks in its current lifecycle, each with the report its
+ *  turn finished with just before it. */
+const heldParks = (rows: readonly SessionEvent[], child: RunId) =>
+  lifecycleParks(rows, child).map((park) => {
     const report = rows.findLast(
       (row) => row.type === 'run.report' && row.commit < park.commit,
     );
     const text = report?.type === 'run.report' ? report.report : null;
-    return [{ park, text: text ?? '' }];
+    return { park, text: text ?? '' };
   });
-};
 
 /** Every result a child holds for `parent` since its lifecycle began, and
  *  its end when the newest park held its last turn. */
