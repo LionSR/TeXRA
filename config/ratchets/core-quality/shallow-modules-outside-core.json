@@ -12,7 +12,7 @@
   "packages/harness/src/shared/transcript/transcriptRow.ts": 80,
   "packages/harness/src/shared/utils/xmlEscape.ts": 6,
   "packages/harness/src/utils/core/idHash.ts": 11,
-  "packages/harness/src/utils/core/index.ts": 19,
+  "packages/harness/src/utils/core/index.ts": 18,
   "packages/harness/src/utils/core/pathCore.ts": 17,
   "packages/harness/src/utils/text/stringUtils.ts": 29,
   "packages/texra/src/agent/output/outputState.ts": 24,

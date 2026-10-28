@@ -6,33 +6,19 @@ import { readFileSync, statSync } from 'node:fs';
 import {
   Effect,
   FileSystem,
-  Layer,
   Path,
   type PlatformError,
   Predicate,
 } from 'effect';
-import { NodePath } from '@effect/platform-node';
 
 // Local imports
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { writeLogLine } from '@logger/logSink';
 import { ensureError } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import {
-  nodeFileSystemLayer,
-  writeFileAtomic,
-} from '@utils/files/fsDurability';
+import { nodeFileServices, writeFileAtomic } from '@utils/files/fsDurability';
 
 type JsonRecord = Record<string, unknown>;
-
-/**
- * The filesystem services a `JsonStore` reads and writes over, as a layer a
- * caller can provide itself. This store provides them for its own write
- * ({@link JsonStore.set}) and for `update`'s runner, so no consumer of a
- * requirement-free port carries `FileSystem | Path` in its type.
- */
-export const nodeFileServices: Layer.Layer<FileSystem.FileSystem | Path.Path> =
-  Layer.mergeAll(nodeFileSystemLayer, NodePath.layer);
 
 /** Preserve the Node error identity exposed by this store's existing callers. */
 function storageError(error: PlatformError.PlatformError): Error {

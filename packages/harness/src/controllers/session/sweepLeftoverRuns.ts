@@ -1,4 +1,5 @@
 import { Effect, SubscriptionRef } from 'effect';
+import { lifecycleParks } from '@agent/runtime/runLaunchGuard';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -6,7 +7,6 @@ import {
   type SessionEvent,
   type RunId,
 } from '@shared/schemas';
-import { lastLifecycleRow } from '@shared/session/runFacts';
 
 const CHANNEL = 'LeftoverRunSweep';
 
@@ -26,21 +26,14 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
   session: SessionHandle,
   rows: readonly SessionEvent[],
 ) {
-  // A shell parked holding its result for its parent in its current
-  // lifecycle stays until that result is delivered.
-  const holds = (row: SessionEvent): boolean => {
-    if (row.type !== 'child.park' || row.heldFor === undefined) return false;
-    const target = aggregateTarget(row.aggregateId);
-    if (target.kind !== 'run') return false;
-    const since = lastLifecycleRow(rows, target.id);
-    return since?.type !== 'run.end' && row.commit > (since?.commit ?? 0);
-  };
   const removed = new Set(
     rows
-      .filter((row) => row.type === 'run.removed' || holds(row))
+      .filter((row) => row.type === 'run.removed')
       .map((row) => row.aggregateId),
   );
   const running = runningRuns(session);
+  // Each run's rows once, so the per-run park check reads only its own.
+  const byRun = Map.groupBy(rows, (row) => row.aggregateId);
   for (const row of rows) {
     if (
       row.type !== 'run.start' ||
@@ -52,6 +45,10 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
     if (target.kind !== 'run') continue;
     const runId = target.id;
     if (running.has(runId)) continue;
+    // A shell parked holding its result for its parent stays until that
+    // result is delivered.
+    const parks = lifecycleParks(byRun.get(row.aggregateId) ?? [], runId);
+    if (parks.some((park) => park.heldFor !== undefined)) continue;
     yield* session.requests
       .removeRun(runId, 'automatic', row.commit)
       .pipe(

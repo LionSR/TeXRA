@@ -31,7 +31,6 @@ import {
   type ProviderError,
   type ScriptDeliverySummary,
 } from '@shared/schemas';
-import { generateShortId } from '@utils/core';
 
 import type { AgentTrace } from './AgentTrace';
 
@@ -115,7 +114,7 @@ export interface CompactionActivityOperation {
 export function startCompactionActivity(
   trace: AgentTrace,
 ): CompactionActivityOperation {
-  const operationId = `compaction-${generateShortId()}`;
+  const operationId = `compaction-${crypto.randomUUID()}`;
   let finished = false;
   const emit = (state: CompactionActivityData['state']): void => {
     trace.info(COMPACTION_ACTIVITY_LOG_TEXT[state], {

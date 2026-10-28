@@ -68,7 +68,6 @@
 import { readFileSync, writeSync } from 'node:fs';
 import { parseEnv } from 'node:util';
 import * as NodeChildProcessSpawner from '@effect/platform-node/NodeChildProcessSpawner';
-import * as NodePath from '@effect/platform-node/NodePath';
 import {
   Cause,
   ConfigProvider,
@@ -92,7 +91,7 @@ import {
 } from 'effect/process/ChildProcessSpawner';
 import { withLogChannel } from '@logger/effectLog';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
-import { nodeFileSystemLayer } from '@utils/files/fsDurability';
+import { nodeFileServices } from '@utils/files/fsDurability';
 import { ensureError } from '@utils/errors/errorMessage';
 import type * as ChildProcess from 'effect/process/ChildProcess';
 import type { PlatformError } from 'effect/PlatformError';
@@ -320,7 +319,7 @@ export const nodePlatformServices: Layer.Layer<
   FileSystem.FileSystem | Path.Path | ChildProcessSpawner
 > = supervisedSpawner.pipe(
   Layer.provide(NodeChildProcessSpawner.layer),
-  Layer.provideMerge(Layer.mergeAll(nodeFileSystemLayer, NodePath.layer)),
+  Layer.provideMerge(nodeFileServices),
 );
 
 /** A project's `.env` exists but could not be read or parsed. */

@@ -15,7 +15,7 @@
 import { Result } from 'effect';
 
 import { assistantMessageFromResult } from '@texra-ai/llm';
-import { addTurnUsage } from '@shared/schemas';
+import { addTurnUsage, type SessionEvent } from '@shared/schemas';
 import { byId, copyById, ownCopy, type BatchCopies } from './runRows';
 import { resultFacts, withInput } from './runFacts';
 import {
@@ -262,6 +262,10 @@ const applyMessage = <K extends MessageKind>(
   copies: BatchCopies,
 ): RowOutcome => MESSAGE_HANDLERS[kind](state, p, copies);
 
+/** Whether `p` is one of a summary's attempts, which the loop ignores. */
+const isSummaryAttempt = (p: ModelMessagePayload): boolean =>
+  (p.kind === 'attempt' || p.kind === 'failed') && p.purpose === 'summary';
+
 /** The handlers for the turn's rows: each needs an opened run, except a
  *  new turn's input and a summary's attempts. */
 export const TURN_ROW_HANDLERS: {
@@ -370,9 +374,26 @@ export const TURN_ROW_HANDLERS: {
   },
 };
 
-/** Whether `p` is one of a summary's attempts, which the loop ignores. */
-function isSummaryAttempt(p: ModelMessagePayload): boolean {
-  return (
-    (p.kind === 'attempt' || p.kind === 'failed') && p.purpose === 'summary'
-  );
+const ISSUING = ['model.message', 'script.call'] as const;
+/** The rows {@link issuedCalls} reads. */
+export const ISSUING_ROW_TYPES = Object.freeze(ISSUING);
+type Issuer = Pick<SessionEvent, 'commit' | 'seq'> & { responseId: string };
+type Call = { callId: string; toolName: string; logId: string };
+type Issued = { readonly call: Call; readonly issuer: Issuer | undefined };
+
+/** Every call `rows` issue, in issue order, with the response that issued
+ *  it: for a script's call, the latest response before it to issue its
+ *  `script` call. The one index of a call's issuer, script calls included. */
+export function issuedCalls(rows: readonly SessionEvent[]): Issued[] {
+  const by = new Map<string, Issuer>();
+  return rows.flatMap((row): Issued[] => {
+    if (row.type === 'script.call')
+      return [{ call: row.payload, issuer: by.get(row.payload.scriptCallId) }];
+    if (row.type !== 'model.message' || row.payload.kind !== 'response')
+      return [];
+    const { commit, seq, payload } = row;
+    const issuer = { commit, seq, responseId: payload.responseId };
+    for (const { callId } of payload.calls) by.set(callId, issuer);
+    return payload.calls.map((call) => ({ call, issuer }));
+  });
 }

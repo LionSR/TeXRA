@@ -17,11 +17,12 @@ import {
   heldElsewhereBy,
   type DatabaseReadFailed,
 } from '@shared/session/database';
-import { parentEdgeOf, runRelation } from '@shared/session/runRelation';
+import { runRelation } from '@shared/session/runRelation';
 import type { RunInputDraft } from '@shared/session/runState';
 import { consumedRow, needsWake } from '@shared/session/runFacts';
 import {
   FOLLOW_UP_TYPES,
+  parentEdgeOf,
   pendingMessages,
   runRowsFrom,
   type QueuedFollowUp,
