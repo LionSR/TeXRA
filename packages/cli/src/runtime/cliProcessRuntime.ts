@@ -47,19 +47,23 @@ import {
   AppState,
   AgentDirectoryService,
   processLayer,
+  Secrets,
   StateWriteFailed,
   type ProcessServices,
   type SkillSourceOptions,
   type StateStore,
 } from '@texra-ai/harness/host';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
-import { GlobalDatabase } from '@texra-ai/harness/node';
+import {
+  FileSecrets,
+  GlobalDatabase,
+  secretsDirectory,
+} from '@texra-ai/harness/node';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
 import { texraPlugins } from '@texra/tools/registry';
 
 import { readCliVersion } from './cliContext';
-import { cliSecrets } from './cliSecrets';
 import { setCliLogRuntime } from './logSinks';
 
 const NO_PLATFORM_APP_STATE =
@@ -219,7 +223,6 @@ export function installCliProcessRuntime(
   // process services: `texra serve` attaches its windows' editors to it.
   const editors = makeEditorHost();
   const version = readCliVersion();
-  const secrets = cliSecrets(storageRoot);
   // The agent directories are a process service the runtime serves, so
   // they are built here, before the install, rather than in the platform
   // init that may join an already-installed runtime. The built-in agent
@@ -252,7 +255,12 @@ export function installCliProcessRuntime(
               skillSourceOptions: options.skillSourceOptions,
             },
           }),
-          secrets,
+          // The one credential store under `storageRoot`, telling this
+          // process's surfaces about every key it writes.
+          secrets: Secrets.announcing(
+            (announce) =>
+              new FileSecrets(secretsDirectory(storageRoot), announce),
+          ),
           ...(options?.appState && {
             appState: AppState.layer(options.appState),
           }),

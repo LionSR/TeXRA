@@ -13,7 +13,6 @@ import {
   Effect,
   Exit,
   Scope,
-  Stream,
   type Context,
   type FileSystem,
   type Path,
@@ -43,7 +42,6 @@ import {
   ownerIdentity,
   type OwnerId,
 } from '@texra-ai/harness/schemas';
-import { appSignalStream } from '@eventBus/AppSignals';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
@@ -233,9 +231,6 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     storageRoot,
     editors,
     open,
-    filesWritten: appSignalStream('workspaceFilesWritten').pipe(
-      Stream.map(({ absolutePaths }) => absolutePaths),
-    ),
     opened: Effect.sync(
       () =>
         new Map(

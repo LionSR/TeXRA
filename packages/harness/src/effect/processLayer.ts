@@ -14,6 +14,7 @@ import {
 import { SessionOwner, type ProcessServices } from '@platform/processRuntime';
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { AgentDirectories, AppState } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { SessionCloseReport } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
@@ -96,7 +97,7 @@ export class Sessions extends Context.Service<
             storageRoot: platform.roots.storageRoot,
             plugins,
             skills,
-            secrets: platform.secrets,
+            secrets: Secrets.layer(platform.secrets),
             appState: AppState.layer(platform.roots.globalState),
             agentDirectories: AgentDirectories.layer(platform.agentDirectories),
             toolMissingReporter: platform.toolMissingHandler,

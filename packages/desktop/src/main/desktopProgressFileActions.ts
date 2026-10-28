@@ -11,7 +11,6 @@ import {
   Settings,
 } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { emitAppSignal } from '@eventBus/AppSignals';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
@@ -116,10 +115,6 @@ export class DesktopProgressFileActions {
       pathToLocationIn(this.host.session.roots.workspace, editedFile),
       {
         confirm: (message) => this.ui.confirmAcceptFile(message),
-        emitWritten: (absolutePath) =>
-          emitAppSignal('workspaceFilesWritten', {
-            absolutePaths: [absolutePath],
-          }),
         showInfo: (message) => this.ui.showInfoMessage(message),
       },
     );

@@ -11,6 +11,8 @@
 import { Effect, Layer } from 'effect';
 import * as RateLimiter from 'effect/persistence/RateLimiter';
 
+import { AppSignals } from '@texra-ai/harness/host';
+
 import {
   issueKeyToString,
   IssuePollingSource,
@@ -38,56 +40,62 @@ import { GitHubSubscriptions } from './subscriptionBindings';
  * then closes the sources' lifetimes, draining the deliveries they admitted,
  * so a replacement runtime starts with sources and bindings of its own.
  */
-export const gitHubSubscriptionsLayer: Layer.Layer<GitHubSubscriptions> =
-  Layer.effect(
-    GitHubSubscriptions,
-    Effect.gen(function* () {
-      const lifetimes = [
-        yield* makePollingLifetime,
-        yield* makePollingLifetime,
-        yield* makePollingLifetime,
-      ] as const;
-      const limiter = yield* RateLimiter.RateLimiter;
-      // Bound annotation endpoint traffic across all PR subscriptions in this
-      // process: one unit per annotations page, at most 3,000 requests per
-      // hour, leaving room for the other PR polling endpoints under GitHub's
-      // primary 5,000/hour limit. Independent of the poll interval.
-      const claimAnnotation = limiter
-        .consume({
-          algorithm: 'token-bucket',
-          onExceeded: 'fail',
-          window: '1 minute',
-          limit: 50,
-          key: 'github-annotations',
-        })
-        .pipe(Effect.asVoid);
-      // Each registry releases its bindings in this scope, after the
-      // lifetimes opened above, so it closes before they do.
-      return {
-        pr: yield* RunSubscriptionRegistry.make<string, PRSubscribeInput>({
-          name: 'PRRunSubscriptionRegistry',
-          source: new PRPollingSource(lifetimes[0], claimAnnotation),
-          keyOf: prKeyToString,
-        }),
-        repo: yield* RunSubscriptionRegistry.make<RepoKey, RepoSubscribeInput>({
-          name: 'RepoRunSubscriptionRegistry',
-          source: new RepoPollingSource(lifetimes[1]),
-          keyOf: repoKeyToString,
-        }),
-        issue: yield* RunSubscriptionRegistry.make<string, IssueKey>({
-          name: 'IssueRunSubscriptionRegistry',
-          source: new IssuePollingSource(lifetimes[2]),
-          keyOf: issueKeyToString,
-        }),
-        drainDeliveries: Effect.forEach(
-          lifetimes,
-          (lifetime) => lifetime.drain,
-          { concurrency: 'unbounded', discard: true },
-        ),
-      };
-    }),
-  ).pipe(
-    Layer.provide(
-      RateLimiter.layer.pipe(Layer.provide(RateLimiter.layerStoreMemory)),
-    ),
-  );
+export const gitHubSubscriptionsLayer: Layer.Layer<
+  GitHubSubscriptions,
+  never,
+  AppSignals
+> = Layer.effect(
+  GitHubSubscriptions,
+  Effect.gen(function* () {
+    const lifetimes = [
+      yield* makePollingLifetime,
+      yield* makePollingLifetime,
+      yield* makePollingLifetime,
+    ] as const;
+    const limiter = yield* RateLimiter.RateLimiter;
+    const signals = yield* AppSignals;
+    // Bound annotation endpoint traffic across all PR subscriptions in this
+    // process: one unit per annotations page, at most 3,000 requests per
+    // hour, leaving room for the other PR polling endpoints under GitHub's
+    // primary 5,000/hour limit. Independent of the poll interval.
+    const claimAnnotation = limiter
+      .consume({
+        algorithm: 'token-bucket',
+        onExceeded: 'fail',
+        window: '1 minute',
+        limit: 50,
+        key: 'github-annotations',
+      })
+      .pipe(Effect.asVoid);
+    // Each registry releases its bindings in this scope, after the
+    // lifetimes opened above, so it closes before they do.
+    return {
+      pr: yield* RunSubscriptionRegistry.make<string, PRSubscribeInput>({
+        name: 'PRRunSubscriptionRegistry',
+        source: new PRPollingSource(lifetimes[0], claimAnnotation),
+        keyOf: prKeyToString,
+        signals,
+      }),
+      repo: yield* RunSubscriptionRegistry.make<RepoKey, RepoSubscribeInput>({
+        name: 'RepoRunSubscriptionRegistry',
+        source: new RepoPollingSource(lifetimes[1]),
+        keyOf: repoKeyToString,
+        signals,
+      }),
+      issue: yield* RunSubscriptionRegistry.make<string, IssueKey>({
+        name: 'IssueRunSubscriptionRegistry',
+        source: new IssuePollingSource(lifetimes[2]),
+        keyOf: issueKeyToString,
+        signals,
+      }),
+      drainDeliveries: Effect.forEach(lifetimes, (lifetime) => lifetime.drain, {
+        concurrency: 'unbounded',
+        discard: true,
+      }),
+    };
+  }),
+).pipe(
+  Layer.provide(
+    RateLimiter.layer.pipe(Layer.provide(RateLimiter.layerStoreMemory)),
+  ),
+);

@@ -48,7 +48,6 @@
     { "from": "telemetry", "to": "utils", "kind": "value" },
     { "from": "tools", "to": "agent", "kind": "value" },
     { "from": "tools", "to": "common", "kind": "value" },
-    { "from": "tools", "to": "eventBus", "kind": "value" },
     { "from": "tools", "to": "housekeeping", "kind": "value" },
     { "from": "tools", "to": "latex", "kind": "value" },
     { "from": "tools", "to": "logger", "kind": "value" },

@@ -28,6 +28,7 @@ import type { AgentCatalog } from '@agent/index/agentCatalog';
 import type { RouteRetries } from '@agent/runtime/run/invocation';
 import type { SessionOwnerShape } from '@agent/runtime/SessionHandle';
 import { writeLogEntry } from '@logger/logSink';
+import type { AppSignals } from '@platform/appSignals';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   DatabaseOpenFailed,
@@ -92,7 +93,8 @@ export class StateStores extends Context.Service<
  * the plugin table every run's offered tools are rebuilt from,
  * `ToolCatalog`, the tool catalog each session's steps pin their tools in
  * (its owner's view, `ToolCatalogOwner`, stays inside the composition), and
- * `ToolAvailability`, each workspace's last dependency probe. Every run
+ * `ToolAvailability`, each workspace's last dependency probe, and
+ * `AppSignals`, the process's app-lifecycle signal hub. Every run
  * and session of the process is provided these; the `Sessions` above them
  * is the composition root's alone ({@link ProcessRuntime}).
  */
@@ -115,7 +117,8 @@ export type ProcessServices =
   | ToolRegistry
   | ToolCatalog
   | ToolAvailability
-  | RouteRetries;
+  | RouteRetries
+  | AppSignals;
 
 /**
  * A process's skill sources (`ProcessLayerOptions.skills`,

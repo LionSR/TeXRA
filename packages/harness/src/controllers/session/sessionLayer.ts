@@ -52,6 +52,7 @@ import {
 import { presentTerminalResult } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { AppSignals } from '@platform/appSignals';
 import {
   holdProcessRoot,
   SessionOwner,
@@ -65,7 +66,7 @@ import {
   type ToolMissingHandler,
 } from '@platform/interfaces';
 import { globalStorageFsLayer } from '@platform/rootedFs';
-import { Secrets, type PlatformSecrets } from '@platform/secrets';
+import type { Secrets } from '@platform/secrets';
 import {
   nodeProcesses,
   processOwnerId,
@@ -556,14 +557,13 @@ export interface ProcessLayerOptions {
   /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
   readonly storageRoot: string;
   /**
-   * The app's plugins, in order, the harness's built-ins among them: the
-   * process serves them as `ToolRegistry` and the tool catalog over it
-   * (`ToolCatalog`). The harness names no plugin of its own: an app passes
-   * its list, `harnessBuiltins` among it.
+   * The app's plugins, in order, `harnessBuiltins` among them (the harness
+   * names no plugin of its own): the process serves them as `ToolRegistry`
+   * and the tool catalog over it (`ToolCatalog`).
    */
   readonly plugins: readonly Plugin[];
   readonly skills?: HostSkillOptions;
-  readonly secrets: PlatformSecrets;
+  readonly secrets: Layer.Layer<Secrets, never, AppSignals>;
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
@@ -640,7 +640,7 @@ export function ownerProcessLayer({
     globalDatabaseOption ?? globalDatabaseLayer(globalStorage)
   ).pipe(Layer.provide(identity), Layer.orDie);
   const services = Layer.mergeAll(
-    Secrets.layer(secrets),
+    secrets,
     // The follower registers each plugin's agent directory off the catalog.
     Layer.provideMerge(
       agentCatalogFollower,
@@ -654,7 +654,7 @@ export function ownerProcessLayer({
     Layer.effect(RouteRetries, ModelRetryGate.make),
   ).pipe(
     Layer.provideMerge(appState.pipe(Layer.orDie)),
-    Layer.provideMerge(identity),
+    Layer.provideMerge(Layer.merge(identity, AppSignals.layer)),
   );
   return sessionOwnerLayer.pipe(
     Layer.provideMerge(SessionMap.layer),

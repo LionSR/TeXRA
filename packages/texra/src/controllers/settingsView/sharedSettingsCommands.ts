@@ -13,7 +13,7 @@
  * parsed at its own edge through the body's `handleMessage`. The binding
  * table is `settingsHostBindings.ts`.
  */
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Stream } from 'effect';
 import { apiProviderOfSecretName } from '@texra-ai/llm';
 
 import {
@@ -29,6 +29,7 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   SUBSCRIPTION_AUTH_PROVIDERS,
 } from '@texra-ai/harness/schemas';
+import { appSignalStream } from '@texra-ai/harness/host';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
@@ -400,6 +401,25 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     ...pluginsPage.handlers,
   } satisfies Partial<SettingsArms>;
 
+  /**
+   * What each app signal the view follows repaints: a run that binds a
+   * GitHub subscription, the setup agent's `apply_team`, and a provider key
+   * written by any writer (the setup agent's `unset_api_key`, another
+   * window). OAuth tokens and other secrets are not provider keys, so they
+   * repaint nothing.
+   */
+  const repaintOn = {
+    githubSubscriptionsChanged: () => gitPage.postSubscriptions,
+    workspaceAgentsChanged: () =>
+      agents.refreshAfterAgentMutation(undefined, true),
+    credentialChanged: ({ key }: { readonly key: string }) => {
+      const provider = apiProviderOfSecretName(key);
+      return provider === undefined
+        ? undefined
+        : refreshAfterProviderKeyChange(provider);
+    },
+  };
+
   // ── The boundary every settings program settles on ──
 
   const settle = <E>(
@@ -431,30 +451,32 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     postLatexStatus: toolsPage.postLatexStatus,
     reported,
     signInSubscription,
-    /** Settle a repaint nobody awaits, reported as a message's would be. */
-    settle,
-    /** The Plugins page following its workspace's availability results,
-     *  for the host to hold while the view lives. */
-    followToolAvailability: toolsPage.followToolAvailability(settle),
     /**
-     * What each app signal this view follows repaints: a run that binds a
-     * GitHub subscription, the setup agent's `apply_team`, a provider key
-     * written by any writer (the setup agent's `unset_api_key`, another
-     * window) and the editor's language models. OAuth tokens and other
-     * secrets are not provider keys, so they repaint nothing. The host
-     * subscribes (controllers do not import the signal bus) and settles
-     * each repaint through {@link settle}.
+     * Repaint the view, until interrupted, on what it follows: its
+     * workspace's tool availability (the Plugins page) and each app signal
+     * `repaintOn` names. Every follower is a child fiber started at once,
+     * so it is subscribed by the end of the turn that forks this. `start`
+     * is how the host runs a repaint nobody awaits; each is settled and
+     * reported as a message's would be.
      */
-    repaintOn: {
-      githubSubscriptionsChanged: () => gitPage.postSubscriptions,
-      workspaceAgentsChanged: () =>
-        agents.refreshAfterAgentMutation(undefined, true),
-      credentialChanged: ({ key }: { readonly key: string }) => {
-        const provider = apiProviderOfSecretName(key);
-        return provider === undefined
-          ? undefined
-          : refreshAfterProviderKeyChange(provider);
-      },
-    },
+    followRepaints: (
+      start: (
+        repaint: Effect.Effect<void, never, ProcessServices>,
+      ) => Effect.Effect<void, never, ProcessServices>,
+    ): Effect.Effect<never, never, ProcessServices> =>
+      Effect.forEach(
+        [
+          toolsPage.followToolAvailability(settle),
+          ...(Object.keys(repaintOn) as Array<keyof typeof repaintOn>).map(
+            (signal) =>
+              Stream.runForEach(appSignalStream(signal), (payload) => {
+                const work = repaintOn[signal](payload as never);
+                return work ? start(settle(work)) : Effect.void;
+              }),
+          ),
+        ],
+        (follower) => Effect.forkChild(follower, { startImmediately: true }),
+        { discard: true },
+      ).pipe(Effect.andThen(Effect.never)),
   };
 }

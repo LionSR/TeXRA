@@ -4,6 +4,7 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
 import type { AgentCatalog } from '@agent/index/agentCatalog';
+import type { AppSignals } from '@platform/appSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
@@ -39,7 +40,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalog
+  ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalog | AppSignals
 > {
   const { old_str, new_str, replace_all } = input;
   const prepared = yield* resolveWritableTarget(input.path);

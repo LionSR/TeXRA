@@ -21,6 +21,7 @@ import { Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import {
   AppState,
   processLayer,
+  Secrets,
   type ProcessRuntime,
   type GlobalValues,
   ToolMissingHandler,
@@ -46,15 +47,15 @@ import {
   type ApprovalPolicy,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
-import { openGettingStarted } from '@commands/system/walkthroughCommands';
-import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import {
   appSignalStream,
   emitAppSignal,
   onAppSignal,
-} from '@eventBus/AppSignals';
+} from '@texra-ai/harness/host';
+import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
+import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
+import { openGettingStarted } from '@commands/system/walkthroughCommands';
+import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   executeVscodeCommand,
@@ -150,12 +151,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     defaultNodeStorageRoot(),
     workspaceRoot,
   );
-  // The one credential store every host shares (`~/.texra/secrets/`):
-  // the background service reads the keys this window saves.
-  const secrets = new FileSecrets(
-    secretsDirectory(defaultNodeStorageRoot()),
-    (key) => emitAppSignal('credentialChanged', { key }),
-  );
   // The editor registry the plugins' editor tools read; the progress view
   // attaches this window's editor to it.
   const editors = makeEditorHost();
@@ -186,7 +181,15 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         skills: {
           resourcesPath: path.join(context.extensionPath, 'resources'),
         },
-        secrets,
+        // The one credential store every host shares (`~/.texra/secrets/`):
+        // the background service reads the keys this window saves.
+        secrets: Secrets.announcing(
+          (announce) =>
+            new FileSecrets(
+              secretsDirectory(defaultNodeStorageRoot()),
+              announce,
+            ),
+        ),
         agentDirectories: agentDirectoriesLayer(context.extensionPath),
         toolMissingReporter: extras.toolMissingHandler,
         usageLog: usageLogLayer({
@@ -287,7 +290,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
             undefined,
           ),
         );
-      return { secrets, runtime, roots, editors, reached };
+      return { runtime, roots, editors, reached };
     }),
   );
 });
@@ -424,11 +427,14 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // A folder's window is a client of the one background service, so its
   // tasks keep running when it closes and other windows and terminals see
   // them. Decided once: a reconnect never re-enters it.
-  const { secrets, runtime, roots, editors, reached } =
-    yield* initVscodePlatform(context, workspaceRoot, {
+  const { runtime, roots, editors, reached } = yield* initVscodePlatform(
+    context,
+    workspaceRoot,
+    {
       toolMissingHandler: vscodeToolMissingReporter,
       service: reachExtensionService(context.extensionPath),
-    });
+    },
+  );
   // The host entry holds the process runtime in a local and threads it to the
   // surfaces registered below, so code under `activate` settles its Effects on
   // the runtime it was handed instead of reading the global back.
@@ -437,7 +443,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   const activationScope = yield* Scope.Scope;
   yield* withProcessServices(
     runtime,
-    activateWorkspace(context, secrets, runtime, roots, editors, reached).pipe(
+    activateWorkspace(context, runtime, roots, editors, reached).pipe(
       Effect.provideService(Scope.Scope, activationScope),
     ),
   );
@@ -451,7 +457,6 @@ const activateExtension = Effect.fn('activateExtension')(function* (
 /** The workspace path's activation, over the process runtime it just built. */
 const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   context: vscode.ExtensionContext,
-  secrets: FileSecrets,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
   editors: EditorRegistry,
@@ -459,6 +464,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   reached: Result.Result<ServiceLink, Error>,
 ) {
   const { globalState } = roots;
+  const secrets = yield* Secrets;
   // A window of the service opens no session of its own: no store, run
   // or claims. Only a window that cannot reach the service runs its
   // tasks here, and says so once. While the link is down, the service's
@@ -552,7 +558,11 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   yield* Deferred.succeed(settingsView, settingsViewProvider);
   registerWalkthroughWorkspaceAction(context, true, runtime);
   // Keys another window or the service writes reach this one's surfaces.
-  yield* Effect.forkScoped(secrets.watch());
+  yield* Effect.forkScoped(
+    FileSecrets.watch(secretsDirectory(defaultNodeStorageRoot()), (key) =>
+      emitAppSignal('credentialChanged', { key }),
+    ),
+  );
   yield* registerFileDecorations(context, session);
 
   // VS Code's event emitters don't await async listeners, so we funnel

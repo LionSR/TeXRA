@@ -4,6 +4,7 @@ import { Effect, Exit, Layer, Scope } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { AppSignals } from '@platform/appSignals';
 import { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
@@ -64,6 +65,7 @@ describe('GitHub run subscriptions', () => {
         name: 'test subscriptions',
         source,
         keyOf: (input) => input,
+        signals: yield* AppSignals,
       }).pipe(Scope.provide(scope));
 
       yield* registry
@@ -85,6 +87,6 @@ describe('GitHub run subscriptions', () => {
       expect(registry.list(['owner/repo'])).toEqual([
         { key: 'owner/repo', runIds: [] },
       ]);
-    }),
+    }).pipe(Effect.provide(AppSignals.layer)),
   );
 });

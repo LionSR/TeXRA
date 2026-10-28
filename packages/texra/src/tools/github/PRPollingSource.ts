@@ -65,6 +65,7 @@ import {
   PollHookRejected,
   PollingSourceBase,
   type PollingLifetime,
+  type PollServices,
 } from './PollingSourceBase';
 import { dedupeComments, DedupedResource, MAX_SEEN_IDS } from './pollingDedup';
 import {
@@ -220,7 +221,7 @@ export class PRPollingSource extends PollingSourceBase<
   subscribe(
     input: PRSubscribeInput,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, GitHubServices> {
+  ): Effect.Effect<Disposable, never, PollServices> {
     const key = prKeyToString(input);
     return this.register(key, (now) => initialState(input, now), onEvent).pipe(
       Effect.map((disposable) => {
@@ -269,7 +270,7 @@ export class PRPollingSource extends PollingSourceBase<
   protected override afterTick(
     entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
     now: number,
-  ): Effect.Effect<void, PollHookRejected, GitHubServices> {
+  ): Effect.Effect<void, PollHookRejected, PollServices> {
     return this.drainAnnotationQueues(entries, now);
   }
 
