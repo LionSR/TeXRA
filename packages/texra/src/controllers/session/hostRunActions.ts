@@ -7,7 +7,6 @@ import {
   Rejected,
   type RequestError,
   type RequestRefusal,
-  type LocalSession,
   type Run,
   type Session,
   type StartInput,
@@ -45,6 +44,7 @@ import {
   type RunRequest,
   type ValidatedRunRequest,
 } from '@texra/controllers/session/runRequests';
+import { forkRun } from '@texra/controllers/session/runActionPolicy';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { packDestination } from '@texra/tools/documents/runOutputs';
 import type {
@@ -115,8 +115,8 @@ class RunConfigUnreadable extends Schema.TaggedError<RunConfigUnreadable>()(
 type RunValidatedOptions = Pick<StartInput, 'helperModel' | 'approval'>;
 
 /** What the run actions read and present beside the window's `Session`:
- *  filled from this process's session where the window holds one
- *  ({@link localRunActionPorts}), from the service where it runs there. */
+ *  filled from this process's session where the window holds one, from
+ *  the service where it runs there (`windowRecords`). */
 export interface RunActionRecordPorts {
   /** The window's roots: its workspace and its settings stores. */
   readonly roots: WorkspaceRoots;
@@ -130,15 +130,6 @@ export interface RunActionRecordPorts {
   /** Where a failure before a run opens is presented. */
   readonly present: Pick<SessionHostInteractions, 'emit'>;
 }
-
-/** The ports of a window whose process holds its session. */
-export const localRunActionPorts = (
-  session: LocalSession,
-): RunActionRecordPorts => ({
-  roots: session.roots,
-  readConfig: (runId) => session.records(runId).readConfig(),
-  present: session,
-});
 
 export interface HostRunActionPorts extends RunActionRecordPorts {
   /** Where this window's run actions land: its own session, or the
@@ -670,29 +661,23 @@ export const createHostRunActions = Effect.fn(
       });
     },
     fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
-      const outcome = yield* session
-        .request({ kind: 'run.fork', runId, at })
-        .pipe(
-          Effect.mapError((error): RequestRefusal =>
-            isRequestRefusal(error)
-              ? error
-              : new Unavailable({
-                  runId,
-                  reason: 'The task could not be forked.',
-                }),
-          ),
-        );
-      if (outcome.kind !== 'forked')
-        return yield* Effect.die(
-          new Error(`run.fork answered ${outcome.kind}`),
-        );
-      // The fork waits for its host: continuing it parks it on the
-      // user's next message. A refusal is told by the resume itself, and
-      // the fork keeps its Resume.
+      const fork = yield* forkRun(session, runId, at).pipe(
+        Effect.mapError((error): RequestRefusal =>
+          isRequestRefusal(error)
+            ? error
+            : new Unavailable({
+                runId,
+                reason: 'The task could not be forked.',
+              }),
+        ),
+      );
+      // The fork waits for its host: continuing it waits on the user's
+      // next message. A refusal is told by the resume itself, and the fork
+      // keeps its Resume.
       yield* session
-        .resume(outcome.runId, { interactive: true })
+        .resume(fork, { interactive: true })
         .pipe(Effect.ignore({ log: 'Warn' }));
-      return outcome.runId;
+      return fork;
     }),
   };
 });

@@ -21,13 +21,13 @@
 import { Effect, Schema, type Scope, Semaphore, Stream } from 'effect';
 
 import {
+  AppState,
   Settings,
   StateReadFailed,
   withLogChannel,
 } from '@texra-ai/harness/host';
 import {
   agentName,
-  GlobalStateKey,
   RUN_PHASE,
   type SessionView,
 } from '@texra-ai/harness/schemas';
@@ -35,6 +35,12 @@ import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type { Session } from '@texra-ai/harness';
 import type { StateStore, StateWriteFailed } from '@texra-ai/harness/host';
+
+/** "Skip for now" on the State 0 picker. The key keeps the CLI's spelling,
+ *  under which it was first stored. */
+const DECLINED_KEY = 'texra.cli.onboardingDeclined';
+/** A real run completed, or the user skipped setup. */
+const FIRST_RUN_DONE_KEY = 'texra.onboarding.firstRunDone';
 
 /** An onboarding flag: off until something sets it. */
 const OnboardingFlagSchema = Schema.Boolean.pipe(
@@ -46,23 +52,19 @@ export function setOnboardingDeclined(
   state: StateStore,
   declined: boolean,
 ): Effect.Effect<void, StateWriteFailed> {
-  return state.update(GlobalStateKey.ONBOARDING_DECLINED, declined);
+  return state.update(DECLINED_KEY, declined);
 }
 
 /** Whether a real run has completed (or the user skipped setup). */
 export function getFirstRunDone(state: StateStore) {
-  return Settings.state(
-    state,
-    GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
-    OnboardingFlagSchema,
-  );
+  return Settings.state(state, FIRST_RUN_DONE_KEY, OnboardingFlagSchema);
 }
 
 /** Record that a real run completed or the user skipped setup. */
 export function setFirstRunDone(
   state: StateStore,
 ): Effect.Effect<void, StateWriteFailed> {
-  return state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, true);
+  return state.update(FIRST_RUN_DONE_KEY, true);
 }
 
 /** Whether `view` holds a completed agent run other than the setup
@@ -111,6 +113,20 @@ export const recordFirstCompletedRun = Effect.fn('recordFirstCompletedRun')(
     );
   },
 );
+
+/**
+ * Run `refresh` as subscribed and whenever `firstRunDone` may have been
+ * written, by this process or another sharing the store. The flag is written
+ * by {@link recordFirstCompletedRun} in whichever process held the run, not
+ * at a run's end, so a host follows the flag rather than its own launches; a
+ * setup chat that waits after delegating has done its first run too.
+ */
+export const followFirstRunDone = (
+  refresh: Effect.Effect<void>,
+): Effect.Effect<void, never, AppState> =>
+  Stream.unwrap(
+    Effect.map(AppState, (state) => state.changes([FIRST_RUN_DONE_KEY])),
+  ).pipe(Stream.runForEach(() => refresh));
 
 interface OnboardingFunnelInputs {
   /** A usable credential exists (a subscription or any provider API key). */
@@ -244,7 +260,7 @@ export class OnboardingFunnelRefresher {
         hasCredential,
         declined: yield* Settings.state(
           this.host.flags,
-          GlobalStateKey.ONBOARDING_DECLINED,
+          DECLINED_KEY,
           OnboardingFlagSchema,
         ),
         firstRunDone: yield* getFirstRunDone(this.host.flags),

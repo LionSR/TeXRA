@@ -28,7 +28,7 @@ import {
   visibleAgents,
 } from './workspaceAgentsState';
 
-const DEFAULT_TEAM = GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID;
+const DEFAULT_TEAM = GlobalStateKey.ACTIVE_TEAM_ID;
 const TeamIdSchema = Schema.optional(Schema.NonEmptyString);
 
 export interface WorkspaceAgentsEntry {

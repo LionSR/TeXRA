@@ -106,8 +106,6 @@ interface ProjectBindingsOptions {
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;
   readonly onboarding: DesktopOnboardingIpc;
-  /** Recompute the onboarding funnel when a launch settles. */
-  readonly refreshFunnelAfterLaunch: Effect.Effect<void>;
 }
 
 export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
@@ -337,10 +335,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
           bridge.surfaceAction({ kind: 'select', runId });
           spawn(snapshot.clearAgentConfigBanner);
         },
-        // Recompute the onboarding funnel when a launch settles so a first
-        // successful run leaves the setup card without a restart. The settled
-        // launch includes AgentRunLifecycle's firstRunDone write.
-        onRunCompleted: options.refreshFunnelAfterLaunch,
       });
       const hostRequests = yield* createDesktopHostRequests({
         runtime,

@@ -15,7 +15,6 @@ import {
 } from 'effect';
 
 import {
-  AppState,
   withProcessServices,
   SessionHostInteractions,
   type HostInteractions,
@@ -28,7 +27,6 @@ import {
   agentKeyOf,
   type FileLocation,
   type RunId,
-  GlobalStateKey,
 } from '@texra-ai/harness/schemas';
 import { AppSignals, appSignalStream } from '@texra-ai/harness/host';
 import { BundledViewContentProvider } from '@common/webview';
@@ -38,6 +36,7 @@ import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import {
+  followFirstRunDone,
   getFirstRunDone,
   OnboardingFunnelRefresher,
   setOnboardingDeclined,
@@ -57,20 +56,12 @@ import { DOCUMENTS_OUTPUT_KEY } from '@texra/shared/plugins/documents';
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
-import { serviceRecords } from '@texra/controllers/server/serviceSession';
+import { windowRecords } from '@texra/controllers/server/serviceSession';
 import {
   attachWindowHost,
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
-import {
-  localExportRecords,
-  type ChatExportRecords,
-} from '@texra/controllers/progressView/ChatExportController';
-import {
-  localRunActionPorts,
-  type HostRunActions,
-  type RunActionRecordPorts,
-} from '@texra/controllers/session/hostRunActions';
+import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
@@ -458,37 +449,27 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * What the run actions and the transcript export read, from the one
-   * place the window's runs are held: its own session, or the
-   * service. In service mode a failure before a run opens is presented on
-   * this window's presentation host, held for the provider's life.
+   * What the run actions and the transcript export read (`windowRecords`).
+   * In service mode a failure before a run opens is presented on this
+   * window's presentation host, held for the provider's life.
    */
   private windowRecords(
     windowSession: WindowSession,
     presentation: Pick<HostInteractions, 'emit'>,
-  ): {
-    readonly records: RunActionRecordPorts;
-    readonly exportRecords: ChatExportRecords;
-  } {
+  ) {
     if (windowSession.service === undefined)
-      return {
-        records: localRunActionPorts(windowSession.session),
-        exportRecords: localExportRecords(windowSession.session),
-      };
+      return windowRecords(windowSession);
     const present = new SessionHostInteractions();
     this.runtime.runSync(
       Effect.acquireRelease(present.use(presentation), (detach) =>
         Effect.sync(detach),
       ).pipe(Scope.provide(this.scope)),
     );
-    const remote = serviceRecords(
-      windowSession.service,
-      this.roots.workspace ?? '',
-    );
-    return {
-      records: { roots: this.roots, readConfig: remote.readConfig, present },
-      exportRecords: { input: remote.exportInput, trace: remote.exportTrace },
-    };
+    return windowRecords({
+      service: windowSession.service,
+      roots: this.roots,
+      present,
+    });
   }
 
   /** Offer the service this window's capabilities for its project's runs. */
@@ -573,27 +554,18 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       );
       yield* this.snapshot.refresh;
       yield* this.refreshOnboardingFunnel();
-      // The funnel then follows `firstRunDone` wherever it is written, not a
-      // run's end: a setup chat that parks after delegating has done its
-      // first run. Started after the refresh above, so that refresh owns the
-      // first transition and its setup-agent selection; the subscription's
-      // own first element still refreshes, for a write that landed between.
+      // Started after the refresh above, so that refresh owns the first
+      // transition and its setup-agent selection; the follower's own first
+      // refresh covers a write that landed between.
       yield* Effect.forkIn(
-        Stream.unwrap(
-          Effect.map(AppState, (appState) =>
-            appState.changes([GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]),
+        followFirstRunDone(
+          this.refreshOnboardingFunnel().pipe(
+            Effect.ignore({
+              log: 'Warn',
+              message: 'Refreshing the onboarding state',
+            }),
           ),
-        ).pipe(
-          Stream.runForEach(() =>
-            this.refreshOnboardingFunnel().pipe(
-              Effect.ignore({
-                log: 'Warn',
-                message: 'Refreshing the onboarding state',
-              }),
-            ),
-          ),
-          withLogChannel(CHANNEL),
-        ),
+        ).pipe(withLogChannel(CHANNEL)),
         this.scope,
       );
       yield* Effect.logDebug('ProgressViewProvider initialized').pipe(

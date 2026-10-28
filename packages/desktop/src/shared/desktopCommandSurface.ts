@@ -14,6 +14,7 @@ import {
   type CommandHandler,
 } from '@texra/shared/commands/registry';
 import type { IconName } from '@ui/wa/iconNames';
+import { texraGuideUrl } from '@ui/copy/guide';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopOpenSettingsMessageSchema,
@@ -30,7 +31,7 @@ export const DESKTOP_LOCAL_COMMANDS = {
   OPEN_DESKTOP_DOCS: 'texra.desktop.openDesktopDocs',
 } as const;
 
-export const DESKTOP_DOCS_URL = 'https://texra.ai/guide/desktop';
+export const DESKTOP_DOCS_URL = texraGuideUrl('desktop');
 
 type DesktopLocalCommandId =
   (typeof DESKTOP_LOCAL_COMMANDS)[keyof typeof DESKTOP_LOCAL_COMMANDS];

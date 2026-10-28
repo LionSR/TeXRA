@@ -24,6 +24,7 @@ import { absentReason } from '@texra-ai/harness/node';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
+import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 
 import { CliUsageError } from './cliContext';
@@ -297,9 +298,6 @@ export const readCliHistoryExportInput = Effect.fn(
   return { status: 'incomplete' } satisfies CliHistoryExportInputResult;
 });
 
-/** Single-file trace-viewer bundle (file://-safe, inlined assets). */
-const TRACE_VIEWER_DIR_NAME = 'traceViewer';
-
 /**
  * Read the trace-viewer's single-file default bundle — one self-contained
  * `index.html` with no external `assets/` (JS/CSS/fonts all inlined) so the
@@ -313,11 +311,7 @@ const TRACE_VIEWER_DIR_NAME = 'traceViewer';
 export function readCliHistoryStandaloneTemplate(
   resourcesPath: string,
 ): Effect.Effect<string | null, CliUsageError, FileSystem.FileSystem> {
-  const templatePath = path.join(
-    resourcesPath,
-    TRACE_VIEWER_DIR_NAME,
-    'index.html',
-  );
+  const templatePath = traceViewerTemplatePath(resourcesPath);
   return FileSystem.FileSystem.use((fs) =>
     fs.readFileString(templatePath),
   ).pipe(

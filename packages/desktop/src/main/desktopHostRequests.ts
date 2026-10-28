@@ -5,9 +5,7 @@
 // an outcome or a request error; an arm the desktop does not perform is
 // `Rejected` with its reason, never dropped.
 
-import path from 'node:path';
-
-import { Effect, Exit, Layer, type Scope } from 'effect';
+import { Effect, Layer, type Scope } from 'effect';
 import {
   Cancelled,
   Rejected,
@@ -40,16 +38,13 @@ import type {
 } from '@texra/shared/session/sessionFrames';
 import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
-import type { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
-import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
+import { windowTranscriptExport } from '@texra/controllers/progressView/exportTranscript';
 import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
-import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   createHostRunActions,
-  localRunActionPorts,
   type HostRunActions,
   type WorkflowDiffRequest,
 } from '@texra/controllers/session/hostRunActions';
@@ -60,9 +55,10 @@ import {
   type SharedHostRequestBindings,
   type SharedHostRequestPorts,
 } from '@texra/controllers/session/sharedHostRequests';
-import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
-import { serviceRecords } from '@texra/controllers/server/serviceSession';
+import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
+import { windowRecords } from '@texra/controllers/server/serviceSession';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import { texraGuideUrl } from '@ui/copy/guide';
 
 import {
   DESKTOP_DOCS_URL,
@@ -128,10 +124,7 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
   const { roots } = project;
   /** Where the window reads its runs' records: its own session, or the
    *  service's, bound once. */
-  const records =
-    project.service === undefined
-      ? { local: project.session, remote: undefined }
-      : { remote: serviceRecords(project.service, project.root) };
+  const { records, exportRecords } = windowRecords(project);
   /** The rooted filesystems of this window's paper, built once from the
    *  roots its session holds for its lifetime, never from an ambient store. */
   const sessionFiles = sessionFsLayer(roots);
@@ -155,13 +148,7 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
   const runActions = runtime.runSync(
     createHostRunActions({
       ...run, // this window's launch follow-up and output opener
-      ...(records.remote === undefined
-        ? localRunActionPorts(records.local)
-        : {
-            roots,
-            readConfig: records.remote.readConfig,
-            present: project.present,
-          }),
+      ...records,
       session: project.session,
       loadModelOptions: () =>
         withProcessServices(
@@ -197,20 +184,6 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
   );
   const { runOutputs } = runActions;
 
-  /** The label scan's candidates, as the program that lists them: the
-   *  file-actions port takes the window's services from the runtime it holds,
-   *  so nothing settles here. */
-  const listWorkspaceCandidateFiles = () =>
-    Effect.suspend(() => {
-      const workspacePath = project.root;
-      if (!workspacePath) return Effect.succeed([]);
-      return listWorkspaceFilesOfType(['input', 'context'], workspacePath).pipe(
-        Effect.map((files) =>
-          files.flat().map((file) => path.resolve(workspacePath, file)),
-        ),
-      );
-    });
-
   const fileActions = new DesktopProgressFileActions(
     {
       ...host,
@@ -218,7 +191,7 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
       // request answers with, exactly as the rejecting promise did.
       showErrorMessage: rejectRequestEffect,
     },
-    { session: project.session, runtime, listWorkspaceCandidateFiles },
+    { session: project.session, runtime },
   );
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
@@ -253,44 +226,13 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
         ),
       );
 
-  /**
-   * The chat export controller, loaded on the first export so its module
-   * graph — the formatters, the trace assembler, the LaTeX compiler — stays
-   * out of app startup. The memo is the library's: a successful load is kept
-   * for the window's life, and a failed one expires at once so the next
-   * export retries. `runSync` only allocates the memo; the load runs inside
-   * the export's own program.
-   */
-  const getChatExportController: Effect.Effect<
-    ChatExportController,
-    TranscriptExportFailed
-  > = runtime.runSync(
-    Effect.cachedWithTTL(
-      Effect.tryPromise({
-        try: async () => {
-          const { ChatExportController: Controller, localExportRecords } =
-            await import('@texra/controllers/progressView/ChatExportController');
-          return new Controller({
-            roots,
-            records:
-              records.remote === undefined
-                ? localExportRecords(records.local)
-                : {
-                    input: records.remote.exportInput,
-                    trace: records.remote.exportTrace,
-                  },
-            latexPreamble,
-          });
-        },
-        catch: (cause) =>
-          new TranscriptExportFailed({
-            step: 'openController',
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      }),
-      (exit) => (Exit.isSuccess(exit) ? 'Infinity' : 0),
-    ),
+  const exportRun = runtime.runSync(
+    windowTranscriptExport({
+      roots,
+      records: exportRecords,
+      latexPreamble,
+      resourcesPath: options.resourcesPath,
+    }),
   );
 
   const exportTranscript = (runId: RunId) =>
@@ -300,7 +242,7 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
           new Unavailable({ runId, reason: 'The run is no longer open.' }),
         );
       }
-      yield* exportRunTranscript(runId, {
+      yield* exportRun(runId, {
         pickFormat: host.pickTranscriptExportFormat(),
         // The preview host has already shown its own notice; the port's
         // tag carries that refusal and its wording out unchanged.
@@ -319,9 +261,6 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
         showInfo: (message) => host.showInfoMessage(message),
         showWarning: (message) => host.showWarningMessage(message),
         showError: rejectRequestEffect,
-        getController: getChatExportController,
-        getTraceViewerTemplate: () =>
-          path.join(options.resourcesPath, 'traceViewer', 'index.html'),
       });
     });
 
@@ -376,13 +315,9 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
   const hostBindings: SharedHostRequestBindings = {
     openPath: (file, line) => host.openPath(file, line),
     openLabel: (label) =>
-      fileActions
-        .findAndOpenLabel(label)
-        .pipe(
-          Effect.mapError((cause) =>
-            hostFailure('fileActions.findAndOpenLabel', cause),
-          ),
-        ),
+      findLabelInWorkspace(roots.workspace, label, (absolutePath) =>
+        host.openPath(absolutePath),
+      ).pipe(Effect.mapError((cause) => hostFailure('openLabel', cause))),
     exportTranscript,
     surfaceAction: (action) => options.postSurfaceAction(action),
     showInfo: (message) => host.showInfoMessage(message),
@@ -408,7 +343,7 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
       postDesktopSettingsView(options.postToRenderer, 'models/keys'),
     ),
     openApiKeyGuide: Effect.suspend(() =>
-      options.openExternalUrl('https://texra.ai/guide/configuration.html'),
+      options.openExternalUrl(texraGuideUrl('configuration')),
     ),
     openCustomAgentDirectory: Effect.gen(function* () {
       const directory = yield* AgentDirectories.use((directories) =>
@@ -416,8 +351,10 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
       );
       yield* host.openPath(directory);
     }),
+    // The desktop guide has no agents section: both hosts open the custom
+    // agents page.
     openAgentDocs: Effect.suspend(() =>
-      options.openExternalUrl(`${DESKTOP_DOCS_URL}#agents`),
+      options.openExternalUrl(texraGuideUrl('custom-agents')),
     ),
     recheckDependencies: Effect.suspend(() => options.recheckTools()),
     openInstallGuide: () =>
