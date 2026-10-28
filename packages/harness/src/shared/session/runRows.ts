@@ -342,6 +342,12 @@ export function runRowsFrom(rows: readonly SessionEvent[]): RunRows {
   return slice;
 }
 
+/** A run's rows as a read returns them, or none once its tombstone
+ *  (`run.removed`, written last) closed it. */
+export const unlessRemoved = <E extends Pick<SessionEvent, 'type'>>(
+  rows: readonly E[],
+): readonly E[] => (rows.at(-1)?.type === 'run.removed' ? [] : rows);
+
 /** The run's parent edge as its rows leave it: null for a root, and for a
  *  child a `run.detach` severed. */
 export const parentEdgeOf = (

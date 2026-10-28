@@ -131,7 +131,7 @@ Every row a session writes is written by a job on one inbox drained by one
 fiber. Claims are not rows: a hold inside a job takes its claim in that job's
 transaction, a hold outside one in a write transaction of its own, and either is
 released in the transaction of the scope that closes it, which need not be a job
-(`controllers/session/sessionStore.ts:143-202`). Jobs SHALL run in the order
+(`controllers/session/sessionStore.ts:144-203`). Jobs SHALL run in the order
 they were enqueued, one at a time, and the table's commit order is that order
 (`agent/runtime/SessionEvents.ts:241-249`). A job other than an ordering barrier
 (`transact(job, order)`, below) is one SQLite transaction: its appends commit
@@ -166,17 +166,17 @@ is a defect; a detached one is logged and dropped
 
 Above the publisher, the session's own door (`SessionLog.transact`) SHALL return
 only after the session's fold has folded every commit the job made
-(`controllers/session/sessionStore.ts:254-263`). A claim a failed transaction
+(`controllers/session/sessionStore.ts:255-264`). A claim a failed transaction
 took is released best effort: a refused release is logged and the claim stays
 until another process proves this one dead
-(`controllers/session/sessionStore.ts:222-234`, `:261`). A trace row emitted on
+(`controllers/session/sessionStore.ts:223-235`, `:262`). A trace row emitted on
 its own reaches the publisher through `SessionLog.publish`
 (`agent/runtime/SessionHandle.ts:97-100`); a call's card rows and a turn's
 closing rows commit inside the run's own batches instead
 (`agent/runtime/loop/toolUseDispatch.ts:544-547`,
 `agent/runtime/loop/toolUse.ts:497-500`). `SessionLog.settled` is the barrier
 after every job enqueued before it
-(`controllers/session/sessionStore.ts:305-307`).
+(`controllers/session/sessionStore.ts:306-308`).
 
 ### 2.4 Row versions and the store gate
 

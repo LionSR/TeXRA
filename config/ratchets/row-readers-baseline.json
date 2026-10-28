@@ -68,7 +68,6 @@
       "packages/harness/src/agent/followUp/Inbox.ts",
       "packages/harness/src/agent/runtime/SessionEvents.ts",
       "packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts",
-      "packages/harness/src/agent/storage/runRecords.ts",
       "packages/harness/src/controllers/session/Database.ts",
       "packages/harness/src/controllers/session/deletionCleanup.ts",
       "packages/harness/src/controllers/session/runTrace.ts",
