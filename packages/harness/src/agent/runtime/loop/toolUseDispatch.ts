@@ -30,10 +30,12 @@ import {
   Deferred,
   Effect,
   Exit,
+  Fiber,
+  FiberMap,
   FileSystem,
   Ref,
   Schema,
-  type Scope,
+  Scope,
   Semaphore,
   SynchronizedRef,
 } from 'effect';
@@ -707,209 +709,34 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   });
 
   /** The door a `script` call's guest issues calls through: the same per-call
-   *  program and scheduler, under the script's stage. A resumed script is
-   *  handed back what its rows settled, in commit order, before any call
-   *  runs again; a call at a recorded `seq` that differs is a divergence. */
-  const scriptCallsOf = Effect.fn('toolUse.scriptCalls')(function* (
+   *  program and scheduler, under the script's stage, which ends with
+   *  `dispatched`. A resumed script is handed back what its rows settled, in
+   *  commit order, before any call runs again; a call at a recorded `seq`
+   *  that differs is a divergence. Built in the call body's scope, which owns
+   *  the calls the guest issues and ends them (`RunCallShape.scriptCalls`). */
+  const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
     script: DispatchFacts,
+    dispatched: Scope.Scope,
   ) {
-    const services = yield* Effect.context<
-      | ProcessServices
-      | Runs
-      | WorkspaceFs
-      | StorageFs
-      | FileSystem.FileSystem
-      | Scope.Scope
-    >();
-    // Built on first use: a call that issues none allocates nothing.
-    const door = yield* Effect.cached(
-      Effect.gen(function* () {
-        const stageId = `script-${script.logId}`;
-        const issued = (state: RunState) =>
-          Object.values(state.pendingResponse?.records ?? {}).flatMap(
-            ({ script: call, status }) =>
-              call?.scriptCallId === script.callId ? [{ call, status }] : [],
-          );
-        // The calls its rows settled, in commit order.
-        const lanes = yield* makeScheduler(
-          issued(yield* cell.current)
-            .flatMap(({ call, status }) =>
-              status.kind === 'settled' ? [[status.at, call.seq] as const] : [],
-            )
-            .toSorted(([a], [b]) => a - b)
-            .map(([, seq]) => seq),
-        );
-        const stageOpened = yield* Ref.make(false);
-        // Labelled by the script's title, which its first call carries.
-        const openStage = Effect.fn('toolUse.openScriptStage')(function* (
-          title: string | null,
-        ) {
-          if (yield* Ref.getAndSet(stageOpened, true)) return;
-          run.session.log.publish(runId, {
-            type: 'stage.start',
-            id: stageId,
-            label: title ?? 'Script',
-            kind: 'script',
-          });
-        });
-        yield* Effect.addFinalizer((exit) =>
-          Effect.gen(function* () {
-            if (!(yield* Ref.get(stageOpened))) return;
-            const settled = resultOf(yield* cell.current, script.callId);
-            let status: 'completed' | 'failed' | 'cancelled' =
-              settled?.result.status === 'executed' ? 'completed' : 'failed';
-            if (Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause))
-              status = 'cancelled';
-            run.session.log.publish(runId, {
-              type: 'stage.end',
-              id: stageId,
-              status,
-            });
-          }),
-        );
-
-        // What the script's calls share while it runs (`ScriptScope.shared`).
-        const sharedValues = new Map<
-          string,
-          Deferred.Deferred<unknown, unknown>
-        >();
-        const shared = <A, E, R>(
-          key: string,
-          make: Effect.Effect<A, E, R>,
-        ): Effect.Effect<A, E, R> =>
-          Effect.suspend(() => {
-            const existing = sharedValues.get(key) as
-              Deferred.Deferred<A, E> | undefined;
-            if (existing !== undefined) return Deferred.await(existing);
-            const made = Deferred.makeUnsafe<A, E>();
-            sharedValues.set(key, made as Deferred.Deferred<unknown, unknown>);
-            return make.pipe(
-              Effect.onExit((exit) => Deferred.done(made, exit)),
-            );
-          });
-        const scopeOf = (source: ScriptSource): ScriptScope => ({
-          ...source,
-          callId: script.callId,
-          calls: Effect.map(cell.current, (state) =>
-            issued(state)
-              .map(({ call }) => call)
-              .toSorted((a, b) => a.seq - b.seq)
-              .map(({ toolName, input }) => ({ toolName, input })),
-          ),
-          shared,
-        });
-
-        /** Settles `op`: from its rows when they settled it; else by `answer`,
-         *  one of the script's host functions, recorded with no card; else by
-         *  running its tool through the per-call program. */
-        const call = Effect.fn('toolUse.scriptCall')(function* (
-          op: ScriptOp,
-          source: ScriptSource,
-          answer?: () => ToolResultPayload['result'],
-        ) {
-          const callId = `${script.callId}/${op.seq}`;
-          yield* lanes.turn(op.seq);
-          yield* openStage(source.title);
-          const input = toJsonValue(op.input);
-          const known = recordOf(yield* cell.current, callId);
-          const recorded = known?.script ?? null;
-          if (
-            recorded !== null &&
-            (recorded.toolName !== op.name ||
-              !isDeepStrictEqual(recorded.input, input))
-          ) {
-            return yield* new ScriptDiverged({
-              seq: op.seq,
-              recorded: `${recorded.toolName}(${JSON.stringify(recorded.input)})`,
-              issued: `${op.name}(${JSON.stringify(input)})`,
-            });
-          }
-          if (known?.status.kind === 'settled') {
-            // Replayed from its row: it takes no lane and does not run.
-            yield* lanes.pass(op.seq);
-            return {
-              result: known.status.result,
-              attachments: known.status.attachments,
-            };
-          }
-          const tool = step.registry.get(op.name);
-          const fact: ScriptCallPayload = recorded ?? {
-            scriptCallId: script.callId,
-            seq: op.seq,
-            callId,
-            toolName: op.name,
-            input,
-            replay: answer !== undefined ? 'safe' : (tool?.replay ?? 'unsafe'),
-            logId: generateShortId(),
-            stageId,
-            phase: op.phase,
-          };
-          if (answer !== undefined) {
-            // Reads the pinned catalog only and runs no tool: no lane, one commit.
-            yield* lanes.pass(op.seq);
-            const result = answer();
-            yield* commitResult(fact, 1, {
-              disposition: result.status === 'executed' ? 'executed' : 'failed',
-              duplicateOf: null,
-              result,
-              attachments: [],
-            });
-            return { result, attachments: [] };
-          }
-          yield* lanes.run(op.seq, tool?.lane ?? 'barrier', () =>
-            Effect.gen(function* () {
-              const status = recordOf(yield* cell.current, callId)?.status;
-              if (status?.kind !== 'settled')
-                yield* resumeCall(fact, input, status ?? { kind: 'issued' }, {
-                  script: scopeOf(source),
-                  scriptCalls: null,
-                });
-              // The script's own result says whether a call ended the turn.
-              return false;
-            }),
-          );
-          const settledNow = resultOf(yield* cell.current, callId);
-          if (settledNow === null) {
-            return yield* Effect.die(
-              new Error(`Script call ${callId} is unsettled after its run.`),
-            );
-          }
-          return {
-            result: settledNow.result,
-            attachments: settledNow.attachments,
-          };
-        });
-        return {
-          catalog: step.definitions
-            .filter(({ name }) => name !== script.toolName)
-            .map((definition) => ({
-              definition,
-              plugin: pluginOf.get(definition.name) ?? 'run',
-            })),
-          globals: step.definitions.flatMap(({ name }) => {
-            const global =
-              name === script.toolName
-                ? undefined
-                : step.registry.get(name)?.scriptGlobal;
-            return global === undefined
-              ? []
-              : [{ tool: name, positional: global.positional }];
-          }),
-          modules: step.modules,
-          call: (op: ScriptOp, source: ScriptSource) =>
-            call(op, source).pipe(Effect.provideContext(services)),
-          answer: (
-            op: ScriptOp,
-            source: ScriptSource,
-            answer: () => ToolResultPayload['result'],
-          ) =>
-            call(op, source, answer).pipe(
-              Effect.map(({ result }) => result),
-              Effect.provideContext(services),
-            ),
-          delivered: lanes.delivered,
-          // A call the guest never awaited to its end: skipped, card closed.
-          settleAbandoned: Effect.flatMap(cell.current, (state) =>
+    const stageId = `script-${script.logId}`;
+    const issued = (state: RunState) =>
+      Object.values(state.pendingResponse?.records ?? {}).flatMap(
+        ({ script: call, status }) =>
+          call?.scriptCallId === script.callId ? [{ call, status }] : [],
+      );
+    // The calls its rows settled, in commit order.
+    const lanes = yield* makeScheduler(
+      issued(yield* cell.current)
+        .flatMap(({ call, status }) =>
+          status.kind === 'settled' ? [[status.at, call.seq] as const] : [],
+        )
+        .toSorted(([a], [b]) => a - b)
+        .map(([, seq]) => seq),
+    );
+    yield* Effect.addFinalizer((exit) =>
+      Exit.hasInterrupts(exit)
+        ? Effect.void
+        : Effect.flatMap(cell.current, (state) =>
             Effect.forEach(
               issued(state),
               ({ call: fact, status }) => {
@@ -917,7 +744,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                 const at = { responseId, callId: fact.callId };
                 const entered = resumedAttempt(state, at, status);
                 // A request the call was parked on is withdrawn with it.
-                return callRequests(
+                const { retireStanding } = callRequests(
                   run,
                   cell,
                   (rows) => commit(fact, rows),
@@ -925,24 +752,195 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
                   entered.raised,
                   entered.own,
                   'The script ended before this call settled.',
-                ).retireStanding.pipe(
-                  Effect.andThen(
-                    skipCall(
-                      fact,
-                      fact.input,
-                      status,
-                      skippedByScriptEnd(attemptOf(status) > 0),
-                    ),
-                  ),
                 );
+                const reason = skippedByScriptEnd(attemptOf(status) > 0);
+                const skip = skipCall(fact, fact.input, status, reason);
+                return Effect.andThen(retireStanding, skip);
               },
               { discard: true },
             ),
-          ).pipe(Effect.provideContext(services)),
-        } satisfies ScriptDoor;
-      }).pipe(Effect.provideContext(services)),
+          ).pipe(Effect.orDie),
     );
-    return door;
+    // Made after that finalizer, so it closes first: no call the guest
+    // issued still runs when the finalizer reads what it left.
+    const fork = yield* FiberMap.makeRuntime<
+      ProcessServices | Runs | WorkspaceFs | StorageFs,
+      string
+    >();
+    const stageOpened = yield* Ref.make(false);
+    // Labelled by the script's title, which its first call carries.
+    const openStage = Effect.fn('toolUse.openScriptStage')(function* (
+      title: string | null,
+    ) {
+      if (yield* Ref.getAndSet(stageOpened, true)) return;
+      run.session.log.publish(runId, {
+        type: 'stage.start',
+        id: stageId,
+        label: title ?? 'Script',
+        kind: 'script',
+      });
+      yield* Scope.addFinalizerExit(dispatched, (exit) =>
+        Effect.gen(function* () {
+          const settled = resultOf(yield* cell.current, script.callId);
+          let status: 'completed' | 'failed' | 'cancelled' =
+            settled?.result.status === 'executed' ? 'completed' : 'failed';
+          if (Exit.hasInterrupts(exit)) status = 'cancelled';
+          run.session.log.publish(runId, {
+            type: 'stage.end',
+            id: stageId,
+            status,
+          });
+        }),
+      );
+    });
+
+    // What the script's calls share while it runs (`ScriptScope.shared`).
+    const sharedValues = new Map<string, Deferred.Deferred<unknown, unknown>>();
+    const shared = <A, E, R>(
+      key: string,
+      make: Effect.Effect<A, E, R>,
+    ): Effect.Effect<A, E, R> =>
+      Effect.suspend(() => {
+        const existing = sharedValues.get(key) as
+          Deferred.Deferred<A, E> | undefined;
+        if (existing !== undefined) return Deferred.await(existing);
+        const made = Deferred.makeUnsafe<A, E>();
+        sharedValues.set(key, made as Deferred.Deferred<unknown, unknown>);
+        return make.pipe(Effect.onExit((exit) => Deferred.done(made, exit)));
+      });
+    const scopeOf = (source: ScriptSource): ScriptScope => ({
+      ...source,
+      callId: script.callId,
+      calls: Effect.map(cell.current, (state) =>
+        issued(state)
+          .map(({ call }) => call)
+          .toSorted((a, b) => a.seq - b.seq)
+          .map(({ toolName, input }) => ({ toolName, input })),
+      ),
+      shared,
+    });
+
+    /** Settles `op`: from its rows when they settled it; else by `answer`,
+     *  one of the script's host functions, recorded with no card; else by
+     *  running its tool through the per-call program. */
+    const settle = Effect.fn('toolUse.scriptCall')(function* (
+      op: ScriptOp,
+      source: ScriptSource,
+      answer?: () => ToolResultPayload['result'],
+    ) {
+      const callId = `${script.callId}/${op.seq}`;
+      yield* lanes.turn(op.seq);
+      yield* openStage(source.title);
+      const input = toJsonValue(op.input);
+      const known = recordOf(yield* cell.current, callId);
+      const recorded = known?.script ?? null;
+      if (
+        recorded !== null &&
+        (recorded.toolName !== op.name ||
+          !isDeepStrictEqual(recorded.input, input))
+      ) {
+        return yield* new ScriptDiverged({
+          seq: op.seq,
+          recorded: `${recorded.toolName}(${JSON.stringify(recorded.input)})`,
+          issued: `${op.name}(${JSON.stringify(input)})`,
+        });
+      }
+      if (known?.status.kind === 'settled') {
+        // Replayed from its row: it takes no lane and does not run.
+        yield* lanes.pass(op.seq);
+        return {
+          result: known.status.result,
+          attachments: known.status.attachments,
+        };
+      }
+      const tool = step.registry.get(op.name);
+      const fact: ScriptCallPayload = recorded ?? {
+        scriptCallId: script.callId,
+        seq: op.seq,
+        callId,
+        toolName: op.name,
+        input,
+        replay: answer !== undefined ? 'safe' : (tool?.replay ?? 'unsafe'),
+        logId: generateShortId(),
+        stageId,
+        phase: op.phase,
+      };
+      if (answer !== undefined) {
+        // Reads the pinned catalog only and runs no tool: no lane, one commit.
+        yield* lanes.pass(op.seq);
+        const result = answer();
+        yield* commitResult(fact, 1, {
+          disposition: result.status === 'executed' ? 'executed' : 'failed',
+          duplicateOf: null,
+          result,
+          attachments: [],
+        });
+        return { result, attachments: [] };
+      }
+      yield* lanes.run(op.seq, tool?.lane ?? 'barrier', () =>
+        Effect.gen(function* () {
+          const status = recordOf(yield* cell.current, callId)?.status;
+          if (status?.kind !== 'settled')
+            yield* resumeCall(fact, input, status ?? { kind: 'issued' }, {
+              script: scopeOf(source),
+              scriptCalls: null,
+            });
+          // The script's own result says whether a call ended the turn.
+          return false;
+        }),
+      );
+      const settledNow = resultOf(yield* cell.current, callId);
+      if (settledNow === null) {
+        return yield* Effect.die(
+          new Error(`Script call ${callId} is unsettled after its run.`),
+        );
+      }
+      return {
+        result: settledNow.result,
+        attachments: settledNow.attachments,
+      };
+    });
+    /** Settles `op` on its own fiber of the door's map; an await the
+     *  sandbox stops stops it. */
+    const call = (
+      op: ScriptOp,
+      source: ScriptSource,
+      answer?: () => ToolResultPayload['result'],
+    ) =>
+      Effect.suspend(() => {
+        const fiber = fork(
+          `${script.callId}/${op.seq}`,
+          settle(op, source, answer),
+        );
+        return Effect.onInterrupt(Fiber.join(fiber), () =>
+          Fiber.interrupt(fiber),
+        );
+      });
+    return {
+      catalog: step.definitions
+        .filter(({ name }) => name !== script.toolName)
+        .map((definition) => ({
+          definition,
+          plugin: pluginOf.get(definition.name) ?? 'run',
+        })),
+      globals: step.definitions.flatMap(({ name }) => {
+        const global =
+          name === script.toolName
+            ? undefined
+            : step.registry.get(name)?.scriptGlobal;
+        return global === undefined
+          ? []
+          : [{ tool: name, positional: global.positional }];
+      }),
+      modules: step.modules,
+      call,
+      answer: (
+        op: ScriptOp,
+        source: ScriptSource,
+        answer: () => ToolResultPayload['result'],
+      ) => Effect.map(call(op, source, answer), ({ result }) => result),
+      delivered: lanes.delivered,
+    } satisfies ScriptDoor;
   });
 
   const lanes = yield* makeScheduler([]);
@@ -988,8 +986,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     } else {
       const input = parseCallArguments(call, logger);
       yield* Effect.scoped(
-        Effect.flatMap(scriptCallsOf(fact), (door) =>
-          resumeCall(fact, input, status, { script: null, scriptCalls: door }),
+        Effect.flatMap(Scope.Scope, (dispatched) =>
+          resumeCall(fact, input, status, {
+            script: null,
+            scriptCalls: scriptDoor(fact, dispatched),
+          }),
         ),
       );
     }
