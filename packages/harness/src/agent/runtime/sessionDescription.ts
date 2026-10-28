@@ -95,9 +95,8 @@ const DESCRIPTION_DEADLINE = '20 seconds';
  * On success, commits the run's `run.description` row, which the meta fold
  * and every renderer read.
  *
- * `stores` are the process secret store and global state the run already
- * holds (the `Secrets` / `AppState` services), which the helper model is
- * resolved against.
+ * The helper model is resolved against the session's settings slots
+ * (`session.roots`) and the process `Secrets` read from context.
  */
 export const generateSessionDescription = Effect.fn(
   'generateSessionDescription',
