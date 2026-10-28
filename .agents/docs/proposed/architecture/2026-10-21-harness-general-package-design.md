@@ -192,7 +192,7 @@ The root entry has about 30 names: `Sessions`, `Session`, `Run`, `StartInput`,
 `PendingRequest`, `RequestDecision`, `RuntimeRequest`, `Outcome`, `SessionView`,
 `RunView`, `RunEndResult`, `AgentEvent`, `RunId`, `WorkspaceRoots`,
 `AgentPlatform`, `AgentDefinition`, `Plugin` and `defineTool`, plus the errors
-(`RunFailure`, `ResumeRefused`, `TraceUnavailable`, `PluginsRefused`,
+(`RunFailure`, `ResumeRefused`, `PluginsRefused`,
 `AgentNotFound`, `ToolsRefused`, `LaunchError`, `RequestError`,
 `SessionOpenError`).
 
