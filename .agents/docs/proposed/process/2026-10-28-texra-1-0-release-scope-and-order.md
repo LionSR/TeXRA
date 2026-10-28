@@ -73,11 +73,13 @@ What this means for the open design work:
 ## Non-goals (explicitly deferred past 1.0)
 
 - Lanes 1 to 9 of the general-package design, except the two items named in
-  P6 below.
-- The run-lifecycle redesign (L1 to L5 of the tech-debt note; L5 is pulled
-  forward in P2 because goal delivery depends on it), the host dedup
+  P5 below.
+- The run-lifecycle redesign (L1 to L5 of the tech-debt note), the host dedup
   (H1 to H4), and storage readers S3 to S6, including the SQL `runs` view
   rewrite (`packages/harness/src/agent/runtime/historyQuery/views.ts`).
+  #14242 (the `agent()` reuse scope reads the live parent link) is a bug fix
+  that changes no row: it lands when it is ready, on neither side of the
+  freeze.
 - The `HistoryQuery` child-process protocol cleanup
   (`packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts`).
 - Lifting the script door out of `dispatchPendingResponse`, the typed
@@ -110,15 +112,19 @@ note), hand-built `Map<seq, Deferred>` ordering gates in
 **Codemode.** The design holds. Two things touch the freeze:
 
 - `script.call` v1 (`packages/harness/src/shared/schemas/runHistoryEvent.ts`)
-  stores `callId` and `stageId`, both derivable from the script call id and
-  the sequence number. A row restates a fact. Drop them or keep them, now.
+  stores `callId` and `stageId`. The schema's own check requires
+  `callId === \`${scriptCallId}/${seq}\``, and the dispatcher builds
+`stageId`as`script-${logId}` (`toolUseDispatch.ts`). Both restate a fact
+  the row already holds. Drop them or keep them, now.
 - Live result delivery to the guest follows `Queue.offer` order
   (`packages/harness/src/agent/codeSandbox/codeSandbox.ts`, the `settled`
   queue), while replay follows commit order (`toolUseDispatch.ts`,
-  `replayOrder`). They agree today by scheduling, not by construction; an
-  order-sensitive script could fail with `ScriptDiverged` on resume. No test
-  covers replay, divergence or reuse. The fix is in the runtime and changes
-  no row, but a 1.0 that promises resume must have it.
+  `replayOrder`). The offer runs in each call's own fiber after its result
+  commits, so nothing ties offer order to commit order; an order-sensitive
+  script (`Promise.race`) could fail with `ScriptDiverged` on resume. This
+  is a reading of the code, not a reproduced failure. No test covers replay,
+  divergence or reuse. The fix is in the runtime and changes no row, but a
+  1.0 that promises resume must have it.
 
 **Storage.** Effect 4's own `effect/sql`; every statement a constant string
 with `?` binds; the "nothing below the codec reads a payload field" rule holds
@@ -132,9 +138,15 @@ under test. Three freeze items:
   (`packages/harness/src/shared/schemas/rowVersions.ts`), and the freeze test
   demands `upcasts >= version - 1`
   (`src/test-kernel/schemas/rowVersions.vitest.ts`). Nine kinds are at v2 and
-  `run.config` is at v6, all with empty `upcast`. Frozen as is, the first bump
-  of `run.config` needs five upcasters for versions nobody released. The
-  numbering must start at the released floor. Current values share one
+  `run.config` is at v6, all with empty `upcast`. Reproduced on 2026-10-28:
+  after `npm run storage:freeze` (50 frozen files, the suite green), bumping
+  `run.config` to v7 with one identity upcaster fails the suite with
+  "run.config v6 has no upcaster chain to v7: expected 1 to be greater than
+  or equal to 6". The test is not being pedantic: `decodeRow` applies
+  `upcast.slice(version - 1)`, so with one upcaster a v6 row would get
+  `slice(5)` of a one-element array, an empty list, and the upcaster would
+  be skipped without an error. The numbering must start at the released
+  floor in both the registry and the codec. Current values share one
   version with no upcast step
   (`packages/harness/src/controllers/session/currentValues.ts`), and the
   `app-state` family's schema is any JSON
@@ -158,14 +170,18 @@ it writes:
   (`packages/harness/src/shared/approvalBypassKind.ts`). A goal-specific
   lifetime rule sits in the general grant shape, and the user has no re-arm
   action.
-- Follow-up delivery ids come in five formats
-  (`packages/harness/src/agent/runtime/scriptRun.ts` and the child-turn
-  paths).
-- `SelfTool.ts` reads the recorded parent "whether or not it was since
-  detached"; `packages/harness/src/shared/session/runRelation.ts` treats a
-  detached run as top level. A detached goal's result is stamped `peer`, and
-  `needsWake` in `packages/harness/src/shared/session/runFacts.ts` then
-  does not wake a conversation that has ended. This is #14242's family.
+- Not a shape problem, checked and dismissed: `SelfTool.ts` reads the
+  recorded launch parent, and
+  `packages/harness/src/shared/session/runRelation.ts` reads the attached
+  one. Both are right for their purpose. `self()` needs the conversation the
+  goal was launched from to fork it, and a delivery's `relation` names where
+  the run stands now. The only way a goal is detached is a Stop of its
+  conversation (`detachActiveChildren` in
+  `packages/harness/src/agent/runtime/runRegistry.ts`), after which
+  `needsWake` in `packages/harness/src/shared/session/runFacts.ts` holds the
+  result for the next resume whether the relation reads `child` or `peer`.
+  Follow-up delivery ids are opaque strings in several formats; an id's
+  format is not a stored shape, so it is not freeze-gated either.
 
 **Agents.** Done. 35 bundled YAML files, one flat persona plus at most one
 plugin block, no second format, user docs complete
@@ -201,21 +217,19 @@ is not freeze-gated; it is the last baseline row.
 Each item is one PR unless noted. Sizes are estimates from the audits. A PR
 here changes stored bytes, the freeze mechanism, or copy; nothing else.
 
-| #   | PR                                                                                                                                                                                                                                                                                                                                        | Rows changed                                                                    | Size      | Done when                                                                                                                                     |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| P1  | Freeze mechanism: upcasters numbered from the released floor; a per-family version and upcast step for current values; a real schema for `app-state` or its removal from the frozen set; one test that runs a real upcaster through `decodeRow`                                                                                           | none (mechanism)                                                                | ~80 lines | A kind frozen at v6 bumps to v7 with one upcaster; `npm run storage:freeze` then `npm run test:pure` passes with the frozen directory present |
-| P2  | Two parent readers (L5, #14242): `launchParent` from `run.start`, `attachedParent` from the view; delete `RunRegistry.parentOf`'s fallback chain (`packages/harness/src/agent/runtime/runRegistry.ts`); `SelfTool` and `runRelation` read the same one                                                                                    | none                                                                            | ~−60      | A detached goal's result wakes its conversation; the 13 `parentOf` call sites name which parent they mean                                     |
-| P3  | Goal rows (R5, R6): `builtIn:goal` module import in `run.config.script`; goal grants as a launch grant; one follow-up delivery-id format                                                                                                                                                                                                  | `run.config`, `approval.policy` / `run.start.approvalPolicy`, `followup.queued` | ~150      | No prompt text in any row; `approvalBypassKind.ts` has no `own: 'parent'`; one id builder with every caller on it                             |
-| P4  | Media by digest (R2): `followup.queued` v3, `request.opened` v4, `run.config` v7; golden store regenerated                                                                                                                                                                                                                                | three kinds                                                                     | ~100      | No `mediaFiles: string[]` path field in a stored schema; fork-from-here restores media by digest (#13874)                                     |
-| P5  | Codemode: drop `script.call`'s derived fields (R4); deliver live results to the guest in commit order; tests for replay, divergence and reuse                                                                                                                                                                                             | `script.call` v2                                                                | ~120      | A script with `Promise.race` over two calls resumes identically from its rows; the three tests fail against the old delivery order            |
-| P6  | Namespace as data (R9) and AppSignals into the app (R7)                                                                                                                                                                                                                                                                                   | none                                                                            | ~60       | `stateSettings.ts` has no literal `texra.` prefix; the deep-import baseline file is empty and deleted with its suite                          |
-| P7  | Golden store independent of installed TeX tools (#14338)                                                                                                                                                                                                                                                                                  | none (fixture)                                                                  | ~20       | The generator's `--twice` check passes on a machine with and without TeX                                                                      |
-| P8  | Copy and doc drift: the plugin-architecture note (`continuation`, Zod, `requires`, `scriptModules`); the `import` contradiction in `docs/guide/multi-agent-workflows.md`; goal copy in `packages/texra/src/tools/pluginCards.ts` and `packages/texra/src/ui/copy/delegationApproval.ts`; the stale "#14201 open" line in the 10-21 design | none                                                                            | ~40       | Every statement about goal mode in UI and docs matches `goalScript.ts`                                                                        |
+| #   | PR                                                                                                                                                                                                                                                                                                                                        | Rows changed                                                 | Size      | Done when                                                                                                                                     |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1  | Freeze mechanism: upcasters numbered from the released floor; a per-family version and upcast step for current values; a real schema for `app-state` or its removal from the frozen set; one test that runs a real upcaster through `decodeRow`                                                                                           | none (mechanism)                                             | ~80 lines | A kind frozen at v6 bumps to v7 with one upcaster; `npm run storage:freeze` then `npm run test:pure` passes with the frozen directory present |
+| P2  | Goal rows (R5, R6): `builtIn:goal` module import in `run.config.script` (the `scriptModules` mechanism in `packages/harness/src/tools/plugins.ts` already exists); goal grants as a launch grant                                                                                                                                          | `run.config`, `approval.policy` / `run.start.approvalPolicy` | ~120      | No prompt text in any row; `approvalBypassKind.ts` has no `own: 'parent'`                                                                     |
+| P3  | Media by digest (R2): `followup.queued` v3, `request.opened` v4, `run.config` v7; golden store regenerated                                                                                                                                                                                                                                | three kinds                                                  | ~100      | No `mediaFiles: string[]` path field in a stored schema; fork-from-here restores media by digest (#13874)                                     |
+| P4  | Codemode: drop `script.call`'s derived fields (R4); deliver live results to the guest in commit order; tests for replay, divergence and reuse                                                                                                                                                                                             | `script.call` v2                                             | ~120      | A script with `Promise.race` over two calls resumes identically from its rows; the three tests fail against the old delivery order            |
+| P5  | Namespace as data (R9) and AppSignals into the app (R7)                                                                                                                                                                                                                                                                                   | none                                                         | ~60       | `stateSettings.ts` has no literal `texra.` prefix; the deep-import baseline file is empty and deleted with its suite                          |
+| P6  | Golden store independent of installed TeX tools (#14338)                                                                                                                                                                                                                                                                                  | none (fixture)                                               | ~20       | The generator's `--twice` check passes on a machine with and without TeX                                                                      |
+| P7  | Copy and doc drift: the plugin-architecture note (`continuation`, Zod, `requires`, `scriptModules`); the `import` contradiction in `docs/guide/multi-agent-workflows.md`; goal copy in `packages/texra/src/tools/pluginCards.ts` and `packages/texra/src/ui/copy/delegationApproval.ts`; the stale "#14201 open" line in the 10-21 design | none                                                         | ~40       | Every statement about goal mode in UI and docs matches `goalScript.ts`                                                                        |
 
-Order: P1 first (everything after it is measured by its test), then P2 before
-P3, then P3 to P7 in any order, P8 last. P3 and P4 both bump `run.config`, so
-they coordinate on one version number or land in sequence. About 600 lines in
-eight PRs.
+Order: P1 first (everything after it is measured by its test), then P2 to P6
+in any order, P7 last. P2 and P3 both bump `run.config`, so they coordinate on
+one version number or land in sequence. About 550 lines in seven PRs.
 
 ## Freeze and release
 
@@ -244,22 +258,20 @@ independent of the tag.
   retired.
 - No stored schema holds a workspace path for media, a program body for a
   goal, or a derivable id.
-- A detached goal's result reaches its conversation.
 - A script that issues concurrent calls resumes from its rows without
   `ScriptDiverged`.
 - `1.0.0-preview.1` installs from the preview channel on all three hosts.
 
 ## Risks
 
-- **P3 and P4 share `run.config`.** Two version bumps in flight on one kind
+- **P2 and P3 share `run.config`.** Two version bumps in flight on one kind
   conflict in `rowVersions.ts` and the golden store. Sequence them.
-- **P1 changes a convention every kind relies on.** The test in
-  `rowVersions.vitest.ts` is the only consumer today, so the change is
-  mechanical, but it must land before any other PR adds an upcaster.
-- **The audits read code; none ran it.** `node_modules` was absent in the
-  audit container, so `storage:freeze` end to end, the live delivery-order
-  race and the golden `--twice` check are claims from reading, to be confirmed
-  by the first PR that touches each.
+- **P1 changes a convention the registry, the codec and the test share.**
+  No kind has an upcaster today, so the change is mechanical, but it must
+  land before any other PR adds one.
+- **Two claims are from reading, not from running.** The live delivery-order
+  race in codemode and the golden store's dependence on installed TeX tools
+  (#14338) were not reproduced here; P4 and P6 confirm each before fixing it.
 - **Scope creep from the design notes.** Each PR above is bounded by "changes
   stored bytes or the freeze mechanism". A reviewer who finds a refactor in
   one of them should ask for it to be split out, not widened in.
@@ -270,11 +282,25 @@ independent of the tag.
   #13736, #13724, #13727, #12168, the rulings ledger's 1.0 sections,
   `rowVersions.ts` (versions and the `upcast[i]` comment),
   `rowCodec.ts` (`upcast.slice(version - 1)` and the readable floor),
-  `rowVersions.vitest.ts` (`upcasts >= version - 1`), `SelfTool.ts` and
-  `runRelation.ts` (the two parent readings), `runFacts.ts` (`needsWake`),
-  `codeSandbox.ts` (the `settled` queue) and `toolUseDispatch.ts`
-  (`replayOrder`), `followUp.ts` and `request.ts` (`mediaFiles` as paths),
-  `harness.api.md` (48 exports), the deep-import baseline (one specifier).
+  `rowVersions.vitest.ts` (`upcasts >= version - 1`), `SelfTool.ts` (the
+  launch parent as the fork source), `runRelation.ts`, `runRegistry.ts`
+  (`detachActiveChildren`, the one writer of `run.detach`), `runFacts.ts`
+  (`needsWake`), `codeSandbox.ts` (the `settled` queue) and
+  `toolUseDispatch.ts` (`replayOrder`, the `script.call` writer, `stageId`),
+  `runHistoryEvent.ts` (the `callId` check), `backgroundScript.ts` and
+  `goalScript.ts` (the template stored in `run.config.script`),
+  `approvalBypassKind.ts` (`own: 'parent'`), `followUp.ts`, `request.ts` and
+  `fileFields.ts` (`mediaFiles` as paths), `pastedImageUtils.ts` (the
+  three-day deletion), `currentValues.ts` and `valueFamily.ts`,
+  `harness.api.md` (48 exports), the deep-import baseline (one specifier),
+  and the import graph of `packages/texra/src/tools` (2 of 92 files reach a
+  harness alias).
 - Counted with grep: Promise, `async`, `Effect.run*`, `AbortController` and
   Effect primitive uses per package.
-- Not run: any test, `storage:freeze`, or the golden generator.
+- Run on 2026-10-28 after `corepack pnpm install`:
+  `src/test-kernel/schemas/rowVersions.vitest.ts` (52 passed, 1 skipped);
+  `npm run storage:freeze` (50 files written, 53 passed); the same suite with
+  the frozen directory present (52 passed); the suite after bumping
+  `run.config` to v7 with one identity upcaster (1 failed, the message quoted
+  above). The frozen directory and the bump were reverted afterwards.
+- Not run: the golden generator, the sandbox, or any E2E.
