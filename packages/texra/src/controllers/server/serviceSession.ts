@@ -15,6 +15,7 @@ import {
 import {
   Cause,
   Effect,
+  Exit,
   FiberHandle,
   Layer,
   Option,
@@ -58,6 +59,7 @@ import {
 } from './client';
 import { TaskRecordsFailed, type ProjectStateFailed } from './protocol';
 import type {
+  CommitOrdinal,
   TranscriptSubscription,
   SessionViewInput,
 } from '@texra-ai/harness/transcript';
@@ -365,15 +367,12 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       ),
     ),
   );
-  /** What a task the service runs ends with: asked of the service the
-   *  link holds, again of the next one if the link is lost meanwhile (a
-   *  retired service finishes its tasks first), and held until this
-   *  window's fold shows it too. A run that failed fails this at once, as
-   *  a run here does: with its error, which the service's terminal
-   *  presenter showed this window, so it is marked presented, or without
-   *  one (an end with no error recorded) as a plain failure. A service
-   *  that cannot answer fails it offline. */
-  const ended = (runId: RunId): Effect.Effect<RunEndResult, RunFailure> =>
+  /** The service's answer to how a task it runs ended, with `at`, its
+   *  log's commit when it answered: asked of the service the link holds,
+   *  again of the next one if the link is lost meanwhile (a retired service
+   *  finishes its tasks first). A service that cannot answer fails it
+   *  offline. */
+  const answered = (runId: RunId) =>
     Effect.flatMap(connected, (client) =>
       client['task.ended']({ workspace, runId }),
     ).pipe(
@@ -391,32 +390,40 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
               Effect.flatMap((reason) => Effect.fail(runFailure(reason))),
             ),
       ),
-      Effect.flatMap(({ at, error, ...end }) => {
-        if (end.outcome === RUN_OUTCOME.FAILED) {
-          const cause = new Error(
-            error?.message ?? `The task failed (run ${runId}).`,
-          );
-          if (error !== undefined && agentErrorPresentation(error) !== null)
-            attachErrorPresentationClaimed(cause);
-          return Effect.fail(runFailure(cause.message, cause));
-        }
-        // The answer and the fold's `task.watch` stream arrive apart: a
-        // result that settled on the answer alone could find the window
-        // still showing the run live, or a resumed run with the outcome
-        // its previous activation left. Held until this window's fold is
-        // at or past `at`, the log's commit when the service answered,
-        // where it holds the run's end, or its removal. The fold-aware
-        // stream ends the wait with the fold, never parks on it.
-        return Effect.as(
-          Stream.runDrain(
-            graph.view.changes.pipe(
-              Stream.takeUntil((level) => level.cursor >= at),
-            ),
-          ),
-          { ...end, runId },
-        );
-      }),
     );
+  /** The run's result from the service's answer, held until this window's
+   *  fold shows it too. A run that failed fails this at once, as a run
+   *  here does: with its error, which the service's terminal presenter
+   *  showed this window, so it is marked presented, or without one (an
+   *  end with no error recorded) as a plain failure. */
+  const endOf = (
+    runId: RunId,
+    { at, error, ...end }: Effect.Success<ReturnType<typeof answered>>,
+  ): Effect.Effect<RunEndResult, RunFailure> => {
+    if (end.outcome === RUN_OUTCOME.FAILED) {
+      const cause = new Error(
+        error?.message ?? `The task failed (run ${runId}).`,
+      );
+      if (error !== undefined && agentErrorPresentation(error) !== null)
+        attachErrorPresentationClaimed(cause);
+      return Effect.fail(runFailure(cause.message, cause));
+    }
+    // The answer and the fold's `task.watch` stream arrive apart: a
+    // result that settled on the answer alone could find the window
+    // still showing the run live, or a resumed run with the outcome
+    // its previous activation left. Held until this window's fold is
+    // at or past `at`, the log's commit when the service answered,
+    // where it holds the run's end, or its removal. The fold-aware
+    // stream ends the wait with the fold, never parks on it.
+    return Effect.as(
+      Stream.runDrain(
+        graph.view.changes.pipe(
+          Stream.takeUntil((level) => level.cursor >= at),
+        ),
+      ),
+      { ...end, runId },
+    );
+  };
   const request: Session['request'] = (runtimeRequest) =>
     callService(
       link,
@@ -501,35 +508,50 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
    *  too; its view this window's fold sliced to this activation; and its
    *  trace read back from the service's rows through the watch. */
   const runOf = (runId: RunId, redirectedFrom?: RunId): Effect.Effect<Run> =>
-    Effect.map(Effect.cached(ended(runId)), (result) => ({
-      runId,
-      ...(redirectedFrom !== undefined && { redirectedFrom }),
-      result,
-      // A resumed run's levels can still show the outcome its previous
-      // activation ended with: the slice starts at a level where it is
-      // live, and ends with the outcome after that, or with the result.
-      view: graph.view.changes.pipe(
-        Stream.dropWhile(
-          (level) => level.runs.get(runId)?.durableOutcome !== null,
-        ),
-        Stream.takeUntil(
-          (level) => level.runs.get(runId)?.durableOutcome != null,
-        ),
-        Stream.haltWhen(Effect.exit(result)),
-      ),
-      // The service's rows, through the watch. `result` answers only once
-      // this window's view shows the run's end, so its cursor is a commit
-      // past every row the run wrote.
-      events: replayTrace(
-        (set, cursor, debug) => watch(set, { cursor, debug }),
+    Effect.gen(function* () {
+      const answer = yield* Effect.cached(answered(runId));
+      const result = yield* Effect.cached(
+        Effect.flatMap(answer, (end) => endOf(runId, end)),
+      );
+      // The service's commit when it answered, past every row the run
+      // wrote, failed or not; with no answer, the window's own cursor.
+      let answeredAt: CommitOrdinal | null = null;
+      return {
         runId,
+        ...(redirectedFrom !== undefined && { redirectedFrom }),
         result,
-        { settled: Effect.void, now: () => graph.view.current().cursor },
-      ),
-      interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
-        Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
-      ),
-    }));
+        // A resumed run's levels can still show the outcome its previous
+        // activation ended with: the slice starts at a level where it is
+        // live, and ends with the outcome after that, or with the result.
+        view: graph.view.changes.pipe(
+          Stream.dropWhile(
+            (level) => level.runs.get(runId)?.durableOutcome !== null,
+          ),
+          Stream.takeUntil(
+            (level) => level.runs.get(runId)?.durableOutcome != null,
+          ),
+          Stream.haltWhen(Effect.exit(result)),
+        ),
+        // The service's rows, through the watch; the service's log is the
+        // store, settled once it answered.
+        events: replayTrace(
+          (set, cursor, debug) => watch(set, { cursor, debug }),
+          runId,
+          result,
+          {
+            settled: Effect.exit(answer).pipe(
+              Effect.map((exit) => {
+                if (Exit.isSuccess(exit)) answeredAt = exit.value.at;
+              }),
+            ),
+            now: () => answeredAt ?? graph.view.current().cursor,
+          },
+        ),
+        interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
+          Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
+        ),
+      };
+    });
   /** A start or resume naming a window's own tools is refused: the service
    *  runs its own, so a run continued with them would wait on a tool no
    *  one serves. */
