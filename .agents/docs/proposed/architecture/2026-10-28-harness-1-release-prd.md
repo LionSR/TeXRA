@@ -285,13 +285,12 @@ Prompt 模板与脚本代码是两种组合方式。1.0 保留参数化 prompt �
 
 风险：所有 `run.result` 调用方须逐个核对，依赖“失败即失败通道”的地方编译器不报；CLI 结果 JSON 在失败时新增 `error`，`memoryMisses` 在 S2 后消失。texra-action（`src/lib/cliResult.ts`）用宽松对象只读 outcome、response、files、cost 等字段，两者都不影响它。`RunEndErrorSchema` 的 `message` 改为必填需升 `run.end` 行版本，单独成 PR。`RunResult` 是否退出公开 `RunRecords` 取决于 `history show --json` 是否是冻结契约，暂不做。
 
-### 2026-10-29 阶段 B 第 4 片落地后仍开放的三个缺口
+### 2026-10-29 阶段 B 第 4 片落地后仍开放的缺口
 
-第 4 片（#14389）让 activation 就是恢复尝试，修复 R15（决策阶段的停止）、R3、R16 两处，以及复审发现的两处竞态：停止落在决策纤程启动之前，和两个恢复尝试争同一个 activation（注册改为一个同步步骤，后来者加入进行中的尝试）。仍开放、各需单独一片：
+第 4 片（#14389）让 activation 就是恢复尝试，修复 R15、R3、R16 两处，以及三处复审发现的竞态：停止落在决策纤程启动之前；两个恢复尝试争同一个 activation（注册改为一个同步步骤，后来者加入进行中的尝试）；停止落在生成已启动、准入之前（“这次 activation 被停止及原因”只由 activation 记录持有，决策、生成准入、退出与 `interrupt` 都读它）。用户停止在准入之前的任何时刻都以 cancelled 结束；`shutdown` 停止或调用方离开不写结束，运行保持可恢复。仍开放、各需单独一片：
 
-1. **停止落在生成已启动、`run.activate` 尚未写入之间**：不写结束行。R15 只覆盖决策阶段；这一窗口归第 5 片“`Run` 即视图”一并收口。
-2. **`OwnedByParent` 往返仍在**：SDK 先交出 `Run`、后到恢复的答复，所以 `ownedBy` 仍被转成错误再捕获后跟随父运行。本 PRD“Resume 的职责和删除顺序”第 2 条要求删除它；需在交接前拿到准入结果，单列一片（R14）。
-3. **会话的 fork 集合已关闭时**，决策纤程不会运行，activation 直到会话释放才清除。会话关闭路径应同步结束这类 activation。
+1. **`OwnedByParent` 往返仍在**：SDK 先交出 `Run`、后到恢复的答复，所以 `ownedBy` 仍被转成错误再捕获后跟随父运行。本 PRD“Resume 的职责和删除顺序”第 2 条要求删除它；需在交接前拿到准入结果，单列一片（R14）。
+2. **会话的 fork 集合已关闭时**，决策纤程不会运行，activation 直到会话释放才清除。会话关闭路径应同步结束这类 activation。
 
 ### 2026-10-28 七条设计线的排期
 
