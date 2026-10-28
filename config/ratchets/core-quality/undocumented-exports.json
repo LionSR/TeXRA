@@ -94,7 +94,6 @@
   "packages/harness/src/tools/bash.ts": 1,
   "packages/harness/src/tools/codemode/ScriptTool.ts": 1,
   "packages/harness/src/tools/core/definition.ts": 1,
-  "packages/harness/src/tools/delegation/detachedChildRun.ts": 1,
   "packages/harness/src/tools/delegation/inputFields.ts": 1,
   "packages/harness/src/tools/EditTool.ts": 1,
   "packages/harness/src/tools/emlParser.ts": 1,

@@ -147,48 +147,35 @@ const executeInBand = Effect.fn('executeInBand')(
       runId,
       parentRunId: options.parentRunId,
       agentName: config.agent,
-      // The parent is blocked awaiting this child, so it rides the parent's
-      // budget slot (child-run budget design note).
+      // Its parent is blocked awaiting it, so it rides the parent's slot.
       awaited: true,
       ...(options.notify !== undefined && { notify: options.notify }),
-      // Built inside the loop's launch guard, like every attempt-scoped
-      // setup: a throw here ends the run and releases its claim.
-      buildLaunch: () =>
-        Effect.succeed(
-          createNativeSubagentStrategy({
-            ...options,
-            ...(launch.kind === 'fresh'
-              ? {
-                  definition: launch.definition,
-                  // Registered with its opening, which the child's run
-                  // commits as it starts.
-                  registration: {
-                    identity: { kind: 'agent', agent: config.agent },
-                    parentRunId: options.parentRunId,
-                    ...(options.parentCall !== undefined && {
-                      parentCall: options.parentCall,
-                    }),
-                    ...(options.grants !== undefined && {
-                      grants: options.grants,
-                    }),
-                  },
-                }
-              : // Awaited: it ends after one cycle, resumed too.
-                {
-                  resume: {
-                    config,
-                    // Its rows' parent, read as its run starts, under the
-                    // claim the child loop holds by then.
-                    parent: persistedParentRunId(options.session, runId),
-                    stopAfterCycle: true,
-                  },
-                }),
-            runId,
-            startedAt,
-            workingDirectory,
-            inBand: true,
-          }),
-        ),
+      strategy: createNativeSubagentStrategy({
+        ...options,
+        ...(launch.kind === 'fresh'
+          ? {
+              definition: launch.definition,
+              // Registered with its opening, which its run commits.
+              registration: {
+                identity: { kind: 'agent', agent: config.agent },
+                parentRunId: options.parentRunId,
+                parentCall: options.parentCall,
+                grants: options.grants,
+              },
+            }
+          : // Awaited: it ends after one cycle, resumed too.
+            {
+              resume: {
+                config,
+                parent: persistedParentRunId(options.session, runId),
+                stopAfterCycle: true,
+              },
+            }),
+        runId,
+        startedAt,
+        workingDirectory,
+        inBand: true,
+      }),
     });
 
     const completionExit = yield* Effect.exit(Fiber.join(fiber));
