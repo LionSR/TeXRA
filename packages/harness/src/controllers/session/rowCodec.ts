@@ -123,8 +123,6 @@ const hasKind = (type: string): type is SessionEventDraft['type'] =>
 
 /** The lowest stored version of `type` this build reads: an older one has
  *  no upcaster here, so an earlier build wrote it. */
-// `decodeRow` refuses the same rows: with no upcasters, `upcast.slice` is
-// empty below `version`, exactly the versions under this floor.
 const readableFrom = (type: SessionEventDraft['type']): number =>
   ROW_KINDS[type].version - ROW_KINDS[type].upcast.length;
 /** Whether `decodeRow` parses this row's data (a kind and version this
@@ -295,7 +293,9 @@ export function decodeRow(
   let data: Record<string, JsonValue>;
   try {
     data = jsonObject(parseData(row.data, blobs));
-    for (const step of ROW_KINDS[row.type].upcast.slice(version - 1))
+    for (const step of ROW_KINDS[row.type].upcast.slice(
+      version - readableFrom(row.type),
+    ))
       data = { ...step(data) };
     if (row.type === 'context.blob') {
       const field = jsonObject(data.payload);
@@ -325,7 +325,9 @@ export function decodeRow(
   if (arm.success === undefined)
     return Result.succeed({ _tag: 'leftOut', kind: name });
   let value = event.value;
-  for (const step of arm.success.upcasters.slice(event.version - 1))
+  for (const step of arm.success.upcasters.slice(
+    event.version - pluginFactFloor(arm.success),
+  ))
     value = step(value);
   const checked = Schema.decodeUnknownResult(arm.success.schema)(value);
   if (Result.isFailure(checked))

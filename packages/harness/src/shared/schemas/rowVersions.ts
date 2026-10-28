@@ -27,7 +27,8 @@ type RowData = { readonly [field: string]: JsonValue };
 interface RowKind {
   /** The version this build writes. */
   readonly version: number;
-  /** `upcast[i]` maps stored version `i + 1` to `i + 2`, over plain JSON. */
+  /** Adjacent conversions from `version - upcast.length` to `version`,
+   *  oldest first, over plain JSON. */
   readonly upcast: readonly ((data: RowData) => RowData)[];
 }
 

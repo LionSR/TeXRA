@@ -39,7 +39,7 @@ import {
  * The release watermark of the session store:
  * `config/storage/frozen/<name>.v<N>.json` is the JSON Schema of version N of
  * a row kind, plugin arm or current-value family as a release shipped it, and
- * the highest N frozen is that name's released version. A later build reads
+ * the frozen versions bound that name's released history. A later build reads
  * a released version forever, so its schema never changes in place: a change
  * is a new version with an upcaster from the released one.
  *
@@ -52,7 +52,7 @@ const FREEZING = process.env.MODE === 'freeze';
 interface Versioned {
   readonly name: string;
   readonly version: number;
-  /** The upcasters from version 1, `upcast[i]` taking `i + 1` to `i + 2`. */
+  /** Adjacent conversions ending at the current version, oldest first. */
   readonly upcasts: number;
   readonly schema: Schema.Top;
 }
@@ -97,13 +97,15 @@ const VERSIONED: readonly Versioned[] = [
 const fingerprint = (schema: Schema.Top): string =>
   `${JSON.stringify(Schema.toJsonSchemaDocument(schema), null, 2)}\n`;
 
-const released = (name: string): number | null => {
+const released = (name: string): { first: number; latest: number } | null => {
   if (!existsSync(FROZEN)) return null;
   const versions = readdirSync(FROZEN).flatMap((file) => {
     const match = /^(.+)\.v(\d+)\.json$/.exec(file);
     return match?.[1] === name ? [Number(match[2])] : [];
   });
-  return versions.length === 0 ? null : Math.max(...versions);
+  return versions.length === 0
+    ? null
+    : { first: Math.min(...versions), latest: Math.max(...versions) };
 };
 
 describe('row versions', () => {
@@ -162,18 +164,16 @@ describe('row versions', () => {
   it.each(VERSIONED)(
     '$name reads its released version',
     ({ name, version, upcasts, schema }) => {
-      const floor = released(name);
-      if (floor === null) return;
+      const history = released(name);
+      if (history === null) return;
       expect(version, `${name} is below its released version`).toBe(
-        Math.max(version, floor),
+        Math.max(version, history.latest),
       );
-      if (version > floor) {
-        expect(
-          upcasts,
-          `${name} v${floor} has no upcaster chain to v${version}`,
-        ).toBeGreaterThanOrEqual(version - 1);
-        return;
-      }
+      expect(
+        upcasts,
+        `${name} v${history.first} has no upcaster chain to v${version}`,
+      ).toBeGreaterThanOrEqual(version - history.first);
+      if (version > history.latest) return;
       expect(
         fingerprint(schema),
         `${name} v${version} was released: change it as a new version with an upcaster`,
