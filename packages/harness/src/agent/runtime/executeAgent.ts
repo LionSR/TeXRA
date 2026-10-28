@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Deferred, Effect, Fiber, Layer, Schema } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
@@ -10,14 +10,12 @@ import { sessionFsLayer } from '@platform/rootedFs';
 import {
   type CommitOrdinal,
   isTaskConfig,
-  RunIdSchema,
   type RunId,
   type RequestEnsureProgressViewPayload,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 
-import { canResume } from '../storage/resumability';
 import { persistedParentRunId, withChildSpend } from '../storage/runRecords';
 import {
   buildAgentLaunchContext,
@@ -41,18 +39,6 @@ import type { RunEndResult } from './RunEndResult';
 import type { SessionHandle } from './SessionHandle';
 
 const CHANNEL = 'executeAgent';
-
-/** A claimed run no longer has the persisted state to resume. */
-export class ResumeSessionUnavailableError extends Schema.TaggedError<ResumeSessionUnavailableError>()(
-  'ResumeSessionUnavailableError',
-  {
-    runId: RunIdSchema,
-  },
-) {
-  override get message(): string {
-    return 'This session can no longer be resumed. Start a new run instead.';
-  }
-}
 
 /**
  * The per-run layer both families run under: the run's `AgentRun`, the
@@ -287,10 +273,6 @@ export function resumeToolUseFromResumeData(
 ): Effect.Effect<RunEndResult, Error, ProcessServices> {
   const { session: runSession, stopAfterCycle } = options;
   const resumed = Effect.gen(function* () {
-    if (!(yield* canResume(identity.runId, runSession)))
-      return yield* new ResumeSessionUnavailableError({
-        runId: identity.runId,
-      });
     const parentRunId = yield* persistedParentRunId(runSession, identity.runId);
     const definition = yield* prepareAgentDefinition({
       config: identity.agentConfig,
