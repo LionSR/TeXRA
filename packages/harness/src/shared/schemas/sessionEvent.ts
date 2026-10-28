@@ -548,7 +548,7 @@ export function pendingKeyOf(
 
 /** The rows a run's trace (`AgentEvent`) is, besides its text chunks. */
 // prettier-ignore
-export const TRACE_ROW_TYPES = ['log', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'conversation.progress', 'run.fact', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplaySessionEvent['type'][];
+export const TRACE_ROW_TYPES = Object.freeze(['log', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'conversation.progress', 'run.fact', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplaySessionEvent['type'][]);
 
 export const DISPLAY_EVENT_TYPES: readonly string[] = Object.freeze(
   DisplaySessionEventDraftSchema.members.map(
