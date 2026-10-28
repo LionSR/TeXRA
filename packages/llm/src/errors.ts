@@ -1,12 +1,8 @@
 // Third-party imports
-import { Effect, Result, Schema, Struct } from 'effect';
+import { Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
-import {
-  ModelOriginSchema,
-  sameModelOrigin,
-  type ModelOrigin,
-} from './protocol.js';
+import { ModelOriginSchema } from './protocol.js';
 
 // Local imports - canonical messages
 
@@ -162,43 +158,6 @@ export class ModelError extends Schema.TaggedError<ModelError>()('ModelError', {
     });
   }
 }
-
-/** The operation `input` names, provided it belongs to the `origin` binding. */
-export const boundOperation = Effect.fn('llm.boundOperation')(function* (
-  input: RemoteOperation,
-  origin: ModelOrigin,
-) {
-  const parsed = Schema.decodeUnknownResult(RemoteOperationSchema)(input);
-  if (
-    !Result.isSuccess(parsed) ||
-    !sameModelOrigin(parsed.success.origin, origin)
-  )
-    return yield* new ModelError({
-      kind: 'unsupported',
-      message: 'The remote operation belongs to another model binding.',
-    });
-  return parsed.success;
-});
-
-/**
- * A cancel reply's status, read as the one fact a caller acts on: only
- * `cancelled` confirms the work stopped. Any other status (still queued or
- * running, or a terminal outcome reached first) leaves the operation
- * observable, so it fails rather than let the caller retire it.
- */
-export const confirmCancelled = (
-  operation: RemoteOperation,
-  status: string,
-): Effect.Effect<void, ModelError> =>
-  status === 'cancelled'
-    ? Effect.void
-    : Effect.fail(
-        new ModelError({
-          kind: 'provider-rejection',
-          retryable: false,
-          message: `The background response ${operation.providerResponseId} was not cancelled; it is ${status}.`,
-        }),
-      );
 
 /**
  * A `ModelError` completed with what an outer scope knows. A field the error

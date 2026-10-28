@@ -3,13 +3,12 @@ import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import {
-  Cause,
-  Clock,
   Effect,
   Exit,
+  identity,
+  Ref,
   Result,
   Schema,
-  type Scope,
   Stream,
   Struct,
 } from 'effect';
@@ -17,27 +16,22 @@ import OpenAI from 'openai';
 
 // Local imports - canonical model contract
 import {
-  BackgroundSubmissionSchema,
   completedTurn,
   FILE_UPLOAD_LIFETIME_SECONDS,
   decodeModelConfiguration,
   type BackgroundEvent,
-  type BackgroundSubmission,
   type Model,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
-  type TurnEvent,
 } from '../turn.js';
 import {
   ModelError,
   RemoteOperationSchema,
-  boundOperation,
-  confirmCancelled,
   fillModelError,
-  type RemoteOperation,
 } from '../errors.js';
 import { backgroundCapable, originOf } from '../protocol.js';
-import { admitObservation, ownedAbortSafeRequest } from './transport.js';
+import { backgroundLifecycle } from './background.js';
+import { ownedAbortSafeRequest } from './transport.js';
 import { filesApiUploads } from './uploadCache.js';
 import { openaiFailure } from './openaiError.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
@@ -166,57 +160,27 @@ export function openaiResponsesModel(
       ),
     );
 
-  const submit: NonNullable<Model['background']>['submit'] = Effect.fn(
-    'llm.responses.submit',
-  )(function* (input) {
-    let operation: RemoteOperation | undefined;
-    let returnedModel: string | undefined;
-    let requestId: string | undefined;
-    const enrich = (error: ModelError) =>
-      fillModelError(error, {
-        operation,
-        responseId: operation?.providerResponseId,
-        requestId,
-        model: returnedModel ?? config.requestedModel,
-      });
-    return yield* Effect.scoped(
-      Effect.gen(function* (): Effect.fn.Return<
-        BackgroundSubmission,
-        ModelError,
-        Scope.Scope
-      > {
-        const { turn, opened } = yield* createResponse(input, 'background');
-        requestId = opened.request_id ?? undefined;
+  const lifecycle = backgroundLifecycle({
+    origin,
+    submit: (input, learned) =>
+      Effect.gen(function* () {
+        const { opened } = yield* createResponse(input, 'background');
+        yield* Ref.set(learned, { requestId: opened.request_id ?? undefined });
         const source = opened.data;
         const iterator = yield* Effect.acquireRelease(
           Effect.sync(() => source[Symbol.asyncIterator]()),
-          (iterator, exit) =>
-            Effect.gen(function* () {
-              const close = iterator.return
-                ? Effect.tryPromise({
-                    try: () => iterator.return!(),
-                    catch: (cause) =>
-                      enrich(
-                        new ModelError({
-                          kind: 'transport',
-                          message: 'Background submission cleanup failed.',
-                          cause,
-                        }),
-                      ),
-                  })
-                : Effect.void;
-              if (Exit.isSuccess(exit)) {
-                // After the single read, no next() is pending. Let the SDK join
-                // its body cancellation before aborting the detached request.
-                yield* close.pipe(
-                  Effect.orDie,
-                  Effect.ensuring(Effect.sync(() => source.controller.abort())),
-                );
-              } else {
-                source.controller.abort();
-                yield* close.pipe(Effect.orDie);
-              }
-            }),
+          (iterator, exit) => {
+            const close = iterator.return
+              ? Effect.promise(() => iterator.return!())
+              : Effect.void;
+            const abort = Effect.sync(() => source.controller.abort());
+            // After the single read no next() is pending, so an accepted
+            // submission lets the SDK join its body cancellation before
+            // aborting the detached request; a failed one aborts first.
+            return Exit.isSuccess(exit)
+              ? close.pipe(Effect.ensuring(abort))
+              : abort.pipe(Effect.andThen(close));
+          },
         );
         const first = yield* Effect.tryPromise({
           try: () => iterator.next(),
@@ -244,29 +208,25 @@ export function openaiResponsesModel(
             cause: parsed.failure,
           });
         const { response, type, sequence_number } = parsed.success;
-        returnedModel = response.model;
-        operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
-          origin,
-          providerResponseId: response.id,
-          afterSequence: sequence_number,
-        });
+        yield* Ref.update(learned, (known) => ({
+          ...known,
+          model: response.model,
+          operation: Schema.decodeUnknownSync(RemoteOperationSchema)({
+            origin,
+            providerResponseId: response.id,
+            afterSequence: sequence_number,
+          }),
+        }));
         if (
           (type === 'response.completed' && response.status === 'completed') ||
           (type === 'response.incomplete' && response.status === 'incomplete')
-        ) {
-          const result = yield* completedTurn(
+        )
+          return yield* completedTurn(
             assembleTurn(Stream.make(yield* terminalParts(response, type)), {
               origin,
               provider: 'The model',
-              finalize: (completed) =>
-                withResponsesContinuation(config, turn, completed),
             }),
           );
-          return Schema.decodeUnknownSync(BackgroundSubmissionSchema)({
-            kind: 'completed',
-            result,
-          });
-        }
         if (
           ![
             'response.created',
@@ -274,7 +234,7 @@ export function openaiResponsesModel(
             'response.in_progress',
           ].includes(type) ||
           !['queued', 'in_progress'].includes(response.status)
-        ) {
+        )
           return yield* new ModelError({
             kind:
               response.status === 'failed'
@@ -285,42 +245,11 @@ export function openaiResponsesModel(
               'The provider did not acknowledge background work.',
             cause: response.error,
           });
-        }
-        return Schema.decodeUnknownSync(BackgroundSubmissionSchema)({
-          kind: 'accepted',
-          operation,
-          returnedModel,
-        });
-      }).pipe(Effect.mapError(enrich)),
-    );
-  });
-
-  const observe: NonNullable<Model['background']>['observe'] = (
-    admitted,
-    input,
-    policy,
-  ) =>
-    Stream.unwrap(
-      Effect.gen(function* () {
-        const { turn, operation, deadlineAtMs, deadline } =
-          yield* admitObservation(
-            'openai-responses',
-            origin,
-            admitted,
-            input,
-            policy,
-          );
-        const remaining = deadlineAtMs - (yield* Clock.currentTimeMillis);
-        let returnedModel: string | undefined;
-        let requestId: string | undefined;
-        const enrich = (error: ModelError) =>
-          fillModelError(error, {
-            operation,
-            responseId: operation.providerResponseId,
-            requestId,
-            model: returnedModel ?? config.requestedModel,
-          });
-        return Stream.unwrap(
+        return undefined;
+      }),
+    observe: {
+      stream: (operation, learned) =>
+        Stream.unwrap(
           Effect.gen(function* () {
             const signal = yield* Effect.abortSignal;
             const opened = yield* Effect.tryPromise({
@@ -339,18 +268,12 @@ export function openaiResponsesModel(
                   )
                   .withResponse(),
               catch: openaiFailure,
-            }).pipe(
-              Effect.timeoutOrElse({
-                duration: remaining,
-                orElse: () => Effect.fail(enrich(deadline)),
-              }),
-            );
-            requestId = opened.request_id ?? undefined;
-            const events = yield* sdkEvents(opened.data, enrich);
-            const readTimeRemaining = Math.max(
-              0,
-              deadlineAtMs - (yield* Clock.currentTimeMillis),
-            );
+            });
+            yield* Ref.update(learned, (known) => ({
+              ...known,
+              requestId: opened.request_id ?? undefined,
+            }));
+            const events = yield* sdkEvents(opened.data, identity);
             // The observation may join mid-item: what it missed, the
             // terminal snapshot supplies.
             const assembly = turnAssembly({
@@ -360,32 +283,40 @@ export function openaiResponsesModel(
               partial: true,
             });
             let sequence = operation.afterSequence ?? -1;
-            const sequenced = (event: TurnEvent): BackgroundEvent[] => {
-              if (event.kind === 'delta')
-                return [{ ...event, afterSequence: sequence }];
-              if (event.kind !== 'identified') return [];
-              returnedModel = event.returnedModel ?? undefined;
-              return [
-                {
-                  ...event,
-                  requestedOrigin: origin,
-                  afterSequence: sequence,
-                },
-              ];
-            };
             const progress = events.pipe(
               Stream.mapEffect(responsesWire(sequence)),
               Stream.takeUntil((event) => event.terminal),
               Stream.mapEffect((event) =>
                 Effect.gen(function* () {
                   sequence = event.sequence;
-                  const turnEvents = yield* Effect.forEach(
+                  const turnEvents = (yield* Effect.forEach(
                     event.parts,
                     assembly.step,
+                  )).flat();
+                  const identified = turnEvents.find(
+                    (turnEvent) => turnEvent.kind === 'identified',
                   );
+                  if (identified?.kind === 'identified')
+                    yield* Ref.update(learned, (known) => ({
+                      ...known,
+                      model: identified.returnedModel ?? undefined,
+                    }));
                   // The terminal cursor is delivered only with its result below.
                   if (event.terminal) return [];
-                  const observed = turnEvents.flat().flatMap(sequenced);
+                  const observed = turnEvents.flatMap(
+                    (turnEvent): BackgroundEvent[] => {
+                      if (turnEvent.kind === 'delta')
+                        return [{ ...turnEvent, afterSequence: sequence }];
+                      if (turnEvent.kind !== 'identified') return [];
+                      return [
+                        {
+                          ...turnEvent,
+                          requestedOrigin: origin,
+                          afterSequence: sequence,
+                        },
+                      ];
+                    },
+                  );
                   return observed.length > 0
                     ? observed
                     : [{ kind: 'cursor' as const, afterSequence: sequence }];
@@ -393,93 +324,62 @@ export function openaiResponsesModel(
               ),
               Stream.flattenIterable,
             );
-            const completion = Effect.gen(function* (): Effect.fn.Return<
-              BackgroundEvent,
-              ModelError
-            > {
-              const result = yield* assembly.complete;
-              // The same anchor the foreground completion builds: an
-              // observed turn chains on `previous_response_id` too.
-              return {
+            const completion = Effect.map(
+              assembly.complete,
+              (result): BackgroundEvent => ({
                 kind: 'completed',
                 afterSequence: sequence,
-                result: yield* withResponsesContinuation(config, turn, result),
-              };
-            });
-            return Stream.concat(progress, Stream.fromEffect(completion)).pipe(
-              Stream.mapError((error) => enrich(assembly.enrich(error))),
-              Stream.interruptWhen(
-                Effect.sleep(readTimeRemaining).pipe(
-                  Effect.andThen(() => Effect.fail(enrich(deadline))),
-                ),
-              ),
-            );
-          }).pipe(Effect.mapError(enrich)),
-        );
-      }),
-    );
-
-  const cancel: NonNullable<Model['background']>['cancel'] = Effect.fn(
-    'llm.responses.cancel',
-  )(function* (input) {
-    const operation = yield* boundOperation(input, origin);
-    let requestId: string | undefined;
-    const enrich = (error: ModelError) =>
-      fillModelError(error, {
-        operation,
-        responseId: operation.providerResponseId,
-        requestId,
-      });
-    return yield* Effect.gen(function* () {
-      const raw = yield* ownedAbortSafeRequest(
-        async (signal) => {
-          const response = await client.responses
-            .cancel(operation.providerResponseId, { signal })
-            .asResponse();
-          requestId = response.headers.get('x-request-id') ?? undefined;
-          return (await response.json()) as unknown;
-        },
-        (cause) =>
-          enrich(
-            cause instanceof SyntaxError
-              ? new ModelError({
-                  kind: 'malformed-output',
-                  message: 'Cancellation returned malformed JSON.',
-                  cause,
-                })
-              : openaiFailure(cause),
-          ),
-        {
-          isAbortMatch: openaiAbortMatch,
-          cleanupFailure: (cause) =>
-            enrich(
-              new ModelError({
-                kind: 'transport',
-                message: 'Cancellation failed while joining its request.',
-                cause,
+                result,
               }),
-            ),
-        },
-      );
-      // Cancellation cannot request encrypted output includes. Report status only.
-      const parsed = Schema.decodeUnknownResult(
-        ResponseSchema.mapFields(
-          Struct.pick(['id', 'object', 'model', 'status']),
+            );
+            return Stream.concat(progress, Stream.fromEffect(completion)).pipe(
+              Stream.mapError(assembly.enrich),
+            );
+          }),
         ),
-      )(raw);
-      if (
-        !Result.isSuccess(parsed) ||
-        parsed.success.id !== operation.providerResponseId
-      )
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'Cancellation returned invalid response identity or status.',
-          requestId,
-        });
-      return yield* confirmCancelled(operation, parsed.success.status);
-    }).pipe(
-      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, enrich))),
-    );
+    },
+    cancel: (operation, learned) =>
+      Effect.gen(function* () {
+        const reply = yield* ownedAbortSafeRequest(
+          async (signal) => {
+            const response = await client.responses
+              .cancel(operation.providerResponseId, { signal })
+              .asResponse();
+            return {
+              requestId: response.headers.get('x-request-id') ?? undefined,
+              body: await response.text(),
+            };
+          },
+          openaiFailure,
+          { isAbortMatch: openaiAbortMatch },
+        );
+        yield* Ref.update(learned, (known) => ({
+          ...known,
+          requestId: reply.requestId,
+        }));
+        // Cancellation cannot request encrypted output includes. Report status only.
+        const parsed = Schema.decodeUnknownResult(
+          Schema.fromJsonString(
+            ResponseSchema.mapFields(
+              Struct.pick(['id', 'object', 'model', 'status']),
+            ),
+          ),
+        )(reply.body);
+        if (
+          !Result.isSuccess(parsed) ||
+          parsed.success.id !== operation.providerResponseId
+        )
+          return yield* new ModelError({
+            kind: 'malformed-output',
+            message:
+              'Cancellation returned invalid response identity or status.',
+            cause: Result.isSuccess(parsed) ? undefined : parsed.failure,
+          });
+        return parsed.success.status;
+      }),
+    // The same anchor the foreground completion builds: an observed or
+    // submitted turn chains on `previous_response_id` too.
+    finalize: (turn, result) => withResponsesContinuation(config, turn, result),
   });
 
   return Object.freeze({
@@ -491,8 +391,6 @@ export function openaiResponsesModel(
           releaseUploads: uploads.releaseUploads,
         }
       : {}),
-    ...(backgroundCapable(config)
-      ? { background: Object.freeze({ submit, observe, cancel }) }
-      : {}),
+    ...(backgroundCapable(config) ? { background: lifecycle } : {}),
   });
 }
