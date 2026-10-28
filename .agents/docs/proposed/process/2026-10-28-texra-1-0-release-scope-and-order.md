@@ -77,10 +77,11 @@ What this means for the open design work:
 - The run-lifecycle redesign (L1 to L5 of the tech-debt note), the host dedup
   (H1 to H4), and storage readers S3 to S6, including the SQL `runs` view
   rewrite (`packages/harness/src/agent/runtime/historyQuery/views.ts`).
-  #14242 (the `agent()` reuse scope reads the live parent link), #14003 and
-  #13994 are bug fixes that change no row; all three are already fixed on
+  #14242 (the `agent()` reuse scope reads the live parent link) and #13994
+  are bug fixes that change no row; both are already fixed on
   `claude/top-tech-debts-survey-sgf9k8` (45c38e9, 961ad58) and land when that
-  work is split into PRs, on neither side of the freeze.
+  work is split into PRs, on neither side of the freeze. #14003 is closed:
+  its fix reached `main` in #14335, and #14342 was closed as superseded.
 - The `HistoryQuery` child-process protocol cleanup
   (`packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts`).
 - Lifting the script door out of `dispatchPendingResponse`, the typed
@@ -141,10 +142,14 @@ under test. Three freeze items:
   `claude/top-tech-debts-survey-sgf9k8` (8994563, not yet a PR):
   `followup.queued` and `log` move to v3 with a `media` list of name, MIME
   type and digest (`StoredMediaSchema`), and the composer, fork-from-here
-  and the request lose their path fields. `run.config.mediaFiles` stays a path list on purpose
-  (43c10db): it is a launch input that templates, document tasks and "Run
-  again" read by path, and the opening message already holds the bytes by
-  digest.
+  and the request lose their path fields. `run.config.mediaFiles` stays a
+  path list on purpose (43c10db): it is a launch input that templates,
+  document tasks and "Run again" read by path, and the opening message
+  already holds the bytes by digest. The `approve` branch of
+  `request.opened` keeps `mediaFiles` paths for the same reason: a proposal
+  names workspace files a model or script chose, and the launched child
+  commits their bytes by digest in its opening batch. Pasted chat media
+  reaches a run only through `followup.queued`, which is now by digest.
 - **Upcaster numbering.** `upcast[i]` maps stored version `i+1` to `i+2`
   (`packages/harness/src/shared/schemas/rowVersions.ts`), and the freeze test
   demands `upcasts >= version - 1`
@@ -326,13 +331,21 @@ What else is in flight that touches this plan, as of `main` at `fa6fb1e`
   one codec test. Under R11 it is superseded; under Q2 it is P1.
 - **`claude/top-tech-debts-survey-sgf9k8`** (the tech-debt session, 23
   commits past #14335, 93 files, no PR yet) bundles P3, the replay half of
-  P4, the fixes for #14242, #14003, #13994 and #13874, the H1/H2 approval
-  store and two llm consolidations. The ask sent to that session: land the
-  stored-byte commits as their own PR.
-- **Nothing else in flight changes a row.** #14340, #14342, #14343, #14346,
-  #14348, #14349, #14351 and `claude/run-events-replay` were read; none
-  touches a stored schema. #14342's completion change is already on `main`
-  through #14335, as #14352 also notes.
+  P4, the fixes for #14242, #13994 and #13874, the H1/H2 approval store and
+  two llm consolidations. Confirmed by that session: H1/H2 add no row kind
+  or field (the approval store is a `SubscriptionRef` on the session view;
+  the durable fact stays `request.decided.decision.content`; the RPC
+  `PROTOCOL_VERSION` moves 34→35, which is wire, not storage); its L2 to L5
+  lifecycle work on worktree branch `l25` identifies an activation by its
+  `run.activate` commit and stays off `ApprovalPolicySnapshotSchema`; and
+  when PRs open, D4 (8994563 with its golden regeneration and 43c10db) goes
+  alone as the one shape PR, with the approval store, the llm refactors and
+  the dispatcher changes in separate PRs that touch no `rowVersions.ts`.
+- **Nothing else in flight changes a row.** #14340, #14343, #14346, #14348,
+  #14349, #14351 and `claude/run-events-replay` were read; none touches a
+  stored schema. #14342 was closed as superseded: its completion change
+  reached `main` through #14335. The triage session confirmed this
+  classification and is not relabelling #13736's tree.
 
 ## Freeze and release
 
