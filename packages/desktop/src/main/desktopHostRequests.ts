@@ -61,7 +61,7 @@ import {
   type SharedHostRequestBindings,
   type SharedHostRequestPorts,
 } from '@texra/controllers/session/sharedHostRequests';
-import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
+import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
 import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 
@@ -200,20 +200,6 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
   );
   const { runOutputs } = runActions;
 
-  /** The label scan's candidates, as the program that lists them: the
-   *  file-actions port takes the window's services from the runtime it holds,
-   *  so nothing settles here. */
-  const listWorkspaceCandidateFiles = () =>
-    Effect.suspend(() => {
-      const workspacePath = project.root;
-      if (!workspacePath) return Effect.succeed([]);
-      return listWorkspaceFilesOfType(['input', 'context'], workspacePath).pipe(
-        Effect.map((files) =>
-          files.flat().map((file) => path.resolve(workspacePath, file)),
-        ),
-      );
-    });
-
   const fileActions = new DesktopProgressFileActions(
     {
       ...host,
@@ -221,7 +207,7 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
       // request answers with, exactly as the rejecting promise did.
       showErrorMessage: rejectRequestEffect,
     },
-    { session: project.session, runtime, listWorkspaceCandidateFiles },
+    { session: project.session, runtime },
   );
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
@@ -379,13 +365,9 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
   const hostBindings: SharedHostRequestBindings = {
     openPath: (file, line) => host.openPath(file, line),
     openLabel: (label) =>
-      fileActions
-        .findAndOpenLabel(label)
-        .pipe(
-          Effect.mapError((cause) =>
-            hostFailure('fileActions.findAndOpenLabel', cause),
-          ),
-        ),
+      findLabelInWorkspace(roots.workspace, label, (absolutePath) =>
+        host.openPath(absolutePath),
+      ).pipe(Effect.mapError((cause) => hostFailure('openLabel', cause))),
     exportTranscript,
     surfaceAction: (action) => options.postSurfaceAction(action),
     showInfo: (message) => host.showInfoMessage(message),
