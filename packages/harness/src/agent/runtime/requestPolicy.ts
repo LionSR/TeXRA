@@ -25,6 +25,7 @@ import {
 } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { runStateAppend } from '@shared/session/runHistory';
+import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRows';
 
 import {
   resolveBypass,
@@ -237,12 +238,6 @@ export const hostCapabilitiesOf = (
 
 const CHANNEL = 'requestPolicy';
 
-/** The rows one request's state is read off. */
-const REQUEST_TYPES: readonly SessionEvent['type'][] = [
-  'request.opened',
-  'request.decided',
-];
-
 /** What a session's asks are built over. */
 export interface RequestAsksInit {
   /** The session the requests are asked on, resolved when first used. */
@@ -276,12 +271,12 @@ export function requestAsks({
   ) =>
     Effect.gen(function* () {
       const aggregateId = qualifyAggregateId('run', runId);
-      const rows = yield* session().log.rows(aggregateId, REQUEST_TYPES);
-      const mine = rows.filter(
-        (row) => 'requestId' in row && row.requestId === requestId,
+      const rows = yield* session().log.rows(
+        aggregateId,
+        RUN_ROW_READS.requests,
       );
-      if (!mine.some((row) => row.type === 'request.opened')) return false;
-      if (mine.some((row) => row.type === 'request.decided')) return false;
+      const request = runRowsFrom(rows).requests[requestId];
+      if (request === undefined || request.decision !== null) return false;
       yield* runStateAppend(append)([
         { type: 'request.decided', aggregateId, requestId, decision },
       ]);

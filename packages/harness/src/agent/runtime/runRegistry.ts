@@ -26,10 +26,7 @@ import {
 
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ProcessServices } from '@platform/processRuntime';
-import {
-  grantsKeptFromRows,
-  type ApprovalGrants,
-} from '@shared/approvalBypassKind';
+import { grantsKept, type ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
@@ -725,13 +722,10 @@ export class RunRegistry implements RunsShape {
         // hold a child born a moment ago.
         const kept = new Map<RunId, ApprovalGrants>();
         for (const id of children) {
-          const rows = yield* session.log.rows(qualifyAggregateId('run', id), [
-            'run.start',
-            'approval.policy',
-          ]);
-          const grants = grantsKeptFromRows(view, id, parentRunId, rows);
-          if (grants === undefined) continue;
-          kept.set(id, grants);
+          const facts = yield* session.log.facts(id);
+          if (facts?.start == null || facts.grants === null) continue;
+          const parent = facts.start.parent?.id ?? parentRunId;
+          kept.set(id, grantsKept(view, id, parent, facts.grants));
           yield* session.log.hold(id);
         }
         if (kept.size > 0)

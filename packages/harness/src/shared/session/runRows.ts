@@ -292,6 +292,7 @@ export const RUN_ROW_READS = {
     'run.removed',
   ],
   parks: ['child.park', 'run.report', 'run.activate', 'run.end'],
+  requests: ['request.opened', 'request.decided'],
 } as const;
 
 /** What one lifecycle or record row changes on `rows`. */
