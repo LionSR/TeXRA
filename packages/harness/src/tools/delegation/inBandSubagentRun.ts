@@ -63,6 +63,9 @@ export class SubagentDurabilityError extends Schema.TaggedError<SubagentDurabili
 ) {}
 
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
+  /** The launching run: a fresh child's parent edge, and the run its loop
+   *  answers to. */
+  readonly parentRunId: RunId;
   /** The run this attempt executes under; the caller owns its derivation. */
   readonly runId: RunId;
   /** The parent's call that launches the child, which owns it, and its
@@ -91,12 +94,7 @@ type InBandLaunch =
       readonly kind: 'fresh';
       readonly definition: PreparedAgentDefinition;
     }
-  | {
-      readonly kind: 'resume';
-      readonly config: AgentConfig;
-      /** The parent its rows hold. */
-      readonly parent: RunId | undefined;
-    };
+  | { readonly kind: 'resume'; readonly config: AgentConfig };
 
 /** A defect as a failed `Error`; an interruption stays one. */
 const defectsAsErrors = <A, R>(
@@ -171,7 +169,13 @@ const executeInBand = Effect.fn('executeInBand')(
             }
           : // Awaited: it ends after one cycle, resumed too.
             {
-              resume: { config, parent: launch.parent, stopAfterCycle: true },
+              resume: {
+                config,
+                // Its rows' parent, read as its run starts, under the claim
+                // the child loop holds by then.
+                parent: persistedParentRunId(options.session, runId),
+                stopAfterCycle: true,
+              },
             }),
         runId,
         startedAt,
@@ -350,11 +354,7 @@ export const resumeSubagentInBand = (
         return yield* new SubagentDurabilityError({
           message: `Subagent ${options.runId} has no stored configuration to resume.`,
         });
-      return yield* executeInBand(options, {
-        kind: 'resume',
-        config,
-        parent: yield* persistedParentRunId(options.session, options.runId),
-      });
+      return yield* executeInBand(options, { kind: 'resume', config });
     }).pipe(defectsAsErrors),
   );
 

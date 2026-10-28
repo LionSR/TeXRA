@@ -104,7 +104,6 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
         ...(grants !== undefined && { grants }),
       },
       runId,
-      parentRunId,
       session,
       startedAt: yield* Clock.currentTimeMillis,
       ...(workingDirectory != null && { workingDirectory }),
