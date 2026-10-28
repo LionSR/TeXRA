@@ -57,6 +57,7 @@ import { makeEditorHost } from '@texra/tools/editorHost';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { texraPlugins } from '@texra/tools/registry';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { workspaceTeams } from '@texra/shared/agentTeams';
 
 import { readCliVersion } from './cliContext';
@@ -240,6 +241,7 @@ export function installCliProcessRuntime(
         processLayer({
           storageRoot,
           settings: TEXRA_SETTINGS,
+          commandDirs: commandDirs,
           plugins: texraPlugins({ editors }),
           ...(options?.resourcesPath !== undefined && {
             skills: {

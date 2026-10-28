@@ -33,7 +33,7 @@ import type { ToolResult } from '@shared/schemas';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
 import { environment, ProjectEnvironment } from '@utils/system/nodeWorkspace';
-import { IS_WINDOWS, withExtendedPath } from '@utils/system/platformPaths';
+import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendHead, appendTail } from '@utils/text/appendTail';
@@ -151,7 +151,7 @@ const serverEnv = (config: McpServerConfig) =>
     }
     for (const [name, value] of Object.entries(config.env))
       env[isPathName(name) ? 'PATH' : name] = value;
-    return { ...env, PATH: withExtendedPath({ PATH: env.PATH }).PATH };
+    return yield* withCommandDirs(env);
   });
 
 const decode = <T>(

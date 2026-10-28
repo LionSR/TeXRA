@@ -553,8 +553,7 @@ export interface ProcessLayerOptions {
   >;
   /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
   readonly storageRoot: string;
-  /** The catalog its config providers carry: the state stores key their
-   *  rows under its namespace. */
+  /** The config's catalog: the state stores key rows under its namespace. */
   readonly settings: SettingsCatalog;
   /**
    * The app's plugins, in order, `harnessBuiltins` among them (the harness
@@ -570,6 +569,8 @@ export interface ProcessLayerOptions {
   /** The host's tool-missing reporter, served as `ToolMissingReporter`;
    *  absent (no UI for it), a probe still answers, without surfacing. */
   readonly toolMissingReporter?: ToolMissingHandler;
+  /** The app's directories on every command's PATH (`CommandDirs`). */
+  readonly commandDirs?: () => readonly string[];
   /**
    * The host's global application-state layer, acquired in this runtime's
    * scope. Absent, the global root's values (`globalAppStateLayer`); the
@@ -604,8 +605,7 @@ export interface ProcessLayerOptions {
   /** The runtime's emission threshold for Effect diagnostics, from facts that
    *  cannot change mid-process: the surface (the extension's channel filters
    *  itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
-   *  `--quiet` / `--verbose`. It is read before any logger runs, so a live
-   *  user setting arrives by another road (the fold's `debug` flag). */
+   *  `--quiet` / `--verbose`; no live setting changes it. */
   readonly minimumLogLevel: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;

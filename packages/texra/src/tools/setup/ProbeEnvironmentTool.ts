@@ -16,6 +16,7 @@ import { ToolContext } from '@texra-ai/harness/plugins';
 import { Secrets, withLogChannel } from '@texra-ai/harness/host';
 import { homeDirectory, withExtendedPath } from '@texra-ai/harness/node';
 import { executed, ToolError } from '@texra-ai/harness/plugins';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import {
   IMAGE_TOOL_LABEL,
@@ -115,7 +116,8 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
   // Where no home directory resolves (logged by `homeDirectory`), the
   // report names it unresolved, so the probe still answers.
   const homedir = (yield* homeDirectory) ?? '<unresolved>';
-  const extendedPath = withExtendedPath({ PATH: process.env.PATH }).PATH ?? '';
+  const extendedPath =
+    withExtendedPath({ PATH: process.env.PATH }, commandDirs()).PATH ?? '';
   const pm = detectPackageManager();
   const hostInfo = yield* readHostInfo;
   const [

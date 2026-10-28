@@ -22,9 +22,9 @@ Node.js platform implementation and host building blocks for
 - **SQLite stores & process identity**: [`GlobalDatabase`](#globaldatabase),
   [`ProjectDatabases`](#projectdatabases), and
   [`ProcessIdentity`](#processidentity).
-- **Commands, binary probes & atomic file I/O**:
-  [`executeCommand`](#executecommand), [`findCommand`](#findcommand),
-  [`probeTool`](#probetool), [`writeFileAtomic`](#writefileatomic), and
+- **Commands & atomic file I/O**:
+  [`executeCommand`](#executecommand), [`CommandDirs`](#commanddirs),
+  [`writeFileAtomic`](#writefileatomic), and
   [`readNormalizedFile`](#readnormalizedfile).
 
 ## absentReason
@@ -48,6 +48,16 @@ propagates.
 
 ```ts
 function canonicalizeWorkspacePath(workspacePath: string): string
+```
+
+## CommandDirs
+
+The directories an app adds to the PATH a command runs and resolves on:
+the package-manager and tool installs a GUI-launched process may lack.
+Absent, none.
+
+```ts
+const CommandDirs: Reference<() => readonly string[]>
 ```
 
 ## ConfigStore
@@ -208,6 +218,18 @@ interface ExecuteCommandBaseOptions {
 }
 ```
 
+## existsAtAbsolute
+
+An existence probe that asserts an absolute path and then asks `node:fs`.
+A relative one is refused with a thrown `Path must be absolute`: some of
+the roots searched come straight from the environment, so a probe that
+quietly answered "absent" would drop those directories from PATH with
+nothing to show for it.
+
+```ts
+function existsAtAbsolute(target: string): boolean
+```
+
 ## FileSecrets
 
 A host's handle on the credential directory. `onChanged` is told "re-read
@@ -217,32 +239,6 @@ it (`credentialChanged`, `Secrets.announcing`), as
 
 ```ts
 class FileSecrets implements PlatformSecrets
-```
-
-## findCommand
-
-Find `name` on this machine (the common tool directories, the TeX
-database for TeX Live scripts, then the extended PATH) and say how to
-launch it: a Perl script runs through `perl`. Null when the tool is not
-there now. A miss is remembered for a minute unless `fresh` asks again.
-
-```ts
-const findCommand: (name: string, options?: { readonly path?: string | undefined; readonly fresh?: boolean | undefined; } | undefined) => Effect<FoundCommand | null, never, ChildProcessSpawner>
-```
-
-## FoundCommand
-
-A command found on this machine, and how to launch it.
-
-```ts
-interface FoundCommand {
-  /** The program to spawn: the tool itself, or `perl` for a Perl script. */
-  readonly command: string;
-  /** The arguments that come before the caller's own (the script's path). */
-  readonly args: readonly string[];
-  /** The absolute path the lookup found. */
-  readonly resolvedPath: string;
-}
 ```
 
 ## GlobalDatabase
@@ -383,7 +379,7 @@ interface JsonStoreOptions {
 Build an environment for a non-interactive git subprocess: the current
 environment with the helper-invoking keys in {@link GIT_UNSAFE_ENV_KEYS}
 removed, `GIT_TERMINAL_PROMPT=0` so git never blocks on a tty prompt, and
-`PATH` extended via {@link withExtendedPath} so GUI-launched hosts (whose
+`PATH` extended via {@link withCommandDirs} so GUI-launched hosts (whose
 minimal PATH may omit Homebrew / /usr/local/bin, or Windows' Git\cmd when
 git was installed for Git Bash only) can still resolve the `git` binary.
 
@@ -394,7 +390,7 @@ ChildProcess command the env replaces the child environment unless
 `extendEnv: true` cannot merge the stripped keys back in.
 
 ```ts
-function makeMachineGitEnv(): NodeJS.ProcessEnv
+const makeMachineGitEnv: Effect.Effect<NodeJS.ProcessEnv>
 ```
 
 ## nodeFileServices
@@ -497,20 +493,6 @@ rest.
 
 ```ts
 const pathExists: (fs: FileSystem, target: string) => Effect<boolean, PlatformError, never>
-```
-
-## probeTool
-
-Probe `toolName` with `command` (by default `<toolName> --version`), or
-with each of several commands in turn until one answers.
-
-The spawned probes are cancelled by the fiber's own interruption, so no
-caller threads an `AbortSignal` in. The probe's own failure is answered,
-not raised: the cause is logged and the tool reads as absent with
-`probeFailed` set, which leaves no error channel for callers to handle.
-
-```ts
-const probeTool: (toolName: string, command?: string | readonly string[] | undefined) => Effect<ToolProbe, never, ChildProcessSpawner>
 ```
 
 ## ProcessIdentity
@@ -662,26 +644,18 @@ production).
 function secretsDirectory(storageRoot: string): string
 ```
 
-## ToolProbe
-
-What a probe found: whether the tool answered, and whether the probe
-itself failed rather than finding nothing.
-
-```ts
-interface ToolProbe {
-  readonly installed: boolean;
-  readonly probeFailed: boolean;
-}
-```
-
 ## whichOnExtendedPath
 
-Resolve `name` on the extended PATH the way a shell would, or null on a
-miss. In-process (npm `which`), and PATHEXT-aware on Windows, so a bare
-`npm` resolves to its `npm.cmd` shim without spawning `where`/`which`.
+Resolve `name` on the process PATH extended with `appDirs` the way a shell
+would, or null on a miss. In-process (npm `which`), and PATHEXT-aware on
+Windows, so a bare `npm` resolves to its `npm.cmd` shim without spawning
+`where`/`which`.
 
 ```ts
-function whichOnExtendedPath(name: string): string | null
+function whichOnExtendedPath(
+  name: string,
+  appDirs: readonly string[],
+): string | null
 ```
 
 ## withExtendedPath
@@ -698,7 +672,10 @@ Windows the extension silently applied or did not, per spawn. Writing the
 key that is already present is the whole fix.
 
 ```ts
-function withExtendedPath<T extends NodeJS.ProcessEnv>(env: T): T
+function withExtendedPath<T extends NodeJS.ProcessEnv>(
+  env: T,
+  appDirs: readonly string[],
+): T
 ```
 
 ## WORKSPACE_STORES

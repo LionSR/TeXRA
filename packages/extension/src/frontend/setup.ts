@@ -5,6 +5,7 @@ import { withLogChannel } from '@texra-ai/harness/host';
 import { withExtendedPath } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { LATEX_WORKSHOP_EXT_ID } from '@texra/shared/constants/latexToolchain';
 import type { StateStore } from '@texra-ai/harness/host';
 
@@ -21,7 +22,10 @@ export function initializeLatexSupport(
   // from the macOS Finder or Windows Start Menu it often inherits a minimal
   // PATH that excludes TeX directories, causing "spawn latexmk ENOENT" errors.
   const extendPath = Effect.sync(() => {
-    const extendedPath = withExtendedPath({ PATH: process.env.PATH }).PATH;
+    const extendedPath = withExtendedPath(
+      { PATH: process.env.PATH },
+      commandDirs(),
+    ).PATH;
     if (extendedPath === process.env.PATH) return false;
     process.env.PATH = extendedPath;
     return true;

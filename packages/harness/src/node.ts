@@ -19,9 +19,9 @@
  * - **SQLite stores & process identity**: [`GlobalDatabase`](#globaldatabase),
  *   [`ProjectDatabases`](#projectdatabases), and
  *   [`ProcessIdentity`](#processidentity).
- * - **Commands, binary probes & atomic file I/O**:
- *   [`executeCommand`](#executecommand), [`findCommand`](#findcommand),
- *   [`probeTool`](#probetool), [`writeFileAtomic`](#writefileatomic), and
+ * - **Commands & atomic file I/O**:
+ *   [`executeCommand`](#executecommand), [`CommandDirs`](#commanddirs),
+ *   [`writeFileAtomic`](#writefileatomic), and
  *   [`readNormalizedFile`](#readnormalizedfile).
  */
 // The default platform of an SDK embedder.
@@ -64,17 +64,17 @@ export {
 // The global root's record of each workspace store under a storage root,
 // keyed by its storage directory's name: the root it serves.
 export { WORKSPACE_STORES } from '@shared/session/valueFamily';
-// Running a program on this machine: find it, run it, tell whether it is
-// installed, and give any other child the PATH the harness resolves tools on.
+// Running a program on this machine: run it, the directories an app adds to
+// the PATH it runs on (`CommandDirs`), and that PATH for any other child.
 // The home directory, logged at warn where none resolves.
 export {
   executeCommand,
   type ExecuteCommandBaseOptions,
 } from '@utils/system/execUtils';
 export type { ExecResult } from '@shared/schemas';
-export { findCommand, type FoundCommand } from '@utils/system/binaryResolver';
-export { probeTool, type ToolProbe } from '@utils/system/toolUtils';
 export {
+  CommandDirs,
+  existsAtAbsolute,
   homeDirectory,
   whichOnExtendedPath,
   withExtendedPath,

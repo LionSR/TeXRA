@@ -66,6 +66,8 @@ export interface AgentPlatform {
    *  `ToolMissingReporter`; absent, a missing-tool probe answers without
    *  surfacing. */
   readonly toolMissingHandler?: ToolMissingHandler;
+  /** The app's directories on every command's PATH (`CommandDirs`). */
+  readonly commandDirs?: () => readonly string[];
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;

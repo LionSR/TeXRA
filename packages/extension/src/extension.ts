@@ -85,6 +85,7 @@ import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import {
   settingsTabByCommand,
   type CommandId,
@@ -166,6 +167,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       processLayer({
         storageRoot: defaultNodeStorageRoot(),
         settings: TEXRA_SETTINGS,
+        commandDirs: commandDirs,
         plugins: texraPlugins({
           editors,
           // The Comments UI behind the `inline_comment` tool. The provider reads

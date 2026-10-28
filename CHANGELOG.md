@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: the harness adds no directories of its own to a command's PATH.**
+  An app names them as `AgentPlatform.commandDirs` (or `processLayer`'s
+  `commandDirs`), served as `CommandDirs`; `withExtendedPath` and
+  `whichOnExtendedPath` take them as an argument, and `makeMachineGitEnv` is
+  an Effect. `findCommand` and `probeTool` leave `@texra-ai/harness/node`.
 - **SDK: script stages and model availability carry keys, not words.**
   `ScriptCallView.detail` is `error` (with its text), `notRun`,
   `interrupted` or `request` (with the request's payload), and its

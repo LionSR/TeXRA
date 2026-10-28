@@ -1,5 +1,7 @@
 // Local imports
-import { withExtendedPath } from './platformPaths';
+import { Effect } from 'effect';
+
+import { withCommandDirs } from './platformPaths';
 
 /**
  * Environment keys that let git invoke arbitrary helper programs (editors,
@@ -30,7 +32,7 @@ const GIT_UNSAFE_ENV_KEYS = new Set([
  * Build an environment for a non-interactive git subprocess: the current
  * environment with the helper-invoking keys in {@link GIT_UNSAFE_ENV_KEYS}
  * removed, `GIT_TERMINAL_PROMPT=0` so git never blocks on a tty prompt, and
- * `PATH` extended via {@link withExtendedPath} so GUI-launched hosts (whose
+ * `PATH` extended via {@link withCommandDirs} so GUI-launched hosts (whose
  * minimal PATH may omit Homebrew / /usr/local/bin, or Windows' Git\cmd when
  * git was installed for Git Bash only) can still resolve the `git` binary.
  *
@@ -40,12 +42,13 @@ const GIT_UNSAFE_ENV_KEYS = new Set([
  * `extendEnv` is true; pass `extendEnv: false` explicitly so a later
  * `extendEnv: true` cannot merge the stripped keys back in.
  */
-export function makeMachineGitEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([key]) => !GIT_UNSAFE_ENV_KEYS.has(key.toLowerCase()),
-    ),
-  );
-  env.GIT_TERMINAL_PROMPT = '0';
-  return withExtendedPath(env);
-}
+export const makeMachineGitEnv: Effect.Effect<NodeJS.ProcessEnv> =
+  Effect.suspend(() => {
+    const env: NodeJS.ProcessEnv = Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([key]) => !GIT_UNSAFE_ENV_KEYS.has(key.toLowerCase()),
+      ),
+    );
+    env.GIT_TERMINAL_PROMPT = '0';
+    return withCommandDirs(env);
+  });

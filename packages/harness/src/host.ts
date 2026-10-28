@@ -275,6 +275,7 @@ export {
   entryMessage,
   LOG_CHANNEL,
   setLogSink,
+  writeLogLine,
   type LogEntry,
   type LogSink,
 } from '@logger/logSink';

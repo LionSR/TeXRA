@@ -726,6 +726,9 @@ importers:
       semver:
         specifier: ^7.8.5
         version: 7.8.5
+      shell-quote:
+        specifier: 'catalog:'
+        version: 1.12.0
       sortablejs:
         specifier: ^1.15.7
         version: 1.15.7

@@ -10,7 +10,7 @@ import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
-import { IS_WINDOWS, withExtendedPath } from '@utils/system/platformPaths';
+import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
 import { toWindowsCommand } from '@utils/system/windowsCommandLine';
 import type {
   ChildProcessHandle,
@@ -42,20 +42,19 @@ function commandEnv(
   inherited: Record<string, string>,
   workspacePath: string,
   authorEnv: Record<string, string | undefined> | undefined,
-  envOverrides?: Record<string, string>,
-): Record<string, string | undefined> {
-  // withExtendedPath, not a bare `env.PATH =`: on Windows the copy of
+  envOverrides: Record<string, string> | undefined,
+): Effect.Effect<Record<string, string | undefined>> {
+  // withCommandDirs, not a bare `env.PATH =`: on Windows the copy of
   // `process.env` carries the variable as `Path`, so assigning `PATH` would
   // leave both spellings on the environment handed to the shell, and the one
   // the shell resolves against is then undefined.
-  const env = withExtendedPath({
+  return withCommandDirs({
     ...inherited,
     ...authorEnv,
     ...envOverrides,
+    PROJECT_DIR: workspacePath,
+    PROJECT_NAME: path.basename(workspacePath),
   });
-  env.PROJECT_DIR = workspacePath;
-  env.PROJECT_NAME = path.basename(workspacePath);
-  return env;
 }
 
 function resultFromProcessOutput(
@@ -409,7 +408,7 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
     yield* logError(message);
     return resultFromProcessOutput('', message, 127);
   }
-  const env = commandEnv(
+  const env = yield* commandEnv(
     yield* inheritedEnv(),
     cwd,
     authorEnv.success,

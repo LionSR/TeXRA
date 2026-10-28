@@ -23,6 +23,7 @@ import { hostSkillContributions } from '@skills/skillSources';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { toolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { CommandDirs } from '@utils/system/platformPaths';
 
 import { PluginsRefused } from './errors.js';
 import { makeSessions } from './sessionPrograms.js';
@@ -104,6 +105,7 @@ export class Sessions extends Context.Service<
               platform.agentDirectories,
             ),
             toolMissingReporter: platform.toolMissingHandler,
+            commandDirs: platform.commandDirs,
             // An embedder's console has no live level filter of its own, so
             // the package speaks at the informational level, not flooding it.
             minimumLogLevel: 'Info',
@@ -161,6 +163,11 @@ function sessionsLayer(
               options.plugins.map(({ id }) => id),
             ),
           }),
+    ),
+    Layer.provideMerge(
+      options.commandDirs === undefined
+        ? Layer.empty
+        : Layer.succeed(CommandDirs)(options.commandDirs),
     ),
   );
 }
