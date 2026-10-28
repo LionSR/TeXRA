@@ -70,11 +70,9 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
   },
 );
 
-const control = { kind: 'compact' } as const;
-
-/** The host port's queued requests: a model switch (whether `model` can
- *  replace the run's, and the admission the loop applies at its next model
- *  boundary) and a `/compact`, each answered once its row commits. */
+/** The host port's model switch: whether `model` can replace the run's, and
+ *  the admission the loop applies at its next model boundary, answered once
+ *  its row commits. */
 export function modelSwitchPort(
   run: AgentRunShape,
   access: ModelAccess['Service'],
@@ -87,16 +85,6 @@ export function modelSwitchPort(
       run.declinedRoutes,
     );
   return {
-    requestImmediateCompaction: () =>
-      run.session.followUps
-        .send(run.runId, { text: '/compact', from: { kind: 'user' }, control })
-        .pipe(
-          Effect.filterOrFail(
-            (sent) => sent.kind !== 'refused',
-            () => new Error('This conversation takes no more input.'),
-          ),
-          Effect.asVoid,
-        ),
     modelSwitchDisabledReason: (model: string) =>
       Effect.map(admission(model), (refused) => refused?.reason),
     switchModel: Effect.fn('toolUse.switchModel')(function* (model: string) {

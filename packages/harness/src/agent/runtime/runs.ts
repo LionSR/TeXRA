@@ -30,8 +30,6 @@ export interface RunControls {
    *  may not be one-shot, which is why this is the live loop's, not the
    *  launch's `followUpSupport`. */
   readonly oneShot: boolean;
-  /** Queue a `/compact` on the run's input; settles once its row commits. */
-  requestImmediateCompaction(): Effect.Effect<void, Error>;
   modelSwitchDisabledReason(
     model: string,
   ): Effect.Effect<string | undefined, Error>;

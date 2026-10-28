@@ -26,18 +26,14 @@ import {
   followUpDisplay,
   userFollowUpInstruction,
 } from '@agent/followUp/followUpMessages';
-import type { FollowUpBatch } from '@agent/followUp/RunInput';
+import type { FollowUpBatch, RunInput } from '@agent/followUp/RunInput';
 import { logUserMessage } from '@agent/trace';
 import {
   ACTIVATED_SKILLS_MAX,
   type MediaAttachmentKind,
   type StoredInputPart,
 } from '@shared/schemas';
-import {
-  consumedRow,
-  type InputPoint,
-  isInstruction,
-} from '@shared/session/runFacts';
+import { consumedRow, isInstruction } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
@@ -80,16 +76,8 @@ export interface ConsumeOptions {
 }
 
 export interface FollowUps {
-  /** Whether `next` would return now: a message readable at `at`, or a
-   *  `/compact`. */
-  readonly hasPending: (at: InputPoint) => Effect.Effect<boolean>;
-  /** The run's own pending requests (`/compact`, a model switch). */
-  readonly controls: Effect.Effect<readonly QueuedFollowUp[]>;
-  /** The messages readable at `at`, when there are any; nothing is taken. */
-  readonly read: (at: InputPoint) => Effect.Effect<FollowUpBatch | null>;
-  /** Block for the next batch readable at `at`; null once the generation
-   *  ended. */
-  readonly next: (at: InputPoint) => Effect.Effect<FollowUpBatch | null>;
+  /** The run's reader: what is pending, read from its rows. */
+  readonly input: Pick<RunInput, 'hasPending' | 'controls' | 'read' | 'next'>;
   /** End the reader: the run stays recoverable, or takes no more input. */
   readonly release: (next: 'recoverable' | 'terminal') => void;
   /**
@@ -301,10 +289,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   });
 
   return {
-    hasPending: input.hasPending,
-    controls: input.controls,
-    read: input.read,
-    next: input.next,
+    input,
     // A child takes no more input once its loop ends: its parent resumes it.
     release: (next) =>
       session.followUps.release(

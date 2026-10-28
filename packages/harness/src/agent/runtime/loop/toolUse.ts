@@ -302,14 +302,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         state = yield* applyPendingModelSwitch(
           cell,
           (at) => compaction.settle(at, 'the model is switching'),
-          yield* followUps.controls,
+          yield* followUps.input.controls,
         );
         if (state.pendingResponse !== null) {
           // Input queued meanwhile is delivered at the request that follows.
           const dispatched = yield* dispatchPendingResponse(
             cell,
             (yield* openStep(state, 'dispatch')).tools,
-            followUps.controls,
+            followUps.input.controls,
           );
           state = dispatched.state;
           if (dispatched.endTurn) return completeTurn(state);
@@ -338,7 +338,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // summary lands, which keeps what the loop appended after its base.
         const tail = state.messages.findLast((m) => m.role !== 'system');
         if (state.invocation === null && tail?.role === 'tool') {
-          const queued = yield* followUps.read('request');
+          const queued = yield* followUps.input.read('request');
           if (queued !== null)
             state = (yield* followUps.consume(cell, queued, {
               position: false,
@@ -352,7 +352,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // it answers, the invocation. An open attempt's history is fixed.
         if (state.invocation === null) {
           // A `/compact`: consumed by the edit answering it, else admitted here.
-          const controls = yield* followUps.controls;
+          const controls = yield* followUps.input.controls;
           const requests = consumedRows(runId, controls, 'compact');
           state = yield* compaction.atBoundary(cell, bound, requests);
           // A compaction dropped the context updates: a new step renders them.
@@ -361,7 +361,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             state = yield* cell.append(step.rows);
             tools = sentDefinitions(step.tools);
           }
-          const unanswered = (yield* followUps.controls).filter((f) =>
+          const unanswered = (yield* followUps.input.controls).filter((f) =>
             requests.some(({ followUpId }) => followUpId === f.followUpId),
           );
           const admitted = consumedRows(runId, unanswered, 'compact');
@@ -423,7 +423,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           if (state.handedDown !== null) return completeTurn(state);
           // A native child waits in this same run scope, just like its root:
           // its loop has already delivered the turn offered at the boundary.
-          const queued = yield* followUps.hasPending('idle');
+          const queued = yield* followUps.input.hasPending('idle');
           if (isChild() && afterError && !queued)
             return finish(state, RUN_OUTCOME.FAILED);
           // Activation clears the visible step: restore an idle cursor's park.
@@ -443,7 +443,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             );
           }
           // The host port stays attached: `/model`, `/compact` land here.
-          const batch = yield* followUps.next('idle');
+          const batch = yield* followUps.input.next('idle');
           if (batch === null) {
             // The input ended under the waiting loop: a cancellation.
             return finish(
@@ -484,7 +484,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           positionRow(runId, state, 'waiting'),
           ...(childTurn?.rows ?? []),
         ];
-        const next = block ?? (goesOn ? yield* followUps.read('turn') : null);
+        const next =
+          block ?? (goesOn ? yield* followUps.input.read('turn') : null);
         const pin =
           next !== null && !isChild() ? yield* openStep(state, 'park') : null;
         state =
