@@ -4,7 +4,7 @@ import { HttpClientError } from 'effect/http';
 
 import { codexCoordinator, SubscriptionOAuthError } from '@texra-ai/llm/node';
 import { lookupApiKey } from '@texra-ai/llm';
-import { toErrorMessage, GlobalStateKey } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
@@ -178,7 +178,7 @@ export class SubscriptionUsageService {
       },
       glmCodingPlan: {
         resolveVariant: () =>
-          Settings.get<boolean>(this.stores, GlobalStateKey.GLM_USE_CHINA),
+          Settings.get<boolean>(this.stores, 'texra.glm.useChina'),
         fetch: (useChina) =>
           Effect.flatMap(lookupApiKey(this.secrets, 'glm'), (apiKey) =>
             apiKey

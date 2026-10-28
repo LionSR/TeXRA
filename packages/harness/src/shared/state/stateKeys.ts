@@ -56,24 +56,6 @@ export const GlobalStateKey = Object.freeze({
   // Agent settings (migrated from VS Code config)
   CUSTOM_AGENT_DIR: 'texra.customAgentDir',
 
-  // Endpoint settings
-  ENDPOINT_OPENAI: 'texra.endpoint.openai',
-  ENDPOINT_ANTHROPIC: 'texra.endpoint.anthropic',
-  ENDPOINT_GOOGLE: 'texra.endpoint.google',
-  ENDPOINT_DEEPSEEK: 'texra.endpoint.deepseek',
-  ENDPOINT_XAI: 'texra.endpoint.xai',
-  ENDPOINT_MOONSHOT: 'texra.endpoint.moonshot',
-  ENDPOINT_DASHSCOPE: 'texra.endpoint.dashscope',
-  ENDPOINT_MINIMAX: 'texra.endpoint.minimax',
-  ENDPOINT_GLM: 'texra.endpoint.glm',
-  ENDPOINT_META: 'texra.endpoint.meta',
-
-  // Region settings
-  DASHSCOPE_USE_CHINA: 'texra.dashscope.useChina',
-  MINIMAX_USE_CHINA: 'texra.minimax.useChina',
-  GLM_USE_CHINA: 'texra.glm.useChina',
-  MOONSHOT_USE_CHINA: 'texra.moonshot.useChina',
-
   // Coding plan settings
   GLM_CODING_PLAN: 'texra.glm.codingPlan',
   KIMI_CODE_PREFER: 'texra.kimiCode.prefer',

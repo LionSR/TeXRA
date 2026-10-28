@@ -53,13 +53,13 @@ describe('coding-plan subscription runtime', () => {
   afterEach(async () => {
     delete MODEL_CONFIGS['glm/glm-5.3'].baseUrl;
     await Effect.runPromise(
-      hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, ''),
+      hostStores().globalState.update('texra.endpoint.glm', ''),
     );
     await Effect.runPromise(
       hostStores().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true),
     );
     await Effect.runPromise(
-      hostStores().globalState.update(GlobalStateKey.GLM_USE_CHINA, true),
+      hostStores().globalState.update('texra.glm.useChina', true),
     );
   });
 
@@ -90,7 +90,7 @@ describe('coding-plan subscription runtime', () => {
     ({ providerEndpoint, modelBaseUrl, baseUrl, usageRoute }) =>
       Effect.gen(function* () {
         yield* hostStores().globalState.update(
-          GlobalStateKey.ENDPOINT_GLM,
+          'texra.endpoint.glm',
           providerEndpoint,
         );
         if (modelBaseUrl) MODEL_CONFIGS['glm/glm-5.3'].baseUrl = modelBaseUrl;

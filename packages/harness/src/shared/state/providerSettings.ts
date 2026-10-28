@@ -5,58 +5,33 @@
  * default and its Models tab control copy. The catalog (`@texra-ai/llm`)
  * owns the provider data; these rows are the host's, read into
  * `RouteFacts.endpoints` by `readModelSettings` and catalogued in
- * `stateSettings.ts`.
+ * `stateSettings.ts`. These rows own the setting keys; readers name the
+ * path.
  *
  * Plain data with no import of the catalog: the settings catalog is reachable
  * from stored shapes, which the llm package may not own. The rows cover the
  * catalog exactly, which `modelSettings.ts` checks at compile time.
  */
-import { GlobalStateKey } from './stateKeys';
+
+/** A provider's custom-endpoint row; its setting key is `texra.endpoint.<id>`. */
+const endpointRow = <const Id extends string>(id: Id, displayName: string) => ({
+  id,
+  displayName,
+  endpointKey: `texra.endpoint.${id}` as const,
+});
 
 /** The providers with a custom-endpoint setting, in catalog order. */
 export const PROVIDER_ENDPOINT_STATE_ENTRIES = [
-  {
-    id: 'openai',
-    displayName: 'OpenAI',
-    endpointKey: GlobalStateKey.ENDPOINT_OPENAI,
-  },
-  {
-    id: 'anthropic',
-    displayName: 'Anthropic',
-    endpointKey: GlobalStateKey.ENDPOINT_ANTHROPIC,
-  },
-  {
-    id: 'google',
-    displayName: 'Google',
-    endpointKey: GlobalStateKey.ENDPOINT_GOOGLE,
-  },
-  { id: 'xai', displayName: 'xAI', endpointKey: GlobalStateKey.ENDPOINT_XAI },
-  {
-    id: 'deepseek',
-    displayName: 'DeepSeek',
-    endpointKey: GlobalStateKey.ENDPOINT_DEEPSEEK,
-  },
-  {
-    id: 'moonshot',
-    displayName: 'Moonshot',
-    endpointKey: GlobalStateKey.ENDPOINT_MOONSHOT,
-  },
-  {
-    id: 'dashscope',
-    displayName: 'Qwen',
-    endpointKey: GlobalStateKey.ENDPOINT_DASHSCOPE,
-  },
-  {
-    id: 'minimax',
-    displayName: 'MiniMax',
-    endpointKey: GlobalStateKey.ENDPOINT_MINIMAX,
-  },
-  { id: 'glm', displayName: 'GLM', endpointKey: GlobalStateKey.ENDPOINT_GLM },
-  {
-    id: 'meta',
-    displayName: 'Meta',
-    endpointKey: GlobalStateKey.ENDPOINT_META,
-  },
+  endpointRow('openai', 'OpenAI'),
+  endpointRow('anthropic', 'Anthropic'),
+  endpointRow('google', 'Google'),
+  endpointRow('xai', 'xAI'),
+  endpointRow('deepseek', 'DeepSeek'),
+  endpointRow('moonshot', 'Moonshot'),
+  endpointRow('dashscope', 'Qwen'),
+  endpointRow('minimax', 'MiniMax'),
+  endpointRow('glm', 'GLM'),
+  endpointRow('meta', 'Meta'),
 ] as const;
 
 /** The China-region toggles, in catalog order. "Set" is the China region. */
@@ -66,7 +41,7 @@ export const PROVIDER_REGION_SETTINGS = [
     // toggled off (international), keys come from platform.moonshot.ai. Keys
     // are platform-specific — a .cn key does not work on .ai.
     provider: 'moonshot',
-    key: GlobalStateKey.MOONSHOT_USE_CHINA,
+    key: 'texra.moonshot.useChina',
     default: true,
     control: {
       label: 'Kimi/Moonshot China region',
@@ -80,7 +55,7 @@ export const PROVIDER_REGION_SETTINGS = [
   },
   {
     provider: 'dashscope',
-    key: GlobalStateKey.DASHSCOPE_USE_CHINA,
+    key: 'texra.dashscope.useChina',
     default: false,
     control: {
       label: 'Qwen China region (Bailian)',
@@ -90,7 +65,7 @@ export const PROVIDER_REGION_SETTINGS = [
   },
   {
     provider: 'minimax',
-    key: GlobalStateKey.MINIMAX_USE_CHINA,
+    key: 'texra.minimax.useChina',
     default: false,
     control: {
       label: 'MiniMax China region',
@@ -106,7 +81,7 @@ export const PROVIDER_REGION_SETTINGS = [
     // China is the default since bigmodel.cn is the primary platform; when
     // toggled off (international), the key URL is z.ai.
     provider: 'glm',
-    key: GlobalStateKey.GLM_USE_CHINA,
+    key: 'texra.glm.useChina',
     default: true,
     control: {
       label: 'GLM China region',
@@ -121,7 +96,7 @@ export const PROVIDER_REGION_SETTINGS = [
 /** The custom-endpoint setting key of a provider, if it offers one. */
 export function providerEndpointKey(
   provider: string,
-): GlobalStateKey | undefined {
+): (typeof PROVIDER_ENDPOINT_STATE_ENTRIES)[number]['endpointKey'] | undefined {
   return PROVIDER_ENDPOINT_STATE_ENTRIES.find((entry) => entry.id === provider)
     ?.endpointKey;
 }
