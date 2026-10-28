@@ -55,18 +55,6 @@ export class ResumeSessionUnavailableError extends Schema.TaggedError<ResumeSess
 }
 
 /**
- * The wiring the two entry points genuinely do not share. Everything outside
- * this union is assembled once in {@link launchRun}, so a field added for
- * one entry point cannot go missing on the other.
- */
-type LaunchVariant =
-  | { readonly kind: 'fresh' }
-  | {
-      readonly kind: 'resume';
-      readonly onIdle?: () => void;
-    };
-
-/**
  * The per-run layer both families run under: the run's `AgentRun`, the
  * invoker, the session's run history, and the session's rooted filesystems (built
  * from the roots of the session the run is on, fresh or resumed, so code
@@ -74,17 +62,13 @@ type LaunchVariant =
  * from the fiber's ambient roots). The follow-up lease is not here: a
  * conversation claims its own inside the loop (`claimFollowUps`).
  */
-function runLayerFor(
-  ctx: AgentLaunchContext,
-  shared: SubagentRunOptions,
-  onIdle: (() => void) | undefined,
-) {
+function runLayerFor(ctx: AgentLaunchContext, shared: SubagentRunOptions) {
   const runSession = ctx.session;
   return modelInvokerLayer().pipe(
     Layer.provideMerge(
       agentRunLayer(ctx, {
         tools: shared.tools,
-        callbacks: { onProgress: shared.onProgress, onIdle },
+        callbacks: { onProgress: shared.onProgress },
       }),
     ),
     Layer.provideMerge(Layer.succeed(RunHistory)(runSession.runHistory)),
@@ -104,24 +88,15 @@ function runLayerFor(
 function launchRun(
   ctx: AgentLaunchContext,
   shared: SubagentRunOptions,
-  variant: LaunchVariant,
+  resume: boolean,
 ): Effect.Effect<RunEndResult, Error, AgentRunServices> {
   const task = isTaskConfig(ctx.config);
   /** A task's result, with its children's spend. */
   const withChildrenSpend = (ended: RunEndResult) =>
     task ? withChildSpend(ctx.session, ended) : Effect.succeed(ended);
-  return runToolUse({
-    turns: shared.turns,
-    resume: variant.kind === 'resume',
-  }).pipe(
+  return runToolUse({ turns: shared.turns, resume }).pipe(
     Effect.flatMap(withChildrenSpend),
-    Effect.provide(
-      runLayerFor(
-        ctx,
-        shared,
-        variant.kind === 'resume' ? variant.onIdle : undefined,
-      ),
-    ),
+    Effect.provide(runLayerFor(ctx, shared)),
   );
 }
 
@@ -261,7 +236,7 @@ export function executeAgent(
               { replayWhenAttached: true },
             );
           }
-          return yield* launchRun(ctx, options, { kind: 'fresh' });
+          return yield* launchRun(ctx, options, false);
         }).pipe(settleDescriptionOnExit(sessionDescription, opened)),
       // The edge the run is born with: the caller's own
       // parent for a fresh child.
@@ -293,13 +268,10 @@ export interface ResumeTurnIdentity {
 }
 
 /** What a fresh launch takes, but its registration. */
-export interface ResumeToolUseFromResumeDataOptions extends Omit<
+export type ResumeToolUseFromResumeDataOptions = Omit<
   ExecuteAgentOptions,
   'registration'
-> {
-  /** A resumed cycle is idle after its child delivery, while its run stays live. */
-  readonly onIdle?: () => void;
-}
+>;
 
 /**
  * Resume one run (a conversation, or a task's recipe) from its
@@ -336,11 +308,7 @@ export function resumeToolUseFromResumeData(
     });
     return yield* runWithLifecycle(
       ctx,
-      () =>
-        launchRun(ctx, options, {
-          kind: 'resume',
-          onIdle: options.onIdle,
-        }),
+      () => launchRun(ctx, options, true),
       // Resume reads the parent edge from the persisted `run.start`.
       {
         parentRunId,

@@ -6,7 +6,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer } from 'effect';
+import { Effect, Fiber, Layer, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
@@ -62,40 +62,29 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
 }
 
 /**
- * Start a run that parks, for scenarios that drive it while it waits. The
- * loop calls `onIdle` on its own fiber immediately before it blocks for
- * input, after the batch carrying the `waiting` step has committed, so one
- * Deferred per park is the loop's own 'parked for the Nth time' signal:
- * `park(n)` is what those scenarios wait on. The wait resumes
- * inside that callback, before the loop enters `followUps.wait`, so input a
- * scenario enqueues after `park` lands on the queue rather than on a waiting
+ * Start a run that parks, for scenarios that drive it while it waits.
+ * `park(n)` waits for the run's `n`-th committed `waiting` position from the
+ * loop's start: the turn boundary, or a restored park with nothing queued.
+ * Input a scenario enqueues after it lands on the queue or on a waiting
  * consumer; the wait takes what is queued first, so both orders deliver the
  * same batch.
  */
 const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
   const requests: InvokeRequest[] = [];
-  const parks = yield* Effect.forEach(init.script, () => Deferred.make<void>());
-  let parked = 0;
-  const fiber = yield* Effect.forkChild(
-    loopProgram(
-      {
-        ...init,
-        onIdle: () => {
-          init.onIdle?.();
-          const park = parks[parked];
-          parked += 1;
-          if (park) Deferred.doneUnsafe(park, Effect.void);
-        },
-      },
-      requests,
-    ),
-  );
-  /** Wait for the loop's `n`-th park; the n-th invocation precedes it. */
-  const park = (n: number) => {
-    const deferred = parks[n];
-    if (!deferred) throw new Error(`The script has no park ${n}.`);
-    return Deferred.await(deferred);
-  };
+  const from = init.session.log.now();
+  const fiber = yield* Effect.forkChild(loopProgram(init, requests));
+  const run = qualifyAggregateId('run', init.runId);
+  const park = (n: number) =>
+    init.session.log.tail(from).pipe(
+      Stream.filter(
+        (row) =>
+          row.aggregateId === run &&
+          row.type === 'run.position' &&
+          row.payload.at === 'waiting',
+      ),
+      Stream.take(n + 1),
+      Stream.runDrain,
+    );
   return { fiber, requests, park };
 });
 
@@ -152,7 +141,7 @@ describe('a parked child run', () => {
           resume: true,
           script: [textTurn('second cycle'), textTurn('never reached')],
         });
-        yield* resumed.park(1);
+        yield* resumed.park(0);
         const resumedState = yield* session.runHistory.load(runId);
         expect(userTexts(resumedState)).toContain(asked);
         expect((yield* session.followUps.read(runId)).followUps).toEqual([]);

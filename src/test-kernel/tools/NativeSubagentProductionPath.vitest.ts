@@ -671,7 +671,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         ).toEqual({
           started: true,
           delivered: true,
-          outcome: RUN_PHASE.WAITING,
           completion: expect.anything(),
         });
         const recoveredControls = session.runs.get(runId)?.controls;
@@ -708,7 +707,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         ).toEqual({
           started: true,
           delivered: true,
-          outcome: RUN_PHASE.WAITING,
           completion: expect.anything(),
         });
         expect(session.runs.get(runId)?.controls).toBeDefined();
@@ -735,7 +733,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(failedRecovery).toEqual({
           started: true,
           delivered: false,
-          outcome: RUN_OUTCOME.FAILED,
           completion: expect.anything(),
         });
         // A resumed child's lifetime ends with its own result, as a root's.
