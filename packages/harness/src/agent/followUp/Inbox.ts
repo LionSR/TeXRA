@@ -87,7 +87,7 @@ export interface SendOptions {
   readonly hold?: QueuedFollowUp['holdUntil'];
   /** Only from the run's parent: its rows' edge, read in this job. */
   readonly fromParent?: boolean;
-  /** No generation here reads the row: it must wake the run (`needsWake`). */
+  /** No generation here reads the row: the input with it queued must owe a wake (`needsWake`). */
   readonly wakesOnly?: boolean;
 }
 
