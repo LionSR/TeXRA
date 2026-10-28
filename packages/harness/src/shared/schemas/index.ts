@@ -53,8 +53,8 @@ export * from './inquiry';
 export * from './prompts';
 export * from './request';
 
-// Layer 4: MainView schemas
-export * from './pickerOptions';
+// Layer 4: model availability
+export * from './modelAvailability';
 
 // Layer 5: ProgressView schemas
 export * from './progressView/data';

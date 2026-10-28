@@ -29,9 +29,9 @@ import {
   toErrorMessage,
   agentKeyOf,
   DEFAULT_WORKFLOW_AGENT,
-  type AgentOptionData,
   type FileListEntry,
 } from '@texra-ai/harness/schemas';
+import type { AgentOptionData } from '@texra/shared/pickerOptions';
 import {
   DOCUMENT_TASK_BLOCK,
   type DocumentAgentOption,

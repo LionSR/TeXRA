@@ -18,8 +18,8 @@ import {
   isFastFirstResponseModel,
   REASONING_LEVEL_LABELS,
 } from '@texra/shared/model/modelPicker';
+import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import type { ModelOption } from '@texra-ai/harness/host';
-import type { ModelOptionData } from '@texra-ai/harness/schemas';
 
 const MILLION = 1_000_000;
 const THOUSAND = 1_000;
