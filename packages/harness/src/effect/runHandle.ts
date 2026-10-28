@@ -95,8 +95,8 @@ const traceHandover = Effect.fn('runHandle.traceHandover')(function* (
   const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
   let tapping = true;
   let reading = false;
-  /** How the run settled before any reader came: a failed or stopped run's
-   *  reader hears its end, which the queue holds; a succeeded one's nothing. */
+  /** How the run settled before any reader came: a failed run's reader
+   *  hears its failure, which the queue holds; a succeeded one's nothing. */
   let settledUnread: 'succeeded' | 'failed' | null = null;
   let buffered = 0;
   /** Stop taking the run's trace events: the reader's close does it while
@@ -126,8 +126,7 @@ const traceHandover = Effect.fn('runHandle.traceHandover')(function* (
         }
         // A run nobody read retains nothing: what it buffered goes with it.
         if (!reading) yield* Effect.orDie(Queue.clear(trace));
-        const end = readerExit(runId, exit);
-        if (Exit.isFailure(end)) yield* Queue.failCause(trace, end.cause);
+        if (Exit.isFailure(exit)) yield* Queue.failCause(trace, exit.cause);
         else yield* Queue.end(trace);
       }),
     events: Stream.unwrap(
@@ -205,7 +204,7 @@ export function handOver(
       exit: Exit.Exit<RunEndResult, RunFailure>,
     ): Effect.Effect<void> =>
       Effect.sync(unlisten).pipe(
-        Effect.andThen(trace.settle(exit)),
+        Effect.andThen(trace.settle(readerExit(runId, exit))),
         Effect.andThen(
           Effect.suspend(() => {
             if (Exit.isFailure(exit))
