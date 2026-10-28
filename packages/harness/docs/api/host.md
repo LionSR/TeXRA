@@ -169,10 +169,8 @@ The process's agent directories as an Effect service, provided once by the
 composition root through `processLayer`. The shape is the port itself: a
 program that resolves one of the three local agent directories yields the
 port's own readers instead of reaching for the process platform's copy.
-
-`layer` takes the port itself, for the same reason `Secrets.layer` does:
-every root builds its agent directories before it installs the runtime that
-serves them, so the service is the value the root already holds.
+A root holds its port before it installs the runtime that serves it, so the
+layer is `Layer.succeed(AgentDirectories)(port)`.
 
 ```ts
 class AgentDirectories extends Context.Service<
@@ -233,6 +231,11 @@ interface AgentDirectoriesPort {
     FileSystem.FileSystem
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
+  /** The team presets a workspace offers, built-in and its own, read from its
+   *  repository state; absent, the app has no teams. */
+  readonly teams?: (
+    repoState: StateStore,
+  ) => Effect.Effect<readonly TeamPreset[], StateReadFailed>;
   /**
    * The packaged resources root a host ships its bundled agents under,
    * the tool plugins' agent directories among them. Absent where none ships:
@@ -263,6 +266,8 @@ interface AgentDirectoryServiceOptions {
   resourcesPath: string;
   /** Where the configured custom agent directory is read from. */
   state: Pick<StateStore, 'get'>;
+  /** The app's team presets (`AgentDirectoriesPort.teams`). */
+  teams?: AgentDirectoriesPort['teams'];
   /** Defaults to logging the issue at `warn`; hosts with an interactive
    * notification surface (e.g. the VS Code extension) can override it. */
   issueReporter?: {
@@ -1356,14 +1361,6 @@ True if `err` is an `AbortController` abort (a DOM `AbortError`).
 function isUserAbort(err: unknown): boolean
 ```
 
-## launchableTeamPresets
-
-The catalog's launchable teams: every preset but the setup starter.
-
-```ts
-function launchableTeamPresets(customRaw: unknown): TeamPreset[]
-```
-
 ## listRunGeneratedFiles
 
 List the generated (non-KV) files under a run's storage directory, sorted by
@@ -1383,7 +1380,7 @@ const listRunGeneratedFiles: (runId: string & Brand<"RunId">, storage: string) =
 ```ts
 function loadTeamOptions<T extends TeamCatalogAgent>(
   ports: Omit<TeamRunOptions<T>, 'agentOverride'> & {
-    customPresetsRaw: unknown;
+    presets: readonly TeamPreset[];
   },
 ): TeamOptionData[]
 ```
@@ -2045,7 +2042,7 @@ const registerCustomAgentRoot: Effect<void, never, FileSystem | GlobalStorageFs 
 function resolveTeamLaunch<T extends TeamCatalogAgent>(
   args: Omit<TeamRunOptions<T>, 'agentOverride'> & {
     teamId: string;
-    customPresetsRaw: unknown;
+    presets: readonly TeamPreset[];
   },
 ): TeamLaunchResolution
 ```
@@ -2717,25 +2714,21 @@ type TeamPlanStatus = 'available' | 'degraded' | 'unavailable';
 
 ## TeamPreset
 
-A team preset as the catalog lists it, with where it came from.
+A team preset: its members by name, and where it came from. The app
+supplies the catalog (`AgentDirectoriesPort.teams`).
 
 ```ts
-interface TeamPreset extends AgentModePreset {
+interface TeamPreset {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  /** An icon name the host's icon set draws. */
+  readonly icon: string;
+  readonly agents: readonly string[];
   readonly source: 'built-in' | 'custom';
   /** The setup starter: an agent list a workspace can select, never a launch. */
   readonly setupOnly?: true;
 }
-```
-
-## teamPresets
-
-The one team preset catalog, in display order: the setup starter (tagged
-`setupOnly`), the built-in teams, then the workspace's custom presets.
-Built-in ids are reserved: a custom preset with the same id is dropped so
-the built-in always wins.
-
-```ts
-function teamPresets(customRaw: unknown): TeamPreset[]
 ```
 
 ## TeamRunOptions
@@ -2856,10 +2849,8 @@ type ToolMissingHandler = (
 The process's tool-missing reporter as an Effect service, provided once
 by the composition root through `processLayer`. A program that needs to surface a
 missing tool yields it via `Effect.serviceOption`, so an absent reporter is
-silence rather than a missing requirement.
-
-`layer` takes the reporter the root already holds; a host without a
-tool-missing UI omits the service, exactly as it omitted the platform port.
+silence rather than a missing requirement. A host without a tool-missing UI
+omits the service.
 
 ```ts
 class ToolMissingReporter extends Context.Service<
@@ -3062,6 +3053,8 @@ interface WorkspaceAgentsControllerDeps<
 > {
   readonly repoState: StateStore;
   readonly globalState: StateStore;
+  /** The app's team presets (`AgentDirectoriesPort.teams`). */
+  readonly teams: AgentDirectoriesPort['teams'];
   readonly getAgents: () => Entry[];
   /**
    * Resolve one stored identifier without collapsing exact source identity.

@@ -15,7 +15,6 @@ export const WorkspaceStateKey = Object.freeze({
   // Agent visibility
   /** Workspace agents selection; the `custom` member carries a category-keyed record. */
   WORKSPACE_AGENTS: 'workspaceAgents',
-  CUSTOM_TEAMS: 'customTeams',
   /** Custom agents the user turned off; every other custom agent is shown. */
   HIDDEN_CUSTOM_AGENTS: 'hiddenCustomAgents',
 

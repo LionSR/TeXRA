@@ -100,7 +100,9 @@ export class Sessions extends Context.Service<
             skills,
             secrets: Secrets.layer(platform.secrets),
             appState: AppState.layer(platform.roots.globalState),
-            agentDirectories: AgentDirectories.layer(platform.agentDirectories),
+            agentDirectories: Layer.succeed(AgentDirectories)(
+              platform.agentDirectories,
+            ),
             toolMissingReporter: platform.toolMissingHandler,
             // An embedder's console has no live level filter of its own, so
             // the package speaks at the informational level, not flooding it.

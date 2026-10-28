@@ -23,6 +23,7 @@ import { emitAppSignal } from '@texra-ai/harness/host';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { workspaceTeams } from '@texra/shared/agentTeams';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { texraPlugins } from '@texra/tools/registry';
 import { makeEditorHost } from '@texra/tools/editorHost';
@@ -106,6 +107,7 @@ export const initializeElectronPlatform = Effect.fn(
           channel: 'desktop',
           resourcesPath,
           state,
+          teams: workspaceTeams,
         }),
     ),
   );

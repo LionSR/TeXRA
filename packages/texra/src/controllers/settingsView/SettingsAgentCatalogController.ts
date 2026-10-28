@@ -4,10 +4,8 @@ import { Clock, Effect, Predicate, Result } from 'effect';
 // Local imports
 import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
 import {
-  WorkspaceStateKey,
   agentKeyOf,
   agentMatchesIdentifier,
-  parseAgentModePresets,
   type AgentSource,
 } from '@texra-ai/harness/schemas';
 import {
@@ -20,7 +18,11 @@ import { findTeamPreset, type TeamPreset } from '@texra-ai/harness/host';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
-import type { AgentModePreset } from '@texra-ai/harness/schemas';
+import {
+  CUSTOM_TEAMS_KEY,
+  parseAgentModePresets,
+  type AgentModePreset,
+} from '@texra/shared/agentTeams';
 
 interface SettingsAgentCatalogEntry {
   name: string;
@@ -61,7 +63,7 @@ export class SettingsAgentCatalogController {
     return Effect.gen({ self: this }, function* () {
       return (
         parseAgentModePresets(
-          yield* this.deps.repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
+          yield* this.deps.repoState.get(CUSTOM_TEAMS_KEY),
         ).find((preset) => preset.id === presetId) ?? null
       );
     });
@@ -127,7 +129,7 @@ export class SettingsAgentCatalogController {
       };
 
       return yield* this.deps.repoState
-        .modify(WorkspaceStateKey.CUSTOM_TEAMS, (stored) =>
+        .modify(CUSTOM_TEAMS_KEY, (stored) =>
           Result.map(presetRecords(stored), (records) => [...records, preset]),
         )
         .pipe(Effect.as(preset));
@@ -140,7 +142,7 @@ export class SettingsAgentCatalogController {
 
       yield* this.deps.workspaceAgents.removeTeamPreset(presetId, () =>
         this.deps.repoState
-          .modify(WorkspaceStateKey.CUSTOM_TEAMS, (stored) =>
+          .modify(CUSTOM_TEAMS_KEY, (stored) =>
             Result.map(presetRecords(stored), (records) =>
               records.filter(
                 (record) =>
@@ -212,7 +214,7 @@ function presetRecords(
     ? Result.succeed(stored)
     : Result.fail(
         new StateReadFailed({
-          key: WorkspaceStateKey.CUSTOM_TEAMS,
+          key: CUSTOM_TEAMS_KEY,
           message:
             'The saved custom teams are not a list; fix or remove that setting before changing a team.',
           cause: stored,

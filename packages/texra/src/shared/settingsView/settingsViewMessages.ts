@@ -12,7 +12,6 @@ import { Effect, Schema, Struct } from 'effect';
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
   type SettingsViewSnapshot,
-  AgentModePresetSchema,
   AgentScanIssueSchema,
   AgentSourceSchema,
   ModelAvailabilityFieldsSchema,
@@ -22,6 +21,7 @@ import {
   WorkspaceStateKey,
 } from '@texra-ai/harness/schemas';
 import { type ModelProvider, ReasoningEffortSchema } from '@texra-ai/llm';
+import { AgentModePresetSchema } from '@texra/shared/agentTeams';
 import { SubscriptionAuthStatusSchema } from '@texra/shared/model/subscriptionAuth';
 import { SubscriptionUsageSnapshotsSchema } from '@texra/shared/model/subscriptionUsage';
 import { settingSchemaWithoutDefault } from '@texra/shared/settingsView/settingRows';

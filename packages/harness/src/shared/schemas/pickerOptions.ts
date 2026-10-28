@@ -148,10 +148,10 @@ export type AgentOptionData = typeof AgentOptionDataSchema.Type;
 
 /**
  * Team picker option row for the main-view "Run with: Team" target. `value`
- * carries the preset id (one of the built-ins in `AGENT_MODE_PRESETS` or a
- * user-saved custom team); hosts resolve the agent list, so the renderer only
- * ever sends team identity back. Availability is resolved against the full
- * live catalog, not just the workspace's enabled agents.
+ * carries the preset id (a built-in team or a user-saved custom one); hosts
+ * resolve the agent list, so the renderer only ever sends team identity back.
+ * Availability is resolved against the full live catalog, not just the
+ * workspace's enabled agents.
  */
 export const TeamOptionDataSchema = PickerOptionBaseSchema.mapFields(
   Struct.assign({

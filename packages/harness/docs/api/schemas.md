@@ -58,17 +58,6 @@ a scope added here is representable everywhere.
 const ActiveSkillSourceScopeSchema: Literals<readonly ["bundled", "user", "project", "interop", "custom"]>
 ```
 
-## AGENT_MODE_PRESETS
-
-Built-in agent teams.
-
-Agent names listed here are matched by name (not source:name key)
-so custom agents that override a built-in are included automatically.
-
-```ts
-const AGENT_MODE_PRESETS: AgentModePreset[]
-```
-
 ## AGENT_SKILLS_CONFIG_KEY
 
 ```ts
@@ -149,20 +138,6 @@ function agentMatchesIdentifier(
   entry: { source: string; name: string },
   identifier: string,
 ): boolean
-```
-
-## AgentModePreset
-
-```ts
-type AgentModePreset = typeof AgentModePresetSchema.Type;
-```
-
-## AgentModePresetSchema
-
-Schema for a single agent team: its members, by name.
-
-```ts
-const AgentModePresetSchema: Struct<{ readonly id: String; readonly name: String; readonly description: String; readonly icon: Literals<readonly ["bookmark", "rocket", "diagram-project", "cube", "hashtag", "screwdriver-wrench"]>; readonly agents: $Array<String>; }>
 ```
 
 ## agentName
@@ -1410,12 +1385,6 @@ user's explicit deletion of the run is the one path that reaps it.
 type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 ```
 
-## parseAgentModePresets
-
-```ts
-function parseAgentModePresets(raw: unknown): AgentModePreset[]
-```
-
 ## parseApprovalPolicy
 
 ```ts
@@ -2376,18 +2345,6 @@ A pending tool edit as the session holds it.
 type StagedToolEdit = typeof StagedToolEditSchema.Type;
 ```
 
-## STARTER_AGENT_MODE_PRESET
-
-Generic default team applied when the user skips the setup agent's
-discipline question. Deliberately NOT part
-of {@link AGENT_MODE_PRESETS}: it is not a discipline and must not appear
-as a team card in the settings UI — only `apply_team` and default-team
-seeding resolve it.
-
-```ts
-const STARTER_AGENT_MODE_PRESET: AgentModePreset
-```
-
 ## StateSettingEntry
 
 ```ts
@@ -2545,10 +2502,10 @@ type TeamOptionData = typeof TeamOptionDataSchema.Type;
 ## TeamOptionDataSchema
 
 Team picker option row for the main-view "Run with: Team" target. `value`
-carries the preset id (one of the built-ins in `AGENT_MODE_PRESETS` or a
-user-saved custom team); hosts resolve the agent list, so the renderer only
-ever sends team identity back. Availability is resolved against the full
-live catalog, not just the workspace's enabled agents.
+carries the preset id (a built-in team or a user-saved custom one); hosts
+resolve the agent list, so the renderer only ever sends team identity back.
+Availability is resolved against the full live catalog, not just the
+workspace's enabled agents.
 
 ```ts
 const TeamOptionDataSchema: Struct<{ readonly value: String; readonly label: String; readonly source: Literals<readonly ["built-in", "custom"]>; readonly icon: String; readonly description: withDecodingDefault<String, never>; readonly unavailableMembers: withDecodingDefault<$Array<String>, never>; readonly disabled: optional<Boolean>; readonly disabledReason: optional<NullOr<String>>; }>
@@ -2796,7 +2753,7 @@ type WorkspaceFileLocation = typeof WorkspaceFileLocationSchema.Type;
 The harness's workspace-scoped state keys (`roots.workspaceState`).
 
 ```ts
-const WorkspaceStateKey: Readonly<{ readonly WORKSPACE_AGENTS: "workspaceAgents"; readonly CUSTOM_TEAMS: "customTeams"; readonly HIDDEN_CUSTOM_AGENTS: "hiddenCustomAgents"; readonly DISABLED_SKILLS: "skills.disabled"; readonly DISABLED_SKILL_SOURCES: "skills.disabledSources"; readonly GIT_MARK_COMMITS: "git.markCommits"; readonly GIT_AUTHOR_NAME: "git.authorName"; readonly GIT_AUTHOR_EMAIL: "git.authorEmail"; readonly GIT_WORKTREE_SUPPORT: "git.worktreeSupport"; readonly TOOL_PATH_PROTECTION_ENABLED: "tools.restrictPathsToWorkingDirectory"; }>
+const WorkspaceStateKey: Readonly<{ readonly WORKSPACE_AGENTS: "workspaceAgents"; readonly HIDDEN_CUSTOM_AGENTS: "hiddenCustomAgents"; readonly DISABLED_SKILLS: "skills.disabled"; readonly DISABLED_SKILL_SOURCES: "skills.disabledSources"; readonly GIT_MARK_COMMITS: "git.markCommits"; readonly GIT_AUTHOR_NAME: "git.authorName"; readonly GIT_AUTHOR_EMAIL: "git.authorEmail"; readonly GIT_WORKTREE_SUPPORT: "git.worktreeSupport"; readonly TOOL_PATH_PROTECTION_ENABLED: "tools.restrictPathsToWorkingDirectory"; }>
 ```
 
 ## WorktreeInfo

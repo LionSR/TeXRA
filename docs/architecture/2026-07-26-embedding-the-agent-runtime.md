@@ -122,7 +122,7 @@ const agentDirectories = new AgentDirectoryService({
   state: { get: () => Effect.succeed(undefined) },
 });
 // Served as `AgentDirectories` by the Step 1 layer:
-// processLayer({ …, agentDirectories: AgentDirectories.layer(agentDirectories) });
+// processLayer({ …, agentDirectories: Layer.succeed(AgentDirectories)(agentDirectories) });
 ```
 
 `state.get()` reads the stored setting that names the user-configured

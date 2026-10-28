@@ -6,10 +6,13 @@ import { Effect } from 'effect';
 import { describe } from 'vitest';
 
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { agentMatchesIdentifier } from '@shared/schemas';
-import type { AgentModePreset } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
+import {
+  CUSTOM_TEAMS_KEY,
+  type AgentModePreset,
+} from '@texra/shared/agentTeams';
+import { workspaceTeams } from '@texra/shared/agentTeams';
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
 
 /** The catalog consumes the native agent list and the same entry lookup. */
@@ -59,11 +62,12 @@ const MALFORMED_PRESET = { id: 'broken' };
 function createController(customPresets: unknown) {
   const getAgents = () => AGENTS;
   const workspaceState = new FakeStateStore({
-    [WorkspaceStateKey.CUSTOM_TEAMS]: customPresets,
+    [CUSTOM_TEAMS_KEY]: customPresets,
   });
   const workspaceAgents = new WorkspaceAgentsController({
     repoState: workspaceState,
     globalState: new FakeStateStore(),
+    teams: workspaceTeams,
     getAgents,
     resolveAgent: (identifier) =>
       AGENTS.find((entry) => agentMatchesIdentifier(entry, identifier)),
@@ -76,7 +80,7 @@ function createController(customPresets: unknown) {
       newerBuiltInOf: () => undefined,
     }),
     customPresets: workspaceState
-      .get(WorkspaceStateKey.CUSTOM_TEAMS)
+      .get(CUSTOM_TEAMS_KEY)
       .pipe(Effect.map((stored) => (stored ?? []) as unknown[])),
   };
 }

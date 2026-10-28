@@ -15,7 +15,6 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   DEBUG_MODE_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
-  AgentModePresetSchema,
   WorkspaceAgentsSelectionSchema,
   AgentSkillsEnabledSchema,
   HiddenCustomAgentKeysSchema,
@@ -606,13 +605,6 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     key: WorkspaceStateKey.WORKSPACE_AGENTS,
     schema: WorkspaceAgentsSelectionSchema.pipe(
       Schema.withDecodingDefault(Effect.succeed(INHERITED_WORKSPACE_AGENTS)),
-    ),
-    slot: 'repoState',
-  },
-  {
-    key: WorkspaceStateKey.CUSTOM_TEAMS,
-    schema: Schema.Array(AgentModePresetSchema).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
     ),
     slot: 'repoState',
   },

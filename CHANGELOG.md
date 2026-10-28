@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: teams are the app's.** The built-in team presets
+  (`AGENT_MODE_PRESETS`, `STARTER_AGENT_MODE_PRESET`), `AgentModePresetSchema`
+  and `parseAgentModePresets` leave `@texra-ai/harness/schemas`, and
+  `teamPresets`/`launchableTeamPresets` leave `./host`. An app supplies its
+  teams as `AgentDirectoriesPort.teams`; `loadTeamOptions` and
+  `resolveTeamLaunch` take the `presets` list instead of the raw saved teams.
+  `AgentDirectories.layer(port)` is gone: provide
+  `Layer.succeed(AgentDirectories)(port)`.
 - **SDK: a settings catalog names its namespace, and keys are relative.**
   `settingsCatalog({ namespace, rows })` replaces `settingsCatalog(rows)`,
   and `nodePlatform({ settings })` takes that catalog instead of rows. Code

@@ -57,6 +57,7 @@ import { makeEditorHost } from '@texra/tools/editorHost';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { texraPlugins } from '@texra/tools/registry';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { workspaceTeams } from '@texra/shared/agentTeams';
 
 import { readCliVersion } from './cliContext';
 import { setCliLogRuntime } from './logSinks';
@@ -227,6 +228,7 @@ export function installCliProcessRuntime(
         new AgentDirectoryService({
           channel: 'cli',
           resourcesPath: options?.resourcesPath ?? '',
+          teams: workspaceTeams,
           state,
         }),
     ),

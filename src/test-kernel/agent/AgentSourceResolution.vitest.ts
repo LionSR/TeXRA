@@ -93,7 +93,7 @@ describe('shadowed agent resolution', () => {
           Layer.provide(
             Layer.mergeAll(
               Layer.succeed(GlobalStorageFs)({} as RootedFileSystem),
-              AgentDirectories.layer(fakeHostAgentDirectories),
+              Layer.succeed(AgentDirectories)(fakeHostAgentDirectories),
               AppState.layer(new FakeStateStore()),
               nodePlatformLayer,
               testHttpClientLayer,

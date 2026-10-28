@@ -42,7 +42,7 @@ function onGlobalStorage<A, E>(
           storePluginsLayer,
           nodePlatformLayer,
           testHttpClientLayer,
-          AgentDirectories.layer({
+          Layer.succeed(AgentDirectories)({
             ...fakeHostAgentDirectories,
             builtIn: () => Effect.succeed(BUNDLED_AGENTS),
           }),

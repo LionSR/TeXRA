@@ -650,7 +650,7 @@ export function ownerProcessLayer({
     ),
     toolMissingReporter === undefined
       ? Layer.empty
-      : ToolMissingReporter.layer(toolMissingReporter),
+      : Layer.succeed(ToolMissingReporter)(toolMissingReporter),
     catalog,
     // One retry gate per process: a 429 cools a credential for every project.
     Layer.effect(RouteRetries, ModelRetryGate.make),

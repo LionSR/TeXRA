@@ -186,6 +186,7 @@ interface CatalogState {
   loadFailure: string | undefined;
   /** A source changed and its reload has not begun; cleared as a scan starts. */
   changePending: boolean;
+  readonly teams: AgentDirectories['Service']['teams'];
 }
 
 /** Scan every agent source and publish the result into `state`. */
@@ -264,6 +265,7 @@ function catalogReads(state: CatalogState) {
     new WorkspaceAgentsController<AgentEntry>({
       repoState,
       globalState,
+      teams: state.teams,
       getAgents: list,
       resolveAgent: get,
     });
@@ -325,6 +327,7 @@ export class AgentCatalog extends Context.Service<
         skippedFiles: Object.freeze([]),
         loadFailure: undefined,
         changePending: false,
+        teams: Context.get(services, AgentDirectories).teams,
       };
       // Every load enters one lane: a fiber that arrives while a load runs
       // waits for it, and a failed scan fails only its own caller.
