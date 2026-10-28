@@ -2493,6 +2493,14 @@ interface StateSettingEntry {
 }
 ```
 
+## StoredMedia
+
+One attached media item by address ({@link StoredMediaSchema}).
+
+```ts
+type StoredMedia = typeof StoredMediaSchema.Type;
+```
+
 ## StoredMediaSchema
 
 Media a message attached, as a follow-up and its transcript row name

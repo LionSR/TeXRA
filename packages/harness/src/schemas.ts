@@ -374,6 +374,7 @@ export {
   SkillDisplayItemSchema,
   SkillNameSchema,
   STARTER_AGENT_MODE_PRESET,
+  type StoredMedia,
   StoredMediaSchema,
   sumUsageStats,
   type TeamOptionData,
