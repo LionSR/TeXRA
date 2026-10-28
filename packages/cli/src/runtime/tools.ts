@@ -11,7 +11,7 @@ import { visibleToolPlugins } from '@texra/controllers/settingsView/ToolDashboar
  */
 export function setCliToolEnabled(id: string, enabled: boolean) {
   return Effect.flatMap(ToolRegistry, ({ entries }) => {
-    const def = visibleToolPlugins(entries, 'cli').find(
+    const def = visibleToolPlugins(entries).find(
       ({ card, plugin }) => card.id === id && plugin.availability !== undefined,
     );
     return def?.plugin.toggle !== undefined

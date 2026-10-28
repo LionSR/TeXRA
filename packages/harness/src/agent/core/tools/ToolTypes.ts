@@ -20,7 +20,6 @@ import type {
 } from '@shared/schemas';
 import type { DatabaseNotOwner } from '@shared/session/database';
 import type { CellError } from '@shared/session/runHistory';
-import type { SettingHost } from '@shared/state/stateSettings';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 /**
@@ -65,8 +64,6 @@ export interface ToolGuard<T, R = never> {
  */
 export interface ITool<E = Error, R = never> {
   readonly definition: ToolDefinition;
-  /** Hosts this tool is statically excluded from; an omitted host supports it. */
-  readonly unavailableHosts?: readonly SettingHost[];
   /** The host capability (named by the plugin that serves it,
    *  `HostCapabilities`) the session's host must serve for this tool to be
    *  offered, read live each step: a window that attaches mid-run brings it. */

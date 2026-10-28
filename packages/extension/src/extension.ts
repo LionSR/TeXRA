@@ -170,6 +170,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         commandDirs: commandDirs,
         plugins: texraPlugins({
           editors,
+          inquiryPanel: true,
           // The Comments UI behind the `inline_comment` tool. The provider reads
           // the controller this host registers at activation, so it is a value
           // from module load; nothing about it waits on that registration.

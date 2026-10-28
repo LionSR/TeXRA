@@ -283,8 +283,6 @@ ToolResult values; unexpected/programmer failures should throw and let
 ```ts
 interface ITool<E = Error, R = never> {
   readonly definition: ToolDefinition;
-  /** Hosts this tool is statically excluded from; an omitted host supports it. */
-  readonly unavailableHosts?: readonly SettingHost[];
   /** The host capability (named by the plugin that serves it,
    *  `HostCapabilities`) the session's host must serve for this tool to be
    *  offered, read live each step: a window that attaches mid-run brings it. */
@@ -1022,9 +1020,8 @@ state stores, as the session opened over it holds them.
 interface WorkspaceRoots {
   /**
    * The product host this process is, named by its composition root. The
-   * catalog rows whose slot differs by host and the tool gate's
-   * `unavailableHosts` read it from here, so a read answers for the host that
-   * opened these roots rather than for a default.
+   * catalog rows whose slot differs by host read it from here, so a read
+   * answers for the host that opened these roots rather than for a default.
    */
   readonly host: SettingHost;
   /** Canonical physical workspace root, or undefined when no folder is open. */

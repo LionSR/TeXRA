@@ -239,7 +239,6 @@ export const agentRunLayer = (
       for (const warning of held.warnings) logger.warn(warning);
       const toolInputs: AgentRunShape['toolInputs'] = {
         tools,
-        host: session.roots.host,
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]
           : (input.tools ?? []),

@@ -204,30 +204,21 @@ export function installedHost(): FakeHost {
   return current;
 }
 
-function installedSetup(): SetupPlatformShape {
-  const { setup } = installedHost();
-  if (!setup) {
-    throw new Error(
-      'The installed fake host has no setup platform: pass `setup` in the host overrides.',
-    );
-  }
-  return setup;
-}
-
 /**
  * The setup platform of every test's TeXRA plugin list: each member reads
  * the installed host's `setup` when called, so a suite that swaps hosts per
- * test swaps setup platforms with them.
+ * test swaps setup platforms with them. A host without one has none of its
+ * members, as a host that passes no setup platform.
  */
 export const fakeSetupPlatform: SetupPlatformShape = {
   get commands() {
-    return installedSetup().commands;
+    return installedHost().setup?.commands;
   },
   get extensions() {
-    return installedSetup().extensions;
+    return installedHost().setup?.extensions;
   },
   get terminal() {
-    return installedSetup().terminal;
+    return installedHost().setup?.terminal;
   },
 };
 
