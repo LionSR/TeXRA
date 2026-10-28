@@ -196,7 +196,11 @@ function fakeSession(state: RunState): SessionHandle {
         Effect.map(tryResume(runId), (resumed) => {
           if (!resumed) return { failed: 'not_resumable' as const };
           live.add(runId);
-          return { started: true as const, delivered: true };
+          return {
+            started: true as const,
+            delivered: true,
+            completion: Effect.never,
+          };
         }),
       )
       .pipe(Effect.map(({ result }) => result));

@@ -5,6 +5,7 @@
  *
  *   pnpm --filter @texra-ai/cli run golden:store            # build, then write
  *   pnpm --filter @texra-ai/cli run golden:store -- --no-build
+ *   pnpm --filter @texra-ai/cli run golden:store -- --twice  # and check it is stable
  *
  * It drives the real CLI, built with the internal validation model (the
  * bundle `validate-run.mjs` builds), against a temporary HOME and project
@@ -48,7 +49,7 @@
  *   rows commit in one order.
  * - `golden_script` (headless, `yolo`): a `script` call whose guest finds
  *   its read tool with `searchTools` and `describeTool`, then reads and runs
- *   one command in a `Promise.all`, then runs an agent it defines
+ *   one command, one after the other, then runs an agent it defines
  *   (`persona`), narrowed to the tools the script's run was offered.
  * - `golden_fork` (headless), then `texra resume --fork` under a PTY: the
  *   fork, whose `run.start.provenance` names its source and whose first
@@ -136,11 +137,14 @@ const PROVIDER_KEYS = [
 const args = process.argv.slice(2).filter((arg) => arg !== '--');
 const noBuild = args.includes('--no-build');
 const keep = args.includes('--keep');
+// Generate twice and fail when the two dumps differ, so a source of
+// nondeterminism shows up here and not as noise in a later fixture diff.
+const twice = args.includes('--twice');
 /** The processes a step starts, reaped however the generation ends. */
 const spawned = new Set();
-if (args.some((arg) => !['--no-build', '--keep'].includes(arg))) {
+if (args.some((arg) => !['--no-build', '--keep', '--twice'].includes(arg))) {
   console.error(
-    'usage: node scripts/generate-golden-store.mjs [--no-build] [--keep]',
+    'usage: node scripts/generate-golden-store.mjs [--no-build] [--keep] [--twice]',
   );
   process.exit(2);
 }
@@ -1368,20 +1372,38 @@ function dump(file) {
   return `${lines.join('\n')}\n`;
 }
 
+/** One generation in a fresh temporary root, normalized and dumped. */
+async function generation() {
+  const root = mkdtempSync(path.join(tmpdir(), 'texra-golden-'));
+  try {
+    const store = await generate(root);
+    const copy = path.join(root, 'golden.db');
+    const source = new DatabaseSync(store, { readOnly: true });
+    source.exec(`VACUUM INTO '${copy.replaceAll("'", "''")}'`);
+    source.close();
+    normalize(copy, root);
+    return dump(copy);
+  } finally {
+    for (const child of spawned) child.kill('SIGKILL');
+    spawned.clear();
+    if (!keep) rmSync(root, { recursive: true, force: true });
+  }
+}
+
 if (!noBuild) build();
 if (!existsSync(binaryPath)) fail(`no validation bundle at ${binaryPath}`);
-const root = mkdtempSync(path.join(tmpdir(), 'texra-golden-'));
-try {
-  const store = await generate(root);
-  const copy = path.join(root, 'golden.db');
-  const source = new DatabaseSync(store, { readOnly: true });
-  source.exec(`VACUUM INTO '${copy.replaceAll("'", "''")}'`);
-  source.close();
-  normalize(copy, root);
-  mkdirSync(path.dirname(fixturePath), { recursive: true });
-  writeFileSync(fixturePath, dump(copy));
-  console.log(`[golden-store] wrote ${path.relative(repoRoot, fixturePath)}`);
-} finally {
-  for (const child of spawned) child.kill('SIGKILL');
-  if (!keep) rmSync(root, { recursive: true, force: true });
+const text = await generation();
+if (twice) {
+  const again = await generation();
+  if (again !== text) {
+    const first = text.split('\n');
+    const second = again.split('\n');
+    const line = first.findIndex((value, i) => value !== second[i]);
+    fail(
+      `two generations differ, first at line ${line + 1}:\n${first[line]}\n${second[line]}`,
+    );
+  }
 }
+mkdirSync(path.dirname(fixturePath), { recursive: true });
+writeFileSync(fixturePath, text);
+console.log(`[golden-store] wrote ${path.relative(repoRoot, fixturePath)}`);

@@ -9,6 +9,7 @@ import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
 import { acceptedEfforts } from '../models/reasoningChoice.js';
 import { responsesConfiguration } from './responsesConfiguration.js';
+import { backgroundCapable } from '../protocol.js';
 import type { ModelConfiguration } from '../turn.js';
 import type { BindSpec } from '../node.js';
 
@@ -151,23 +152,6 @@ export function configurationFor(spec: BindSpec): ModelConfiguration {
     supportsTemperature,
     acceptedEfforts: acceptedEfforts(config),
   });
-}
-
-/**
- * Whether a configuration admits background work: Responses and Google mark
- * it, and Google retrieves a background result through server-side state.
- */
-export function backgroundCapable(configuration: ModelConfiguration): boolean {
-  switch (configuration.protocol) {
-    case 'openai-responses':
-      return configuration.background === 'supported';
-    case 'google-interactions':
-      return (
-        configuration.background === 'supported' && configuration.defaults.store
-      );
-    case 'anthropic-messages':
-      return false;
-  }
 }
 
 /** Whether the configuration takes a tool choice naming one function. */

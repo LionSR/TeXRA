@@ -151,16 +151,16 @@ const RunViewSchema = Schema.Struct({
   lastTimestamp: Schema.Number,
   conversationProgress: ConversationProgressSchema,
   /** The run's one-based turn, from its latest `run.position` (the loop
-   *  commits `state.turn + 1`; the row's `round` counts model calls, so no
-   *  surface reads it). Null before the first position and after every
-   *  activation, and null for the whole life of a run with no loop of its
-   *  own — an agent-CLI child waits through `child.park`, which carries a
-   *  phase and no position. */
+   *  commits `state.turn + 1`; the row's `round` counts model calls). Null
+   *  before the first position, after every activation, and for a run with
+   *  no loop of its own (an agent-CLI child waits through `child.park`). */
   turn: Schema.NullOr(Count),
   followUpSupport: UserFollowUpSupportSchema,
   /** Latest `context.state`. */
   context: Schema.NullOr(ContextStateDataSchema),
   parentId: Schema.NullOr(RunIdSchema),
+  /** The run that launched it (`run.start.parent`), which a detach keeps. */
+  launchParentId: Schema.NullOr(RunIdSchema),
   /** The task this one was forked from and the settled point it was cut at
    *  (`run.start.provenance`); null for a run its own launch began. */
   forkedFrom: Schema.NullOr(Schema.Struct({ id: RunIdSchema, at: Positive })),
@@ -168,7 +168,7 @@ const RunViewSchema = Schema.Struct({
    *  `halted`): the settled point a whole-task fork cuts at; null before
    *  its first turn ends, when there is nothing to fork. */
   forkPoint: Schema.NullOr(Positive),
-  /** The parent's tool card that launched this run (`run.start.parentCard`). */
+  /** The parent's tool card that launched this run (`run.start.parent.call.card`). */
   parentCard: Schema.NullOr(Schema.String),
   /** Root first. */
   ancestors: Schema.Array(

@@ -145,7 +145,7 @@ describe(
           // acknowledgement: its input ending ends it.
           if (!('started' in result)) throw new Error('resume refused');
           yield* session.followUps.closeInput(runId);
-          expect((yield* result.completion!)?.outcome).toBe('cancelled');
+          expect((yield* result.completion)?.outcome).toBe('cancelled');
         }),
     );
 
