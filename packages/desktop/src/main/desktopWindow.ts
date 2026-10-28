@@ -327,55 +327,50 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       commandRoutes.set(command, route);
     }
   }
-  const hostBridge = yield* Effect.acquireRelease(
-    Effect.sync(() =>
-      installDesktopHostBridge(window, {
-        onCommand: (message) => {
-          const named = Schema.decodeUnknownResult(DesktopCommandMessageSchema)(
-            message,
-          );
-          if (!Result.isSuccess(named)) {
-            console.warn('Dropped a renderer command with no command name');
-            return;
-          }
-          const command = named.success;
-          const route = commandRoutes.get(command.command);
-          if (!route) {
-            console.warn(`Dropped ${command.command}: no surface routes it`);
-            return;
-          }
-          // The one run site for every command's program, and its one
-          // report: a failure or defect reaches the window's async-error
-          // reporter.
-          spawn(host.reported(route(command)));
-        },
-        // A session message names its project: that project's port answers
-        // it.
-        onSession: (message) => {
-          const addressed = Schema.decodeUnknownResult(
-            SessionMessageEnvelopeSchema,
-          )(message);
-          if (!Result.isSuccess(addressed)) {
-            console.warn('Dropped a session message with no session key');
-            return;
-          }
-          const { session } = addressed.success;
-          const receive = Effect.suspend(() => {
-            const binding = bindings.get(session);
-            return binding
-              ? binding.port.receive(message)
-              : Effect.sync(() =>
-                  console.warn(
-                    `Dropped a renderer message for session ${session}: not open`,
-                  ),
-                );
-          });
-          spawn(routing(receive), { startImmediately: true });
-        },
-      }),
-    ),
-    (installed) => Effect.sync(() => installed.dispose()),
-  );
+  const hostBridge = yield* installDesktopHostBridge(window, {
+    onCommand: (message) => {
+      const named = Schema.decodeUnknownResult(DesktopCommandMessageSchema)(
+        message,
+      );
+      if (!Result.isSuccess(named)) {
+        console.warn('Dropped a renderer command with no command name');
+        return;
+      }
+      const command = named.success;
+      const route = commandRoutes.get(command.command);
+      if (!route) {
+        console.warn(`Dropped ${command.command}: no surface routes it`);
+        return;
+      }
+      // The one run site for every command's program, and its one
+      // report: a failure or defect reaches the window's async-error
+      // reporter.
+      spawn(host.reported(route(command)));
+    },
+    // A session message names its project: that project's port answers
+    // it.
+    onSession: (message) => {
+      const addressed = Schema.decodeUnknownResult(
+        SessionMessageEnvelopeSchema,
+      )(message);
+      if (!Result.isSuccess(addressed)) {
+        console.warn('Dropped a session message with no session key');
+        return;
+      }
+      const { session } = addressed.success;
+      const receive = Effect.suspend(() => {
+        const binding = bindings.get(session);
+        return binding
+          ? binding.port.receive(message)
+          : Effect.sync(() =>
+              console.warn(
+                `Dropped a renderer message for session ${session}: not open`,
+              ),
+            );
+      });
+      spawn(routing(receive), { startImmediately: true });
+    },
+  });
   host.connectRenderer(hostBridge);
   yield* reconcileLane.withPermits(1)(
     Effect.andThen(bindings.sync, surface.attach()),

@@ -22,7 +22,6 @@ import {
   supportsTerminalJobControl,
   type TuiTerminal,
 } from '@cli/tui/terminalCleanup';
-import { DisposableStore } from '@texra/platform/disposable';
 
 import {
   resetCliState,
@@ -118,11 +117,12 @@ export function createSessionExitController(
   let exitConfirmationExpiresAt = 0;
   const terminalJobControlSupported = supportsTerminalJobControl();
   let teardownPromise: Promise<void> | undefined;
-  const signalHandlers = new DisposableStore();
+  // Removers for the handlers `install` put on the process.
+  const signalHandlers: (() => void)[] = [];
   // Leaving the session: no handler may fire again, and a pending Ctrl-C
   // confirmation is void.
   const detachSignals = (): void => {
-    signalHandlers.dispose();
+    for (const remove of signalHandlers.splice(0)) remove();
     exitConfirmationExpiresAt = 0;
     clearTransientNotice();
     // The drain that follows awaits the run's stop and the store's flush. A
@@ -259,7 +259,7 @@ export function createSessionExitController(
     }
     for (const [signal, handler] of handlers) {
       process.on(signal, handler);
-      signalHandlers.add(() => process.off(signal, handler));
+      signalHandlers.push(() => process.off(signal, handler));
     }
   };
 

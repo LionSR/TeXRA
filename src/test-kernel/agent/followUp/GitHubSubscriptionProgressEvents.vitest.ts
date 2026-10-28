@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Exit, Layer, Scope } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
@@ -56,14 +56,15 @@ class RegistryTestSource {
 describe('GitHub run subscriptions', () => {
   // A disposed registry must stop every poll it started: a binding left
   // behind keeps spending the GitHub rate limit for a run that is gone.
-  it.effect('dispose releases every binding and the source-key listener', () =>
+  it.effect('closing releases every binding and the source-key listener', () =>
     Effect.gen(function* () {
       const source = new RegistryTestSource();
-      const registry = new RunSubscriptionRegistry<string, string>({
+      const scope = yield* Scope.make();
+      const registry = yield* RunSubscriptionRegistry.make<string, string>({
         name: 'test subscriptions',
         source,
         keyOf: (input) => input,
-      });
+      }).pipe(Scope.provide(scope));
 
       yield* registry
         .bind('stream-a' as RunId, 'owner/repo', {
@@ -77,7 +78,7 @@ describe('GitHub run subscriptions', () => {
         );
       expect(source.keyListenerCount()).toBe(1);
 
-      registry.dispose();
+      yield* Scope.close(scope, Exit.void);
 
       expect(source.activeKeys()).toEqual([]);
       expect(source.keyListenerCount()).toBe(0);

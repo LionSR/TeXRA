@@ -178,8 +178,6 @@ interface ExtensionHostRequests {
     port: string,
   ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices>;
   closePort(port: string): void;
-  /** Stops a recording this host owns; the take is discarded. */
-  dispose(): void;
 }
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
@@ -225,10 +223,6 @@ export function createExtensionHostRequests(
     runtime,
   } = options;
   const { roots } = records;
-  const draftRequests = options.draftRequests.attach(roots, (recording) => {
-    // Recorder notifications can arrive outside a request fiber.
-    runtime.runFork(options.snapshot.setRecording(recording));
-  });
 
   /** The native picker of each multi-file launcher list. */
   const multipleFilePickers = createFileSelectionPickers(roots);
@@ -275,6 +269,16 @@ export function createExtensionHostRequests(
   // and the view's scope ends it.
   const diffRefresh = runtime.runSync(
     FiberHandle.make().pipe(Scope.provide(options.scope)),
+  );
+  // Closing the view's scope stops a recording this host owns; the take is
+  // discarded.
+  const draftRequests = runtime.runSync(
+    options.draftRequests
+      .attach(roots, (recording) => {
+        // Recorder notifications can arrive outside a request fiber.
+        runtime.runFork(options.snapshot.setRecording(recording));
+      })
+      .pipe(Scope.provide(options.scope)),
   );
   /** A file action that schedules a PDF viewer opens it in the view's
    *  scope, so a close of the view cancels a delayed open. */
@@ -734,6 +738,5 @@ export function createExtensionHostRequests(
     handleHostRequest: (request, port) =>
       withSessionFs(roots, dispatch(request, port)),
     closePort: draftRequests.closePort,
-    dispose: draftRequests.dispose,
   };
 }

@@ -123,7 +123,8 @@ class SurfacePlacementFailed extends Schema.TaggedError<SurfacePlacementFailed>(
 /** One transport port: a VS Code webview attached to the bridge. */
 interface Port {
   readonly attached: AttachedPort;
-  readonly disposables: vscode.Disposable[];
+  /** The webview's listeners and its page render, closed with the port. */
+  readonly scope: Scope.Closeable;
 }
 
 /** The window's session: the service's, or, when the service could not be
@@ -374,12 +375,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
       refreshApiKeyStatus: this.refreshApiKeyStatus,
     });
-    this.runtime.runSync(
-      Scope.addFinalizer(
-        this.scope,
-        Effect.sync(() => hostRequests.dispose()),
-      ),
-    );
     this.runValidated = hostRequests.runValidated;
 
     // Attached for the window's life, before the first run of this window
@@ -727,19 +722,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // The slot is VS Code's own synchronous entry: it hands back a resolved
     // view, so the attachment settles here.
     this.sidebarPort = this.runtime.runSync(
-      this.attach('sidebar', webviewView),
-    );
-    this.sidebarPort.disposables.push(
-      webviewView.onDidDispose(() => {
-        this.closeSidebarPort();
+      this.attach('sidebar', webviewView, () => {
+        this.sidebarPort = undefined;
         this.sidebarView = undefined;
       }),
     );
   }
 
+  /** Attach `view` as a port; when VS Code disposes the view, the port
+   *  closes and `onDisposed` runs. */
   private attach(
     id: 'sidebar' | 'editor',
     view: vscode.WebviewView | vscode.WebviewPanel,
+    onDisposed: () => void,
   ): Effect.Effect<Port, SurfacePlacementFailed, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       // The post starts synchronously inside runFork, so sends keep their order.
@@ -777,18 +772,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       );
       // The template is read off this tick (it never fails: a failed render
       // is a logged error page); a port closed before it lands paints nothing,
-      // because closing the port interrupts the render.
-      const portScope = yield* Scope.make();
-      const disposables: vscode.Disposable[] = [
-        view.webview.onDidReceiveMessage((message) => {
-          this.runtime.runFork(attached.receive(message));
-        }),
-        {
-          dispose: () => {
-            this.runtime.runFork(Scope.close(portScope, Exit.void));
-          },
-        },
-      ];
+      // because closing the port interrupts the render. The listeners are
+      // registered after the render, so closing removes them first.
+      const port: Port = { attached, scope: yield* Scope.make() };
       yield* Effect.forkIn(
         this.contentProvider
           .getHtmlContent(view.webview, {
@@ -802,15 +788,28 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               }),
             ),
           ),
-        portScope,
+        port.scope,
       );
-      return { attached, disposables };
+      for (const listener of [
+        view.onDidDispose(() => {
+          this.closePort(port);
+          onDisposed();
+        }),
+        view.webview.onDidReceiveMessage((message) => {
+          this.runtime.runFork(attached.receive(message));
+        }),
+      ])
+        yield* Scope.addFinalizer(
+          port.scope,
+          Effect.sync(() => listener.dispose()),
+        );
+      return port;
     });
   }
 
   private closePort(port: Port | undefined): void {
     if (!port) return;
-    for (const disposable of port.disposables) disposable.dispose();
+    this.runtime.runFork(Scope.close(port.scope, Exit.void));
     this.runtime.runFork(port.attached.close);
   }
 
@@ -960,14 +959,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         },
       );
       panel.iconPath = new vscode.ThemeIcon('pulse');
-      const port = yield* this.attach('editor', panel);
+      const port = yield* this.attach('editor', panel, () => {
+        this.editor = undefined;
+      });
       this.editor = { panel, port };
-      port.disposables.push(
-        panel.onDidDispose(() => {
-          this.closePort(port);
-          this.editor = undefined;
-        }),
-      );
     });
   }
 
