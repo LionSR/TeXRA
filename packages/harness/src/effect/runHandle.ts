@@ -100,10 +100,9 @@ const traceHandover = Effect.fn('runHandle.traceHandover')(
           release();
           // A successful run nobody read keeps nothing: what it buffered
           // goes with it, and a later reader replays the trace.
-          if (!claimed && Exit.isSuccess(exit)) {
-            whole = false;
-            yield* Effect.orDie(Queue.clear(trace));
-          }
+          if (!claimed && Exit.isSuccess(exit)) whole = false;
+          // A buffer no reader can take any more holds nothing.
+          if (!claimed && !whole) yield* Effect.orDie(Queue.clear(trace));
           if (Exit.isFailure(exit)) yield* Queue.failCause(trace, exit.cause);
           else yield* Queue.end(trace);
         }),
@@ -274,7 +273,9 @@ export function handOver(
           runId,
           result,
           view,
-          events: trace.events(replayTrace(session.view.inputs, runId, result)),
+          events: trace.events(
+            replayTrace(session.view.inputs, runId, result, session.log),
+          ),
           interrupt: Effect.suspend(() =>
             !joined && interruptLaunch()
               ? Effect.void

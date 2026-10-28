@@ -517,10 +517,14 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         ),
         Stream.haltWhen(Effect.exit(result)),
       ),
+      // The service's rows, through the watch. `result` answers only once
+      // this window's view shows the run's end, so its cursor is a commit
+      // past every row the run wrote.
       events: replayTrace(
         (set, cursor, debug) => watch(set, { cursor, debug }),
         runId,
         result,
+        { settled: Effect.void, now: () => graph.view.current().cursor },
       ),
       interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
         Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),

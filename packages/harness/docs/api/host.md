@@ -2070,16 +2070,12 @@ const registerCustomAgentRoot: Effect<void, never, FileSystem | GlobalStorageFs 
 
 ## replayTrace
 
-A run's trace read back from its session's view inputs:
-the trace rows of its latest activation, then each as it commits, until
-its `run.end`; then `result`'s failure, if it fails. For a reader that
-comes after a run's buffered trace is gone, a second reader, or a window
-whose run another process runs.
-
-A stream's text arrives as chunks as the session sees it. A stream that
-ends with text no chunk carried, because it streamed before the reader
-came, gets that text as one chunk before its `stream.end`, so a reader's
-chunks always add up to each stream's final text.
+A run's trace read back from its session's view inputs, for a reader its
+in-memory trace cannot serve: the rows of its latest activation, then each
+as it commits, until its `run.end` (or, with none stored, every row
+committed when the run was over: `store`); then `result`'s failure. A
+stream that ended before the reader came arrives as one chunk of its final
+text, so a reader's chunks always add up to each stream's final text.
 
 ```ts
 function replayTrace<E>(
@@ -2092,6 +2088,11 @@ function replayTrace<E>(
   ) => Stream.Stream<readonly SessionViewInput[]>,
   runId: RunId,
   result: Effect.Effect<unknown, E>,
+  /** `settled`: every write enqueued so far is committed; `now()`: the head. */
+  store: {
+    readonly settled: Effect.Effect<void>;
+    readonly now: () => CommitOrdinal;
+  },
 ): Stream.Stream<AgentEvent, E>
 ```
 
