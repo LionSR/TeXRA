@@ -292,14 +292,16 @@ const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
         ? `This ${noun} has no conversation to compact.`
         : `Resume the ${noun} to switch its model.`,
     );
-  const action =
-    req.kind === 'run.model'
-      ? controls.switchModel(req.model)
-      : controls.requestImmediateCompaction();
-  return yield* action.pipe(
-    Effect.mapError((error) => unavailable(error.message)),
-    Effect.as(done),
-  );
+  const failed = Effect.mapError((error: Error) => unavailable(error.message));
+  if (req.kind === 'run.model')
+    return yield* controls.switchModel(req.model).pipe(failed, Effect.as(done));
+  // A `/compact` queues on the run's input; the live loop answers it.
+  const control = { kind: 'compact' } as const;
+  const item = { text: '/compact', from: { kind: 'user' }, control } as const;
+  const sent = yield* deps.session().followUps.send(runId, item).pipe(failed);
+  return sent.kind === 'refused'
+    ? yield* unavailable('This conversation takes no more input.')
+    : done;
 });
 
 /** Delete the admitted lifetime after acquiring its inactive run slot. */

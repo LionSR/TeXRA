@@ -29,6 +29,10 @@ export type FollowUpBatch =
     }
   | { readonly kind: 'synthetic'; readonly text: string };
 
+/** A `/compact` is pending: it wakes an idle run. */
+const compacting = (rows: readonly QueuedFollowUp[]): boolean =>
+  rows.some((f) => f.control?.kind === 'compact');
+
 /**
  * One generation's reader over the run's pending rows: a row an earlier
  * process left queued and one sent while this generation runs arrive the
@@ -64,32 +68,30 @@ export class RunInput {
     Latch.openUnsafe(this.signal);
   }
 
-  /** A `/compact` is pending: it wakes an idle run. */
-  private readonly compacting: Effect.Effect<boolean> = Effect.suspend(() =>
-    Effect.map(this.controls, (controls) =>
-      controls.some((f) => f.control?.kind === 'compact'),
-    ),
-  );
+  /** The messages in `rows` readable at `at`, with the stale notices. */
+  private batch(
+    rows: readonly QueuedFollowUp[],
+    at: InputPoint,
+  ): Extract<FollowUpBatch, { kind: 'followUps' }> | null {
+    const followUps = readableMessages(rows, at, this.run);
+    const stale = staleNotices(rows, this.run);
+    return followUps.length > 0 || stale.length > 0
+      ? { kind: 'followUps', followUps, stale }
+      : null;
+  }
 
   /** The messages readable at `at`, when there are any; nothing is taken. */
   readonly read = (
     at: InputPoint,
   ): Effect.Effect<Extract<FollowUpBatch, { kind: 'followUps' }> | null> =>
-    Effect.map(this.queued, (rows) => {
-      const followUps = readableMessages(rows, at, this.run);
-      const stale = staleNotices(rows, this.run);
-      return followUps.length > 0 || stale.length > 0
-        ? ({ kind: 'followUps', followUps, stale } as const)
-        : null;
-    });
+    Effect.map(this.queued, (rows) => this.batch(rows, at));
 
   /** Whether `next` would return now: a message readable at `at`, or a
    *  `/compact`. */
   readonly hasPending = (at: InputPoint): Effect.Effect<boolean> =>
-    Effect.zipWith(
-      this.compacting,
-      this.read(at),
-      (compacting, batch) => compacting || batch !== null,
+    Effect.map(
+      this.queued,
+      (rows) => compacting(rows) || this.batch(rows, at) !== null,
     );
 
   /** End the generation: what is pending stays queued on the run's rows. */
@@ -106,9 +108,10 @@ export class RunInput {
         if (this.ended) return null;
         // Closed before the read: a signal landing after it reopens the wait.
         Latch.closeUnsafe(this.signal);
-        const batch = yield* this.read(at);
+        const rows = yield* this.queued;
+        const batch = this.batch(rows, at);
         if (batch !== null) return batch;
-        if (yield* this.compacting)
+        if (compacting(rows))
           return { kind: 'synthetic', text: COMPACTION_REQUEST } as const;
         yield* this.signal.await;
       }
