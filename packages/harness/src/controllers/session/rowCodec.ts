@@ -141,7 +141,7 @@ function rowUpcasts({ commit, type, version: stored }: typeof RowSchema.Type) {
   const at = stored ?? version;
   if (at > version) return new DatabaseStoreNewer({ type, version: at });
   if (at < readableFrom(type)) return new DatabaseRowEarlier({ commit, type });
-  return upcast.slice(at - 1);
+  return upcast.slice(at - readableFrom(type));
 }
 
 /** Whether `decodeRow` parses this row's data (a kind and version this
@@ -325,9 +325,9 @@ export function decodeRow(
   if (Result.isFailure(arm)) return Result.fail(arm.failure);
   if (arm.success === undefined)
     return Result.succeed({ _tag: 'leftOut', kind: name });
-  let value = event.value;
-  for (const step of arm.success.upcasters.slice(event.version - 1))
-    value = step(value);
+  const value = arm.success.upcasters
+    .slice(event.version - pluginFactFloor(arm.success))
+    .reduce((current, step) => step(current), event.value);
   const checked = Schema.decodeUnknownResult(arm.success.schema)(value);
   if (Result.isFailure(checked))
     return corrupt(checked.failure, `plugin.fact/${name}`);
