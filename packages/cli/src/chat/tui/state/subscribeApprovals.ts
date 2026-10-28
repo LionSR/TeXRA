@@ -16,7 +16,13 @@
 import { Cause, Effect } from 'effect';
 
 import { providerDisplayName } from '@texra-ai/llm';
-import { withLogChannel, type HostInteractions } from '@texra-ai/harness/host';
+import {
+  followPendingRequests,
+  withLogChannel,
+  type HostInteractions,
+  type ProcessRuntime,
+  type SettingsStores,
+} from '@texra-ai/harness/host';
 import {
   toErrorMessage,
   type PendingRequest,
@@ -26,7 +32,6 @@ import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import { followPendingRequests } from '@texra/controllers/session/followPendingRequests';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
   ApiKeyPromptFailed,
@@ -47,7 +52,6 @@ import {
 } from './approvalQueue';
 import { appendLocalNotice } from './transcript';
 import type { Session } from '@texra-ai/harness';
-import type { ProcessRuntime, SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * What this host holds for its lifetime: the session its denial notices read
@@ -266,9 +270,12 @@ export function createTuiHostInteractions(
     Effect.scoped(
       followPendingRequests(
         stores.requests.view,
-        (request): request is StagedRequest =>
-          request.payload.kind === 'retry' ||
-          request.payload.kind === 'toolEdit',
+        (view) =>
+          view.requests.filter(
+            (request): request is StagedRequest =>
+              request.payload.kind === 'retry' ||
+              request.payload.kind === 'toolEdit',
+          ),
         stage,
       ),
     ),

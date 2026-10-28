@@ -32,14 +32,13 @@ import {
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
-import { withLogChannel } from '@texra-ai/harness/host';
+import { followPendingRequests, withLogChannel } from '@texra-ai/harness/host';
 import {
   toErrorMessage,
   type PendingRequest,
   type ToolEditContent,
   type ToolEditPermission,
 } from '@texra-ai/harness/schemas';
-import { followPendingRequests } from '@texra/controllers/session/followPendingRequests';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
@@ -130,14 +129,17 @@ export class ToolEditApprovalController {
   /** Stage every pending tool edit the session lists, until interrupted. */
   get follow(): Effect.Effect<void, never, PreviewServices> {
     return Effect.scoped(
-      followPendingRequests(this.options.session.view, isToolEdit, (pending) =>
-        Effect.scoped(this.stage(pending)).pipe(
-          Effect.catchCause((cause) =>
-            Cause.hasInterruptsOnly(cause)
-              ? Effect.interrupt
-              : this.report(cause).pipe(Effect.andThen(Effect.never)),
+      followPendingRequests(
+        this.options.session.view,
+        (view) => view.requests.filter(isToolEdit),
+        (pending) =>
+          Effect.scoped(this.stage(pending)).pipe(
+            Effect.catchCause((cause) =>
+              Cause.hasInterruptsOnly(cause)
+                ? Effect.interrupt
+                : this.report(cause).pipe(Effect.andThen(Effect.never)),
+            ),
           ),
-        ),
       ),
     );
   }

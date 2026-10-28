@@ -11,7 +11,11 @@
  */
 import { Effect, Result } from 'effect';
 
-import { withLogChannel, type HostInteractions } from '@texra-ai/harness/host';
+import {
+  followPendingRequests,
+  withLogChannel,
+  type HostInteractions,
+} from '@texra-ai/harness/host';
 import {
   type RequestDecision,
   approvalPolicyDenialMessage,
@@ -23,7 +27,6 @@ import {
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { followPendingRequests } from '@texra/controllers/session/followPendingRequests';
 import {
   type CliApprovalContent,
   type CliApprovalPromptHooks,
@@ -279,8 +282,10 @@ export function createHeadlessCliHostInteractions(
     Effect.forkScoped(
       followPendingRequests(
         session.view,
-        (pending): pending is AnswerableRequest =>
-          requestParksItsCaller(pending.payload),
+        (view) =>
+          view.requests.filter((pending): pending is AnswerableRequest =>
+            requestParksItsCaller(pending.payload),
+          ),
         (pending) =>
           answer(pending.runId, pending.payload).pipe(
             Effect.catchCause((cause) =>
