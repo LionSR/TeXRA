@@ -86,6 +86,7 @@ import {
   resetSettingsState,
   selectedPanel,
   selectedSections,
+  selectSettingsPage,
   settingSignal,
   skillLoadIssues,
   skillsList,
@@ -154,13 +155,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     entry: SettingsNavEntry,
     section?: SettingsSectionName,
   ): void {
-    selectedPanel.set(entry.panel);
-    if (section) {
-      selectedSections.set({
-        ...selectedSections.get(),
-        [entry.panel]: section,
-      });
-    }
+    selectSettingsPage(entry.panel, section);
     requestAnimationFrame(() => {
       const panel =
         this.shadowRoot?.querySelector<HTMLElement>('.settings-panel');

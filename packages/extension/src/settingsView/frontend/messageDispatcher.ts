@@ -34,8 +34,7 @@ import {
   preferShortModelNames,
   prSubscriptions,
   providerKeyStatuses,
-  selectedPanel,
-  selectedSections,
+  selectSettingsPage,
   skillLoadIssues,
   skillsList,
   subscriptionAuth,
@@ -52,9 +51,7 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
       SettingsTabPanelName,
       SettingsSectionName?,
     ];
-    selectedPanel.set(page);
-    if (section)
-      selectedSections.set({ ...selectedSections.get(), [page]: section });
+    selectSettingsPage(page, section);
   },
 
   // Memory.

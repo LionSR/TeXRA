@@ -9,7 +9,8 @@
  * only by the `settingsViewHandlers` registry (see `messageDispatcher.ts`)
  * in response to backend SETTINGS_VIEW_COMMANDS messages — the
  * backend configuration is the actual source of truth, this file is a pure
- * receiver.
+ * receiver. The one exception is the page shown, which the user's navigation
+ * also selects, through the same `selectSettingsPage`.
  *
  * Singleton scope: only one Settings view per webview/page. If we ever need
  * multiple independent settings instances on the same page, this file must be
@@ -148,6 +149,17 @@ export const selectedPanel = trackedSignal<SettingsTabPanelName>(
 export const selectedSections = trackedSignal<{
   readonly [P in SettingsTabPanelName]?: SettingsSectionName<P>;
 }>(() => ({}));
+
+/** Show a page, on `section` when one is named, else where it was left.
+ *  The host's tab push and the user's click both land here. */
+export function selectSettingsPage(
+  page: SettingsTabPanelName,
+  section?: SettingsSectionName,
+): void {
+  selectedPanel.set(page);
+  if (section)
+    selectedSections.set({ ...selectedSections.get(), [page]: section });
+}
 
 // ---------------------------------------------------------------------------
 // Memory state
