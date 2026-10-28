@@ -11,6 +11,7 @@ ruling and argues against it explicitly.
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | Settled questions, all topics             | [architecture rulings ledger](./implemented/architecture/2026-08-01-architecture-rulings-ledger.md)                   |
 | Core concepts, owners and Effect layering | [core concepts](./implemented/architecture/2026-09-26-core-concepts.md)                                               |
+| Harness 1.0 release requirements          | [Harness 1.0 发布 PRD](./proposed/architecture/2026-10-28-harness-1-release-prd.md)                                   |
 | The harness as a general package          | [harness general-package design](./proposed/architecture/2026-10-21-harness-general-package-design.md)                |
 | The harness / app / llm package split     | [harness package split](./implemented/architecture/2026-10-02-harness-package-split.md)                               |
 | Durable runs: replay, fork, compaction    | [durable harness](./implemented/architecture/2026-10-02-durable-harness.md)                                           |
