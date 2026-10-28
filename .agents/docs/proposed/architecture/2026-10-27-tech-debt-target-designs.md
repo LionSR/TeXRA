@@ -551,8 +551,8 @@ rows on interrupt too is the optional D2.
 ## Progress and corrections (2026-10-28)
 
 Landed since this note: #14364 (L2 to L5, H1 to H5, S1, S3 to S5, V1 to V7,
-M3 to M5, T2, T5) and, after it, #14368, #14371 and #14373. Open: #14367,
-#14369, #14370 and #14372.
+M3 to M5, T2, T5) and, after it, #14368, #14370, #14371, #14373 and #14375.
+Open: #14367, #14369 and #14372.
 
 - **Liveness, in process (§1):** done by #14373. The registry entry holds the
   run's controls and `LiveRun.launched` (an open activation) is the one
@@ -581,7 +581,7 @@ M3 to M5, T2, T5) and, after it, #14368, #14371 and #14373. Open: #14367,
   write function plus a host binding used only for that key; #14370 moves it
   to each host's caller. The `invalidatesModelOptions` reactions per host stay
   as they are, which is the intended split.
-- **D5:** done, but `packages/harness/example/_support.ts` still writes the old
+- **D5:** done; #14375 deleted the examples' last write of the old
   `polishModel` key.
 - **V9:** see the general-package design's 2026-10-28 re-check: of the 487
   names on `./host` and `./schemas`, the forgotten-exports rule keeps all but

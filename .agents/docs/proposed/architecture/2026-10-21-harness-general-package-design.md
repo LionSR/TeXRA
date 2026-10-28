@@ -335,7 +335,8 @@ items needs code; one guard does:
   only the vendor that issued it accepts. Its refusal text says "conversation
   format" for both cases.
 
-`wakeAt` and `deferred` are features, not fixes, and move to lane 5.
+A timed wake (now the timed follow-up, see the 2026-10-28 re-check) and
+`deferred` are features, not fixes, and move to lane 5.
 
 ### Re-check (2026-10-28, at `5d6fd81`)
 
@@ -343,12 +344,13 @@ A measured comparison against pi-durable 1.4.0 and DeepSeek Harness 0.2.2
 re-read the surface and the ports. Where it changes this design:
 
 - **Lane 1, the doors.** The root entry is 48 names (#14337) and no app or host
-  `src/` file imports a harness internal. Four tooling and test files outside
-  `src/` still do (`packages/cli/scripts/tui-harness.tsx`,
+  `src/` file imports a harness internal. Five tooling and test files outside
+  `src/` still do (`packages/cli/scripts/{tui-harness.tsx,service-host-harness.ts}`,
   `packages/desktop/design-harness/scenes/{desktop,extension}.ts`,
-  `packages/desktop/tests/e2e/sessionLifecycle.spec.ts`). `./schemas` is
-  already a named list in `schemas.ts`; the 46 `export *` lines are the
-  internal barrel `shared/schemas/index.ts`, which nothing outside the harness
+  `packages/desktop/tests/e2e/sessionLifecycle.spec.ts`); those that import
+  `@shared/schemas` reach the internal barrel through the alias. `./schemas` is
+  already a named list in `schemas.ts`; the 46 `export *` lines are that
+  internal barrel, `shared/schemas/index.ts`, which no app or host `src/` file
   reaches. Naming its 367 exports, or importing leaves instead, adds about 519
   import lines, so the barrel stays. Of the 487 names on `./host` and
   `./schemas`, 114 have no consumer outside the harness, but the
@@ -356,8 +358,9 @@ re-read the surface and the ports. Where it changes this design:
   them; #14371 removed five of the six that were free. Shrinking further means
   narrowing the root signatures (the run-lifecycle work in the 1.0 PRD) or
   moving app vocabulary: the team launch code in `common/teams/TeamPlan.ts`
-  (about 218 lines, 15 `./host` names) and the picker wire types in
-  `shared/schemas/pickerOptions.ts` (7 `./schemas` names).
+  (its lines 111-328, which would free 15 `./host` names) and the picker wire
+  types in `shared/schemas/pickerOptions.ts` (lines 82-150, which would free 7
+  of the 10 `./schemas` names the file contributes).
 - **Lane 3, vocabulary.** #14364 made the namespace data and moved the
   presets, the LaTeX prompt, the TeX paths and the validation model to the app.
   #14369 replaces `ITool.unavailableHosts` with the host-capability check and
@@ -441,7 +444,7 @@ fold. Putting the other built-ins on `ToolContext` stays part of the fence.
   extends the root `tsconfig.json`.
 - **`./host`** is smaller but nothing forces it to shrink. Its api-report diff
   is the only check.
-- **`wakeAt`** is free only before the freeze.
+- **The timed follow-up's `notBefore`** is free only before the freeze.
 - Non-goals: a second dialect, third-party code in process, a daemon, request or
   task kinds, in-process hooks, and cross-protocol history conversion. A model
   switch across protocols is refused early.
