@@ -146,9 +146,21 @@ exist), so they need no upcaster.
   The top-level `parentCard` is dropped. The card is not redundant with
   the call id, because providers may reuse a call id (`SelfTool.ts:95-99`).
   `RegisterRunOptions` takes one `parentCall`.
-- If D4 is accepted: `followup.queued` v3 and `log` v3 store
+- D4 (landed): `followup.queued` v3 and `log` v3 store
   `media: { name, mimeType, digest }[]` in place of `mediaFiles` paths.
   #14258 found no row carrying base64, so it can close as not planned.
+  `run.config.mediaFiles` stays a path list, and that is not a second
+  media reference. Like `inputFiles` it is a launch input. The opening
+  reads it once and commits the bytes by digest in its `append`, so the
+  run's history never reads media through it. Its later readers (output
+  pairing, figure mirroring, the `MEDIA` template, Run again, chat
+  export, document-task revisions) need the path itself. What remains is
+  that Run again or a revision after the pasted-file sweep fails loudly
+  with "File not found". Making Run again survive that needs the launcher
+  to hold stored media (the follow-up composer's pattern) across the
+  three hosts. Before document tasks could pass a launch's media by
+  address, the owner must decide how PDFs reach models without native
+  PDF support: today the opening rasterizes them from the file on disk.
 
 **Golden store (#14260).** The race is in the guest script, not the
 generator. `GOLDEN_SCRIPT_SOURCE` (`run/validationModel.ts:62`) runs
