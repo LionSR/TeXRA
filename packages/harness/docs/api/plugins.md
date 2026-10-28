@@ -613,7 +613,7 @@ Why a submission could not be admitted, worded for the user by
 {@link presentFollowUpResult}: a resume's refusal (`ResumeRefusal`; a
 message to a run with no loop here is admitted only as a resume would be,
 and `not_resumable` there also covers a closed input, a disposed session,
-or a message that is not the user's own), or one of the message's alone:
+or a message that does not wake the run), or one of the message's alone:
 
 - `read_failed`: the run's claim or state could not be read just now
   (a busy or failing store), which says nothing about the run itself.
