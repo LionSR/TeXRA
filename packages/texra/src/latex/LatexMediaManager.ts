@@ -1,6 +1,6 @@
 // Node imports
 import * as path from 'node:path';
-import { hasExtension, pathToLocationIn } from '@texra-ai/harness';
+import { hasExtension, pathToLocationIn } from '@texra-ai/harness/host';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { absentReason } from '@texra-ai/harness/node';
 
@@ -17,7 +17,8 @@ import { extractFigurePathsFromLatex } from './extractFigure';
 import { resolveLatexDir } from './latexParsingUtils';
 import { TikzPictureManager } from './TikzPictureManager';
 import { compileLatex2Pdf } from './texTools';
-import type { WorkspaceFs, WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceFs } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** LaTeX project siblings that should always ride alongside the main file. */

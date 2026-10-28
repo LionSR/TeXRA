@@ -19,7 +19,7 @@ import { Effect } from 'effect';
  */
 
 // Local imports - agent
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 
 // Local imports - shared
 import {

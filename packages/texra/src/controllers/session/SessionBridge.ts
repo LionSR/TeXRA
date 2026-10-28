@@ -44,8 +44,8 @@ import {
   Internal,
   isRequestRefusal,
   type Session,
-  withLogChannel,
 } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import {
   Invalid,
   RequestErrorSchema,
@@ -62,7 +62,7 @@ import {
   type SurfaceActionMessage,
 } from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 const CHANNEL = 'SessionBridge';
 

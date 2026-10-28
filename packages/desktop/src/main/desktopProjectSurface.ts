@@ -24,7 +24,7 @@ import type {
   ProcessRuntime,
   ProcessServices,
   PlatformSecrets,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { DesktopPromptController } from './desktopPromptController.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';

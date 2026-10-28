@@ -31,7 +31,7 @@ import {
   type ReadonlyRoundIndexed,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
-import type { AggregateId } from '@texra-ai/harness';
+import type { AggregateId } from '@texra-ai/harness/host';
 import type { RunView, AgentConfig } from '@texra-ai/harness/schemas';
 import type { AgentBlock } from '@texra-ai/harness/plugins';
 

@@ -24,7 +24,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem, SynchronizedRef } from 'effect';
 import which from 'which';
 
-import { withLogChannel, isModuleNotFoundError } from '@texra-ai/harness';
+import { withLogChannel, isModuleNotFoundError } from '@texra-ai/harness/host';
 import { executeCommand, withExtendedPath } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

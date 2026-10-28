@@ -22,7 +22,7 @@
  */
 
 import * as path from 'node:path';
-import { Settings } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness/host';
 
 import { Effect, type FileSystem } from 'effect';
 
@@ -36,7 +36,7 @@ import {
   resolvePackageDir,
 } from '@texra/tools/support/externalBinaryUtils';
 import type { SandboxMode } from '@openai/codex-sdk';
-import type { StateReadFailed, SettingsStores } from '@texra-ai/harness';
+import type { StateReadFailed, SettingsStores } from '@texra-ai/harness/host';
 
 type PlatformInfo = { pkg: string; triple: string };
 

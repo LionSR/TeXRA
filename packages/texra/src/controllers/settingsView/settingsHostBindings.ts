@@ -5,7 +5,7 @@
  */
 import { Cause, Effect } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { formatError } from '@texra-ai/harness/schemas';
 import type {
   ExternalOpener,
@@ -16,7 +16,7 @@ import type {
 import type { LatexEditorStatus } from '@texra/controllers/settingsView/LatexToolingController';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { SettingsViewOutboundMessage } from '@texra/shared/settingsView/settingsViewMessages';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;

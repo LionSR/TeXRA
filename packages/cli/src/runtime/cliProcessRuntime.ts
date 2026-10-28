@@ -41,16 +41,16 @@ import {
   Stream,
 } from 'effect';
 
+import { Sessions } from '@texra-ai/harness';
 import {
   AgentDirectories,
   AppState,
   AgentDirectoryService,
   processLayer,
-  Sessions,
   StateWriteFailed,
   type ProcessServices,
   type StateStore,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import { GlobalDatabase } from '@texra-ai/harness/node';
 import { usageLogLayer } from '@telemetry/UsageLogService';

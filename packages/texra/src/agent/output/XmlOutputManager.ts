@@ -5,7 +5,7 @@ import { entryTypeIn } from '@texra-ai/harness/node';
 
 import { Effect, FileSystem } from 'effect';
 
-import { createExternalLocation } from '@texra-ai/harness';
+import { createExternalLocation } from '@texra-ai/harness/host';
 import {
   toErrorMessage,
   fileLocationDisplayPath,
@@ -39,7 +39,7 @@ import {
 } from './extraction/filenameHeaders';
 import { reportMissingOutputs, type OutputState } from './outputState';
 import type { AgentTrace } from '@texra-ai/harness/plugins';
-import type { ConfigProvider } from '@texra-ai/harness';
+import type { ConfigProvider } from '@texra-ai/harness/host';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** Delete any pre-staged symlink before writing so the write never follows the link into the immutable snapshot. */

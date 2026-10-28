@@ -17,13 +17,12 @@ import {
 } from 'effect';
 
 // Local imports
+import { Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import {
   AppState,
   processLayer,
-  Sessions,
   type ProcessRuntime,
   type GlobalValues,
-  WorkspaceRoots,
   ToolMissingHandler,
   withProcessServices,
   StateStores,
@@ -31,7 +30,7 @@ import {
   setLogSink,
   ToolAvailability,
   Settings,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
   createNodeWorkspaceRoots,

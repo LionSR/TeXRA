@@ -21,10 +21,8 @@ import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 
-import type {
-  HostRequestFailure,
-  ToolEditApprovalRequest,
-} from '@texra-ai/harness';
+import type { HostRequestFailure } from '@texra-ai/harness';
+import type { ToolEditApprovalRequest } from '@texra-ai/harness/host';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopSpawn } from './desktopWindows.js';

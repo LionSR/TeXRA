@@ -14,7 +14,7 @@ import {
   buildDiffHunks,
   withLogChannel,
   isPathWithin,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import {
   readNormalizedFile,

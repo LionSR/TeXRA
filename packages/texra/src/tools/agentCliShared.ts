@@ -5,11 +5,9 @@
 import { Effect, Schema, type Context } from 'effect';
 
 // Local imports
-import {
-  presentFollowUpResult,
-  ToolContext,
-  type ToolResult,
-} from '@texra-ai/harness';
+import { type ToolResult } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
+import { presentFollowUpResult } from '@texra-ai/harness/host';
 import {
   ChildRuns,
   requireRun,
@@ -35,7 +33,7 @@ import type {
   AgentCliSessionEntry,
   AgentCliSessionRegistry,
 } from './agentCliSessionRegistry';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * The tool cards one streamed agent-CLI turn opens, keyed by the id its SDK

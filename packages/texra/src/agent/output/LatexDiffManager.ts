@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { createRunStorageLocation, Settings } from '@texra-ai/harness';
+import { createRunStorageLocation, Settings } from '@texra-ai/harness/host';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import {
@@ -40,7 +40,8 @@ import {
 } from './compileCheck';
 import { recoverOutputFailure } from './outputOperations';
 import type { AgentTrace } from '@texra-ai/harness/plugins';
-import type { WorkspaceFs, WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceFs } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** The services a diff pass checks, runs and records on. */

@@ -12,7 +12,7 @@ import * as path from 'node:path';
 import { Effect, type FileSystem, type PlatformError } from 'effect';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import type {
   ExternalOpenFailed,
@@ -21,7 +21,8 @@ import type {
 } from '@texra/hosts/uiHosts';
 import type { ChatExportInputUnreadable } from '@texra/agent/export/loadChatExportInput';
 import type { TaskRecordsFailed } from '@texra/controllers/server/protocol';
-import type { Rejected, StorageFs, WorkspaceFs } from '@texra-ai/harness';
+import type { Rejected } from '@texra-ai/harness';
+import type { StorageFs, WorkspaceFs } from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { TranscriptExportFailed } from './transcriptExportFailure';

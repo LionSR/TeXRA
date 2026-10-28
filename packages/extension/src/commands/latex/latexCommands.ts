@@ -3,7 +3,7 @@ import { Effect, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import {
@@ -21,7 +21,8 @@ import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
-import type { ProcessServices, WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 export function handleFixCompilation(
   roots: WorkspaceRoots,

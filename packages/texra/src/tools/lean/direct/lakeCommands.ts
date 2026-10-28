@@ -8,7 +8,7 @@
  */
 
 import * as path from 'node:path';
-import { type PerKeyLane, withPerKeyLane } from '@texra-ai/harness';
+import { type PerKeyLane, withPerKeyLane } from '@texra-ai/harness/host';
 
 import { Effect } from 'effect';
 

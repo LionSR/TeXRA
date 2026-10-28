@@ -11,13 +11,15 @@ import {
   serializeFilteredConfig,
 } from '@texra-ai/harness/schemas';
 import {
-  listRunGeneratedFiles,
   type AgentRunListingEntry,
   type LocalSession,
-  type RunGeneratedFile,
   type RunResult,
   type SessionOpenError,
 } from '@texra-ai/harness';
+import {
+  listRunGeneratedFiles,
+  type RunGeneratedFile,
+} from '@texra-ai/harness/host';
 import { absentReason } from '@texra-ai/harness/node';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';

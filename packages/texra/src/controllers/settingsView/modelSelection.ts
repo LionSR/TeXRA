@@ -12,7 +12,7 @@ import {
   type ModelOption,
   type PlatformSecrets,
   Settings,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
@@ -25,7 +25,7 @@ import {
   isFastFirstResponseModel,
 } from '@texra/shared/model/modelPicker';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 /** Membership form of the order the Models tab groups by. */
 const MODEL_SELECTION_SOURCES = new Set<string>(MODEL_SOURCE_ORDER);

@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path';
 import { Effect, FileSystem, type Path, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
-import { withSessionFs } from '@texra-ai/harness';
+import { withSessionFs } from '@texra-ai/harness/host';
 import { executeCommand } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { generatePastedImageName } from '@texra/utils/files/pastedImageName';

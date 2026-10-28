@@ -8,7 +8,7 @@ import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
   resolveTeamLaunch,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { resolveCliRunAgent } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
@@ -33,7 +33,7 @@ import {
   CHAT_API_MODE_MODEL_RECOVERY,
   type SlashCommandContext,
 } from './slashContext';
-import type { WorkspaceAgentsStores } from '@texra-ai/harness';
+import type { WorkspaceAgentsStores } from '@texra-ai/harness/host';
 
 /** Resolve the chat root agent once: the entry the run pins, or the refusal. */
 export function resolveChatToolUseAgent(

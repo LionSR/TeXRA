@@ -1,6 +1,7 @@
 import { Context, Effect, type Layer, ManagedRuntime } from 'effect';
 
-import { processLayer, Sessions } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/harness';
+import { processLayer } from '@texra-ai/harness/host';
 import {
   type ProcessServices,
   type SessionOwner,

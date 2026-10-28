@@ -7,7 +7,8 @@ import {
   lookupApiKey,
   type ApiKeyProviderId,
 } from '@texra-ai/llm';
-import { Secrets, type RequestRefusal } from '@texra-ai/harness';
+import { type RequestRefusal } from '@texra-ai/harness';
+import { Secrets } from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 interface ProgressApiKeyRetryRequest {

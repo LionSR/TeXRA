@@ -20,7 +20,7 @@
  */
 
 import * as path from 'node:path';
-import { Settings } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness/host';
 
 import { Effect } from 'effect';
 
@@ -31,7 +31,7 @@ import {
   createCachedBinaryResolver,
   importForeignSdk,
 } from '@texra/tools/support/externalBinaryUtils';
-import type { StateReadFailed, SettingsStores } from '@texra-ai/harness';
+import type { StateReadFailed, SettingsStores } from '@texra-ai/harness/host';
 
 // ---------------------------------------------------------------------------
 // SDK import

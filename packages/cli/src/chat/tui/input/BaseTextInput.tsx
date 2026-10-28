@@ -33,7 +33,7 @@ import {
 } from './textInputBindings';
 import { ImagePasteQueue } from './imagePasteQueue';
 import { useActiveDraft } from './activeDraft';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 
 const IMAGE_PASTE_TIMEOUT_MS = 15_000;
 

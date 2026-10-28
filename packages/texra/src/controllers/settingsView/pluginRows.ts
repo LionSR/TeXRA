@@ -8,6 +8,8 @@
  */
 import { Effect, FileSystem } from 'effect';
 
+import { type WorkspaceRoots } from '@texra-ai/harness';
+import { type ToolProbeInputs } from '@texra-ai/harness/plugins';
 import {
   AgentCatalog,
   InstalledPlugins,
@@ -16,9 +18,7 @@ import {
   readMcpConfig,
   type ExternalToolCheckResult,
   type PluginEnv,
-  type ToolProbeInputs,
-  type WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { buildToolDashboardItems } from '@texra/controllers/settingsView/ToolDashboardData';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 

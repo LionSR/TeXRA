@@ -11,7 +11,7 @@ import {
   type RunModelCandidate,
   type RunModelDecisionReason,
   type RunModelFallbackMode,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   type ModelOptionData,
   type UsageRoute,

@@ -14,9 +14,9 @@ import {
   StateReadFailed,
   type StateStore,
   type WorkspaceAgentsController,
-} from '@texra-ai/harness';
-import { planTeamRun } from '@texra-ai/harness';
-import { findTeamPreset, type TeamPreset } from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
+import { planTeamRun } from '@texra-ai/harness/host';
+import { findTeamPreset, type TeamPreset } from '@texra-ai/harness/host';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';

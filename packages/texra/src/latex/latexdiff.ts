@@ -6,7 +6,7 @@ import {
   redactSecrets,
   withLogChannel,
   pathToLocationIn,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { executeCommand, readNormalizedFile } from '@texra-ai/harness/node';
 import { formatError, type FileLocation } from '@texra-ai/harness/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';

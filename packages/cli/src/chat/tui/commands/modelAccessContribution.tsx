@@ -39,7 +39,7 @@ import type {
   PlatformSecrets,
   Secrets,
   SettingsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type {
   SlashCommandEffect,

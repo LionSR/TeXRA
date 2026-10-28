@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel, pathToLocationIn } from '@texra-ai/harness';
+import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/host';
 import { pluralize } from '@texra-ai/harness/transcript';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
@@ -14,12 +14,12 @@ import { quickPick } from '@frontend/ui/dialogs';
 import { showLoggedInfoMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
   StorageFs,
   WorkspaceFs,
   ProcessServices,
-  WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 const CHANNEL = 'FigCommands';
 

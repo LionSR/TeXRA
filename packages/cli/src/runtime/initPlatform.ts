@@ -3,19 +3,21 @@ import { Cause, Effect, Exit, Scope } from 'effect';
 
 // Local imports
 import {
-  AppState,
   Sessions,
+  type WorkspaceRoots,
+  type LocalSession,
+  type SessionOpenError,
+} from '@texra-ai/harness';
+import {
+  AppState,
   setLogSink,
   type StateStore,
   type StateWriteFailed,
   Secrets,
   type PlatformSecrets,
-  type WorkspaceRoots,
-  type LocalSession,
-  type SessionOpenError,
   withProcessServices,
   StateStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   createNodeWorkspaceRoots,
   resolveWorkspaceStoragePath,
@@ -42,7 +44,7 @@ import {
 import { CliExitCode } from './exitCodes';
 import { terminalForegroundHeld } from './foregroundCommand';
 import type { CliContext } from './cliContext';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 // Removers for the listeners installCliShutdownSignalHandlers put on the

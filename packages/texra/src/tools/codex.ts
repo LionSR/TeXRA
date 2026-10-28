@@ -23,12 +23,11 @@ import { Effect, type FileSystem, Result, Schema, Stream } from 'effect';
 // Local imports
 import {
   defineTool,
-  ToolContext,
-  withLogChannel,
   type WorkspaceRoots,
   type ToolResult,
-  Settings,
 } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
+import { withLogChannel, Settings } from '@texra-ai/harness/host';
 import {
   ensureError,
   toErrorMessage,

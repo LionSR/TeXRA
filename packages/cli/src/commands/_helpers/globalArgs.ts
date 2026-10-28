@@ -1,4 +1,4 @@
-import { Skills } from '@texra-ai/harness';
+import { Skills } from '@texra-ai/harness/host';
 import {
   APPROVAL_POLICIES,
   type ApprovalPolicy,

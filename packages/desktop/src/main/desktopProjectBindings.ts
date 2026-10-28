@@ -24,7 +24,7 @@ import {
   type ProcessRuntime,
   type ProcessServices,
   ToolAvailability,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { linkOutage } from '@texra/controllers/server/client';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
@@ -54,7 +54,7 @@ import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { desktopSpawner, type DesktopSpawn } from './desktopWindows.js';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import type { PlatformSecrets } from '@texra-ai/harness/host';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type {
   DesktopProject,

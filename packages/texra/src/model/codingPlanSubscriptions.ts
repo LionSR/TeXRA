@@ -1,4 +1,4 @@
-import { Settings } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness/host';
 import {
   GlobalStateKey,
   providerRegionSetting,
@@ -11,7 +11,7 @@ import type {
   ConfigWriteFailed,
   StateReadFailed,
   SettingsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 
 export interface CodingPlanSubscriptionRuntime {

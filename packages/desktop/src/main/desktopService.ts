@@ -16,7 +16,7 @@ import {
   spawnService,
   type ServiceLink,
 } from '@texra/controllers/server/client';
-import type { GlobalValues } from '@texra-ai/harness';
+import type { GlobalValues } from '@texra-ai/harness/host';
 
 /** The service bundle: the packaged app's, or the extension build's in a
  *  development run. */
