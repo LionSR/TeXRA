@@ -19,42 +19,39 @@ import {
 } from 'effect';
 
 import {
-  withProcessServices,
   workspaceEnvironmentLayer,
   type ProcessRuntime,
   type ProcessServices,
   ToolAvailability,
+  type SessionHostInteractions,
 } from '@texra-ai/harness/host';
-import { linkOutage } from '@texra/controllers/server/client';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
+import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import {
-  createHostSnapshotSource,
   HostSnapshotReadFailed,
+  type HostSnapshotSource,
 } from '@texra/controllers/session/hostSnapshotSource';
-import {
+import { openGuiWindow } from '@texra/controllers/session/openGuiWindow';
+import type {
+  AttachedPort,
   SessionBridge,
-  type AttachedPort,
 } from '@texra/controllers/session/SessionBridge';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopWorkspaceInboundMessageSchema,
   type DesktopWorkspaceReply,
 } from '../shared/desktopWorkspaceMessages.js';
-import { createDesktopAgentRun } from './desktopAgentRun.js';
 import {
   createDesktopBrowserViews,
   type DesktopBrowserViews,
 } from './desktopBrowserViews.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
-import {
-  createDesktopHostRequests,
-  type DesktopHostRequests,
-} from './desktopHostRequests.js';
+import { createDesktopHostRequests } from './desktopHostRequests.js';
 import { createDesktopPtyHost } from './desktopPtyHost.js';
+import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { desktopSpawner, type DesktopSpawn } from './desktopWindows.js';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
-import type { PlatformSecrets } from '@texra-ai/harness/host';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type {
   DesktopProject,
@@ -67,9 +64,11 @@ interface ProjectBinding {
   readonly bridge: SessionBridge;
   /** This window's port on the project's bridge. */
   readonly port: AttachedPort;
-  readonly snapshot: ReturnType<typeof createHostSnapshotSource>;
+  readonly snapshot: HostSnapshotSource;
   /** The project's launcher (`HostRunActions.runValidated`). */
-  readonly runValidated: DesktopHostRequests['runValidated'];
+  readonly runValidated: HostRunActions['runValidated'];
+  /** Where a failure before one of its runs opens is presented. */
+  readonly present: Pick<SessionHostInteractions, 'emit'>;
   readonly workspace: ReturnType<typeof createDesktopWorkspaceIpc>;
   readonly browserViews: DesktopBrowserViews;
   /** The project's `.env` over the process's: every question about this
@@ -103,7 +102,6 @@ interface ProjectBindingsOptions {
   readonly host: DesktopWindowHost;
   readonly runtime: ProcessRuntime;
   readonly projects: DesktopProjectRegistry;
-  readonly secrets: PlatformSecrets;
   readonly resourcesPath: string;
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;
@@ -229,69 +227,9 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         workspacePath: project.root,
         showOpenFileDialog: host.openFileDialog,
       });
-      // The bridge drains the requests in flight, uninterruptibly, when it
-      // closes, and a launch request lives as long as its run: a window that
-      // closes must neither wait for a run to end nor stop it. So the bridge
-      // has a scope of its own, closed off the window's release: the drain
-      // ends after the window is gone, as the runs it waits on do, and its
-      // answers, whose port is gone, are dropped.
-      const bridgeScope = yield* Scope.make();
-      yield* Effect.addFinalizer(() =>
-        Effect.asVoid(Effect.forkDetach(Scope.close(bridgeScope, Exit.void))),
-      );
-      // Install the recipient before host requests publish the recorder's
-      // state.
-      const bridge = yield* SessionBridge.make({
-        session: project.session,
-        handleHostRequest: (request, portId) =>
-          hostRequests.handleHostRequest(request, portId),
-        onPortClosed: (portId) => hostRequests.closePort(portId),
-      }).pipe(Scope.provide(bridgeScope));
       yield* Effect.forkScoped(workspace.followFilesWritten, {
         startImmediately: true,
       });
-      const snapshot = createHostSnapshotSource({
-        project: project.display,
-        root: project.root,
-        stores: project.roots,
-        secrets: options.secrets,
-        fileOptions: () =>
-          files.fileOptions().pipe(
-            Effect.mapError(
-              (cause) =>
-                new HostSnapshotReadFailed({
-                  member: 'fileOptions',
-                  message: 'The project file lists could not be read.',
-                  cause,
-                }),
-            ),
-          ),
-        onError: host.reportBackgroundError,
-        publish: (next) => bridge.setHost(next),
-      });
-      // Why the service link holds no service, while it holds none (reaching
-      // it again, or refused by a newer TeXRA), so the window never sits
-      // frozen without saying so.
-      const service = project.service;
-      if (service !== undefined)
-        yield* Effect.forkScoped(
-          Stream.runForEach(linkOutage(service), (reason) =>
-            snapshot.setServiceOffline(reason),
-          ),
-        );
-      // The funnel is host state every open project's snapshot carries (8.1).
-      yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          options.onboarding.onFunnelChange((state) =>
-            snapshot.setOnboarding(state),
-          ),
-        ),
-        (unsubscribe) => Effect.sync(unsubscribe),
-      );
-      const funnel = options.onboarding.funnelState();
-      const initialSnapshot = funnel
-        ? snapshot.setOnboarding(funnel).pipe(Effect.andThen(snapshot.refresh))
-        : snapshot.refresh;
       // The window's focus, told to the service as a VS Code window's is:
       // the project's host calls go to the window the user last worked in.
       // The window shows one project at a time, so only that project's
@@ -324,48 +262,73 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
           Stream.map(() => undefined),
         ),
       );
-      const run = yield* createDesktopAgentRun({
-        runtime,
-        host: hosts.run,
-        toolEditPreview: hosts.toolEditPreview,
-        project,
-        focused,
-        isFocused: () => shown() && host.window.isFocused(),
-        showAgentConfigBanner: ({ agentName }) =>
-          withProcessServices(
-            runtime,
-            snapshot.showAgentConfigBanner(agentName),
-          ),
-        // A resolved agent also retires the missing-agent warning.
-        onLaunched: (runId) => {
-          bridge.surfaceAction({ kind: 'select', runId });
-          spawn(snapshot.clearAgentConfigBanner);
+      const { bridge, snapshot, present, runValidated } = yield* openGuiWindow({
+        runs: project,
+        roots: project.roots,
+        project: project.display,
+        snapshot: {
+          fileOptions: () =>
+            files.fileOptions().pipe(
+              Effect.mapError(
+                (cause) =>
+                  new HostSnapshotReadFailed({
+                    member: 'fileOptions',
+                    message: 'The project file lists could not be read.',
+                    cause,
+                  }),
+              ),
+            ),
+          onError: host.reportBackgroundError,
         },
-        // Recompute the onboarding funnel when a launch settles so a first
-        // successful run leaves the setup card without a restart. The settled
-        // launch includes AgentRunLifecycle's firstRunDone write.
-        onRunCompleted: options.refreshFunnelAfterLaunch,
-      });
-      const hostRequests = yield* createDesktopHostRequests({
-        runtime,
-        spawn,
-        project,
+        // The tool-edit preview: staged copies of the original and proposed
+        // content the review pane diffs, for each tool edit the project's
+        // session lists, here or in the service.
+        toolEdits: new DesktopToolEditApprovalHost({
+          ui: {
+            ...hosts.toolEditPreview,
+            showErrorMessage: hosts.run.showErrorMessage,
+          },
+          spawn,
+          focused: () => shown() && host.window.isFocused(),
+        }),
+        focused,
         draftRequests: options.draftRequests,
-        workspaceFile: workspace.file,
-        host: hosts.request,
-        run,
-        files,
-        snapshot,
-        resourcesPath: options.resourcesPath,
-        postToRenderer: host.post,
-        postSurfaceAction: (action) => bridge.surfaceAction(action),
-        onboarding: options.onboarding,
-        openExternalUrl: host.openExternalUrl,
-        recheckTools: () =>
-          Effect.flatMap(ToolAvailability, (tools) =>
-            Effect.asVoid(tools.refresh(project.roots)),
-          ),
+        host: (parts) =>
+          createDesktopHostRequests({
+            ...parts,
+            runtime,
+            project,
+            host: hosts.run,
+            files,
+            workspaceFile: workspace.file,
+            resourcesPath: options.resourcesPath,
+            postToRenderer: host.post,
+            onboarding: options.onboarding,
+            openExternalUrl: host.openExternalUrl,
+            recheckTools: () =>
+              Effect.flatMap(ToolAvailability, (tools) =>
+                Effect.asVoid(tools.refresh(project.roots)),
+              ),
+            // Recompute the onboarding funnel when a launch settles so a
+            // first successful run leaves the setup card without a restart.
+            // The settled launch includes AgentRunLifecycle's firstRunDone
+            // write.
+            onRunCompleted: options.refreshFunnelAfterLaunch,
+          }),
       });
+      // The funnel is host state every open project's snapshot carries (8.1).
+      yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          options.onboarding.onFunnelChange((state) =>
+            snapshot.setOnboarding(state),
+          ),
+        ),
+        (unsubscribe) => Effect.sync(unsubscribe),
+      );
+      const funnel = options.onboarding.funnelState();
+      const initialSnapshot = funnel
+        ? snapshot.setOnboarding(funnel).pipe(Effect.andThen(snapshot.refresh))
+        : snapshot.refresh;
       // Registered after the host requests, so a port's release (its map
       // entry, its transcript set, `onPortClosed`) precedes their release, as
       // the extension's `dispose` orders them; awaited, unlike the bridge's.
@@ -384,7 +347,8 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         bridge,
         port,
         snapshot,
-        runValidated: hostRequests.runValidated,
+        runValidated,
+        present,
         workspace,
         browserViews,
         env,

@@ -22,7 +22,6 @@ import {
   showLoggedMessage,
   showLoggedMessageWithDocs,
 } from '@frontend/ui/errorHandlingUtils';
-import { quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import {
@@ -39,9 +38,7 @@ import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
-import { settingEnumChoices } from '@texra/shared/settingsView/settingRows';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { WorkflowDiffRequest } from '@texra/controllers/session/hostRunActions';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { runOutputFiles } from '@texra/tools/documents/runOutputs';
@@ -83,42 +80,13 @@ const withLatexdiffTool = <E, R>(
     withLogChannel(CHANNEL),
   );
 
-type MarkupItem = vscode.QuickPickItem & { value: LatexdiffMathMarkupValue };
-
-// Returns undefined when the user cancels, logging it so callers just bail.
-const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
-  roots: WorkspaceRoots,
-) {
-  const configuredMode = yield* Settings.get<LatexdiffMathMarkupValue>(
+/** The math markup every diff runs with: the `texra.latexdiff.mathMarkup`
+ *  setting, as on every host. */
+const configuredMathMarkup = (roots: WorkspaceRoots) =>
+  Settings.get<LatexdiffMathMarkupValue>(
     roots,
     DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
   );
-  // The row is a catalog enum row: a missing one is a defect, not an option.
-  const items: MarkupItem[] = settingEnumChoices<LatexdiffMathMarkupValue>(
-    TEXRA_SETTINGS.byKey(DocumentsStateKey.LATEXDIFF_MATH_MARKUP)!,
-  )!.map(({ value, label, description }) => ({
-    label,
-    description,
-    picked: value === configuredMode,
-    value,
-  }));
-  // Keep the configured mode first so Enter accepts it immediately.
-  const prioritizedItems = [
-    ...items.filter((item) => item.value === configuredMode),
-    ...items.filter((item) => item.value !== configuredMode),
-  ];
-
-  const pick = yield* quickPick(prioritizedItems, {
-    title: 'Latexdiff math markup',
-    placeHolder: 'Select math markup granularity for this diff run',
-    ignoreFocusOut: true,
-    prompt: `Saved default: ${configuredMode} — press Enter to accept, or pick another`,
-  });
-  if (!pick) {
-    yield* Effect.logDebug('Math markup selection cancelled by user');
-  }
-  return pick?.value;
-});
 
 /**
  * Open and build one generated diff, returning its resolved location and
@@ -240,9 +208,9 @@ const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
 });
 
 /**
- * Prompt for math markup, run a diff, and open the generated diff file. Shared
- * by the `latexdiff` and `latexdiff-vc` entry points, which differ only in the
- * underlying diff call and the tool name used for logging.
+ * Run a diff with the configured math markup and open the generated diff
+ * file. Shared by the `latexdiff` and `latexdiff-vc` entry points, which
+ * differ only in the underlying diff call and the tool name used for logging.
  */
 const runDiffAndOpen = Effect.fnUntraced(function* (
   roots: WorkspaceRoots,
@@ -255,8 +223,7 @@ const runDiffAndOpen = Effect.fnUntraced(function* (
     FileSystem.FileSystem | ChildProcessSpawner
   >,
 ) {
-  const mathMarkup = yield* promptForLatexdiffMathMarkup(roots);
-  if (!mathMarkup) return;
+  const mathMarkup = yield* configuredMathMarkup(roots);
   yield* Effect.logInfo(`Running ${toolLabel}, math markup: ${mathMarkup}`);
 
   const result = yield* runDiff(mathMarkup);
@@ -392,8 +359,7 @@ export const handleRunLatexdiff = Effect.fnUntraced(function* (
     'latexdiff',
     'Error running LaTeX diffs',
     Effect.gen(function* () {
-      const mathMarkup = yield* promptForLatexdiffMathMarkup(roots);
-      if (!mathMarkup) return;
+      const mathMarkup = yield* configuredMathMarkup(roots);
 
       yield* Effect.logInfo(`Running latexdiff, math markup: ${mathMarkup}`);
 

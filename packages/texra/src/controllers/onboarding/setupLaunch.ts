@@ -20,7 +20,7 @@ export const SETUP_INSTRUCTION =
  * Launch the setup conversation from the desktop's setup card: resolve a
  * model the user's credentials can call, build the setup request, and run it
  * through the project's launch path, the one the Execute button uses. `run`
- * and `project` are the project the user started setup in, taken before the
+ * and `roots` are the project the user started setup in, taken before the
  * first suspension: the run and its presentation belong to it even when the
  * window moves to another project while the model resolves.
  * Setup continues after its initiating request has completed, so a failure
@@ -28,22 +28,24 @@ export const SETUP_INSTRUCTION =
  * Setup waits for it, and the run's own failure is its result row's to show.
  */
 export const kickoffDesktopSetup = (options: {
-  readonly project: {
-    readonly roots: SettingsStores;
-    readonly present: Pick<SessionHostInteractions, 'emit'>;
-  };
-  /** The project's launch path; none when no folder is open. */
-  readonly run: Pick<HostRunActions, 'runValidated'> | undefined;
+  readonly roots: SettingsStores;
+  /** The project window's launch path, and where it presents a failure;
+   *  none before the window has bound the project. */
+  readonly run:
+    | (Pick<HostRunActions, 'runValidated'> & {
+        readonly present: Pick<SessionHostInteractions, 'emit'>;
+      })
+    | undefined;
   readonly secrets: PlatformSecrets;
-}): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    if (!options.run) {
-      return yield* Effect.fail(
-        new Error('Open a folder before running setup.'),
-      );
-    }
+}): Effect.Effect<void> => {
+  const { run } = options;
+  if (!run)
+    return Effect.logWarning(
+      'Setup did not start: the window has not bound its project yet.',
+    );
+  return Effect.gen(function* () {
     const model = yield* resolveSetupLaunchModel(
-      options.project.roots,
+      options.roots,
       options.secrets,
     );
     if (model === null) {
@@ -63,17 +65,17 @@ export const kickoffDesktopSetup = (options: {
     if (!validation.valid) {
       return yield* Effect.fail(new Error(validation.message));
     }
-    return yield* options.run.runValidated(validation.request);
+    return yield* run.runValidated(validation.request);
   }).pipe(
     Effect.catch((error) =>
       error instanceof Cancelled
         ? Effect.void
-        : presentRunFailure(options.project.present, error),
+        : presentRunFailure(run.present, error),
     ),
-    Effect.flatMap((run) =>
-      run === undefined
+    Effect.flatMap((started) =>
+      started === undefined
         ? Effect.void
-        : run.result.pipe(
+        : started.result.pipe(
             Effect.asVoid,
             Effect.catch((failure) =>
               Effect.logDebug(`The setup run failed: ${failure.message}`),
@@ -81,3 +83,4 @@ export const kickoffDesktopSetup = (options: {
           ),
     ),
   );
+};

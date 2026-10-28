@@ -13,7 +13,6 @@ import {
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { kickoffDesktopSetup } from '@texra/controllers/onboarding/setupLaunch';
-import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { createDesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type { StateReadFailed, StateWriteFailed } from '@texra-ai/harness/host';
 import type { DesktopProjectRegistry } from './desktopProjects.js';
@@ -43,7 +42,8 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
     /** The settings surface and the launch path of the shown project, read
      *  when a card asks, since both are built after this surface. */
     readonly settings: () => DesktopSettingsIpc | undefined;
-    readonly activeRun: () => Pick<HostRunActions, 'runValidated'> | undefined;
+    readonly activeRun: () =>
+      Parameters<typeof kickoffDesktopSetup>[0]['run'] | undefined;
   }): Effect.fn.Return<
     {
       readonly onboarding: ReturnType<typeof createDesktopOnboardingIpc>;
@@ -75,7 +75,7 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
           withProcessServices(
             runtime,
             kickoffDesktopSetup({
-              project: projects.active(),
+              roots: projects.active().roots,
               run: options.activeRun(),
               secrets,
             }),

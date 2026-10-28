@@ -18,7 +18,6 @@ import {
 
 import { type LocalSession, type Session, Sessions } from '@texra-ai/harness';
 import {
-  SessionHostInteractions,
   withPerKeyLane,
   type PerKeyLane,
   StateStores,
@@ -61,10 +60,6 @@ interface DesktopProjectFacts {
    *  for it, derived once from `key` and `root`. */
   readonly display: ProjectDisplay;
   readonly roots: WorkspaceRoots;
-  /** Where a failure this window meets before a run opens, and a run's
-   *  final output, are presented: the local session, or the window's own
-   *  host, which its run wiring attaches. */
-  readonly present: Pick<SessionHostInteractions, 'emit'>;
   /** Release the session from its owner; settles once its entry has unwound. */
   dispose(): Effect.Effect<void>;
 }
@@ -84,7 +79,6 @@ export type DesktopProject = DesktopProjectFacts &
         readonly session: Session;
         readonly service: ServiceLink;
         readonly root: string;
-        readonly present: SessionHostInteractions;
       }
   );
 
@@ -295,11 +289,6 @@ function openProjectSession(
         root,
         service,
         session: yield* serviceSession(service, root, roots),
-        // Disposed with the project, its window's attachment with it.
-        present: yield* Effect.acquireRelease(
-          Effect.sync(() => new SessionHostInteractions()),
-          (present) => present.dispose(),
-        ),
       };
     // The no-workspace session's runs, and every run without a service, run
     // here.
@@ -318,13 +307,7 @@ function openProjectSession(
     // extension and the CLI say it.
     if (session.storeMovedAside)
       warnInDialog(sessionStoreMovedAsideMessage(session.storeMovedAside));
-    return {
-      ...facts,
-      root,
-      session,
-      present: session,
-      link: yield* hosts.localLink(session),
-    };
+    return { ...facts, root, session, link: yield* hosts.localLink(session) };
   });
 }
 

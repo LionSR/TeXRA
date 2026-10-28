@@ -25,7 +25,6 @@ import { DESKTOP_RELEASES_PAGE_URL } from './desktopUpdateChecker.js';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { DesktopProject } from './desktopProjects.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
-import type { DesktopAgentRunOptions } from './desktopAgentRun.js';
 import type { DesktopHostBridge } from './hostBridge.js';
 import type { DesktopSpawn } from './desktopWindows.js';
 
@@ -332,7 +331,7 @@ export function createDesktopWindowHost(options: {
           ...dialogsOfProject,
           openDiff: diff.openDiff,
           openBuildDisplay: previewHost.openBuildDisplayIn(roots),
-        } satisfies DesktopAgentRunOptions['host'],
+        } satisfies DesktopAgentRunHost,
         toolEditPreview: {
           openPath: requestPreviewHost.openPath,
           openBuildDisplay: requestPreviewHost.openBuildDisplayIn(roots),

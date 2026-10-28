@@ -26,7 +26,7 @@ import type { HostRequestFailure } from '@texra-ai/harness';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopSpawn } from './desktopWindows.js';
 
-export type DesktopToolEditApprovalUi = Pick<
+type DesktopToolEditApprovalUi = Pick<
   DesktopAgentRunHost,
   'openPath' | 'openBuildDisplay' | 'showErrorMessage'
 > & {

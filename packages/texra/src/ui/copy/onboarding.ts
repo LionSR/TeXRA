@@ -88,3 +88,9 @@ export const ONBOARDING_OPEN_WALKTHROUGH = {
   label: 'Open walkthrough',
   icon: 'book',
 } as const satisfies { readonly label: string; readonly icon: IconName };
+
+/** The guide pages the banners' help links open, on every host. */
+export const GUIDE_URLS = Object.freeze({
+  apiKeys: 'https://texra.ai/guide/installation.html#setting-up-api-keys',
+  customAgents: 'https://texra.ai/guide/custom-agents.html',
+});

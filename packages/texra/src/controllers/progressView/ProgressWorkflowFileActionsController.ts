@@ -10,11 +10,11 @@ import { withLogChannel } from '@texra-ai/harness/host';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
+import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
 import { type AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
 import type { AppSignals } from '@texra-ai/harness/host';
-import type { HostRequestFailure } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { HostRunActions } from '../session/hostRunActions';
 import type { RunOutputsSource } from './runOutputs';
@@ -48,7 +48,6 @@ interface ProgressWorkflowFileActionsHost {
   latexdiffFile(baseFile: string, editedFile: string): FileAction<void>;
   openDirectory(directory: string): FileAction<void>;
   showInfo(message: string): FileAction<void>;
-  showError(message: string): FileAction<void>;
 }
 
 interface ProgressWorkflowFileActionsControllerDeps {
@@ -113,8 +112,10 @@ export class ProgressWorkflowFileActionsController {
         Effect.logError('Failed to open run folder', error).pipe(
           withLogChannel(CHANNEL),
           Effect.andThen(
-            this.deps.host.showError(
-              `Failed to open run folder: ${toErrorMessage(error)}`,
+            Effect.fail(
+              new Rejected({
+                reason: `Failed to open run folder: ${toErrorMessage(error)}`,
+              }),
             ),
           ),
         ),

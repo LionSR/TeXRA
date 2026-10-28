@@ -24,7 +24,6 @@ function createDeps(
       latexdiffFile: () => Effect.void,
       openDirectory: () => Effect.void,
       showInfo: () => Effect.void,
-      showError: () => Effect.void,
       ...overrides,
     },
     storageRoot: '/storage',

@@ -101,6 +101,7 @@ import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { texraPlugins } from '@texra/tools/registry';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
+import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 import {
   formatApprovalPolicy,
   approvalPolicyLabel,
@@ -112,7 +113,6 @@ import { reachExtensionService } from './common/extensionService';
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
-import type { WindowSession } from './progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from './settingsView/SettingsViewProvider';
 
 const EXTENSION_CHANNEL = 'extension';
@@ -483,7 +483,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
         ),
       ),
     );
-  let windowSession: WindowSession;
+  let windowSession: GuiSession;
   if (Result.isSuccess(reached)) {
     windowSession = {
       service: reached.success,

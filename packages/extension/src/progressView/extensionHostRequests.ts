@@ -1,13 +1,12 @@
 /**
- * The extension's `host.request` handler (PRD one-fold-three-renderers,
- * 8.3): the verbs this host performs, bound onto VS Code's commands,
- * editors, pickers, and dialogs, plus the few arms the extension answers its
- * own way -- its file pickers, its editor's current file, its tab pop-out,
- * its launch command. Everything else is the one shared body in
- * `sharedHostRequests.ts`, which decides the order, the guards, and the
- * refusal wording for both GUI hosts. Each arm answers exactly once with an
- * outcome or a request error; an arm the extension does not perform is
- * `Rejected` with its reason, never dropped.
+ * The extension's half of its window (`openGuiWindow`): the verbs this host
+ * performs, bound onto VS Code's commands, editors, pickers, and dialogs,
+ * plus the few arms the extension answers its own way -- its file pickers,
+ * its editor's current file, its tab pop-out, its getting-started commands.
+ * Everything else is the one shared body, which decides the order, the
+ * guards, and the refusal wording for both GUI hosts. Each arm answers
+ * exactly once with an outcome or a request error; an arm the extension
+ * does not perform is `Rejected` with its reason, never dropped.
  */
 import * as path from 'node:path';
 
@@ -19,25 +18,29 @@ import {
   Rejected,
   type HostRequestFailure,
   type RequestRefusal,
+  type Run,
   type Session,
+  type WorkspaceRoots,
 } from '@texra-ai/harness';
 import {
   AgentDirectories,
   type StateStore,
   type StateReadFailed,
   type StateWriteFailed,
-  Secrets,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
   withLogChannel,
-  withSessionFs,
   WorkspaceFs,
-  type StorageFs,
   pathToLocationIn,
 } from '@texra-ai/harness/host';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
-import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
+import {
+  toErrorMessage,
+  type AgentConfig,
+  type RunEndResult,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import {
   handleLatexdiff,
   handleLatexdiffCommitAction,
@@ -47,8 +50,6 @@ import {
   handleAcceptEdited,
   handleCompare,
 } from '@commands/latex/compareCommands';
-import { presentPack } from '@commands/housekeeping/packCommands';
-import { presentClean } from '@commands/housekeeping/cleanCommands';
 import { findCommitInHistory } from '@commands/git/gitCommands';
 import { openFile, openLabel } from '@commands/files/openFileCommands';
 import {
@@ -71,6 +72,7 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import latexPreamble from '@resources/templates/chatExport.tex';
+import type { AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
 import {
   setFirstRunDone,
   setOnboardingDeclined,
@@ -82,71 +84,51 @@ import type {
   GettingStartedAction,
   HostRequest,
 } from '@texra/shared/session/hostRequest';
-import type {
-  HostOutcome,
-  SurfaceActionMessage,
-} from '@texra/shared/session/sessionFrames';
+import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
-import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
 import {
-  ChatExportController,
-  type ChatExportRecords,
-} from '@texra/controllers/progressView/ChatExportController';
-import {
-  exportRunTranscript,
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
   type TranscriptExportOpenKind,
 } from '@texra/controllers/progressView/exportTranscript';
 import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
-import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import {
   fromHost,
   hostFailure,
   type HostCallFailed,
 } from '@texra/controllers/session/hostCallFailure';
-import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
-import {
-  createHostRunActions,
-  type HostRunActions,
-  type RunActionRecordPorts,
-} from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import {
-  handleSharedHostRequest,
-  isSharedHostRequest,
-  type SharedHostRequestBindings,
-  type SharedHostRequestPorts,
-} from '@texra/controllers/session/sharedHostRequests';
-import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import type {
+  OwnHostRequest,
+  SharedHostRequestBindings,
+} from '@texra/controllers/session/openGuiWindow';
+import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
+import type { WindowHost } from '@texra/controllers/server/windowHost';
 import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
 import { getToolDocsPage } from '@texra/utils/system/toolChecks';
+import { GUIDE_URLS } from '@ui/copy/onboarding';
+import type { ApiKeyProviderId } from '@texra-ai/llm';
 
 const CHANNEL = 'ExtensionHostRequests';
 
 interface ExtensionHostRequestsOptions {
-  /** The run records and failure surface the run actions read, from the
-   *  window's own session handle or from the service. */
-  readonly records: RunActionRecordPorts;
-  /** What the transcript export reads, from the same place. */
-  readonly exportRecords: ChatExportRecords;
   /** Where this window's runs run: the session here, or the service's. */
   readonly runSession: Session;
+  readonly roots: WorkspaceRoots;
+  /** The window's bridge and snapshot. */
+  readonly bridge: SessionBridge;
+  readonly snapshot: HostSnapshotSource;
+  /** What this window does for its project's runs. */
+  readonly window: WindowHost;
   readonly extensionPath: string;
   /** The extension's id, which names its getting-started walkthrough. */
   readonly extensionId: string;
   readonly globalState: StateStore;
-  readonly snapshot: HostSnapshotSource;
-  readonly draftRequests: HostDraftRequests;
-  readonly toolEditApprovals: ToolEditApprovalController;
   /** The process runtime the extension root holds; every request arm that
    *  settles an Effect runs it here. */
   readonly runtime: ProcessRuntime;
-  /** The view's scope: what a run's end does lives as long as the view,
-   *  as do a comparison's refresh and a PDF viewer's delayed open. */
-  readonly scope: Scope.Scope;
   /** The settings view at a target (`texra.showDashboard`). */
   openSettings(
     target: SettingsTarget | undefined,
@@ -156,8 +138,6 @@ interface ExtensionHostRequestsOptions {
   showConnectModel(): Effect.Effect<void, Error, ProcessServices>;
   /** Reveal the task list (`texra.showProgressView`). */
   showProgressView(): Effect.Effect<void, Error>;
-  /** A host-initiated change to the surface (PRD 8.5). */
-  surfaceAction(action: SurfaceActionMessage['action']): void;
   /** Select a run this window just launched (the run actions' `launched`). */
   presentLaunchedRun(runId: RunId): void;
   /** The placement commands the sidebar and the editor tab share. */
@@ -170,16 +150,6 @@ interface ExtensionHostRequestsOptions {
     void,
     StateReadFailed | StateWriteFailed
   >;
-}
-
-interface ExtensionHostRequests {
-  /** The window's launcher, which `texra.execute` starts its run on. */
-  readonly runValidated: HostRunActions['runValidated'];
-  handleHostRequest(
-    request: HostRequest,
-    port: string,
-  ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices>;
-  closePort(port: string): void;
 }
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
@@ -212,189 +182,60 @@ function revealFileInOS(fsPath: string) {
   );
 }
 
-/** This window's `host.request` handler over its ports. */
-export function createExtensionHostRequests(
-  options: ExtensionHostRequestsOptions,
-): ExtensionHostRequests {
-  const {
-    records,
-    runSession,
-    snapshot,
-    toolEditApprovals,
-    globalState,
-    runtime,
-  } = options;
-  const { roots } = records;
+/** The export's open verb. The editor APIs behind it are thenables, so this
+ *  is where they are lifted -- once, at the host boundary. */
+const openExportPath = (
+  filePath: string,
+  kind: TranscriptExportOpenKind,
+): Effect.Effect<void, ExternalOpenFailed> => {
+  const failed = (cause: unknown) =>
+    new ExternalOpenFailed({
+      kind: 'path',
+      target: filePath,
+      message: toErrorMessage(cause),
+      cause,
+    });
+  const uri = vscode.Uri.file(filePath);
+  if (kind === 'external') {
+    return Effect.tryPromise({
+      try: () => vscode.env.openExternal(uri),
+      catch: failed,
+    }).pipe(Effect.asVoid);
+  }
+  if (kind === 'pdf') {
+    return executeVscodeCommand('vscode.open', uri).pipe(
+      Effect.asVoid,
+      Effect.mapError(failed),
+    );
+  }
+  return openFileInEditor(filePath).pipe(
+    Effect.asVoid,
+    Effect.mapError(failed),
+  );
+};
+
+/** This window's half of its `openGuiWindow`, for the view's scope. */
+export const createExtensionHostRequests = Effect.fn(
+  'createExtensionHostRequests',
+)(function* (options: ExtensionHostRequestsOptions) {
+  const { runSession, snapshot, globalState, runtime, roots } = options;
 
   /** The native picker of each multi-file launcher list. */
   const multipleFilePickers = createFileSelectionPickers(roots);
-
-  const runActions = runtime.runSync(
-    createHostRunActions({
-      ...records,
-      session: runSession,
-      scope: options.scope,
-      launched: (run) =>
-        Effect.sync(() => options.presentLaunchedRun(run.runId)),
-      openFinalOutput: (config, result) =>
-        withProcessServices(
-          runtime,
-          openFinalOutputIfAvailable(roots, config)(result),
-        ),
-      loadModelOptions: () =>
-        withProcessServices(
-          runtime,
-          Effect.flatMap(Secrets, (secrets) =>
-            loadModelOptions({ ...roots, secrets }),
-          ),
-        ),
-      // The set-key prompt either runs or faults, so its failure is the one
-      // failure, as `ApiKeyPromptFailed`.
-      promptForApiKey: (provider) =>
-        runHandler('setApiKey', setApiKey(roots, provider)).pipe(
-          Effect.mapError(
-            (failure) =>
-              new ApiKeyPromptFailed({
-                provider,
-                message: 'The host could not ask for a provider API key.',
-                cause: failure,
-              }),
-          ),
-        ),
-      showInfo: (message) => vscodeUi.showInfoMessage(message),
-      showWarning: (message) => vscodeUi.showWarningMessage(message),
-    }),
-  );
-
-  const { runOutputs } = runActions;
   // The window's one comparison refresh: a newer comparison replaces it,
   // and the view's scope ends it.
-  const diffRefresh = runtime.runSync(
-    FiberHandle.make().pipe(Scope.provide(options.scope)),
-  );
-  // Closing the view's scope stops a recording this host owns; the take is
-  // discarded.
-  const draftRequests = runtime.runSync(
-    options.draftRequests
-      .attach(roots, (recording) => {
-        // Recorder notifications can arrive outside a request fiber.
-        runtime.runFork(options.snapshot.setRecording(recording));
-      })
-      .pipe(Scope.provide(options.scope)),
-  );
+  const diffRefresh = yield* FiberHandle.make();
   /** A file action that schedules a PDF viewer opens it in the view's
    *  scope, so a close of the view cancels a delayed open. */
+  const scope = yield* Scope.Scope;
   const inViewScope = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-    Effect.provideService(effect, Scope.Scope, options.scope);
+    Effect.provideService(effect, Scope.Scope, scope);
   const at = (file: string) => pathToLocationIn(roots.workspace, file);
   // A file-action port's handler; the process services come from the runtime.
   const runFileAction = <A, E>(
     command: string,
     handler: Effect.Effect<A, E, ProcessServices>,
   ) => withProcessServices(runtime, runHandler(command, handler));
-
-  const workflowFileActions = new ProgressWorkflowFileActionsController({
-    state: runOutputs,
-    storageRoot: roots.storage,
-    host: {
-      // Each command is named, so a failure carries a tag, never a rejection.
-      compareFiles: (base, edited) =>
-        runFileAction(
-          'compare',
-          handleCompare(at(base), at(edited), diffRefresh),
-        ),
-      acceptEditedFile: (base, edited, copyMeta) =>
-        runFileAction(
-          'acceptEdited',
-          handleAcceptEdited(at(base), at(edited), copyMeta),
-        ),
-      latexdiffFile: (base, edited) =>
-        runFileAction(
-          'latexdiff',
-          inViewScope(handleLatexdiff(roots, base, edited)),
-        ),
-      openDirectory: (directory) => revealFileInOS(directory),
-      showInfo: (message) => vscodeUi.showInfoMessage(message),
-      showError: (message) => vscodeUi.showErrorMessage(message),
-    },
-    runs: runActions,
-  });
-
-  let chatExportController: ChatExportController | undefined;
-
-  /** The export port's open verb. The editor APIs behind it are thenables, so
-   *  this is where they are lifted -- once, at the host boundary. */
-  const openExportPath = (
-    filePath: string,
-    kind: TranscriptExportOpenKind,
-  ): Effect.Effect<void, ExternalOpenFailed> => {
-    const failed = (cause: unknown) =>
-      new ExternalOpenFailed({
-        kind: 'path',
-        target: filePath,
-        message: toErrorMessage(cause),
-        cause,
-      });
-    const uri = vscode.Uri.file(filePath);
-    if (kind === 'external') {
-      return Effect.tryPromise({
-        try: () => vscode.env.openExternal(uri),
-        catch: failed,
-      }).pipe(Effect.asVoid);
-    }
-    if (kind === 'pdf') {
-      return executeVscodeCommand('vscode.open', uri).pipe(
-        Effect.asVoid,
-        Effect.mapError(failed),
-      );
-    }
-    return openFileInEditor(filePath).pipe(
-      Effect.asVoid,
-      Effect.mapError(failed),
-    );
-  };
-
-  /** The transcript export, over the session's rooted filesystems the
-   *  dispatch root already provided. */
-  function exportTranscript(runId: RunId) {
-    return exportRunTranscript(runId, {
-      // A refusal to show the pick is worded into the export's tag.
-      pickFormat: quickPick(TRANSCRIPT_EXPORT_FORMAT_CHOICES, {
-        title: 'Export transcript',
-        placeHolder: 'Choose a format',
-        ignoreFocusOut: true,
-      }).pipe(
-        Effect.map((choice) => choice?.format),
-        Effect.mapError(
-          (error) =>
-            new TranscriptExportFailed({
-              step: 'pickFormat',
-              message: error.message,
-              cause: error.cause,
-            }),
-        ),
-      ),
-      openPath: openExportPath,
-      showInfo: (message) => vscodeUi.showInfoMessage(message),
-      showWarning: (message) => vscodeUi.showWarningMessage(message),
-      showError: (message) => vscodeUi.showErrorMessage(message),
-      getController: Effect.sync(
-        () =>
-          (chatExportController ??= new ChatExportController({
-            roots,
-            records: options.exportRecords,
-            latexPreamble,
-          })),
-      ),
-      getTraceViewerTemplate: () =>
-        path.join(
-          options.extensionPath,
-          'resources',
-          'traceViewer',
-          'index.html',
-        ),
-    });
-  }
 
   /** A working directory outside the open workspace folders cannot launch. */
   const admitLaunch: SharedHostRequestBindings['admitLaunch'] = (form) => {
@@ -464,7 +305,7 @@ export function createExtensionHostRequests(
             findCommitInHistory(roots, parsed.commitHash),
           );
           if (commitLabel) {
-            options.surfaceAction({
+            options.bridge.surfaceAction({
               kind: 'launch',
               patch: { commit: parsed.commitHash },
             });
@@ -564,22 +405,14 @@ export function createExtensionHostRequests(
 
   /** This host's half of the shared body's binding table: every verb mapped
    *  onto a VS Code command, an editor API, or the sidebar. */
-  const hostBindings: SharedHostRequestBindings = {
+  const bindings: SharedHostRequestBindings = {
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
     openLabel: (label) => runHandler('openLabel', openLabel(roots, label)),
-    exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
-    surfaceAction: (action) => options.surfaceAction(action),
-    showInfo: (message) => vscodeUi.showInfoMessage(message),
     admitLaunch,
     runWorkflowDiff: (diff) =>
       runHandler(
         'runLatexdiff',
         inViewScope(handleRunLatexdiff(roots, runSession, diff)),
-      ),
-    presentWorkflowFileOperation: (operation, files) =>
-      runHandler(
-        operation,
-        operation === 'pack' ? presentPack(files) : presentClean(files),
       ),
     latexdiffAgainstCommit: (action, baseFile, commit) =>
       runHandler(
@@ -595,20 +428,16 @@ export function createExtensionHostRequests(
     setApiKey: runHandler('setApiKey', setApiKey(roots)).pipe(
       Effect.andThen(refreshOnboardingFunnel),
     ),
-    openApiKeyGuide: Effect.asVoid(
-      fromHost('env.openExternal', () =>
-        vscode.env.openExternal(
-          vscode.Uri.parse(
-            'https://texra.ai/guide/installation#setting-up-api-keys',
-          ),
+    openGuide: (page) =>
+      Effect.asVoid(
+        fromHost('env.openExternal', () =>
+          vscode.env.openExternal(vscode.Uri.parse(GUIDE_URLS[page])),
         ),
       ),
-    ),
     openCustomAgentDirectory: Effect.gen(function* () {
       const dir = yield* (yield* AgentDirectories).custom();
       if (dir) yield* revealFileInOS(dir);
     }),
-    openAgentDocs: runHandler('openDoc', openGuidePage('custom-agents')),
     recheckDependencies: Effect.gen(function* () {
       yield* checkCoreDependencies(true);
       yield* snapshot.refreshHostBanners;
@@ -657,38 +486,15 @@ export function createExtensionHostRequests(
     },
   };
 
-  /** The arms both GUI hosts answer through one body, now that this host's
-   *  ports are bound. */
-  const sharedRequests: SharedHostRequestPorts = {
-    runActions,
-    workflowFileActions,
-    snapshot,
-    draftRequests,
-    toolEditApprovals,
-    roots,
-    host: hostBindings,
-  };
-
   /**
-   * One program per request. Every arm this host performs its own way is
-   * here; the rest reach the shared body above. The capabilities that still
+   * The arms this host performs its own way. The capabilities that still
    * answer with a promise - VS Code commands, the editor APIs - are lifted
    * once (`executeVscodeCommand`, `fromHost`), and this extension's own
    * commands run as the programs behind them, so no arm re-enters the
    * runtime between here and the bridge that runs this program.
    */
-  function dispatch(
-    request: HostRequest,
-    port: string,
-  ): Effect.Effect<
-    HostOutcome,
-    HostRequestFailure,
-    ProcessServices | StorageFs | WorkspaceFs
-  > {
-    return Effect.gen(function* () {
-      if (isSharedHostRequest(request)) {
-        return yield* handleSharedHostRequest(sharedRequests, request, port);
-      }
+  const own = (request: OwnHostRequest) =>
+    Effect.gen(function* () {
       switch (request.kind) {
         case 'popOut':
           yield* options.popOutToEditor();
@@ -727,18 +533,83 @@ export function createExtensionHostRequests(
           );
       }
     });
-  }
 
   return {
-    runValidated: runActions.runValidated,
-    // The bridge takes the dispatch program itself: it runs on the fiber the
-    // webview's message pump already owns, and its failure reaches the
-    // bridge's refusal-versus-defect fold as the value the arm carried. Over
-    // this session's rooted filesystems: the root a request writes under is
-    // chosen here, at the host edge, not read at the depth that writes --
-    // once, for the whole dispatch.
-    handleHostRequest: (request, port) =>
-      withSessionFs(roots, dispatch(request, port)),
-    closePort: draftRequests.closePort,
+    bindings,
+    own,
+    window: options.window,
+    showInfoMessage: vscodeUi.showInfoMessage,
+    showWarningMessage: vscodeUi.showWarningMessage,
+    runs: {
+      launched: (run: Run) =>
+        Effect.sync(() => options.presentLaunchedRun(run.runId)),
+      openFinalOutput: (config: AgentConfig, result: RunEndResult) =>
+        withProcessServices(
+          runtime,
+          openFinalOutputIfAvailable(roots, config)(result),
+        ),
+      // The set-key prompt either runs or faults, so its failure is the one
+      // failure, as `ApiKeyPromptFailed`.
+      promptForApiKey: (provider: ApiKeyProviderId) =>
+        runHandler('setApiKey', setApiKey(roots, provider)).pipe(
+          Effect.mapError(
+            (failure) =>
+              new ApiKeyPromptFailed({
+                provider,
+                message: 'The host could not ask for a provider API key.',
+                cause: failure,
+              }),
+          ),
+        ),
+    },
+    // Each command is named, so a failure carries a tag, never a rejection.
+    files: {
+      compareFiles: (base: string, edited: string) =>
+        runFileAction(
+          'compare',
+          handleCompare(at(base), at(edited), diffRefresh),
+        ),
+      acceptEditedFile: (
+        base: string,
+        edited: string,
+        copyMeta?: AcceptCopyMeta,
+      ) =>
+        runFileAction(
+          'acceptEdited',
+          handleAcceptEdited(at(base), at(edited), copyMeta),
+        ),
+      latexdiffFile: (base: string, edited: string) =>
+        runFileAction(
+          'latexdiff',
+          inViewScope(handleLatexdiff(roots, base, edited)),
+        ),
+      openDirectory: (directory: string) => revealFileInOS(directory),
+    },
+    export: {
+      // A refusal to show the pick is worded into the export's tag.
+      pickFormat: quickPick(TRANSCRIPT_EXPORT_FORMAT_CHOICES, {
+        title: 'Export transcript',
+        placeHolder: 'Choose a format',
+        ignoreFocusOut: true,
+      }).pipe(
+        Effect.map((choice) => choice?.format),
+        Effect.mapError(
+          (error) =>
+            new TranscriptExportFailed({
+              step: 'pickFormat',
+              message: error.message,
+              cause: error.cause,
+            }),
+        ),
+      ),
+      openPath: openExportPath,
+      latexPreamble,
+      traceViewerTemplate: path.join(
+        options.extensionPath,
+        'resources',
+        'traceViewer',
+        'index.html',
+      ),
+    },
   };
-}
+});

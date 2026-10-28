@@ -174,7 +174,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     host,
     runtime,
     projects,
-    secrets,
     resourcesPath: options.resourcesPath,
     draftRequests: options.draftRequests,
     onboarding,

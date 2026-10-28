@@ -7,7 +7,6 @@ import {
   Rejected,
   type RequestError,
   type RequestRefusal,
-  type LocalSession,
   type Run,
   type Session,
   type StartInput,
@@ -81,7 +80,7 @@ export interface WorkflowDiffRequest {
 
 /** What the workflow toolbar's pack or clean of a run's files did, and the
  *  input file its message names. */
-export interface WorkflowFileOperationResult {
+interface WorkflowFileOperationResult {
   readonly result: FileOpResult;
   readonly inputFile: string;
 }
@@ -114,13 +113,12 @@ class RunConfigUnreadable extends Schema.TaggedError<RunConfigUnreadable>()(
  *  session's `start` takes them. */
 type RunValidatedOptions = Pick<StartInput, 'helperModel' | 'approval'>;
 
-/** What the run actions read and present beside the window's `Session`:
- *  filled from this process's session where the window holds one
- *  ({@link localRunActionPorts}), from the service where it runs there. */
-export interface RunActionRecordPorts {
+export interface HostRunActionPorts {
   /** The window's roots: its workspace and its settings stores. */
   readonly roots: WorkspaceRoots;
-  /** The run's saved setup; null when it saved none. */
+  /** The run's saved setup, from this process's session where the window
+   *  holds it, from the service where it runs there; null when it saved
+   *  none. */
   readonly readConfig: (
     runId: RunId,
   ) => Effect.Effect<
@@ -129,18 +127,6 @@ export interface RunActionRecordPorts {
   >;
   /** Where a failure before a run opens is presented. */
   readonly present: Pick<SessionHostInteractions, 'emit'>;
-}
-
-/** The ports of a window whose process holds its session. */
-export const localRunActionPorts = (
-  session: LocalSession,
-): RunActionRecordPorts => ({
-  roots: session.roots,
-  readConfig: (runId) => session.records(runId).readConfig(),
-  present: session,
-});
-
-export interface HostRunActionPorts extends RunActionRecordPorts {
   /** Where this window's run actions land: its own session, or the
    *  background service's. Run state is read from its view. */
   readonly session: Session;
