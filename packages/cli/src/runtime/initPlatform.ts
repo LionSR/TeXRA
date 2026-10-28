@@ -340,7 +340,6 @@ export function initCliPlatform(
           // `~/.texra/v1/global-storage/config.json`. One provider per process is
           // what keeps a value `texra config` writes readable at the next startup.
           const roots = createNodeWorkspaceRoots({
-            host: 'cli',
             workspacePath: context.cwd,
             storageRoot,
             storage,
@@ -430,7 +429,6 @@ export function initCliPlatform(
 
     const cliServices: CliPlatformServices = {
       runtime,
-      host: roots.host,
       config: roots.config,
       workspaceState: roots.workspaceState,
       repoState: roots.repoState,

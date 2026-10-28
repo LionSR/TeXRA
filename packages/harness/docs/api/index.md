@@ -990,12 +990,6 @@ state stores, as the session opened over it holds them.
 
 ```ts
 interface WorkspaceRoots {
-  /**
-   * The product host this process is, named by its composition root. The
-   * catalog rows whose slot differs by host read it from here, so a read
-   * answers for the host that opened these roots rather than for a default.
-   */
-  readonly host: SettingHost;
   /** Canonical physical workspace root, or undefined when no folder is open. */
   readonly workspace: string | undefined;
   /**

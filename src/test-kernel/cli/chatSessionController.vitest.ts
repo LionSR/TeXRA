@@ -262,7 +262,7 @@ function makeInit(
     getSlashCommandContext: () => {
       throw new Error('slash commands are not exercised here');
     },
-    stores: makeFakeSettingsStores('cli').stores,
+    stores: makeFakeSettingsStores().stores,
     runtime: testRuntime(),
     approvalPolicy: () => undefined,
     ...overrides,

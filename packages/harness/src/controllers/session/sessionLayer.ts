@@ -385,7 +385,6 @@ const openSession = (open: SessionHandleInit) =>
     const key = new SessionKey({
       ...open,
       roots: {
-        host: roots.host,
         workspace: roots.workspace,
         storageRoot: roots.storageRoot,
         storage: roots.storage,

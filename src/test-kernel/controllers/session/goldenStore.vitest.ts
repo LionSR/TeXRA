@@ -217,7 +217,7 @@ describe('the golden 1.0 store', () => {
           );
         const events = yield* rowReader(
           storage,
-          armsOf(texraPlugins()),
+          armsOf(texraPlugins({ name: 'vscode' })),
           exec,
         ).read(rows, true);
         expect(events).toHaveLength(rows.length);
