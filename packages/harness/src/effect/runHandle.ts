@@ -212,6 +212,8 @@ export function handOver(
     const trace = yield* traceHandover(runId);
     const unlisten = session.trace.listen(runId, trace.offer);
     const admitted = yield* Deferred.make<CommitOrdinal, RunFailure>();
+    // This activation's end, read once as it exits: a resume writes another.
+    const ended = yield* Deferred.make<RunEndResult, RunFailure>();
     let joined = false;
     // Settling a run that was admitted changes nothing here; one that never
     // was fails its admission with its own failure, its result's error, or
@@ -221,7 +223,8 @@ export function handOver(
     ): Effect.Effect<void> =>
       Effect.sync(unlisten).pipe(
         Effect.andThen(Effect.exit(reportedEnd(session, runId, exit))),
-        Effect.flatMap(trace.settle),
+        Effect.tap(trace.settle),
+        Effect.flatMap((end) => Deferred.done(ended, end)),
         Effect.andThen(
           Effect.suspend(() => {
             if (Exit.isFailure(exit))
@@ -314,10 +317,7 @@ export function handOver(
         spawned.push(drain);
         return {
           runId,
-          result: Fiber.await(runFiber).pipe(
-            Effect.flatMap((exit) => reportedEnd(session, runId, exit)),
-            Effect.flatMap((value) => Effect.as(Fiber.join(drain), value)),
-          ),
+          result: Effect.tap(Deferred.await(ended), Fiber.join(drain)),
           view,
           events: trace.events,
           // A launch not yet admitted is stopped where it stands, and then
