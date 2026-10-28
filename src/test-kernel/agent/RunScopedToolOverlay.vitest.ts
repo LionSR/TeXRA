@@ -15,6 +15,7 @@ import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { stepFor } from '@agent/runtime/loop/step';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { AgentRun, agentRunLayer } from '@agent/runtime/run/AgentRun';
+import { AppSignals } from '@platform/appSignals';
 import { AppState } from '@platform/interfaces';
 import { AgentConfigSchema } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
@@ -87,7 +88,11 @@ function runLayer(
         mcpConfigPathOf(createFakeWorkspaceRoots().storageRoot),
       ).pipe(
         Layer.provide(
-          Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
+          Layer.mergeAll(
+            nodePlatformLayer,
+            AppState.layer(fakeHostAppState),
+            AppSignals.layer,
+          ),
         ),
       ),
     ),

@@ -35,6 +35,7 @@ import {
   responseAuthentication,
   responseParameters,
 } from './openaiResponsesRequest.js';
+import type { ClientRequest, IncomingMessage } from 'node:http';
 
 const decodeFrame = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Unknown),
@@ -185,8 +186,8 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       resume(Effect.fail(invalid ?? failure(cause)));
     };
     const onUnexpected = (
-      request: import('node:http').ClientRequest,
-      response: import('node:http').IncomingMessage,
+      request: ClientRequest,
+      response: IncomingMessage,
     ) => {
       const status = response.statusCode;
       const error = new ModelError({

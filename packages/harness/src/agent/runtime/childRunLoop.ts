@@ -267,10 +267,12 @@ class ChildLoop<TTurn, R> {
   failure: { readonly cause: unknown } | undefined;
   end: ChildEnd = { kind: 'open' };
 
-  constructor(
-    readonly params: ChildRunLoopParams<TTurn, R>,
-    readonly runs: RunRegistry,
-  ) {}
+  readonly params: ChildRunLoopParams<TTurn, R>;
+  readonly runs: RunRegistry;
+  constructor(params: ChildRunLoopParams<TTurn, R>, runs: RunRegistry) {
+    this.params = params;
+    this.runs = runs;
+  }
 
   get trace(): AgentTrace | undefined {
     return this.params.childRun?.logger;
@@ -706,8 +708,7 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
 ): Effect.fn.Return<void, Error, R | Runs> {
   const { params } = loop;
   const { session, runId } = params;
-  // Re-read: a stop landing after the body's exit is still the run's
-  // terminal verdict.
+  // Re-read: a stop landing after the body's exit is still its verdict.
   const stoppedAtExit =
     stopped || loop.runs.get(runId)?.stopReason !== undefined;
   const { end, failure } = loop;

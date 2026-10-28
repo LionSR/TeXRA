@@ -122,20 +122,25 @@ export class ToolEditApprovalController {
   /** The requests staged in this window, each held by its scope. */
   private readonly staged = new Map<string, StagedPreview>();
 
-  constructor(private readonly options: ToolEditApprovalControllerOptions) {}
+  private readonly options: ToolEditApprovalControllerOptions;
+  constructor(options: ToolEditApprovalControllerOptions) {
+    this.options = options;
+  }
 
   /** Stage every pending tool edit the session lists, until interrupted. */
-  readonly follow: Effect.Effect<void, never, PreviewServices> = Effect.scoped(
-    followPendingRequests(this.options.session.view, isToolEdit, (pending) =>
-      Effect.scoped(this.stage(pending)).pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterruptsOnly(cause)
-            ? Effect.interrupt
-            : this.report(cause).pipe(Effect.andThen(Effect.never)),
+  get follow(): Effect.Effect<void, never, PreviewServices> {
+    return Effect.scoped(
+      followPendingRequests(this.options.session.view, isToolEdit, (pending) =>
+        Effect.scoped(this.stage(pending)).pipe(
+          Effect.catchCause((cause) =>
+            Cause.hasInterruptsOnly(cause)
+              ? Effect.interrupt
+              : this.report(cause).pipe(Effect.andThen(Effect.never)),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
   handleAction(
     payload: Pick<

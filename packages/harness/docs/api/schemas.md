@@ -870,67 +870,7 @@ function getProposalFileGroups(
 ## GlobalStateKey
 
 ```ts
-enum GlobalStateKey {
-  MEMORY_ENABLED = 'texra.memory.enabled',
-  /** Code mode's "only" stage: every chat run gets `script`, and the model
-   *  sees no other tool; the rest are callable from scripts alone. */
-  SCRIPT_ONLY = 'texra.codeMode.scriptOnly',
-
-  // Child-work policy. Global rather than per-workspace: these describe how the
-  // user wants their own child runs handled, not anything about a checkout.
-  ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
-  DETACH_SUBAGENTS_ON_STOP = 'texra.detachSubagentsOnStop',
-
-  // Model selection settings
-  /** `{ enabledExtras, disabledDefaults }`: the user's delta over `DEFAULT_MODELS`. */
-  MODEL_SELECTION = 'texra.modelSelection',
-  HELPER_MODEL = 'texra.helperModel',
-  REASONING_LEVELS = 'texra.reasoningLevels',
-  PREFER_SHORT_MODEL_NAMES = 'texra.preferShortModelNames',
-
-  // Agent settings (migrated from VS Code config)
-  CUSTOM_AGENT_DIR = 'texra.customAgentDir',
-
-  // Endpoint settings
-  ENDPOINT_OPENAI = 'texra.endpoint.openai',
-  ENDPOINT_ANTHROPIC = 'texra.endpoint.anthropic',
-  ENDPOINT_GOOGLE = 'texra.endpoint.google',
-  ENDPOINT_DEEPSEEK = 'texra.endpoint.deepseek',
-  ENDPOINT_XAI = 'texra.endpoint.xai',
-  ENDPOINT_MOONSHOT = 'texra.endpoint.moonshot',
-  ENDPOINT_DASHSCOPE = 'texra.endpoint.dashscope',
-  ENDPOINT_MINIMAX = 'texra.endpoint.minimax',
-  ENDPOINT_GLM = 'texra.endpoint.glm',
-  ENDPOINT_META = 'texra.endpoint.meta',
-
-  // Region settings
-  DASHSCOPE_USE_CHINA = 'texra.dashscope.useChina',
-  MINIMAX_USE_CHINA = 'texra.minimax.useChina',
-  GLM_USE_CHINA = 'texra.glm.useChina',
-  MOONSHOT_USE_CHINA = 'texra.moonshot.useChina',
-
-  // Coding plan settings
-  GLM_CODING_PLAN = 'texra.glm.codingPlan',
-  KIMI_CODE_PREFER = 'texra.kimiCode.prefer',
-
-  // Transport settings
-  WEBSOCKET_OPENAI = 'texra.websocket.openai',
-
-  // Tool settings
-  DISABLED_TOOLS = 'texra.tools.disabled',
-
-  /** The per-install key MCP env values are digested under (`mcpConfig`). */
-  MCP_REVISION_KEY = 'texra.mcp.revisionKey',
-
-  // Installed Claude Code and Codex plugins, and the trust given to each
-  INSTALLED_PLUGINS = 'texra.plugins.installed',
-
-  // Onboarding funnel (user-scoped; see texra's onboardingFunnel)
-  /** Canonical shared key; the CLI-originated spelling is intentionally stable. */
-  ONBOARDING_DECLINED = 'texra.cli.onboardingDeclined',
-  ONBOARDING_FIRST_RUN_DONE = 'texra.onboarding.firstRunDone',
-  ONBOARDING_DEFAULT_TEAM_ID = 'texra.onboarding.defaultTeamId',
-}
+const GlobalStateKey: Readonly<{ readonly MEMORY_ENABLED: "texra.memory.enabled"; readonly SCRIPT_ONLY: "texra.codeMode.scriptOnly"; readonly ALLOW_ORCHESTRATOR_KILL: "texra.allowOrchestratorKill"; readonly DETACH_SUBAGENTS_ON_STOP: "texra.detachSubagentsOnStop"; readonly MODEL_SELECTION: "texra.modelSelection"; readonly HELPER_MODEL: "texra.helperModel"; readonly REASONING_LEVELS: "texra.reasoningLevels"; readonly PREFER_SHORT_MODEL_NAMES: "texra.preferShortModelNames"; readonly CUSTOM_AGENT_DIR: "texra.customAgentDir"; readonly ENDPOINT_OPENAI: "texra.endpoint.openai"; readonly ENDPOINT_ANTHROPIC: "texra.endpoint.anthropic"; readonly ENDPOINT_GOOGLE: "texra.endpoint.google"; readonly ENDPOINT_DEEPSEEK: "texra.endpoint.deepseek"; readonly ENDPOINT_XAI: "texra.endpoint.xai"; readonly ENDPOINT_MOONSHOT: "texra.endpoint.moonshot"; readonly ENDPOINT_DASHSCOPE: "texra.endpoint.dashscope"; readonly ENDPOINT_MINIMAX: "texra.endpoint.minimax"; readonly ENDPOINT_GLM: "texra.endpoint.glm"; readonly ENDPOINT_META: "texra.endpoint.meta"; readonly DASHSCOPE_USE_CHINA: "texra.dashscope.useChina"; readonly MINIMAX_USE_CHINA: "texra.minimax.useChina"; readonly GLM_USE_CHINA: "texra.glm.useChina"; readonly MOONSHOT_USE_CHINA: "texra.moonshot.useChina"; readonly GLM_CODING_PLAN: "texra.glm.codingPlan"; readonly KIMI_CODE_PREFER: "texra.kimiCode.prefer"; readonly WEBSOCKET_OPENAI: "texra.websocket.openai"; readonly DISABLED_TOOLS: "texra.tools.disabled"; readonly MCP_REVISION_KEY: "texra.mcp.revisionKey"; readonly INSTALLED_PLUGINS: "texra.plugins.installed"; readonly ONBOARDING_DECLINED: "texra.cli.onboardingDeclined"; readonly ONBOARDING_FIRST_RUN_DONE: "texra.onboarding.firstRunDone"; readonly ONBOARDING_DEFAULT_TEAM_ID: "texra.onboarding.defaultTeamId"; }>
 ```
 
 ## GOAL_MAX_COST_SETTING
@@ -2860,29 +2800,7 @@ and the process's `AppState` service. Each host wires its own
 implementation at startup.
 
 ```ts
-enum WorkspaceStateKey {
-  // Agent visibility
-  /** Workspace agents selection; the `custom` member carries a category-keyed record. */
-  WORKSPACE_AGENTS = 'texra.workspaceAgents',
-  CUSTOM_TEAMS = 'texra.customTeams',
-  /** Custom agents the user turned off; every other custom agent is shown. */
-  HIDDEN_CUSTOM_AGENTS = 'texra.hiddenCustomAgents',
-
-  // Skill availability
-  DISABLED_SKILLS = 'texra.skills.disabled',
-  DISABLED_SKILL_SOURCES = 'texra.skills.disabledSources',
-
-  // Git commit author settings
-  GIT_MARK_COMMITS = 'texra.git.markCommits',
-  GIT_AUTHOR_NAME = 'texra.git.authorName',
-  GIT_AUTHOR_EMAIL = 'texra.git.authorEmail',
-
-  // Git worktree support
-  GIT_WORKTREE_SUPPORT = 'texra.git.worktreeSupport',
-
-  // Tool path safety
-  TOOL_PATH_PROTECTION_ENABLED = 'texra.tools.restrictPathsToWorkingDirectory',
-}
+const WorkspaceStateKey: Readonly<{ readonly WORKSPACE_AGENTS: "texra.workspaceAgents"; readonly CUSTOM_TEAMS: "texra.customTeams"; readonly HIDDEN_CUSTOM_AGENTS: "texra.hiddenCustomAgents"; readonly DISABLED_SKILLS: "texra.skills.disabled"; readonly DISABLED_SKILL_SOURCES: "texra.skills.disabledSources"; readonly GIT_MARK_COMMITS: "texra.git.markCommits"; readonly GIT_AUTHOR_NAME: "texra.git.authorName"; readonly GIT_AUTHOR_EMAIL: "texra.git.authorEmail"; readonly GIT_WORKTREE_SUPPORT: "texra.git.worktreeSupport"; readonly TOOL_PATH_PROTECTION_ENABLED: "texra.tools.restrictPathsToWorkingDirectory"; }>
 ```
 
 ## WorktreeInfo

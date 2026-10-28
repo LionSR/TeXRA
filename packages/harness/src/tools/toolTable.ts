@@ -20,6 +20,7 @@ import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { LogWriteError } from '@agent/runtime/SessionHandle';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
+import type { AppSignals } from '@platform/appSignals';
 import type { AppState, ConfigProvider } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { GlobalValues } from '@platform/processRuntime';
@@ -37,15 +38,17 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
  * What a plugin's process layer is built over: the tool catalog it belongs
- * to, and the process's filesystem, paths, child processes and application
- * state (a language server pool spawns and reads its settings).
+ * to, and the process's filesystem, paths, child processes, application
+ * state (a language server pool spawns and reads its settings) and signal
+ * hub (the GitHub subscriptions announce their bindings).
  */
 export type PluginLayerServices =
   | ToolCatalog
   | FileSystem.FileSystem
   | Path.Path
   | ChildProcessSpawner
-  | AppState;
+  | AppState
+  | AppSignals;
 
 /**
  * A plugin's process-lifetime services (its `processLayer`): built

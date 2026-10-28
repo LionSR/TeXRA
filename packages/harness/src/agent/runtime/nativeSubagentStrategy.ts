@@ -8,7 +8,11 @@ import { Effect } from 'effect';
 
 import { type RunEndResult } from '@agent/runtime/RunEndResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
+import type {
+  ExecuteAgentOptions,
+  ResumeToolUseFromResumeDataOptions,
+  ResumeTurnIdentity,
+} from '@agent/runtime/executeAgent';
 import type { RegisterRunOptions } from '@agent/storage/runLifecycle';
 import {
   registryOf,
@@ -58,8 +62,8 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
     | {
         readonly definition?: never;
         readonly resume: {
-          readonly identity: import('@agent/runtime/executeAgent').ResumeTurnIdentity;
-          readonly options: import('@agent/runtime/executeAgent').ResumeToolUseFromResumeDataOptions;
+          readonly identity: ResumeTurnIdentity;
+          readonly options: ResumeToolUseFromResumeDataOptions;
         };
       }
   );

@@ -26,7 +26,7 @@ import type {
   PluginToolServices,
   ToolServices,
 } from '@agent/runtime/ToolServices';
-import { emitAppSignal } from '@eventBus/AppSignals';
+import { AppSignals } from '@platform/appSignals';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
 import {
   qualifyAggregateId,
@@ -238,8 +238,8 @@ export function announceRunFacts(
   rows: (runId: RunId) => Effect.Effect<readonly SessionEvent[], Error>,
   since: CommitOrdinal,
   arms: PluginArms,
-): Effect.Effect<void> {
-  return Effect.suspend(() => {
+): Effect.Effect<void, never, AppSignals> {
+  return AppSignals.use((signals) => {
     const writing = new Map(
       Object.entries(arms).flatMap(([name, { writes }]) =>
         writes === undefined ? [] : [[name, writes] as const],
@@ -255,7 +255,7 @@ export function announceRunFacts(
             if (row.type !== 'plugin.fact' || row.commit <= last) continue;
             const writes = writing.get(`${row.plugin}/${row.kind}`);
             if (writes !== undefined)
-              emitAppSignal('workspaceFilesWritten', {
+              signals.emit('workspaceFilesWritten', {
                 absolutePaths: [...writes(row.value)],
               });
             last = row.commit;

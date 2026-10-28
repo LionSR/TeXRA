@@ -47,14 +47,15 @@ export interface RunControls {
 export class RunHandle {
   private liveControls?: RunControls;
 
-  constructor(
-    /**
-     * The run's birth facts, the same object its `run.start` published and its
-     * `run.end` row closes. Held whole rather than copied field by field,
-     * so the handle and the event plane cannot describe the run differently.
-     */
-    readonly run: RunFacts,
-  ) {}
+  /**
+   * The run's birth facts, the same object its `run.start` published and its
+   * `run.end` row closes. Held whole rather than copied field by field,
+   * so the handle and the event plane cannot describe the run differently.
+   */
+  readonly run: RunFacts;
+  constructor(run: RunFacts) {
+    this.run = run;
+  }
 
   get runId(): RunId {
     return this.run.runId;

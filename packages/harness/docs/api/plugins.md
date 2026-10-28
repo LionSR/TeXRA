@@ -1082,8 +1082,9 @@ class PluginHold extends Context.Service<
 ## PluginLayerServices
 
 What a plugin's process layer is built over: the tool catalog it belongs
-to, and the process's filesystem, paths, child processes and application
-state (a language server pool spawns and reads its settings).
+to, and the process's filesystem, paths, child processes, application
+state (a language server pool spawns and reads its settings) and signal
+hub (the GitHub subscriptions announce their bindings).
 
 ```ts
 type PluginLayerServices =
@@ -1091,7 +1092,8 @@ type PluginLayerServices =
   | FileSystem.FileSystem
   | Path.Path
   | ChildProcessSpawner
-  | AppState;
+  | AppState
+  | AppSignals;
 ```
 
 ## PluginRow

@@ -42,7 +42,10 @@ interface SettingsAgentCatalogControllerDeps {
 }
 
 export class SettingsAgentCatalogController {
-  constructor(private readonly deps: SettingsAgentCatalogControllerDeps) {}
+  private readonly deps: SettingsAgentCatalogControllerDeps;
+  constructor(deps: SettingsAgentCatalogControllerDeps) {
+    this.deps = deps;
+  }
 
   buildSelectionItems() {
     return Effect.gen({ self: this }, function* () {
