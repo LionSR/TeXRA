@@ -18,17 +18,17 @@ import {
   nullishWithDefault,
   ToolError,
 } from '@texra-ai/harness/plugins';
+import { Settings, type ConfigProvider } from '@texra-ai/harness/host';
 import { type StateSettingEntry } from '@texra-ai/harness/schemas';
 import { settingSchemaWithoutDefault } from '@texra/shared/settingsView/settingRows';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 /**
  * Keys `update_config` may write. Read access (`read_config`) is open across
  * all `texra.*` keys, but writes are limited to this allowlist so a
  * hallucinated payload cannot flip an arbitrary setting. Each key's value
- * schema and description come from the settings catalog, so the tool
- * validates against, and explains, exactly what every host reads. The catalog
- * is consulted when a tool runs, never while this module loads.
+ * schema and description come from the settings catalog the call's
+ * configuration carries, so the tool validates against, and explains, exactly
+ * what that workspace reads.
  */
 const UPDATABLE_KEY_LIST = [
   'texra.bib.defaultPath',
@@ -41,8 +41,11 @@ const UPDATABLE_KEY_LIST = [
 
 type UpdatableKey = (typeof UPDATABLE_KEY_LIST)[number];
 
-function catalogEntry(key: UpdatableKey): StateSettingEntry {
-  const entry = TEXRA_SETTINGS.byKey(key);
+function catalogEntry(
+  config: ConfigProvider,
+  key: UpdatableKey,
+): StateSettingEntry {
+  const entry = config.catalog.byKey(key);
   if (!entry) {
     throw new Error(`update_config allowlist key ${key} is not in the catalog`);
   }
@@ -72,10 +75,10 @@ export const ReadConfigTool = defineTool({
 Accepts any key starting with \`texra.\`. Returns the current resolved value (workspace value if set, else user, else default). Use this when teaching the user what a setting controls: read first, explain, then propose a change with \`update_config\`.`,
   schema: ReadConfigInputSchema,
   execute: Effect.fn('ConfigTools.execute')(function* (input: ReadConfigInput) {
-    const call = yield* ToolContext;
-    const value = call.env.roots.config.get(input.key);
+    const { config } = (yield* ToolContext).env.roots;
+    const value = config.get(input.key);
     const json = JSON.stringify(value, null, 2) ?? 'undefined';
-    const description = TEXRA_SETTINGS.byKey(input.key)?.description;
+    const description = config.catalog.byKey(input.key)?.description;
     return executed(
       `${input.key}:\n${json}${description ? `\n\n${description}` : ''}`,
       `Read ${input.key}`,
@@ -103,7 +106,8 @@ type UpdateConfigInput = typeof UpdateConfigInputSchema.Type;
 const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
   input: UpdateConfigInput,
 ) {
-  const entry = catalogEntry(input.key);
+  const { roots } = (yield* ToolContext).env;
+  const entry = catalogEntry(roots.config, input.key);
   const value = yield* Schema.decodeUnknownEffect(
     settingSchemaWithoutDefault(entry),
   )(input.value).pipe(
@@ -115,11 +119,9 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
     ),
   );
 
-  const call = yield* ToolContext;
-  const config = call.env.roots.config;
-  const previous = config.get(input.key);
+  const previous = roots.config.get(input.key);
   const target = input.target === 'workspace' ? 'workspace' : 'global';
-  yield* config.update(input.key, value, target);
+  yield* Settings.set(roots, input.key, value, target);
 
   const before = JSON.stringify(previous);
   const after = JSON.stringify(value);
