@@ -631,9 +631,8 @@ export function ownerProcessLayer({
   const globalStorage = resolveGlobalStoragePath(storageRoot);
   const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
-  const identity = Layer.effect(
-    ProcessIdentity,
-    Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
+  const identity = Layer.unwrap(
+    Effect.map(processStart, (s) => ProcessIdentity.layer(processOwnerId(s))),
   );
   // Keep the global handle outside session `Layer.fresh`; open failure is fatal.
   const globalDatabase = (

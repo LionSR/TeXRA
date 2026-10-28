@@ -165,14 +165,12 @@ const admit = (
           }),
         );
       }
-      const liveness = SubscriptionRef.getUnsafe(deps.local);
       // A fork only reads the committed rows of its source, whoever holds it.
       if (
         req.kind !== 'run.delete' &&
         req.kind !== 'run.fork' &&
         state.ownerId !== null &&
-        !liveness.self.includes(state.ownerId) &&
-        !liveness.dead.includes(state.ownerId)
+        !SubscriptionRef.getUnsafe(deps.local).self.includes(state.ownerId)
       ) {
         return Effect.orDie(deps.log.claimOwner(state.aggregateId)).pipe(
           Effect.filterOrFail(
