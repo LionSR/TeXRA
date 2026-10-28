@@ -22,8 +22,22 @@ import {
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { RunFailure, type Run, type Session, type StartInput } from '@texra-ai/harness';
-import { describeFollowUpFailure, hasErrorPresentationClaimed, withProcessServices, type ProcessRuntime, type ProcessServices, SESSION_CLOSE_DEADLINE_MS, AgentError, isUserAbort } from '@texra-ai/harness/host';
+import {
+  RunFailure,
+  type Run,
+  type Session,
+  type StartInput,
+} from '@texra-ai/harness';
+import {
+  describeFollowUpFailure,
+  hasErrorPresentationClaimed,
+  withProcessServices,
+  type ProcessRuntime,
+  type ProcessServices,
+  SESSION_CLOSE_DEADLINE_MS,
+  AgentError,
+  isUserAbort,
+} from '@texra-ai/harness/host';
 
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import {

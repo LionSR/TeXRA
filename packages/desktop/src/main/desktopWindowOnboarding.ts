@@ -3,7 +3,13 @@
 
 import { Effect, Schema, Scope } from 'effect';
 
-import { AppState, Secrets, withProcessServices, type ProcessRuntime, withLogChannel } from '@texra-ai/harness/host';
+import {
+  AppState,
+  Secrets,
+  withProcessServices,
+  type ProcessRuntime,
+  withLogChannel,
+} from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import { kickoffDesktopSetup } from '@texra/controllers/onboarding/setupLaunch';

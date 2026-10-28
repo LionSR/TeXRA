@@ -4,7 +4,15 @@ import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 
 // Local imports
 import { resolveModelSource } from '@texra-ai/llm';
-import { getEnabledModels, getHelperModelName, readModelOptions, StateWriteFailed, type ModelOption, type PlatformSecrets, Settings } from '@texra-ai/harness/host';
+import {
+  getEnabledModels,
+  getHelperModelName,
+  readModelOptions,
+  StateWriteFailed,
+  type ModelOption,
+  type PlatformSecrets,
+  Settings,
+} from '@texra-ai/harness/host';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {

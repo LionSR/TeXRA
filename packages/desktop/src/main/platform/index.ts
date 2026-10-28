@@ -2,7 +2,14 @@ import { app } from 'electron';
 import { Effect, Layer, ManagedRuntime, Scope } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
-import { AgentDirectories, AppState, processLayer, AgentDirectoryService, type ProcessServices, StateStores } from '@texra-ai/harness/host';
+import {
+  AgentDirectories,
+  AppState,
+  processLayer,
+  AgentDirectoryService,
+  type ProcessServices,
+  StateStores,
+} from '@texra-ai/harness/host';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
   createNodeWorkspaceRoots,

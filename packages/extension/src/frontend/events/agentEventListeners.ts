@@ -11,7 +11,16 @@
  */
 import { Cause, Effect, Scope } from 'effect';
 
-import { withProcessServices, type ProcessRuntime, type HostPresentation, type RuntimePresentationEvent, type RuntimePresentationEventPayloads, type HostInteractions, type PresentationEventHandlers, withLogChannel } from '@texra-ai/harness/host';
+import {
+  withProcessServices,
+  type ProcessRuntime,
+  type HostPresentation,
+  type RuntimePresentationEvent,
+  type RuntimePresentationEventPayloads,
+  type HostInteractions,
+  type PresentationEventHandlers,
+  withLogChannel,
+} from '@texra-ai/harness/host';
 import {
   toErrorMessage,
   INSTRUCTION_ACTION,
