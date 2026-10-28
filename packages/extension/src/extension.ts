@@ -178,6 +178,9 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           // and the Lean 4 probe.
           setup: vscodeSetupPlatform,
         }),
+        skills: {
+          resourcesPath: path.join(context.extensionPath, 'resources'),
+        },
         // The one credential store every host shares (`~/.texra/secrets/`):
         // the background service reads the keys this window saves.
         secrets: Secrets.announcing(
@@ -272,13 +275,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         repoState: yield* (yield* StateStores).repo(storage, workspaceRoot),
         globalState,
       });
-      // The once-per-process installs, in the order the shared bootstrap owns.
-      yield* bootstrapHost({
-        roots,
-        skills: {
-          resourcesPath: path.join(context.extensionPath, 'resources'),
-        },
-      });
+      // The once-per-process writes the shared bootstrap owns.
+      yield* bootstrapHost({ roots });
       // The one-time telemetry notice, one information message; VS Code's own
       // switch being off means nothing is sent, so nothing to announce.
       const notice = vscode.env.isTelemetryEnabled

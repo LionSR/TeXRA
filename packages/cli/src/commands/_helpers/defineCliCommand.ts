@@ -157,6 +157,7 @@ export function defineCliCommand<const A extends ArgsDef, E>(
                 }
               : {
                   resourcesPath: context.resourcesPath,
+                  skillSourceOptions: context.skillSourceOptions,
                   minimumLogLevel: context.minimumLogLevel,
                   // The command's project: its `.env` is what its model
                   // availability and its runs read.
