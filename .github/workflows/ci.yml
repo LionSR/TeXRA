@@ -405,6 +405,13 @@ jobs:
           pnpm --filter @texra/desktop run build:renderer
           node packages/extension/scripts/build-serve.mjs
 
+      # `electron` is not in pnpm's allowBuilds, so install skips its
+      # postinstall and the binary downloads the first time a test resolves
+      # `require('electron')`, inside the first spec's 60 s budget. Download
+      # it here, in its own timed step, so no test pays for it.
+      - name: Download the Electron binary
+        run: pnpm --filter @texra/desktop exec node -e "require('electron')"
+
       - name: Run desktop e2e suite
         env:
           TEXRA_NO_UPDATE_CHECK: '1'
