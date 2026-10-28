@@ -22,7 +22,15 @@
  *   rearranges itself before the refusal;
  * - a run whose rows do not fold is reported as finished;
  * - a resume whose input the resumed turn's end takes with it answers only
- *   at a later rest, after the turn that input starts.
+ *   at a later rest, after the turn that input starts;
+ * - a user's stop while a resume decides is lost: the stop writes the end,
+ *   and the resume activates the stopped run anyway;
+ * - the first caller of a resume leaving before admission takes a second
+ *   SDK caller's resume down with it;
+ * - every caller of a resume leaving before admission leaves the resume
+ *   running with no owner, which then activates the run;
+ * - a message sent while a resume decides only watches that resume, so the
+ *   resume's caller leaving loses the wake.
  */
 import '@test/support/sessionGraphTestSetup';
 
@@ -30,9 +38,10 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Cause, Effect, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -45,11 +54,13 @@ import {
   parkedRunAfterCrash,
   sessionStoreFaults,
   storedRows,
+  untilStored,
   REAL_RUN_TIMEOUT,
   validationHost,
 } from '@test/support/storeFaults';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { makeSessions } from '../../../../packages/harness/src/effect/sessionPrograms';
 
 /** A resume on the test process's runtime. */
 const resume = (runId: RunId, options: ResumeRunOptions) =>
@@ -84,6 +95,23 @@ const offeredTools = (storage: string, runId: RunId) => {
     ).payload.tools.map((tool) => tool.name),
   );
 };
+
+/** The outcomes of the run's `run.end` rows, in order. */
+const endsOf = (storage: string, runId: RunId) =>
+  storedRows(storage)
+    .filter((row) => row.run === runId && row.type === 'run.end')
+    .map((row) => (JSON.parse(row.data) as { outcome: string }).outcome);
+
+/** `session` as the package hands it to an embedder (`Sessions.open`). */
+const packageSession = (session: SessionHandle) =>
+  Effect.gen(function* () {
+    const sessions = yield* makeSessions(
+      // cast: the owner opens the one session this case holds.
+      { open: () => Effect.succeed(session) } as never,
+      yield* testRuntime().contextEffect,
+    );
+    return yield* sessions.open(testWorkspaceRoots());
+  });
 
 /** What a resume that reached the run's next idle turn answers. */
 const DELIVERED = { started: true, delivered: true };
@@ -166,28 +194,25 @@ describe(
           // The first resume waits on the run's claim, inside its resume.
           const claim = yield* faults.holdNext('acquireClaims');
           const admitted: string[] = [];
-          const admit = (who: string) => () =>
-            Effect.sync(() => void admitted.push(who));
+          const admit =
+            (who: string) => (_: RunId, __: number, joined: boolean) =>
+              Effect.sync(() => void admitted.push(`${who} ${joined}`));
           const first = yield* Effect.forkChild(
             resume(runId, { session, onAdmitted: admit('first') }),
           );
           yield* claim.reached;
-          const joining = yield* Deferred.make<void>();
+          // Joined as it is forked: the resume is the run's activation.
           const second = yield* Effect.forkChild(
-            resume(runId, {
-              session,
-              onAdmitted: admit('second'),
-              onJoined: () => Deferred.doneUnsafe(joining, Effect.void),
-            }),
+            resume(runId, { session, onAdmitted: admit('second') }),
+            { startImmediately: true },
           );
-          yield* Deferred.await(joining);
           yield* claim.release;
 
           const joined = yield* Fiber.join(second);
           expect(joined).toMatchObject(DELIVERED);
           expect(yield* Fiber.join(first)).toEqual(joined);
           expect(activations(storage, runId)).toBe(2);
-          expect(admitted.toSorted()).toEqual(['first', 'second']);
+          expect(admitted.toSorted()).toEqual(['first false', 'second true']);
         }),
     );
 
@@ -266,6 +291,125 @@ describe(
           ).toEqual({ failed: 'owned_elsewhere' });
           expect(rearranged).toBe(false);
           expect(activations(storage, runId)).toBe(1);
+        }),
+    );
+    it.live(
+      "a user's stop while a resume decides ends the run cancelled, keeps the stop's reason, and the resume activates nothing",
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          const faults = yield* sessionStoreFaults(storage);
+          // Past its checks under the claim, the resume reads the run's
+          // input before it launches: the stop lands there.
+          const claim = yield* faults.holdNext('acquireClaims');
+          const resumed = yield* Effect.forkChild(
+            Effect.exit(resume(runId, { session })),
+          );
+          yield* claim.reached;
+          const input = yield* faults.holdNext('readAggregate');
+          yield* claim.release;
+          yield* input.reached;
+
+          const stop = session.runs.stop(runId, {
+            reason: 'user',
+            detachActiveChildren: false,
+          });
+          expect(session.runs.get(runId)?.stopReason).toBe('user');
+          yield* stop.settlement;
+          yield* input.release;
+          yield* Fiber.join(resumed);
+
+          expect(endsOf(storage, runId)).toEqual(['cancelled']);
+          expect(activations(storage, runId)).toBe(1);
+        }),
+    );
+
+    it.live(
+      'a second SDK resumer is handed the run when the first leaves before admission',
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          yield* send(session, runId, 'once');
+          const sdk = yield* packageSession(session);
+          const faults = yield* sessionStoreFaults(storage);
+          const claim = yield* faults.holdNext('acquireClaims');
+          const first = yield* Effect.forkChild(sdk.resume(runId), {
+            startImmediately: true,
+          });
+          yield* claim.reached;
+          const second = yield* Effect.forkChild(sdk.resume(runId), {
+            startImmediately: true,
+          });
+          yield* Fiber.interrupt(first);
+          yield* claim.release;
+
+          const run = yield* Fiber.join(second);
+          expect(run.runId).toBe(runId);
+          expect((yield* run.result).outcome).toBe('completed');
+          expect(activations(storage, runId)).toBe(2);
+        }),
+    );
+
+    it.live(
+      'a resume whose every caller leaves before it admits the run is stopped, activating nothing',
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          const faults = yield* sessionStoreFaults(storage);
+          const claim = yield* faults.holdNext('acquireClaims');
+          const first = yield* Effect.forkChild(resume(runId, { session }), {
+            startImmediately: true,
+          });
+          yield* claim.reached;
+          const second = yield* Effect.forkChild(resume(runId, { session }), {
+            startImmediately: true,
+          });
+          yield* Fiber.interrupt(first);
+          yield* Fiber.interrupt(second);
+          yield* claim.release;
+
+          // Nothing is left to activate it: no activation comes within a
+          // bound that a live resume meets many times over.
+          const activated = yield* untilStored(
+            storage,
+            () => activations(storage, runId) > 1,
+          ).pipe(Effect.timeout('3 seconds'), Effect.exit);
+          expect(
+            activated._tag === 'Failure' && Cause.squash(activated.cause),
+          ).toBeInstanceOf(Cause.TimeoutError);
+          expect(session.runs.get(runId)).toBeUndefined();
+        }),
+    );
+
+    it.live(
+      "a message sent while a resume decides wakes the run though the resume's caller leaves",
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          const faults = yield* sessionStoreFaults(storage);
+          // The resume reads the run's config, before its claim.
+          const owner = yield* faults.holdNext('readRunRecords');
+          const resumed = yield* Effect.forkChild(resume(runId, { session }));
+          yield* owner.reached;
+          const config = yield* faults.holdNext('readRunRecords');
+          yield* owner.release;
+          yield* config.reached;
+
+          expect(
+            yield* submitFollowUp(
+              runId,
+              { from: { kind: 'user' }, text: 'woken' },
+              { session },
+            ),
+          ).toEqual({ status: 'queued' });
+          yield* Fiber.interrupt(resumed);
+          yield* config.release;
+
+          yield* untilStored(storage, () =>
+            answersOf(storage, runId).some((answer) =>
+              answer.includes('woken'),
+            ),
+          );
         }),
     );
   },

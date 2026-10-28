@@ -57,7 +57,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
     );
     // The completion commits on the parent's input; its wake follows.
     const followUp = vi
-      .spyOn(toolUseFollowUp, 'startFollowUpWake')
+      .spyOn(toolUseFollowUp, 'wakeRun')
       .mockReturnValue(Effect.succeed(Effect.void));
 
     publishTestRunStart(testDefaultSession(), PARENT_RUN_ID);

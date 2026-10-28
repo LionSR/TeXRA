@@ -60,7 +60,7 @@ export const testRunPrograms: RunPrograms = {
   resume: (...args) =>
     Effect.flatMap(
       Effect.promise(() => import('@agent/runtime/resumeRun')),
-      (module) => module.resumeRun(...args),
+      (module) => module.decideResume(...args),
     ),
 };
 

@@ -1,13 +1,24 @@
-import { Clock, Effect, Exit, Fiber, Result, Scope, Stream } from 'effect';
+import {
+  Clock,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Result,
+  Scope,
+  Stream,
+} from 'effect';
 
 /**
- * The one resume entry point. Every host continues a persisted run through
- * it, including implicit follow-up wakes, and a second resume of the same
- * run joins the one in flight (`Resumes.once`). It launches on the run
+ * The one resume path. A host continues a persisted run through
+ * {@link resumeRun}, a wake through `wakeRun`; both run the run's decision
+ * ({@link decideResume}) as its activation, so a stop reaches it from the
+ * call and a second resume of the run joins it. It launches on the run
  * lane; the launched run opens its own reader. Recovered children use the
  * same continuous delivery driver as newly launched children and
  * acknowledge each resumed turn separately.
  */
+import { openResume, REFUSED } from '@agent/followUp/ToolUseFollowUp';
 import { runRejection } from '@agent/storage/resumability';
 import {
   getRunRecords,
@@ -16,7 +27,6 @@ import {
 } from '@agent/storage/runRecords';
 import { findInCauseChain } from '@common/errors/errorPredicates';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessServices } from '@platform/processRuntime';
 import {
   type CommitOrdinal,
   qualifyAggregateId,
@@ -40,12 +50,7 @@ import {
 } from './executeAgent';
 import { deliverHeld } from './runLaunchGuard';
 import { startChildRunLoop } from './childRunLoop';
-import {
-  registryOf,
-  type AgentRunServices,
-  Runs,
-  RunLive,
-} from './runRegistry';
+import { registryOf, type AgentRunServices, RunLive } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
 
 type ResumeRunCompletion = Effect.Effect<RunEndResult, Error>;
@@ -61,24 +66,27 @@ export type ResumeRunResult =
     }
   | { readonly failed: ResumeRefusal };
 
-/** One resume job's answer ({@link resumeOwnRun}): its result, or that an
- *  open call of `ownedBy` owns the run, as its records said under its claim
- *  in the job, so it resumes with that parent. */
+/** A resume's answer: its result, or that an open call of `ownedBy` owns
+ *  the run, as its records said under its claim, so it resumes with that
+ *  parent. */
 export type ResumeAttempt = ResumeRunResult | { readonly ownedBy: RunId };
 
 export interface ResumeRunOptions extends Pick<
   ResumeToolUseFromResumeDataOptions,
-  'onRun' | 'onAdmitted' | 'stopAfterCycle' | 'tools'
+  'onRun' | 'stopAfterCycle' | 'tools'
 > {
   /** Session owning the resumed run's coordination state. */
   readonly session: SessionHandle;
-  /** This caller joined a resume already in flight: an observer. */
-  readonly onJoined?: () => void;
+  /** This caller's hook once the run is admitted at `commit`, its
+   *  `run.activate`; `joined`: it found the resume in flight, an observer. */
+  readonly onAdmitted?: (
+    runId: RunId,
+    commit: CommitOrdinal,
+    joined: boolean,
+  ) => Effect.Effect<void>;
 }
 
 const CHANNEL = 'ResumeRun';
-
-const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 
 /**
  * Only a run history refusal of the saved rows names an unusable checkpoint.
@@ -92,77 +100,69 @@ function namesUnusableCheckpoint(error: unknown): boolean {
 }
 
 /**
- * Resume a stream through the single host entry path. A run live here is
- * refused before anything is read; one being resumed already is joined. An
- * owned child is resumed through its parent: the parent's open call
- * reattaches it, so it never runs alone or twice.
+ * Resume `runId` as a caller of its resume, joined or opened here; a run
+ * another launch holds here is refused. An owned child answers `ownedBy`,
+ * for a caller that follows the parent itself. The last caller to leave
+ * before any took the answer stops the resume and the run it launched.
  */
-export const resumeRun = Effect.fn('resumeRun')(function* (
+export const resumeRun = (
   runId: RunId,
   options: ResumeRunOptions,
-): Effect.fn.Return<ResumeRunResult, Error, ProcessServices> {
-  const result = yield* resumeOwnRun(runId, options);
-  if (!('ownedBy' in result)) return result;
-  yield* Effect.logInfo(
-    `Run ${runId} belongs to an open call of run ${result.ownedBy}: resuming that run, which reattaches it`,
-  ).pipe(withLogChannel(CHANNEL));
-  return yield* resumeRun(result.ownedBy, options);
-});
+): Effect.Effect<ResumeAttempt, Error> =>
+  Effect.uninterruptibleMask((restore) =>
+    Effect.gen(function* () {
+      const runs = registryOf(options.session.runs);
+      const found = runs.attemptOf(runId);
+      if (found === undefined && runs.get(runId)?.launched === true)
+        return REFUSED;
+      const attempt = found ?? (yield* openResume(runId, options, false));
+      attempt.waiters += 1;
+      const { onAdmitted } = options;
+      const answer = Effect.gen(function* () {
+        const hook = yield* Effect.forkChild(
+          Effect.flatMap(
+            Deferred.await(attempt.admitted),
+            (commit) =>
+              onAdmitted?.(runId, commit, found !== undefined) ?? Effect.void,
+          ),
+        );
+        // A caller that leaves takes its hook with it.
+        const result = yield* attempt.answer.pipe(
+          Effect.onError(() => Fiber.interrupt(hook)),
+        );
+        // Admitted, this caller's hook runs to its end; never admitted, never.
+        yield* Deferred.isDoneUnsafe(attempt.admitted)
+          ? Fiber.join(hook)
+          : Fiber.interrupt(hook);
+        return result;
+      });
+      return yield* restore(answer).pipe(
+        Effect.onExit((exit) =>
+          Effect.sync(() => {
+            attempt.waiters -= 1;
+            if (Exit.isSuccess(exit)) attempt.handedOff = true;
+            else if (
+              attempt.waiters === 0 &&
+              !attempt.handedOff &&
+              runs.attemptOf(runId) === attempt
+            )
+              runs.interrupt(runId);
+          }),
+        ),
+      );
+    }),
+  );
 
 /**
- * One resume job of `runId` itself, on the session's `Runs`: an owned child
- * answers `ownedBy`, decided in the job, for a caller that follows the
- * parent itself (the package's `Session.resume`).
+ * One resume's decision, run as its run's activation (`resumeRun`), of a
+ * run no generation here holds: refused, owned by an open call of its
+ * parent, or launched with its queued input, `activated` told the commit
+ * of its `run.activate`.
  */
-export const resumeOwnRun = Effect.fn('resumeOwnRun')(function* (
+export const decideResume = Effect.fn('decideResume')(function* (
   runId: RunId,
   options: ResumeRunOptions,
-): Effect.fn.Return<ResumeAttempt, Error, ProcessServices> {
-  const session = options.session;
-  // The resume runs on the session's fiber: its owner's interruption stops
-  // it, unless a caller joined it; a joiner's ends only its own wait.
-  const { result, joined } = yield* session.followUps.resumes.once(
-    runId,
-    resumeHere(runId, options),
-    registryOf(session.runs).fork,
-    options.onJoined,
-  );
-  if (!joined || 'ownedBy' in result) return result;
-  // A joiner of a resume already in flight hears that resume's refusal or
-  // failure as its own; once that resume has the run it gets its own
-  // admission, under the run's claim as the resume's own is, a failure of
-  // which fails this joiner alone.
-  if (!('started' in result) || !options.onAdmitted) return result;
-  const hook = options.onAdmitted;
-  return yield* Effect.scoped(
-    Effect.gen(function* () {
-      const heldBy = yield* holdClaim(session, runId);
-      if (heldBy !== null) return { failed: 'owned_elsewhere' } as const;
-      // Joined at the activation the resume committed: the latest.
-      const commit = (yield* session.followUps.read(runId)).activation?.commit;
-      if (commit === undefined)
-        return yield* Effect.die(new Error(`Run ${runId} has no activation.`));
-      yield* hook(runId, commit);
-      return result;
-    }),
-  );
-});
-
-/** Hold the run's claim for the enclosing scope: null, or the live process
- *  that refused it. */
-const holdClaim = (session: SessionHandle, runId: RunId) =>
-  session.log.hold(runId).pipe(
-    Effect.as(null),
-    Effect.catch((error) => {
-      const holder = heldElsewhereBy(error);
-      return holder === null ? Effect.fail(error) : Effect.succeed(holder);
-    }),
-  );
-
-/** One resume of a run no generation here holds. */
-const resumeHere = Effect.fn('resumeHere')(function* (
-  runId: RunId,
-  options: ResumeRunOptions,
+  activated: (commit: CommitOrdinal) => Effect.Effect<unknown>,
 ): Effect.fn.Return<ResumeAttempt, Error, AgentRunServices | Scope.Scope> {
   const session = options.session;
   if (session.runs.get(runId)?.live === true) return REFUSED;
@@ -183,9 +183,13 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   // neither launches from a state read before the other ran, and a host is
   // refused before it rearranges itself. A claim this process holds, or one
   // whose owner is provably dead, is taken over.
-  const claim = yield* Scope.make();
-  yield* Effect.addFinalizer(() => Scope.close(claim, Exit.void));
-  const heldBy = yield* holdClaim(session, runId).pipe(Scope.provide(claim));
+  const heldBy = yield* session.log.hold(runId).pipe(
+    Effect.as(null),
+    Effect.catch((error) => {
+      const holder = heldElsewhereBy(error);
+      return holder === null ? Effect.fail(error) : Effect.succeed(holder);
+    }),
+  );
   if (heldBy !== null) return { failed: 'owned_elsewhere' };
   // Whether an open call owns it, read under its claim in this resume's
   // job, so the answer and the activation below are one decision.
@@ -211,6 +215,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
     session,
     { runId, agentConfig: config },
     options,
+    activated,
   );
 }, Effect.scoped);
 
@@ -279,13 +284,9 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   session: SessionHandle,
   resume: ResumeTurnIdentity,
   options: ResumeRunOptions,
+  activated: (commit: CommitOrdinal) => Effect.Effect<unknown>,
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
   const runId = resume.runId;
-
-  // Do not revive a generation while its stop is settling: a live run registry
-  // entry is a run whose fiber has not settled yet.
-  if ((yield* Runs).get(resume.runId)?.live === true) return REFUSED;
-
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
       // The receipt reads the rows committed from here on.
@@ -300,7 +301,8 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       // What every resumed run takes from the resume's caller.
       const launchOptions = {
         session: options.session,
-        onAdmitted: options.onAdmitted,
+        onAdmitted: (_: RunId, commit: CommitOrdinal) =>
+          Effect.asVoid(activated(commit)),
         onRun: options.onRun,
         stopAfterCycle: options.stopAfterCycle,
         tools: options.tools,

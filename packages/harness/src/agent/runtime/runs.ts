@@ -10,7 +10,6 @@ import type { RunStopReason } from '@shared/session/runtimeRequest';
 import type { Effect, Scope } from 'effect';
 import type { RunEndResult } from './RunEndResult';
 import type { RootLaunchOptions, RootLaunchRequest } from './rootLaunch';
-import type { resumeRun } from './resumeRun';
 
 /** A root launch: what to run, and how its launch settles. */
 export interface RootLaunch {
@@ -43,8 +42,8 @@ export interface LiveRun {
   readonly controls: RunControls | undefined;
   /** A generation of it is live here: its fiber, a hold, or a launch. */
   readonly live: boolean;
-  /** A launch of it is in flight here, from the call that launched it (before
-   *  its fiber claims the lane) until the fiber exits: what a stop reaches. */
+  /** A launch or resume of it is in flight here, from the call (before its
+   *  fiber claims the lane) until its fiber exits: what a stop reaches. */
   readonly launched: boolean;
   /** Its attached parent: the view's edge, or for a child whose `run.start`
    *  the view has not folded yet, the parent its activation launched under;
@@ -63,9 +62,9 @@ export interface LiveRun {
 
 /**
  * A session's runs, as hosts and tools reach them: launch one (a root, or a
- * hold on a stopped one), resume one, stop one, and read what this process
- * holds of them. A root launch requires the composition root's
- * `SessionOwner`, which no tool is given.
+ * hold on a stopped one), stop one, and read what this process holds of
+ * them; a run resumes through `resumeRun`. A root launch requires the
+ * composition root's `SessionOwner`, which no tool is given.
  */
 export interface RunsShape {
   launch(spec: RootLaunch): Effect.Effect<RunEndResult, Error, SessionOwner>;
@@ -74,7 +73,6 @@ export interface RunsShape {
   launch(spec: {
     readonly hold: RunId;
   }): Effect.Effect<void, Error, Scope.Scope>;
-  readonly resume: typeof resumeRun;
   stop(runId: RunId, options: RunStopOptions): RunStop;
   get(runId: RunId): LiveRun | undefined;
   get(): readonly LiveRun[];

@@ -661,10 +661,13 @@ who owns the run, and holds it until the launched run holds its own
 (`agent/runtime/resumeRun.ts:188-200`). Its earlier reads only refuse a run
 whose records are gone, and one deleted or whose input closed while they ran
 (`agent/runtime/resumeRun.ts:175-187`). A run another live process holds answers
-`owned_elsewhere` (`agent/runtime/resumeRun.ts:196`). A second resume of a run
-another resume in this process is already handling joins that resume and gets
-its result (`agent/runtime/resumeRun.ts:6`, `:130`); otherwise a run live in
-this process is refused (`agent/runtime/resumeRun.ts:174`). A child an open call
+`owned_elsewhere` (`agent/runtime/resumeRun.ts:196`). A resume is the run's
+activation from the call: a second resume of the run joins it and gets its
+result, a stop reaches it before it admits the run (a user's stop ends the run
+cancelled, and nothing is admitted after), and the last caller to leave before
+any took its answer stops it (`agent/runtime/resumeRun.ts`,
+`agent/followUp/ToolUseFollowUp.ts`); a run another launch holds in this
+process is refused. A child an open call
 of its parent owns resumes through that parent
 (`agent/runtime/resumeRun.ts:199-200`, `:104-114`).
 

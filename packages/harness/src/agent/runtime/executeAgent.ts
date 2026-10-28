@@ -142,7 +142,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
    * commit of the batch that opened this activation (a fresh run's opening,
    * a resume's `run.activate`). The run runs it as that batch commits,
    * which it holds: keep it short. A joiner of a resume runs it once the
-   * resume has the run, under the claim.
+   * resume has admitted the run.
    */
   onAdmitted?: (runId: RunId, commit: CommitOrdinal) => Effect.Effect<void>;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */

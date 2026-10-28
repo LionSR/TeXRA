@@ -25,7 +25,7 @@ import {
 import { FetchHttpClient, HttpClient } from 'effect/http';
 
 import { Inbox } from '@agent/followUp/Inbox';
-import { startFollowUpWake } from '@agent/followUp/ToolUseFollowUp';
+import { wakeRun } from '@agent/followUp/ToolUseFollowUp';
 import {
   executeAgent,
   resumeToolUseFromResumeData,
@@ -34,7 +34,7 @@ import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
-import { resumeRun } from '@agent/runtime/resumeRun';
+import { decideResume } from '@agent/runtime/resumeRun';
 import { rootRun } from '@agent/runtime/rootLaunch';
 import { onHeldResult } from '@agent/runtime/runLaunchGuard';
 import { finalizeRun } from '@agent/storage/runLifecycle';
@@ -198,7 +198,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           root: rootRun,
           executeAgent,
           resumeTurn: resumeToolUseFromResumeData,
-          resume: resumeRun,
+          resume: decideResume,
         },
         wake: (id) => void fork(session.followUps.wake(id)),
       });
@@ -230,7 +230,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           log: store.log,
           detach: store.detach,
           run: view.run,
-          resume: (runId) => startFollowUpWake(runId, session),
+          resume: (runId) => wakeRun(runId, session),
         }),
         trace: store.trace,
         runHistory: makeRunHistory(store.log),

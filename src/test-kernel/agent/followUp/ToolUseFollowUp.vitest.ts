@@ -5,15 +5,19 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import * as resumability from '@agent/storage/resumability';
 import { Inbox, type InboxPort } from '@agent/followUp/Inbox';
 import { RunInput } from '@agent/followUp/RunInput';
+import { submitFollowUp, wakeRun } from '@agent/followUp/ToolUseFollowUp';
+import type { ResumeAttempt } from '@agent/runtime/resumeRun';
 import {
-  startFollowUpWake,
-  submitFollowUp,
-} from '@agent/followUp/ToolUseFollowUp';
+  RunRegistry,
+  type RunPrograms,
+  type RunRegistryInit,
+} from '@agent/runtime/runRegistry';
 import type {
   SessionHandle,
   SessionTransaction,
 } from '@agent/runtime/SessionHandle';
 import {
+  type CommitOrdinal,
   qualifyAggregateId,
   type RunId,
   type SessionEvent,
@@ -184,38 +188,47 @@ function fakeSession(state: RunState): SessionHandle {
     );
   // The port's resume is the session's own wake, as the session layer wires it.
   recorded = recordedFollowUps({
-    resume: (runId) => startFollowUpWake(runId, session),
+    resume: (runId) => wakeRun(runId, session),
   });
   const { followUps, live } = recorded;
-  /** The session's resume, as `resumeRun` runs it: one in flight per run,
-   *  and a run that took it is live here from then on. */
-  const resume = (runId: RunId) =>
-    followUps.resumes
-      .once(
-        runId,
-        Effect.map(tryResume(runId), (resumed) => {
-          if (!resumed) return { failed: 'not_resumable' as const };
-          live.add(runId);
-          return {
-            started: true as const,
-            delivered: true,
-            completion: Effect.never,
-          };
-        }),
-        (attempt) => Effect.forkDetach(attempt, { startImmediately: true }),
-      )
-      .pipe(Effect.map(({ result }) => result));
+  /** The session's resume decision: a run that took it is live here from
+   *  then on. */
+  const resume = (
+    runId: RunId,
+    _options: unknown,
+    activated: (commit: CommitOrdinal) => Effect.Effect<unknown>,
+  ) =>
+    Effect.flatMap(
+      tryResume(runId),
+      (resumed): Effect.Effect<ResumeAttempt> => {
+        if (!resumed)
+          return Effect.succeed({ failed: 'not_resumable' as const });
+        live.add(runId);
+        return Effect.as(activated(1 as CommitOrdinal), {
+          started: true as const,
+          delivered: true,
+          completion: Effect.never,
+        });
+      },
+    );
+  const registry = new RunRegistry({
+    session: () => session,
+    // cast: the fake decision reads no process service.
+    fork: ((effect: Effect.Effect<unknown, unknown>) =>
+      Effect.runFork(effect)) as unknown as RunRegistryInit['fork'],
+    // cast: a wake reaches only the session's resume decision.
+    programs: { resume } as unknown as RunPrograms,
+    wake: () => {},
+  });
+  // The registry's records, but a generation `live` here as the case says.
+  const runs = Object.assign(Object.create(registry) as RunRegistry, {
+    get: (runId: RunId) =>
+      state === 'live' || live.has(runId)
+        ? { runId, live: true, readsMessages: true }
+        : registry.get(runId),
+  });
   const session = {
-    runs: {
-      resume,
-      get: (runId: RunId) =>
-        state === 'live' || live.has(runId)
-          ? { runId, live: true, readsMessages: true }
-          : undefined,
-      // The session's fork: the attempt outlives the fiber that asked.
-      fork: (program: Effect.Effect<unknown, unknown>) =>
-        Effect.forkDetach(program, { startImmediately: true }),
-    },
+    runs,
     view: { run: () => ({}) },
     interactions: { emit: () => Effect.void },
     log: {

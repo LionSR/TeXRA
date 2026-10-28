@@ -90,13 +90,19 @@ export const rootRun = Effect.fn('rootRun')(
         new Error('This session is closed; open it again to launch a run.'),
       );
     const runId = request.runId ?? generateRunId();
-    const fiber = yield* registryOf(session.runs).start(
-      runId,
-      admittedRun(runId, request, options),
-      (run) => run,
-    );
-    return yield* Fiber.join(fiber).pipe(
-      Effect.onInterrupt(() => Fiber.interrupt(fiber)),
+    // The caller's interruption stops the run from the moment it starts.
+    return yield* Effect.uninterruptibleMask((restore) =>
+      Effect.flatMap(
+        registryOf(session.runs).start(
+          runId,
+          admittedRun(runId, request, options),
+          (run) => run,
+        ),
+        (fiber) =>
+          restore(Fiber.join(fiber)).pipe(
+            Effect.onInterrupt(() => Fiber.interrupt(fiber)),
+          ),
+      ),
     );
   },
   (launch, _request, options) =>

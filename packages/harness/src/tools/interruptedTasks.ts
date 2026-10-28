@@ -18,7 +18,7 @@
  */
 import { Deferred, Effect, Queue, type Scope } from 'effect';
 
-import { resumeOnSession } from '@agent/followUp/ToolUseFollowUp';
+import { wakeRun } from '@agent/followUp/ToolUseFollowUp';
 import { resumeBlocker } from '@agent/runtime/resumeBlocker';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -53,7 +53,7 @@ const checkRun = (session: SessionHandle, runId: RunId, resume: boolean) =>
     // Nothing blocks it now. A resume that finds it blocked again records
     // that itself; one refused for any other reason leaves no stale block.
     yield* session.view.markResumeBlocked(runId, null);
-    if (resume) yield* resumeOnSession(runId, session);
+    if (resume) yield* Effect.flatten(wakeRun(runId, session));
   }).pipe(
     Effect.catch((error) =>
       Effect.logWarning(

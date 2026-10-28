@@ -76,15 +76,16 @@ const reportedEnd = (
       );
 
 /** What a launch reports to its handle: the moment the run exists in its
- *  session, and that it joined a resume already in flight. */
+ *  session. */
 interface LaunchHooks {
   /** The run is admitted at `commit`, its activation's: the batch with its
-   *  `run.start` or its `run.activate`. */
+   *  `run.start` or its `run.activate`; `joined`: this caller joined a
+   *  resume already in flight, an observer. */
   readonly onAdmitted: (
     runId: RunId,
     commit: CommitOrdinal,
+    joined?: boolean,
   ) => Effect.Effect<void>;
-  readonly onJoined: () => void;
 }
 
 /** One launch of `runId`, fresh or resumed, wired to the hooks its handle
@@ -97,12 +98,13 @@ type Launch = (
  * Launch `runId` on `session` and hand back its {@link Run} once it exists
  * there; a launch that fails first fails this with its own error.
  *
- * The handoff is all-or-nothing for the caller that launched: this either
- * returns a `Run`, or it ends every fiber it started, and abandoned before
- * admission it stops the launch, unless another caller joined it, when it
- * leaves and the run goes on for them. A caller that joined a resume already
- * in flight is an observer: its interruption ends only its own wait and its
- * events, never the run.
+ * The handoff is all-or-nothing for its caller: this either returns a
+ * `Run`, or it ends every fiber it started. A launch's caller is one of the
+ * resume's callers, so abandoning the handoff stops the launch unless
+ * another caller still waits on it (`resumeRun`); once a `Run` is returned
+ * only a stop or the session's close ends the run. A caller that joined a
+ * resume already in flight is an observer: its `interrupt` ends only its
+ * own wait and its events, never the run.
  */
 export function handOver(
   session: RuntimeSessionHandle,
@@ -139,7 +141,8 @@ export function handOver(
     // The launch and the drain are the run's, and until the caller holds the
     // `Run` that names them they are nobody's: whatever ends this handoff short
     // of that ends them too. So the handoff is uninterruptible but for the
-    // admission wait, where an interruption stops the launch by run id, and the
+    // admission wait, where an interruption ends the launch fiber (which stops
+    // its run: `resumeRun`, `rootRun`), and the
     // exit handler outside the mask covers the rest, the boundary included: an
     // interrupt that lands while the tail runs is raised the moment the mask
     // lifts, with a `Run` built that reaches no one.
@@ -150,10 +153,9 @@ export function handOver(
       Effect.gen(function* () {
         const runFiber = yield* Effect.forkDetach(
           launch({
-            onAdmitted: (_, commit) =>
-              Deferred.done(admitted, Exit.succeed(commit)),
-            onJoined: () => {
-              joined = true;
+            onAdmitted: (_, commit, observer = false) => {
+              joined = observer;
+              return Deferred.done(admitted, Exit.succeed(commit));
             },
           }).pipe(
             Effect.onExit(settle),
@@ -234,20 +236,13 @@ export function handOver(
     ).pipe(
       Effect.onExit((exit) =>
         Exit.isSuccess(exit)
-          ? Effect.void
-          : Effect.suspend(() => {
-              // Only a launcher's abandoned handoff stops the launch by id
-              // (one the launch failed has settled it), and only while no
-              // other caller joined it; a joiner ends only its own wait.
-              if (!Cause.hasInterrupts(exit.cause) || joined)
-                return Fiber.interruptAll(spawned);
-              if (session.followUps.resumes.joined(runId)) return Effect.void;
-              // Again once the launch has unwound: a run it started meanwhile.
-              interruptLaunch();
-              return Fiber.interruptAll(spawned).pipe(
-                Effect.andThen(Effect.sync(interruptLaunch)),
-              );
-            }),
+          ? Effect.sync(() => {
+              // Handed out: leaving it no longer stops a resume.
+              const resuming = registryOf(session.runs).attemptOf(runId);
+              if (resuming) resuming.handedOff = true;
+            })
+          : // The launch leaves with its caller (`resumeRun`, `rootRun`).
+            Fiber.interruptAll(spawned),
       ),
     );
   });
