@@ -99,7 +99,11 @@ import { InstallVscodeExtensionTool } from './setup/InstallVscodeExtensionTool';
 import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
 import { SendToTerminalTool } from './setup/SendToTerminalTool';
 import { ApplyTeamTool } from './setup/ApplyTeamTool';
-import { SetupPlatform, type SetupPlatformShape } from './setup/platform';
+import {
+  SetupHost,
+  SetupPlatform,
+  type SetupPlatformShape,
+} from './setup/platform';
 import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
 import type { WriteFilter } from '@texra-ai/harness/plugins';
 import type { Plugin } from '@texra-ai/harness';
@@ -194,12 +198,13 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
 /** The onboarding agent's narrow set, one concern per tool, over the host's
  *  setup capabilities: a tool that needs a member the host left undefined
  *  is not offered. The members are read when asked, not here. */
-const setup = (platform: SetupPlatformShape) =>
-  definePlugin<SetupPlatform>({
+const setup = (platform: SetupPlatformShape, host: SetupHost['Service']) =>
+  definePlugin<SetupPlatform | SetupHost>({
     id: 'setup',
     processLayer: {
       layer: Layer.mergeAll(
         Layer.succeed(SetupPlatform)(platform),
+        Layer.succeed(SetupHost)(host),
         serves(() =>
           Object.entries(platform).flatMap(([member, value]) =>
             value === undefined ? [] : [member],
@@ -256,24 +261,24 @@ const documents: Plugin = {
 };
 
 /** TeXRA's plugins, in dashboard order. */
-export const texraPlugins = (
-  host: {
-    /** The host's Lean services in place of the direct `lake` pool (VS
-     *  Code's Lean 4 extension bridge). */
-    readonly lean?: ProcessPluginLayer<LeanLanguageServices>['layer'];
-    /** The host's Comments UI behind `inline_comment`. */
-    readonly inlineComments?: InlineCommentProvider;
-    /** The host's setup capabilities (VS Code's commands, extensions and
-     *  terminal); none elsewhere. */
-    readonly setup?: SetupPlatformShape;
-    /** The composition's editor registry its hosts attach to
-     *  (`makeEditorHost`); none attached when absent. */
-    readonly editors?: EditorRegistry;
-    /** The host shows external inquiries (VS Code, desktop): the `inquiry`
-     *  tool is offered only there. */
-    readonly inquiryPanel?: true;
-  } = {},
-): readonly Plugin[] => {
+export const texraPlugins = (host: {
+  /** Which host this is, as the setup agent's environment probe reports it. */
+  readonly name: SetupHost['Service'];
+  /** The host's Lean services in place of the direct `lake` pool (VS
+   *  Code's Lean 4 extension bridge). */
+  readonly lean?: ProcessPluginLayer<LeanLanguageServices>['layer'];
+  /** The host's Comments UI behind `inline_comment`. */
+  readonly inlineComments?: InlineCommentProvider;
+  /** The host's setup capabilities (VS Code's commands, extensions and
+   *  terminal); none elsewhere. */
+  readonly setup?: SetupPlatformShape;
+  /** The composition's editor registry its hosts attach to
+   *  (`makeEditorHost`); none attached when absent. */
+  readonly editors?: EditorRegistry;
+  /** The host shows external inquiries (VS Code, desktop): the `inquiry`
+   *  tool is offered only there. */
+  readonly inquiryPanel?: true;
+}): readonly Plugin[] => {
   const editors = host.editors ?? makeEditorHost();
   return [
     fileOps({ writeFilter: texWriteFilter }),
@@ -302,7 +307,7 @@ export const texraPlugins = (
     claudeAgent,
     core(editors, host.inlineComments),
     codemode,
-    setup(host.setup ?? {}),
+    setup(host.setup ?? {}, host.name),
     documents,
   ];
 };

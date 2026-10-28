@@ -1,13 +1,13 @@
 import { Effect, Predicate } from 'effect';
 import { defineCommand } from 'citty';
 
-import { AgentCatalog, type ProcessServices } from '@texra-ai/harness/host';
 import {
-  canLaunchTeam,
+  AgentCatalog,
+  findTeamPreset,
   planTeamRun,
-  planTeamRuns,
+  type ProcessServices,
 } from '@texra-ai/harness/host';
-import { findTeamPreset } from '@texra-ai/harness/host';
+import { canLaunchTeam, planTeamRuns } from '@texra/shared/teamLaunch';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';

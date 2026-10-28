@@ -17,18 +17,21 @@
  * with a core message type; a plugin's own facts are `plugin.fact` rows
  * (`ToolResult.facts`), never a log payload.
  */
-import type { RunId, SessionEventDraft } from '@shared/schemas';
+import type {
+  RunId,
+  SessionEventDraft,
+  TRACE_ROW_TYPES,
+} from '@shared/schemas';
 
 /** One session arm as the trace carries it, distributive over `T`: an
  *  {@link AgentEvent} arm, or the `run.end` a {@link ResultEvent} names. A
  *  row the run's state is folded from is never one: the trace is the
  *  display door, and those rows commit through the run's cell
  *  (`runEventDraft`, typed to an unfolded draft, refuses any other). */
-export type TraceArm<
-  T extends Exclude<AgentEvent, StreamChunkEvent>['type'] | 'run.end',
-> = T extends unknown
-  ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
-  : never;
+export type TraceArm<T extends (typeof TRACE_ROW_TYPES)[number] | 'run.end'> =
+  T extends unknown
+    ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
+    : never;
 
 /**
  * The terminal fact as the runtime hands it to in-process consumers
@@ -51,16 +54,4 @@ export interface StreamChunkEvent {
 
 /** Discriminated union of every event the SDK surface emits. */
 export type AgentEvent =
-  | TraceArm<
-      | 'log'
-      | 'stage.start'
-      | 'stage.end'
-      | 'tool.start'
-      | 'tool.end'
-      | 'usage'
-      | 'run.fact'
-      | 'context.state'
-      | 'stream.start'
-      | 'stream.end'
-    >
-  | StreamChunkEvent;
+  TraceArm<(typeof TRACE_ROW_TYPES)[number]> | StreamChunkEvent;

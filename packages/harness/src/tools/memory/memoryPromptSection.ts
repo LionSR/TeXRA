@@ -5,7 +5,7 @@
  * the plugin (`@agent/runtime/loop/step`), so it follows the tool switched
  * on or off mid-conversation, and the recorded offered set rebuilds it.
  */
-import { hasDelegationTool } from '@shared/constants/delegationTools';
+import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import type { PromptSection } from '@tools/toolTable';
 
 /** Base memory instructions for all agents with memory enabled. */
@@ -30,7 +30,8 @@ The /memories directory is shared with the orchestrator and other subagents. Che
 export const memoryPromptSection: PromptSection = ({ offered, isChild }) => {
   if (!offered.includes('memory')) return '';
   const parts = [MEMORY_TOOL_INSTRUCTIONS];
-  if (hasDelegationTool(offered)) parts.push(ORCHESTRATOR_MEMORY_INSTRUCTIONS);
+  if (offered.includes(AGENT_TOOL_NAME))
+    parts.push(ORCHESTRATOR_MEMORY_INSTRUCTIONS);
   else if (isChild) parts.push(SUBAGENT_MEMORY_INSTRUCTIONS);
   return parts.join('\n');
 };

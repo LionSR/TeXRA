@@ -243,7 +243,7 @@ export function installCliProcessRuntime(
           storageRoot,
           settings: TEXRA_SETTINGS,
           commandDirs: commandDirs,
-          plugins: texraPlugins({ editors }),
+          plugins: texraPlugins({ name: 'cli', editors }),
           ...(options?.resourcesPath !== undefined && {
             skills: {
               resourcesPath: options.resourcesPath,

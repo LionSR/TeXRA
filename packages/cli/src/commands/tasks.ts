@@ -221,7 +221,7 @@ const startCommand = defineCliCommand({
     };
     const config =
       yield* Schema.decodeUnknownEffect(AgentConfigSchema)(payload);
-    const runId = yield* Effect.scoped(
+    const { runId } = yield* Effect.scoped(
       Effect.gen(function* () {
         const { client } = yield* connectCliService(context.storageRoot);
         return yield* client['task.start']({

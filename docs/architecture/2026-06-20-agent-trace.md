@@ -32,23 +32,22 @@ history (`RunCell.append`), never through the trace.
             ┌───────────────────────────────────────────────────┐
             │ TraceEmitter (TraceEmitter.ts)                     │
             │ fans each event out to the sinks it was built with │
-            └───────────────┬───────────────────┬───────────────┘
-                            ▼                   ▼
-            ┌──────────────────────┐ ┌──────────────────────────┐
-            │ session.log.publish  │ │ session.trace.tap        │
-            │ a display row on the │ │ the run's trace port:    │
-            │ session event table  │ │ every listener of the    │
-            │ (a chunk: transient  │ │ run (its `events`)       │
-            │ text, never a row)   │ │                          │
-            └──────────────────────┘ └──────────────────────────┘
+            └─────────────────────────┬─────────────────────────┘
+                                      ▼
+            ┌───────────────────────────────────────────────────┐
+            │ session.log.publish                                │
+            │ a display row on the session event table          │
+            │ (a chunk: transient text, never a row)            │
+            └───────────────────────────────────────────────────┘
 ```
 
-A run's trace is built in `AgentLaunchContext.ts` with those two sinks; a
-delegated child's trace (`packages/harness/src/tools/delegation/childRun.ts`)
-publishes to its session log only. Readers never subscribe to the emitter:
-the progress view and the desktop renderer read the session view folded from
-the event table, and an SDK caller reads its run handle's `events`, which listens on the
-run's trace port.
+A run's trace (`AgentLaunchContext.ts`) and a delegated child's
+(`packages/harness/src/tools/delegation/childRun.ts`) publish to the session
+log only. Readers never subscribe to the emitter: the progress view and the
+desktop renderer read the session view folded from the event table, and an
+SDK caller's run handle `events` reads the run's rows and streamed text back
+from the session (`replayTrace` in
+`packages/harness/src/controllers/session/runTrace.ts`).
 
 Not every product event needs a named helper. Most cases of the `AgentEvent`
 union (usage, context state, tool cards) are emitted directly with

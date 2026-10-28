@@ -59,14 +59,10 @@ export const ALWAYS_AVAILABLE: ToolAvailabilityChecks = {
 /**
  * The asking workspace, carried into a plugin's probe as data rather than read
  * from an ambient scope: the folder a probe asks whether it is a git
- * repository, the configuration a probe reads a port from, and the host a
- * probe asks whether the editor drives a tool for it: three fields of the
- * roots every caller of the availability surface opened.
+ * repository and the configuration a probe reads a port from: two fields of
+ * the roots every caller of the availability surface opened.
  */
-export type ToolProbeInputs = Pick<
-  WorkspaceRoots,
-  'workspace' | 'config' | 'host'
->;
+export type ToolProbeInputs = Pick<WorkspaceRoots, 'workspace' | 'config'>;
 
 /**
  * How a plugin with an external dependency answers "is it available": an

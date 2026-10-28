@@ -83,7 +83,7 @@ import { bashApprovalRequest } from '../agent/progressTestUtils';
 import type { PlatformSecrets } from '@texra-ai/harness/host';
 
 /** The settings the TUI's retry decisions write through, if any. */
-const settingsStores = makeFakeSettingsStores('cli');
+const settingsStores = makeFakeSettingsStores();
 let detachHost = (): void => {};
 
 /**

@@ -215,7 +215,7 @@ export type ClosureFact =
   StreamClosure | Extract<SessionEventDraft, { type: 'stage.end' }>;
 
 /** Each run's trace ({@link SessionLog.publish}): the first row the store
- *  refused, its open work, and its port every reader of its events hears. */
+ *  refused, and its open work. */
 export interface RunTrace {
   /** The first refused row of `runId`, taken, as its `run.end` error. */
   lost(runId: RunId): Effect.Effect<RunEnd['error'] | undefined>;
@@ -223,10 +223,6 @@ export interface RunTrace {
    *  read in a publisher job or after `SessionLog.settled`. */
   closure(runId: RunId): StreamClosure[];
   closure(runId: RunId, outcome: RunOutcome): ClosureFact[];
-  /** The run's trace port: hand `event` to every listener of `runId`. */
-  tap(runId: RunId, event: AgentEvent): void;
-  /** Listen on `runId`'s port, from now until the returned release. */
-  listen(runId: RunId, listener: (event: AgentEvent) => void): () => void;
 }
 
 /**

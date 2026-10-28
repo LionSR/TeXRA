@@ -240,12 +240,11 @@ All notable changes to this project will be documented in this file.
   `@texra-ai/harness/schemas`, which puts your rows after the harness's. Each
   composition resolves settings against its own rows, so two in one
   process no longer share one catalog.
-- **SDK: a run whose trace cannot be read says why.** A run's `events`
-  stream fails with `TraceUnavailable` instead of ending with no events.
-  Its reason is `ended` (the run finished before anyone read its trace),
-  `truncated` (the trace outgrew what is kept for a reader that had not
-  attached yet) or `remote` (the run runs in the TeXRA service, which keeps
-  its trace). The run's result is unaffected.
+- **SDK: anyone can read a run's events, at any time.** `run.events` reads
+  the run's events back from its session, from the start of the run's
+  current activation: a second reader, a reader after the run ended, and a
+  window whose task the TeXRA service runs all get them. A text stream that
+  finished before the reader reached it arrives whole, as one chunk.
 - **A failed task in the TeXRA service always reports failure**, even
   when the service recorded no error for it.
 - **A VS Code window of the TeXRA service opens no session of its own.**

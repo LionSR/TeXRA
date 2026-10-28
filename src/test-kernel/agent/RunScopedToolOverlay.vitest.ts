@@ -95,7 +95,7 @@ function runLayer(ctx: RunLaunch, tools: ITool[], seen: InvokeRequest[] = []) {
     Layer.provideMerge(Secrets.layer(new FakeSecrets())),
     Layer.provideMerge(
       pluginCatalogLayer(
-        texraPlugins(),
+        texraPlugins({ name: 'vscode' }),
         mcpConfigPathOf(createFakeWorkspaceRoots().storageRoot),
       ).pipe(
         Layer.provide(

@@ -164,7 +164,7 @@ const roster = (plugins: readonly Plugin[]) =>
  */
 describe('plugin rosters', () => {
   it("pins TeXRA's plugins and their tools, in dashboard order", () => {
-    expect(roster(texraPlugins())).toEqual([
+    expect(roster(texraPlugins({ name: 'vscode' }))).toEqual([
       [
         'file-ops',
         ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
@@ -228,7 +228,7 @@ describe('plugin rosters', () => {
 
   it('gives every switchable plugin a dashboard card, and every card a plugin', () => {
     // A switch with no card would be off with nothing to turn it on.
-    const plugins = texraPlugins();
+    const plugins = texraPlugins({ name: 'vscode' });
     const carded = new Set(TEXRA_PLUGIN_CARDS.map(({ id }) => id));
     const listed = new Set(plugins.map(({ id }) => id));
     expect({
@@ -241,7 +241,9 @@ describe('plugin rosters', () => {
 
   it('pins the row kinds plugins write', () => {
     // `armsOf` refuses an arm of another plugin's id, or a kind twice.
-    expect(Object.keys(armsOf(texraPlugins())).toSorted()).toEqual([
+    expect(
+      Object.keys(armsOf(texraPlugins({ name: 'vscode' }))).toSorted(),
+    ).toEqual([
       'documents/accepted',
       'documents/output',
       'external-inquiry/thread',

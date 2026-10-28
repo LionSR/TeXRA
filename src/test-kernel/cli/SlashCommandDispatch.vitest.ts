@@ -33,7 +33,7 @@ afterEach(() => {
  * pair the chat entry point threads in from its own platform services.
  */
 const services = {
-  stores: makeFakeSettingsStores('cli').stores,
+  stores: makeFakeSettingsStores().stores,
   runtime: testRuntime(),
   runtimeSession: testSessionOf(testDefaultSession()),
   runSession: testSessionOf(testDefaultSession()),
