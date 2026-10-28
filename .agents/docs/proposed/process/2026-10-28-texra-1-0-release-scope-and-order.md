@@ -316,8 +316,8 @@ shape changes.
 
 ## Coordination record (2026-10-28)
 
-What else is in flight that touches this plan, as of `main` at `fa6fb1e`
-(#14344 merged):
+What else is in flight that touches this plan, as of `main` at `ba42b90`
+(#14344 and #14349 merged):
 
 - **A second 1.0 PRD exists.** Draft PR #14352 (`docs/harness-1-release-prd`)
   adds `.agents/docs/proposed/architecture/2026-10-28-harness-1-release-prd.md`
@@ -360,11 +360,45 @@ What else is in flight that touches this plan, as of `main` at `fa6fb1e`
   one format-aware reader is the golden-store normalizer
   (`packages/cli/scripts/generate-golden-store.mjs`, its `NANO` and `UUID`
   patterns), so that branch regenerates the fixture and runs `--twice`.
+- **Three more Codex drafts, read against the freeze rule.** #14354
+  (`codex/storage-fact-boundary`) widens `StoredProtocolSchema` in
+  `packages/harness/src/shared/schemas/storedTurn.ts` from three literals to
+  any non-empty string, so removing a provider adapter no longer makes its
+  history read as corrupt; no version bump, a widening the additive rule
+  allows, and in the direction this note wants. It edits the same file as
+  the D4 commit (which adds `StoredMediaSchema`) and regenerates the golden
+  store, so the two coordinate on merge order; the tech-debt session was
+  told. #14353 (`codex/codemode-results`) returns the SQL page as the
+  `value` of the query action's `tool.result` and caps a page at 4 MiB; the
+  `ToolResult` schema already had `value`, so stored bytes grow but no shape
+  changes. #14355 (`codex/resume-cleanup`) returns the parent owner from
+  `handOver` instead of raising `OwnedByParent`; no rows. None of the three
+  is freeze-gated; none conflicts with P1 to P7.
 - **Nothing else in flight changes a row.** #14340, #14343, #14346, #14348,
-  #14349, #14351 and `claude/run-events-replay` were read; none touches a
-  stored schema. #14342 was closed as superseded: its completion change
-  reached `main` through #14335. The triage session confirmed this
-  classification and is not relabelling #13736's tree.
+  #14349, #14351, #14356 (`claude/run-events-replay`, now a PR) were read;
+  none touches a stored schema. #14342 was closed as superseded: its
+  completion change reached `main` through #14335. The triage session
+  confirmed this classification and is not relabelling #13736's tree.
+
+## Owner decision queue
+
+Everything across the open sessions and drafts that waits on the owner, in
+one place, so one sitting clears it. The first three decide this plan; the
+rest are other sessions' blockers collected here because they are all the
+same person's.
+
+| #   | Decision                                                                                                                                                        | Where it is asked                   |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| 1   | R1: 1.0 is the app with a frozen store (this note), or harness-first (#14352). Whichever survives absorbs the other's useful parts and keeps the one index row. | This note; #14352                   |
+| 2   | R11: rows evolve additively and the golden store is the freeze (delete the upcaster machinery), or keep Q2 and merge #14350.                                    | This note; #14350                   |
+| 3   | R13: collapse the five `ExhaustionReason` literals before the freeze, or never.                                                                                 | This note; the single-owner session |
+| 4   | Take #14353, #14354 and #14355 out of draft, or close them. All three are compatible with this plan.                                                            | The three Codex drafts              |
+| 5   | Review and merge #14340 and #14343 (green, mergeable, waiting since 01:59).                                                                                     | The triage session                  |
+| 6   | Review #14356 (`TraceUnavailable` removed; any reader of `run.events` is served).                                                                               | The design-philosophy session       |
+| 7   | Let the tech-debt session open its PRs, D4 first as the shape PR.                                                                                               | The tech-debt session               |
+| 8   | The dead-code session asks whether to rebase onto `24b9c3e` and re-run its checks.                                                                              | The dead-code session               |
+| 9   | The LLM-jargon session asks whether to delete the cross-process "held result" protocol or keep it.                                                              | The LLM-jargon session              |
+| 10  | The Effect-modernization session asks whether to open a PR for wave two and whether to revert the `Redacted` keys in the three subscription-usage adapters.     | The Effect-modernization session    |
 
 ## Freeze and release
 
