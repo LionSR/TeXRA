@@ -23,7 +23,8 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
-import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { Secrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settings';
 import type { Persona, SessionEventDraft } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunHistoryDraft } from '@shared/session/runState';
@@ -92,9 +93,9 @@ export interface AgentRunShape {
   readonly toolPolicy: ToolPolicy;
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
-  /** The session's setting slots and the process secret store the launch
-   *  read, for what the run reads besides its model (`ModelAccess` owns that). */
-  readonly stores: ModelOptionStores;
+  /** The session's setting slots the launch read, for what the run reads
+   *  besides its model (`ModelAccess` owns that). */
+  readonly stores: SettingsStores;
   /** What the run opens from; null for a tool-use run whose rows hold its
    *  opening, which a resume never renders again. */
   readonly opening: TemplateOpening | null;
@@ -169,7 +170,7 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun | ModelAccess,
   Error,
-  RunHistory | HttpClient.HttpClient
+  RunHistory | HttpClient.HttpClient | Secrets
 > =>
   Layer.effect(
     AgentRun,

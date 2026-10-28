@@ -23,7 +23,7 @@ import { closeSessionOf } from '@test/support/sessionEnd';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { hostStores } from '@test/support/setupPlatform';
+import { installedHost } from '@test/support/setupPlatform';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { toolCatalogLayer } from '@tools/liveTools';
 import { mcpPluginLoader } from '@tools/mcp/mcpConfig';
@@ -134,7 +134,7 @@ describe('MCP server plugins', () => {
           resolveTestStep({
             tools: [{ name: 'mcp__fixture__*' }],
             injectTools: false,
-            stores: hostStores(),
+            stores: installedHost().roots,
             workspaceRoot: undefined,
             host: 'cli',
           }).pipe(Scope.provide(pin), Effect.provideContext(services));

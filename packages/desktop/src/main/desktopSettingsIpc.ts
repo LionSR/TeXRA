@@ -24,11 +24,7 @@ import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type {
-  StorageFs,
-  ProcessServices,
-  PlatformSecrets,
-} from '@texra-ai/harness/host';
+import type { StorageFs, ProcessServices } from '@texra-ai/harness/host';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 const NO_EXTENSION_HOSTING =
@@ -59,7 +55,6 @@ export interface DesktopSettingsIpcOptions {
   /** The roots of the project this settings surface serves. The desktop has
    *  no process-default roots, so they must be passed. */
   readonly roots: WorkspaceRoots;
-  readonly secrets: PlatformSecrets;
   /** Root of the packaged resources tree, which holds the agent templates. */
   readonly resourcesPath: string;
   /** Runs this surface's background work on fibers of the scope it opens in. */
@@ -175,7 +170,6 @@ export function createDesktopSettingsIpc(
     // The approval policy is the project's persisted setting: the write
     // is the change, which this session and the service both read.
     roots: options.roots,
-    secrets: options.secrets,
     resourcesPath: options.resourcesPath,
     skillDisplay: Skills.display(options.roots),
     accountCopy: ACCOUNT_OUTCOME,

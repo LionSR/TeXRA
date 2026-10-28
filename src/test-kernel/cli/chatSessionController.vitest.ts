@@ -99,7 +99,6 @@ import { untrackRun } from '@test/support/sessionEnd';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
-import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import {
   admitInterruptibleRun,
@@ -267,7 +266,6 @@ function makeInit(
     getSlashCommandContext: () => {
       throw new Error('slash commands are not exercised here');
     },
-    secrets: new FakeSecrets(),
     stores: makeFakeSettingsStores('cli').stores,
     runtime: testRuntime(),
     approvalPolicy: () => undefined,

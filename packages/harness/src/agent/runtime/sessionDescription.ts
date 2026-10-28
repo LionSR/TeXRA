@@ -13,7 +13,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { helperCall } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
-import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { Secrets } from '@platform/secrets';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
@@ -106,17 +106,16 @@ export const generateSessionDescription = Effect.fn(
   config: AgentConfig,
   agentDescription: string | undefined,
   session: SessionHandle,
-  stores: ModelOptionStores,
 ): Effect.fn.Return<
   void,
   never,
-  HttpClient.HttpClient | UsageLog | RouteRetries
+  HttpClient.HttpClient | UsageLog | RouteRetries | Secrets
 > {
   const instruction = getDisplayedInstruction(config);
   if (!instruction) return;
   yield* Effect.gen(function* () {
     const text = yield* helperCall(
-      stores,
+      session.roots,
       {
         userPrompt: buildUserPrompt(
           config.agent,

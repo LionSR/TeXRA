@@ -92,7 +92,6 @@ import type { LocalSession, Session, WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ProcessRuntime,
   ProcessServices,
-  PlatformSecrets,
   StateStore,
   StateReadFailed,
   StateWriteFailed,
@@ -188,7 +187,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   constructor(
     context: vscode.ExtensionContext,
     private readonly globalState: StateStore,
-    private readonly secrets: PlatformSecrets,
     /** Process runtime shared with every extension surface. */
     private readonly runtime: ProcessRuntime,
     /** The window's roots: its workspace, storage and settings stores. */
@@ -250,7 +248,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       project: projectDisplayOf(roots.storage, roots.workspace),
       root: roots.workspace,
       stores: roots,
-      secrets,
       fileOptions: () =>
         workspaceFileOptions(roots.workspace).pipe(
           Effect.mapError(
@@ -275,7 +272,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       apiKeyBanner: () =>
         Effect.all(
           [
-            hasUsableSetupCredential(this.roots, this.secrets).pipe(
+            hasUsableSetupCredential(this.roots).pipe(
               withLogChannel('Setup Credentials'),
             ),
             getFirstRunDone(globalState),

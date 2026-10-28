@@ -140,7 +140,6 @@ export {
   readModelOptions,
   setModelEnabled,
   type ModelOption,
-  type ModelOptionStores,
 } from '@model/computeModelOptions';
 export {
   decideRunModel,

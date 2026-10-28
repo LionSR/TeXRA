@@ -26,9 +26,7 @@ import {
   attachErrorPresentationClaimed,
   hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import { AppState } from '@platform/interfaces';
-import { Secrets } from '@platform/secrets';
 import {
   INSTRUCTION_ACTION,
   isTaskConfig,
@@ -306,7 +304,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
   ): Effect.fn.Return<
     AgentLaunchContext,
     Error,
-    Secrets | AppState | FileSystem.FileSystem | Scope.Scope
+    AppState | FileSystem.FileSystem | Scope.Scope
   > {
     const { config, persona, agentEntry, modelConfig } = input.definition;
     // The run's working directory is decided here, once: absolute or absent.
@@ -322,13 +320,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     const { session, runId } = input;
     const resumed = input.registration === undefined;
     const { logger: agentLogger, entry } = yield* enterRun(input, config);
-    // The run's model is bound from the stores the launch already has: the
-    // session's own setting slots, so routing and the provider switches
-    // answer for this run's workspace, and the process secret store.
-    const stores: ModelOptionStores = {
-      ...session.roots,
-      secrets: yield* Secrets,
-    };
 
     // Log the initial instruction as a user message so the run's tab
     // displays it inline with the stream log (no separate panel).
@@ -391,7 +382,9 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
         ...input.toolPolicy,
         ...(config.script != null && { stopAfterCycle: true }),
       }),
-      stores,
+      // The session's own setting slots, so routing and the provider
+      // switches answer for this run's workspace.
+      stores: session.roots,
       logger: agentLogger,
       parentStage,
       opening,

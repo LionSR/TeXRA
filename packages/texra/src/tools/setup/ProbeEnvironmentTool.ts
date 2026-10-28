@@ -158,7 +158,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
         ),
         { concurrency: 'unbounded' },
       ),
-      hasUsableSetupCredential(roots, secrets).pipe(
+      hasUsableSetupCredential(roots).pipe(
         // A check that cannot be answered is not "no credential"; advice
         // built on it would send a configured user to sign in again.
         Effect.catch((failure) =>

@@ -405,7 +405,6 @@ export async function runChat(
     session,
     runtimeSession,
     runSession,
-    secrets: services.secrets,
     stores: services,
     runtime: services.runtime,
     processCwd: process.cwd(),
@@ -544,7 +543,6 @@ export async function runChat(
     shutdownScope: services.shutdownScope,
     cwd: context.cwd,
     getSlashCommandContext: slashCommandContext,
-    secrets: services.secrets,
     stores: services,
     runtime,
     approvalPolicy: () => chatPolicy,
@@ -595,7 +593,6 @@ export async function runChat(
         },
         (held) => chatController.submit(held.line, held),
       ),
-    secrets: services.secrets,
     stores: services,
     runtime,
     runtimeSession,
@@ -652,7 +649,6 @@ export async function runChat(
   const viewportController = createTuiViewportController(inkRef);
   const ink = render(
     <App
-      secrets={services.secrets}
       stores={services}
       runtime={runtime}
       session={runSession}

@@ -1,5 +1,5 @@
 {
-  "packages/harness/src/agent/runtime/AgentLaunchContext.ts": 411,
+  "packages/harness/src/agent/runtime/AgentLaunchContext.ts": 404,
   "packages/harness/src/agent/runtime/AgentRunLifecycle.ts": 466,
   "packages/harness/src/agent/runtime/childRunLoop.ts": 979,
   "packages/harness/src/agent/runtime/loop/hooks.ts": 469,

@@ -521,7 +521,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const progressViewProvider = new ProgressViewProvider(
     context,
     globalState,
-    secrets,
     runtime,
     roots,
     windowSession,
@@ -546,7 +545,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const settingsViewProvider = registerCommands(
     context,
     progressViewProvider,
-    secrets,
     runtime,
     roots,
     session,

@@ -16,11 +16,7 @@ import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import {
-  fakeConfig,
-  FakeSecrets,
-  FakeStateStore,
-} from '@test/support/FakePlatform';
+import { fakeConfig, FakeStateStore } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
@@ -114,7 +110,6 @@ async function createSettingsFixture(config: ConfigProvider) {
         presentSubscriptionSignInUrl: () => Effect.void,
         presentSubscriptionDeviceCode: () => Effect.void,
       },
-      secrets: new FakeSecrets(),
       resourcesPath: '/resources',
       roots: session.roots,
     }).pipe(

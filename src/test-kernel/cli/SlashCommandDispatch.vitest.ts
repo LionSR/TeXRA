@@ -21,7 +21,6 @@ import { type RunId } from '@shared/schemas';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 afterEach(() => {
@@ -34,7 +33,6 @@ afterEach(() => {
  * pair the chat entry point threads in from its own platform services.
  */
 const services = {
-  secrets: new FakeSecrets(),
   stores: makeFakeSettingsStores('cli').stores,
   runtime: testRuntime(),
   runtimeSession: testSessionOf(testDefaultSession()),

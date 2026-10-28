@@ -21,7 +21,6 @@ import {
   heldElsewhereBy,
   presentFollowUpResult,
   type PerKeyLane,
-  type PlatformSecrets,
   type ProcessRuntime,
   type ProcessServices,
   withPerKeyLane,
@@ -224,11 +223,10 @@ export interface ChatSessionControllerInit {
   readonly cwd: string;
   readonly getSlashCommandContext: () => SlashCommandContext;
   /**
-   * The process secret store and the three setting slots a retry's credential
-   * work reads, threaded from the `CliPlatformServices` the chat entry point
-   * already holds rather than looked up again here.
+   * The three setting slots a retry's credential work reads, threaded from
+   * the `CliPlatformServices` the chat entry point already holds rather than
+   * looked up again here.
    */
-  readonly secrets: PlatformSecrets;
   readonly stores: SettingsStores;
   /** The process runtime this controller runs its programs on, captured once
    *  here: the controller lives for the length of the chat session, and its
@@ -298,7 +296,6 @@ export function createChatSessionController(
     shutdownScope,
     cwd,
     getSlashCommandContext,
-    secrets,
     stores,
     runtime,
   } = init;
@@ -815,7 +812,7 @@ export function createChatSessionController(
           const selection = yield* selectCliRunnableModel(
             [{ model: meta.model, reason: meta.modelSource }],
             {
-              stores: { ...stores, secrets, runtime },
+              stores: { ...stores, runtime },
               noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
                 CHAT_API_MODE_MODEL_RECOVERY,
               ),

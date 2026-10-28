@@ -20,11 +20,7 @@ import {
   agentDocumentForPath,
   AgentDocumentUnavailable,
 } from './desktopAgentDocuments.js';
-import type {
-  ProcessRuntime,
-  ProcessServices,
-  PlatformSecrets,
-} from '@texra-ai/harness/host';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { DesktopPromptController } from './desktopPromptController.js';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
@@ -58,7 +54,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
     readonly bindings: ProjectBindings;
     readonly onboarding: DesktopOnboardingIpc;
     readonly promptController: DesktopPromptController;
-    readonly secrets: PlatformSecrets;
     readonly resourcesPath: string;
   }): Effect.fn.Return<ProjectSurface, never, Scope.Scope> {
     const { host, runtime, projects, bindings, onboarding } = options;
@@ -240,7 +235,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           ),
         },
         roots: project.roots,
-        secrets: options.secrets,
         resourcesPath: options.resourcesPath,
         spawn: desktopSpawner(runtime, owner, project.root),
       }).pipe(
