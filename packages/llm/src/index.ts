@@ -65,6 +65,19 @@ export type {
   RemoteOperation,
 } from './errors.js';
 
+// The llm-zoo catalog, so a consumer declares one dependency and one version.
+export {
+  DEFAULT_MODEL_CAPABILITIES,
+  EFFORT_SCALE,
+  hint,
+  MODEL_CONFIGS,
+  MODELS,
+  ModelProvider,
+  ReasoningEffort,
+} from 'llm-zoo';
+export type { ModelConfig, ModelRef, ReasoningMode } from 'llm-zoo';
+export { ReasoningEffortSchema } from 'llm-zoo/schemas';
+
 // Credentials and the provider manifest over llm-zoo.
 export { resolveCredential, SecretsFailed } from './providers/credentials.js';
 export type {

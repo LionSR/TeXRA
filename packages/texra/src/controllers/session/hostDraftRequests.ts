@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer';
 
 import { Deferred, Effect, Fiber, FileSystem } from 'effect';
-import { MODEL_CONFIGS } from 'llm-zoo';
+import { MODEL_CONFIGS } from '@texra-ai/llm';
 
 import { Cancelled, Rejected, type WorkspaceRoots } from '@texra-ai/harness';
 import {

@@ -528,7 +528,7 @@ const SCENARIOS = [
     expect: [
       'agent: chat',
       'model: harness-model',
-      'model access: Your own API keys',
+      'model access: your own API keys',
       'status: not started',
       'queued follow-ups: 0',
     ],

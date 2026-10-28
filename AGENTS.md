@@ -124,7 +124,7 @@ llm import no host layer. ESLint also fails:
 - an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and
   the named runtime entries (`EFFECT_RUN_ENTRIES`); the SDK's entry files run
   nothing;
-- `new AbortController()` outside its two permanent residents;
+- `new AbortController()` outside its one permanent resident;
 - in the core (`CORE_QUALITY_DIRS`), `new Promise`, `.then(` and `any`, with
   no disable comment honored;
 - any `@adapter-until` marker: there are no temporary adapters.

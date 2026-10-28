@@ -102,7 +102,10 @@ function tui(): void {
   detachHost = Effect.runSync(
     testDefaultSession().interactions.use(
       createTuiHostInteractions(presentationHost, cliContext, {
-        requests: testDefaultSession().requests,
+        requests: {
+          request: testDefaultSession().requests.request,
+          view: testDefaultSession().view,
+        },
         settings: settingsStores.stores,
         runtime: testRuntime(),
       }),

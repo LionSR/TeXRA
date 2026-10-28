@@ -28,8 +28,6 @@ export const testRunFork: RunRegistryInit['fork'] = (effect) =>
  */
 export function testRunHandle(input: {
   runId: RunId;
-  /** The parent edge; omitted (or null) for a root. */
-  parent?: RunId | null;
   agent: string;
   /** Defaults to a native agent identity for `agent`. */
   identity?: RunIdentity;
@@ -38,7 +36,7 @@ export function testRunHandle(input: {
     runId: input.runId,
     identity: input.identity ?? { kind: 'agent', agent: input.agent },
   };
-  return new RunHandle(run, input.parent ?? null);
+  return new RunHandle(run);
 }
 
 /** A registry over an empty fold: no run has a view, which is what a
@@ -102,6 +100,7 @@ export function admitInterruptibleRun(
   runs: RunsShape,
   runId: RunId,
   onInterrupt: () => void,
+  launchParent: RunId | null = null,
 ): Fiber.Fiber<void> {
   const interruptEffect = Effect.sync(onInterrupt);
   // Awaited as a root launch awaits: interrupting this fiber stops the run.
@@ -110,6 +109,7 @@ export function admitInterruptibleRun(
       runs,
       runId,
       Effect.never.pipe(Effect.onInterrupt(() => interruptEffect)),
+      launchParent,
     ).pipe(Effect.ignore),
   );
 }
@@ -120,9 +120,10 @@ export function startAwaited<A, E, R extends AgentRunServices>(
   runs: RunsShape,
   runId: RunId,
   program: Effect.Effect<A, E, R>,
+  launchParent: RunId | null = null,
 ): Effect.Effect<A, E | Error> {
   return Effect.flatMap(
-    registryOf(runs).start(runId, program, (run) => run),
+    registryOf(runs).start(runId, program, (run) => run, launchParent),
     (fiber) =>
       Fiber.join(fiber).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber))),
   );

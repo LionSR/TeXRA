@@ -1,15 +1,16 @@
 import { it } from '@effect/vitest';
 import { afterEach, describe, expect } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  MODEL_CONFIGS,
-  ModelProvider,
-  ReasoningEffort,
-  type ModelConfig,
-} from 'llm-zoo';
 
 import { Effect } from 'effect';
-import { codexBackendModelId, routeConfig } from '@texra-ai/llm';
+import {
+  codexBackendModelId,
+  DEFAULT_MODEL_CAPABILITIES,
+  MODEL_CONFIGS,
+  type ModelConfig,
+  ModelProvider,
+  ReasoningEffort,
+  routeConfig,
+} from '@texra-ai/llm';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
 import { Secrets } from '@platform/secrets';
 import {
@@ -67,8 +68,8 @@ describe('provider capabilities', () => {
         yield* Effect.promise(() =>
           installPlatform({
             config: {
-              'texra.chatgptCodex.preferSubscription': true,
-              'texra.chatgptCodex.contextWindowK': 900,
+              'chatgptCodex.preferSubscription': true,
+              'chatgptCodex.contextWindowK': 900,
             },
           }),
         );

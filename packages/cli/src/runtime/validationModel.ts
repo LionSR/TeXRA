@@ -5,29 +5,33 @@
  * at the provider boundary, so a `texra run` smoke test exercises the real
  * CLI and `executeAgent` path without a live model API.
  *
- * The four `TEXRA_CLI_*` reads are build constants: direct `process.env`
- * property access, so esbuild's `define` inlines them; only the CLI's
- * validation build defines them. Every shipped bundle loads a stub in place
- * of this module (`scripts/stub-internal-validation-model.mjs`). The runtime
- * keys go through the ambient `ConfigProvider` (`envVar`), read when the
- * program runs.
+ * Only that build carries this module: a shipped CLI bundle loads a stub in
+ * its place (`scripts/stub-internal-validation-model.mjs`). The switches go
+ * through the ambient `ConfigProvider` (`envVar`), read when the program runs.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
-import { Effect, Stream } from 'effect';
+import { Effect, Layer, Stream } from 'effect';
 import {
-  originOf,
   type Model,
+  type ModelConfig,
   type ModelOrigin,
+  originOf,
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
 } from '@texra-ai/llm';
-import { envVar } from '@utils/system/envFlags';
-import { COMPACTION_SYSTEM_PROMPT } from './compaction';
-import { SKIPPED_NOT_STARTED } from './tools';
-import type { ModelConfig } from 'llm-zoo';
+import { ValidationModel } from '@texra-ai/harness/host';
+import { envVar } from '@texra-ai/harness/node';
+
+/** The per-run switch, and the flag file's variable and sentinel. */
+const SWITCH = 'TEXRA_INTERNAL_VALIDATE_MODEL';
+const FLAG = 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG';
+const FLAG_CONTENT = 'texra-cli-run-validation';
+// The harness's words for a compaction request and a call that never ran.
+const COMPACTION_SYSTEM_PROMPT_START = 'Summarize the conversation below.';
+const SKIPPED_NOT_STARTED = 'interrupted before the Harness recorded it';
 
 const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
 
@@ -109,11 +113,11 @@ function goldenTurn(
   const results = turn.messages.filter((m) => m.role === 'tool');
   const said = JSON.stringify(turn.messages);
   // The golden chat's `/compact`: its summary replaces the history.
-  if (system === COMPACTION_SYSTEM_PROMPT)
+  if (system.startsWith(COMPACTION_SYSTEM_PROMPT_START))
     return Effect.succeed(text('The golden chat so far.'));
   // The golden parent's session label: its `run.description`.
   if (
-    system.startsWith('Generate a short TeXRA session label') &&
+    system.startsWith('Generate a short session label') &&
     said.includes('<agent>golden_parent</agent>')
   )
     return Effect.succeed(text('Working through the golden parent task'));
@@ -347,41 +351,29 @@ function mathematicalValidationOutput(prompt: string): {
 }
 
 /**
- * True only inside a guarded package-validation run: the bundle was built
- * with the include flag, the per-run env var is `1`, and an absolute flag
- * file holds the expected sentinel. `CI` is not read, so an interactive
+ * True only inside a guarded package-validation run: the per-run switch is
+ * `1`, and an absolute flag file holds the expected sentinel. `CI` is not read, so an interactive
  * `texra chat` (which a CI marker would force headless) can run against the
  * scripted model. Any partial/forged activation dies rather than silently
  * falling through to real models.
  */
-export const shouldUseInternalValidationModel = Effect.fn(
-  'shouldUseInternalValidationModel',
-)(function* (): Effect.fn.Return<boolean> {
-  if (process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL !== '1')
-    return false;
+const shouldUseInternalValidationModel = Effect.gen(function* () {
+  if ((yield* envVar(SWITCH)) !== '1') return false;
 
-  const envKey = process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_ENV ?? '';
-  const flagEnvKey =
-    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV ?? '';
-  const expectedFlagContent =
-    process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT ?? '';
-
-  if ((yield* envVar(envKey)) !== '1') return false;
-
-  const flagPath = yield* envVar(flagEnvKey);
+  const flagPath = yield* envVar(FLAG);
   if (!flagPath || !path.isAbsolute(flagPath)) {
     return yield* Effect.die(
       new Error(
-        `${envKey}=1 is restricted to package validation and needs an absolute ${flagEnvKey} path.`,
+        `${SWITCH}=1 is restricted to package validation and needs an absolute ${FLAG} path.`,
       ),
     );
   }
 
   // An unreadable flag file dies with the filesystem error, which names it.
   const flagContent = yield* Effect.sync(() => readFileSync(flagPath, 'utf8'));
-  if (flagContent.trim() !== expectedFlagContent) {
+  if (flagContent.trim() !== FLAG_CONTENT) {
     return yield* Effect.die(
-      new Error(`${envKey}=1 received an invalid validation flag file.`),
+      new Error(`${SWITCH}=1 received an invalid validation flag file.`),
     );
   }
 
@@ -391,7 +383,7 @@ export const shouldUseInternalValidationModel = Effect.fn(
 const VALIDATION_ENDPOINT = 'https://validation.invalid/v1';
 
 /** The canned llm `Model` behind the validation backend. */
-export function validationModel(config: ModelConfig): {
+function validationModel(config: ModelConfig): {
   readonly model: Model;
   readonly origin: ModelOrigin;
 } {
@@ -425,7 +417,10 @@ export function validationModel(config: ModelConfig): {
     let content: TurnResult['content'];
     if (golden !== null) {
       content = golden;
-    } else if (echo && turn.system === COMPACTION_SYSTEM_PROMPT) {
+    } else if (
+      echo &&
+      turn.system?.startsWith(COMPACTION_SYSTEM_PROMPT_START)
+    ) {
       content = text('Earlier turns, summarized.');
     } else if (echo) {
       // The user messages the request carries, in order, each by its last
@@ -527,9 +522,7 @@ export function validationModel(config: ModelConfig): {
             envVar('TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY'),
             envVar('TEXRA_INTERNAL_VALIDATE_ECHO'),
             envVar('TEXRA_INTERNAL_VALIDATE_GOLDEN'),
-            envVar(
-              process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV ?? '',
-            ),
+            envVar(FLAG),
           ]);
         return complete(
           turn,
@@ -544,3 +537,9 @@ export function validationModel(config: ModelConfig): {
     ).pipe(Stream.map((result): TurnEvent => ({ kind: 'completed', result })));
   return { origin, model: { prepareTurn, streamTurn } };
 }
+
+/** The harness's `ValidationModel`: the canned model and its gate. */
+export const validationModelLayer = Layer.succeed(ValidationModel)({
+  enabled: shouldUseInternalValidationModel,
+  bind: validationModel,
+});

@@ -5,18 +5,21 @@
  * billing. Also whether a model switch can take the run's route, and the one
  * move onto the user's own credential a failed attempt offers.
  */
-import { Effect } from 'effect';
+import { Context, Effect, Option } from 'effect';
 
 import {
   decideModelRoute,
   hasUsableApiKey,
-  OWN_KEY_ROUTE_FACTS,
   type HostRouteFacts,
+  type Model,
+  type ModelConfig,
+  type ModelOrigin,
   type ModelRoute,
+  OWN_KEY_ROUTE_FACTS,
+  type ReasoningMode,
   type SelectedModel,
 } from '@texra-ai/llm';
 
-import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import { routeFactsFor, type ModelSettings } from '@model/modelSettings';
 import {
@@ -32,7 +35,20 @@ import {
   type ModelBackend,
   type ProviderError,
 } from '@shared/schemas';
-import type { ModelConfig, ReasoningMode } from 'llm-zoo';
+
+/** The canned model a package-validation build provides beneath the process
+ *  layer, and whether a new run takes it. Absent, none does, and a run
+ *  recorded on the validation route fails to bind. */
+export class ValidationModel extends Context.Service<
+  ValidationModel,
+  {
+    readonly enabled: Effect.Effect<boolean>;
+    readonly bind: (config: ModelConfig) => {
+      readonly model: Model;
+      readonly origin: ModelOrigin;
+    };
+  }
+>()('@texra-ai/harness/ValidationModel') {}
 
 /** The routes a binding can take: the unserved one fails in the decision. */
 type BindableRoute = Exclude<ModelRoute, { kind: 'unserved' }>;
@@ -72,12 +88,13 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
 ): Effect.fn.Return<RouteDecision, RouteUnavailable> {
   const host = routeFactsFor(settings, ask.declinedRoutes);
   const { backend, mode } = ask;
+  const canned = yield* Effect.serviceOption(ValidationModel);
   const decided = decideModelRoute(
     config,
     backend === undefined
       ? {
           ...host,
-          validation: yield* shouldUseInternalValidationModel(),
+          validation: Option.isSome(canned) && (yield* canned.value.enabled),
           mode,
         }
       : {
@@ -90,7 +107,7 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
   );
   if (decided.kind === 'unserved') {
     return yield* unavailable(
-      `${config.label} is served only through OpenRouter or GitHub Copilot, which TeXRA no longer supports. Choose another model.`,
+      `${config.label} is served only through OpenRouter or GitHub Copilot, which this build no longer supports. Choose another model.`,
     );
   }
   const served = servingBackend(config, decided);

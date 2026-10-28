@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   resolveTeamLaunch,
   type TeamCatalogAgent,
+  type TeamPreset,
 } from '@common/teams/TeamPlan';
-import type { TeamPreset } from '@common/teams/TeamPresets';
 import { agentMatchesIdentifier } from '@shared/schemas';
 
 const delegateTools = ['agent'];
@@ -40,7 +40,7 @@ describe('resolveTeamLaunch', () => {
     expect(
       resolveTeamLaunch({
         teamId: 'custom-team',
-        customPresetsRaw: [preset],
+        presets: [preset],
         resolveAgent: fromCatalog([
           agent('writer'),
           agent('lead', { tools: delegateTools }),

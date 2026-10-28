@@ -14,7 +14,11 @@ import {
   Stream,
 } from 'effect';
 
-import { type RunStopReason, type Session } from '@texra-ai/harness';
+import {
+  isRequestRefusal,
+  type RunStopReason,
+  type Session,
+} from '@texra-ai/harness';
 import {
   describeFollowUpFailure,
   hasErrorPresentationClaimed,
@@ -52,6 +56,7 @@ import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
+import { resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
@@ -77,6 +82,7 @@ import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import {
   appendLocalErrorTranscript,
   appendLocalNotice,
+  appendLocalRequestRefusal,
   appendLocalUserTranscript,
   clearLocalTranscript,
   moveLocalTranscriptToRun,
@@ -433,25 +439,7 @@ export function createChatSessionController(
     presentationHost,
     sessionContext,
     {
-      requests,
-      preview: !served
-        ? undefined
-        : (runId, requestId) =>
-            requests
-              .request({ kind: 'request.preview', runId, requestId })
-              .pipe(
-                // `request.preview` answers with a preview, null included;
-                // any other outcome is a broken protocol, not a missing one.
-                Effect.flatMap((outcome) =>
-                  outcome.kind === 'preview'
-                    ? Effect.succeed(outcome.preview)
-                    : Effect.die(
-                        new Error(
-                          `request.preview answered with a ${outcome.kind} outcome`,
-                        ),
-                      ),
-                ),
-              ),
+      requests: runSession,
       settings: stores,
       runtime,
     },
@@ -601,15 +589,25 @@ export function createChatSessionController(
             appendLocalNotice(`Resuming document task ${id}. Tab lists it.`),
           );
           yield* Effect.forkDetach(
-            runSession
-              .resume(id, { interactive: true })
-              .pipe(
-                Effect.catch((refused) =>
-                  Effect.sync(() =>
-                    appendLocalErrorTranscript(toErrorMessage(refused)),
-                  ),
+            resumeRun(runSession, id).pipe(
+              Effect.map((resumed) =>
+                resumed === 'waiting'
+                  ? describeFollowUpFailure('blocked')
+                  : undefined,
+              ),
+              Effect.catch((refused) =>
+                Effect.succeed(
+                  isRequestRefusal(refused)
+                    ? requestErrorText(refused)
+                    : refused.message,
                 ),
               ),
+              Effect.flatMap((notResumed) =>
+                notResumed === undefined
+                  ? Effect.void
+                  : Effect.sync(() => appendLocalErrorTranscript(notResumed)),
+              ),
+            ),
           );
           return;
         }
@@ -650,24 +648,27 @@ export function createChatSessionController(
         yield* Effect.forkIn(
           recoverRun(
             Effect.gen(function* () {
-              const run = yield* runSession
-                .resume(id, { interactive: true })
-                .pipe(
-                  // A refusal is the resume's answer, not a failure: the chat
-                  // says it in the session's words and exits as a usage error.
-                  Effect.catchTag('ResumeRefused', (refusal) =>
-                    Effect.sync(() => {
-                      if (session.stopRequested) {
-                        session.settleExitCode(claim, CliExitCode.Interrupted);
-                      } else {
-                        appendLocalErrorTranscript(refusal.message);
-                        session.settleExitCode(claim, CliExitCode.Usage);
-                      }
-                      return undefined;
-                    }),
-                  ),
-                );
-              if (run === undefined) return;
+              // A refusal, or a run that waits for what blocks it, is the
+              // resume's answer, not a failure: the chat says it in the
+              // session's words and exits as a usage error.
+              const run = yield* resumeRun(runSession, id).pipe(
+                Effect.catchIf(isRequestRefusal, (refusal) =>
+                  Effect.succeed(refusal),
+                ),
+              );
+              if (run === 'waiting' || isRequestRefusal(run)) {
+                if (session.stopRequested) {
+                  session.settleExitCode(claim, CliExitCode.Interrupted);
+                } else {
+                  if (run === 'waiting')
+                    appendLocalErrorTranscript(
+                      describeFollowUpFailure('blocked'),
+                    );
+                  else appendLocalRequestRefusal(run);
+                  session.settleExitCode(claim, CliExitCode.Usage);
+                }
+                return;
+              }
               yield* adoptResumedRun(run.runId);
               // A root acknowledges at idle, so its result holds this chain,
               // and the root-run slot it settles, until the run ends.
@@ -910,7 +911,7 @@ export function createChatSessionController(
             runId: target,
             text: prepared.instruction,
             displayText: prepared.displayInstruction,
-            mediaFiles: mediaFiles ? [...mediaFiles] : undefined,
+            media: mediaFiles ? [...mediaFiles] : undefined,
             holdUntil,
           })
           .pipe(

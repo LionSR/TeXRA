@@ -1,156 +1,37 @@
 /**
- * Whether a command-line tool is installed: one probe that runs its version
- * command (falling back to a common-paths lookup), and the image processor
- * that PDF rasterization and image resizing pick.
- * Which tools an app needs, and how it tells the user to install a missing
- * one, are the app's own table.
+ * The image processor PDF rasterization and image resizing pick, probed by
+ * its version command on the extended PATH. Whether another tool is
+ * installed, and how to install it, are the app's.
  */
 
 // Third-party imports
 import { Effect } from 'effect';
-import { parse as shellParse } from 'shell-quote';
-
-// Local imports
-import { withLogChannel } from '@logger/effectLog';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { findCommand } from './binaryResolver';
 import { executeCommand } from './execUtils';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-
-const CHANNEL = 'toolUtils';
-
-/** Whether a probe result carries a version-like pattern (e.g., "3.7.1"). */
-function hasVersionOutput(result: { stdout: string; stderr: string }): boolean {
-  return /\d+\.\d+/.test(result.stdout) || /\d+\.\d+/.test(result.stderr);
-}
-
-/** Split a probe command string into an executable and its arguments. */
-function parseCommand(cmd: string): { cmdName: string; args: string[] } | null {
-  const parts = shellParse(cmd).filter(
-    (arg): arg is string => typeof arg === 'string',
-  );
-  if (parts.length === 0) return null;
-  const [cmdName, ...args] = parts;
-  return { cmdName, args };
-}
-
-/**
- * Run one `<tool> --version` probe. A `--version` probe answers the same from
- * any directory and for any project, so it names the process cwd and no
- * setting slots. An interrupted probe's scope kills the child.
- */
-const runProbe = (cmd: string, args: string[]) =>
-  executeCommand([cmd, ...args], {
-    cwd: process.cwd(),
-    settings: undefined,
-    timeout: 5000,
-    quiet: true,
-  });
-
-/**
- * Probe one command, falling back to a common-paths-resolved path when the
- * direct spawn neither exits 0 nor prints version-like output.
- */
-const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
-  function* (
-    cmd: string,
-    args: string[],
-  ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
-    let result = yield* runProbe(cmd, args);
-    // Accept if exit code is 0, OR if we got version-like output
-    // (some tools return non-zero for --version but still output version info)
-    if (result.exitCode === 0 || hasVersionOutput(result)) return true;
-
-    const fallback = yield* findCommand(cmd);
-    if (fallback) {
-      result = yield* runProbe(fallback.command, [...fallback.args, ...args]);
-      if (result.exitCode === 0 || hasVersionOutput(result)) return true;
-    }
-
-    // Log at info level so it shows in output channel by default
-    yield* Effect.logInfo(
-      `Tool '${cmd}' not detected. Last result: exitCode=${result.exitCode}, ` +
-        `stdout=${result.stdout.slice(0, 200) || '(empty)'}, ` +
-        `stderr=${result.stderr.slice(0, 200) || '(empty)'}`,
-    ).pipe(withLogChannel(CHANNEL));
-    return false;
-  },
-);
-
-/** What a probe found: whether the tool answered, and whether the probe
- *  itself failed rather than finding nothing. */
-export interface ToolProbe {
-  readonly installed: boolean;
-  readonly probeFailed: boolean;
-}
-
-/**
- * Probe `toolName` with `command` (by default `<toolName> --version`), or
- * with each of several commands in turn until one answers.
- *
- * The spawned probes are cancelled by the fiber's own interruption, so no
- * caller threads an `AbortSignal` in. The probe's own failure is answered,
- * not raised: the cause is logged and the tool reads as absent with
- * `probeFailed` set, which leaves no error channel for callers to handle.
- */
-export const probeTool = Effect.fn('toolUtils.probeTool')(function* (
-  toolName: string,
-  command: string | readonly string[] = `${toolName} --version`,
-): Effect.fn.Return<ToolProbe, never, ChildProcessSpawner> {
-  const probe = Effect.gen(function* () {
-    if (typeof command !== 'string') {
-      // Try each command in the array until one succeeds
-      for (const cmd of command) {
-        const parsed = parseCommand(cmd);
-        if (!parsed) continue;
-        if (yield* executeWithFallback(parsed.cmdName, parsed.args)) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-    // Single command: validate first, then execute
-    const parsed = parseCommand(command);
-    if (!parsed) {
-      return yield* Effect.fail(
-        new Error('Invalid command: no executable found'),
-      );
-    }
-    return yield* executeWithFallback(parsed.cmdName, parsed.args);
-  });
-
-  // A probe failure reads as an absent tool, marked: a caller that reports
-  // the absence links no install docs for a probe that never answered.
-  const answerAsAbsent = (err: unknown) =>
-    Effect.logWarning(
-      `Tool check for '${toolName}' failed: ${toErrorMessage(err)}`,
-    ).pipe(
-      withLogChannel(CHANNEL),
-      Effect.as({ installed: false, probeFailed: true }),
-    );
-
-  // Both arms, because the `try`/`catch` this replaces answered a rejected
-  // spawn and a synchronous throw alike — the binary resolution and the PATH
-  // build sit inside the probe and are ordinary code that can throw, and a
-  // throw there means "not detected", not a crashed run. Interruption is
-  // neither a failure nor a defect, so it still unwinds the fiber instead of
-  // reporting a missing tool.
-  return yield* probe.pipe(
-    Effect.map((installed) => ({ installed, probeFailed: false })),
-    Effect.catch((error: Error) => answerAsAbsent(error)),
-    Effect.catchDefect(answerAsAbsent),
-  );
-});
 
 /** The version command of each image processor: GraphicsMagick has no
  *  `--version` flag. */
 const IMAGE_TOOL_COMMANDS = {
-  magick: 'magick --version',
-  gm: 'gm version',
+  magick: ['magick', '--version'],
+  gm: ['gm', 'version'],
 } as const;
+
+/** Whether `command` answers: it exits 0, or prints a version (some tools
+ *  exit non-zero for their version command). A `--version` probe answers
+ *  the same from any directory, so it runs in the process cwd. */
+const answers = (command: readonly string[]) =>
+  Effect.map(
+    executeCommand([...command], {
+      cwd: process.cwd(),
+      settings: undefined,
+      timeout: 5000,
+      quiet: true,
+    }),
+    (result) =>
+      result.exitCode === 0 || /\d+\.\d+/.test(result.stdout + result.stderr),
+  );
 
 /** The image processor found, kept for the process: every image resize and
  *  PDF conversion asks, and each probe spawns two processes. A miss is not
@@ -172,10 +53,7 @@ export const detectImageTool = Effect.fn('toolUtils.detectImageTool')(
     if (foundImageTool !== undefined) return foundImageTool;
     const [hasMagick, hasGm] = yield* Effect.all(
       (['magick', 'gm'] as const).map((tool) =>
-        Effect.map(
-          probeTool(tool, IMAGE_TOOL_COMMANDS[tool]),
-          ({ installed }) => installed,
-        ),
+        answers(IMAGE_TOOL_COMMANDS[tool]),
       ),
       { concurrency: 'unbounded' },
     );

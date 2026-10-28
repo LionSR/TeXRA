@@ -1,30 +1,59 @@
 /**
- * Run actions every host takes the same way, as plain functions over the
- * `Session` the host holds: the GUI run actions and the CLI's commands and
- * slash commands call these rather than writing the request themselves.
+ * What resuming and forking a run answer, for every host: the GUI windows'
+ * run actions and the terminal chat's `/resume`, `/resume all` and `/fork`
+ * read the session's answers through these, so a refusal is worded and
+ * mapped once.
  */
 import { Effect } from 'effect';
 
-import type { RequestError, Session } from '@texra-ai/harness';
+import {
+  isRequestRefusal,
+  Unavailable,
+  type RequestRefusal,
+  type Run,
+  type RunFailure,
+  type Session,
+} from '@texra-ai/harness';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /**
- * Fork `runId` into a new task holding its conversation up to `at` (its
- * latest finished point when absent): the new task's id, waiting for its
- * host to resume it. A refusal is the request's own error; any answer but
- * `forked` is a defect.
+ * Resume `runId` on `session`: the run that continues (the one asked for,
+ * or the parent that owns it), `'waiting'` when it waits for what blocks it
+ * (its agent, a plugin) and continues once that is back, or the refusal
+ * that says why it does not continue. A run that fails to start is a
+ * `RunFailure`, not a refusal.
  */
-export const forkRun = (
-  session: Pick<Session, 'request'>,
+export const resumeRun = (
+  session: Session,
   runId: RunId,
-  at?: number | null,
-): Effect.Effect<RunId, RequestError> =>
-  session
-    .request({ kind: 'run.fork', runId, at })
-    .pipe(
-      Effect.flatMap((outcome) =>
-        outcome.kind === 'forked'
-          ? Effect.succeed(outcome.runId)
-          : Effect.die(new Error(`run.fork answered ${outcome.kind}`)),
-      ),
-    );
+): Effect.Effect<Run | 'waiting', RequestRefusal | RunFailure> =>
+  session.resume(runId, { interactive: true }).pipe(
+    Effect.catchTags({
+      ResumeRefused: (refusal) =>
+        refusal.reason === 'blocked'
+          ? Effect.succeed('waiting' as const)
+          : Effect.fail(new Unavailable({ runId, reason: refusal.message })),
+      ToolsRefused: (refusal) =>
+        Effect.fail(new Unavailable({ runId, reason: refusal.message })),
+    }),
+  );
+
+/** A new task holding `runId`'s conversation up to `at` (its latest settled
+ *  point when null): the fork's id, or the refusal that says why not. */
+export const forkRun = (
+  session: Session,
+  runId: RunId,
+  at: number | null,
+): Effect.Effect<RunId, RequestRefusal> =>
+  session.request({ kind: 'run.fork', runId, at }).pipe(
+    Effect.mapError((error): RequestRefusal =>
+      isRequestRefusal(error)
+        ? error
+        : new Unavailable({ runId, reason: 'The task could not be forked.' }),
+    ),
+    Effect.flatMap((outcome) =>
+      outcome.kind === 'forked'
+        ? Effect.succeed(outcome.runId)
+        : Effect.die(new Error(`run.fork answered ${outcome.kind}`)),
+    ),
+  );

@@ -378,9 +378,11 @@ export const WINDOW_OUTDATED =
 
 /** A window's lasting hold on the service: the client it is connected
  *  through, or null while the service is away and the link reaches it
- *  again; and, while it is null, why. */
-export interface ServiceLink {
-  readonly client: SubscriptionRef.SubscriptionRef<ServiceClient | null>;
+ *  again; and, while it is null, why. A window of a session its own
+ *  process opened holds a link to that process (`HostWindows.localLink`),
+ *  whose client is only what a window attaches through. */
+export interface ServiceLink<Client = ServiceClient> {
+  readonly client: SubscriptionRef.SubscriptionRef<Client | null>;
   /** Why `client` is null, as a window says it: reconnecting
    *  ({@link SERVICE_OFFLINE}), or refused by a newer service
    *  ({@link WINDOW_OUTDATED}). */

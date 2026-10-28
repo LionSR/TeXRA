@@ -15,6 +15,7 @@ import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { stepFor } from '@agent/runtime/loop/step';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { AgentRun, agentRunLayer } from '@agent/runtime/run/AgentRun';
+import { validationModelLayer } from '@cli/runtime/validationModel';
 import { AppSignals } from '@platform/appSignals';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -103,6 +104,7 @@ function runLayer(
       ),
     ),
     Layer.provideMerge(nodeSpawnerLayer),
+    Layer.provideMerge(validationModelLayer),
   );
 }
 
@@ -110,14 +112,10 @@ function runLayer(
 // real route: the guarded package-validation gate, opened as validation opens it.
 beforeAll(() => {
   const flag = path.join(mkdtempSync(path.join(tmpdir(), 'texra-vm-')), 'flag');
-  writeFileSync(flag, 'overlay');
+  writeFileSync(flag, 'texra-cli-run-validation');
   for (const [name, value] of Object.entries({
-    TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
-    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_ENV: 'TEXRA_OVERLAY_VALIDATION',
-    TEXRA_OVERLAY_VALIDATION: '1',
-    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV: 'TEXRA_OVERLAY_FLAG',
-    TEXRA_OVERLAY_FLAG: flag,
-    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT: 'overlay',
+    TEXRA_INTERNAL_VALIDATE_MODEL: '1',
+    TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
   }))
     vi.stubEnv(name, value);
 });

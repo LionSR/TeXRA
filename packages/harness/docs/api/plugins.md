@@ -302,7 +302,6 @@ interface CallRequests {
    *  decision, as `SessionRequests.ask` does. */
   readonly open: (
     payload: PermissionPayload,
-    options?: { readonly onNeverCommitted?: Effect.Effect<void> },
   ) => Effect.Effect<RequestDecision, DatabaseNotOwner | CellError>;
 }
 ```
@@ -729,8 +728,9 @@ One message a producer sends.
 interface InboxItem {
   readonly text: string;
   readonly displayText?: string;
-  /** Media file paths (e.g. pasted images) attached to a user's message. */
-  readonly mediaFiles?: readonly string[];
+  /** A user's media (e.g. pasted images) and its blobs (`attachedMedia`). */
+  readonly media?: QueuedFollowUp['content']['media'];
+  readonly blobs?: readonly DraftBlob[];
   readonly from: FollowUpSenderInput;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */
@@ -1150,16 +1150,18 @@ interface ProcessChildStrategy<
   TTurn,
   R = never,
 > extends ChildStrategyBase<TTurn, R> {
-  launch(signal: AbortSignal): Effect.Effect<TTurn, Error, R>;
+  /** A stop interrupts the turn's fiber: a foreign call takes its signal
+   *  from that interruption (`Effect.abortSignal`, `Effect.tryPromise`). */
+  launch(): Effect.Effect<TTurn, Error, R>;
   /** The next turn, from the queued follow-ups. Absent: the first turn is
    *  the only one (a background shell). */
   runTurn?(
     followUps: readonly FollowUpContent[],
-    signal: AbortSignal,
   ): Effect.Effect<TTurn, Error, R>;
-  /** Deliver a finished turn even when the loop was interrupted: only a
-   *  killed OS process, whose exit code and output are a complete result. */
-  readonly deliverAfterInterrupt?: boolean;
+  /** The turn a stop cut short, rebuilt from what the child buffered, and
+   *  delivered: only a killed OS process, whose exit code and output are a
+   *  complete result. */
+  interruptedTurn?(): TTurn;
   /** A stop pauses this child rather than cancelling it: what it had done
    *  and how the parent's model continues it; undefined cancels it. */
   pauseNotice?(): ChildRunPause | undefined;
@@ -1293,10 +1295,11 @@ interface RequestDecisionHook {
 ## requestToolEditApproval
 
 Ask the person for an edit: policy first (allow, deny), else a
-`request.opened` on the run with the preview staged on the attached host,
-serialized behind the run's other prompts, answered by a surface's
-`request.decide`. An approve carries the file as the user left it in the
-host's diff view, or nothing when the host staged no preview.
+`request.opened` on the run with its content held in the session's
+tool-edit store, serialized behind the run's other prompts, answered by a
+surface's `request.decide`. An approve applies the file as the user left
+it: the decision's content, else the edit a surface recorded, else the
+proposal.
 
 ```ts
 const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApprovalResult, Error, ToolContext>
@@ -1807,13 +1810,18 @@ type ToolEditApprovalResult =
 
 ## ToolEditProposal
 
-What a tool proposes; {@link requestToolEditApproval} derives the rest.
+What a tool proposes; {@link requestToolEditApproval} derives the rest:
+the diff a host shows (hunks, the first changed line), computed once, and
+the permission every surface lists.
 
 ```ts
-type ToolEditProposal = Omit<
-  ToolEditApprovalRequest,
-  'permission' | 'roots' | 'hunks' | 'firstChangedLine'
->;
+interface ToolEditProposal {
+  readonly path: string;
+  readonly originalContent: string;
+  readonly proposedContent: string;
+  readonly sourceTool: string;
+  readonly runId?: RunId | null;
+}
 ```
 
 ## ToolEnv

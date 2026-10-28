@@ -116,7 +116,7 @@ export const readDelegationTargets = Effect.fn('readDelegationTargets')(
 const worktreeLine = (enabled: boolean): string =>
   enabled
     ? 'Git worktree support: ENABLED. Pass `working_directory` (absolute path) to `agent` to run a tool-use subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.'
-    : 'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` to `agent` because the call will be rejected. Ask the user to turn on `texra.git.worktreeSupport` ("Subagent worktrees" in Settings > General > Git) if worktree operation is needed.';
+    : 'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` to `agent` because the call will be rejected. Ask the user to turn on `git.worktreeSupport` ("Subagent worktrees" in Settings > General > Git) if worktree operation is needed.';
 
 /** The system text's delegation section, rendered once, at the freeze. */
 export function delegationSection(targets: DelegationTargets): string {

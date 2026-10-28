@@ -1,10 +1,8 @@
-import { Cause, Effect } from 'effect';
+import { Effect, HashMap, Option, SubscriptionRef } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireRun, sessionOf } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
-import { withLogChannel } from '@logger/effectLog';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   decideApproval,
   isApprovalDenied,
@@ -18,7 +16,10 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
-import type { ToolEditContent } from '@shared/session/runtimeRequest';
+import type {
+  StagedToolEdit,
+  ToolEditContent,
+} from '@shared/session/runtimeRequest';
 import { Settings } from '@shared/config/settings';
 import { errorResult } from '@tools/core/result';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
@@ -31,37 +32,17 @@ import {
   type DiffHunks,
 } from '@utils/text/unifiedDiff';
 
-const CHANNEL = 'ToolEditApproval';
-
 /**
- * Tool-edit approval request / result shapes.
- *
- * The request reaches a host through `SessionHandle.interactions.presentToolEdit`
- * (the preview the durable payload cannot carry); the decision comes back as
- * the request's `request.decide`. Its content carries the diff a host shows
- * (hunks, the first changed line), computed here once; the line counts are
- * the permission's.
+ * What a tool proposes; {@link requestToolEditApproval} derives the rest:
+ * the diff a host shows (hunks, the first changed line), computed once, and
+ * the permission every surface lists.
  */
-export interface ToolEditApprovalRequest extends ToolEditContent {
+export interface ToolEditProposal {
   readonly path: string;
+  readonly originalContent: string;
+  readonly proposedContent: string;
   readonly sourceTool: string;
   readonly runId?: RunId | null;
-  /**
-   * The session's workspace roots, as data: a host's preview of this request
-   * writes its temp files under the workspace and reads the diff's settings
-   * from these slots, and that preview program runs on the host's own runner
-   * rather than inside the tool call that raised the request, so the roots
-   * have to travel with the request instead of being read from an ambient
-   * workspace scope. {@link requestToolEditApproval} — the one producer of a
-   * request — fills them from the run's session.
-   */
-  readonly roots: WorkspaceRoots;
-  /**
-   * What the UI shows for this request, prepared once at the tool boundary
-   * (`prepareToolEditApprovalPrompt`): the payload of the `request.opened`
-   * fact the session publishes, and what every host surface renders.
-   */
-  readonly permission: ToolEditPermission;
 }
 
 /**
@@ -80,12 +61,6 @@ export type ToolEditApprovalResult =
       readonly startLine?: number;
     }
   | RefusalDecision;
-
-/** What a tool proposes; {@link requestToolEditApproval} derives the rest. */
-export type ToolEditProposal = Omit<
-  ToolEditApprovalRequest,
-  'permission' | 'roots' | 'hunks' | 'firstChangedLine'
->;
 
 /**
  * Build the tool-edit permission payload every host lists from the fold, the
@@ -106,10 +81,8 @@ export function prepareToolEditApprovalPrompt(
     request: ToolEditProposal;
     relativePath: string;
   },
-): Pick<
-  ToolEditApprovalRequest,
-  'permission' | 'hunks' | 'firstChangedLine'
-> & {
+): Pick<ToolEditContent, 'hunks' | 'firstChangedLine'> & {
+  permission: ToolEditPermission;
   diffTimeout: string | undefined;
 } {
   const { requestId, request, relativePath } = params;
@@ -151,10 +124,11 @@ function diffEdit(original: string, proposed: string): DiffHunks {
 
 /**
  * Ask the person for an edit: policy first (allow, deny), else a
- * `request.opened` on the run with the preview staged on the attached host,
- * serialized behind the run's other prompts, answered by a surface's
- * `request.decide`. An approve carries the file as the user left it in the
- * host's diff view, or nothing when the host staged no preview.
+ * `request.opened` on the run with its content held in the session's
+ * tool-edit store, serialized behind the run's other prompts, answered by a
+ * surface's `request.decide`. An approve applies the file as the user left
+ * it: the decision's content, else the edit a surface recorded, else the
+ * proposal.
  */
 export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
   function* (
@@ -168,17 +142,10 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     const { run, requests } = call;
     const session = sessionOf(run);
     const contextRunId = run.runId;
-    const withRunId =
+    const preparedRequest: ToolEditProposal =
       request.runId || !contextRunId
         ? request
         : { ...request, runId: contextRunId };
-    const preparedRequest: ToolEditProposal &
-      Pick<ToolEditApprovalRequest, 'roots'> = {
-      ...withRunId,
-      // Filled here, at the one boundary that has the run, so a caller cannot
-      // hand the preview roots that are not this session's.
-      roots: session.roots,
-    };
 
     const runId = preparedRequest.runId ?? undefined;
     const isRunBypassed =
@@ -219,56 +186,46 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       ),
     });
     yield* reportDiffTimeout(diffTimeout);
-    const staged: ToolEditApprovalRequest = { ...preparedRequest, ...prompt };
-    const { permission } = prompt;
+    const { permission, hunks } = prompt;
+    const { requestId } = permission;
+    const { toolEdits } = session.view;
     return yield* session.approvals.enqueue('toolEdit', runId, {
-      // The preview is staged before the request opens, and stays staged
-      // until that request's `request.decided` releases it on every host:
-      // a surface reading the committed row must never find the request
-      // listed with nothing to show for it. Staging hands back the release
-      // for what it staged, bound to the host it staged on; the one case no
-      // decision ever reaches is an open that never committed, which
-      // `requests.ask` owns and runs this for.
-      prompt: session.interactions.presentToolEdit(staged).pipe(
-        Effect.flatMap((releaseStaged) =>
-          requests
-            .open(
-              { kind: 'toolEdit', data: permission },
-              {
-                // The host's own cleanup program, composed into the open:
-                // this call waits for it, and a host that fails to release
-                // says so here rather than through the refusal this tool
-                // reports, so cleanup never masks the caller's outcome.
-                onNeverCommitted: releaseStaged
-                  ? releaseStaged.pipe(
-                      Effect.catchCause((cause) =>
-                        Effect.logWarning(
-                          `Failed to release the tool-edit preview staged for request ${permission.requestId}`,
-                        ).pipe(
-                          Effect.annotateLogs({ data: Cause.squash(cause) }),
-                          withLogChannel(CHANNEL),
-                        ),
-                      ),
-                    )
-                  : Effect.void,
-              },
-            )
-            .pipe(
-              Effect.flatMap(
-                (decided): Effect.Effect<ToolEditApprovalResult> => {
-                  if (decided.action !== 'approve') {
-                    return Effect.succeed(refusalOf('toolEdit', decided));
-                  }
-                  return finalizeApprovalResult(
-                    (
-                      decided.content ?? preparedRequest.proposedContent
-                    ).replaceAll('\r\n', '\n'),
-                    preparedRequest,
-                  );
-                },
-              ),
-            ),
+      // The content is held in the session's store from before the request
+      // opens until this call stops waiting on it, however it stops: a
+      // surface reading the committed row never finds the request listed
+      // with nothing to show for it, and nothing is left behind.
+      prompt: Effect.acquireUseRelease(
+        SubscriptionRef.update(
+          toolEdits,
+          HashMap.set<string, StagedToolEdit>(requestId, {
+            originalContent: preparedRequest.originalContent,
+            proposedContent: preparedRequest.proposedContent,
+            hunks,
+            firstChangedLine: prompt.firstChangedLine,
+            edited: null,
+          }),
         ),
+        () =>
+          requests.open({ kind: 'toolEdit', data: permission }).pipe(
+            Effect.flatMap((decided): Effect.Effect<ToolEditApprovalResult> =>
+              decided.action !== 'approve'
+                ? Effect.succeed(refusalOf('toolEdit', decided))
+                : // An approval naming no content applies the user's edit
+                  // of the proposal, when a surface sent one.
+                  Effect.flatMap(SubscriptionRef.get(toolEdits), (held) =>
+                    finalizeApprovalResult(
+                      (
+                        decided.content ??
+                        Option.getOrUndefined(HashMap.get(held, requestId))
+                          ?.edited ??
+                        preparedRequest.proposedContent
+                      ).replaceAll('\r\n', '\n'),
+                      preparedRequest,
+                    ),
+                  ),
+            ),
+          ),
+        () => SubscriptionRef.update(toolEdits, HashMap.remove(requestId)),
       ),
       bypassed: Effect.suspend(acceptProposedAsIs),
     });

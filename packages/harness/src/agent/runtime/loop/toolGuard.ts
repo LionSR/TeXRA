@@ -177,7 +177,7 @@ export const callRequests = (
       reentering?.request.payload.kind === kind
         ? reentering.requestId
         : callRequestId(at, opened + 1),
-    open: (payload, options) =>
+    open: (payload) =>
       Effect.suspend(() => {
         const reentered =
           payload.data.requestId === reentering?.requestId ? reentering : null;
@@ -185,15 +185,10 @@ export const callRequests = (
         else if (payload.data.requestId === callRequestId(at, opened + 1))
           opened += 1;
         // Answered before this owner's loop reached the call: the answer
-        // is the row's, and what the host staged for it is released here,
-        // as no later decision will release it.
+        // is the row's.
         if (reentered?.request.decision != null)
-          return Effect.as(
-            Effect.uninterruptible(options?.onNeverCommitted ?? Effect.void),
-            reentered.request.decision,
-          );
+          return Effect.succeed(reentered.request.decision);
         return session.requests.ask(runId, payload, {
-          ...options,
           open: (rows) => {
             if (reentered !== null) {
               // Open already: only what the policy decides commits, and

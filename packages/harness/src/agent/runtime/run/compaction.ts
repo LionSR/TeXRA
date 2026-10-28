@@ -44,7 +44,7 @@ export const COMPACTION_REQUEST =
   'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
 
 /** System prompt used for conversation compaction. */
-export const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Preserve:
+const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Preserve:
 - The original user request and goals
 - All key decisions made
 - File paths and code changes discussed or made

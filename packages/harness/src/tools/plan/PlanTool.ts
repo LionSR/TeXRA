@@ -27,10 +27,6 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
-import {
-  issuedCalls,
-  ISSUING_ROW_TYPES,
-} from '@shared/session/turnRowHandlers';
 import { launchBackgroundScript } from '@tools/codemode/backgroundScript';
 import { defineTool } from '@tools/core/definition';
 import { errorResult, executed } from '@tools/core/result';
@@ -100,16 +96,11 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   // child-run budget, while this process holds it. "Keep agents running"
   // detached, a goal is still found by the call that launched it.
   const { session, runId } = call.run;
+  // A plan call, by the response its result names (`RunFacts.calls`).
+  const issued = (yield* session.runHistory.load(runId))?.calls ?? {};
   const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
-    ...ISSUING_ROW_TYPES,
     'tool.result',
   ]);
-  // A plan call, by the response its result names.
-  const plans = new Set(
-    issuedCalls(rows).flatMap(({ call, issuer }) =>
-      call.toolName === PLAN ? [`${issuer?.responseId}/${call.callId}`] : [],
-    ),
-  );
   const { runs } = SubscriptionRef.getUnsafe(session.view.ref);
   // A goal that ended still holds the conversation while work it started
   // (a round's background agent) runs on.
@@ -132,7 +123,8 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
         launched !== undefined && Result.isSuccess(launched)
           ? launched.success.runId
           : undefined;
-      return goal !== undefined && plans.has(`${responseId}/${callId}`)
+      return goal !== undefined &&
+        issued[`${responseId}/${callId}`]?.toolName === PLAN
         ? [goal]
         : [];
     })

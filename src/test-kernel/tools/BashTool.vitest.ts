@@ -75,7 +75,7 @@ async function parkRunWaiting(runId: RunId): Promise<void> {
 // Unit tests exercise the tool directly — no approval host is wired.
 const BASH_PLATFORM_OPTIONS = {
   workspacePath: '/workspace',
-  config: { 'texra.toolUse.requireBashApproval': false },
+  config: { 'toolUse.requireBashApproval': false },
 } as const;
 
 /** The run id a background launch reports in its output. */
@@ -191,10 +191,10 @@ describe('BashTool', () => {
         const followUps = testDefaultSession().followUps;
         const resumeOnce = followUps.resumes.once.bind(followUps.resumes);
         vi.spyOn(followUps.resumes, 'once').mockImplementation(
-          (resumed, resume) => {
+          (resumed, resume, fork) => {
             Deferred.doneUnsafe(wakeReached, Effect.void);
             handleAtResumeTime ??= testDefaultSession().runs.get(runId)?.handle;
-            return resumeOnce(resumed, resume);
+            return resumeOnce(resumed, resume, fork);
           },
         );
         yield* Effect.promise(() => parkRunWaiting(parentRunId));

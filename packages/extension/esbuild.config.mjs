@@ -3,7 +3,6 @@ import * as esbuild from 'esbuild';
 
 import { buildIdentityDefine } from '../../scripts/build-identity.mjs';
 import { codeSandboxWorker } from '../../scripts/code-sandbox-worker.mjs';
-import { stubInternalValidationModel } from '../../scripts/stub-internal-validation-model.mjs';
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -46,7 +45,7 @@ const extensionConfig = {
     'process.env.NODE_ENV': production ? '"production"' : '"development"',
     'import.meta.url': 'importMetaUrl',
   },
-  plugins: [stubInternalValidationModel, codeSandboxWorker],
+  plugins: [codeSandboxWorker],
 };
 
 async function main() {

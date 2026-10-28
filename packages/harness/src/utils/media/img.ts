@@ -95,7 +95,7 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
 ) {
   const fs = yield* FileSystem.FileSystem;
   const maxDimension = Math.min(
-    Settings.getConfig<number>(config, 'texra.maxImageDimension'),
+    Settings.getConfig<number>(config, 'maxImageDimension'),
     API_MAX_IMAGE_DIMENSION,
   );
   // One read: the bytes that are measured are the bytes returned.

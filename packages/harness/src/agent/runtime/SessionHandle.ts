@@ -42,8 +42,12 @@ import type {
   SessionOpenError,
   SessionStoreMovedAside,
 } from '@shared/session/database';
-import type { RequestError } from '@shared/session/runtimeRequest';
+import type {
+  RequestError,
+  StagedToolEdits,
+} from '@shared/session/runtimeRequest';
 import type { RunHistory } from '@shared/session/runHistory';
+import type { RunRows } from '@shared/session/runRowsShape';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Append, UnfoldedDraft } from '@shared/session/sessionEvents';
@@ -117,10 +121,10 @@ export interface SessionLog {
   blobs(
     digests: readonly string[],
   ): Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
-  /** A run's record rows: the latest row of each record type. */
-  records(
-    runId: RunId,
-  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+  /** A run's facts, folded from its latest row of each record type (its
+   *  requests and pending input left out: `Inbox.read` reads those); null
+   *  while the store holds no open run under the id. */
+  facts(runId: RunId): Effect.Effect<RunRows | null, DatabaseReadFailed>;
   /** A run's display rows, its priced `usage` rows among them; empty when
    *  the run never existed or was removed. */
   display(
@@ -197,6 +201,9 @@ export interface SessionViewAccess {
   ): Effect.Effect<void>;
   /** The runs a resume found blocked here, with what each waits for. */
   resumeBlocks(): LocalRuntimeState['resumeBlocked'];
+  /** Each pending tool edit's content and the user's edit of it, held while
+   *  the call that opened the request waits on it: local, never a row. */
+  readonly toolEdits: SubscriptionRef.SubscriptionRef<StagedToolEdits>;
 }
 
 /** A streaming row's closing fact, as the run history commits it. */
@@ -232,13 +239,14 @@ export interface SessionHandleInit {
   /** The workspace this session works on: the opener is the one caller that
    *  knows which paper it opened. */
   readonly roots: WorkspaceRoots;
-  /** A presentation host the session is born with, attached for its life. */
+  /** A presentation host the session is born with: it answers while no
+   *  host is attached. */
   readonly interactions?: HostInteractions;
   /**
    * The opener is a host window, which follows its interrupted tasks
    * (`followInterruptedTasks`): it resumes a task whose resume was blocked
    * once what it needs is back, and with `offer` also lists at open, or
-   * under `texra.resumeOnOpen: auto` continues, the tasks a closed or
+   * under `resumeOnOpen: auto` continues, the tasks a closed or
    * crashed host app left interrupted. Headless runs and the SDK leave it
    * unset: their policy is off.
    */
@@ -266,15 +274,6 @@ export interface AskOptions<E> {
   readonly open?: (
     rows: readonly RequestRow[],
   ) => Effect.Effect<CommitOrdinal, E>;
-  /**
-   * Cleanup for what the caller staged before the request opened, run once
-   * and uninterruptibly in the two cases that leave no row behind: the
-   * `request.opened` append was refused, or an interruption's cancellation
-   * found nothing open. A committed request always ends in a
-   * `request.decided`, the release every surface follows, so it is never
-   * released here.
-   */
-  readonly onNeverCommitted?: Effect.Effect<void>;
 }
 
 /**

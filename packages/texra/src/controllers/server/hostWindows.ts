@@ -1,31 +1,39 @@
 /**
- * The windows attached to the service, and the one presentation surface the
- * service gives each project's session: a run that asks for a host
- * capability (a file's diagnostics, an inline criticism, a PDF to open, a
- * tool edit's preview, a notice) is answered by a window of that project.
+ * The windows attached to this process, and the one presentation surface it
+ * gives each session they serve: a run that asks for a host capability (a
+ * file's diagnostics, an inline criticism, a PDF to open, a notice) is
+ * answered by a window of that session's project. The service's windows
+ * attach over its socket; a window of a session this process opened attaches
+ * in-process, through `localLink`.
  *
  * A call goes only to a window of the session's project: among those that
  * offer the capability, the one focused last. A call that waits for its
  * answer fails, typed, when that window detaches or does not answer in
- * time; nothing waits forever. With no window of the project attached, a
- * capability is absent, as it is in a headless process, and the service
- * says so once each time the project's last window goes. The service keeps
- * no window state beyond the attachments themselves, and a call's answer
- * reaches the run's history only through the tool result that used it.
+ * time; nothing waits forever. A session holds the surface while a window of
+ * it is attached: with none, a capability is absent, as it is in a headless
+ * process, a notice waits for the next window when it asks to, and the
+ * process says so once each time the project's last window goes. Nothing is
+ * kept beyond the attachments themselves, and a call's answer reaches the
+ * run's history only through the tool result that used it.
  */
 import { randomUUID } from 'node:crypto';
 import { isPathWithin } from '@texra-ai/harness/host';
 
 import {
   Clock,
+  Context,
   Deferred,
   type Duration,
   Effect,
+  Equal,
+  Layer,
   Queue,
+  RcMap,
+  Ref,
   Result,
   Schema,
-  type Scope,
   Stream,
+  SubscriptionRef,
 } from 'effect';
 
 import {
@@ -34,7 +42,6 @@ import {
   type EditorCapabilities,
   type EditorHostShape,
 } from '@texra/tools/editorHost';
-import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
 
 import {
   CALL_CAPABILITY,
@@ -45,11 +52,12 @@ import {
   type HostFrame,
   type Notice,
 } from './hostCalls';
-import type { ToolEditContent } from '@texra-ai/harness/schemas';
+import type { ServiceLink } from './client';
+import type { WindowClient } from './windowHost';
 import type { Session, SessionHost } from '@texra-ai/harness';
 
 /** Why a call a run waited on got no answer from a window. */
-export class WindowCallFailed extends Schema.TaggedError<WindowCallFailed>()(
+class WindowCallFailed extends Schema.TaggedError<WindowCallFailed>()(
   'WindowCallFailed',
   {
     /** `detached`: the window went before it answered; `no-answer`: it did
@@ -65,7 +73,6 @@ const ANSWER_WITHIN = {
   readDiagnostics: '2 minutes',
   addCriticism: '10 seconds',
   openPdf: '30 seconds',
-  approveToolEdit: '30 seconds',
 } satisfies Partial<Record<HostCall['kind'], Duration.Input>>;
 type AnsweredCall = Extract<HostCall, { kind: keyof typeof ANSWER_WITHIN }>;
 
@@ -73,7 +80,7 @@ interface Window {
   readonly id: string;
   /** The session key of the window's project: its storage root. */
   readonly key: string;
-  /** The project folder, as the service's notices name it. */
+  /** The project folder, as the notices name it. */
   readonly project: string;
   readonly capabilities: ReadonlySet<HostCapability>;
   focusedAt: number;
@@ -96,328 +103,218 @@ const answerFailure = (
     message: answer.message,
   });
 
-type PresentedToolEdit = Extract<
-  HostCall,
-  { kind: 'presentToolEdit' }
->['request'];
-
-/** A staged tool edit, and the window that staged it: a window of the
- *  project that attaches while none holds it stages it there. `seen` marks
- *  one whose request the session has listed. */
-interface Staged {
-  readonly request: PresentedToolEdit;
-  window: Window | undefined;
-  seen: boolean;
-}
-
-const previewOf = (entry: Staged | undefined): ToolEditContent | null =>
-  entry === undefined
-    ? null
-    : {
-        originalContent: entry.request.originalContent,
-        proposedContent: entry.request.proposedContent,
-        hunks: entry.request.hunks,
-        firstChangedLine: entry.request.firstChangedLine,
-      };
-
 /** The project folder a session holds, or its store for a session with
  *  no folder. */
 const projectOf = (session: Session): string =>
   session.roots.workspace ?? session.roots.storage;
 
-/** The service's attached windows. */
-export interface HostWindows {
-  /** Attach a window of `session`'s project offering `capabilities`: its
-   *  id, then the calls for it, until the stream ends (the window went). */
-  readonly attach: (
-    session: Session,
-    capabilities: readonly HostCapability[],
-  ) => Stream.Stream<HostFrame>;
-  /** Files a task wrote past the editor's own write path, as this
-   *  process's announcer heard them from the task's rows: every window
-   *  whose project holds one hears it, so its file tree and decorations
-   *  follow the service's tasks. */
-  readonly filesWritten: (
-    absolutePaths: readonly string[],
-  ) => Effect.Effect<void>;
-  /** The window was focused: its project's calls go to it first. */
-  readonly focus: (attachment: string) => Effect.Effect<void>;
-  /** A window's answer to one call. */
-  readonly answer: (id: string, answer: HostAnswer) => Effect.Effect<void>;
-  /** Give `session` the forwarding surface, and attach its project's
-   *  windows' editors to `editors`, for the scope's life. */
-  readonly adopt: (
-    session: Session,
-    editors: EditorHostShape,
-  ) => Effect.Effect<void, never, Scope.Scope>;
-}
+const make = (editors: EditorHostShape) =>
+  Effect.gen(function* () {
+    const windows = new Set<Window>();
+    /** Every unanswered call's window, by call id. */
+    const calls = new Map<string, Window>();
 
-export const makeHostWindows = Effect.sync((): HostWindows => {
-  const windows = new Set<Window>();
-  /** Every unanswered call's window, by call id. */
-  const calls = new Map<string, Window>();
-  const staged = new PrunedNestedMap<string, string, Staged>();
+    /** The window a call of `key`'s project goes to. */
+    const target = (key: string, capability: HostCapability) => {
+      let best: Window | undefined;
+      for (const window of windows)
+        if (
+          window.key === key &&
+          window.capabilities.has(capability) &&
+          (best === undefined || window.focusedAt > best.focusedAt)
+        )
+          best = window;
+      return best;
+    };
+    const offers = (key: string, capability: HostCapability) =>
+      target(key, capability) !== undefined;
 
-  /** The window a call of `key`'s project goes to. */
-  const target = (key: string, capability: HostCapability) => {
-    let best: Window | undefined;
-    for (const window of windows)
-      if (
-        window.key === key &&
-        window.capabilities.has(capability) &&
-        (best === undefined || window.focusedAt > best.focusedAt)
-      )
-        best = window;
-    return best;
-  };
-  const offers = (key: string, capability: HostCapability) =>
-    target(key, capability) !== undefined;
-
-  /** Send a call that needs no answer. */
-  const tell = (window: Window | undefined, call: HostCall) =>
-    window === undefined
-      ? Effect.void
-      : Queue.offer(window.frames, {
-          kind: 'call',
-          id: randomUUID(),
-          call,
-        }).pipe(Effect.asVoid);
-
-  /** Send a call to `window` (by default the one `key`'s project routes it
-   *  to) and wait for its answer, decoded by `schema`. */
-  const ask = <A>(
-    key: string,
-    call: AnsweredCall,
-    schema: Schema.Codec<A, unknown>,
-    window = target(key, CALL_CAPABILITY[call.kind]),
-  ): Effect.Effect<A, WindowCallFailed> =>
-    Effect.gen(function* () {
-      const within = ANSWER_WITHIN[call.kind];
-      const answered = Deferred.makeUnsafe<unknown, WindowCallFailed>();
-      // Registered in the same step that checks the window is attached, so
-      // a detach either finds this call or came before it.
-      if (window === undefined || !windows.has(window))
-        return yield* new WindowCallFailed({
-          reason: 'detached',
-          message: 'No TeXRA window of this project is attached.',
-        });
-      const id = randomUUID();
-      window.pending.set(id, {
-        answer: (answer) =>
-          answer.ok
-            ? Deferred.succeed(answered, answer.value).pipe(Effect.asVoid)
-            : Deferred.fail(answered, answerFailure(answer)).pipe(
-                Effect.asVoid,
-              ),
-        fail: (failure) => Deferred.fail(answered, failure).pipe(Effect.asVoid),
-      });
-      calls.set(id, window);
-      yield* Queue.offer(window.frames, { kind: 'call', id, call });
-      const value = yield* Deferred.await(answered).pipe(
-        Effect.timeoutOrElse({
-          duration: within,
-          orElse: () =>
-            Effect.fail(
-              new WindowCallFailed({
-                reason: 'no-answer',
-                message: `The TeXRA window did not answer within ${within}.`,
-              }),
-            ),
-        }),
-        Effect.ensuring(
-          Effect.sync(() => {
-            window.pending.delete(id);
-            calls.delete(id);
-          }),
-        ),
-      );
-      const parsed = Schema.decodeUnknownResult(schema)(value);
-      if (!Result.isSuccess(parsed))
-        return yield* new WindowCallFailed({
-          reason: 'failed',
-          message: `The TeXRA window answered ${call.kind} with a value it does not take.`,
-        });
-      return parsed.success;
-    });
-
-  /** The window went: what it was asked fails, and its project hears once
-   *  when no window of it is left. */
-  const detach = (window: Window) =>
-    Effect.gen(function* () {
-      windows.delete(window);
-      for (const [id, pending] of window.pending) {
-        calls.delete(id);
-        yield* pending.fail(
-          new WindowCallFailed({
-            reason: 'detached',
-            message: 'The TeXRA window closed before it answered.',
-          }),
-        );
-      }
-      window.pending.clear();
-      // The edits this window staged go to the project's window focused
-      // last that offers them, so its Approve reads an edit it shows; with
-      // none left, they wait for the next to attach.
-      const next = target(window.key, 'toolEdits');
-      for (const entry of staged.group(window.key).values())
-        if (entry.window === window) stage(entry, next);
-      if (![...windows].some((other) => other.key === window.key))
-        yield* Effect.logWarning(
-          `No TeXRA window of ${window.project} is attached: its tasks run without diagnostics, inline criticism, PDF opening or editable tool-edit previews until one attaches.`,
-        );
-    });
-
-  const interactionsOf = (session: Session): SessionHost => {
-    const key = session.roots.storage;
-    return {
-      emit: (event, payload) => {
-        const window = target(key, 'notices');
-        // The notice's own schema checks it on the window's side of the wire.
-        const notice = { event, payload } as Notice;
-        return window === undefined
-          ? Effect.logWarning(`Service notice ${event}`).pipe(
-              Effect.annotateLogs({ data: payload }),
-            )
-          : tell(window, { kind: 'notice', notice });
-      },
-      approvalDenied: (denial, runId) => {
-        const window = target(key, 'notices');
-        if (window !== undefined)
-          Queue.offerUnsafe(window.frames, {
+    /** Send a call that needs no answer. */
+    const tell = (window: Window | undefined, call: HostCall) =>
+      window === undefined
+        ? Effect.void
+        : Queue.offer(window.frames, {
             kind: 'call',
             id: randomUUID(),
-            call: { kind: 'approvalDenied', denial, runId },
+            call,
+          }).pipe(Effect.asVoid);
+
+    /** Send a call to the window `key`'s project routes it to and wait for
+     *  its answer, decoded by `schema`. */
+    const ask = <A>(
+      key: string,
+      call: AnsweredCall,
+      schema: Schema.Codec<A, unknown>,
+    ): Effect.Effect<A, WindowCallFailed> =>
+      Effect.gen(function* () {
+        const window = target(key, CALL_CAPABILITY[call.kind]);
+        const within = ANSWER_WITHIN[call.kind];
+        const answered = Deferred.makeUnsafe<unknown, WindowCallFailed>();
+        // Registered in the same step that checks the window is attached, so
+        // a detach either finds this call or came before it.
+        if (window === undefined || !windows.has(window))
+          return yield* new WindowCallFailed({
+            reason: 'detached',
+            message: 'No TeXRA window of this project is attached.',
           });
-      },
-      // The staged preview of a request the session still lists.
-      preview: (requestId) =>
-        Effect.sync(() =>
-          session.view
-            .current()
-            .requests.some((request) => request.requestId === requestId)
-            ? previewOf(staged.get(key, requestId))
-            : null,
-        ),
-      // The service keeps every preview for `request.preview`; the window
-      // that stages it as well is the one asked to release or approve it.
-      presentToolEdit: (request) => {
-        const { requestId } = request.permission;
-        const entry: Staged = {
-          request: {
-            path: request.path,
-            originalContent: request.originalContent,
-            proposedContent: request.proposedContent,
-            hunks: request.hunks,
-            firstChangedLine: request.firstChangedLine,
-            sourceTool: request.sourceTool,
-            runId: request.runId ?? null,
-            permission: request.permission,
-          },
-          window: undefined,
-          seen: false,
-        };
-        staged.set(key, requestId, entry);
-        stage(entry, target(key, 'toolEdits'));
-      },
-      releaseToolEdit: (requestId) =>
-        Effect.suspend(() => {
-          const entry = staged.delete(key, requestId);
-          return tell(liveWindow(entry), {
-            kind: 'releaseToolEdit',
-            requestId,
+        const id = randomUUID();
+        window.pending.set(id, {
+          answer: (answer) =>
+            answer.ok
+              ? Deferred.succeed(answered, answer.value).pipe(Effect.asVoid)
+              : Deferred.fail(answered, answerFailure(answer)).pipe(
+                  Effect.asVoid,
+                ),
+          fail: (failure) =>
+            Deferred.fail(answered, failure).pipe(Effect.asVoid),
+        });
+        calls.set(id, window);
+        yield* Queue.offer(window.frames, { kind: 'call', id, call });
+        const value = yield* Deferred.await(answered).pipe(
+          Effect.timeoutOrElse({
+            duration: within,
+            orElse: () =>
+              Effect.fail(
+                new WindowCallFailed({
+                  reason: 'no-answer',
+                  message: `The TeXRA window did not answer within ${within}.`,
+                }),
+              ),
+          }),
+          Effect.ensuring(
+            Effect.sync(() => {
+              window.pending.delete(id);
+              calls.delete(id);
+            }),
+          ),
+        );
+        const parsed = Schema.decodeUnknownResult(schema)(value);
+        if (!Result.isSuccess(parsed))
+          return yield* new WindowCallFailed({
+            reason: 'failed',
+            message: `The TeXRA window answered ${call.kind} with a value it does not take.`,
           });
-        }),
-      approveToolEdit: (requestId) =>
-        Effect.suspend(() => {
-          const window = liveWindow(staged.get(key, requestId));
-          if (window === undefined) return Effect.succeed(false);
-          // The window that staged it holds the user's edit, whichever
-          // window is focused now.
-          return ask(
+        return parsed.success;
+      });
+
+    /** The window went: what it was asked fails, and its project hears once
+     *  when no window of it is left. */
+    const detach = (window: Window) =>
+      Effect.gen(function* () {
+        windows.delete(window);
+        for (const [id, pending] of window.pending) {
+          calls.delete(id);
+          yield* pending.fail(
+            new WindowCallFailed({
+              reason: 'detached',
+              message: 'The TeXRA window closed before it answered.',
+            }),
+          );
+        }
+        window.pending.clear();
+        if (![...windows].some((other) => other.key === window.key))
+          yield* Effect.logWarning(
+            `No TeXRA window of ${window.project} is attached: its tasks run without diagnostics, inline criticism or PDF opening until one attaches.`,
+          );
+      });
+
+    const interactionsOf = (session: Session): SessionHost => {
+      const key = session.roots.storage;
+      return {
+        emit: (event, payload) => {
+          const window = target(key, 'notices');
+          // The notice's own schema checks it on the window's side of the wire.
+          const notice = { event, payload } as Notice;
+          return window === undefined
+            ? Effect.logWarning(`Host notice ${event}`).pipe(
+                Effect.annotateLogs({ data: payload }),
+              )
+            : tell(window, { kind: 'notice', notice });
+        },
+        approvalDenied: (denial, runId) => {
+          const window = target(key, 'notices');
+          if (window !== undefined)
+            Queue.offerUnsafe(window.frames, {
+              kind: 'call',
+              id: randomUUID(),
+              call: { kind: 'approvalDenied', denial, runId },
+            });
+        },
+      };
+    };
+    /** What `session`'s project's windows offer its runs' editor tools,
+     *  routed to the window focused last that offers each. */
+    const editorOf = (key: string): EditorCapabilities => ({
+      get readDiagnostics(): EditorCapabilities['readDiagnostics'] {
+        if (!offers(key, 'readDiagnostics')) return undefined;
+        return (path: string) =>
+          ask(
             key,
-            { kind: 'approveToolEdit', requestId },
-            CallResultSchemas.approveToolEdit,
-            window,
+            { kind: 'readDiagnostics', path },
+            CallResultSchemas.readDiagnostics,
           ).pipe(
-            // An edit the window holds that cannot be read stays pending,
-            // never approved as the model proposed it.
-            Effect.catch((failure) =>
-              Effect.logWarning(
-                `The window's edit of ${requestId} was not read (${failure.message}); the request stays pending`,
-              ).pipe(Effect.as(true)),
+            Effect.mapError(
+              (failure) =>
+                new DiagnosticsReadFailed({
+                  reason:
+                    failure.reason === 'failed'
+                      ? 'read-failed'
+                      : failure.reason,
+                  path,
+                  message: failure.message,
+                }),
             ),
           );
-        }),
-    };
-  };
-  /** What `session`'s project's windows offer its runs' editor tools,
-   *  routed to the window focused last that offers each. */
-  const editorOf = (key: string): EditorCapabilities => ({
-    get readDiagnostics(): EditorCapabilities['readDiagnostics'] {
-      if (!offers(key, 'readDiagnostics')) return undefined;
-      return (path: string) =>
-        ask(
-          key,
-          { kind: 'readDiagnostics', path },
-          CallResultSchemas.readDiagnostics,
-        ).pipe(
-          Effect.mapError(
-            (failure) =>
-              new DiagnosticsReadFailed({
-                reason:
-                  failure.reason === 'failed' ? 'read-failed' : failure.reason,
-                path,
-                message: failure.message,
-              }),
+      },
+      get addCriticism(): EditorCapabilities['addCriticism'] {
+        if (!offers(key, 'addCriticism')) return undefined;
+        return (entry) =>
+          ask(
+            key,
+            { kind: 'addCriticism', entry },
+            CallResultSchemas.addCriticism,
+          );
+      },
+      get openPdf(): EditorCapabilities['openPdf'] {
+        if (!offers(key, 'openPdf')) return undefined;
+        return ({ location, preserveFocus }) =>
+          ask(
+            key,
+            { kind: 'openPdf', location, preserveFocus },
+            Schema.Null,
+          ).pipe(
+            Effect.asVoid,
+            Effect.mapError(
+              (failure) =>
+                new PdfOpenFailed({
+                  path: location.absolutePath,
+                  message: failure.message,
+                }),
+            ),
+          );
+      },
+    });
+    // Each session's surface, held while a window of it is attached: the
+    // session's one host, and its project's editor capabilities. A session
+    // is a key by identity: a project reopened after an idle close is a new
+    // session, given its own.
+    const surfaces = yield* RcMap.make({
+      lookup: (session: Session) =>
+        Effect.andThen(
+          session.attach(interactionsOf(session)),
+          editors.attach(
+            session.roots.storage,
+            editorOf(session.roots.storage),
           ),
-        );
-    },
-    get addCriticism(): EditorCapabilities['addCriticism'] {
-      if (!offers(key, 'addCriticism')) return undefined;
-      return (entry) =>
-        ask(
-          key,
-          { kind: 'addCriticism', entry },
-          CallResultSchemas.addCriticism,
-        );
-    },
-    get openPdf(): EditorCapabilities['openPdf'] {
-      if (!offers(key, 'openPdf')) return undefined;
-      return ({ location, preserveFocus }) =>
-        ask(
-          key,
-          { kind: 'openPdf', location, preserveFocus },
-          Schema.Null,
-        ).pipe(
-          Effect.asVoid,
-          Effect.mapError(
-            (failure) =>
-              new PdfOpenFailed({
-                path: location.absolutePath,
-                message: failure.message,
-              }),
-          ),
-        );
-    },
-  });
-  /** Stage `entry` in `window`, which then holds it. */
-  const stage = (entry: Staged, window: Window | undefined) => {
-    entry.window = window;
-    if (window !== undefined)
-      Queue.offerUnsafe(window.frames, {
-        kind: 'call',
-        id: randomUUID(),
-        call: { kind: 'presentToolEdit', request: entry.request },
-      });
-  };
-  /** The window that staged `entry`, while it is attached. */
-  const liveWindow = (entry: Staged | undefined) =>
-    entry?.window !== undefined && windows.has(entry.window)
-      ? entry.window
-      : undefined;
+        ),
+    });
 
-  return {
-    attach: (session, capabilities) =>
+    /** Attach a window of `session`'s project offering `capabilities`: its
+     *  id, then the calls for it, until the stream ends (the window went). */
+    const attach = (
+      session: Session,
+      capabilities: readonly HostCapability[],
+    ): Stream.Stream<HostFrame> =>
       Stream.unwrap(
         Effect.gen(function* () {
           const window: Window = {
@@ -430,66 +327,76 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             pending: new Map(),
           };
           windows.add(window);
-          // The project's tool edits no attached window holds (staged while
-          // none was, or by one that went) are staged here, so this
-          // window's Approve reads the edit it shows.
-          if (window.capabilities.has('toolEdits'))
-            for (const entry of staged.group(window.key).values())
-              if (liveWindow(entry) === undefined) stage(entry, window);
+          yield* Effect.addFinalizer(() => detach(window));
+          // After the window is listed, so what the session queued while it
+          // had none reaches this one.
+          yield* RcMap.get(surfaces, Equal.byReferenceUnsafe(session));
           return Stream.concat(
             Stream.succeed<HostFrame>({
               kind: 'attached',
               attachment: window.id,
             }),
             Stream.fromQueue(window.frames),
-          ).pipe(Stream.ensuring(detach(window)));
+          );
         }),
-      ),
-    filesWritten: (absolutePaths) =>
-      Effect.forEach(
-        [...windows].filter(
-          (window) =>
-            window.capabilities.has('notices') &&
-            absolutePaths.some((path) => isPathWithin(window.project, path)),
-        ),
-        (window) => tell(window, { kind: 'filesWritten', absolutePaths }),
-        { discard: true },
-      ),
-    focus: (attachment) =>
+      );
+    const answer = (id: string, reply: HostAnswer) =>
+      Effect.suspend(() => {
+        const pending = calls.get(id)?.pending.get(id);
+        if (pending !== undefined) return pending.answer(reply);
+        // A call nothing waits on (a notice): its failure is said here.
+        return reply.ok
+          ? Effect.void
+          : Effect.logWarning(
+              `A TeXRA window could not carry out a host call: ${reply.message}`,
+            );
+      });
+    const focus = (attachment: string) =>
       Effect.map(Clock.currentTimeMillis, (now) => {
         for (const window of windows)
           if (window.id === attachment) window.focusedAt = now;
-      }),
-    answer: (id, answer) =>
-      Effect.suspend(
-        () => calls.get(id)?.pending.get(id)?.answer(answer) ?? Effect.void,
-      ),
-    adopt: Effect.fn('hostWindows.adopt')(function* (session, editors) {
-      const key = session.roots.storage;
-      // A staged preview whose request the session listed and no longer
-      // lists has settled: it is dropped, and its window releases its
-      // view. One not listed yet is kept: staging precedes the row.
-      yield* Effect.forkScoped(
-        Stream.runForEach(session.view.changes, (view) =>
-          Effect.gen(function* () {
-            const held = staged.group(key);
-            if (held.size === 0) return;
-            const pending = new Set(view.requests.map((r) => r.requestId));
-            for (const [requestId, entry] of [...held]) {
-              if (pending.has(requestId)) entry.seen = true;
-              else if (entry.seen) {
-                staged.delete(key, requestId);
-                yield* tell(liveWindow(entry), {
-                  kind: 'releaseToolEdit',
-                  requestId,
-                });
-              }
-            }
-          }),
+      });
+    return {
+      attach,
+      /** Files a task wrote past the editor's own write path, as this
+       *  process's announcer heard them from the task's rows: every window
+       *  whose project holds one hears it, so its file tree and decorations
+       *  follow the service's tasks. */
+      filesWritten: (absolutePaths: readonly string[]) =>
+        Effect.forEach(
+          [...windows].filter(
+            (window) =>
+              window.capabilities.has('notices') &&
+              absolutePaths.some((path) => isPathWithin(window.project, path)),
+          ),
+          (window) => tell(window, { kind: 'filesWritten', absolutePaths }),
+          { discard: true },
         ),
-      );
-      yield* session.attach(interactionsOf(session));
-      yield* editors.attach(key, editorOf(key));
-    }),
-  };
-});
+      /** A window was focused: its project's calls go to it first. */
+      focus,
+      /** A window's answer to one call. */
+      answer,
+      /** The link a window of `session`, a session this process opened,
+       *  attaches through: always this process, never away. */
+      localLink: (session: Session): Effect.Effect<ServiceLink<WindowClient>> =>
+        Effect.all({
+          client: SubscriptionRef.make<WindowClient | null>({
+            'host.attach': ({ capabilities }) => attach(session, capabilities),
+            'host.answer': (input) => answer(input.id, input.answer),
+            'host.focus': ({ attachment }) => focus(attachment),
+          }),
+          away: SubscriptionRef.make(''),
+          refusalTold: Ref.make(false),
+        }),
+    };
+  });
+
+/** The windows attached to this process, served on every host's process
+ *  runtime over the editor registry its plugins read. */
+export class HostWindows extends Context.Service<
+  HostWindows,
+  Effect.Success<ReturnType<typeof make>>
+>()('@texra/server/HostWindows') {
+  static readonly layer = (editors: EditorHostShape) =>
+    Layer.effect(HostWindows, make(editors));
+}

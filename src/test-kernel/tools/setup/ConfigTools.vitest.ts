@@ -37,7 +37,7 @@ describe('ConfigTools — update_config allowlist', () => {
 
       assert.equal(result.status, 'error');
       assert.deepEqual(
-        roots.config.inspect(key),
+        roots.config.inspect(key.slice('texra.'.length)),
         { globalValue: undefined, workspaceValue: undefined },
         'must not write rejected settings',
       );
@@ -53,7 +53,7 @@ describe('ConfigTools — update_config approval', () => {
   it.live('asks before writing, and a rejected call writes nothing', () =>
     Effect.gen(function* () {
       const project = createFakeHost({
-        config: { 'texra.bib.zoteroPort': 23119 },
+        config: { 'bib.zoteroPort': 23119 },
       });
       const session = yield* Effect.acquireRelease(
         sessionWithInteractions(createRecordingHost().interactions),
@@ -90,7 +90,7 @@ describe('ConfigTools — update_config approval', () => {
         'update_config {"key":"texra.bib.zoteroPort","value":23200,"target":"user"}',
       ]);
       expect(result.status).toBe('error');
-      expect(project.roots.config.get('texra.bib.zoteroPort')).toBe(23119);
+      expect(project.roots.config.get('bib.zoteroPort')).toBe(23119);
     }),
   );
 });

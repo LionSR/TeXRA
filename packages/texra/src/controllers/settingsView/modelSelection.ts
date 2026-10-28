@@ -1,9 +1,13 @@
 // Third-party imports
 import { Effect, Result } from 'effect';
-import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 
 // Local imports
-import { resolveModelSource } from '@texra-ai/llm';
+import {
+  MODEL_CONFIGS,
+  type ModelConfig,
+  type ReasoningEffort,
+  resolveModelSource,
+} from '@texra-ai/llm';
 import {
   getEnabledModels,
   getHelperModelName,

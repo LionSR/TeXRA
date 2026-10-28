@@ -119,7 +119,7 @@ function readOutput(runId: RunId, viewRange?: [number, number]) {
 describe('ExecutionsTool /executions/{id}/output', () => {
   setupPlatform({
     workspacePath: '/workspace',
-    config: { 'texra.toolUse.requireBashApproval': false },
+    config: { 'toolUse.requireBashApproval': false },
   });
 
   beforeEach(async () => {

@@ -22,7 +22,6 @@ export * from './coreSettings';
 export * from './opResults';
 
 // Layer 2b: Depends on layer 1
-export * from './agentPresets';
 export * from './toolResult';
 
 // Layer 2: Depends on layer 1 only

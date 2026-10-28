@@ -24,6 +24,7 @@ import {
 } from '@texra/shared/model/modelPicker';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderKeyStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
+import { MODEL_AVAILABILITY_LABEL } from '@ui/copy/modelAccess';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 
 // Side-effect imports - register WA icon component
@@ -57,17 +58,16 @@ function sortFastFirst(
 }
 
 /**
- * What the row's availability kind means. `undefined` is a row the backend
- * left unresolved (the secret-free basic list), which blocks nothing.
+ * What the row's availability kind means and says; `undefined` is a row the
+ * backend left unresolved (the secret-free basic list), which blocks nothing.
  */
-function availabilityOf(
-  model: ModelSelectionItem,
-):
-  | (typeof MODEL_AVAILABILITY_STATUS)[keyof typeof MODEL_AVAILABILITY_STATUS]
-  | undefined {
-  return model.availability === undefined
+function availabilityOf({ availability: kind }: ModelSelectionItem) {
+  return kind === undefined
     ? undefined
-    : MODEL_AVAILABILITY_STATUS[model.availability];
+    : {
+        ...MODEL_AVAILABILITY_STATUS[kind],
+        label: MODEL_AVAILABILITY_LABEL[kind],
+      };
 }
 
 @customElement('model-selection-list')

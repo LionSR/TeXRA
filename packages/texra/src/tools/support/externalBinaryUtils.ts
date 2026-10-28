@@ -27,6 +27,7 @@ import which from 'which';
 import { withLogChannel, isModuleNotFoundError } from '@texra-ai/harness/host';
 import { executeCommand, withExtendedPath } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'ExternalBinaryUtils';
@@ -218,7 +219,7 @@ const resolveBinary = Effect.fn('externalBinaryUtils.resolveBinary')(function* (
   return (
     which.sync(config.pathCommand, {
       nothrow: true,
-      path: withExtendedPath({ PATH: process.env.PATH }).PATH,
+      path: withExtendedPath({ PATH: process.env.PATH }, commandDirs()).PATH,
       ...(process.platform === 'win32' ? { pathExt: '.EXE' } : {}),
     }) ?? undefined
   );

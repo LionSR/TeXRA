@@ -392,9 +392,12 @@ the ordinary storage layout under the `storageDir` you name (required; the
 package never falls back to a per-user directory), that directory's `mcp.json`,
 and environment-variable secrets (so provider API keys are read from
 `process.env`; nothing is persisted). The setting rows your own plugins read
-go to it as `nodePlatform({ settings })`, resolved after the harness's own; a
-platform with its own `ConfigProvider` carries them as its `catalog`, built
-with `settingsCatalog(rows)` from `@texra-ai/harness/schemas`. Code reads and
+go to it as `nodePlatform({ settings })`, a catalog built with
+`settingsCatalog({ namespace, rows })` from `@texra-ai/harness/schemas`, which
+resolves them after the harness's own; a platform with its own
+`ConfigProvider` carries that catalog as its `catalog`. Keys are relative to
+the namespace (`'memory.enabled'`), which the stores add to every key they
+write. Code reads and
 writes a setting through `Settings` (`get`, `set`, `reset`) against the
 stores it holds.
 

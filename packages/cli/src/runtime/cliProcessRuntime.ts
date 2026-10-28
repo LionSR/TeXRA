@@ -32,14 +32,7 @@
  * scoped connection. Platform-less entries provide refusing services instead.
  * initCliPlatform reads that AppState and opens only the workspace scope.
  */
-import {
-  Context,
-  Effect,
-  Layer,
-  type LogLevel,
-  ManagedRuntime,
-  Stream,
-} from 'effect';
+import { Effect, Layer, type LogLevel, ManagedRuntime, Stream } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
 import {
@@ -60,11 +53,16 @@ import {
   secretsDirectory,
 } from '@texra-ai/harness/node';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
+import { makeEditorHost } from '@texra/tools/editorHost';
+import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { texraPlugins } from '@texra/tools/registry';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
+import { workspaceTeams } from '@texra/shared/agentTeams';
 
 import { readCliVersion } from './cliContext';
 import { setCliLogRuntime } from './logSinks';
+import { validationModelLayer } from './validationModel';
 
 const NO_PLATFORM_APP_STATE =
   'A platform-less TeXRA CLI entry serves no application state: it runs without a platform and its storage root may be read-only.';
@@ -170,15 +168,9 @@ export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
   globalDatabase: refusingGlobalDatabase,
 });
 
-/** The editor registry this process's plugins read, as a value the CLI
- *  holds: `texra serve` attaches its windows' editors to it. */
-export class CliEditors extends Context.Service<CliEditors, EditorRegistry>()(
-  '@texra/cli/CliEditors',
-) {}
-
 /** What a CLI command's program runs over: the process services, its
- *  sessions, and the editor registry its plugins read. */
-export type CliServices = ProcessServices | Sessions | CliEditors;
+ *  sessions, and the windows attached to it (`texra serve`'s). */
+export type CliServices = ProcessServices | Sessions | HostWindows;
 
 /** The process runtime the CLI installs: {@link CliServices}. */
 export type CliProcessRuntime = ManagedRuntime.ManagedRuntime<
@@ -219,8 +211,8 @@ export function installCliProcessRuntime(
   // the directory is the state store's and the global database's to create
   // when they open below, and clone — whose storage root may be read-only,
   // and which runs no records operation — must not create it at all.
-  // The editor registry this install's plugins read, served beside the
-  // process services: `texra serve` attaches its windows' editors to it.
+  // The editor registry this install's plugins read, which the windows
+  // served beside the process services answer for.
   const editors = makeEditorHost();
   const version = readCliVersion();
   // The agent directories are a process service the runtime serves, so
@@ -238,6 +230,7 @@ export function installCliProcessRuntime(
         new AgentDirectoryService({
           channel: 'cli',
           resourcesPath: options?.resourcesPath ?? '',
+          teams: workspaceTeams,
           state,
         }),
     ),
@@ -245,9 +238,11 @@ export function installCliProcessRuntime(
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       Layer.merge(
-        Layer.succeed(CliEditors)(editors),
+        HostWindows.layer(editors),
         processLayer({
           storageRoot,
+          settings: TEXRA_SETTINGS,
+          commandDirs: commandDirs,
           plugins: texraPlugins({ editors }),
           ...(options?.resourcesPath !== undefined && {
             skills: {
@@ -277,7 +272,7 @@ export function installCliProcessRuntime(
           }),
           minimumLogLevel: options?.minimumLogLevel ?? 'Info',
           workspace: options?.workspace,
-        }),
+        }).pipe(Layer.provide(validationModelLayer)),
       ),
     ),
   );

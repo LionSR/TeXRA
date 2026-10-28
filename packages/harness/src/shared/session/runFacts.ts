@@ -10,6 +10,7 @@
  */
 import {
   type AggregateId,
+  type DispatchFacts,
   type FollowUpContent,
   type JsonValue,
   qualifyAggregateId,
@@ -21,12 +22,15 @@ import {
 } from '@shared/schemas';
 
 import {
+  byId,
   isMessage,
+  isSharedRunRow,
   isStaleNotice,
   type QueuedFollowUp,
   type RunLookup,
   runRowsFrom,
 } from './runRows';
+import type { RunRows } from './runRowsShape';
 import type { PendingResponse } from './inFlight';
 
 /** What a run answers and produced, as its rows record it. */
@@ -52,6 +56,16 @@ export type RunFacts = {
   readonly forceFinalTool: boolean;
   /** The latest response's answer was finalized for display. */
   readonly answerFinalized: boolean;
+  /** Each call a response issued, and each call a script of it issued, by
+   *  `responseId/callId`: its tool and card, and the response that issued
+   *  it (a script's call: its script's) with that row's commit and seq. */
+  readonly calls: Readonly<
+    Record<
+      string,
+      Pick<DispatchFacts, 'toolName' | 'logId'> &
+        Pick<SessionEvent, 'commit' | 'seq'> & { readonly responseId: string }
+    >
+  >;
 };
 
 /** A run's facts before any row. */
@@ -64,6 +78,7 @@ export const NO_FACTS: RunFacts = {
   finalToolTurn: null,
   forceFinalTool: false,
   answerFinalized: false,
+  calls: byId([]),
 };
 
 /** `input` with what a row recorded: each field it names replaces the
@@ -189,6 +204,15 @@ export const consumedRow = (
   followUpId,
 });
 
+/** Run `runId`'s rows among `rows`, folded for its lifecycle (a shared row
+ *  left out, so a partial read folds too). */
+const lifecycleOf = (rows: readonly SessionEvent[], runId: RunId): RunRows => {
+  const id = qualifyAggregateId('run', runId);
+  return runRowsFrom(
+    rows.filter((row) => row.aggregateId === id && !isSharedRunRow(row)),
+  );
+};
+
 /** The row that bounds run `runId`'s current lifecycle in `rows`: its last
  *  `run.end` or `run.activate`, since an activate after an end starts a new
  *  lifecycle, so a resumed run never carries the end of one it left. */
@@ -196,24 +220,9 @@ export function lastLifecycleRow(
   rows: readonly SessionEvent[],
   runId: RunId,
 ): Extract<SessionEvent, { type: 'run.end' | 'run.activate' }> | undefined {
-  const id = qualifyAggregateId('run', runId);
-  return rows.findLast(
-    (row): row is Extract<SessionEvent, { type: 'run.end' | 'run.activate' }> =>
-      row.aggregateId === id &&
-      (row.type === 'run.end' || row.type === 'run.activate'),
-  );
+  const { end, activation } = lifecycleOf(rows, runId);
+  return end ?? activation ?? undefined;
 }
-
-/** The commit of run `runId`'s latest `run.activate` in `rows`. */
-export const lastActivationCommit = (
-  rows: readonly SessionEvent[],
-  runId: RunId,
-): number | undefined => {
-  const id = qualifyAggregateId('run', runId);
-  return rows.findLast(
-    (row) => row.aggregateId === id && row.type === 'run.activate',
-  )?.commit;
-};
 
 /** The run's terminal fact for its current lifecycle, or null: the scope
  *  `finalizeRun`, the row's one writer, and every reader share. */
@@ -221,8 +230,7 @@ export function runEndFromEvents(
   rows: readonly SessionEvent[],
   runId: RunId,
 ): Extract<SessionEvent, { type: 'run.end' }> | null {
-  const row = lastLifecycleRow(rows, runId);
-  return row?.type === 'run.end' ? row : null;
+  return lifecycleOf(rows, runId).end;
 }
 
 /**
@@ -237,25 +245,15 @@ export function runEndFromEvents(
  * revives a run that ended. A row for a running generation only (a progress
  * notice, a host notification) wakes nothing.
  */
-export function needsWake(
-  rows: readonly SessionEvent[],
-  runId: RunId,
-  run: RunLookup,
-): boolean {
+export function needsWake(input: RunRows, run: RunLookup): boolean {
   // A resumed run that crashed carries no end, so no earlier Stop of it
   // holds a message back.
-  const end = runEndFromEvents(rows, runId);
+  const end = input.end;
   const stopped = end?.outcome === 'cancelled';
-  const committed = new Map(
-    rows.flatMap((row) =>
-      row.type === 'followup.queued' ? [[row.followUpId, row.commit]] : [],
-    ),
-  );
-  return readableMessages(runRowsFrom(rows).followUps, 'idle', run).some(
-    ({ followUpId, holdUntil, content: { from } }) => {
+  return readableMessages(input.followUps, 'idle', run).some(
+    ({ commit, holdUntil, content: { from } }) => {
       if (holdUntil === 'generation') return false;
-      if (from.kind === 'user')
-        return !stopped || (committed.get(followUpId) ?? 0) > end.commit;
+      if (from.kind === 'user') return !stopped || commit > end.commit;
       if (from.kind === 'run' && from.relation === 'child') return !stopped;
       return end === null;
     },

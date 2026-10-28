@@ -6,6 +6,40 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: settings-view snapshot ids are the app's.** `SettingsViewSnapshot`
+  leaves `@texra-ai/harness/schemas`; a row's `surfaces.settingsView` and
+  `snapshotEntries` take the app's id as a string.
+- **SDK: the package-validation model is the CLI's.** The harness reads it
+  as the `ValidationModel` service (`@texra-ai/harness/host`), provided
+  beneath `processLayer`; absent, no run takes the validation route and one
+  recorded on it fails to bind. The stand-in that kept it out of every
+  bundle now applies to the CLI's alone.
+- **SDK: the harness adds no directories of its own to a command's PATH.**
+  An app names them as `AgentPlatform.commandDirs` (or `processLayer`'s
+  `commandDirs`), served as `CommandDirs`; `withExtendedPath` and
+  `whichOnExtendedPath` take them as an argument, and `makeMachineGitEnv` is
+  an Effect. `findCommand` and `probeTool` leave `@texra-ai/harness/node`.
+- **SDK: script stages and model availability carry keys, not words.**
+  `ScriptCallView.detail` is `error` (with its text), `notRun`,
+  `interrupted` or `request` (with the request's payload), and its
+  `summary` is only the answer; `ScriptStageView.summary` gives way to the
+  counts `agents` and `needsYou`. `MODEL_AVAILABILITY_STATUS` entries lose
+  their `label`. A host words them itself.
+- **SDK: teams are the app's.** The built-in team presets
+  (`AGENT_MODE_PRESETS`, `STARTER_AGENT_MODE_PRESET`), `AgentModePresetSchema`
+  and `parseAgentModePresets` leave `@texra-ai/harness/schemas`, and
+  `teamPresets`/`launchableTeamPresets` leave `./host`. An app supplies its
+  teams as `AgentDirectoriesPort.teams`; `loadTeamOptions` and
+  `resolveTeamLaunch` take the `presets` list instead of the raw saved teams.
+  `AgentDirectories.layer(port)` is gone: provide
+  `Layer.succeed(AgentDirectories)(port)`.
+- **SDK: a settings catalog names its namespace, and keys are relative.**
+  `settingsCatalog({ namespace, rows })` replaces `settingsCatalog(rows)`,
+  and `nodePlatform({ settings })` takes that catalog instead of rows. Code
+  names a key without the namespace (`'memory.enabled'`); the config and
+  state stores add it, so TeXRA's stored keys are unchanged.
+  `ConfigProvider.get` no longer takes a default (the catalog row's default
+  answers), and `processLayer` takes the catalog as `settings`.
 - **The helper model is stored as `texra.helperModel`.** It was the one
   setting stored outside the `texra.` namespace (`polishModel`), and the old
   key is no longer read: if you picked a helper model, pick it again in
@@ -73,6 +107,16 @@ All notable changes to this project will be documented in this file.
   with attachments that an earlier build saved show as written by that
   build and cannot be resumed by this one; their files and transcripts are
   unaffected.
+- **Images pasted into a follow-up are kept with the conversation.** A
+  follow-up's pasted image is read once, when you send it, and stored with
+  the conversation, so the clean-up of old pasted files no longer breaks a
+  queued message, a resume, or "Fork from here", which now always brings the
+  message's images back. A file that cannot be read is refused when you send
+  it, not at the next turn. Conversations saved by an earlier build show as
+  written by that build and cannot be resumed by this one. For SDK users, the
+  `followUp.send` request takes `media` (a file path, or stored media by
+  address) in place of `mediaFiles`, and a user row's and an `InboxItem`'s
+  `mediaFiles` is `media: { name, mimeType, digest }[]`.
 
 - **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.0.6 (peer
   floor `^4.0.6`).** Their Effect peers (`effect`, plus

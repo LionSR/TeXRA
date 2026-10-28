@@ -6,6 +6,7 @@
  * a defect. A message is the exception: `submitFollowUp` admits it.
  */
 import { Context, Effect, FileSystem, Path, SubscriptionRef } from 'effect';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import {
   describeFollowUpFailure,
@@ -21,6 +22,7 @@ import {
   writeRejection,
 } from '@agent/runtime/runApprovalQueue';
 import { forkRun, runNoun } from '@agent/runtime/forkRun';
+import { attachedMedia } from '@agent/runtime/run/mediaInput';
 import { registryOf, RunLive } from '@agent/runtime/runRegistry';
 import type {
   SessionHandle,
@@ -55,11 +57,14 @@ import type { ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runFiles, type RunFilesServices } from './deletionCleanup';
+import { answerToolEditRequest } from './SessionView';
 
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
 type RequestServices = GlobalValues | RunFilesServices;
 /** What a handler reads of `services`; never the whole captured context. */
 const servicesOf = Context.pick(GlobalValues, FileSystem.FileSystem, Path.Path);
+/** What a follow-up's media read takes of `services`. */
+const mediaReadOf = Context.pick(FileSystem.FileSystem, ChildProcessSpawner);
 
 /** The log's reads, and removal through the session's publisher. */
 type SessionRequestLog = Pick<
@@ -78,7 +83,7 @@ export interface SessionRequestsInit {
   /** This process's liveness snapshot (`self`, `dead`). */
   readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
   readonly plugins: ToolTable;
-  readonly services: Context.Context<GlobalValues | RunFilesServices>;
+  readonly services: Context.Context<RequestServices | ChildProcessSpawner>;
   /** Whether the session's doors are shut (a cancellation writes nothing). */
   readonly closed: () => boolean;
 }
@@ -160,14 +165,12 @@ const admit = (
           }),
         );
       }
-      const liveness = SubscriptionRef.getUnsafe(deps.local);
       // A fork only reads the committed rows of its source, whoever holds it.
       if (
         req.kind !== 'run.delete' &&
         req.kind !== 'run.fork' &&
         state.ownerId !== null &&
-        !liveness.self.includes(state.ownerId) &&
-        !liveness.dead.includes(state.ownerId)
+        !SubscriptionRef.getUnsafe(deps.local).self.includes(state.ownerId)
       ) {
         return Effect.orDie(deps.log.claimOwner(state.aggregateId)).pipe(
           Effect.filterOrFail(
@@ -220,14 +223,13 @@ const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
   );
 
 /**
- * The one way in for a surface's decision (one run model, 3.7): a pending
- * request's `request.decided` row, which the waiting run reads from the
- * tail. {@link decide} re-reads the committed rows in its transaction, so of
- * two surfaces deciding at once one records and the other hears `settled`.
- *
- * The plugin owning the request's kind records its side first (an
- * inquiry's answer, on its cross-project thread), outside the run's
- * transaction, so the whole decision takes the request's lane.
+ * The one way in for a surface's decision: a pending request's
+ * `request.decided` row, which the waiting run reads from the tail.
+ * {@link decide} re-reads the committed rows in its transaction, so of two
+ * surfaces deciding at once one records and the other hears `settled`. The
+ * plugin owning the request's kind records its side first (an inquiry's
+ * answer, on its cross-project thread), outside the run's transaction, so
+ * the whole decision takes the request's lane.
  */
 const decideRequest = (
   deps: RequestDeps,
@@ -392,22 +394,18 @@ const handle = (
         { id: req.runId, uid: admitted.uid },
         req.at ?? null,
       ).pipe(
-        Effect.catchIf(
-          (error): error is Error => !(error instanceof Rejected),
-          (error) => Effect.die(error),
-        ),
+        Effect.catchIf((e): e is Error => !(e instanceof Rejected), Effect.die),
         Effect.map((runId): Outcome => ({ kind: 'forked', runId })),
       );
     case 'request.decide':
       return decideRequest(deps, req, heldHere);
     case 'request.preview':
-      // A request of another run: its staged content is not this caller's.
-      return pendingOf(deps, req.runId, req.requestId) === undefined
-        ? Effect.succeed({ kind: 'preview', preview: null })
-        : Effect.map(
-            deps.session().interactions.preview(req.requestId),
-            (preview): Outcome => ({ kind: 'preview', preview }),
-          );
+    case 'request.edit':
+      return answerToolEditRequest(
+        deps.session().view,
+        req,
+        settled(req.runId),
+      );
     case 'policy.set':
       return withRunClaim(
         deps,
@@ -431,30 +429,30 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
     req: RuntimeRequest,
   ) {
     // A message skips `admit`: `submitFollowUp` refuses under the run's claim
-    // and keeps its run's sends in order, so nothing may wait before it.
-    if (req.kind === 'followUp.send')
-      return yield* submitFollowUp(
+    // and keeps its run's sends in order, its media read included.
+    if (req.kind === 'followUp.send') {
+      const attach = Effect.provideContext(
+        attachedMedia(req.media ?? [], deps.session().roots),
+        mediaReadOf(deps.services),
+      );
+      const result = yield* submitFollowUp(
         req.runId,
         {
           text: req.text,
           from: { kind: 'user' },
           ...(req.displayText == null ? {} : { displayText: req.displayText }),
-          ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
         },
-        { session: deps.session(), hold: req.holdUntil ?? undefined },
+        { session: deps.session(), hold: req.holdUntil ?? undefined, attach },
       ).pipe(
-        Effect.orDie,
-        Effect.flatMap((result) =>
-          result.status === 'failed'
-            ? Effect.fail(
-                new Unavailable({
-                  runId: req.runId,
-                  reason: describeFollowUpFailure(result.reason),
-                }),
-              )
-            : Effect.succeed<Outcome>({ kind: 'followUp', ...result }),
-        ),
+        Effect.catchIf((e): e is Error => !(e instanceof Rejected), Effect.die),
       );
+      if (result.status !== 'failed')
+        return { kind: 'followUp' as const, ...result };
+      return yield* new Unavailable({
+        runId: req.runId,
+        reason: describeFollowUpFailure(result.reason),
+      });
+    }
     yield* requireRunAction(deps, req);
     const admitted = yield* admit(deps, req);
     // This process holds the run's claim: a parked request has a fiber here.
