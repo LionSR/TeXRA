@@ -15,7 +15,6 @@ import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 
 import {
   formatCliCodingPlanPreference,
-  formatCliModelAccessRoute,
   formatCliSubscriptionPreference,
   cliCodingPlanStatus,
   subscriptionAccountLabel,
@@ -52,7 +51,7 @@ export const loadCliModelAccessOverview = Effect.fn(
       (plan) =>
         `${plan.displayName} preference: ${formatCliCodingPlanPreference(access, plan)}`,
     ),
-    `Otherwise: ${formatCliModelAccessRoute('api-key')}`,
+    `Otherwise: ${OWN_API_KEYS.label}`,
   ];
   return { access, lines } satisfies CliModelAccessOverview;
 });
@@ -165,7 +164,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
     if (line) lines.push(withUsage(line, codingPlanUsage.get(plan.id)));
   }
 
-  lines.push(`Otherwise: ${formatCliModelAccessRoute('api-key')}`);
+  lines.push(`Otherwise: ${OWN_API_KEYS.label}`);
 
   const otherPersonalKeys = formatPersonalApiKeysLine(
     API_KEY_PROVIDER_IDS.filter(

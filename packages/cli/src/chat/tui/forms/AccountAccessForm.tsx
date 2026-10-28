@@ -10,7 +10,6 @@ import {
   buildCliAccountAccessRows,
   buildCliModelAccessItems,
   CLI_ACCOUNT_ACCESS_DESCRIPTION,
-  formatCliModelAccessRoute,
   type CliModelAccessItemsInput,
   type CliModelAccessSelection,
 } from '@cli/runtime/modelAccessRoute';
@@ -18,6 +17,7 @@ import {
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import {
   DEVICE_CODE_DESCRIPTION,
   SUBSCRIPTION_AUTH_COPY,
@@ -231,7 +231,7 @@ export function AccountAccessForm(
   if (data !== undefined) {
     // The rows already describe each preference and account; the detail block
     // only carries what no row says.
-    detailLines = [`Otherwise: ${formatCliModelAccessRoute('api-key')}`];
+    detailLines = [`Otherwise: ${OWN_API_KEYS.label}`];
   } else if (error !== undefined) {
     detailLines = [error];
   }

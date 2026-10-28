@@ -6,7 +6,7 @@ import {
   type TokenUsageStats,
   type UsageRoute,
 } from '@texra-ai/harness/schemas';
-import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
+import { OWN_API_KEYS, usageRouteBadge } from '@ui/copy/modelAccess';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_NOUN, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { usageCostLabel } from '@ui/copy/modelAccess';
@@ -122,7 +122,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
     ...(input.teamName ? [`team: ${input.teamName}`] : []),
     `agent: ${input.agent}`,
     `model: ${getModelLabel(input.model)}`,
-    `model access: ${formatCliModelAccessRoute(input.modelAccess)}`,
+    `model access: ${usageRouteBadge(input.modelAccess)?.label ?? OWN_API_KEYS.inline}`,
     `approval: ${formatApprovalPolicy(input.approvalPolicy)}`,
     ...(bypassLabels.length > 0
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]

@@ -82,15 +82,16 @@ export function usageRouteBadge(
   route: UsageRoute | undefined,
   plan?: string,
 ): UsageRouteBadge | undefined {
-  const codingPlan = codingPlanForUsageRoute(route);
-  if (codingPlan) {
-    return {
-      label: codingPlan.displayName,
-      compactLabel: codingPlan.displayName,
-      subscription: true,
-    };
-  }
   switch (route) {
+    case 'kimi-code-subscription':
+    case 'glm-coding-plan-subscription': {
+      const { displayName } = codingPlanForUsageRoute(route);
+      return {
+        label: displayName,
+        compactLabel: displayName,
+        subscription: true,
+      };
+    }
     case 'chatgpt-subscription': {
       const planName = chatGptPlanName(plan);
       return planName
@@ -117,9 +118,6 @@ export function usageRouteBadge(
         compactLabel: OWN_API_KEYS.compactLabel,
         subscription: false,
       };
-    case 'kimi-code-subscription':
-    case 'glm-coding-plan-subscription':
-      throw new Error(`Missing coding-plan copy for usage route: ${route}`);
     case undefined:
       return undefined;
     default:

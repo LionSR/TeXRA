@@ -21,8 +21,8 @@ import {
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 
 // Local file imports
+import { usageRouteBadge } from '@ui/copy/modelAccess';
 import { resolveKnownCliModelId } from './cliConfig';
-import { formatCliModelAccessRoute } from './modelAccessRoute';
 
 export interface CliModelAccess {
   readonly model: ModelOptionData;
@@ -150,7 +150,7 @@ function formatModelStatusForCli(model: CliModelAccess): string {
   const route = model.usageRoute;
   return route === 'kimi-code-subscription' ||
     route === 'glm-coding-plan-subscription'
-    ? `api: ${formatCliModelAccessRoute(route)}`
+    ? `api: ${usageRouteBadge(route)?.label}`
     : `api: ${model.status}`;
 }
 

@@ -1,12 +1,9 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Result, Stream } from 'effect';
 
-import {
-  isLiveRun,
-  runBypasses,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
-import { type Session } from '@texra-ai/harness';
+import { isLiveRun, runBypasses } from '@texra-ai/harness/schemas';
+import { isRequestRefusal, type Session } from '@texra-ai/harness';
+import { describeFollowUpFailure } from '@texra-ai/harness/host';
 import { readModelOptions } from '@texra-ai/harness/host';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
@@ -33,6 +30,8 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
+import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
+import { requestErrorText } from '@ui/copy/requestErrors';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
@@ -183,19 +182,29 @@ export function resumeInterruptedTasks(
       tasks,
       // A refusal is the task's own transcript line, as the single-task
       // `/resume` reports one; the rest still resume.
-      (task) =>
-        runSession
-          .resume(task.runId, { interactive: true })
-          .pipe(
-            Effect.catch((refused) =>
-              Effect.sync(() =>
-                appendLocalErrorTranscript(
-                  `Could not resume ${task.title}: ${toErrorMessage(refused)}`,
-                  task.runId,
-                ),
-              ),
+      (task) => {
+        const notResumed = (reason: string) =>
+          Effect.sync(() =>
+            appendLocalErrorTranscript(
+              `Could not resume ${task.title}: ${reason}`,
+              task.runId,
+            ),
+          );
+        return resumeRun(runSession, task.runId).pipe(
+          Effect.flatMap((resumed) =>
+            resumed === 'waiting'
+              ? notResumed(describeFollowUpFailure('blocked'))
+              : Effect.void,
+          ),
+          Effect.catch((refused) =>
+            notResumed(
+              isRequestRefusal(refused)
+                ? requestErrorText(refused)
+                : refused.message,
             ),
           ),
+        );
+      },
       { concurrency: 'unbounded', discard: true },
     ).pipe(Effect.forkDetach, Effect.asVoid);
   });
@@ -245,17 +254,13 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
     // Cut before this chat lets go of the source, so the fork reads it as
     // it stands now.
     const forked = yield* Effect.result(
-      context.runSession.request({ kind: 'run.fork', runId }),
+      forkRun(context.runSession, runId, null),
     );
     if (Result.isFailure(forked)) {
       appendLocalRequestRefusal(forked.failure, runId);
       return;
     }
-    if (forked.success.kind !== 'forked')
-      return yield* Effect.die(
-        new Error(`run.fork answered ${forked.success.kind}`),
-      );
-    const fork = forked.success.runId;
+    const fork = forked.success;
     // The chat holds one task: the conversation it shows gives way to the
     // fork, as `/clear` gives way to a new task (refused mid-response). The
     // fork is taken up once the source has ended, so the source's end cannot

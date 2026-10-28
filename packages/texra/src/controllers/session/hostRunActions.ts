@@ -44,6 +44,7 @@ import {
   type RunRequest,
   type ValidatedRunRequest,
 } from '@texra/controllers/session/runRequests';
+import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { packDestination } from '@texra/tools/documents/runOutputs';
 import type {
@@ -514,15 +515,12 @@ export const createHostRunActions = Effect.fn(
      */
     resume: Effect.fn('HostRunActions.resume')(function* (runId) {
       yield* nativeAgentRun(runId, 'resume');
-      const run = yield* session.resume(runId, { interactive: true }).pipe(
-        Effect.map((resumed): Run | null => resumed),
-        Effect.catch((refusal) =>
-          refusal._tag === 'ResumeRefused' && refusal.reason === 'blocked'
-            ? Effect.succeed(null)
-            : Effect.fail(new Unavailable({ runId, reason: refusal.message })),
+      const run = yield* resumeRun(session, runId).pipe(
+        Effect.catchTag('RunFailure', (failure) =>
+          Effect.fail(new Unavailable({ runId, reason: failure.message })),
         ),
       );
-      if (run === null) return;
+      if (run === 'waiting') return;
       const config = yield* readConfig(run.runId);
       if (config === undefined || !isTaskConfig(config)) return;
       const result = yield* run.result.pipe(
@@ -656,29 +654,12 @@ export const createHostRunActions = Effect.fn(
       });
     },
     fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
-      const outcome = yield* session
-        .request({ kind: 'run.fork', runId, at })
-        .pipe(
-          Effect.mapError((error): RequestRefusal =>
-            isRequestRefusal(error)
-              ? error
-              : new Unavailable({
-                  runId,
-                  reason: 'The task could not be forked.',
-                }),
-          ),
-        );
-      if (outcome.kind !== 'forked')
-        return yield* Effect.die(
-          new Error(`run.fork answered ${outcome.kind}`),
-        );
+      const forked = yield* forkRun(session, runId, at);
       // The fork waits for its host: continuing it parks it on the
       // user's next message. A refusal is told by the resume itself, and
       // the fork keeps its Resume.
-      yield* session
-        .resume(outcome.runId, { interactive: true })
-        .pipe(Effect.ignore({ log: 'Warn' }));
-      return outcome.runId;
+      yield* resumeRun(session, forked).pipe(Effect.ignore({ log: 'Warn' }));
+      return forked;
     }),
   };
 });
