@@ -2233,7 +2233,7 @@ type SettingsViewStateSettingEntry = SurfacedSettingEntry & {
 
 ## SettingWriteEffects
 
-Consequences of writing a row, declared once for every write path.
+Consequences of writing a row, read by the settings write handlers.
 
 ```ts
 interface SettingWriteEffects {
@@ -2335,7 +2335,7 @@ interface StateSettingEntry {
   readonly projectMayOptOut?: true;
   /** Which catalog-driven UIs render the row. */
   readonly surfaces?: SettingSurfaces;
-  /** Write-time consequences applied by every write path. */
+  /** Write-time consequences, read by the settings write handlers. */
   readonly onWrite?: SettingWriteEffects;
   /**
    * Per-value descriptions for an enum setting, aligned 1:1 with the schema's

@@ -59,8 +59,8 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  *   `repoState` / `globalState`); the same on every host.
  * - **`surfaces`** — which catalog-driven *UI* renders the row (settings view,
  *   CLI `/config`, the Models tab's per-provider controls).
- * - **`onWrite`** — write-time consequences declared once, so the CLI form and
- *   the webview Models tab cannot enforce different rules.
+ * - **`onWrite`** — write-time consequences declared once, read by the
+ *   settings write handlers (the settings views' and the CLI `/config` form's).
  *
  * Everything downstream is a filter over these rows: the CLI unknown-key set,
  * the `/config` panel, the settings-view write gate, the Models tab rows, and
@@ -107,7 +107,7 @@ export interface SettingSurfaces {
   readonly models?: readonly ModelsTabSurface[];
 }
 
-/** Consequences of writing a row, declared once for every write path. */
+/** Consequences of writing a row, read by the settings write handlers. */
 export interface SettingWriteEffects {
   /**
    * Writing the row changes which models are available or how they route, so
@@ -143,7 +143,7 @@ export interface StateSettingEntry {
   readonly projectMayOptOut?: true;
   /** Which catalog-driven UIs render the row. */
   readonly surfaces?: SettingSurfaces;
-  /** Write-time consequences applied by every write path. */
+  /** Write-time consequences, read by the settings write handlers. */
   readonly onWrite?: SettingWriteEffects;
   /**
    * Per-value descriptions for an enum setting, aligned 1:1 with the schema's
