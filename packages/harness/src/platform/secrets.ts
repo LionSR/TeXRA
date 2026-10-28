@@ -6,7 +6,8 @@
  * holds; a credential that may also come from the environment is read through
  * {@link resolveCredential}, the one secret-then-env ladder.
  */
-import { Context, type Effect, Layer } from 'effect';
+import { Context, Effect, Layer } from 'effect';
+import { AppSignals } from '@platform/appSignals';
 import type { CredentialStore, SecretsFailed } from '@texra-ai/llm';
 
 /**
@@ -26,9 +27,9 @@ import type { CredentialStore, SecretsFailed } from '@texra-ai/llm';
  * write: a commit the store landed still exits as interrupted when its caller
  * was cancelled during it, so the step would be skipped over a credential
  * that is now on disk. The host stores therefore own the post-commit facts
- * themselves, in an `Effect.ensuring` finalizer that runs on every exit: they
- * publish the `credentialChanged` app signal (the VS Code store publishes it
- * from `SecretStorage.onDidChange` instead). A writer does not by hand.
+ * themselves, in an `Effect.ensuring` finalizer that runs on every exit: the
+ * file store tells the `credentialChanged` app signal its layer hands it
+ * (`Secrets.announcing`). A writer does not by hand.
  */
 export interface PlatformSecrets extends CredentialStore {
   /**
@@ -44,15 +45,29 @@ export interface PlatformSecrets extends CredentialStore {
  * or writes a credential yields the store's own Effect and matches
  * {@link SecretsFailed}.
  *
- * `layer` takes the store itself. Every root builds its stores before it
- * installs the runtime that serves them, so there is nothing left to defer:
- * the service is the value the root already holds, not a thunk resolved per
- * member call.
+ * `layer` takes a store built before the runtime (an embedder's, a test's):
+ * the service is that value, not a thunk resolved per member call.
  */
 export class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
   '@texra-ai/harness/platform/Secrets',
 ) {
   static layer(secrets: PlatformSecrets): Layer.Layer<Secrets> {
     return Layer.succeed(Secrets)(secrets);
+  }
+
+  /**
+   * A host's store, built by the runtime over the process's signal hub:
+   * `make` is handed the announcement (`credentialChanged`) to tell after
+   * each write it commits. The host reads the store back from context.
+   */
+  static announcing(
+    make: (announce: (key: string) => void) => PlatformSecrets,
+  ): Layer.Layer<Secrets, never, AppSignals> {
+    return Layer.effect(
+      Secrets,
+      Effect.map(AppSignals, (signals) =>
+        make((key) => signals.emit('credentialChanged', { key })),
+      ),
+    );
   }
 }

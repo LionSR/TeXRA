@@ -29,7 +29,7 @@ import {
   WireUsageSchema,
 } from './googleInteractionsWire.js';
 import { systemUpdateText } from '../message.js';
-import { originOf, sameModelOrigin } from '../protocol.js';
+import { backgroundCapable, originOf, sameModelOrigin } from '../protocol.js';
 import {
   ModelError,
   RemoteOperationSchema,
@@ -570,6 +570,7 @@ export function googleInteractionsModel(
     );
   }
   const origin = originOf(config);
+  const background = backgroundCapable(config);
   const client = new GoogleGenAI({
     enterprise: false,
     apiKey: transport.apiKey,
@@ -598,8 +599,7 @@ export function googleInteractionsModel(
       const mode = authored.mode ?? 'foreground';
       if (
         mode === 'background' &&
-        (config.background !== 'supported' ||
-          !(authored.store ?? config.defaults.store))
+        (!background || !(authored.store ?? config.defaults.store))
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
@@ -759,7 +759,6 @@ export function googleInteractionsModel(
       if (
         turn.protocol !== 'google-interactions' ||
         turn.mode !== 'background' ||
-        config.background !== 'supported' ||
         !turn.controls.store
       ) {
         return yield* new ModelError({
@@ -939,7 +938,7 @@ export function googleInteractionsModel(
   return Object.freeze({
     prepareTurn,
     streamTurn,
-    ...(config.background === 'supported'
+    ...(background
       ? { background: Object.freeze({ submit, observe, cancel }) }
       : {}),
   });

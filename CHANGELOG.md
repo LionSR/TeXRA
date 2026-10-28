@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The helper model is stored as `texra.helperModel`.** It was the one
+  setting stored outside the `texra.` namespace (`polishModel`), and the old
+  key is no longer read: if you picked a helper model, pick it again in
+  Settings → Models.
 - **Claude requests use API version 2026-10-21 (`@anthropic-ai/sdk` 1.3.0).**
   Requests to Anthropic no longer send a temperature: an agent's
   `temperature` still applies to other providers, and Claude samples at its

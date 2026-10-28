@@ -121,10 +121,12 @@ harness only through `@texra-ai/harness` and its subpaths (`/node`, `/plugins`,
 (`HARNESS_NO_APP_IMPORT_PATTERNS` in `eslint.config.mjs`), and harness, app and
 llm import no host layer. ESLint also fails:
 
-- an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/`, the
-  SDK entry files (`HARNESS_ENTRY_FILES`), `packages/harness/src/effect/` and
-  the named runtime entries (`EFFECT_RUN_ENTRIES`);
+- an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and
+  the named runtime entries (`EFFECT_RUN_ENTRIES`); the SDK's entry files run
+  nothing;
 - `new AbortController()` outside its two permanent residents;
+- in the core (`CORE_QUALITY_DIRS`), `new Promise`, `.then(` and `any`, with
+  no disable comment honored;
 - any `@adapter-until` marker: there are no temporary adapters.
 
 The ratchets in `config/ratchets/` freeze the remaining edges. **Never widen a
@@ -158,8 +160,9 @@ Where things go:
   webview frontends import no `@utils/*` module at runtime; they get path,
   error, text and escaping helpers from `@texra-ai/harness/schemas` and the
   transcript helpers from `@texra-ai/harness/transcript`.
-- `packages/harness/src/eventBus/` is `AppSignals` only (auth, subscriptions,
-  credentials, workspace-file writes), not run or session progress.
+- `AppSignals` (`packages/harness/src/platform/appSignals.ts`) carries only
+  app-lifecycle signals (auth, subscriptions, credentials, workspace-file
+  writes), not run or session progress.
 - Webview base classes are in `packages/extension/src/common/webview/`, not in
   the harness.
 - The transcript row model is `packages/harness/src/shared/transcript/`

@@ -30,7 +30,7 @@ import ts from 'typescript';
 import tseslint from 'typescript-eslint';
 import { parse as parseYaml } from 'yaml';
 
-import { CORE_QUALITY_DIRS, EFFECT_RUN_ENTRIES } from '../eslint.config.mjs';
+import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { coreEntries } from './core-quality-api-report.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
@@ -48,7 +48,6 @@ const MIN_MODULE_DEPTH = 3;
  * complexity 15, so a `switch` over an owned union counts once.
  */
 const ESLINT_RULES = [
-  ['no-explicit-any', '@typescript-eslint/no-explicit-any', []],
   ['no-non-null-assertion', '@typescript-eslint/no-non-null-assertion', []],
   [
     'explicit-module-boundary-types',
@@ -71,7 +70,6 @@ const ESLINT_RULES = [
 
 /** Every rule, in report order, with the one line the report prints. */
 export const RULES = {
-  'no-explicit-any': '`any` disables the checker for everything it touches.',
   'no-non-null-assertion':
     '`!` asserts a fact the types do not hold; model it so the value cannot be absent.',
   'type-assertions':
@@ -91,11 +89,6 @@ export const RULES = {
     'Blocks nested deeper than 4: control flow standing in for a data structure.',
   'max-lines-per-function':
     'Functions over 150 lines (layer closures included): shared locals hiding the state each helper depends on; make that state an explicit value.',
-  'new-promise':
-    '`new Promise` in core: Effect owns async (Effect.async/callback at a foreign edge).',
-  'promise-then': '`.then(` chains in core: compose with Effect instead.',
-  'effect-run':
-    '`Effect.run*` in core outside a named runtime entry: the run belongs to the host that owns the runtime.',
   'try-catch-effect':
     '`try/catch` around Effect code: errors belong in the typed error channel.',
   'silent-degradation':
@@ -213,19 +206,6 @@ function runsEffectCode(block) {
   ts.forEachChild(block, visit);
   return found;
 }
-
-// `packages/harness/src` counts as core here although the lint block lets a
-// host package run effects: the SDK runs nothing itself (its README), so the
-// ratchet holds it to the stricter core rule.
-const RUN_NAMES = new Set([
-  'runPromise',
-  'runPromiseExit',
-  'runSync',
-  'runSyncExit',
-  'runFork',
-  'runCallback',
-  'runMain',
-]);
 
 /** `() => undefined`, `() => null`, `() => []`, `() => {}`, `() => ({})`, literals. */
 function returnsQuietValue(handler) {
@@ -1115,20 +1095,10 @@ function measureAst(rootDir, files, byRule) {
       } else if (ts.isTypeAssertionExpression(node) && !hasCastReason(node)) {
         site('type-assertions', node, `<${node.type.getText()}>`);
       } else if (
-        ts.isNewExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === 'Promise'
-      ) {
-        site('new-promise', node, 'new Promise');
-      } else if (
         ts.isCallExpression(node) &&
         ts.isPropertyAccessExpression(node.expression)
       ) {
         const method = node.expression.name.text;
-        if (method === 'then') site('promise-then', node, '.then(');
-        if (RUN_NAMES.has(method) && !EFFECT_RUN_ENTRIES.includes(file)) {
-          site('effect-run', node, node.expression.getText());
-        }
         if (
           method === 'catch' &&
           node.arguments.length === 1 &&

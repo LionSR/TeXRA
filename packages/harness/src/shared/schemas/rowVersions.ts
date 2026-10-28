@@ -69,7 +69,9 @@ export const CURRENT_VALUE_VERSION = 1;
 /** Every arm of `SessionEventDraftSchema`: a new arm without an entry does
  *  not compile. */
 export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
-  'run.start': V1,
+  // v2: the launching call's id and card are one `parent.call`, with no
+  // top-level `parentCard` (no upcaster, as `run.config`).
+  'run.start': { version: 2, upcast: [] },
   'run.activate': V1,
   // v2: a recipe's script names its block and options; `toolConfig` is
   // gone (no upcaster: an earlier build's v1 row refuses its run as written

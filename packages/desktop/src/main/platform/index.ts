@@ -7,6 +7,7 @@ import {
   AppState,
   processLayer,
   AgentDirectoryService,
+  Secrets,
   type ProcessServices,
   StateStores,
 } from '@texra-ai/harness/host';
@@ -18,7 +19,7 @@ import {
   resolveWorkspaceStoragePath,
   secretsDirectory,
 } from '@texra-ai/harness/node';
-import { emitAppSignal } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@texra-ai/harness/host';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -75,9 +76,9 @@ export const initializeElectronPlatform = Effect.fn(
   // own roots (desktopProjects.ts); this pair only backs the window before a
   // folder is open.
   const storage = resolveWorkspaceStoragePath(dataRoot, undefined);
-  // Secrets precede the runtime; the process identity and application state
-  // are acquired by its own layers, over the spawner and database it serves.
-  const { mainDir, resourcesPath, configStores, secrets } = yield* Effect.gen(
+  // The process identity and application state are acquired by the
+  // runtime's own layers, over the spawner and database it serves.
+  const { mainDir, resourcesPath, configStores } = yield* Effect.gen(
     function* () {
       const mainDir = yield* resolveDesktopMainDir(moduleDirname);
       const resourcesPath = yield* resolveResourcesPath(mainDir);
@@ -87,12 +88,7 @@ export const initializeElectronPlatform = Effect.fn(
         undefined,
         (message) => console.warn(`[desktop] ${message}`),
       );
-      // The one credential store every host shares (`~/.texra/secrets/`):
-      // the background service reads the keys this window saves.
-      const secrets = new FileSecrets(secretsDirectory(dataRoot), (key) =>
-        emitAppSignal('credentialChanged', { key }),
-      );
-      return { mainDir, resourcesPath, configStores, secrets };
+      return { mainDir, resourcesPath, configStores };
     },
   ).pipe(Effect.provide(nodeFileServices));
   // The one Effect runtime of this process (PRD 7.7), over the stores it
@@ -116,7 +112,11 @@ export const initializeElectronPlatform = Effect.fn(
       processLayer({
         storageRoot: dataRoot,
         plugins: texraPlugins(),
-        secrets,
+        // The one credential store every host shares (`~/.texra/secrets/`):
+        // the background service reads the keys this window saves.
+        secrets: Secrets.announcing(
+          (announce) => new FileSecrets(secretsDirectory(dataRoot), announce),
+        ),
         agentDirectories: agentDirectoriesLayer,
         // Desktop model traffic goes to the same anonymous usage log the extension
         // and CLI write to, tagged with editorType 'desktop' and the app version.
@@ -148,7 +148,12 @@ export const initializeElectronPlatform = Effect.fn(
       .project(storage, undefined)
       .pipe(Scope.provide(processScope));
     // Keys another window or the service writes reach this one's surfaces.
-    yield* Effect.forkIn(secrets.watch(), processScope);
+    yield* Effect.forkIn(
+      FileSecrets.watch(secretsDirectory(dataRoot), (key) =>
+        emitAppSignal('credentialChanged', { key }),
+      ),
+      processScope,
+    );
     repairLaunchPath();
     const processRoots = createNodeWorkspaceRoots({
       host: 'desktop',

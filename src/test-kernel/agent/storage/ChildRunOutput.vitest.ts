@@ -100,7 +100,7 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
         aggregateId: qualifyAggregateId('run', childRunId),
         identity: { kind: 'agent', agent: 'draft' },
         userFollowUpSupport: 'unsupported',
-        parent: { id: parentId, callId: null },
+        parent: { id: parentId, call: null },
         provenance: null,
       },
       {

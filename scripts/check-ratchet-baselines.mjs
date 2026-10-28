@@ -14,7 +14,10 @@
  * be the donor's with each path that differs renamed by a move in
  * `git diff --find-renames <base>` (a module specifier names the file it
  * resolves to by its trailing path). Retained rows cannot grow.
- * A deleted baseline file retires its ratchet and fails; that is an owner
+ * A deleted baseline file fails, unless it was empty at the base and is
+ * listed in ZERO_RULES (ratchet-zero-rules.mjs), whose named checker holds
+ * its rule at zero without a file; a listed file that still exists fails, so
+ * no rule is read from two places. Retiring any other ratchet is an owner
  * call, made outside this check. Refuted candidates are recorded refusals,
  * which only restrict, so they are not compared.
  *
@@ -30,6 +33,8 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+
+import { ZERO_RULES } from './ratchet-zero-rules.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -322,9 +327,20 @@ function main() {
     if (!everNow.has(kind))
       problems.push(`${ROW_KINDS_EVER}: ${kind} removed (the list only grows)`);
   const present = new Set(files);
-  for (const file of baseFiles)
-    if (file && !present.has(file))
+  for (const file of baseFiles) {
+    if (!file || present.has(file)) continue;
+    if (!Object.hasOwn(ZERO_RULES, file))
       problems.push(`${file}: deleted (retiring a ratchet is an owner call)`);
+    else if (readBaseline(file, git('show', `${base}:${file}`)).rows.size > 0)
+      problems.push(
+        `${file}: deleted with rows at the base; only an empty baseline gives way to ZERO_RULES`,
+      );
+  }
+  for (const file of files)
+    if (Object.hasOwn(ZERO_RULES, file))
+      problems.push(
+        `${file}: listed in ZERO_RULES (held at zero by ${ZERO_RULES[file]}); delete the file`,
+      );
   if (problems.length > 0) {
     console.error(
       `ratchet-baselines: ${problems.length} widening(s) against ${target} (fork point ${base.slice(0, 10)})\n${problems.join('\n')}`,

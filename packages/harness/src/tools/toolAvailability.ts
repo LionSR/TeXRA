@@ -37,8 +37,8 @@ import {
 } from 'effect';
 
 // Local imports
-import { onAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
+import { onAppSignal, type AppSignals } from '@platform/appSignals';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { storedDisabledTools, type Plugin } from '@tools/plugins';
@@ -135,7 +135,7 @@ interface ProbeRound {
 export const toolAvailabilityLayer: Layer.Layer<
   ToolAvailability,
   never,
-  ToolProbeServices | ToolRegistry | ToolCatalog
+  ToolProbeServices | ToolRegistry | ToolCatalog | AppSignals
 > = Layer.effect(
   ToolAvailability,
   Effect.gen(function* () {

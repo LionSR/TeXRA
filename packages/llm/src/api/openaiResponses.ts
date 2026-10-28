@@ -33,11 +33,10 @@ import {
   RemoteOperationSchema,
   boundOperation,
   confirmCancelled,
-  enrichModelError,
   fillModelError,
   type RemoteOperation,
 } from '../errors.js';
-import { originOf } from '../protocol.js';
+import { backgroundCapable, originOf } from '../protocol.js';
 import { admitObservation, ownedAbortSafeRequest } from './transport.js';
 import { filesApiUploads } from './uploadCache.js';
 import { openaiFailure } from './openaiError.js';
@@ -93,7 +92,7 @@ export function openaiResponsesModel(
           providerName: 'OpenAI',
           model: origin.requestedModel,
           failure: (cause) =>
-            enrichModelError(openaiFailure(cause), {
+            fillModelError(openaiFailure(cause), {
               model: origin.requestedModel,
             }),
           parseUploaded: decodeUploadedFile,
@@ -426,10 +425,10 @@ export function openaiResponsesModel(
     const operation = yield* boundOperation(input, origin);
     let requestId: string | undefined;
     const enrich = (error: ModelError) =>
-      enrichModelError(error, {
+      fillModelError(error, {
         operation,
         responseId: operation.providerResponseId,
-        requestId: error.requestId ?? requestId,
+        requestId,
       });
     return yield* Effect.gen(function* () {
       const raw = yield* ownedAbortSafeRequest(
@@ -492,7 +491,7 @@ export function openaiResponsesModel(
           releaseUploads: uploads.releaseUploads,
         }
       : {}),
-    ...(config.background === 'supported'
+    ...(backgroundCapable(config)
       ? { background: Object.freeze({ submit, observe, cancel }) }
       : {}),
   });

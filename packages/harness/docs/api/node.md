@@ -221,9 +221,10 @@ interface ExecuteCommandBaseOptions {
 
 ## FileSecrets
 
-A host's handle on the credential directory. `onChanged` is the host's
-"re-read this key" signal (`credentialChanged`), told after every write
-of this process and, through {@link FileSecrets.watch}, of every other.
+A host's handle on the credential directory. `onChanged` is told "re-read
+this key" after every write of this handle: the process's store announces
+it (`credentialChanged`, `Secrets.announcing`), as
+{@link FileSecrets.watch} does every other process's.
 
 ```ts
 class FileSecrets implements PlatformSecrets

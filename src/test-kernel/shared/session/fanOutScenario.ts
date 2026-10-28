@@ -128,7 +128,7 @@ export class Log {
     if (uid === undefined) {
       throw new Error(`fixture parent ${id} has no run.start`);
     }
-    return { id, uid, callId: null };
+    return { id, uid, call: null };
   }
 
   /** Finite-read marker for this fixture log, whose first facts acquire its claims. */
@@ -232,9 +232,8 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.child, {
     type: 'run.start',
     identity: CHILD_IDENTITY,
-    parent: log.parent(ROOT),
+    parent: { ...log.parent(ROOT), call: { callId: 'call-1', card: 'call-1' } },
     provenance: null,
-    parentCard: 'call-1',
     userFollowUpSupport: 'nativeInteractive',
   });
   log.emit(CHILD, T.child, {

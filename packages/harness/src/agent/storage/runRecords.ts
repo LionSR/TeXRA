@@ -143,8 +143,9 @@ export const owningCall = Effect.fn('owningCall')(function* (
   runId: RunId,
 ) {
   const edge = yield* parentEdge(session, runId);
-  if (edge?.callId == null) return null;
-  const { id, callId } = edge;
+  if (edge?.call == null) return null;
+  const { id } = edge;
+  const { callId } = edge.call;
   const children = openCallChildren(id, yield* session.runHistory.load(id)).get(
     callId,
   );
@@ -201,7 +202,7 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
       ).pipe(Effect.annotateLogs({ data: read.failure }));
       continue;
     }
-    const edge = parentEdgeOf(read.success)?.callId ?? null;
+    const edge = parentEdgeOf(read.success)?.call?.callId ?? null;
     if (edge !== null && (callId ?? edge) === edge)
       if (runEndFromEvents(read.success, child) === null)
         open.push({ runId: child, callId: edge });

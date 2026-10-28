@@ -1131,7 +1131,7 @@ describe('the session event table and its one publisher', () => {
         const db = yield* Database;
         const child: SessionEventDraft = {
           ...olderStart,
-          parent: { id: RUN, callId: null },
+          parent: { id: RUN, call: null },
           provenance: null,
         };
         // A missing parent rejects the complete batch, including the earlier
@@ -1143,7 +1143,7 @@ describe('the session event table and its one publisher', () => {
               ...child,
               parent: {
                 id: Schema.decodeUnknownSync(RunIdSchema)('ffff00'),
-                callId: null,
+                call: null,
               },
             },
           ]),
