@@ -32,11 +32,10 @@ import { formatSubagentDelivery, formatSubagentError } from './subagentResults';
  * native subagent callers — durable in-band (`InBandSubagentRunBaseOptions`)
  * and detached (`NativeSubagentStrategyParams`) — so a new launch option has a
  * single home and can't drift between the two interfaces or the executeInBand
- * field mapping.
+ * field mapping. The child's parent is not one: a fresh child's is its
+ * registration's, a resumed one's its rows'.
  */
 export interface ChildRunLaunchOptions {
-  /** The launching run: the child's parent edge. */
-  readonly parentRunId: RunId;
   readonly session: SessionHandle;
   /** The history a fresh child is born on: a fork's (`forkSeed`). */
   readonly seed?: RegisterRunOptions['seed'];
@@ -62,13 +61,14 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
     | {
         readonly definition?: never;
         /** A persisted child, resumed under its stored config with the
-         *  parent its rows hold, as its resume read them. */
+         *  parent its rows hold (`parent`), read as its run starts, under
+         *  the claim its loop holds. */
         readonly resume: Pick<
           ExecuteAgentOptions,
           'onRun' | 'onAdmitted' | 'tools'
         > & {
           readonly config: AgentConfig;
-          readonly parent: RunId | undefined;
+          readonly parent: Effect.Effect<RunId | undefined, Error>;
           readonly stopAfterCycle?: boolean;
         };
       }
@@ -140,7 +140,7 @@ export function createNativeSubagentStrategy(
             return yield* programs.executeAgent(definition, params.runId, {
               ...launch,
               ...options,
-              parentRunId: parent,
+              parentRunId: yield* parent,
             });
           }
           return yield* programs.executeAgent(params.definition, params.runId, {
