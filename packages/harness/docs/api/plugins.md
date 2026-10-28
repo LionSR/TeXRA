@@ -729,8 +729,9 @@ One message a producer sends.
 interface InboxItem {
   readonly text: string;
   readonly displayText?: string;
-  /** Media file paths (e.g. pasted images) attached to a user's message. */
-  readonly mediaFiles?: readonly string[];
+  /** A user's media (e.g. pasted images) and its blobs (`attachedMedia`). */
+  readonly media?: QueuedFollowUp['content']['media'];
+  readonly blobs?: readonly DraftBlob[];
   readonly from: FollowUpSenderInput;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */

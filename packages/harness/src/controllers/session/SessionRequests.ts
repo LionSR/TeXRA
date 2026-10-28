@@ -6,6 +6,7 @@
  * a defect. A message is the exception: `submitFollowUp` admits it.
  */
 import { Context, Effect, FileSystem, Path, SubscriptionRef } from 'effect';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import {
   describeFollowUpFailure,
@@ -21,6 +22,7 @@ import {
   writeRejection,
 } from '@agent/runtime/runApprovalQueue';
 import { forkRun, runNoun } from '@agent/runtime/forkRun';
+import { attachedMedia } from '@agent/runtime/run/mediaInput';
 import { registryOf, RunLive } from '@agent/runtime/runRegistry';
 import type {
   SessionHandle,
@@ -60,6 +62,8 @@ const done: Outcome = Object.freeze({ kind: 'done' } as const);
 type RequestServices = GlobalValues | RunFilesServices;
 /** What a handler reads of `services`; never the whole captured context. */
 const servicesOf = Context.pick(GlobalValues, FileSystem.FileSystem, Path.Path);
+/** What a follow-up's media read takes of `services`. */
+const mediaReadOf = Context.pick(FileSystem.FileSystem, ChildProcessSpawner);
 
 /** The log's reads, and removal through the session's publisher. */
 type SessionRequestLog = Pick<
@@ -78,7 +82,7 @@ export interface SessionRequestsInit {
   /** This process's liveness snapshot (`self`, `dead`). */
   readonly local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>;
   readonly plugins: ToolTable;
-  readonly services: Context.Context<GlobalValues | RunFilesServices>;
+  readonly services: Context.Context<RequestServices | ChildProcessSpawner>;
   /** Whether the session's doors are shut (a cancellation writes nothing). */
   readonly closed: () => boolean;
 }
@@ -432,29 +436,25 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
   ) {
     // A message skips `admit`: `submitFollowUp` refuses under the run's claim
     // and keeps its run's sends in order, so nothing may wait before it.
-    if (req.kind === 'followUp.send')
-      return yield* submitFollowUp(
+    if (req.kind === 'followUp.send') {
+      const media = attachedMedia(req.media ?? [], deps.session().roots);
+      const result = yield* submitFollowUp(
         req.runId,
         {
           text: req.text,
           from: { kind: 'user' },
           ...(req.displayText == null ? {} : { displayText: req.displayText }),
-          ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
+          ...(yield* Effect.provideContext(media, mediaReadOf(deps.services))),
         },
         { session: deps.session(), hold: req.holdUntil ?? undefined },
-      ).pipe(
-        Effect.orDie,
-        Effect.flatMap((result) =>
-          result.status === 'failed'
-            ? Effect.fail(
-                new Unavailable({
-                  runId: req.runId,
-                  reason: describeFollowUpFailure(result.reason),
-                }),
-              )
-            : Effect.succeed<Outcome>({ kind: 'followUp', ...result }),
-        ),
-      );
+      ).pipe(Effect.orDie);
+      if (result.status !== 'failed')
+        return { kind: 'followUp' as const, ...result };
+      return yield* new Unavailable({
+        runId: req.runId,
+        reason: describeFollowUpFailure(result.reason),
+      });
+    }
     yield* requireRunAction(deps, req);
     const admitted = yield* admit(deps, req);
     // This process holds the run's claim: a parked request has a fiber here.

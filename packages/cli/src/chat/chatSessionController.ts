@@ -913,7 +913,7 @@ export function createChatSessionController(
             runId: target,
             text: prepared.instruction,
             displayText: prepared.displayInstruction,
-            mediaFiles: mediaFiles ? [...mediaFiles] : undefined,
+            media: mediaFiles ? [...mediaFiles] : undefined,
             holdUntil,
           })
           .pipe(

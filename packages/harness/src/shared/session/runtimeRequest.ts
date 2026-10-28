@@ -18,7 +18,11 @@ import {
   APPROVAL_BYPASS_KINDS,
   APPROVAL_POLICY_LIMITS,
 } from '@shared/approvalBypassKind';
-import { RequestDecisionSchema, RunIdSchema } from '@shared/schemas';
+import {
+  RequestDecisionSchema,
+  RunIdSchema,
+  StoredMediaSchema,
+} from '@shared/schemas';
 
 const runScoped = { runId: RunIdSchema };
 
@@ -89,7 +93,13 @@ export const RuntimeRequestSchema = Schema.Union([
     ...runScoped,
     text: Schema.String.check(Schema.isMinLength(1)),
     displayText: Schema.optional(Schema.NullOr(Schema.String)),
-    mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+    /** What the message attaches: a file (a pasted image's), read and
+     *  stored once here, or media the store already holds (a fork's). */
+    media: Schema.optional(
+      Schema.NullOr(
+        Schema.Array(Schema.Union([Schema.String, StoredMediaSchema])),
+      ),
+    ),
     /** `turn`: the run reads the message when its current turn ends, not
      *  at the turn's next model request. Absent: at the next request. */
     holdUntil: Schema.optional(Schema.NullOr(Schema.Literal('turn'))),

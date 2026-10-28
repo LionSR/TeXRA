@@ -18,6 +18,7 @@ import {
   type DatabaseReadFailed,
 } from '@shared/session/database';
 import { parentEdgeOf, runRelation } from '@shared/session/runRelation';
+import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RunInputDraft } from '@shared/session/runState';
 import { consumedRow, needsWake } from '@shared/session/runFacts';
 import {
@@ -80,8 +81,9 @@ export interface InboxPort {
 export interface InboxItem {
   readonly text: string;
   readonly displayText?: string;
-  /** Media file paths (e.g. pasted images) attached to a user's message. */
-  readonly mediaFiles?: readonly string[];
+  /** A user's media (e.g. pasted images) and its blobs (`attachedMedia`). */
+  readonly media?: QueuedFollowUp['content']['media'];
+  readonly blobs?: readonly DraftBlob[];
   readonly from: FollowUpSenderInput;
   /** Identity of a delivery its producer may repeat (a child's result):
    *  the row's `followUpId`, so a replay writes nothing. */

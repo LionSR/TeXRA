@@ -73,6 +73,16 @@ All notable changes to this project will be documented in this file.
   with attachments that an earlier build saved show as written by that
   build and cannot be resumed by this one; their files and transcripts are
   unaffected.
+- **Images pasted into a follow-up are kept with the conversation.** A
+  follow-up's pasted image is read once, when you send it, and stored with
+  the conversation, so the clean-up of old pasted files no longer breaks a
+  queued message, a resume, or "Fork from here", which now always brings the
+  message's images back. A file that cannot be read is refused when you send
+  it, not at the next turn. Conversations saved by an earlier build show as
+  written by that build and cannot be resumed by this one. For SDK users, the
+  `followUp.send` request takes `media` (a file path, or stored media by
+  address) in place of `mediaFiles`, and a user row's and an `InboxItem`'s
+  `mediaFiles` is `media: { name, mimeType, digest }[]`.
 
 - **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.0.6 (peer
   floor `^4.0.6`).** Their Effect peers (`effect`, plus

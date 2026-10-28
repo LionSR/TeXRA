@@ -31,6 +31,7 @@ import { logUserMessage } from '@agent/trace';
 import {
   ACTIVATED_SKILLS_MAX,
   type MediaAttachmentKind,
+  type StoredInputPart,
 } from '@shared/schemas';
 import {
   consumedRow,
@@ -43,7 +44,7 @@ import type { Alongside } from '@shared/session/sessionEvents';
 import type { RunCell } from '@shared/session/runHistory';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
-import { type InputPart, mediaInputParts } from './run/mediaInput';
+import { storedMediaPart } from './run/mediaInput';
 import { blobRows } from './run/requestContext';
 import { appendRow, positionRow } from './loop/rows';
 import { promptHooks } from './loop/hooks';
@@ -115,44 +116,47 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   const input = yield* session.followUps.open(runId);
 
   /** The canonical user message of one batch: every item's text as its
-   *  own part, media parts after it; `kinds[i]` is item i's badges. */
+   *  own part, media parts after it; `kinds[i]` is item i's badges.
+   *  The media is the row's by address: a medium the model does not take
+   *  is skipped with a transcript warning. */
   const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
     followUps: readonly QueuedFollowUp[],
-  ): Effect.fn.Return<
-    {
-      message: Extract<AppendedMessage, { readonly role: 'user' }>;
-      kinds: readonly (readonly MediaAttachmentKind[])[];
-    },
-    Error,
-    FileSystem.FileSystem | ChildProcessSpawner
-  > {
-    const bound = yield* SynchronizedRef.get(run.model);
-    const parts: InputPart[] = [];
+  ) {
+    const { capabilities } = (yield* SynchronizedRef.get(run.model)).config;
+    const parts: StoredInputPart[] = [];
     const kinds: (readonly MediaAttachmentKind[])[] = [];
     for (const { content } of followUps) {
       parts.push({ kind: 'text', text: content.text });
-      const files = content.mediaFiles ?? [];
-      const media = yield* mediaInputParts(
-        files.map((path) => run.fileService.createLocation(path)),
-        bound.config.capabilities,
-        logger,
-        run.session.roots.config,
+      const media = (content.media ?? []).flatMap(
+        ({ name, mimeType, digest }) => {
+          const part = storedMediaPart(mimeType, digest, capabilities);
+          if (part === null)
+            logger.warn(`Skipping ${name}: the model does not accept it.`);
+          return part === null ? [] : [part];
+        },
       );
-      parts.push(...media.parts);
-      kinds.push(media.kinds);
+      parts.push(...media);
+      kinds.push(
+        media.flatMap((part) =>
+          part.kind === 'image' || part.kind === 'document' ? [part.kind] : [],
+        ),
+      );
     }
-    return { message: { role: 'user', content: parts }, kinds };
+    return {
+      message: { role: 'user', content: parts } satisfies AppendedMessage,
+      kinds,
+    };
   });
 
   const logFollowUps = (
     followUps: readonly QueuedFollowUp[],
-    kinds: readonly (readonly MediaAttachmentKind[])[] = [],
+    kinds: readonly (readonly MediaAttachmentKind[])[],
   ): void => {
     for (const [i, { content }] of followUps.entries()) {
       const { text, scriptSummary } = followUpDisplay(content);
-      const { mediaFiles } = content;
+      const { media } = content;
       const attachments = kinds[i];
-      logUserMessage(logger, text, { attachments, mediaFiles, scriptSummary });
+      logUserMessage(logger, text, { attachments, media, scriptSummary });
     }
   };
 
@@ -171,17 +175,16 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     const followUps = batch.kind === 'followUps' ? batch.followUps : [];
     const stale = batch.kind === 'followUps' ? batch.stale : [];
     const turn = batch.kind === 'synthetic' || followUps.length > 0;
-    const built = yield* (
+    const built =
       batch.kind === 'synthetic'
-        ? Effect.succeed({
+        ? {
             message: {
               role: 'user',
               content: [{ kind: 'text', text: batch.text }],
             } satisfies AppendedMessage,
             kinds: [],
-          })
-        : batchMessage(followUps)
-    ).pipe(Effect.tapCause(() => Effect.sync(() => logFollowUps(followUps))));
+          }
+        : yield* batchMessage(followUps);
     if (stale.length > 0) {
       logger.debug(
         `Consumed ${stale.length} progress notice(s) of ended subagents without delivering them.`,

@@ -15,6 +15,7 @@ import type {
   ScriptDeliverySummary,
 } from '@shared/schemas';
 import { isInstruction } from '@shared/session/runFacts';
+import type { WithBlobs } from '@shared/session/historyTurns';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { InboxItem } from './Inbox';
 
@@ -62,22 +63,23 @@ export function userFollowUpInstruction(
   return instruction || undefined;
 }
 
-/** The `followup.queued` row one send writes: its id is the delivery id
- *  when the producer gave one, and a run sender gets its relation to the
- *  recipient. */
+/** The `followup.queued` row one send writes, with the blobs its media
+ *  brings: its id is the delivery id when the producer gave one, and a run
+ *  sender gets its relation to the recipient. */
 export function queuedRow(
   item: InboxItem,
   hold: QueuedFollowUp['holdUntil'],
   relationOf: (sender: RunId) => RunRelation,
-): QueuedFollowUp {
-  const { from, deliveryId, mediaFiles, control, ...content } = item;
+): WithBlobs<QueuedFollowUp> {
+  const { from, deliveryId, media, blobs, control, ...content } = item;
   return {
     followUpId: deliveryId ?? randomUUID(),
     ...(hold ? { holdUntil: hold } : {}),
     ...(control ? { control } : {}),
+    ...(blobs !== undefined && { blobs }),
     content: {
       ...content,
-      mediaFiles: mediaFiles?.slice(),
+      ...(media !== undefined && { media: [...media] }),
       from:
         from.kind === 'run'
           ? { kind: 'run', runId: from.runId, relation: relationOf(from.runId) }

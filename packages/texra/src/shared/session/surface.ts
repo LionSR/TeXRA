@@ -26,6 +26,7 @@ import {
   type RequestError,
   type SessionView,
   type RunView,
+  type StoredMediaSchema,
 } from '@texra-ai/harness/schemas';
 import {
   InquiryDraftSchema,
@@ -124,10 +125,11 @@ interface ProposalRef {
 }
 
 /** An image of a follow-up: the `[fileName]` chip its text carries and
- *  the stored file the send names, once the host has saved it. */
+ *  what the send attaches: the file the host saved it to (null until
+ *  then), or, in a fork's composer, the media the store already holds. */
 interface DraftImage {
   readonly fileName: string;
-  readonly path: string | null;
+  readonly media: string | typeof StoredMediaSchema.Type | null;
 }
 
 /** A follow-up in progress for one stream. Only `text` persists. */
@@ -434,7 +436,7 @@ export function reconcileLaunch(surface: Surface, host: HostSnapshot): Surface {
  */
 export function canSendFollowUp(run: RunView, draft: Draft): boolean {
   if (!acceptsFollowUp(run)) return false;
-  if (draft.images.some((image) => image.path === null)) return false;
+  if (draft.images.some((image) => image.media === null)) return false;
   return draft.text.trim() !== '' || draft.images.length > 0;
 }
 

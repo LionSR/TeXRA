@@ -22,19 +22,24 @@ describe('logUserMessage', () => {
     disposeTrace();
   });
 
-  // #13662: "Fork from here" refills the fork's composer from the row, so
-  // the row keeps the files the follow-up attached, not only their kinds.
-  it('records the attached files a fork puts back in its composer', () => {
-    const pasted = '/storage/pasted/pasted-image-1.png';
+  // #13662, #13874: "Fork from here" refills the fork's composer from the
+  // row, so the row keeps what the follow-up attached, by blob address: a
+  // pasted file swept from storage leaves the fork its media.
+  it('records the attached media a fork puts back in its composer', () => {
+    const pasted = {
+      name: 'pasted-image-1.png',
+      mimeType: 'image/png',
+      digest: 'a'.repeat(64),
+    };
     logUserMessage(logger, 'See [pasted-image-1.png]', {
       attachments: ['image'],
-      mediaFiles: [pasted],
+      media: [pasted],
     });
 
     expect(runTrace.rows()[0]).toMatchObject({
       kind: 'user',
       attachments: ['image'],
-      mediaFiles: [pasted],
+      media: [pasted],
     });
   });
 });

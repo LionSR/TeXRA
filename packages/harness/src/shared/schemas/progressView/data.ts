@@ -15,6 +15,7 @@ import {
   UserQuestionPermissionSchema,
 } from '../prompts';
 import { ScriptDeliverySummarySchema } from '../scriptDelivery';
+import { StoredMediaSchema } from '../storedTurn';
 
 // ============================================================
 // Shared Field Schemas
@@ -29,15 +30,16 @@ export type MediaAttachmentKind = typeof MediaAttachmentKindSchema.Type;
  * bytes — so the archived conversation can render `[image attachment]` /
  * `[document attachment]` markers for media that was sent to the model but
  * only ever lived in the provider message, not the transcript row.
- * `mediaFiles` are the files a follow-up attached, as its send named them,
- * so "Fork from here" puts them back in the fork's composer beside the text.
+ * `media` is what a follow-up attached, by address (the follow-up's row
+ * links the blobs), so "Fork from here" puts it back in the fork's composer
+ * beside the text without a file to re-read.
  * `scriptSummary` carries a workflow delivery's typed presentation facts
  * beside the rendered text, so the progress view renders structured data
  * instead of re-parsing it out of the row text.
  */
 export const UserMessagePayloadSchema = Schema.Struct({
   attachments: Schema.optional(Schema.Array(MediaAttachmentKindSchema)),
-  mediaFiles: Schema.optional(Schema.Array(Schema.String)),
+  media: Schema.optional(Schema.Array(StoredMediaSchema)),
   scriptSummary: Schema.optional(ScriptDeliverySummarySchema),
 });
 

@@ -57,6 +57,16 @@ const MediaAddress = {
   mimeType: Schema.String.check(Schema.isMinLength(1)),
   digest: Sha256Schema,
 };
+/** Media a message attached, as a follow-up and its transcript row name
+ *  it: the file name it was attached under, and its bytes by address, as
+ *  a media part holds them, so the rows never point at a file that may be
+ *  gone. */
+export const StoredMediaSchema = Schema.Struct({
+  name: Schema.String.check(Schema.isMinLength(1)),
+  ...MediaAddress,
+});
+/** One attached media item by address ({@link StoredMediaSchema}). */
+export type StoredMedia = typeof StoredMediaSchema.Type;
 const StoredInputPartSchema = Schema.Union([
   TextPartSchema,
   Schema.Struct({

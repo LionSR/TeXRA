@@ -31,6 +31,7 @@ import {
   RequestErrorSchema,
   RuntimeRequestSchema,
   RunIdSchema,
+  StoredMediaSchema,
 } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
@@ -151,13 +152,13 @@ const SurfaceActionMessageSchema = Schema.Struct({
      *  selection, a follow-up to the selected stream or a launch. */
     Schema.Struct({ kind: Schema.Literal('submit') }),
     /** A fork's composer holds the message "Fork from here" cut before,
-     *  with the files it attached as the composer's images. */
+     *  with the media it attached as the composer's images. */
     Schema.Struct({
       kind: Schema.Literal('draft'),
       runId: RunIdSchema,
       text: Schema.String,
       images: Schema.Array(
-        Schema.Struct({ fileName: Schema.String, path: Schema.String }),
+        Schema.Struct({ fileName: Schema.String, media: StoredMediaSchema }),
       ),
     }),
     /** A workflow run of this session left running for finished or

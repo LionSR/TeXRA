@@ -10,7 +10,11 @@
  */
 import { Schema } from 'effect';
 
-import { CredentialSwitchSchema, RunIdSchema } from '@texra-ai/harness/schemas';
+import {
+  CredentialSwitchSchema,
+  RunIdSchema,
+  StoredMediaSchema,
+} from '@texra-ai/harness/schemas';
 import {
   CurrentFileTypeSchema,
   DocumentFileTypeSchema,
@@ -48,7 +52,7 @@ export const HostRequestSchema = Schema.Union([
    * Fork: a new task holding this conversation up to `at` (its latest
    * settled point when absent), continued and shown; with `draft` (Fork
    * from here), the message it was cut before waits in its composer, with
-   * the files it attached (`mediaFiles`).
+   * the media it attached (`media`, by address).
    */
   Schema.Struct({
     kind: Schema.Literal('fork'),
@@ -57,7 +61,7 @@ export const HostRequestSchema = Schema.Union([
       Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
     ),
     draft: Schema.optional(Schema.NullOr(Schema.String)),
-    mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+    media: Schema.optional(Schema.NullOr(Schema.Array(StoredMediaSchema))),
   }),
   /** The latexFixer follow-up over a workflow run's compile failures. */
   Schema.Struct({ kind: Schema.Literal('runCompileFixer'), ...runScoped }),
@@ -139,7 +143,7 @@ export const HostRequestSchema = Schema.Union([
   }),
   Schema.Struct({ kind: Schema.Literal('polish'), text: Schema.String }),
   /** A pasted image, stored host-side; the outcome names the file the
-   *  follow-up's `mediaFiles` then carries. */
+   *  follow-up's `media` then carries. */
   Schema.Struct({
     kind: Schema.Literal('savePastedImage'),
     fileName: Schema.String.check(Schema.isMinLength(1)),

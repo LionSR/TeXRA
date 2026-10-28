@@ -117,7 +117,7 @@ describe('session Surface ownership', () => {
 
   it('retains the complete draft on rejected admission and clears only an unchanged accepted draft', async () => {
     view.set(viewOf(buildScenario().events));
-    const image = { fileName: 'figure.png', path: '/pasted/figure.png' };
+    const image = { fileName: 'figure.png', media: '/pasted/figure.png' };
     surfaces.act(KEY, {
       kind: 'draft',
       runId: ROOT,
@@ -127,7 +127,7 @@ describe('session Surface ownership', () => {
       kind: 'followUp.send',
       runId: ROOT,
       text: 'Saved text',
-      mediaFiles: [image.path],
+      media: [image.media],
     };
     const reject = response();
     surfaces.runtimeRequest(KEY, request);

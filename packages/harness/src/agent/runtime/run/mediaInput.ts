@@ -6,26 +6,30 @@
  * Failure policy: a file the model cannot take is skipped with a transcript
  * warning; a file that cannot be read or classified fails the read. The
  * caller decides what a failed read means for its message: the run loop
- * fails the opening message loudly (a task's revision included),
- * and a follow-up batch is restored to its queue with the failure
- * reported. Nothing drops an attachment silently.
+ * fails the opening message loudly (a task's revision included), and a
+ * follow-up's send is refused (`attachedMedia`: its media is read once, as
+ * it is sent, and stored by address). Nothing drops an attachment silently.
  */
 import { Cause, Effect, Exit, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import type { ConfigProvider } from '@platform/interfaces';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   fileLocationDisplayPath,
   type FileLocation,
   type MediaAttachmentKind,
+  type StoredMedia,
   type StoredMediaPart,
   type ToolFileAttachment,
   type ToolResultPayload,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
+import { Rejected } from '@shared/session/runtimeRequest';
 import { blobAddress } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
+import { getBasename } from '@utils/core';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { getBase64EncodedMedia, processPdf2Png } from '@utils/media/img';
@@ -158,6 +162,57 @@ export const mediaInputParts = Effect.fn('mediaInput')(function* (
     kinds: loaded.flatMap((file) => file.kinds),
   };
 });
+
+/**
+ * What a message attaches, as its row names it (none: nothing): a file is
+ * read here, once, where it enters (an image resized to the project's
+ * limit), its bytes stored under their address with the row; media the
+ * store holds already (a fork's) is linked. A file that is missing, empty
+ * or of no medium a model takes refuses the send.
+ */
+export const attachedMedia = Effect.fn('mediaInput.attached')(
+  function* (
+    entries: readonly (string | StoredMedia)[],
+    roots: Pick<WorkspaceRoots, 'workspace' | 'config'>,
+  ): Effect.fn.Return<
+    { readonly media?: StoredMedia[]; readonly blobs?: DraftBlob[] },
+    Error,
+    FileSystem.FileSystem | ChildProcessSpawner
+  > {
+    if (entries.length === 0) return {};
+    const read = yield* Effect.forEach(
+      entries,
+      Effect.fnUntraced(function* (entry) {
+        if (typeof entry !== 'string')
+          return { media: entry, blob: { digest: entry.digest } };
+        const path = pathToLocationIn(roots.workspace, entry).absolutePath;
+        const mimeType = getMimeType(path);
+        if (mimeType === null || !storedMediaPart(mimeType, '', ANY_MODEL))
+          return yield* Effect.fail(
+            new Error(`Unsupported media file: ${entry}`),
+          );
+        const base64 = yield* getBase64EncodedMedia(path, roots.config);
+        const digest = blobAddress(base64);
+        return {
+          media: { name: getBasename(path), mimeType, digest },
+          blob: { digest, text: base64 },
+        };
+      }),
+      { concurrency: 4 },
+    );
+    return {
+      media: read.map((entry) => entry.media),
+      blobs: read.map((entry) => entry.blob),
+    };
+  },
+  Effect.mapError((error) => new Rejected({ reason: error.message })),
+);
+/** A model taking every medium: what a stored attachment may be. */
+const ANY_MODEL: MediaCapabilities = {
+  supportsVision: true,
+  supportsNativePdf: true,
+  supportsNativeAudio: true,
+};
 
 /**
  * Bytes the store holds under `digest` (a captured attachment), as the

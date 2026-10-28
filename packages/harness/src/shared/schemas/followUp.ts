@@ -7,6 +7,7 @@
 import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
+import { StoredMediaSchema } from './storedTurn';
 
 /**
  * Where one run stands relative to another in the supervision tree: who
@@ -56,8 +57,9 @@ export const FollowUpContentSchema = Schema.Struct({
   text: Schema.String,
   /** What the transcript and the queued list show instead of `text`. */
   displayText: Schema.optional(Schema.NullOr(Schema.String)),
-  /** Media file paths (e.g. pasted images) attached to a user follow-up. */
-  mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+  /** Media a user follow-up attached (e.g. pasted images), by address:
+   *  the row links the blobs, so they live as long as it does. */
+  media: Schema.optional(Schema.Array(StoredMediaSchema)),
   from: FollowUpSenderSchema,
 });
 export type FollowUpContent = typeof FollowUpContentSchema.Type;

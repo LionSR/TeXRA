@@ -298,7 +298,7 @@ export function createSessionSurfaces(options: {
           patch: {
             images: draft.images.map((image) =>
               image.fileName === request.fileName
-                ? { ...image, path: outcome.fileName }
+                ? { ...image, media: outcome.fileName }
                 : image,
             ),
           },
@@ -484,14 +484,14 @@ export function createSessionSurfaces(options: {
       // follow-up, however the send was reached.
       if (!run || !canSendFollowUp(run, draft)) return;
       const text = draft.text.trim();
-      const mediaFiles = draft.images.flatMap((image) =>
-        image.path === null ? [] : [image.path],
+      const media = draft.images.flatMap((image) =>
+        image.media === null ? [] : [image.media],
       );
       void runtimeRequestFor(entry, {
         kind: 'followUp.send',
         runId,
         text: text === '' ? '(image)' : text,
-        mediaFiles: mediaFiles.length > 0 ? mediaFiles : null,
+        media: media.length > 0 ? media : null,
       });
       return;
     }

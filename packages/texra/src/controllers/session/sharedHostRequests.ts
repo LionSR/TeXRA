@@ -12,7 +12,6 @@
  * the host's switch to exactly those kinds, so it stays exhaustive and the
  * compiler still names a kind it forgot.
  */
-import * as path from 'node:path';
 import { formatResultCount } from '@texra-ai/harness/transcript';
 
 import { Effect } from 'effect';
@@ -321,11 +320,11 @@ export function handleSharedHostRequest(
         const { draft } = request;
         if (draft != null) {
           // The composer keeps an image while its text holds the image's
-          // `[name]` chip, the stored file's name. A send from the CLI
+          // `[name]` chip, the attached file's name. A send from the CLI
           // names it `[Image #N]` instead, so a missing chip is added.
-          const images = (request.mediaFiles ?? []).map((file) => ({
-            fileName: path.basename(file),
-            path: file,
+          const images = (request.media ?? []).map((media) => ({
+            fileName: media.name,
+            media,
           }));
           const chips = images
             .map(({ fileName }) => `[${fileName}]`)

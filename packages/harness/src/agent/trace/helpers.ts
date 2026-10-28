@@ -30,6 +30,7 @@ import {
   type MediaAttachmentKind,
   type ProviderError,
   type ScriptDeliverySummary,
+  type StoredMedia,
 } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
 
@@ -143,7 +144,7 @@ export function startCompactionActivity(
  * `attachments` records each attached media file's kind (not bytes) so the
  * archived conversation can render `[image attachment]` / `[document
  * attachment]` markers for media that only ever reached the provider
- * message, and `mediaFiles` the files a follow-up attached, which
+ * message, and `media` what a follow-up attached, by address, which
  * "Fork from here" carries into the fork's composer. `scriptSummary` carries
  * a workflow delivery's typed presentation facts beside the row text
  * (`UserMessagePayloadSchema`), so renderers never re-parse them out of the
@@ -154,17 +155,17 @@ export function logUserMessage(
   message: string,
   {
     attachments,
-    mediaFiles,
+    media,
     scriptSummary,
   }: {
     readonly attachments?: readonly MediaAttachmentKind[];
-    readonly mediaFiles?: readonly string[] | null;
+    readonly media?: readonly StoredMedia[];
     readonly scriptSummary?: ScriptDeliverySummary;
   } = {},
 ): void {
   const data = {
     ...(attachments?.length ? { attachments } : {}),
-    ...(mediaFiles?.length ? { mediaFiles } : {}),
+    ...(media?.length ? { media } : {}),
     ...(scriptSummary ? { scriptSummary } : {}),
   };
   trace.info(message, {

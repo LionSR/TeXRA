@@ -484,6 +484,7 @@ describe('Sessions owner', () => {
         ),
       ),
       Effect.provide(nodePlatformLayer),
+      Effect.provide(nodeSpawnerLayer),
     );
 
   it.effect(
@@ -518,7 +519,10 @@ describe('Sessions owner', () => {
           local,
           plugins: toolTable([]),
           services: yield* Effect.context<
-            GlobalValues | FileSystem.FileSystem | Path.Path
+            | GlobalValues
+            | FileSystem.FileSystem
+            | Path.Path
+            | ChildProcessSpawner
           >(),
           closed: () => false,
         });
@@ -579,7 +583,10 @@ describe('Sessions owner', () => {
           ),
           plugins: toolTable([]),
           services: yield* Effect.context<
-            GlobalValues | FileSystem.FileSystem | Path.Path
+            | GlobalValues
+            | FileSystem.FileSystem
+            | Path.Path
+            | ChildProcessSpawner
           >(),
           closed: () => false,
         });
