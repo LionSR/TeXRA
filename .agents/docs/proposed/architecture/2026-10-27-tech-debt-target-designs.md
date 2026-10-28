@@ -158,9 +158,10 @@ exist), so they need no upcaster.
   that Run again or a revision after the pasted-file sweep fails loudly
   with "File not found". Making Run again survive that needs the launcher
   to hold stored media (the follow-up composer's pattern) across the
-  three hosts. Before document tasks could pass a launch's media by
-  address, the owner must decide how PDFs reach models without native
-  PDF support: today the opening rasterizes them from the file on disk.
+  three hosts. A stored PDF reaches a model without native PDF support as
+  page images rasterized from its stored bytes when the follow-up is read
+  (`storedPdfPages`), so a launch's media could pass by address the same
+  way.
 
 **Golden store (#14260).** The race is in the guest script, not the
 generator. `GOLDEN_SCRIPT_SOURCE` (`run/validationModel.ts:62`) runs

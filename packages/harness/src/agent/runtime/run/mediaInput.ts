@@ -54,6 +54,48 @@ interface MediaInputParts {
   readonly kinds: readonly MediaAttachmentKind[];
 }
 
+/** A PDF as page images, for a model that takes images but no PDF. */
+const pdfPageParts = Effect.fn('mediaInput.pdfPages')(function* (
+  path: string,
+  display: string,
+  logger: AgentTrace,
+) {
+  const { pages, pageCount } = yield* processPdf2Png(path).pipe(
+    Effect.mapError(
+      (cause) =>
+        new Error(
+          `Failed to process PDF file as image: ${display}: ${cause.message}`,
+          { cause },
+        ),
+    ),
+  );
+  if (pages.length < pageCount) {
+    logger.warn(
+      `Attached only pages 1-${pages.length} of ${pageCount} from ${display}`,
+    );
+  }
+  return pages.map((base64): InputPart => ({
+    kind: 'image',
+    mimeType: 'image/png',
+    base64,
+  }));
+});
+
+/**
+ * A stored PDF's bytes as page images, for a model that takes images but
+ * no PDF: the image tool reads them from a temp file removed after.
+ */
+export const storedPdfPages = Effect.fn('mediaInput.storedPdfPages')(function* (
+  name: string,
+  base64: string,
+  logger: AgentTrace,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* fs.makeTempFileScoped({ suffix: '.pdf' });
+  yield* fs.writeFile(path, Buffer.from(base64, 'base64'));
+  return yield* pdfPageParts(path, name, logger);
+}, Effect.scoped);
+
 /**
  * Read one media file into input parts. A PDF is a native document when the
  * model accepts one, page images otherwise; audio only where the model takes
@@ -90,26 +132,8 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
         kinds: ['document'],
       };
     }
-    const { pages, pageCount } = yield* processPdf2Png(path).pipe(
-      Effect.mapError(
-        (cause) =>
-          new Error(
-            `Failed to process PDF file as image: ${display}: ${cause.message}`,
-            { cause },
-          ),
-      ),
-    );
-    if (pages.length < pageCount) {
-      logger.warn(
-        `Attached only pages 1-${pages.length} of ${pageCount} from ${display}`,
-      );
-    }
     return {
-      parts: pages.map((base64) => ({
-        kind: 'image',
-        mimeType: 'image/png',
-        base64,
-      })),
+      parts: yield* pdfPageParts(path, display, logger),
       kinds: ['document'],
     };
   }
