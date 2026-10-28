@@ -26,7 +26,7 @@ import {
 } from '@shared/schemas';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import type { RunPosition, RunRows } from './runRowsShape';
+import type { RunPosition, RunRowVerdict, RunRows } from './runRowsShape';
 import type { RunView } from './sessionView';
 
 /** The rows this module owns, and the only rows it accepts. A type listed
@@ -150,17 +150,8 @@ export const freshRunRows = (): RunRows => ({
   position: null,
   title: null,
   grants: null,
+  childTurn: { active: null, lastCompleted: null },
 });
-
-export type RunRowVerdict =
-  | { readonly kind: 'applied'; readonly rows: Partial<RunRows> }
-  /** The row changes nothing: an id already recorded, or a row that needs
-   *  a run this reader holds no rows for. */
-  | { readonly kind: 'unchanged' }
-  /** A decision naming a request this reader does not hold. */
-  | { readonly kind: 'unresolved'; readonly requestId: string }
-  /** The rows contradict each other under any reader. */
-  | { readonly kind: 'contradiction'; readonly detail: string };
 
 const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
   kind: 'applied',
@@ -293,6 +284,7 @@ export const RUN_ROW_READS = {
   ],
   parks: ['child.park', 'run.report', 'run.activate', 'run.end'],
   requests: ['request.opened', 'request.decided'],
+  turns: ['child.turn'],
 } as const;
 
 /** What one lifecycle or record row changes on `rows`. */
@@ -321,6 +313,15 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
       return { config: row.config };
     case 'run.position':
       return { position: row };
+    case 'child.turn': {
+      // `accepted` opens a turn; `settled` closes it, maybe an earlier one.
+      const turn = { key: row.attemptId, index: row.turnIndex };
+      const { active, lastCompleted } = rows.childTurn;
+      const closes = active?.key === turn.key && active.index === turn.index;
+      return row.phase === 'settled'
+        ? { childTurn: { active: closes ? null : active, lastCompleted: turn } }
+        : { childTurn: { active: turn, lastCompleted } };
+    }
     case 'run.description':
       // A user's title stands until the user renames again.
       return row.by === 'model' && rows.title?.by === 'user'

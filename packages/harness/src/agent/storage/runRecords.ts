@@ -15,6 +15,7 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import { attemptOf } from '@shared/session/inFlight';
 import { unloadable } from '@shared/session/runHistory';
 import { applyRunRows, type RunState } from '@shared/session/runState';
+import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
 import { runEndFromEvents } from '@shared/session/runFacts';
 import {
@@ -32,49 +33,14 @@ import {
 } from '@shared/schemas';
 import { deriveRunId } from '@utils/core/idHash';
 
-/** One child turn's identity: `key` names the child-run attempt that
- *  accepted it and `index` its position in that attempt. */
-export interface AttemptKey {
-  readonly key: string;
-  readonly index: number;
-}
-
-/** Turn attribution for a child run's report/result slots: the turn
- *  running (or cut short before its delivery ran) and the latest delivered
- *  one, both null before the loop accepted a turn. */
-interface ChildTurnState {
-  readonly active: AttemptKey | null;
-  readonly lastCompleted: AttemptKey | null;
-}
-
-/** Fold the run's `child.turn` rows: `accepted` opens a turn, `settled`
- *  closes it as the last completed (maybe an earlier attempt's). */
-export function readChildTurnState(
+/** The run's child turns, folded from its `child.turn` rows. */
+export const readChildTurnState = (
   session: SessionHandle,
   runId: RunId,
-): Effect.Effect<ChildTurnState, DatabaseReadFailed> {
-  return session.log
-    .rows(qualifyAggregateId('run', runId), ['child.turn'])
-    .pipe(
-      Effect.map((rows) => {
-        let active: AttemptKey | null = null;
-        let lastCompleted: AttemptKey | null = null;
-        for (const row of rows) {
-          if (row.type !== 'child.turn') continue;
-          const turn = { key: row.attemptId, index: row.turnIndex };
-          if (row.phase !== 'settled') active = turn;
-          else if (
-            active !== null &&
-            active.key === turn.key &&
-            active.index === turn.index
-          )
-            active = null;
-          if (row.phase === 'settled') lastCompleted = turn;
-        }
-        return { active, lastCompleted };
-      }),
-    );
-}
+): Effect.Effect<RunRows['childTurn'], DatabaseReadFailed> =>
+  session.log
+    .rows(qualifyAggregateId('run', runId), RUN_ROW_READS.turns)
+    .pipe(Effect.map((rows) => runRowsFrom(rows).childTurn));
 
 /**
  * A run's persisted parent (`run.start.parent`, less a `run.detach` or an

@@ -5,7 +5,6 @@
       "packages/harness/src/agent/runtime/runLaunchGuard.ts",
       "packages/harness/src/tools/delegation/childRun.ts"
     ],
-    "child.turn": ["packages/harness/src/agent/storage/runRecords.ts"],
     "context.blob": ["packages/harness/src/controllers/session/rowCodec.ts"],
     "context.edit": [
       "packages/harness/src/agent/runtime/RunHistory.ts",

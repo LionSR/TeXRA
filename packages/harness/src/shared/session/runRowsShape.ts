@@ -78,4 +78,29 @@ export type RunRows = RunPosition & {
   /** Its own grants: the latest `approval.policy`, else the snapshot its
    *  `run.start` carried. */
   readonly grants: ApprovalGrants | null;
+  /** Its child turns (`child.turn`), for the report and result slots: the
+   *  turn running (or cut short before its delivery ran) and the latest
+   *  delivered one, both null before the loop accepted a turn. */
+  readonly childTurn: {
+    readonly active: AttemptKey | null;
+    readonly lastCompleted: AttemptKey | null;
+  };
 };
+
+/** One child turn's identity: `key` names the child-run attempt that
+ *  accepted it and `index` its position in that attempt. */
+export interface AttemptKey {
+  readonly key: string;
+  readonly index: number;
+}
+
+/** What `applyRunRow` makes of one row. */
+export type RunRowVerdict =
+  | { readonly kind: 'applied'; readonly rows: Partial<RunRows> }
+  /** The row changes nothing: an id already recorded, or a row that needs
+   *  a run this reader holds no rows for. */
+  | { readonly kind: 'unchanged' }
+  /** A decision naming a request this reader does not hold. */
+  | { readonly kind: 'unresolved'; readonly requestId: string }
+  /** The rows contradict each other under any reader. */
+  | { readonly kind: 'contradiction'; readonly detail: string };

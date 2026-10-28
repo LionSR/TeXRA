@@ -11,12 +11,9 @@ import { Effect, type Scope } from 'effect';
 
 import type { InboxItem, Sent, SendOptions } from '@agent/followUp/Inbox';
 import type { AgentTrace } from '@agent/trace';
-import {
-  getRunRecords,
-  persistedParentRunId,
-  type AttemptKey,
-} from '@agent/storage/runRecords';
+import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
+import type { AttemptKey } from '@shared/session/runRowsShape';
 import {
   qualifyAggregateId,
   type ResultMeta,
