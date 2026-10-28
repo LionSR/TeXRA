@@ -5,14 +5,10 @@ import { useState } from 'react';
 import {
   AgentCatalog,
   type AgentEntry,
+  type TeamPreset,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
-import {
-  type AgentModePreset,
-  AGENT_MODE_PRESETS,
-  agentKeyOf,
-  STARTER_AGENT_MODE_PRESET,
-} from '@texra-ai/harness/schemas';
+import { agentKeyOf } from '@texra-ai/harness/schemas';
 import {
   readCliWorkspaceAgents,
   type CliWorkspaceAgentsRecord,
@@ -38,7 +34,7 @@ type WorkspaceAgentsFormMode =
 
 interface WorkspaceAgentsData {
   readonly record: CliWorkspaceAgentsRecord;
-  readonly presets: readonly AgentModePreset[];
+  readonly presets: readonly TeamPreset[];
   readonly agents: readonly AgentEntry[];
 }
 
@@ -263,11 +259,14 @@ export function WorkspaceAgentsForm(
           label: 'No default team',
           description: 'Inherited workspaces show all agents',
         },
-        ...[STARTER_AGENT_MODE_PRESET, ...AGENT_MODE_PRESETS].map((preset) => ({
-          value: preset.id,
-          label: preset.name,
-          description: preset.description,
-        })),
+        // Only a built-in team can be the user default (`setDefaultTeam`).
+        ...data.presets
+          .filter((preset) => preset.source === 'built-in')
+          .map((preset) => ({
+            value: preset.id,
+            label: preset.name,
+            description: preset.description,
+          })),
       ],
       (value) => {
         write(
