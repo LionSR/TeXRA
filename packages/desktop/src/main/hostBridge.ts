@@ -1,3 +1,4 @@
+import { Effect, type Scope } from 'effect';
 import { ipcMain, type BrowserWindow, type IpcMainEvent } from 'electron';
 
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
@@ -22,25 +23,24 @@ export interface DesktopHostBridge {
   /** A `desktop:*` or settings-view command push. */
   postToRenderer(message: unknown): void;
   postSession(message: DownMessage): void;
-  /** Stop listening; the window's scope runs it when the window closes. */
-  dispose(): void;
 }
 
-export function installDesktopHostBridge(
+/** The bridge listens until the caller's scope (the window's) closes. */
+export const installDesktopHostBridge = Effect.fnUntraced(function* (
   window: BrowserWindow,
   options: DesktopHostBridgeOptions,
-): DesktopHostBridge {
+): Effect.fn.Return<DesktopHostBridge, never, Scope.Scope> {
   const listen = (channel: string, handle: (message: unknown) => void) => {
     const listener = (event: IpcMainEvent, message: unknown) => {
       if (event.sender === window.webContents) handle(message);
     };
-    ipcMain.on(channel, listener);
-    return () => ipcMain.off(channel, listener);
+    return Effect.acquireRelease(
+      Effect.sync(() => ipcMain.on(channel, listener)),
+      () => Effect.sync(() => ipcMain.off(channel, listener)),
+    );
   };
-  const stops = [
-    listen(ELECTRON_WEBVIEW_MESSAGE_CHANNEL, options.onCommand),
-    listen(ELECTRON_SESSION_MESSAGE_CHANNEL, options.onSession),
-  ];
+  yield* listen(ELECTRON_WEBVIEW_MESSAGE_CHANNEL, options.onCommand);
+  yield* listen(ELECTRON_SESSION_MESSAGE_CHANNEL, options.onSession);
   const push = (channel: string, message: unknown) => {
     if (window.isDestroyed() || window.webContents.isDestroyed()) return;
     window.webContents.send(channel, message);
@@ -57,8 +57,5 @@ export function installDesktopHostBridge(
     },
     // Typed `DownMessage`s the session bridge builds: nothing to check.
     postSession: (message) => push(ELECTRON_SESSION_PUSH_CHANNEL, message),
-    dispose: () => {
-      for (const stop of stops) stop();
-    },
   };
-}
+});

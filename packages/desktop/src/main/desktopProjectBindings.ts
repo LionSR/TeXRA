@@ -345,7 +345,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         // launch includes AgentRunLifecycle's firstRunDone write.
         onRunCompleted: options.refreshFunnelAfterLaunch,
       });
-      const hostRequests = createDesktopHostRequests({
+      const hostRequests = yield* createDesktopHostRequests({
         runtime,
         spawn,
         project,
@@ -365,9 +365,8 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
             Effect.asVoid(tools.refresh(project.roots)),
           ),
       });
-      yield* Effect.addFinalizer(() => Effect.sync(hostRequests.dispose));
       // Registered after the host requests, so a port's release (its map
-      // entry, its transcript set, `onPortClosed`) precedes their disposal, as
+      // entry, its transcript set, `onPortClosed`) precedes their release, as
       // the extension's `dispose` orders them; awaited, unlike the bridge's.
       const port = yield* Effect.acquireRelease(
         bridge.attach({

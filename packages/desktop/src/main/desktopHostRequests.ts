@@ -7,7 +7,7 @@
 
 import path from 'node:path';
 
-import { Effect, Exit, Layer } from 'effect';
+import { Effect, Exit, Layer, type Scope } from 'effect';
 import {
   AgentDirectories,
   Cancelled,
@@ -114,15 +114,15 @@ export interface DesktopHostRequests {
     port: string,
   ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices>;
   closePort(port: string): void;
-  /** Stops a recording this window owns; the take is discarded. */
-  dispose(): void;
 }
 
 const CHANNEL = 'DesktopHostRequests';
 
-export function createDesktopHostRequests(
+/** The window's request handler; closing the caller's scope stops a
+ *  recording this window owns, and the take is discarded. */
+export const createDesktopHostRequests = Effect.fnUntraced(function* (
   options: DesktopHostRequestsOptions,
-): DesktopHostRequests {
+): Effect.fn.Return<DesktopHostRequests, never, Scope.Scope> {
   const { project, host, run, runtime } = options;
   const { roots } = project;
   /** Where the window reads its runs' records: its own session, or the
@@ -141,13 +141,16 @@ export function createDesktopHostRequests(
   // A shared controller's notice IS the refusal the request answers with.
   const rejectRequestEffect = (reason: string): Effect.Effect<void, Rejected> =>
     Effect.fail(new Rejected({ reason }));
-  const draftRequests = options.draftRequests.attach(roots, (recording) => {
-    // Recorder notifications can arrive outside a request fiber; the first
-    // steps run in the caller's, so the snapshot takes them in order.
-    options.spawn(options.snapshot.setRecording(recording), {
-      startImmediately: true,
-    });
-  });
+  const draftRequests = yield* options.draftRequests.attach(
+    roots,
+    (recording) => {
+      // Recorder notifications can arrive outside a request fiber; the first
+      // steps run in the caller's, so the snapshot takes them in order.
+      options.spawn(options.snapshot.setRecording(recording), {
+        startImmediately: true,
+      });
+    },
+  );
   const runActions = runtime.runSync(
     createHostRunActions({
       ...run, // this window's launch follow-up and output opener
@@ -523,6 +526,5 @@ export function createDesktopHostRequests(
     runValidated: runActions.runValidated,
     handleHostRequest,
     closePort: draftRequests.closePort,
-    dispose: draftRequests.dispose,
   };
-}
+});

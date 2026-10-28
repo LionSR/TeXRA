@@ -11,7 +11,7 @@
  * bound through that input are auto-disposed.
  */
 
-import { Effect } from 'effect';
+import { Effect, type Scope } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
 import { emitAppSignal } from '@eventBus/AppSignals';
@@ -63,35 +63,50 @@ interface BoundSubscription {
 
 export class RunSubscriptionRegistry<K extends string, Input> {
   private readonly perRun = new PrunedNestedMap<RunId, K, BoundSubscription>();
-  private readonly keysListener: Disposable;
   /** The polling source this registry binds runs to. */
   readonly source: PollingSourceLike<K, Input>;
 
-  private readonly opts: RunSubscriptionRegistryOptions<K, Input>;
-  constructor(opts: RunSubscriptionRegistryOptions<K, Input>) {
-    this.opts = opts;
-    this.source = opts.source;
-    // Source-key changes are internal bookkeeping. The registry emits the UI
-    // signal only after its binding map has reached the corresponding state.
-    this.keysListener = opts.source.onKeysChanged((keys) => {
-      this.pruneMissingSourceKeys(keys);
+  /**
+   * A registry held by the caller's scope. Closing the scope releases
+   * everything it holds on the polling source and the runs' inputs: the
+   * source-key listener first, then every binding's close listener and
+   * subscription. The owning runtime's layer closes it before the sources'
+   * own lifetime closes.
+   */
+  static make<K extends string, Input>(
+    opts: RunSubscriptionRegistryOptions<K, Input>,
+  ): Effect.Effect<RunSubscriptionRegistry<K, Input>, never, Scope.Scope> {
+    return Effect.gen(function* () {
+      const registry = new RunSubscriptionRegistry(opts);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          const bindings = [...registry.perRun.groups()].flatMap(
+            ([, bound]) => [...bound.values()],
+          );
+          registry.perRun.clear();
+          for (const binding of bindings) release(binding);
+          if (bindings.length > 0) registry.emitBindingsChanged();
+        }),
+      );
+      // Source-key changes are internal bookkeeping. The registry emits the
+      // UI signal only after its binding map has reached the corresponding
+      // state.
+      yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          opts.source.onKeysChanged((keys) => {
+            registry.pruneMissingSourceKeys(keys);
+          }),
+        ),
+        (listener) => Effect.sync(() => listener.dispose()),
+      );
+      return registry;
     });
   }
 
-  /**
-   * Release everything this registry holds on the polling source and the
-   * runs' inputs: the source-key listener, and every binding's close
-   * listener and subscription. The owning runtime's layer runs it on
-   * disposal, before the sources' own lifetime closes.
-   */
-  dispose(): void {
-    this.keysListener.dispose();
-    const bindings = [...this.perRun.groups()].flatMap(([, bound]) => [
-      ...bound.values(),
-    ]);
-    this.perRun.clear();
-    for (const binding of bindings) release(binding);
-    if (bindings.length > 0) this.emitBindingsChanged();
+  private readonly opts: RunSubscriptionRegistryOptions<K, Input>;
+  private constructor(opts: RunSubscriptionRegistryOptions<K, Input>) {
+    this.opts = opts;
+    this.source = opts.source;
   }
 
   /**

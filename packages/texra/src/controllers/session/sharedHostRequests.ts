@@ -176,7 +176,9 @@ export interface SharedHostRequestPorts {
   readonly snapshot: HostSnapshotSource;
   /** This session's take on the one process recorder, as
    *  {@link HostDraftRequests.attach} bound it. */
-  readonly draftRequests: ReturnType<HostDraftRequests['attach']>;
+  readonly draftRequests: Effect.Success<
+    ReturnType<HostDraftRequests['attach']>
+  >;
   readonly toolEditApprovals: ToolEditApprovalController;
   readonly roots: WorkspaceRoots;
   readonly host: SharedHostRequestBindings;
