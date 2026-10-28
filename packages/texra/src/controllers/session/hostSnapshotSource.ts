@@ -29,7 +29,7 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
-import { loadTeamOptions } from '@texra-ai/harness/host';
+import { loadTeamOptions } from '@texra/shared/teamLaunch';
 import type {
   FileOptions,
   HostSnapshot,
