@@ -189,9 +189,7 @@ const EXECUTION_ROUTES: ReadonlyArray<{
           yield* waitForRuns(context, input.timeout, [runId]);
           // The child's deliveries still queued on the caller: this result
           // answers them, and its settlement consumes them with it.
-          const queued = yield* context.session.followUps
-            .read(context.runId)
-            .pipe(Effect.orDie);
+          const queued = yield* context.session.followUps.read(context.runId);
           const answered = queued.followUps
             .map(({ followUpId }) => followUpId)
             .filter((followUpId) => followUpId.startsWith(`${runId}:`));
@@ -288,8 +286,8 @@ const EXECUTION_PATH_LIST = EXECUTION_ROUTES.map(
 
 /**
  * Every line of logic below is one Effect program. A storage or filesystem
- * read failure dies at its read site (`Effect.orDie`): nothing here recovers
- * from one, and the tool runner surfaces the collaborator's own error.
+ * read failure stays in the error channel: nothing here recovers from one,
+ * and the tool runner surfaces the collaborator's own error.
  */
 const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
   input: ExecutionsToolInput,
@@ -566,7 +564,7 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
     const conversation = yield* readCompletedRunConversation(
       runId,
       context.session,
-    ).pipe(Effect.orDie);
+    );
 
     if (conversation.length === 0) {
       // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
@@ -603,7 +601,7 @@ const listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
   runId: RunId,
 ) {
   const { storage } = session.roots;
-  const files = yield* listRunGeneratedFiles(runId, storage).pipe(Effect.orDie);
+  const files = yield* listRunGeneratedFiles(runId, storage);
   if (files.length === 0) {
     return executed('No files generated for this run.');
   }
@@ -627,7 +625,7 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
     context.session.roots.storage,
     runId,
     filePath,
-  ).pipe(Effect.orDie);
+  );
   if (!fullPath) {
     return yield* Effect.fail(new ToolError(`File not found: ${displayPath}`));
   }
@@ -646,9 +644,7 @@ const listWorkspaceFiles = Effect.fn('ExecutionsTool.listWorkspaceFiles')(
       [records.readRunRecord(), records.readWorkspaceFiles()],
       { concurrency: 2 },
     );
-    const entries = yield* listRunWorkspaceFiles(record, paths).pipe(
-      Effect.orDie,
-    );
+    const entries = yield* listRunWorkspaceFiles(record, paths);
 
     if (entries.length === 0) {
       return executed(`No workspace files recorded for run ${runId}.`);
