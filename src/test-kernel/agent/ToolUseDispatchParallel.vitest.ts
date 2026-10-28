@@ -71,6 +71,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { ScriptTool } from '@tools/codemode/ScriptTool';
+import { ExecutionsTool } from '@tools/ExecutionsTool';
 
 import { recordSessionEvents } from './progressTestUtils';
 
@@ -322,6 +323,70 @@ const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
   ).pipe(Effect.provide(kit.layer));
 
 describe('tool-use dispatch', () => {
+  // Failure modes: a SQL page reaches the guest as display text, losing its
+  // typed cells and pagination; display truncation changes a data value; or
+  // generated SQL values bypass the page's serialized byte limit.
+  it.live('delivers bounded SQL pages as data to a script', () =>
+    Effect.gen(function* () {
+      const text = `${'x'.repeat(3000)}|\nend`;
+      const kit = yield* openDispatch({
+        tools: {
+          // cast: the built-ins' services are the dispatch's.
+          script: ScriptTool as unknown as ITool,
+          executions: ExecutionsTool,
+        },
+        calls: [
+          makeCall('query-script', 'script', {
+            code: `const page = await tools.executions({
+  path: '/executions', action: 'query',
+  sql: 'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 201) SELECT x AS number, ? AS text, NULL AS absent FROM n',
+  params: [${JSON.stringify(text)}],
+});
+let oversized = null;
+try {
+  await tools.executions({
+    path: '/executions', action: 'query',
+    sql: "SELECT replace(printf('%3000000s', ''), ' ', 'é') AS oversized",
+  });
+} catch (error) {
+  oversized = { name: error.name, message: error.message };
+}
+return { columns: page.columns, count: page.rows.length,
+  first: page.rows[0], last: page.rows.at(-1), more: page.more, oversized };`,
+          }),
+        ],
+      });
+      yield* Effect.addFinalizer(() => closeSessionOf(kit.session));
+      yield* dispatch(kit, [ExecutionsTool.definition]);
+      const results = (yield* kit.session.log.rows(
+        qualifyAggregateId('run', kit.runId),
+        ['tool.result'],
+      )).flatMap((row) => (row.type === 'tool.result' ? [row.payload] : []));
+      const script = results.find(({ callId }) => callId === 'query-script');
+      expect(
+        script?.result.status,
+        script?.result.status === 'error' ? script.result.error : undefined,
+      ).toBe('executed');
+      expect(script?.result).toMatchObject({
+        status: 'executed',
+        value: {
+          columns: ['number', 'text', 'absent'],
+          count: 200,
+          first: [1, text, null],
+          last: [200, text, null],
+          more: true,
+          oversized: {
+            name: 'ToolFailed',
+            message: expect.stringContaining('4194304 bytes'),
+          },
+        },
+      });
+      const query = results.find(({ callId }) => callId === 'query-script/0');
+      expect(query?.result.output).toContain('select a substr() to read them');
+      expect(query?.result.output).toContain('More rows exist past these 200');
+    }),
+  );
+
   it.live(
     'leaves a durable tool write unsettled when it fails under an interrupt',
     () =>

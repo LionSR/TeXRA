@@ -1,14 +1,11 @@
 /**
- * A session's history query store: the model's SQL runs against a separate
- * in-memory database that holds only the session's display rows, copied in
- * from `SessionEvents.all` up to the commit the query was asked at. Nothing
- * a statement names can reach the session database, a run history row, a private
- * run record or an envelope column: those were never copied.
+ * Model SQL reads a separate in-memory display-row store from
+ * `SessionEvents.all`, through the requested commit. It never opens the
+ * session database or copies core history, private records or envelope columns.
  *
- * The store is a child process (`childSource.ts`), started on the first
- * query and closed with the session's scope. Queries run one at a time; a
- * query past its deadline, or one whose caller is interrupted, kills the
- * process, and the next query rebuilds the store from the start.
+ * The child process starts on first query and closes with the session scope.
+ * Queries are serialized; timeout or caller interruption kills the child.
+ * The next query then rebuilds the store from the start.
  */
 import {
   Cause,
@@ -48,24 +45,28 @@ const CHANNEL = 'HistoryQuery';
 const QUERY_DEADLINE = '5 seconds';
 /** Rows one query returns; the page says when more exist. */
 const HISTORY_QUERY_ROW_CAP = 200;
+/** Serialized page ceiling before a result leaves the query process. */
+const HISTORY_QUERY_PAGE_LIMIT_BYTES = 4 * 1024 * 1024;
 /** SQLite's own memory ceiling in the store, rows and sorts together. */
 const STORE_HEAP_LIMIT_BYTES = 1024 * 1024 * 1024;
-/** Rows per append request: each row is capped, so a request is bounded
- *  however long the history. */
+/** Capped rows per append keep requests bounded for any history length. */
 const APPEND_ROWS = 500;
 
-/** A statement the store will not run, or did not finish: the model's to
- *  correct, so its message is SQLite's own or names the limit it hit. */
+/** A correctable query refusal: SQLite's error or the exceeded limit. */
 export class HistoryQueryRefused extends Schema.TaggedError<HistoryQueryRefused>()(
   'HistoryQueryRefused',
   {
-    reason: Schema.Literals(['not-a-read', 'rejected', 'timeout']),
+    reason: Schema.Literals([
+      'not-a-read',
+      'rejected',
+      'timeout',
+      'result-too-large',
+    ]),
     message: Schema.String,
   },
 ) {}
 
-/** The store itself failed: its process would not start, exited, or refused
- *  the rows it was fed. */
+/** A store failure: process startup, exit, or rejected history rows. */
 export class HistoryQueryFailed extends Schema.TaggedError<HistoryQueryFailed>()(
   'HistoryQueryFailed',
   {
@@ -84,10 +85,13 @@ const PageSchema = Schema.Struct({
 export type HistoryPage = typeof PageSchema.Type;
 const ReplySchema = Schema.Union([
   Schema.Struct({ ok: Schema.Literal(true), value: Schema.Unknown }),
-  Schema.Struct({ ok: Schema.Literal(false), message: Schema.String }),
+  Schema.Struct({
+    ok: Schema.Literal(false),
+    reason: Schema.Literals(['rejected', 'result-too-large']),
+    message: Schema.String,
+  }),
 ]);
 type Reply = typeof ReplySchema.Type;
-/** One reply as the process writes it: a line of JSON. */
 const ReplyLineSchema = Schema.fromJsonString(ReplySchema);
 
 /** The session a store reads: its display tail and its current commit. */
@@ -256,7 +260,6 @@ const openStore = Effect.fn('HistoryQuery.open')(function* (
 });
 
 export class HistoryQuery {
-  /** Built in the session's scope: the store's process closes with it. */
   static readonly make = (
     session: () => HistorySession,
   ): Effect.Effect<HistoryQuery, never, Scope.Scope | ChildProcessSpawner> =>
@@ -344,6 +347,7 @@ export class HistoryQuery {
         sql,
         params,
         cap: HISTORY_QUERY_ROW_CAP,
+        maxBytes: HISTORY_QUERY_PAGE_LIMIT_BYTES,
       }).pipe(Effect.timeoutOption(QUERY_DEADLINE));
       if (Option.isNone(reply)) {
         yield* this.discard('a query ran past its deadline');
@@ -354,7 +358,7 @@ export class HistoryQuery {
       }
       if (!reply.value.ok) {
         return yield* new HistoryQueryRefused({
-          reason: 'rejected',
+          reason: reply.value.reason,
           message: reply.value.message,
         });
       }

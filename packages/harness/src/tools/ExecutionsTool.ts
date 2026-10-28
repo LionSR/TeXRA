@@ -1,7 +1,5 @@
 /**
- * Tool for viewing and managing run history, generated files, and running
- * processes. Supports viewing past runs, waiting for status changes, reading
- * output from background processes, and killing live runs.
+ * Query and manage run history, generated files and live processes.
  *
  * Every fact about a run — what it is, what it is called, how far it got,
  * whose child it is, what it still has to do — is read off the session fold
@@ -722,6 +720,8 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
 export const ExecutionsTool = defineTool({
   name: 'executions',
   slow: true,
+  scriptReturns:
+    '{ columns: string[]; rows: (string | number | null)[][]; more: boolean } | ToolOutput',
   description: `View run history and manage live runs.
 
 Paths:
@@ -734,7 +734,7 @@ Use action: "wait" on /executions or /executions/{id} to wait for a status chang
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed runs to change.
 Use action: "kill" on /executions/{id} to terminate a live run.
 Use action: "send" with message on /executions/{id} to message any other run in this project: your subagent (a follow-up it continues from), your orchestrator, a sibling, or any other run. It reads the message after its current turn; an idle run wakes to read it. A one-shot run (a headless run, or a subagent its orchestrator waits on in band) reads none, and a message to it is refused.
-Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). Children: SELECT * FROM runs WHERE parent_id = ?. Views:
+Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). In a script, query returns { columns, rows, more }; other actions return { output, summary }. Queries return at most 200 rows and refuse a JSON page larger than 4 MiB; use LIMIT or substr() to narrow it. Children: SELECT * FROM runs WHERE parent_id = ?. Views:
 ${HISTORY_VIEW_SUMMARY}
 Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
   schema: ExecutionsToolInputSchema,

@@ -64,9 +64,18 @@ const handle = (message) => {
       statement.setReturnArrays(true);
       const columns = statement.columns().map((column) => column.name);
       const rows = [];
+      // Count the UTF-8 JSON page, not its characters: SQL can synthesize a
+      // large cell even though the source history's text values are bounded.
+      let bytes = Buffer.byteLength(JSON.stringify({ columns, rows, more: false }));
+      const tooLarge = new Error('Query result exceeds ' + message.maxBytes + ' bytes. Select fewer columns, use LIMIT or substr(), and retry. No values were truncated.');
+      tooLarge.code = 'RESULT_TOO_LARGE';
+      if (bytes > message.maxBytes) throw tooLarge;
       for (const row of statement.iterate(...message.params)) {
         if (rows.length === message.cap) return { columns, rows, more: true };
-        rows.push(row.map(cell));
+        const values = row.map(cell);
+        bytes += Buffer.byteLength(JSON.stringify(values)) + (rows.length === 0 ? 0 : 1);
+        if (bytes > message.maxBytes) throw tooLarge;
+        rows.push(values);
       }
       return { columns, rows, more: false };
     }
@@ -80,7 +89,11 @@ lines.on('line', (line) => {
   try {
     reply = { ok: true, value: handle(JSON.parse(line)) };
   } catch (error) {
-    reply = { ok: false, message: error instanceof Error ? error.message : String(error) };
+    reply = {
+      ok: false,
+      reason: error?.code === 'RESULT_TOO_LARGE' ? 'result-too-large' : 'rejected',
+      message: error instanceof Error ? error.message : String(error),
+    };
   }
   process.stdout.write(JSON.stringify(reply) + '\n');
 });
