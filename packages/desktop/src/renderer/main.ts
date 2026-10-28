@@ -733,7 +733,7 @@ const routeMessage = createMessageRoutes({
   },
   'desktop:openWorkbench': (message) =>
     projectWorkbenches.get(shell.active)?.workbench.openKind(message.kind),
-  'desktop:openSettings': () => settingsDialog.open(),
+  'desktop:openSettings': (message) => settingsDialog.open(message.tab),
   'desktop:toggleLayout': (message) => {
     if (projectWorkbenches.has(shell.active)) {
       LAYOUT_PANEL_TOGGLES[message.panel]();

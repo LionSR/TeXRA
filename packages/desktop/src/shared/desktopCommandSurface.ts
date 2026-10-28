@@ -1,4 +1,3 @@
-import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import {
   toElectronAccelerator,
@@ -17,6 +16,7 @@ import {
 import type { IconName } from '@ui/wa/iconNames';
 import {
   DESKTOP_SHELL_COMMANDS,
+  type DesktopOpenSettingsMessageSchema,
   type DesktopWorkbenchKind,
 } from './desktopShellMessages.js';
 
@@ -133,11 +133,6 @@ export interface DesktopCommandActions {
   toggleSidePanel(): void;
 }
 
-interface DesktopSettingsTabMessage {
-  command: typeof SETTINGS_VIEW_COMMANDS.SET_TAB;
-  tab: SettingsTarget;
-}
-
 export function getDesktopCommandMenuEntries(
   platform: DesktopPlatform,
 ): DesktopCommandMenuEntry[] {
@@ -224,24 +219,17 @@ export function dispatchDesktopCommand(
   );
 }
 
-export function buildDesktopSettingsTabMessage(
-  tab: SettingsTarget,
-): DesktopSettingsTabMessage {
-  return { command: SETTINGS_VIEW_COMMANDS.SET_TAB, tab };
-}
-
 /**
- * Opens the Settings dialog before selecting an optional settings tab.
- * Main-process navigation has two consumers, so this helper keeps their
- * message ordering identical.
+ * Opens the Settings dialog, on `tab` when one is named. The renderer's
+ * dialog selects the tab, as it does for its own openings.
  */
 export function postDesktopSettingsView(
   postToRenderer: (message: unknown) => void,
   tab?: SettingsTarget,
 ): void {
-  postToRenderer({
+  const message: typeof DesktopOpenSettingsMessageSchema.Type = {
     command: DESKTOP_SHELL_COMMANDS.OPEN_SETTINGS,
-  });
-  if (tab == null) return;
-  postToRenderer(buildDesktopSettingsTabMessage(tab));
+    ...(tab && { tab }),
+  };
+  postToRenderer(message);
 }
