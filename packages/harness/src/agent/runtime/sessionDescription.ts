@@ -47,7 +47,7 @@ function cleanSessionDescription(text: string): string {
   return truncateWithEllipsis(cleaned, MAX_DESCRIPTION_LENGTH);
 }
 
-const SYSTEM_PROMPT = `Generate a short TeXRA session label from the agent name, description, and user's instruction. Use at most 10 words and no trailing period. Be specific but terse. Use no full sentences, meta-commentary, or quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Fixing TikZ arrow alignment").`;
+const SYSTEM_PROMPT = `Generate a short session label from the agent name, description, and user's instruction. Use at most 10 words and no trailing period. Be specific but terse. Use no full sentences, meta-commentary, or quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Fixing TikZ arrow alignment").`;
 
 /**
  * Build a user prompt for session description generation.

@@ -91,7 +91,7 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
   );
   if (decided.kind === 'unserved') {
     return yield* unavailable(
-      `${config.label} is served only through OpenRouter or GitHub Copilot, which TeXRA no longer supports. Choose another model.`,
+      `${config.label} is served only through OpenRouter or GitHub Copilot, which this build no longer supports. Choose another model.`,
     );
   }
   const served = servingBackend(config, decided);

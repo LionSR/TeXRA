@@ -144,12 +144,14 @@ const arxiv: Plugin = {
   },
 };
 
+const TEX_INSTRUCTIONS = `Find the project's TeX sources with relative paths (e.g., \`find . -name "*.tex"\`).\nFor math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.`;
+
 /**
  * Tools every host offers without setup that no dashboard card lists:
  * review annotations, the PDF viewer, the user-question dialog, and Loogle
  * search (network only, so not gated on the Lean 4 plugin's probe). Its
- * prompt section is the configured default bibliography, at every step of
- * every run.
+ * prompt section, at every step of every run, finds the TeX sources, says how
+ * replies write math, and names the configured default bibliography.
  */
 const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
   definePlugin<EditorHost>({
@@ -163,8 +165,8 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
     prompt: ({ config }) => {
       const bibPath = Settings.getConfig<string>(config, 'bib.defaultPath');
       return bibPath
-        ? `The default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
-        : '';
+        ? `${TEX_INSTRUCTIONS}\nThe default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
+        : TEX_INSTRUCTIONS;
     },
     // The editor's PDF viewer; the host's Comments UI, for the one host
     // that has one (elsewhere the tool fails naming the missing wiring).

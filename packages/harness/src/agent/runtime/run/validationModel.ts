@@ -113,7 +113,7 @@ function goldenTurn(
     return Effect.succeed(text('The golden chat so far.'));
   // The golden parent's session label: its `run.description`.
   if (
-    system.startsWith('Generate a short TeXRA session label') &&
+    system.startsWith('Generate a short session label') &&
     said.includes('<agent>golden_parent</agent>')
   )
     return Effect.succeed(text('Working through the golden parent task'));
