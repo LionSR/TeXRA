@@ -137,6 +137,14 @@ run read).
 const envFlag: (name: string, env?: Readonly<Record<string, string | undefined>> | undefined) => Effect<boolean, never, never>
 ```
 
+## envVar
+
+One variable; unset and `''` both read as undefined.
+
+```ts
+const envVar: (name: string) => Effect<string | undefined, never, never>
+```
+
 ## ExecResult
 
 ```ts

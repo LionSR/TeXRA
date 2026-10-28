@@ -863,7 +863,7 @@ place a cut between an effect and its result. One real kill covers that case: a
 process killed after its command's effect and before its result reports the
 command as outcome unknown and never reruns it automatically; the model may
 still issue a new command, which runs under I4
-(`src/test-kernel/controllers/session/goldenStore.vitest.ts:666`).
+(`src/test-kernel/controllers/session/goldenStore.vitest.ts:660`).
 
 ## 10. Conformance
 
@@ -905,7 +905,7 @@ These existing suites check the sections above.
 - **8 requests**: `src/test-kernel/support/crashConformance.ts:48-51`
 - **9 crash guarantees**:
   `src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts`,
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:636`
+  `src/test-kernel/controllers/session/goldenStore.vitest.ts:630`
 
 ## 11. Non-goals
 

@@ -140,6 +140,8 @@ export {
 export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 // Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
+// The canned model a package-validation build provides beneath the process.
+export { ValidationModel } from '@agent/runtime/modelAccess/routeDecision';
 export type { RouteCredential } from '@agent/runtime/modelAccess/credentials';
 // The models a host offers: each visible model's option, the enabled list and
 // its writer, run-model precedence, the reasoning policy, the helper model.

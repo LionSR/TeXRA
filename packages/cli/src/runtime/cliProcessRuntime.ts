@@ -62,6 +62,7 @@ import { workspaceTeams } from '@texra/shared/agentTeams';
 
 import { readCliVersion } from './cliContext';
 import { setCliLogRuntime } from './logSinks';
+import { validationModelLayer } from './validationModel';
 
 const NO_PLATFORM_APP_STATE =
   'A platform-less TeXRA CLI entry serves no application state: it runs without a platform and its storage root may be read-only.';
@@ -271,7 +272,7 @@ export function installCliProcessRuntime(
           }),
           minimumLogLevel: options?.minimumLogLevel ?? 'Info',
           workspace: options?.workspace,
-        }),
+        }).pipe(Layer.provide(validationModelLayer)),
       ),
     ),
   );

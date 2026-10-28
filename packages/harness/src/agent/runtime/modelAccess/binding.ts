@@ -8,7 +8,7 @@
  */
 import { hash } from 'node:crypto';
 
-import { Effect, type Scope } from 'effect';
+import { Effect, Option, type Scope } from 'effect';
 import {
   type ModelConfig,
   type ModelOrigin,
@@ -17,7 +17,6 @@ import {
 } from '@texra-ai/llm';
 import { bindModel as bindWireModel } from '@texra-ai/llm/node';
 
-import { validationModel } from '@agent/runtime/run/validationModel';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import {
   decideReasoning,
@@ -36,7 +35,7 @@ import type { ModelBackend } from '@shared/schemas';
 
 import { routeCredential, usageRouteOf } from './credentials';
 import { routePolicies, type CallFailure } from './failureInfo';
-import type { RouteDecision } from './routeDecision';
+import { ValidationModel, type RouteDecision } from './routeDecision';
 import type { BindRequest, BoundModel } from './ModelAccess';
 import type { HttpClient } from 'effect/http';
 
@@ -117,7 +116,14 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
   const { route, facts } = plan.decision;
   const protocol = PROTOCOL_BY_BACKEND[backend];
   if (protocol === 'validation') {
-    const bound = validationModel(requested);
+    const canned = yield* Effect.serviceOption(ValidationModel);
+    if (Option.isNone(canned)) {
+      return yield* new RouteUnavailable({
+        reason: 'unavailable',
+        message: `Model ${request.modelId} runs on the validation model, which this build does not carry.`,
+      });
+    }
+    const bound = canned.value.bind(requested);
     yield* reasoningOf(plan, requested);
     return {
       ...commonOf(plan),

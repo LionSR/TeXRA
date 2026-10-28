@@ -85,7 +85,7 @@ export { runsInWsl } from '@utils/system/wslDetect';
 // agent CLI starts from (no provider key but the one it authenticates
 // with), and the one a non-interactive git child starts from (no
 // helper-invoking key, no terminal prompt).
-export { envFlag, inheritedEnv } from '@utils/system/envFlags';
+export { envFlag, envVar, inheritedEnv } from '@utils/system/envFlags';
 export { makeMachineGitEnv } from '@utils/system/gitEnv';
 // The file reads `FileSystem` has no form for: crash-safe replace, existence
 // with a path under a file read as absent, text with a leading BOM kept and

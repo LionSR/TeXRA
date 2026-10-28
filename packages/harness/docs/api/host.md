@@ -2924,6 +2924,25 @@ class UsageLog extends Context.Service<
 type UsageLogEntry = typeof UsageLogEntrySchema.Type;
 ```
 
+## ValidationModel
+
+The canned model a package-validation build provides beneath the process
+layer, and whether a new run takes it. Absent, none does, and a run
+recorded on the validation route fails to bind.
+
+```ts
+class ValidationModel extends Context.Service<
+  ValidationModel,
+  {
+    readonly enabled: Effect.Effect<boolean>;
+    readonly bind: (config: ModelConfig) => {
+      readonly model: Model;
+      readonly origin: ModelOrigin;
+    };
+  }
+>()('@texra-ai/harness/ValidationModel')
+```
+
 ## ValueFamily
 
 One family of current values: its stored name, the schema its value

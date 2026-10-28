@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: the package-validation model is the CLI's.** The harness reads it
+  as the `ValidationModel` service (`@texra-ai/harness/host`), provided
+  beneath `processLayer`; absent, no run takes the validation route and one
+  recorded on it fails to bind. The stand-in that kept it out of every
+  bundle now applies to the CLI's alone.
 - **SDK: the harness adds no directories of its own to a command's PATH.**
   An app names them as `AgentPlatform.commandDirs` (or `processLayer`'s
   `commandDirs`), served as `CommandDirs`; `withExtendedPath` and

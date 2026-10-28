@@ -9,7 +9,6 @@
   "packages/harness/src/agent/runtime/ModelInvoker.ts": 817,
   "packages/harness/src/agent/runtime/ModelRetryGate.ts": 438,
   "packages/harness/src/agent/runtime/run/compaction.ts": 445,
-  "packages/harness/src/agent/runtime/run/validationModel.ts": 546,
   "packages/harness/src/agent/runtime/RunHistory.ts": 409,
   "packages/harness/src/agent/runtime/runRegistry.ts": 825,
   "packages/harness/src/agent/runtime/SessionHandle.ts": 405,

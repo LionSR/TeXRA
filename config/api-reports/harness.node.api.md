@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/node.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
 
-Exports: 44
+Exports: 45
 
 - `absentReason` — `const absentReason: (error: PlatformError) => boolean`
 - `canonicalizeWorkspacePath` — `function canonicalizeWorkspacePath: (workspacePath: string) => string`
@@ -12,6 +12,7 @@ Exports: 44
 - `effectDiagnosticsLayer` — `const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>`
 - `entryTypeIn` — `const entryTypeIn: (fs: FileSystem, target: string) => Effect<Type | undefined, PlatformError, never>`
 - `envFlag` — `const envFlag: (name: string, env?: Readonly<Record<string, string | undefined>> | undefined) => Effect<boolean, never, never>`
+- `envVar` — `const envVar: (name: string) => Effect<string | undefined, never, never>`
 - `ExecResult` — `type ExecResult = typeof ExecResultSchema.Type; ≡ { readonly exitCode: number; readonly noExitCode?: boolean | undefined; readonly outputLimitExceeded?: boolean | undefined; readonly stderr: string; readonly stdout: string; readonly success: boolean; readonly timedOut: boolean; }`
 - `executeCommand` — `const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<{ readonly exitCode: number; readonly noExitCode?: boolean | undefined; readonly outputLimitExceeded?: boolean | undefined; readonly stderr: string; readonly stdout: string; readonly success: boolean; readonly timedOut: boolean; }, never, ChildProcessSpawner>`
 - `ExecuteCommandBaseOptions` — `interface ExecuteCommandBaseOptions { readonly channel?: string; readonly env?: Record<string, string>; readonly timeout?: number; readonly cwd: string | undefined; readonly settings: SettingsStores | undefined; readonly onStdout?: (chunk: string) => void; readonly onStderr?: (chunk: string) => void; readonly buffer?: boolean; readonly maxBuffer?: number; readonly quiet?: boolean; readonly killProcessTree?: boolean; }`
