@@ -48,12 +48,15 @@ const NEVER_ENTERED = 'The run ended without entering the session.';
  * A run's exit as its handle reports it. A stop interrupts the run's fiber,
  * which re-raises the interruption once its `cancelled` end commits: the run
  * ended, and passing the interruption on would interrupt whoever reads it.
+ * A handle that `left` a run it joined keeps its own interruption: the run
+ * goes on without it.
  */
 const readerExit = (
   runId: RunId,
   exit: Exit.Exit<RunEndResult, RunFailure>,
+  left: boolean,
 ): Exit.Exit<RunEndResult, RunFailure> =>
-  Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)
+  !left && Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)
     ? Exit.succeed(buildTerminalRunEndResult(RUN_OUTCOME.CANCELLED, runId))
     : exit;
 
@@ -197,6 +200,9 @@ export function handOver(
     const trace = yield* traceHandover(runId);
     const unlisten = session.trace.listen(runId, trace.offer);
     const admitted = yield* Deferred.make<CommitOrdinal, RunFailure>();
+    let joined = false;
+    // A joiner's `interrupt` ends its own wait, not the run it joined.
+    let left = false;
     // Settling a run that was admitted changes nothing here; one that never
     // was fails its admission with its own failure, its result's error, or
     // the launcher's broken contract.
@@ -204,7 +210,7 @@ export function handOver(
       exit: Exit.Exit<RunEndResult, RunFailure>,
     ): Effect.Effect<void> =>
       Effect.sync(unlisten).pipe(
-        Effect.andThen(trace.settle(readerExit(runId, exit))),
+        Effect.andThen(trace.settle(readerExit(runId, exit, left))),
         Effect.andThen(
           Effect.suspend(() => {
             if (Exit.isFailure(exit))
@@ -218,7 +224,6 @@ export function handOver(
           }),
         ),
       );
-    let joined = false;
     // The launch and the drain are the run's, and until the caller holds
     // the `Run` that names them they are nobody's: whatever ends this
     // handoff short of that ends them too. So the handoff is
@@ -305,16 +310,16 @@ export function handOver(
         return {
           runId,
           result: Fiber.await(runFiber).pipe(
-            Effect.flatMap((exit) => readerExit(runId, exit)),
+            Effect.flatMap((exit) => readerExit(runId, exit, left)),
             Effect.flatMap((value) => Effect.as(Fiber.join(drain), value)),
           ),
           view,
           events: trace.events,
-          interrupt: Effect.suspend(() =>
-            !joined && interruptLaunch()
-              ? Effect.void
-              : Fiber.interrupt(runFiber),
-          ),
+          interrupt: Effect.suspend(() => {
+            if (!joined && interruptLaunch()) return Effect.void;
+            left = joined;
+            return Fiber.interrupt(runFiber);
+          }),
         };
       }),
     ).pipe(
