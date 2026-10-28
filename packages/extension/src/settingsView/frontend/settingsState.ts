@@ -9,7 +9,8 @@
  * only by the `settingsViewHandlers` registry (see `messageDispatcher.ts`)
  * in response to backend SETTINGS_VIEW_COMMANDS messages — the
  * backend configuration is the actual source of truth, this file is a pure
- * receiver.
+ * receiver. The one exception is the page shown, which the user's navigation
+ * also selects, through the same `selectSettingsPage`.
  *
  * Singleton scope: only one Settings view per webview/page. If we ever need
  * multiple independent settings instances on the same page, this file must be
@@ -35,7 +36,6 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
-  type AgentModePreset,
   type SkillDisplayIssue,
   type SkillDisplayItem,
   type AgentScanIssue,
@@ -54,6 +54,7 @@ import {
   type AgentSelectionItem,
   type ModelSelectionItem,
   type PRSubscriptionEntry,
+  type SettingsTeamPreset,
   type SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
@@ -149,6 +150,17 @@ export const selectedSections = trackedSignal<{
   readonly [P in SettingsTabPanelName]?: SettingsSectionName<P>;
 }>(() => ({}));
 
+/** Show a page, on `section` when one is named, else where it was left.
+ *  The host's tab push and the user's click both land here. */
+export function selectSettingsPage(
+  page: SettingsTabPanelName,
+  section?: SettingsSectionName,
+): void {
+  selectedPanel.set(page);
+  if (section)
+    selectedSections.set({ ...selectedSections.get(), [page]: section });
+}
+
 // ---------------------------------------------------------------------------
 // Memory state
 // ---------------------------------------------------------------------------
@@ -191,7 +203,7 @@ export const customAgentScanIssues = trackedSignal<readonly AgentScanIssue[]>(
 // ---------------------------------------------------------------------------
 // Agent teams state
 // ---------------------------------------------------------------------------
-export const customPresets = trackedSignal<readonly AgentModePreset[]>(
+export const teamPresets = trackedSignal<readonly SettingsTeamPreset[]>(
   () => [],
 );
 export const orchestratorAgents = trackedSignal<readonly string[]>(() => []);

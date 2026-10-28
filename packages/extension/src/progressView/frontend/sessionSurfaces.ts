@@ -95,6 +95,11 @@ export interface SessionSurfaces {
   submit(key: string): void;
   /** Fires after any session's view, surface, or host changed. */
   onChange(listener: () => void): () => void;
+  /** Record the run the `shown` session shows as seen after every change
+   *  and when the window regains focus, but only while the window has
+   *  focus: a run finishing behind another app is news when the user comes
+   *  back. Returns the unsubscribe. */
+  followSeen(shown: () => string): () => void;
   dispose(): void;
 }
 
@@ -586,6 +591,20 @@ export function createSessionSurfaces(options: {
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
+      };
+    },
+    followSeen(shown) {
+      const markSeen = () => {
+        const entry = held.get(shown());
+        if (entry && document.hasFocus()) {
+          act(entry, { kind: 'seen', view: entry.view$.get() });
+        }
+      };
+      listeners.add(markSeen);
+      window.addEventListener('focus', markSeen);
+      return () => {
+        listeners.delete(markSeen);
+        window.removeEventListener('focus', markSeen);
       };
     },
     dispose() {

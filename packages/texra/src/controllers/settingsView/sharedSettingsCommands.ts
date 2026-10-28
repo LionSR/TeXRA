@@ -63,6 +63,7 @@ import {
 import { buildSettingsSnapshotMessage } from '@texra/shared/settingsView/handlers/settingsSnapshot';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 import {
+  DERIVED_SETTINGS_SNAPSHOTS,
   type DerivedSettingsSnapshot,
   type SettingsViewInboundMessage,
   type SettingsViewOutboundMessage,
@@ -323,17 +324,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     );
 
   const postAll = allSettledVoid<Error, ProcessServices | StorageFs>([
-    ...(
-      [
-        'memory',
-        'agents',
-        'git-author',
-        'approval',
-        'skills',
-        'telemetry',
-        'latex',
-      ] as const
-    ).map(postSnapshot),
+    ...DERIVED_SETTINGS_SNAPSHOTS.map(postSnapshot),
     postSkills,
     memoryPage.postMemoryData,
     postProfile,
