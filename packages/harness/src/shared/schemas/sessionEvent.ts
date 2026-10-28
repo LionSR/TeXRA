@@ -53,7 +53,6 @@ import {
 import { ContextBlobSchema, ToolsOfferedPayloadSchema } from './offeredTools';
 import { HookOutcomePayloadSchema } from './hookOutcome';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
-import { ConversationProgressSchema } from './runState';
 import { TranscriptEventSchema } from './traceEvent';
 
 /** Per-aggregate append order; `run.start` is seq 1 of its run. Dense from
@@ -252,7 +251,6 @@ const DisplayRowDraftSchema = Schema.Union([
    * terminal phase from it and from nothing else.
    */
   durable('run.end', RunEndRowSchema.fields),
-  durable('conversation.progress', { progress: ConversationProgressSchema }),
   durable('run.fact', { fact: RunFactSchema }),
   /**
    * A child driven by the child loop, which has no run history or rounds, parks

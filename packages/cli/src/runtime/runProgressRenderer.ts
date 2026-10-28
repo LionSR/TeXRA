@@ -38,6 +38,15 @@ interface RunProgressSession {
   readonly view: Pick<LocalSession['view'], 'changes'>;
 }
 
+/** The tool calls `run` has finished: its transcript's settled tool cards,
+ *  which the view holds while some port subscribes the run (a launched
+ *  run's own handle does, as does the chat for every run it lists). */
+export function finishedToolCalls(run: RunView): number {
+  return run.transcript.rows.filter(
+    (row) => row.kind === 'tool' && !row.model.isInProgress,
+  ).length;
+}
+
 export interface RunProgressRenderer {
   /** Follow the session's view until the scope closes, describing `runId`. */
   attach(
@@ -268,7 +277,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       );
       parts.push(formatActiveChildren(children, descriptionColumns)!);
     }
-    const toolCallCount = root.conversationProgress.toolCallCount;
+    const toolCallCount = finishedToolCalls(root);
     if (toolCallCount && !nameOnlySubagents) {
       parts.push(`tools: ${toolCallCount}`);
     }
