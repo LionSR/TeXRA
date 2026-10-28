@@ -19,8 +19,6 @@ import {
 import { getRunRecords } from '@agent/storage/runRecords';
 import {
   AgentConfigSchema,
-  type DispatchFacts,
-  qualifyAggregateId,
   ToolError,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -93,31 +91,10 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   // one whose call opened the card the script's start names (a provider
   // may reuse a call id, never a card), or, for a call a script of the
   // conversation made, the response that issued that script.
-  const rows = yield* run.session.log.rows(qualifyAggregateId('run', parent), [
-    'model.message',
-    'script.call',
-  ]);
-  const issues = (
-    row: (typeof rows)[number],
-    ids: (call: DispatchFacts) => boolean,
-  ) =>
-    row.type === 'model.message' &&
-    row.payload.kind === 'response' &&
-    row.payload.calls.some(ids);
-  const at = rows.findIndex(
-    (row) =>
-      issues(row, ({ logId }) => logId === card) ||
-      (row.type === 'script.call' && row.payload.logId === card),
+  const conversation = yield* run.session.runHistory.load(parent);
+  const issued = Object.values(conversation?.calls ?? {}).find(
+    ({ logId }) => logId === card,
   );
-  const owner = rows[at];
-  const issued =
-    owner?.type === 'script.call'
-      ? rows
-          .slice(0, at)
-          .findLast((row) =>
-            issues(row, ({ callId }) => callId === owner.payload.scriptCallId),
-          )
-      : owner;
   if (config === null || issued === undefined)
     return yield* Effect.fail(missing);
   return {

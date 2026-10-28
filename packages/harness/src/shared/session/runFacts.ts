@@ -10,6 +10,7 @@
  */
 import {
   type AggregateId,
+  type DispatchFacts,
   type FollowUpContent,
   type JsonValue,
   qualifyAggregateId,
@@ -21,6 +22,7 @@ import {
 } from '@shared/schemas';
 
 import {
+  byId,
   isMessage,
   isSharedRunRow,
   isStaleNotice,
@@ -54,6 +56,16 @@ export type RunFacts = {
   readonly forceFinalTool: boolean;
   /** The latest response's answer was finalized for display. */
   readonly answerFinalized: boolean;
+  /** Each call a response issued, and each call a script of it issued, by
+   *  `responseId/callId`: its tool and card, and the response that issued
+   *  it (a script's call: its script's) with that row's commit and seq. */
+  readonly calls: Readonly<
+    Record<
+      string,
+      Pick<DispatchFacts, 'toolName' | 'logId'> &
+        Pick<SessionEvent, 'commit' | 'seq'> & { readonly responseId: string }
+    >
+  >;
 };
 
 /** A run's facts before any row. */
@@ -66,6 +78,7 @@ export const NO_FACTS: RunFacts = {
   finalToolTurn: null,
   forceFinalTool: false,
   answerFinalized: false,
+  calls: byId([]),
 };
 
 /** `input` with what a row recorded: each field it names replaces the
