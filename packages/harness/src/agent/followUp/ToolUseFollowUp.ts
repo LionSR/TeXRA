@@ -57,6 +57,9 @@ interface SubmitFollowUpOptions extends Omit<RunInboxSendOptions, 'hold'> {
    *  message the run reads when its current turn ends, not at the turn's
    *  next model request. */
   readonly hold?: 'generation' | 'turn';
+  /** The message's media, read in the run's send lane once the message is
+   *  accepted, so a slow read never lets a later message commit first. */
+  readonly attach?: Effect.Effect<Pick<InboxItem, 'media' | 'blobs'>, Error>;
 }
 
 const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
@@ -293,7 +296,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   item: InboxItem,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error> {
-  const { session, hold, fromParent } = options;
+  const { session, hold, fromParent, attach } = options;
   // From the checks to the row's commit, one send to a run at a time, so a
   // run's messages commit in call order; the wake runs after, so a send that
   // resumes the run does not hold later sends for the resumed turn.
@@ -321,7 +324,12 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     // stop: its row lands after the run's end, which the wake reads.
     if (item.from.kind === 'user' && live?.stopReason !== undefined)
       yield* live.drained;
-    return yield* session.followUps.send(runId, item, { hold, fromParent });
+    const media = attach === undefined ? {} : yield* attach;
+    return yield* session.followUps.send(
+      runId,
+      { ...item, ...media },
+      { hold, fromParent },
+    );
   }).pipe(withPerKeyLane(session.followUps.sendLanes, runId));
   if ('status' in sent) return sent;
   // Another process holds the run, the sender is not its parent, its input

@@ -223,14 +223,13 @@ const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
   );
 
 /**
- * The one way in for a surface's decision (one run model, 3.7): a pending
- * request's `request.decided` row, which the waiting run reads from the
- * tail. {@link decide} re-reads the committed rows in its transaction, so of
- * two surfaces deciding at once one records and the other hears `settled`.
- *
- * The plugin owning the request's kind records its side first (an
- * inquiry's answer, on its cross-project thread), outside the run's
- * transaction, so the whole decision takes the request's lane.
+ * The one way in for a surface's decision: a pending request's
+ * `request.decided` row, which the waiting run reads from the tail.
+ * {@link decide} re-reads the committed rows in its transaction, so of two
+ * surfaces deciding at once one records and the other hears `settled`. The
+ * plugin owning the request's kind records its side first (an inquiry's
+ * answer, on its cross-project thread), outside the run's transaction, so
+ * the whole decision takes the request's lane.
  */
 const decideRequest = (
   deps: RequestDeps,
@@ -395,10 +394,7 @@ const handle = (
         { id: req.runId, uid: admitted.uid },
         req.at ?? null,
       ).pipe(
-        Effect.catchIf(
-          (error): error is Error => !(error instanceof Rejected),
-          (error) => Effect.die(error),
-        ),
+        Effect.catchIf((e): e is Error => !(e instanceof Rejected), Effect.die),
         Effect.map((runId): Outcome => ({ kind: 'forked', runId })),
       );
     case 'request.decide':
@@ -433,19 +429,23 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
     req: RuntimeRequest,
   ) {
     // A message skips `admit`: `submitFollowUp` refuses under the run's claim
-    // and keeps its run's sends in order, so nothing may wait before it.
+    // and keeps its run's sends in order, its media read included.
     if (req.kind === 'followUp.send') {
-      const media = attachedMedia(req.media ?? [], deps.session().roots);
+      const attach = Effect.provideContext(
+        attachedMedia(req.media ?? [], deps.session().roots),
+        mediaReadOf(deps.services),
+      );
       const result = yield* submitFollowUp(
         req.runId,
         {
           text: req.text,
           from: { kind: 'user' },
           ...(req.displayText == null ? {} : { displayText: req.displayText }),
-          ...(yield* Effect.provideContext(media, mediaReadOf(deps.services))),
         },
-        { session: deps.session(), hold: req.holdUntil ?? undefined },
-      ).pipe(Effect.orDie);
+        { session: deps.session(), hold: req.holdUntil ?? undefined, attach },
+      ).pipe(
+        Effect.catchIf((e): e is Error => !(e instanceof Rejected), Effect.die),
+      );
       if (result.status !== 'failed')
         return { kind: 'followUp' as const, ...result };
       return yield* new Unavailable({
