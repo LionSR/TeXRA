@@ -147,8 +147,7 @@ const executeInBand = Effect.fn('executeInBand')(
       runId,
       parentRunId: options.parentRunId,
       agentName: config.agent,
-      // The parent is blocked awaiting this child, so it rides the parent's
-      // budget slot (child-run budget design note).
+      // Its parent is blocked awaiting it, so it rides the parent's slot.
       awaited: true,
       ...(options.notify !== undefined && { notify: options.notify }),
       strategy: createNativeSubagentStrategy({
@@ -156,23 +155,18 @@ const executeInBand = Effect.fn('executeInBand')(
         ...(launch.kind === 'fresh'
           ? {
               definition: launch.definition,
-              // Registered with its opening, which the child's run commits
-              // as it starts.
+              // Registered with its opening, which its run commits.
               registration: {
                 identity: { kind: 'agent', agent: config.agent },
                 parentRunId: options.parentRunId,
-                ...(options.parentCall !== undefined && {
-                  parentCall: options.parentCall,
-                }),
-                ...(options.grants !== undefined && { grants: options.grants }),
+                parentCall: options.parentCall,
+                grants: options.grants,
               },
             }
           : // Awaited: it ends after one cycle, resumed too.
             {
               resume: {
                 config,
-                // Its rows' parent, read as its run starts, under the claim
-                // the child loop holds by then.
                 parent: persistedParentRunId(options.session, runId),
                 stopAfterCycle: true,
               },
