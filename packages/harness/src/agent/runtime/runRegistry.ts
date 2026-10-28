@@ -355,11 +355,12 @@ export class RunRegistry implements RunsShape {
       const entry = this.entryFor(runId);
       const { activation } = entry;
       // A deciding resume hands its activation to the next launch here (its
-      // generation, or a parent's reattach); another keeps it, refusing this.
+      // generation, or a parent's reattach), never to a second resume; any
+      // other launch keeps it, refusing this one.
       const own =
         activation === undefined
           ? { unbornParent: launchParent, stopped: false, attempt }
-          : activation.deciding && activation;
+          : (!attempt && activation.deciding && activation) || undefined;
       if (own) own.deciding = undefined;
       entry.activation ??= own;
       const body = attempt ? program : this.admit(runId, program, false);

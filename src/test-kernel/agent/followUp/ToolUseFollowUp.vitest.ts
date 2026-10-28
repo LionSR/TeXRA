@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Semaphore } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Scheduler, Semaphore } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import * as resumability from '@agent/storage/resumability';
@@ -289,37 +289,67 @@ describe('wakeRun', () => {
   );
 });
 
+describe('wakeRun races', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.live(
+    'two wakes whose fibers interleave open one resume, the second joining it',
+    () =>
+      Effect.gen(function* () {
+        const runId = generateRunId();
+        const session = fakeSession('idle');
+        const barrier = createDeferred<boolean>();
+        const decide = vi.fn(() => Effect.promise(() => barrier.promise));
+
+        const wakes = [];
+        for (const _ of [1, 2])
+          wakes.push(
+            yield* Effect.forkChild(
+              wakeRun(runId, session).pipe(withResumePort(decide)),
+            ),
+          );
+        for (const wake of wakes) yield* Fiber.join(wake);
+        barrier.resolve(false);
+
+        expect(decide).toHaveBeenCalledTimes(1);
+      }).pipe(Effect.provideService(Scheduler.MaxOpsBeforeYield, 3)),
+  );
+});
+
 describe('submitFollowUp', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it.effect('wakes a run once and orders concurrent submissions', () =>
-    Effect.gen(function* () {
-      const runId = generateRunId();
-      const session = fakeSession('idle');
-      const barrier = createDeferred<boolean>();
-      const tryResumeRun = vi.fn(() => Effect.promise(() => barrier.promise));
+  it.live(
+    'wakes a run once and orders concurrent submissions, their fibers yielding every few steps',
+    () =>
+      Effect.gen(function* () {
+        const runId = generateRunId();
+        const session = fakeSession('idle');
+        const barrier = createDeferred<boolean>();
+        const tryResumeRun = vi.fn(() => Effect.promise(() => barrier.promise));
 
-      const fibers = [];
-      for (const text of ['one', 'two', 'three']) {
-        fibers.push(
-          yield* Effect.forkChild(
-            submitFollowUp(runId, user(text), { session }).pipe(
-              withResumePort(tryResumeRun),
+        const fibers = [];
+        for (const text of ['one', 'two', 'three']) {
+          fibers.push(
+            yield* Effect.forkChild(
+              submitFollowUp(runId, user(text), { session }).pipe(
+                withResumePort(tryResumeRun),
+              ),
             ),
-          ),
-        );
-      }
+          );
+        }
+        // A submission answers once its wake started or joined the resume.
+        for (const fiber of fibers)
+          expect(yield* Fiber.join(fiber)).toEqual({ status: 'queued' });
+        expect(recorded.queued(runId)).toEqual(['one', 'two', 'three']);
 
-      yield* settle;
-      expect(recorded.queued(runId)).toEqual(['one', 'two', 'three']);
-
-      barrier.resolve(true);
-      for (const fiber of fibers)
-        expect(yield* Fiber.join(fiber)).toEqual({ status: 'queued' });
-      expect(tryResumeRun).toHaveBeenCalledTimes(1);
-    }),
+        barrier.resolve(true);
+        expect(tryResumeRun).toHaveBeenCalledTimes(1);
+      }).pipe(Effect.provideService(Scheduler.MaxOpsBeforeYield, 3)),
   );
 
   it.effect(

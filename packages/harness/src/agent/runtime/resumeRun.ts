@@ -113,18 +113,16 @@ export const resumeRun = (
   Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const runs = registryOf(options.session.runs);
-      const found = runs.attemptOf(runId);
-      if (found === undefined && runs.get(runId)?.launched === true)
-        return REFUSED;
-      const attempt = found ?? (yield* openResume(runId, options, false));
+      const opened = yield* openResume(runId, options, false);
+      if (opened === undefined) return REFUSED;
+      const { attempt, joined } = opened;
       attempt.waiters += 1;
       const { onAdmitted } = options;
       const answer = Effect.gen(function* () {
         const hook = yield* Effect.forkChild(
           Effect.flatMap(
             Deferred.await(attempt.admitted),
-            (commit) =>
-              onAdmitted?.(runId, commit, found !== undefined) ?? Effect.void,
+            (commit) => onAdmitted?.(runId, commit, joined) ?? Effect.void,
           ),
         );
         // A caller that leaves takes its hook with it.

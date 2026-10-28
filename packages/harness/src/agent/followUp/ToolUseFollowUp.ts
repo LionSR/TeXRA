@@ -145,25 +145,34 @@ export const wakeRun = (
   session: SessionHandle,
 ): Effect.Effect<Effect.Effect<void>> =>
   Effect.gen(function* () {
-    const runs = registryOf(session.runs);
-    const found = runs.attemptOf(runId);
-    const here = runs.get(runId);
-    if (found === undefined && (here?.live || here?.launched))
-      return Effect.void;
     if (session.view.run(runId) === undefined) return Effect.void;
-    const attempt = found ?? (yield* openResume(runId, { session }, true));
+    const opened = yield* openResume(runId, { session }, true);
+    if (opened === undefined) return Effect.void;
+    const { attempt } = opened;
     attempt.handedOff = true;
     // Observation only: interruptible even where the caller is masked.
     return Effect.asVoid(Effect.interruptible(Effect.exit(attempt.answer)));
   });
 
-/** Open `runId`'s resume as its activation, deciding on the session's fork. */
+/**
+ * Join `runId`'s resume in flight here, or open one as its activation,
+ * deciding on the session's fork. The registry opens one per activation
+ * (`RunRegistry.start`): a caller that lost the race joins the winner.
+ * Undefined while a launch that is no resume holds the run.
+ */
 export const openResume = (
   runId: RunId,
   options: ResumeRunOptions,
   wake: boolean,
-): Effect.Effect<RunAttempt> =>
+): Effect.Effect<
+  { readonly attempt: RunAttempt; readonly joined: boolean } | undefined
+> =>
   Effect.gen(function* () {
+    const runs = registryOf(options.session.runs);
+    const found = runs.attemptOf(runId);
+    if (found) return { attempt: found, joined: true };
+    const here = runs.get(runId);
+    if (here?.live || here?.launched) return undefined;
     const done = yield* Deferred.make<ResumeAttempt, Error>();
     const attempt: RunAttempt = {
       answer: Deferred.await(done),
@@ -172,16 +181,17 @@ export const openResume = (
       handedOff: false,
     };
     const { session } = options;
-    const runs = registryOf(session.runs);
+    let ran = false;
     // A stop recorded before this fiber ran had no fiber to interrupt: the
     // decision reads it first, under its exit's handler.
-    const decided = Effect.suspend(() =>
-      session.runs.get(runId)?.stopReason === undefined
+    const decided = Effect.suspend(() => {
+      ran = true;
+      return session.runs.get(runId)?.stopReason === undefined
         ? runs.programs.resume(runId, options, (commit) =>
             Deferred.succeed(attempt.admitted, commit),
           )
-        : Effect.interrupt,
-    ).pipe(Effect.onExit(stoppedUnadmitted(session, runId, attempt)));
+        : Effect.interrupt;
+    }).pipe(Effect.onExit(stoppedUnadmitted(session, runId, attempt)));
     const fiber = yield* runs.start(
       runId,
       wake ? woken(runId, session, decided) : decided,
@@ -189,8 +199,11 @@ export const openResume = (
       null,
       attempt,
     );
+    // Not opened (it has not run and is not the activation's): join.
+    if (!ran && runs.attemptOf(runId) !== attempt)
+      return yield* openResume(runId, options, wake);
     fiber.addObserver((exit) => Deferred.doneUnsafe(done, exit));
-    return attempt;
+    return { attempt, joined: false };
   });
 
 /** A user's stop that reached the resume before it admitted the run ends
