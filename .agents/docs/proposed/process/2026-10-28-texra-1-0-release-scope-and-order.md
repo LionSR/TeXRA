@@ -393,12 +393,15 @@ same person's.
 | 2   | R11: rows evolve additively and the golden store is the freeze (delete the upcaster machinery), or keep Q2 and merge #14350.                                    | This note; #14350                   |
 | 3   | R13: collapse the five `ExhaustionReason` literals before the freeze, or never.                                                                                 | This note; the single-owner session |
 | 4   | Take #14353, #14354 and #14355 out of draft, or close them. All three are compatible with this plan.                                                            | The three Codex drafts              |
-| 5   | Review and merge #14340 and #14343 (green, mergeable, waiting since 01:59).                                                                                     | The triage session                  |
-| 6   | Review #14356 (`TraceUnavailable` removed; any reader of `run.events` is served).                                                                               | The design-philosophy session       |
-| 7   | Let the tech-debt session open its PRs, D4 first as the shape PR.                                                                                               | The tech-debt session               |
-| 8   | The dead-code session asks whether to rebase onto `24b9c3e` and re-run its checks.                                                                              | The dead-code session               |
-| 9   | The LLM-jargon session asks whether to delete the cross-process "held result" protocol or keep it.                                                              | The LLM-jargon session              |
-| 10  | The Effect-modernization session asks whether to open a PR for wave two and whether to revert the `Redacted` keys in the three subscription-usage adapters.     | The Effect-modernization session    |
+| 5   | Review #14356 (`TraceUnavailable` removed; any reader of `run.events` is served).                                                                               | The design-philosophy session       |
+| 6   | Let the tech-debt session open its PRs, D4 first as the shape PR.                                                                                               | The tech-debt session               |
+| 7   | The dead-code session asks whether to rebase onto `24b9c3e` and re-run its checks.                                                                              | The dead-code session               |
+| 8   | The LLM-jargon session asks whether to delete the cross-process "held result" protocol or keep it.                                                              | The LLM-jargon session              |
+| 9   | The Effect-modernization session asks whether to open a PR for wave two and whether to revert the `Redacted` keys in the three subscription-usage adapters.     | The Effect-modernization session    |
+
+Cleared since the queue was written: #14340, #14343 and #14348 merged
+(`main` at `2874076`); #14351 merges on green CI. None of the four changes a
+row.
 
 ## Freeze and release
 
