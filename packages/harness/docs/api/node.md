@@ -260,6 +260,19 @@ class GlobalDatabase extends Context.Service<
 >()('@texra-ai/harness/session/GlobalDatabase')
 ```
 
+## homeDirectory
+
+The user's home directory, or `undefined` where none resolves.
+`os.homedir()` throws a SystemError (UV_ENOENT) where it cannot be
+determined (a uid with no passwd entry and no `HOME`: containers, CI, some
+remote setups), and can return an empty string. Every file the caller would
+read under the home directory is then skipped, so the failure is logged at
+warn rather than read as "no such file".
+
+```ts
+const homeDirectory: Effect.Effect<string | undefined>
+```
+
 ## inheritedEnv
 
 The environment a child process the harness spawns starts from: this
