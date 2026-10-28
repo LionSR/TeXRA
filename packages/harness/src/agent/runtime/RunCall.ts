@@ -30,7 +30,6 @@ import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   ToolError,
-  type AgentDelegationScope,
   type PermissionPayload,
   type ToolResult,
   type ToolDefinition,
@@ -142,8 +141,8 @@ export interface ScriptScope extends ScriptSource {
 /**
  * The rest of what a plugin's tool reads of its run (`ToolRun`, whose id
  * the core declares): exactly the fields the app's tools read. Its policy,
- * configuration, model, delegation scope, scope (a tool that starts
- * something the run should stop registers that stop there), opening,
+ * configuration (which holds its delegation scope), model, scope (a tool that
+ * starts something the run should stop registers that stop there), opening,
  * trace and stage (what a plugin's own stages nest under); and its run
  * files, which hold what the run read (`fileService.readFiles`). Never its
  * session: a plugin reaches the session's runs through `ChildRuns`, and
@@ -155,7 +154,6 @@ declare module '../core/tools/ToolTypes.js' {
     readonly toolPolicy: ToolPolicy;
     readonly config: AgentConfig;
     readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
-    readonly delegationAgentScope?: AgentDelegationScope | null;
     readonly scope: Scope.Scope;
     readonly opening: TemplateOpening | null;
     readonly logger: AgentTrace;

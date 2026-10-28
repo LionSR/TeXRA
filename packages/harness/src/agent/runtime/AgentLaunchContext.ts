@@ -1,6 +1,6 @@
 import { Cause, Effect, Exit, FileSystem, Schema, Scope } from 'effect';
 
-import { type ModelConfig, ModelProvider, selectModel } from '@texra-ai/llm';
+import { ModelProvider, selectModel } from '@texra-ai/llm';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { agentEntryOf } from '@agent/index/agentYamlScanner';
 import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
@@ -40,41 +40,13 @@ import { ToolRegistry } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { declaredToolNames } from './agentToolResolution';
-import type { AgentRunShape } from './run/AgentRun';
+import type { AgentRunShape, RunLaunch } from './run/AgentRun';
 import type { SessionHandle } from './SessionHandle';
 import type { SessionHostInteractions } from './HostInteractions';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
-
-/**
- * The launch facts carried by {@link AgentRunShape}. The run narrows the
- * persona to its resolved tool list; every other fact reaches it unchanged.
- */
-type LaunchResolvedRunFacts = Pick<
-  AgentRunShape,
-  | 'runId'
-  | 'session'
-  | 'workingDirectory'
-  | 'delegationAgentScope'
-  | 'config'
-  | 'persona'
-  | 'logger'
-  | 'parentStage'
-  | 'toolPolicy'
-  | 'stores'
-  | 'opening'
-  | 'entry'
->;
-
-export interface AgentLaunchContext extends LaunchResolvedRunFacts {
-  /** The launch model's registry config, which `AgentRun` binds (or a
-   *  resumed run's snapshot's); a mid-run switch rebinds there. */
-  readonly modelConfig: ModelConfig;
-  /** Description from the exact registry entry selected for this launch. */
-  readonly resolvedAgentDescription?: string;
-}
 
 interface AgentLaunchInput {
   definition: PreparedAgentDefinition;
@@ -310,11 +282,11 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
   function* (
     input: AgentLaunchInput,
   ): Effect.fn.Return<
-    AgentLaunchContext,
+    RunLaunch,
     Error,
     AppState | FileSystem.FileSystem | Scope.Scope
   > {
-    const { config, persona, agentEntry, modelConfig } = input.definition;
+    const { config, persona, modelConfig, stopAfterCycle } = input.definition;
     // The run's working directory is decided here, once: absolute or absent.
     // Every tool call of the run carries it as `ToolContext.env.workingDirectory`
     // and trusts it rather than re-validating.
@@ -374,21 +346,13 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
             },
           );
 
-    const context: AgentLaunchContext = {
+    return {
       runId,
       session,
       workingDirectory,
-      delegationAgentScope: config.delegationAgentScope,
       config,
-      resolvedAgentDescription: agentEntry.description,
       persona,
-      modelConfig,
-      toolPolicy: Object.freeze({
-        stopAfterCycle: input.definition.stopAfterCycle,
-      }),
-      // The session's own setting slots, so routing and the provider
-      // switches answer for this run's workspace.
-      stores: session.roots,
+      toolPolicy: { stopAfterCycle },
       logger: agentLogger,
       parentStage,
       opening,
@@ -399,10 +363,5 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           : undefined,
       },
     };
-    // Frozen at the run's one real construction site: a run's identity, its
-    // owning session, and the rest of what the launch resolved must not change
-    // under the loop that reads them, and `readonly` alone stops only the
-    // callers that kept their types.
-    return Object.freeze(context);
   },
 );

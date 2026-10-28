@@ -28,7 +28,7 @@ import type { AgentRunServices } from './runRegistry';
 import type { ChildRunTurns } from './childRunLoop';
 import type { TransactionPart } from './childTurnResult';
 import type { SessionHandle } from './SessionHandle';
-import type { AgentLaunchContext } from './AgentLaunchContext';
+import type { RunLaunch } from './run/AgentRun';
 
 const CHANNEL = 'agentRunLifecycle';
 
@@ -207,7 +207,7 @@ function withResolvedOutcome(
  * agent run (registration, status accounting, error surfacing, cleanup).
  */
 export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
-  ctx: AgentLaunchContext,
+  ctx: RunLaunch,
   runner: () => Effect.Effect<RunEndResult, Error, R>,
   options?: RunLifecycleOptions,
 ): Effect.fn.Return<RunEndResult, Error, R | AgentRunServices> {

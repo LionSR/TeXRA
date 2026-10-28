@@ -109,7 +109,7 @@ export function executeAgent(
   return Effect.gen(function* () {
     // Done once the run exists: its description is a row of it.
     const opened = yield* Deferred.make<void>();
-    const ctx = yield* buildAgentLaunchContext({
+    const launch = yield* buildAgentLaunchContext({
       definition,
       runId,
       registration: options.registration,
@@ -120,7 +120,7 @@ export function executeAgent(
         ),
       session: options.session,
     });
-    const { config, session } = ctx;
+    const { config, session } = launch;
     // A failed run arrives as a FAILED result carrying its structured
     // error, so there is nothing to unwrap here; a task's result carries
     // its children's spend.
@@ -134,7 +134,8 @@ export function executeAgent(
       Effect.provide(
         modelInvokerLayer().pipe(
           Layer.provideMerge(
-            agentRunLayer(ctx, {
+            agentRunLayer(launch, {
+              modelConfig: definition.modelConfig,
               tools: options.tools,
               callbacks: { onProgress: options.onProgress },
             }),
@@ -148,7 +149,7 @@ export function executeAgent(
       onRun: options.onRun,
       finishLastTurn: options.turns?.finishLastTurn,
     };
-    if (resume) return yield* runWithLifecycle(ctx, () => loop, lifecycle);
+    if (resume) return yield* runWithLifecycle(launch, () => loop, lifecycle);
 
     // Start description generation concurrently with the run, and settle
     // it before the run ends (`settleDescriptionOnExit`), so the metadata
@@ -161,7 +162,7 @@ export function executeAgent(
           generateSessionDescription(
             runId,
             config,
-            ctx.resolvedAgentDescription,
+            definition.agentEntry.description,
             session,
           ),
         ),
@@ -170,7 +171,7 @@ export function executeAgent(
     // The backstop wait is `ensuring`, not a generator `finally`: the driver
     // skips a `finally` after a failed `yield*`, ending the run early.
     return yield* runWithLifecycle(
-      ctx,
+      launch,
       () =>
         Effect.gen(function* () {
           // The run directory is created by the first write into it.
@@ -187,7 +188,7 @@ export function executeAgent(
           );
           // Subagents don't need to force-open the progress board or show notifications;
           // the orchestrator's run is already visible.
-          if (ctx.entry.parent === null) {
+          if (launch.entry.parent === null) {
             yield* session.interactions.emit(
               'requestEnsureProgressView',
               {

@@ -1923,8 +1923,8 @@ interface ToolPathResolution extends WorkspacePathResolution {
 Immutable per-run tool policy, resolved by the launch and read from the
 run's `AgentRun` service.
 
-A frozen value the loop takes from context, with no ambient frame anywhere
-beneath it — the property an SDK embedder wants.
+A readonly value the loop takes from context, with no ambient frame
+anywhere beneath it — the property an SDK embedder wants.
 
 ```ts
 interface ToolPolicy {

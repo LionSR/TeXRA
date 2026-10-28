@@ -512,7 +512,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     persona:
       approved.agentSource === AGENT_SOURCE.INLINE ? approved.persona : null,
     ...(outputSchema !== undefined && { outputSchema }),
-    delegationAgentScope: run.delegationAgentScope,
+    delegationAgentScope: run.config.delegationAgentScope,
     ...taskConfig,
   };
   if (!awaited) {

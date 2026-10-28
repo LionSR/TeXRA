@@ -72,7 +72,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
       outputSchema: null,
       cli: null,
       workingDirectory: workingDirectory ?? null,
-      delegationAgentScope: run.delegationAgentScope ?? null,
+      delegationAgentScope: run.config.delegationAgentScope ?? null,
       script: {
         code: input.code,
         title,
