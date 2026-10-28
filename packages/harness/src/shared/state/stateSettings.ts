@@ -766,16 +766,6 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     },
   }),
 
-  // --- Plugin switches ------------------------------------------------------
-  // Written and read by the Plugins page and the TUI's `/plugins` over the
-  // plugin rows, which no catalog-driven UI renders.
-  {
-    key: GlobalStateKey.DISABLED_TOOLS,
-    schema: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
-    ),
-    slot: 'globalState',
-  },
   {
     key: WorkspaceStateKey.DISABLED_SKILLS,
     schema: Schema.Array(QualifiedSkillNameSchema).pipe(

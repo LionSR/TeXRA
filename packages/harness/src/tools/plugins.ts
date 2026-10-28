@@ -41,7 +41,7 @@ import { DatabaseWriteFailed } from '@shared/session/database';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import type { SessionView } from '@shared/session/sessionView';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { decodeDisabledTools, GlobalStateKey } from '@shared/state/stateKeys';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
   AgentBlock,
@@ -185,29 +185,14 @@ export const defineBuiltinPlugin = <ROut = never>(
   return erase(plugin);
 };
 
-const DisabledToolIdsSchema = Schema.Array(Schema.String);
-
-/**
- * The switch record as stored, checked: the ids the user holds off, or
- * `undefined` while nothing (neither the first-install seed nor the user)
- * has written it. A present value that is not a list of ids is corruption and
- * fails as the read, rather than reading as "nothing off", which would switch
- * every opt-in plugin on.
- */
+/** {@link decodeDisabledTools}, failing as the state read it is. */
 export function storedDisabledTools(
   stored: unknown,
 ): Result.Result<ReadonlySet<string> | undefined, StateReadFailed> {
-  if (stored === undefined) return Result.succeed(undefined);
-  const parsed = Schema.decodeUnknownResult(DisabledToolIdsSchema)(stored);
-  return Result.isSuccess(parsed)
-    ? Result.succeed(new Set(parsed.success))
-    : Result.fail(
-        new StateReadFailed({
-          key: GlobalStateKey.DISABLED_TOOLS,
-          message: `The tool switch record (${GlobalStateKey.DISABLED_TOOLS}) is unreadable: ${parsed.failure.message}`,
-          cause: parsed.failure,
-        }),
-      );
+  return Result.mapError(
+    decodeDisabledTools(stored),
+    (failure) => new StateReadFailed(failure),
+  );
 }
 
 /** The plugin ids the user switched off in `store`'s record; none while it

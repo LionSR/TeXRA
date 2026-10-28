@@ -2764,14 +2764,7 @@ type WorkspaceFileLocation = typeof WorkspaceFileLocationSchema.Type;
 
 ## WorkspaceStateKey
 
-The harness's workspace and global state keys. An app's keys live beside
-its setting rows, and a plugin's beside the rows its `Plugin` value
-declares.
-
-The stores these keys address are the session's `roots.workspaceState`,
-taken as data from the session, tool call or host command that holds it,
-and the process's `AppState` service. Each host wires its own
-implementation at startup.
+The harness's workspace-scoped state keys (`roots.workspaceState`).
 
 ```ts
 const WorkspaceStateKey: Readonly<{ readonly WORKSPACE_AGENTS: "texra.workspaceAgents"; readonly CUSTOM_TEAMS: "texra.customTeams"; readonly HIDDEN_CUSTOM_AGENTS: "texra.hiddenCustomAgents"; readonly DISABLED_SKILLS: "texra.skills.disabled"; readonly DISABLED_SKILL_SOURCES: "texra.skills.disabledSources"; readonly GIT_MARK_COMMITS: "texra.git.markCommits"; readonly GIT_AUTHOR_NAME: "texra.git.authorName"; readonly GIT_AUTHOR_EMAIL: "texra.git.authorEmail"; readonly GIT_WORKTREE_SUPPORT: "texra.git.worktreeSupport"; readonly TOOL_PATH_PROTECTION_ENABLED: "texra.tools.restrictPathsToWorkingDirectory"; }>
