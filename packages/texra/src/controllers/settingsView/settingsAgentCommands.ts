@@ -156,7 +156,10 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       const { catalog, workspaceAgents } = yield* page;
       return {
         command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-        customPresets: yield* catalog.getCustomPresets(),
+        // The setup starter is a selectable agent list, not a team card.
+        presets: (yield* workspaceAgents.allPresets()).filter(
+          (preset) => !preset.setupOnly,
+        ),
         orchestratorAgents: catalog.getOrchestratorAgentNames(),
         activePresetId: yield* workspaceAgents.getActiveTeamId(),
       };

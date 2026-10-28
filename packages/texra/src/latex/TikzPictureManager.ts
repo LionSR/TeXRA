@@ -5,7 +5,11 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - log
-import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/host';
+import {
+  withLogChannel,
+  pathToLocationIn,
+  Settings,
+} from '@texra-ai/harness/host';
 import { renderPrompt } from '@texra-ai/harness/plugins';
 
 // Local imports - latex utils
@@ -129,7 +133,10 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
     `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
   ).pipe(withLogChannel(CHANNEL));
 
-  const template = roots.config.get<string>('texra.latex.tikzTemplate');
+  const template = Settings.getConfig<string>(
+    roots.config,
+    'texra.latex.tikzTemplate',
+  );
   const compiledFiles: FileLocation[] = [];
 
   for (const [label, tikzPictures] of labeledTikzPictures) {

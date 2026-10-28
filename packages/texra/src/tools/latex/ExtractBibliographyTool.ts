@@ -6,7 +6,7 @@ import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, FileSystem, Schema } from 'effect';
 import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
-import { WorkspaceFs, toPosixPath } from '@texra-ai/harness/host';
+import { Settings, WorkspaceFs, toPosixPath } from '@texra-ai/harness/host';
 import { relativeToRoot, pathExists } from '@texra-ai/harness/node';
 
 // Local imports - tools
@@ -85,7 +85,8 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
 
     // Use provided bibPath, or fall back to configured default
     const effectiveBibPath =
-      bibPath || call.env.roots.config.get<string>('texra.bib.defaultPath');
+      bibPath ||
+      (yield* Settings.get<string>(call.env.roots, 'texra.bib.defaultPath'));
 
     if (effectiveBibPath) {
       const resolved = yield* resolveToolPath(call.env, effectiveBibPath);

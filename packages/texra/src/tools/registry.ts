@@ -7,6 +7,7 @@
 
 // Third-party imports
 import { Effect, Layer } from 'effect';
+import { Settings } from '@texra-ai/harness/host';
 import {
   HostCapabilities,
   codemode,
@@ -105,9 +106,7 @@ import type { Plugin } from '@texra-ai/harness';
  *  replacement rules of the call's workspace. */
 const texWriteFilter: WriteFilter = (path, content, config) => {
   if (!isTexFile(path)) return Effect.succeed(content);
-  const replaced = replacementEngine.applyFor(content, 'tex-write', (key) =>
-    config.get(key),
-  );
+  const replaced = replacementEngine.applyFor(content, 'tex-write', config);
   return logReplacementDiagnostics(replaced.diagnostics).pipe(
     Effect.as(replaced.text),
   );
@@ -162,7 +161,10 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
       lean_loogle: LeanLoogleTool,
     },
     prompt: ({ config }) => {
-      const bibPath = config.get<string>('texra.bib.defaultPath');
+      const bibPath = Settings.getConfig<string>(
+        config,
+        'texra.bib.defaultPath',
+      );
       return bibPath
         ? `The default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
         : '';

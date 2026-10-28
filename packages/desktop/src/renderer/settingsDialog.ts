@@ -3,11 +3,11 @@ import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@settingsView/frontend';
 import { html, render } from 'lit';
+import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import { resolvePostMessageTargetOrigin } from '@texra/shared/postMessageOrigin';
 import { readSelectValue } from '@ui/wa/selectTemplates';
 
-import { buildDesktopSettingsTabMessage } from '../shared/desktopCommandSurface';
 import { createOverlayDialog } from './overlayDialog';
 
 interface DesktopSettingsDialog {
@@ -111,8 +111,9 @@ export function createDesktopSettingsDialog(
       if (!settingsView.isConnected) content.append(settingsView);
       dialog.open = true;
       if (tab == null) return;
+      // The view's own listener selects the tab, as for a host push.
       window.postMessage(
-        buildDesktopSettingsTabMessage(tab),
+        { command: SETTINGS_VIEW_COMMANDS.SET_TAB, tab },
         resolvePostMessageTargetOrigin(window.location.origin),
       );
     },

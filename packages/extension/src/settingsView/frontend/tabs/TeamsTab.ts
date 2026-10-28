@@ -8,13 +8,10 @@ import { classMap } from 'lit/directives/class-map.js';
 // Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-import {
-  AGENT_MODE_PRESETS,
-  type AgentModePreset,
-} from '@texra-ai/harness/schemas';
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
+import type { SettingsTeamPreset } from '@texra/shared/settingsView/settingsViewMessages';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import {
   renderIconActionButton,
@@ -172,8 +169,8 @@ export class TeamsTab extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) customPresets: readonly AgentModePreset[] =
-    [];
+  /** The workspace's team catalog, built-in teams first. */
+  @property({ attribute: false }) presets: readonly SettingsTeamPreset[] = [];
   /** Agent names that carry delegation tools, computed backend-side from the registry. */
   @property({ attribute: false }) orchestratorAgents: readonly string[] = [];
   /**
@@ -183,13 +180,13 @@ export class TeamsTab extends LitElement {
    */
   @property({ attribute: false }) activePresetId: string | null = null;
 
-  private handlePresetClick(preset: AgentModePreset): void {
+  private handlePresetClick(preset: SettingsTeamPreset): void {
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET, {
       presetId: preset.id,
     });
   }
 
-  private handleDeletePreset(event: Event, preset: AgentModePreset): void {
+  private handleDeletePreset(event: Event, preset: SettingsTeamPreset): void {
     event.stopPropagation();
     postMessage(SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET, {
       presetId: preset.id,
@@ -200,10 +197,8 @@ export class TeamsTab extends LitElement {
     return this.orchestratorAgents.includes(name);
   }
 
-  private renderPresetCard(
-    preset: AgentModePreset,
-    deletable: boolean,
-  ): TemplateResult {
+  private renderPresetCard(preset: SettingsTeamPreset): TemplateResult {
+    const deletable = preset.source === 'custom';
     const orchestratorAgents = preset.agents.filter((name) =>
       this.isOrchestratorAgent(name),
     );
@@ -316,8 +311,7 @@ export class TeamsTab extends LitElement {
         })}
 
         <div class="preset-grid" role="list">
-          ${AGENT_MODE_PRESETS.map((p) => this.renderPresetCard(p, false))}
-          ${this.customPresets.map((p) => this.renderPresetCard(p, true))}
+          ${this.presets.map((p) => this.renderPresetCard(p))}
         </div>
       </div>
     `;
