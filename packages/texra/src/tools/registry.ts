@@ -46,6 +46,7 @@ import { ArxivSearchTool } from './arxiv/ArxivSearchTool';
 import {
   InlineComments,
   InlineCommentTool,
+  type InlineCommentCapability,
   type InlineCommentProvider,
 } from './comment/InlineCommentTool';
 import { DiagnosticsTool } from './DiagnosticsTool';
@@ -99,6 +100,7 @@ import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
 import { SendToTerminalTool } from './setup/SendToTerminalTool';
 import { ApplyTeamTool } from './setup/ApplyTeamTool';
 import { SetupPlatform, type SetupPlatformShape } from './setup/platform';
+import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
 import type { WriteFilter } from '@texra-ai/harness/plugins';
 import type { Plugin } from '@texra-ai/harness';
 
@@ -112,10 +114,10 @@ const texWriteFilter: WriteFilter = (path, content, config) => {
   );
 };
 
-/** The host capabilities (`ITool.hostCapability`) a plugin serves on
- *  every session of this host. */
-const serves = (...capabilities: readonly string[]) =>
-  Layer.succeed(HostCapabilities)({ of: () => new Set(capabilities) });
+/** The host capabilities (`ITool.hostCapability`) a plugin serves, read
+ *  each time a step asks. */
+const serves = (capabilities: () => readonly string[]) =>
+  Layer.succeed(HostCapabilities)({ of: () => new Set(capabilities()) });
 
 const latexExtract: Plugin = {
   id: 'latex-extract',
@@ -182,21 +184,27 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
           : Layer.mergeAll(
               Layer.succeed(EditorHost)(editors),
               Layer.succeed(InlineComments)(provider),
-              serves('inline-comments'),
+              serves(() => [
+                'inline-comments' satisfies InlineCommentCapability,
+              ]),
             ),
     },
   });
 
 /** The onboarding agent's narrow set, one concern per tool, over the host's
- *  setup capabilities: a tool that needs a member the host left out is not
- *  offered. */
+ *  setup capabilities: a tool that needs a member the host left undefined
+ *  is not offered. The members are read when asked, not here. */
 const setup = (platform: SetupPlatformShape) =>
   definePlugin<SetupPlatform>({
     id: 'setup',
     processLayer: {
       layer: Layer.mergeAll(
         Layer.succeed(SetupPlatform)(platform),
-        serves(...Object.keys(platform)),
+        serves(() =>
+          Object.entries(platform).flatMap(([member, value]) =>
+            value === undefined ? [] : [member],
+          ),
+        ),
       ),
     },
     tools: {
@@ -283,7 +291,11 @@ export const texraPlugins = (
     host.inquiryPanel
       ? {
           ...externalInquiry,
-          processLayer: { layer: serves('inquiry-panel') },
+          processLayer: {
+            layer: serves(() => [
+              'inquiry-panel' satisfies InquiryPanelCapability,
+            ]),
+          },
         }
       : externalInquiry,
     codex,

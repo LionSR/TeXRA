@@ -408,10 +408,13 @@ function executeList(
   });
 }
 
+/** The host capability of a host that shows the inquiry panel. */
+export type InquiryPanelCapability = 'inquiry-panel';
+
 export const ExternalInquiryTool = defineTool({
   name: 'inquiry',
   // Offered where the host shows the inquiry panel (`texraPlugins`).
-  hostCapability: 'inquiry-panel',
+  hostCapability: 'inquiry-panel' satisfies InquiryPanelCapability,
   requiresApproval: 'inBody',
   description: TOOL_DESCRIPTION,
   schema: InquiryInputSchema,

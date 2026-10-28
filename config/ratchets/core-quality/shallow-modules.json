@@ -1,5 +1,5 @@
 {
-  "packages/harness/src/agent/core/tools/ToolTypes.ts": 38,
+  "packages/harness/src/agent/core/tools/ToolTypes.ts": 37,
   "packages/harness/src/platform/interfaces.ts": 45,
   "packages/harness/src/shared/schemas/index.ts": 56,
   "packages/harness/src/shared/schemas/jsonValue.ts": 4,

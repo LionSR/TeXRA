@@ -58,6 +58,9 @@ export interface InlineCommentProvider {
   list(input: { absolutePath?: string }): InlineCommentThreadView[];
 }
 
+/** The host capability `core` serves beside a provider. */
+export type InlineCommentCapability = 'inline-comments';
+
 /**
  * The host's inline-comment provider, the `core` plugin's process layer on
  * the one host that has a Comments UI (`texraPlugins({ inlineComments })`).
@@ -324,7 +327,7 @@ function inlineComment(
 export const InlineCommentTool = defineTool({
   name: 'inline_comment',
   // Offered where the host passes its Comments UI (`texraPlugins`).
-  hostCapability: 'inline-comments',
+  hostCapability: 'inline-comments' satisfies InlineCommentCapability,
   description:
     'Leave inline comment threads in the editor via VS Code\'s native Comments UI (gutter bubbles + Comments panel) that the user can reply to and resolve. Commands: "add" opens a thread on a file range, "reply" appends to a thread, "resolve"/"unresolve" toggle a thread\'s state, "list" reads open threads including the user\'s replies. Use this for conversational, resolvable review notes; use the diagnostics tool\'s "add" command for one-off lint-style critique squiggles. Not available outside the VS Code extension host.',
   schema: InlineCommentInputSchema,
