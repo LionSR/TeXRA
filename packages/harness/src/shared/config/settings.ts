@@ -11,10 +11,7 @@ import type {
   StateStore,
   StateReadFailed,
 } from '@platform/interfaces';
-import type {
-  SettingHost,
-  StateSettingEntry,
-} from '@shared/state/stateSettings';
+import type { StateSettingEntry } from '@shared/state/stateSettings';
 
 const CHANNEL = 'settings';
 
@@ -36,8 +33,6 @@ const CHANNEL = 'settings';
 
 /** The setting slots a caller holds: a `WorkspaceRoots` is one. */
 export interface SettingsStores {
-  /** The host these stores belong to (`WorkspaceRoots.host`). */
-  readonly host: SettingHost;
   readonly config: ConfigProvider;
   readonly workspaceState: StateStore;
   readonly repoState: StateStore;

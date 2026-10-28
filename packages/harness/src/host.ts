@@ -113,7 +113,6 @@ export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentati
 export { presentRunFailure } from '@agent/runtime/terminalResultToast';
 // Which side of a trace event a run wrote.
 export type { TraceArm } from '@agent/trace';
-export type { SettingHost } from '@shared/state/stateSettings';
 export type { AggregateId, SessionCloseReport } from '@shared/schemas';
 // The platform's ports, their stores' failures, and the services plugins read.
 export {

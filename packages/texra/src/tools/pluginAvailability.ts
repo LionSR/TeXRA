@@ -106,13 +106,14 @@ const leanServers = Effect.map(
  *  setup capabilities (VS Code's; none elsewhere). */
 export const lean4Availability = (setup: SetupPlatformShape) =>
   prerequisitesChecks({
-    probe: Effect.fn('pluginAvailability.probe')(function* (inputs) {
+    probe: Effect.fn('pluginAvailability.probe')(function* () {
       const servers = yield* leanServers;
       const extensionAvailable =
         setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
       const lakeAvailable = (yield* findCommand('lake')) !== null;
-      // Only the VS Code build drives Lean through the extension.
-      const requiresExtension = inputs.host === 'vscode';
+      // Only a host that serves editor extensions (VS Code) drives Lean
+      // through one.
+      const requiresExtension = setup.extensions !== undefined;
       return {
         extensionAvailable,
         lakeAvailable,

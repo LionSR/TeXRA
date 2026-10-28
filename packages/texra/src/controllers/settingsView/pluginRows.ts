@@ -9,7 +9,6 @@
 import { Effect, FileSystem } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
-import { type ToolProbeInputs } from '@texra-ai/harness/plugins';
 import {
   AgentCatalog,
   InstalledPlugins,
@@ -19,7 +18,10 @@ import {
   type ExternalToolCheckResult,
   type PluginEnv,
 } from '@texra-ai/harness/host';
-import { buildToolDashboardItems } from '@texra/controllers/settingsView/ToolDashboardData';
+import {
+  buildToolDashboardItems,
+  type DashboardInputs,
+} from '@texra/controllers/settingsView/ToolDashboardData';
 import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages';
 
 /**
@@ -29,7 +31,7 @@ import type { PluginRow } from '@texra/shared/settingsView/settingsViewMessages'
  * `mcp.json` lists no servers and says why in `mcpWarnings`.
  */
 export const buildPluginRows = Effect.fn('buildPluginRows')(function* (
-  inputs: ToolProbeInputs & PluginEnv & Pick<WorkspaceRoots, 'storageRoot'>,
+  inputs: DashboardInputs & PluginEnv & Pick<WorkspaceRoots, 'storageRoot'>,
   cachedResults?: readonly ExternalToolCheckResult[],
 ) {
   const agents = (yield* AgentCatalog).list().map((agent) => ({

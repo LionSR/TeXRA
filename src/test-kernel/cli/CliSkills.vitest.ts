@@ -120,7 +120,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
             'The bundled copy.',
           );
         });
-        const stores = makeFakeSettingsStores('cli').stores;
+        const stores = makeFakeSettingsStores().stores;
         // The run catalog over the installed plugins as they load now.
         const catalogNow = () =>
           Effect.flatMap(readInstalledPluginLoad(stores), (plugins) =>

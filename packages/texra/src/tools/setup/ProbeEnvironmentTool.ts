@@ -31,7 +31,11 @@ import { detectPackageManager } from '@texra/utils/system/toolChecks';
 
 // Local file imports
 
-import { getChatGptSubscriptionStatus, SetupPlatform } from './platform';
+import {
+  getChatGptSubscriptionStatus,
+  SetupHost,
+  SetupPlatform,
+} from './platform';
 import { locateTool, missingCoreTools } from './toolProbing';
 
 const CHANNEL = 'Setup Credentials';
@@ -110,6 +114,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
   }
 
   const platform = yield* SetupPlatform;
+  const host = yield* SetupHost;
   const secrets = yield* Secrets;
   const { roots } = (yield* ToolContext).env;
 
@@ -196,7 +201,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
   );
 
   const summary = {
-    host: roots.host,
+    host,
     os: {
       platform: hostInfo.platform,
       arch: hostInfo.arch,

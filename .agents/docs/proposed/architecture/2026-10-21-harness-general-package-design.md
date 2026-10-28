@@ -364,9 +364,11 @@ re-read the surface and the ports. Where it changes this design:
 - **Lane 3, vocabulary.** #14364 made the namespace data and moved the
   presets, the LaTeX prompt, the TeX paths and the validation model to the app.
   #14369 replaces `ITool.unavailableHosts` with the host-capability check and
-  deletes the code-mode `WeakSet`. `defineBuiltinPlugin` remains as a typed
-  alias until the lane 4b fence moves the built-ins' services onto
-  `ToolContext`.
+  deletes the code-mode `WeakSet`. `SettingHost` is gone from
+  `WorkspaceRoots`, `SettingsStores` and the probes: the app reads a host's
+  capabilities instead, and the setup probe its `SetupHost`.
+  `defineBuiltinPlugin` remains as a typed alias until the lane 4b fence moves
+  the built-ins' services onto `ToolContext`.
 - **Lane 5, the clock.** A `run.position.wakeAt` field fits poorly: the loop
   rewrites positions at every boundary, so a user message drops the timer
   unless the loop restates it; a wake still needs input the parked run can

@@ -9,9 +9,6 @@
  * writes its own.
  */
 
-// Local imports
-import type { SettingHost } from '@shared/state/stateSettings';
-
 // Local file imports
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { resolveGlobalStoragePath } from './workspaceStorage';
@@ -21,8 +18,6 @@ import type { ConfigProvider, StateStore } from '../interfaces';
 
 /** The per-workspace services a Node host opens for one workspace folder. */
 export interface NodeWorkspaceRootsInit {
-  /** The product host opening these roots (`WorkspaceRoots.host`). */
-  readonly host: SettingHost;
   /** The canonical workspace root (`canonicalizeWorkspacePath`), decided by the host where it reads it. */
   readonly workspacePath: string | undefined;
   /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
@@ -53,7 +48,6 @@ export function createNodeWorkspaceRoots(
   init: NodeWorkspaceRootsInit,
 ): WorkspaceRoots {
   return {
-    host: init.host,
     workspace: init.workspacePath,
     storageRoot: init.storageRoot,
     storage: init.storage,

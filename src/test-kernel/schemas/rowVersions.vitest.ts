@@ -79,12 +79,14 @@ const VERSIONED: readonly Versioned[] = [
       schema: arm,
     };
   }),
-  ...Object.entries(armsOf(texraPlugins())).map(([name, arm]) => ({
-    name: `plugin.fact.${name.replace('/', '.')}`,
-    version: arm.version,
-    upcasts: arm.upcasters.length,
-    schema: arm.schema,
-  })),
+  ...Object.entries(armsOf(texraPlugins({ name: 'vscode' }))).map(
+    ([name, arm]) => ({
+      name: `plugin.fact.${name.replace('/', '.')}`,
+      version: arm.version,
+      upcasts: arm.upcasters.length,
+      schema: arm.schema,
+    }),
+  ),
   ...VALUE_FAMILIES.map(({ name, schema }) => ({
     name: `current-value.${name.replace('/', '.')}`,
     version: CURRENT_VALUE_VERSION,

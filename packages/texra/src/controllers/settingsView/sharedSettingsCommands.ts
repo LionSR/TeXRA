@@ -124,7 +124,11 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
   const usage = new SubscriptionUsageService({ stores: roots });
   const memoryPage = settingsMemoryCommands({ bindings, present });
   const gitPage = settingsGitCommands({ bindings, present });
-  const toolsPage = settingsToolCommands({ roots, bindings });
+  const toolsPage = settingsToolCommands({
+    roots,
+    bindings,
+    installsExtensions: ports.host === 'vscode',
+  });
   const pluginsPage = settingsPluginCommands({
     roots,
     bindings,

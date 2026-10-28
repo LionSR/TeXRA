@@ -1963,15 +1963,11 @@ class ToolProbeFailed extends Schema.TaggedError<ToolProbeFailed>()(
 
 The asking workspace, carried into a plugin's probe as data rather than read
 from an ambient scope: the folder a probe asks whether it is a git
-repository, the configuration a probe reads a port from, and the host a
-probe asks whether the editor drives a tool for it: three fields of the
-roots every caller of the availability surface opened.
+repository and the configuration a probe reads a port from: two fields of
+the roots every caller of the availability surface opened.
 
 ```ts
-type ToolProbeInputs = Pick<
-  WorkspaceRoots,
-  'workspace' | 'config' | 'host'
->;
+type ToolProbeInputs = Pick<WorkspaceRoots, 'workspace' | 'config'>;
 ```
 
 ## ToolProbeServices

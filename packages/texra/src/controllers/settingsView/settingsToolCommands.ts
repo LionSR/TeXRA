@@ -30,16 +30,13 @@ import type { WorkspaceRoots } from '@texra-ai/harness';
 export function settingsToolCommands(ports: {
   readonly roots: Pick<
     WorkspaceRoots,
-    | 'host'
-    | 'workspace'
-    | 'config'
-    | 'globalState'
-    | 'globalStorage'
-    | 'storageRoot'
+    'workspace' | 'config' | 'globalState' | 'globalStorage' | 'storageRoot'
   >;
   readonly bindings: SettingsHostBindings;
+  /** The host installs an editor extension a plugin card names. */
+  readonly installsExtensions: boolean;
 }) {
-  const { bindings, roots } = ports;
+  const { bindings, roots, installsExtensions } = ports;
   const refresh = Effect.flatMap(ToolAvailability, (availability) =>
     availability.refresh(roots),
   );
@@ -54,7 +51,10 @@ export function settingsToolCommands(ports: {
     Effect.flatMap(ToolAvailability, (availability) =>
       Effect.flatMap(SubscriptionRef.get(availability.results), (held) =>
         Effect.map(
-          buildPluginRows(roots, held.get(roots.workspace)),
+          buildPluginRows(
+            { ...roots, installsExtensions },
+            held.get(roots.workspace),
+          ),
           (built) => ({
             command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS,
             ...built,

@@ -78,7 +78,6 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       builtIn: () => Effect.succeed(''),
     },
     roots: createNodeWorkspaceRoots({
-      host: 'sdk',
       workspacePath: workspaceDir,
       storage: resolveWorkspaceStoragePath(options.storageDir, workspaceDir),
       storageRoot: options.storageDir,

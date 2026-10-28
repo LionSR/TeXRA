@@ -2379,15 +2379,6 @@ function setModelEnabled(input: {
 })
 ```
 
-## SettingHost
-
-The product hosts, spelled once, for settings.
-`sdk` is the agent package embedded in someone else's process.
-
-```ts
-type SettingHost = 'vscode' | 'cli' | 'desktop' | 'sdk';
-```
-
 ## Settings
 
 Every read and write of a setting; see the module comment.
@@ -2402,8 +2393,6 @@ The setting slots a caller holds: a `WorkspaceRoots` is one.
 
 ```ts
 interface SettingsStores {
-  /** The host these stores belong to (`WorkspaceRoots.host`). */
-  readonly host: SettingHost;
   readonly config: ConfigProvider;
   readonly workspaceState: StateStore;
   readonly repoState: StateStore;

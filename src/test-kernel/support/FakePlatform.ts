@@ -19,7 +19,6 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { type SettingHost } from '@shared/state/stateSettings';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { workspaceTeams } from '@texra/shared/agentTeams';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
@@ -234,8 +233,6 @@ export interface FakePlatformOptions {
   storagePath?: string;
   /** The global-storage root, as a real path. Worker-shared by default. */
   globalStoragePath?: string;
-  /** The product host the roots name; the extension's by default. */
-  host?: SettingHost;
 }
 
 /** A fake host's shutdown scope and the port it serves as
@@ -272,7 +269,6 @@ export function createFakeWorkspaceRoots(
   > = {},
 ): WorkspaceRoots {
   return {
-    host: options.host ?? 'vscode',
     workspace: Object.hasOwn(options, 'workspacePath')
       ? options.workspacePath
       : fakePath('workspace'),
