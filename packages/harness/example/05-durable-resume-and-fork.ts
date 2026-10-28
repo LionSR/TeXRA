@@ -8,9 +8,12 @@
  * 4. Forks the conversation (`session.request({ kind: 'run.fork' })`) into a
  *    new run id, resumes the fork (`session.resume`), sends a follow-up on the
  *    fork, and verifies that both branches are persisted independently.
+ * 5. Resumes `run1` and, while that resumed run is live, reads the events of
+ *    the first `run1` handle again: they are its own activation's, and the
+ *    read ends without waiting for the resumed one.
  */
-import { Effect, Stream } from 'effect';
-import { Sessions } from '@texra-ai/harness';
+import { Effect, Exit, Option, Stream } from 'effect';
+import { responseText, Sessions } from '@texra-ai/harness';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
 import { makeExampleWorkspace } from './_support.ts';
@@ -43,6 +46,11 @@ const program = Effect.gen(function* () {
       (view) => view.runs.get(run1.runId)?.status === 'waiting',
     ),
   );
+
+  // The first read of a run's events takes its live trace; any later read
+  // replays it from the session.
+  const drafted = yield* Stream.runHead(run1.events.pipe(responseText));
+  console.log('[05] run1 drafted:', Option.getOrThrow(drafted));
 
   // Fork the conversation at its settled point
   const forkOutcome = yield* session.request({
@@ -89,6 +97,34 @@ const program = Effect.gen(function* () {
     runId: forkedRunId,
     reason: 'user',
   });
+  // Resume the stopped `run1`: a new activation of the same run id, live
+  // and waiting for its next message.
+  const resumed = yield* session.resume(run1.runId);
+  yield* Stream.runHead(
+    Stream.filter(
+      resumed.view,
+      (view) => view.runs.get(run1.runId)?.status === 'waiting',
+    ),
+  );
+  // The first handle still reads its own activation, and its read ends
+  // while the resumed one is running: with that activation's end, the stop
+  // that interrupted it.
+  let firstText = '';
+  const firstEnd = yield* Effect.exit(
+    Stream.runForEach(run1.events.pipe(responseText), (text) =>
+      Effect.sync(() => {
+        firstText += text;
+      }),
+    ),
+  );
+  if (
+    firstText !== 'Drafted section 1 with an informal proof sketch.' ||
+    !Exit.hasInterrupts(firstEnd)
+  ) {
+    throw new Error(`run1's first activation replayed: ${firstText}`);
+  }
+  console.log(`[05] first activation reread: ${firstText}`);
+  yield* resumed.interrupt;
   yield* session.settled;
 
   const listed = yield* session.listRuns();

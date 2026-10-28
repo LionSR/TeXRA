@@ -151,6 +151,23 @@ function liveRoot(session: LocalSession, runId: RunId): RunId | null {
   return root;
 }
 
+/** A window's handle of `run`: its id, and a commit inside the activation
+ *  the handle is for, the first view level showing that activation. */
+function admittedTask(run: Run) {
+  return Stream.runHead(run.view).pipe(
+    Effect.flatMap(
+      Option.match({
+        onNone: () =>
+          Effect.fail(
+            new TaskFailed({ message: 'The task ended before it started.' }),
+          ),
+        onSome: (level) =>
+          Effect.succeed({ runId: run.runId, activation: level.cursor }),
+      }),
+    ),
+  );
+}
+
 /** A handler that died answers `Internal` under a reference the service
  *  log carries the cause under, as the session bridge does. */
 const internal = Effect.fn('handlers.internal')(function* (
@@ -475,7 +492,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
                   ),
                 ),
             );
-            return run.runId;
+            return yield* admittedTask(run);
           }),
         ),
       'host.attach': ({ workspace, capabilities }) =>
@@ -552,12 +569,14 @@ export const serviceHandlers = TexraRpcs.toLayer(
             // A run this service is running needs no resume: the client that
             // asks takes up the conversation it belongs to, where it is (a
             // chat left it waiting here).
+            // A live root's handle is for the activation the view shows it
+            // in now; a later one starts only once that one ends.
             const live = liveRoot(session, runId);
-            if (live !== null) return live;
-            return yield* admit(
+            if (live !== null)
+              return { runId: live, activation: session.view.current().cursor };
+            const run = yield* admit(
               runs,
               session.resume(runId, { interactive: true }).pipe(
-                Effect.map((run): RunId | null => run.runId),
                 // Blocked, not failed: it stays interrupted until what it
                 // needs is back.
                 Effect.catchTag('ResumeRefused', (refusal) =>
@@ -569,6 +588,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
               (error) =>
                 Effect.fail(new TaskFailed({ message: error.message })),
             );
+            return run === null ? null : yield* admittedTask(run);
           }),
         ),
     };

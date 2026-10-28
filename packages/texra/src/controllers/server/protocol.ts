@@ -74,7 +74,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 34;
+export const PROTOCOL_VERSION = 35;
 
 /** What `service.hello` and `texra service status` report. */
 export const ServiceInfoSchema = Schema.Struct({
@@ -124,6 +124,14 @@ const TaskSummarySchema = Schema.Struct({
   live: Schema.Boolean,
 });
 export type TaskSummary = typeof TaskSummarySchema.Type;
+
+/** The run a `task.start` or `task.resume` reached, and a commit inside the
+ *  activation it reached: a window's handle reads that activation's events
+ *  from the rows up to it, whatever later activation the run has by then. */
+const TaskAdmitted = Schema.Struct({
+  runId: RunIdSchema,
+  activation: CommitOrdinalSchema,
+});
 
 /** Why `task.start` or `task.resume` did not reach its run. */
 export class TaskFailed extends Schema.TaggedError<TaskFailed>()('TaskFailed', {
@@ -200,7 +208,7 @@ export const TexraRpcs = RpcGroup.make(
       approvalPolicy: Schema.NullOr(ApprovalPolicySchema),
     },
     /** The run that started: the asked id, or the one the launch resolved. */
-    success: RunIdSchema,
+    success: TaskAdmitted,
     error: TaskFailed,
   }),
   Rpc.make('task.resume', {
@@ -208,7 +216,7 @@ export const TexraRpcs = RpcGroup.make(
     /** The run that resumed: the asked one, or the parent that owns it;
      *  null when something it needs (its agent, a plugin) is missing, so it
      *  stays interrupted. */
-    success: Schema.NullOr(RunIdSchema),
+    success: Schema.NullOr(TaskAdmitted),
     error: TaskFailed,
   }),
   /** What a task's current activation ends with, once it ends: its

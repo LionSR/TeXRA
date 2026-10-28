@@ -16,6 +16,7 @@ import {
   Cause,
   Effect,
   Exit,
+  Fiber,
   FiberHandle,
   Layer,
   Option,
@@ -367,6 +368,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       ),
     ),
   );
+  const scope = yield* Effect.scope;
   /** The service's answer to how a task it runs ended, with `at`, its
    *  log's commit when it answered: asked of the service the link holds,
    *  again of the next one if the link is lost meanwhile (a retired service
@@ -504,12 +506,19 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       }),
     );
   /** The run the service admitted, as this window holds it: its end is the
-   *  service's answer (asked once), held until this window's fold shows it
-   *  too; its view this window's fold sliced to this activation; and its
-   *  trace read back from the service's rows through the watch. */
-  const runOf = (runId: RunId, redirectedFrom?: RunId): Effect.Effect<Run> =>
+   *  service's answer (asked once, at once, while the activation it ends is
+   *  this one), held until this window's fold shows it too; its view this
+   *  window's fold sliced to this activation; and its trace read back from
+   *  the service's rows of this activation through the watch. */
+  const runOf = (
+    {
+      runId,
+      activation,
+    }: { readonly runId: RunId; readonly activation: CommitOrdinal },
+    redirectedFrom?: RunId,
+  ): Effect.Effect<Run> =>
     Effect.gen(function* () {
-      const answer = yield* Effect.cached(answered(runId));
+      const answer = Fiber.join(yield* Effect.forkIn(answered(runId), scope));
       const result = yield* Effect.cached(
         Effect.flatMap(answer, (end) => endOf(runId, end)),
       );
@@ -546,6 +555,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
             ),
             now: () => answeredAt ?? graph.view.current().cursor,
           },
+          activation,
         ),
         interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
           Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
@@ -619,7 +629,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                   message: describeFollowUpFailure('blocked'),
                 }),
               )
-            : runOf(resumed, resumed === runId ? undefined : runId),
+            : runOf(resumed, resumed.runId === runId ? undefined : runId),
         ),
       );
     },

@@ -245,7 +245,7 @@ interface Replay {
   readonly runId: RunId;
   /** History until `replay.complete` (it may span frames); null once read. */
   history: SessionViewInput[] | null;
-  /** Rows at or below this `seq` are read or precede the latest activation. */
+  /** Rows at or below this `seq` are read or precede the activation. */
   seq: number;
   /** Each open row's text so far, by stream or card id; null once its
    *  stream ended, when later text is already in its final text. */
@@ -254,8 +254,8 @@ interface Replay {
    *  the run was over (null before): past it, every row the run wrote. */
   drainedTo: number;
   endAt: number | null;
-  /** Its `run.end` or `run.removed` is read (a run that ended without one
-   *  is done once read through `endAt`). */
+  /** Its `run.end`, a later `run.activate` or `run.removed` is read (a run
+   *  that ended without one is done once read through `endAt`). */
   ended: boolean;
 }
 
@@ -279,7 +279,7 @@ function eventsOf(replay: Replay, row: DisplaySessionEvent): AgentEvent[] {
   replay.seq = row.seq;
   if (
     row.type === 'run.removed' ||
-    runEndFromEvents([row], replay.runId) !== null
+    lastLifecycleRow([row], replay.runId) !== undefined
   ) {
     replay.ended = true;
     return [];
@@ -299,8 +299,8 @@ function eventsOf(replay: Replay, row: DisplaySessionEvent): AgentEvent[] {
     : [event];
 }
 
-/** The `seq` the run's current lifecycle starts after: its latest
- *  activation, or for a lifecycle that ended, the one before that end. */
+/** The `seq` the lifecycle `rows` end in starts after: its activation, or
+ *  for a lifecycle that ended, the one before that end. */
 function lifecycleStart(rows: readonly SessionEvent[], runId: RunId): number {
   const last = lastLifecycleRow(rows, runId);
   if (last === undefined) return -1;
@@ -311,7 +311,7 @@ function lifecycleStart(rows: readonly SessionEvent[], runId: RunId): number {
 
 /**
  * A run's trace read back from its session's view inputs, for a reader its
- * in-memory trace cannot serve: the rows of its latest activation, then each
+ * in-memory trace cannot serve: the rows of the reader's activation, then each
  * as it commits, until its `run.end` (or, with none stored, every row
  * committed when the run was over: `store`); then `result`'s failure. A
  * stream that ended before the reader came arrives as one chunk of its final
@@ -332,6 +332,8 @@ export function replayTrace<E>(
     readonly settled: Effect.Effect<void>;
     readonly now: () => CommitOrdinal;
   },
+  /** A commit in the reader's activation: it reads the latest at or before. */
+  activation: CommitOrdinal,
 ): Stream.Stream<AgentEvent, E> {
   const id = qualifyAggregateId('run', runId);
   /** A row of this run; the listing is a summary of every run, not history. */
@@ -357,10 +359,7 @@ export function replayTrace<E>(
     const readInput = (input: SessionViewInput): AgentEvent[] => {
       if (done()) return [];
       if (input._tag === 'chunk') return chunkOf(replay, input);
-      if (input._tag === 'drained') {
-        replay.drainedTo = input.cursor;
-        return [];
-      }
+      if (input._tag === 'drained') replay.drainedTo = input.cursor;
       return own(input) ? eventsOf(replay, input.event) : [];
     };
     /** One batch of inputs, or the store's head once the run is over. */
@@ -374,14 +373,14 @@ export function replayTrace<E>(
       if (replay.history === null) return next.flatMap(readInput);
       replay.history.push(...next);
       if (!next.some((input) => input._tag === 'replay.complete')) return [];
-      // The whole history: start at the run's latest activation, as a
-      // reader of this activation's live trace does.
+      // The whole history: start at the reader's activation, as a reader
+      // of its live trace does.
       const history = replay.history;
       replay.history = null;
-      replay.seq = lifecycleStart(
-        history.flatMap((input) => (own(input) ? [input.event] : [])),
-        runId,
+      const rows = history.flatMap((input) =>
+        own(input) && input.event.commit <= activation ? [input.event] : [],
       );
+      replay.seq = lifecycleStart(rows, runId);
       return history.flatMap(readInput);
     };
     const over = Effect.exit(result).pipe(

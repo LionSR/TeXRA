@@ -2072,7 +2072,7 @@ const registerCustomAgentRoot: Effect<void, never, FileSystem | GlobalStorageFs 
 ## replayTrace
 
 A run's trace read back from its session's view inputs, for a reader its
-in-memory trace cannot serve: the rows of its latest activation, then each
+in-memory trace cannot serve: the rows of the reader's activation, then each
 as it commits, until its `run.end` (or, with none stored, every row
 committed when the run was over: `store`); then `result`'s failure. A
 stream that ended before the reader came arrives as one chunk of its final
@@ -2094,6 +2094,8 @@ function replayTrace<E>(
     readonly settled: Effect.Effect<void>;
     readonly now: () => CommitOrdinal;
   },
+  /** A commit in the reader's activation: it reads the latest at or before. */
+  activation: CommitOrdinal,
 ): Stream.Stream<AgentEvent, E>
 ```
 
