@@ -334,7 +334,6 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     launchedAt: event.at,
     runStartedAt: null,
     lastTimestamp: event.at,
-    conversationProgress: { toolCallCount: 0 },
     turn: null,
     followUpSupport: event.userFollowUpSupport,
     context: null,
@@ -742,8 +741,6 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
         model: event.model,
         modelLabel: getModelLabel(event.model),
       };
-    case 'conversation.progress':
-      return { ...run, conversationProgress: event.progress };
     case 'context.state':
       return {
         ...run,

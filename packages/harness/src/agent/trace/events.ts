@@ -58,7 +58,6 @@ export type AgentEvent =
       | 'tool.start'
       | 'tool.end'
       | 'usage'
-      | 'conversation.progress'
       | 'run.fact'
       | 'context.state'
       | 'stream.start'

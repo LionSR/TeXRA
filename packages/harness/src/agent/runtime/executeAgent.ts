@@ -84,20 +84,7 @@ function runLayerFor(
     Layer.provideMerge(
       agentRunLayer(ctx, {
         tools: shared.tools,
-        callbacks: {
-          onProgress: (update) => {
-            // A UI-only signal, suppressed in the transcript fold: the session
-            // view updater sets the run's `conversationProgress` from it.
-            if (update.kind === 'overview') {
-              ctx.logger.emit({
-                type: 'conversation.progress',
-                progress: { toolCallCount: update.toolCallCount },
-              });
-            }
-            shared.onProgress?.(update);
-          },
-          ...(onIdle ? { onIdle } : {}),
-        },
+        callbacks: { onProgress: shared.onProgress, onIdle },
       }),
     ),
     Layer.provideMerge(Layer.succeed(RunHistory)(runSession.runHistory)),

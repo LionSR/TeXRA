@@ -17,7 +17,6 @@ import {
   ResumeBlockerSchema,
   CommitOrdinalSchema,
   ContextStateDataSchema,
-  ConversationProgressSchema,
   JsonValueSchema,
   OwnerIdSchema,
   PermissionPayloadSchema,
@@ -149,7 +148,6 @@ const RunViewSchema = Schema.Struct({
   launchedAt: Positive,
   runStartedAt: Schema.NullOr(Positive),
   lastTimestamp: Schema.Number,
-  conversationProgress: ConversationProgressSchema,
   /** The run's one-based turn, from its latest `run.position` (the loop
    *  commits `state.turn + 1`; the row's `round` counts model calls). Null
    *  before the first position, after every activation, and for a run with

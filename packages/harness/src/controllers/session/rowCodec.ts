@@ -121,39 +121,51 @@ export function aggregateOf(kind: unknown, logicalId: unknown): AggregateId {
 const hasKind = (type: string): type is SessionEventDraft['type'] =>
   Object.hasOwn(ROW_KINDS, type);
 
-/** The lowest stored version of `type` this build reads: an older one has
- *  no upcaster here, so an earlier build wrote it. */
-// `decodeRow` refuses the same rows: with no upcasters, `upcast.slice` is
-// empty below `version`, exactly the versions under this floor.
-const readableFrom = (type: SessionEventDraft['type']): number =>
-  ROW_KINDS[type].version - ROW_KINDS[type].upcast.length;
+/** The lowest stored version of `type` this build reads: an earlier build
+ *  wrote an older row, and every row of a kind this build retired. */
+const readableFrom = (type: string): number =>
+  hasKind(type)
+    ? ROW_KINDS[type].version - ROW_KINDS[type].upcast.length
+    : Number.MAX_SAFE_INTEGER;
+
+/** The upcasts a row this build reads takes, or why it refuses it: an
+ *  earlier build's (a retired kind, or below its floor), a newer build's
+ *  (above it), or damaged (an unknown kind: its run's reads fail). */
+function rowUpcasts({ commit, type, version: stored }: typeof RowSchema.Type) {
+  if (RETIRED_ROW_KINDS.has(type))
+    return new DatabaseRowEarlier({ commit, type });
+  if (!hasKind(type))
+    return new DatabaseRowCorrupt({ commit, type, detail: 'an unknown kind' });
+  // A projected row has no version: this build's projector wrote it.
+  const { version, upcast } = ROW_KINDS[type];
+  const at = stored ?? version;
+  if (at > version) return new DatabaseStoreNewer({ type, version: at });
+  if (at < readableFrom(type)) return new DatabaseRowEarlier({ commit, type });
+  return upcast.slice(at - 1);
+}
+
 /** Whether `decodeRow` parses this row's data (a kind and version this
  *  build reads): another build's row is refused before its blobs are read. */
 export function decodable(row: SqlRow): boolean {
-  const { type, version } = Schema.decodeUnknownSync(RowSchema)(row);
-  if (!hasKind(type)) return false;
-  const stored = version ?? ROW_KINDS[type].version;
-  return stored >= readableFrom(type) && stored <= ROW_KINDS[type].version;
+  return Array.isArray(rowUpcasts(Schema.decodeUnknownSync(RowSchema)(row)));
 }
 
 /** The queries, with their parameters, for the runs holding a row an
- *  earlier build wrote below the version this build reads. */
+ *  earlier build wrote ({@link readableFrom}). */
 export const EARLIER_RUNS: readonly (readonly [string, readonly unknown[]])[] =
-  Object.keys(ROW_KINDS)
-    .filter(hasKind)
-    .flatMap((type) =>
-      readableFrom(type) > 1
-        ? [
-            [
-              `SELECT s.logical_id AS logicalId, min(e."commit") AS "commit",
+  [...RETIRED_ROW_KINDS, ...Object.keys(ROW_KINDS)].flatMap((type) =>
+    readableFrom(type) > 1
+      ? [
+          [
+            `SELECT s.logical_id AS logicalId, min(e."commit") AS "commit",
                 e.type AS type FROM ${EVENT_FROM}
                 WHERE s.kind = 'run' AND e.type = ? AND e.version < ?
                 GROUP BY s.logical_id`,
-              [type, readableFrom(type)],
-            ] as const,
-          ]
-        : [],
-    );
+            [type, readableFrom(type)],
+          ] as const,
+        ]
+      : [],
+  );
 
 /** Validate a draft and encode it at its kind's current version, with the
  *  blobs it brings. Throws on a draft that does not parse, is not JSON, or
@@ -260,10 +272,9 @@ interface LeftOut {
   readonly kind: string;
 }
 
-/**
- * A selected row as its event, or {@link LeftOut}: a newer kind or version
- * fails `DatabaseStoreNewer` (written after this build's store gate), and an
- * undecodable row or unknown kind `DatabaseRowCorrupt`, naming it. */
+/** A selected row as its event, or {@link LeftOut}: another build's kind
+ *  or version fails as {@link rowUpcasts} says, and an undecodable row
+ *  `DatabaseRowCorrupt`, naming it. */
 export function decodeRow(
   input: SqlRow,
   arms: PluginArms,
@@ -281,22 +292,12 @@ export function decodeRow(
         detail: causeOf(error),
       }),
     );
-  // A kind this build retired, or one a newer build wrote since the gate
-  // passed (the next write refuses the store): its run's reads fail.
-  if (!hasKind(row.type)) return corrupt('a kind this build does not read');
-  // A projected row has no version: this build's projector wrote it.
-  const version = row.version ?? ROW_KINDS[row.type].version;
-  if (version > ROW_KINDS[row.type].version)
-    return Result.fail(new DatabaseStoreNewer({ type: row.type, version }));
-  if (version < readableFrom(row.type))
-    return Result.fail(
-      new DatabaseRowEarlier({ commit: row.commit, type: row.type }),
-    );
+  const upcasts = rowUpcasts(row);
+  if (!Array.isArray(upcasts)) return Result.fail(upcasts);
   let data: Record<string, JsonValue>;
   try {
     data = jsonObject(parseData(row.data, blobs));
-    for (const step of ROW_KINDS[row.type].upcast.slice(version - 1))
-      data = { ...step(data) };
+    for (const step of upcasts) data = { ...step(data) };
     if (row.type === 'context.blob') {
       const field = jsonObject(data.payload);
       // The value is stored canonical, so its text hashes to its address.

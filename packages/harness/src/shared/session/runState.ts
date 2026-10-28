@@ -184,7 +184,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'run.end': true,
   'run.removed': true,
   'run.description': true,
-  'conversation.progress': true,
   'run.fact': true,
   'child.park': true,
   'plugin.fact': true,
