@@ -21,7 +21,7 @@ import type { SettingsStores } from '@shared/config/settings';
 import { isPathWithin } from '@utils/core/pathCore';
 import { canonicalizePath } from '@utils/files/externalRoots';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { safeHomedir } from '@utils/system/platformPaths';
+import { homeDirectory } from '@utils/system/platformPaths';
 
 import { issue } from './skillLoader';
 import {
@@ -85,12 +85,11 @@ function discoverRuntimeSkills(
   plugins: InstalledPluginLoad,
   options?: SkillSourceOptions,
 ) {
-  // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can raise
-  // UV_ENOENT in containers/CI); `/nonexistent` matches the fallback used by
-  // other agnostic-zone callers (e.g. `claudeAgentConfig.ts`).
-  const home = safeHomedir() ?? '/nonexistent';
   return Effect.gen(function* () {
     const host = yield* HostSkillSources;
+    // An unresolvable home directory is logged by `homeDirectory`; the
+    // `/nonexistent` root then holds no user skills to discover.
+    const home = (yield* homeDirectory) ?? '/nonexistent';
     const result = yield* discoverSkillSources(
       foldSkillSources(host.contributions, {
         cwd: roots.workspace,

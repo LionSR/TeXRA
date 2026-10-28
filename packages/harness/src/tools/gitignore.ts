@@ -7,7 +7,7 @@ import ignore from 'ignore';
 
 // Local imports - utils
 import { toPosixPath } from '@utils/core/pathCore';
-import { safeHomedir } from '@utils/system/platformPaths';
+import { homeDirectory } from '@utils/system/platformPaths';
 
 type GitignoreSource = {
   absolutePath: string;
@@ -64,11 +64,11 @@ export const getGitignoreMatcher = Effect.fn('getGitignoreMatcher')(function* (
     return EMPTY_GITIGNORE_MATCHER;
   }
 
-  const homeDirectory = safeHomedir();
+  const home = yield* homeDirectory;
   const sources = (yield* Effect.all(
     [
-      homeDirectory
-        ? readGitignoreFile(path.join(homeDirectory, '.gitignore_global'))
+      home
+        ? readGitignoreFile(path.join(home, '.gitignore_global'))
         : Effect.succeed(null),
       readGitignoreFile(path.join(workspacePath, '.gitignore_global')),
       readGitignoreFile(path.join(workspacePath, '.gitignore')),

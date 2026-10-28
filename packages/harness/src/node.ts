@@ -66,6 +66,7 @@ export {
 export { WORKSPACE_STORES } from '@shared/session/valueFamily';
 // Running a program on this machine: find it, run it, tell whether it is
 // installed, and give any other child the PATH the harness resolves tools on.
+// The home directory, logged at warn where none resolves.
 export {
   executeCommand,
   type ExecuteCommandBaseOptions,
@@ -74,6 +75,7 @@ export type { ExecResult } from '@shared/schemas';
 export { findCommand, type FoundCommand } from '@utils/system/binaryResolver';
 export { probeTool, type ToolProbe } from '@utils/system/toolUtils';
 export {
+  homeDirectory,
   whichOnExtendedPath,
   withExtendedPath,
 } from '@utils/system/platformPaths';
