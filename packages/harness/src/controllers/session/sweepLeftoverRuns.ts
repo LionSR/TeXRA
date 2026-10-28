@@ -32,6 +32,8 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
       .map((row) => row.aggregateId),
   );
   const running = runningRuns(session);
+  // Each run's rows once, so the per-run park check reads only its own.
+  const byRun = Map.groupBy(rows, (row) => row.aggregateId);
   for (const row of rows) {
     if (
       row.type !== 'run.start' ||
@@ -45,8 +47,8 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
     if (running.has(runId)) continue;
     // A shell parked holding its result for its parent stays until that
     // result is delivered.
-    if (lifecycleParks(rows, runId).some((park) => park.heldFor !== undefined))
-      continue;
+    const parks = lifecycleParks(byRun.get(row.aggregateId) ?? [], runId);
+    if (parks.some((park) => park.heldFor !== undefined)) continue;
     yield* session.requests
       .removeRun(runId, 'automatic', row.commit)
       .pipe(
