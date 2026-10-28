@@ -316,8 +316,7 @@ shape changes.
 
 ## Coordination record (2026-10-28)
 
-What else is in flight that touches this plan, as of `main` at `ba42b90`
-(#14344 and #14349 merged):
+What else is in flight that touches this plan, as of `main` at `8cbfe69`:
 
 - **A second 1.0 PRD exists.** Draft PR #14352 (`docs/harness-1-release-prd`)
   adds `.agents/docs/proposed/architecture/2026-10-28-harness-1-release-prd.md`
@@ -346,7 +345,7 @@ What else is in flight that touches this plan, as of `main` at `ba42b90`
   when PRs open, D4 (8994563 with its golden regeneration and 43c10db) goes
   alone as the one shape PR, with the approval store, the llm refactors and
   the dispatcher changes in separate PRs that touch no `rowVersions.ts`.
-- **The single-owner session's work is now five PRs** against `ba42b90`:
+- **The single-owner session's work landed as five PRs**, all merged on 2026-10-28 (#14358 `1e23712` first, as agreed below; `main` at `8cbfe69`):
   #14358 (one owner for seven session-row facts: S1 partial, S4 request
   half, S5 call issuer; row-readers baseline −14), #14359 (six
   infrastructure facts, the id minter and golden regeneration among them),
