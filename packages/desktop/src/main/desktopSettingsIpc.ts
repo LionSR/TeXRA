@@ -6,7 +6,7 @@ import {
 } from '@texra-ai/llm/node';
 import { Skills, withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { onAppSignal } from '@eventBus/AppSignals';
+import { onAppSignal } from '@texra-ai/harness/host';
 import { unsupported } from '@texra/shared/utils/dispatcher';
 import type { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
@@ -196,15 +196,9 @@ export function createDesktopSettingsIpc(
     ),
   };
 
-  const { repaintOn, settle } = body;
   const subscriptions: Array<Effect.Effect<void, never, ProcessServices>> = [
-    body.followToolAvailability,
-    ...(Object.keys(repaintOn) as Array<keyof typeof repaintOn>).map((signal) =>
-      onAppSignal(signal, (payload) => {
-        const work = repaintOn[signal](payload as never);
-        if (work) spawn(settle(work));
-      }),
-    ),
+    // Each repaint runs as a fiber of the window, like its other callbacks.
+    body.followRepaints((repaint) => Effect.sync(() => spawn(repaint))),
     // Outside VS Code a rejected token left the pollers failing in silence.
     // The dialog is the whole fix: the token status reports only which store
     // holds a token, and rejection leaves the secret in place, so re-posting

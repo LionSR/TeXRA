@@ -17,6 +17,7 @@ import {
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@texra-ai/harness/host';
+import { emitAppSignal, type AppSignals } from '@texra-ai/harness/host';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 
 const CHANNEL = 'AcceptedFileTarget';
@@ -99,21 +100,20 @@ function buildAcceptSuccessMessage(
 
 /**
  * Host capabilities the accept-edited commit step reaches through that the
- * filesystem cannot answer: notifying the host of a workspace write and
- * reporting success. The reads, writes and deletions themselves go through
- * the `FileSystem` the returned program requires, so no host re-implements
- * them. `E` is the failure the host's own notification can report.
+ * filesystem cannot answer: reporting success. The reads, writes and
+ * deletions themselves go through the `FileSystem` the returned program
+ * requires, and a workspace write is announced on the process's signal hub
+ * (`workspaceFilesWritten`), so no host re-implements them. `E` is the
+ * failure the host's own notification can report.
  */
 export interface CommitAcceptedFilePorts<E = never> {
-  /** Notify the host that a workspace file was written at this absolute path. */
-  emitWritten: (absolutePath: string) => void;
   showInfo: (message: string) => Effect.Effect<void, E>;
 }
 
 /**
  * Host capabilities the accept-edited replace flow reaches through, so the
  * host-neutral orchestration can run on both the VS Code command (warning
- * dialog, app signals) and the desktop bridge (dialog IPC) without each side
+ * dialog) and the desktop bridge (dialog IPC) without each side
  * re-implementing the confirm / commit sequence.
  */
 export interface AcceptEditedFileReplacePorts<
@@ -143,7 +143,11 @@ export function commitAcceptedFile<E>(
   target: { targetLocation: FileLocation; targetFileName: string },
   targetExisted: boolean,
   ports: CommitAcceptedFilePorts<E>,
-): Effect.Effect<void, E | PlatformError.PlatformError, FileSystem.FileSystem> {
+): Effect.Effect<
+  void,
+  E | PlatformError.PlatformError,
+  FileSystem.FileSystem | AppSignals
+> {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const { targetLocation, targetFileName } = target;
@@ -155,7 +159,9 @@ export function commitAcceptedFile<E>(
     );
     yield* fs.writeFileString(targetLocation.absolutePath, editedContent);
     if (targetLocation.kind === 'workspace') {
-      ports.emitWritten(targetLocation.absolutePath);
+      yield* emitAppSignal('workspaceFilesWritten', {
+        absolutePaths: [targetLocation.absolutePath],
+      });
     }
 
     const stale = staleDiffFileLocation(
@@ -210,7 +216,7 @@ export function acceptEditedFileReplace<E>(
 ): Effect.Effect<
   boolean,
   E | PlatformError.PlatformError,
-  FileSystem.FileSystem
+  FileSystem.FileSystem | AppSignals
 > {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;

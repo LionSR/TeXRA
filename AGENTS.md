@@ -160,8 +160,9 @@ Where things go:
   webview frontends import no `@utils/*` module at runtime; they get path,
   error, text and escaping helpers from `@texra-ai/harness/schemas` and the
   transcript helpers from `@texra-ai/harness/transcript`.
-- `packages/harness/src/eventBus/` is `AppSignals` only (auth, subscriptions,
-  credentials, workspace-file writes), not run or session progress.
+- `AppSignals` (`packages/harness/src/platform/appSignals.ts`) carries only
+  app-lifecycle signals (auth, subscriptions, credentials, workspace-file
+  writes), not run or session progress.
 - Webview base classes are in `packages/extension/src/common/webview/`, not in
   the harness.
 - The transcript row model is `packages/harness/src/shared/transcript/`

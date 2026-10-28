@@ -44,7 +44,7 @@ import {
 } from 'effect';
 
 import { AgentCatalog } from '@agent/index/agentCatalog';
-import { emitAppSignal } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@platform/appSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -93,11 +93,7 @@ export const registerCustomAgentRoot = Effect.flatMap(
 export const reloadAgentCatalog = Effect.flatMap(
   AgentCatalog,
   (catalog) => catalog.refresh,
-).pipe(
-  Effect.andThen(
-    Effect.sync(() => emitAppSignal('workspaceAgentsChanged', undefined)),
-  ),
-);
+).pipe(Effect.andThen(emitAppSignal('workspaceAgentsChanged', undefined)));
 
 /**
  * An edit under the custom directory, as a stream of "something changed".
@@ -233,7 +229,7 @@ export const agentCatalogFollower = Layer.effectDiscard(
     yield* appState.changes([GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]).pipe(
       Stream.drop(1),
       Stream.runForEach(() =>
-        Effect.sync(() => emitAppSignal('workspaceAgentsChanged', undefined)),
+        emitAppSignal('workspaceAgentsChanged', undefined),
       ),
       Effect.forkScoped,
     );

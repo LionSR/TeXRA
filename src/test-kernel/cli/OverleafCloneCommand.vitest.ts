@@ -3,13 +3,14 @@ import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { overleafGitClone } from '@latex/overleafProject';
+import { Secrets } from '@platform/secrets';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -44,14 +45,6 @@ vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
     disposeCliProcessRuntime: EffectModule.void,
   };
 });
-
-vi.mock('@cli/runtime/cliSecrets', () => ({
-  cliSecrets: () => ({
-    get: mocks.getSecret,
-    delete: mocks.deleteSecret,
-    set: mocks.setSecret,
-  }),
-}));
 
 vi.mock('@cli/runtime/cliContext', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/cliContext')>()),
@@ -137,7 +130,23 @@ describe('CLI Overleaf clone command', () => {
     runtimeSpy = vi
       .spyOn(runtime, 'runPromiseExit')
       .mockImplementation((program, options) =>
-        runPromiseExit(program.pipe(Effect.provide(scripted.layer)), options),
+        runPromiseExit(
+          program.pipe(
+            Effect.provide(
+              Layer.merge(
+                scripted.layer,
+                // The store the clone caches its token in, as the runtime
+                // serves it.
+                Layer.mock(Secrets, {
+                  get: mocks.getSecret,
+                  delete: mocks.deleteSecret,
+                  set: mocks.setSecret,
+                }),
+              ),
+            ),
+          ),
+          options,
+        ),
       );
     mocks.getSecret.mockReturnValue(Effect.succeed('olp_secret'));
     mocks.readCliAmbientState.mockReturnValue({

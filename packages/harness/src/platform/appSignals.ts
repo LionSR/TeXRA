@@ -1,4 +1,12 @@
-import { Deferred, Effect, PubSub, Stream } from 'effect';
+import {
+  Context,
+  Deferred,
+  Effect,
+  Layer,
+  PubSub,
+  type Scope,
+  Stream,
+} from 'effect';
 
 /**
  * Cross-cutting, process-scoped app-lifecycle signals (subscriptions,
@@ -9,8 +17,9 @@ import { Deferred, Effect, PubSub, Stream } from 'effect';
  *
  * Delivery and error order, which this module owns and no caller may vary:
  *
- * - `emitAppSignal` publishes and returns. It never runs a subscriber, so a
- *   subscriber can neither block nor fail the code that emitted.
+ * - Publishing (`emit`, `emitAppSignal`) enqueues and returns. It never runs
+ *   a subscriber, so a subscriber can neither block nor fail the code that
+ *   emitted.
  * - Each subscriber drains its own `PubSub` subscription on its own fiber,
  *   forked at the host's run edge (the fork lives at the host entry, not
  *   in the bus, since only a host runs Effects). One subscriber sees the
@@ -134,66 +143,80 @@ export interface AppSignalPayloads {
   workspaceFilesWritten: { absolutePaths: string[] };
 }
 
+/** The name of one app signal. */
 export type AppSignal = keyof AppSignalPayloads;
 
 /**
- * One published signal. The key and its payload are correlated by the two
- * public functions below, which is where a caller proves the pair; on the
+ * One published signal. The key and its payload are correlated by `emit`
+ * and the subscriptions below, which is where a caller proves the pair; on the
  * hub they travel as what every subscription reads, a key and one of the
  * declared payloads.
  */
-interface AppSignalEvent {
+export interface AppSignalEvent {
   readonly signal: AppSignal;
   readonly payload: AppSignalPayloads[AppSignal];
 }
 
 /**
- * The hub every signal is published to, opened by the first subscriber. A
- * `PubSub` is built inside an Effect and this module holds no execution
- * boundary of its own, so there is nothing to open it before then — and
- * nothing is lost: a subscription only receives what is published after it
- * exists, so a signal emitted before the first subscriber had no reader
- * either way. Unbounded and never shut down: it lives as long as the
- * process, and publishing never blocks or drops.
+ * The process's signal hub: one unbounded `PubSub`, built once by the
+ * process layer and served to every program of the process from context.
+ * Unbounded and never shut down, so publishing never blocks or drops; a
+ * subscription only receives what is published after it exists.
  */
-let hub: PubSub.PubSub<AppSignalEvent> | undefined;
+export class AppSignals extends Context.Service<
+  AppSignals,
+  {
+    /**
+     * Publish `signal` to every current subscriber and return. Synchronous
+     * by construction: the publish is the enqueue, and the hub is unbounded,
+     * so it always accepts without suspending. The delivery itself runs on
+     * each subscriber's own fiber — see the delivery and error order above.
+     * For an owner whose callbacks run outside any fiber (a secret store's
+     * commit, a registry's close listener), which captures the service
+     * where its layer is built; a program publishes with
+     * {@link emitAppSignal}.
+     */
+    readonly emit: <K extends AppSignal>(
+      signal: K,
+      payload: AppSignalPayloads[K],
+    ) => void;
+    /** A subscription to every signal, held for the caller's scope. */
+    readonly subscribe: Effect.Effect<
+      PubSub.Subscription<AppSignalEvent>,
+      never,
+      Scope.Scope
+    >;
+  }
+>()('@texra-ai/harness/AppSignals') {
+  static readonly layer: Layer.Layer<AppSignals> = Layer.effect(
+    AppSignals,
+    Effect.map(PubSub.unbounded<AppSignalEvent>(), (hub) => ({
+      emit: (signal, payload) => {
+        PubSub.publishUnsafe(hub, { signal, payload });
+      },
+      subscribe: PubSub.subscribe(hub),
+    })),
+  );
+}
 
-const openHub: Effect.Effect<PubSub.PubSub<AppSignalEvent>> = Effect.suspend(
-  () => {
-    if (hub !== undefined) return Effect.succeed(hub);
-    // `??=` settles a race between two first subscribers on the winner: the
-    // loser publishes into, and reads from, the hub the winner opened.
-    return Effect.map(
-      PubSub.unbounded<AppSignalEvent>(),
-      (opened) => (hub ??= opened),
-    );
-  },
-);
-
-/**
- * Publish `signal` to every current subscriber and return. Synchronous by
- * construction: the publish is the enqueue, and the hub is unbounded, so it
- * always accepts without suspending. The delivery itself runs on each
- * subscriber's own fiber — see the delivery and error order above.
- */
-export function emitAppSignal<K extends AppSignal>(
+/** Publish `signal` from a program: {@link AppSignals}' `emit`. */
+export const emitAppSignal = <K extends AppSignal>(
   signal: K,
   payload: AppSignalPayloads[K],
-): void {
-  if (hub === undefined) return;
-  PubSub.publishUnsafe(hub, { signal, payload });
-}
+): Effect.Effect<void, never, AppSignals> =>
+  AppSignals.useSync((signals) => signals.emit(signal, payload));
 
 /** The payloads of `signal` among every signal a subscription reads. */
 const payloadsOf =
   <K extends AppSignal>(signal: K) =>
-  (
-    events: Stream.Stream<AppSignalEvent>,
-  ): Stream.Stream<AppSignalPayloads[K]> =>
+  <R>(
+    events: Stream.Stream<AppSignalEvent, never, R>,
+  ): Stream.Stream<AppSignalPayloads[K], never, R> =>
     events.pipe(
       Stream.filter((event) => event.signal === signal),
-      // The key matched, so the payload is the one this key declares; a
-      // generic key cannot carry that pairing through the hub's type.
+      // A generic key cannot carry the key-payload pairing through the hub's
+      // type.
+      // cast: the key matched, so the payload is the one this key declares.
       Stream.map((event) => event.payload as AppSignalPayloads[K]),
     );
 
@@ -206,10 +229,13 @@ const payloadsOf =
  */
 export function appSignalStream<K extends AppSignal>(
   signal: K,
-): Stream.Stream<AppSignalPayloads[K]> {
-  return Stream.unwrap(Effect.map(openHub, Stream.fromPubSub)).pipe(
-    payloadsOf(signal),
-  );
+): Stream.Stream<AppSignalPayloads[K], never, AppSignals> {
+  return Stream.unwrap(
+    Effect.map(
+      AppSignals.use((signals) => signals.subscribe),
+      Stream.fromSubscription,
+    ),
+  ).pipe(payloadsOf(signal));
 }
 
 /**
@@ -224,10 +250,10 @@ export function onAppSignal<K extends AppSignal>(
   signal: K,
   listener: (payload: AppSignalPayloads[K]) => void,
   subscribed?: Deferred.Deferred<void>,
-): Effect.Effect<void> {
+): Effect.Effect<void, never, AppSignals> {
   return Effect.scoped(
     Effect.gen(function* () {
-      const subscription = yield* PubSub.subscribe(yield* openHub);
+      const subscription = yield* (yield* AppSignals).subscribe;
       if (subscribed) yield* Deferred.succeed(subscribed, undefined);
       yield* Stream.fromSubscription(subscription).pipe(
         payloadsOf(signal),
