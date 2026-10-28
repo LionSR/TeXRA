@@ -38,7 +38,7 @@ import {
   HISTORY_WRITE_SQL,
   HISTORY_SCHEMA_SQL,
   HISTORY_ROW_LIMIT,
-  HISTORY_TEXT_LIMIT,
+  cutText,
   replaceRuns,
   type HistoryWrite,
 } from './views';
@@ -142,9 +142,7 @@ function storeOps(rows: readonly DisplaySessionEvent[]): HistoryWrite[] {
       Object.entries(row).filter(([key]) => !ENVELOPE_KEYS.has(key)),
     );
     const data = JSON.stringify(payload, (_key, value: unknown) =>
-      typeof value === 'string' && value.length > HISTORY_TEXT_LIMIT
-        ? `${value.slice(0, HISTORY_TEXT_LIMIT)}… [cut: ${value.length} characters in all]`
-        : value,
+      cutText(value),
     );
     ops.push([
       'insert',

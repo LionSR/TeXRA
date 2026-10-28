@@ -97,7 +97,12 @@ export const HISTORY_SCHEMA_SQL = [
 /** The longest text value the store holds whole: a longer one, a large
  *  tool output most often, is cut to this many characters and marked with
  *  its full length, so a long history stays within the store's memory. */
-export const HISTORY_TEXT_LIMIT = 16 * 1024;
+const HISTORY_TEXT_LIMIT = 16 * 1024;
+/** `value`, or a text value past {@link HISTORY_TEXT_LIMIT} cut to it. */
+export const cutText = <T>(value: T): T | string =>
+  typeof value === 'string' && value.length > HISTORY_TEXT_LIMIT
+    ? `${value.slice(0, HISTORY_TEXT_LIMIT)}… [cut: ${value.length} characters in all]`
+    : value;
 /** The longest row the store holds whole, after its text values are cut: a
  *  longer one (many values, a large object) keeps only its length. */
 export const HISTORY_ROW_LIMIT = 64 * 1024;
@@ -124,8 +129,7 @@ export const replaceRuns = (runs: SessionView['runs']): HistoryWrite[] => [
     let lifecycle = 'activated';
     if (run.durableOutcome !== null) lifecycle = 'ended';
     else if (run.status === RUN_LIFECYCLE_READY) lifecycle = 'created';
-    return [
-      'run',
+    const row = [
       run.id,
       run.parentId,
       run.identity.kind,
@@ -139,6 +143,7 @@ export const replaceRuns = (runs: SessionView['runs']): HistoryWrite[] => [
       run.usage.inputTokens,
       run.usage.outputTokens,
     ];
+    return ['run', ...row.map(cutText)];
   }),
 ];
 
