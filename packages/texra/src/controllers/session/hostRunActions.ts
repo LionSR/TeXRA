@@ -44,6 +44,7 @@ import {
   type RunRequest,
   type ValidatedRunRequest,
 } from '@texra/controllers/session/runRequests';
+import { forkRun } from '@texra/controllers/session/runActionPolicy';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { packDestination } from '@texra/tools/documents/runOutputs';
 import type {
@@ -660,29 +661,23 @@ export const createHostRunActions = Effect.fn(
       });
     },
     fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
-      const outcome = yield* session
-        .request({ kind: 'run.fork', runId, at })
-        .pipe(
-          Effect.mapError((error): RequestRefusal =>
-            isRequestRefusal(error)
-              ? error
-              : new Unavailable({
-                  runId,
-                  reason: 'The task could not be forked.',
-                }),
-          ),
-        );
-      if (outcome.kind !== 'forked')
-        return yield* Effect.die(
-          new Error(`run.fork answered ${outcome.kind}`),
-        );
-      // The fork waits for its host: continuing it parks it on the
-      // user's next message. A refusal is told by the resume itself, and
-      // the fork keeps its Resume.
+      const fork = yield* forkRun(session, runId, at).pipe(
+        Effect.mapError((error): RequestRefusal =>
+          isRequestRefusal(error)
+            ? error
+            : new Unavailable({
+                runId,
+                reason: 'The task could not be forked.',
+              }),
+        ),
+      );
+      // The fork waits for its host: continuing it waits on the user's
+      // next message. A refusal is told by the resume itself, and the fork
+      // keeps its Resume.
       yield* session
-        .resume(outcome.runId, { interactive: true })
+        .resume(fork, { interactive: true })
         .pipe(Effect.ignore({ log: 'Warn' }));
-      return outcome.runId;
+      return fork;
     }),
   };
 });

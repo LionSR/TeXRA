@@ -33,6 +33,7 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
+import { forkRun } from '@texra/controllers/session/runActionPolicy';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
@@ -244,18 +245,12 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
     const source = runViewOf(currentView(), runId);
     // Cut before this chat lets go of the source, so the fork reads it as
     // it stands now.
-    const forked = yield* Effect.result(
-      context.runSession.request({ kind: 'run.fork', runId }),
-    );
+    const forked = yield* Effect.result(forkRun(context.runSession, runId));
     if (Result.isFailure(forked)) {
       appendLocalRequestRefusal(forked.failure, runId);
       return;
     }
-    if (forked.success.kind !== 'forked')
-      return yield* Effect.die(
-        new Error(`run.fork answered ${forked.success.kind}`),
-      );
-    const fork = forked.success.runId;
+    const fork = forked.success;
     // The chat holds one task: the conversation it shows gives way to the
     // fork, as `/clear` gives way to a new task (refused mid-response). The
     // fork is taken up once the source has ended, so the source's end cannot
