@@ -1,12 +1,10 @@
 import { Effect, Schema } from 'effect';
 
-// IPC plumbing for the in-app Review workbench.
-//
-// The desktop main process used to satisfy `DiffViewHost.openDiff` by
-// generating a `.diff` patch file and opening it in the OS default editor
-// (`desktopDiffHost.ts`). With #3801's three-pane shell landed, the
-// renderer can now mount `<texra-diff-view>` (Monaco-backed) inside a
-// persistent Review tab beside a hierarchical changed-file index.
+// IPC plumbing for the in-app Review workbench: the renderer mounts
+// `<texra-diff-view>` (Monaco-backed) inside a persistent Review tab beside a
+// hierarchical changed-file index. A `.diff` patch opened in the OS default
+// editor is only the fallback when the renderer cannot be reached
+// (`desktopDiffHost.ts`).
 //
 // `desktop:showDiff` carries the original/proposed text + a hint language
 // for Monaco's tokenizer, so the renderer never has to read disk. The

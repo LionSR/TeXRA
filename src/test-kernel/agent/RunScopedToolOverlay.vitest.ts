@@ -10,7 +10,8 @@ import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
+import { ModelInvoker } from '@agent/runtime/ModelInvoker';
+import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { stepFor } from '@agent/runtime/loop/step';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { AgentRun, agentRunLayer } from '@agent/runtime/run/AgentRun';

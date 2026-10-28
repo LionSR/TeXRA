@@ -13,12 +13,9 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
   generateRunId,
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
   type RequestError,
   ensureError,
 } from '@texra-ai/harness/schemas';
-import { Settings } from '@texra-ai/harness';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceClient } from '@texra/controllers/server/client';
 import { requestErrorText } from '@ui/copy/requestErrors';
@@ -29,6 +26,7 @@ import {
   CliUsageError,
   launchApproval,
   launchApprovalNotice,
+  projectApprovalPolicy,
   type CliContext,
 } from '../runtime/cliContext';
 import { connectCliService, serviceKeysNotice } from '../runtime/cliService';
@@ -195,10 +193,7 @@ const startCommand = defineCliCommand({
     const approval = launchApproval(requested);
     const refused = launchApprovalNotice(
       requested,
-      Settings.getConfig<ApprovalPolicy>(
-        services.config,
-        APPROVAL_POLICY_CONFIG_KEY,
-      ),
+      projectApprovalPolicy(services.config),
     );
     if (refused !== undefined) writeTextStderr(refused);
     // Asked beside the launch, so a slow login shell never delays it.

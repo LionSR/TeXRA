@@ -1,5 +1,5 @@
 /**
- * The Shell (PRD one-fold-three-renderers, section 9): one record per view
+ * The Shell: one record per view
  * instance, above the per-session `Surface`. It is what lets a rail row
  * choose a project: a `Surface` is per session and cannot say which session,
  * a `SessionView` is a fact about one session, and the layer map is a

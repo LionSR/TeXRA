@@ -54,7 +54,7 @@ import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { desktopSpawner, type DesktopSpawn } from './desktopWindows.js';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
-import type { PlatformSecrets, AgentDirectoriesPort } from '@texra-ai/harness';
+import type { PlatformSecrets } from '@texra-ai/harness';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type {
   DesktopProject,
@@ -62,7 +62,7 @@ import type {
 } from './desktopProjects.js';
 import type { DesktopWindowHost } from './desktopWindowHost.js';
 
-export interface ProjectBinding {
+interface ProjectBinding {
   readonly project: DesktopProject;
   readonly bridge: SessionBridge;
   /** This window's port on the project's bridge. */
@@ -99,12 +99,11 @@ export interface ProjectBindings {
   readonly workspaceRoute: DesktopCommandRoute;
 }
 
-export interface ProjectBindingsOptions {
+interface ProjectBindingsOptions {
   readonly host: DesktopWindowHost;
   readonly runtime: ProcessRuntime;
   readonly projects: DesktopProjectRegistry;
   readonly secrets: PlatformSecrets;
-  readonly agentDirectories: AgentDirectoriesPort;
   readonly resourcesPath: string;
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;
@@ -350,7 +349,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         runtime,
         spawn,
         project,
-        secrets: options.secrets,
         draftRequests: options.draftRequests,
         workspaceFile: workspace.file,
         host: hosts.request,
@@ -360,7 +358,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         resourcesPath: options.resourcesPath,
         postToRenderer: host.post,
         postSurfaceAction: (action) => bridge.surfaceAction(action),
-        getCustomAgentDirectory: () => options.agentDirectories.custom(),
         onboarding: options.onboarding,
         openExternalUrl: host.openExternalUrl,
         recheckTools: () =>

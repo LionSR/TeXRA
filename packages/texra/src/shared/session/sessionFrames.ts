@@ -1,6 +1,6 @@
 /**
- * The bridge between a session runtime and a renderer process (PRD
- * one-fold-three-renderers, 7.4, 8.1, 8.4, 8.5): the wire schemas, up and
+ * The bridge between a session runtime and a renderer process: the wire
+ * schemas, up and
  * down, and `SessionFrames`, the webview's source of session events.
  *
  * Down: an `EventsFrame` carries the rows one `Subscribe` asked for, tagged
@@ -88,7 +88,7 @@ export const EventsFrameSchema = Schema.Struct({
 });
 export type EventsFrame = typeof EventsFrameSchema.Type;
 
-/** What the host answers a `host.request` with (PRD 8.3): the pickers and
+/** What the host answers a `host.request` with: the pickers and
  *  the drop return the paths they accepted, a polish returns its text, a
  *  stored image its file name, the editor's file I/O a listing, a file's
  *  contents, or a write refused because the file changed since it was
@@ -136,7 +136,7 @@ const ResponseSchema = Schema.Struct({
 });
 export type Response = typeof ResponseSchema.Type;
 
-/** The host-initiated surface actions (PRD 8.5), and only these. */
+/** The host-initiated surface actions, and only these. */
 const SurfaceActionMessageSchema = Schema.Struct({
   kind: Schema.Literal('surface.action'),
   session: SessionKeySchema,
@@ -148,7 +148,7 @@ const SurfaceActionMessageSchema = Schema.Struct({
      *  session keeps it. The surface decides, since only it knows. */
     Schema.Struct({ kind: Schema.Literal('showSessions'), runId: RunIdSchema }),
     /** The run accelerator: the composer's Send for the surface's resolved
-     *  selection, a follow-up to the selected stream or a launch (PRD 12.4). */
+     *  selection, a follow-up to the selected stream or a launch. */
     Schema.Struct({ kind: Schema.Literal('submit') }),
     /** A fork's composer holds the message "Fork from here" cut before,
      *  with the files it attached as the composer's images. */
@@ -162,7 +162,7 @@ const SurfaceActionMessageSchema = Schema.Struct({
     }),
     /** A workflow run of this session left running for finished or
      *  cancelled: the host decides the transition once and sends it to one
-     *  port, which plays the completion chime (PRD 12.4). */
+     *  port, which plays the completion chime. */
     Schema.Struct({ kind: Schema.Literal('chime') }),
     /** The setup agent selected by the onboarding funnel. */
     Schema.Struct({ kind: Schema.Literal('launch'), patch: LaunchPatchSchema }),

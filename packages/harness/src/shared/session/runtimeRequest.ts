@@ -7,7 +7,7 @@
  *
  * Arm tags are `group.action` throughout, so two groups cannot claim one
  * tag. Every run-scoped arm names a bare `runId`: a `RunId` names one run
- * for its whole life (decision 9), so a request that waits while its run is
+ * for its whole life, so a request that waits while its run is
  * deleted can only miss, never land on a different run.
  * The union carries the arms the runtime answers today; a lane that routes
  * another retained command adds its arm with its handler.

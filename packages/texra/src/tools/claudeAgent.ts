@@ -64,7 +64,6 @@ import {
 import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
   agentCliApprovalCommand,
-  type AgentCliLaunchContext,
   buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
@@ -508,15 +507,13 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
   | ChildProcessSpawner
   | FileSystem.FileSystem
 > {
-  const toolCall = yield* ToolContext;
-  const { roots } = toolCall.env;
+  const { roots } = (yield* ToolContext).env;
   const permissionMode = yield* claudeAgentPermissionMode(input, roots);
   const claudeRun = yield* readClaudeCodeRun(roots, input);
   const sessionId = input.session_id ?? undefined;
   const isFork = input.fork_session === true;
 
   return yield* dispatchAgentCliTool({
-    toolCall,
     agentName: CLAUDE_AGENT_NAME,
     store: ClaudeAgentSessions,
     // A fork always launches a distinct TeXRA child. Queueing onto the
@@ -530,8 +527,13 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
       summaryLabel: 'Claude Code CLI',
       queuedLabel: 'Claude Code session',
     },
-    launch: (context) =>
-      launchClaudeAgentSession(input, permissionMode, claudeRun, context),
+    launch: (releaseFallbackClaim) =>
+      launchClaudeAgentSession(
+        input,
+        permissionMode,
+        claudeRun,
+        releaseFallbackClaim,
+      ),
   });
 });
 
@@ -562,20 +564,26 @@ const launchClaudeAgentSession = Effect.fn(
   input: ClaudeAgentInput,
   permissionMode: ClaudeAgentPermissionMode,
   claudeRun: ClaudeCodeRun,
-  context: AgentCliLaunchContext,
+  releaseFallbackClaim: (() => void) | undefined,
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  Secrets | ToolContext | ChildProcessSpawner | FileSystem.FileSystem
+  | Secrets
+  | ToolContext
+  | ClaudeAgentSessions
+  | ChildProcessSpawner
+  | FileSystem.FileSystem
 > {
   const config = yield* getClaudeAgentConfig;
-  const { roots } = (yield* ToolContext).env;
+  const { roots, workingDirectory: parentWorkingDirectory } =
+    (yield* ToolContext).env;
+  const registry = yield* ClaudeAgentSessions;
   // Mirrors codex so subagents can see the project: a call from inside the
   // workspace runs in that directory with read access to the workspace root
   // for sibling files; an out-of-workspace cwd runs isolated. The SDK's
   // `Options` names these `cwd` / `additionalDirectories`, unlike codex.
   const { workingDirectory, additionalDirectories } =
-    buildAgentWorkspaceOptions(roots.workspace, context.parentWorkingDirectory);
+    buildAgentWorkspaceOptions(roots.workspace, parentWorkingDirectory);
   // The env block reads the process environment and `Secrets`: no workspace.
   const env = yield* config
     .buildClaudeAgentEnv()
@@ -610,8 +618,8 @@ const launchClaudeAgentSession = Effect.fn(
         pathToClaudeCodeExecutable,
         resumeSessionId: input.session_id ?? undefined,
         forkSession: input.fork_session === true,
-        releaseFallbackClaim: context.releaseFallbackClaim,
-        registry: context.registry,
+        releaseFallbackClaim,
+        registry,
       }),
     summaryLabel: 'Claude Code CLI',
     launchedLine: `Claude Code agent launched (model: ${claudeRun.ref}, effort: ${claudeRun.effort ?? 'none'}, permission: ${permissionMode}).${claudeRun.note ? ` ${claudeRun.note}` : ''}`,

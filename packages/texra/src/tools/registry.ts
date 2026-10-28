@@ -185,7 +185,7 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
 const setup = (platform: SetupPlatformShape) =>
   definePlugin<SetupPlatform>({
     id: 'setup',
-    processLayer: { layer: SetupPlatform.layer(platform) },
+    processLayer: { layer: Layer.succeed(SetupPlatform)(platform) },
     tools: {
       probe_environment: ProbeEnvironmentTool,
       unset_api_key: UnsetApiKeyTool,

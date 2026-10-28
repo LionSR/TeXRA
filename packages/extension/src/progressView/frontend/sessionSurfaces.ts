@@ -36,7 +36,6 @@ import {
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { LAUNCH_FILE_LISTS } from '@ui/copy/fileSelectConfigs';
 
-import { playCompletionSound } from './audioNotification';
 import { editedProposal, proposalApproval } from './proposalEdit';
 import {
   installWebviewTransport,
@@ -49,6 +48,26 @@ import type {
   RuntimeRequest,
   RunId,
 } from '@texra-ai/harness/schemas';
+
+/** A short beep for a run the host decided to chime for. Autoplay
+ *  restrictions and a missing audio device are expected, not fatal, but the
+ *  cause is logged so a regressing AudioContext path is not invisible. */
+function playCompletionSound(): void {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    osc.connect(ctx.destination);
+    osc.start();
+    setTimeout(() => {
+      osc.stop();
+      ctx.close();
+    }, 150);
+  } catch (error) {
+    console.warn('Failed to play completion sound:', error);
+  }
+}
 
 /** One open session as the root holds it: its three records as signals. */
 interface SessionSurface {

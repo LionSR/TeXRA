@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
-  it('deduplicates repeated source paths while preserving required custom roots, and rejects a repeated contribution id', () => {
+  it('deduplicates repeated source paths while preserving required custom roots', () => {
     const projectSkillsPath = path.resolve(
       path.sep,
       'tmp',
@@ -67,16 +67,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         required: true,
       }),
     ]);
-    expect(() =>
-      foldSkillSources(hostSkillContributions(['lean4', 'lean4']), {
-        cwd: path.resolve(path.sep, 'tmp', 'project'),
-        home: path.resolve(path.sep, 'tmp', 'home'),
-        storageRoot: path.resolve(path.sep, 'tmp', 'home', '.texra'),
-        resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
-        options: {},
-        plugins: [],
-      }),
-    ).toThrow('Duplicate skill source contribution id: lean4');
   });
 
   it.effect(

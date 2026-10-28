@@ -7,20 +7,19 @@
 
 import path from 'node:path';
 
-import { Effect, Exit, FileSystem, Layer } from 'effect';
+import { Effect, Exit, Layer } from 'effect';
 import {
+  AgentDirectories,
   Cancelled,
   Rejected,
   Unavailable,
   type HostRequestFailure,
-  PlatformSecrets,
-  AgentDirectoriesFailed,
+  Secrets,
   withProcessServices,
   workspaceEnvironmentLayer,
   type ProcessRuntime,
   type ProcessServices,
   sessionFsLayer,
-  type GlobalStorageFs,
   type StorageFs,
   type WorkspaceFs,
   pathToLocationIn,
@@ -82,8 +81,6 @@ interface DesktopHostRequestsOptions {
   /** The project this window serves: its runs run in its session, here or
    *  in the service, whose records answer what the window reads of them. */
   project: DesktopProject;
-  /** The process secret store the model catalog reads. */
-  secrets: PlatformSecrets;
   host: DesktopAgentRunHost;
   run: DesktopAgentRun;
   files: DesktopFileSelection;
@@ -95,11 +92,6 @@ interface DesktopHostRequestsOptions {
   postToRenderer(message: unknown): boolean | void;
   /** A host-initiated change to the surface (PRD 8.5). */
   postSurfaceAction(action: SurfaceActionMessage['action']): void;
-  getCustomAgentDirectory(): Effect.Effect<
-    string,
-    AgentDirectoriesFailed,
-    GlobalStorageFs | FileSystem.FileSystem
-  >;
   onboarding: Pick<
     DesktopOnboardingIpc,
     'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'
@@ -170,9 +162,9 @@ export function createDesktopHostRequests(
       loadModelOptions: () =>
         withProcessServices(
           runtime,
-          loadModelOptions({ ...roots, secrets: options.secrets }).pipe(
-            Effect.provide(projectEnv),
-          ),
+          Effect.flatMap(Secrets, (secrets) =>
+            loadModelOptions({ ...roots, secrets }),
+          ).pipe(Effect.provide(projectEnv)),
         ),
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal prompt.
@@ -244,15 +236,6 @@ export function createDesktopHostRequests(
             ),
           ),
       openDirectory: (directory) => host.openPath(directory),
-      // An accepted-edit backup names an absolute path the controller already
-      // resolved, so this reads through the process filesystem rather than a
-      // rooted view that would refuse a path outside the workspace.
-      readFile: (file) =>
-        Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
-          Effect.map(fs.readFileString(file), (text) =>
-            text.replaceAll('\r\n', '\n'),
-          ),
-        ),
       showInfo: (message) => host.showInfoMessage(message),
       showError: rejectRequestEffect,
     },
@@ -426,7 +409,9 @@ export function createDesktopHostRequests(
       options.openExternalUrl('https://texra.ai/guide/configuration.html'),
     ),
     openCustomAgentDirectory: Effect.gen(function* () {
-      const directory = yield* options.getCustomAgentDirectory();
+      const directory = yield* AgentDirectories.use((directories) =>
+        directories.custom(),
+      );
       yield* host.openPath(directory);
     }),
     openAgentDocs: Effect.suspend(() =>

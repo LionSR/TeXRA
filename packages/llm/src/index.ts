@@ -55,12 +55,7 @@ export {
   TurnProtocolSchema,
 } from './protocol.js';
 export type { ModelOrigin, PreparedHistoryEntry } from './protocol.js';
-export {
-  AssistantMessageSchema,
-  MessageSchema,
-  PreparedHistorySchema,
-  systemUpdateText,
-} from './message.js';
+export { AssistantMessageSchema, MessageSchema } from './message.js';
 export type { AssistantMessage, Continuation } from './message.js';
 export { ModelError, RemoteOperationSchema } from './errors.js';
 export type {
@@ -124,7 +119,6 @@ export {
   OWN_KEY_ROUTE_FACTS,
   resolveModelSource,
   routeConfig,
-  zeroCostAccessOverrides,
 } from './models/modelRoute.js';
 export type {
   ApiKeyUsageRoute,
@@ -138,7 +132,6 @@ export {
   acceptedEfforts,
   chooseReasoning,
   CODEX_ROUTE_EFFORTS,
-  defaultReasoningLevel,
   ReasoningChoiceError,
   wireEffort,
 } from './models/reasoningChoice.js';

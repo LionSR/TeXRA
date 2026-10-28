@@ -26,6 +26,7 @@ import {
 import { pluginDataDir, runHook } from '@common/plugins/pluginHooks';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import {
+  qualifyAggregateId,
   SUPPORTED_HOOK_EVENTS,
   type HookOutcomePayload,
   type ToolResult,
@@ -33,7 +34,6 @@ import {
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 
 import type { RunCell } from '@shared/session/runHistory';
-import { rowAggregate } from './rows';
 import { executableDecision } from '../requestPolicy';
 import { registryOf } from '../runRegistry';
 import type { AgentRunShape } from '../run/AgentRun';
@@ -241,7 +241,7 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
   return {
     rows: outcomes.map((payload): RunHistoryDraft => ({
       type: 'hook.outcome',
-      aggregateId: rowAggregate(run.runId),
+      aggregateId: qualifyAggregateId('run', run.runId),
       payload,
     })),
     ...effectOf(outcomes),

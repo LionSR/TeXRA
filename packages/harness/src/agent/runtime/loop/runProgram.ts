@@ -117,11 +117,10 @@ export type RunExit = {
 export const settleRun =
   (
     cell: RunCell,
-    /** The run's own input lease, or null for a run that takes no input. */
-    lease: FollowUps | null,
+    /** The run's own input lease. */
+    lease: FollowUps,
   ) =>
   (exit: Exit.Exit<RunExit, Error>): Effect.Effect<void, never, Runs> => {
-    if (lease === null) return Effect.void;
     // The body's own value when it returned.
     const outcome = Exit.match(exit, {
       onSuccess: (value) => value.outcome,

@@ -13,7 +13,7 @@ import {
   type RequestRefusal,
   type LocalSession,
   type Run,
-  Secrets,
+  type Secrets,
   type Session,
   type StartInput,
   StateReadFailed,
@@ -28,12 +28,7 @@ import {
 import { entryTypeIn } from '@texra-ai/harness/node';
 import { Cause, Effect, FileSystem, Schema, type Scope } from 'effect';
 
-import {
-  type ApiKeyProviderId,
-  hasUsableApiKey,
-  lookupApiKey,
-  type SecretsFailed,
-} from '@texra-ai/llm';
+import { type ApiKeyProviderId, type SecretsFailed } from '@texra-ai/llm';
 import {
   toErrorMessage,
   isTaskConfig,
@@ -169,7 +164,7 @@ export interface HostRunActionPorts extends RunActionRecordPorts {
    */
   promptForApiKey(
     provider: ApiKeyProviderId,
-  ): Effect.Effect<void, ApiKeyPromptFailed>;
+  ): Effect.Effect<void, ApiKeyPromptFailed, Secrets>;
   /** The notification surface, shared with {@link MessageHost}: a host that
    *  could not present fails with `NotificationFailed`, and a user who
    *  ignores the notice is not a failure. */
@@ -249,7 +244,7 @@ export interface HostRunActions {
     | RunLaunchFailed
     | SecretsFailed
     | StateReadFailed,
-    AppState
+    AppState | Secrets
   >;
   /** A new task holding the run's conversation up to `at` (its latest
    *  settled point when null), continued here so it takes a message: the
@@ -268,9 +263,8 @@ export const createHostRunActions = Effect.fn(
 ): Effect.fn.Return<
   HostRunActions,
   never,
-  FileSystem.FileSystem | Secrets | AgentCatalog
+  FileSystem.FileSystem | AgentCatalog
 > {
-  const secrets = yield* Secrets;
   // The catalog the merge's task resolves its agent against.
   const catalog = yield* Effect.context<AgentCatalog>();
   // Resolved once here and carried: the planner's workspace probes below
@@ -449,8 +443,6 @@ export const createHostRunActions = Effect.fn(
       );
 
   const apiKeyRetry = new ProgressApiKeyRetryController({
-    readKey: (provider) => lookupApiKey(secrets, provider),
-    hasUsableKey: (provider) => hasUsableApiKey(secrets, provider),
     // A host that could not ask returns the port's `ApiKeyPromptFailed`.
     promptForApiKey: (provider) => ports.promptForApiKey(provider),
     isRetryPending,

@@ -8,7 +8,7 @@
 // App entry points import registration from ./webAwesomeIcons directly because
 // icon registration is intentionally a one-time side effect at webview startup.
 // Component imports themselves (e.g. wa-button, wa-input) live alongside the
-// component family they belong to — added in subsequent migration PRs.
+// component family they belong to.
 
 import '@awesome.me/webawesome/dist/styles/themes/default.css';
 

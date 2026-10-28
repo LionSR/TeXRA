@@ -207,7 +207,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             // form settles it on the runtime this surface handed it.
             onSave={(provider, key) =>
               Effect.gen(function* () {
-                yield* commitCliProviderApiKey(secrets, roots, provider, key);
+                yield* commitCliProviderApiKey(roots, provider, key);
                 apiKeys.setData(
                   (current) => current && { ...current, [provider]: 'set' },
                 );
