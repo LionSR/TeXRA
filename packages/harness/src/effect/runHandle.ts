@@ -236,14 +236,13 @@ export function handOver(
           }),
         ),
       );
-    // The launch and the drain are the run's, and until the caller holds
-    // the `Run` that names them they are nobody's: whatever ends this
-    // handoff short of that ends them too. So the handoff is
-    // uninterruptible but for the admission wait, where an interruption
-    // stops the launch by run id, and the exit handler
-    // outside the mask covers the rest, the boundary included: an interrupt
-    // that lands while the tail runs is raised the moment the mask lifts,
-    // with a `Run` built that reaches no one.
+    // The launch and the drain are the run's, and until the caller holds the
+    // `Run` that names them they are nobody's: whatever ends this handoff short
+    // of that ends them too. So the handoff is uninterruptible but for the
+    // admission wait, where an interruption stops the launch by run id, and the
+    // exit handler outside the mask covers the rest, the boundary included: an
+    // interrupt that lands while the tail runs is raised the moment the mask
+    // lifts, with a `Run` built that reaches no one.
     const interruptLaunch = (): boolean =>
       registryOf(session.runs).interrupt(runId);
     const spawned: Fiber.Fiber<unknown, Error>[] = [];
@@ -300,10 +299,9 @@ export function handOver(
             );
           });
         yield* interest([runId]);
-        // The package owns this drain: the descendants join the
-        // subscription as the view gains them, and the run's `result` waits
-        // for its final fold even when nobody reads `view`, and fails if
-        // the fold dies first.
+        // The package owns this drain: the descendants join the subscription as
+        // the view gains them, and the run's `result` waits for its final fold
+        // even when nobody reads `view`, and fails if the fold dies first.
         const drain = yield* Effect.forkDetach(
           Stream.runDrain(
             view.pipe(
