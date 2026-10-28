@@ -35,11 +35,12 @@ import type { DatabaseReadFailed } from '@shared/session/database';
 
 import { HISTORY_QUERY_CHILD_SOURCE } from './childSource';
 import {
-  HISTORY_INSERT_SQL,
-  HISTORY_REMOVE_SQL,
+  HISTORY_WRITE_SQL,
   HISTORY_SCHEMA_SQL,
   HISTORY_ROW_LIMIT,
-  HISTORY_TEXT_LIMIT,
+  cutText,
+  replaceRuns,
+  type HistoryWrite,
 } from './views';
 import type { SessionHandle } from '../SessionHandle';
 import type { PlatformError } from 'effect/PlatformError';
@@ -90,12 +91,8 @@ type Reply = typeof ReplySchema.Type;
 /** One reply as the process writes it: a line of JSON. */
 const ReplyLineSchema = Schema.fromJsonString(ReplySchema);
 
-/** The session a store reads: its display tail and its current commit. */
-type HistorySession = Pick<SessionHandle, 'log'>;
-
-type StoreOp =
-  | readonly ['insert', string, string, string, string]
-  | readonly ['remove', string];
+/** The session a store reads: its display tail, current commit and view. */
+type HistorySession = Pick<SessionHandle, 'log' | 'view'>;
 
 interface Store {
   readonly scope: Scope.Closeable;
@@ -130,8 +127,8 @@ function statementRefusal(sql: string): string | null {
   return null;
 }
 
-function storeOps(rows: readonly DisplaySessionEvent[]): StoreOp[] {
-  const ops: StoreOp[] = [];
+function storeOps(rows: readonly DisplaySessionEvent[]): HistoryWrite[] {
+  const ops: HistoryWrite[] = [];
   for (const row of rows) {
     const target = aggregateTarget(row.aggregateId);
     if (target.kind !== 'run') continue;
@@ -145,9 +142,7 @@ function storeOps(rows: readonly DisplaySessionEvent[]): StoreOp[] {
       Object.entries(row).filter(([key]) => !ENVELOPE_KEYS.has(key)),
     );
     const data = JSON.stringify(payload, (_key, value: unknown) =>
-      typeof value === 'string' && value.length > HISTORY_TEXT_LIMIT
-        ? `${value.slice(0, HISTORY_TEXT_LIMIT)}… [cut: ${value.length} characters in all]`
-        : value,
+      cutText(value),
     );
     ops.push([
       'insert',
@@ -247,8 +242,7 @@ const openStore = Effect.fn('HistoryQuery.open')(function* (
     yield* request(store, {
       kind: 'init',
       schema: HISTORY_SCHEMA_SQL,
-      insert: HISTORY_INSERT_SQL,
-      remove: HISTORY_REMOVE_SQL,
+      writes: HISTORY_WRITE_SQL,
       heapLimit: STORE_HEAP_LIMIT_BYTES,
     }).pipe(Effect.flatMap(failedStep('schema')));
     return store;
@@ -339,6 +333,10 @@ export class HistoryQuery {
         );
         store.cursor = cursor;
       }
+      const { runs } = SubscriptionRef.getUnsafe(this.session().view.ref);
+      yield* request(store, { kind: 'append', ops: replaceRuns(runs) }).pipe(
+        Effect.flatMap(failedStep('runs')),
+      );
       const reply = yield* request(store, {
         kind: 'query',
         sql,
