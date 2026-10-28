@@ -196,9 +196,10 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
 export interface FinalizeRunInput {
   readonly runId: RunId;
   readonly outcome: RunOutcome;
-  /** Keep an outcome already written: a backstop (the host-exit drain)
-   *  owns no result. Read and write share one transaction. */
-  readonly keepExistingOutcome?: boolean;
+  /** An end no driver here writes (a stop that reached no live target, a
+   *  session close, a backstop): it retires the run's open owned children
+   *  first, where a driver's own end is refused while one is open. */
+  readonly ownerless?: boolean;
   /** The classified error behind a FAILED outcome, when the run has one. */
   readonly error?: RunEnd['error'];
   /** What the run produced; absent (an empty output) for a backstop, and
@@ -223,22 +224,22 @@ export const endIn = Effect.fn('endIn')(function* (
   append: Append,
   input: FinalizeRunInput,
 ) {
-  const { runId, outcome, keepExistingOutcome, error } = input;
+  const { runId, outcome, error } = input;
   const target = qualifyAggregateId('run', runId);
   const rows = yield* session.log.records(runId);
   // A run never created has nothing to end: its launch reports the failure.
   if (!rows.some((row) => row.type === 'run.start')) return { recorded: false };
   const lastTurn: Effect.Success<TransactionPart> = yield* input.lastTurn ??
     Effect.succeed({ rows: [] });
-  // Ended in its current lifecycle: a resumed run ends again, even the same
-  // way, or every `durableOutcome` reader keeps it RUNNING for want of the row.
+  // Ended in its current lifecycle, that end stands: a resumed run ends
+  // again, or every `durableOutcome` reader keeps it RUNNING for want of
+  // the row.
   const ended = runEndFromEvents(rows, runId)?.outcome;
-  const persisted =
-    keepExistingOutcome === true && ended !== undefined ? ended : outcome;
-  // No end now: the run already ended this way, or its end waits until the
-  // result it holds is delivered.
-  const skipEnd = ended === persisted || lastTurn.held === true;
-  if (ended === persisted && error !== undefined)
+  const persisted = ended ?? outcome;
+  // No end now: the run already ended, or its end waits until the result
+  // it holds is delivered.
+  const skipEnd = ended !== undefined || lastTurn.held === true;
+  if (ended !== undefined && error !== undefined)
     yield* Effect.logWarning(`Run ${runId} had ended: ${error.message}`);
   // The loop's halt, never apart from its end, through the run's cell.
   const halt = skipEnd
@@ -287,8 +288,8 @@ export const endIn = Effect.fn('endIn')(function* (
   return result;
 });
 
-/** No run ends while its open call owns a child that has not ended. A
- *  stop or backstop (`cascade`) retires such a child first; the run's own
+/** No run ends while its open call owns a child that has not ended. An
+ *  ownerless end (`cascade`) retires such a child first; the run's own
  *  terminal, or a stop whose child is live here, is refused. */
 const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
   session: SessionHandle,
@@ -309,7 +310,7 @@ const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
         finalizeRun(session, {
           runId: child.runId,
           outcome: RUN_OUTCOME.CANCELLED,
-          keepExistingOutcome: true,
+          ownerless: true,
         }),
       ),
     );
@@ -323,8 +324,8 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   session: SessionHandle,
   input: FinalizeRunInput,
 ): Effect.fn.Return<FinalizedRun, Error> {
-  const { runId, outcome, keepExistingOutcome } = input;
-  yield* endOwnedChildren(session, runId, keepExistingOutcome === true).pipe(
+  const { runId, outcome, ownerless } = input;
+  yield* endOwnedChildren(session, runId, ownerless === true).pipe(
     defectAsFailure,
   );
   const end = (ending: FinalizeRunInput) =>
@@ -387,7 +388,6 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   const backstop = yield* end({
     runId,
     outcome: RUN_OUTCOME.FAILED,
-    keepExistingOutcome: true,
     error: { kind: 'unexpected', message },
   });
   if (Exit.isFailure(backstop))

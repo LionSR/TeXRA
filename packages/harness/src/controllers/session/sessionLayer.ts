@@ -36,10 +36,8 @@ import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { rootRun } from '@agent/runtime/rootLaunch';
-import {
-  endRunOutsideLifecycle,
-  onHeldResult,
-} from '@agent/runtime/runLaunchGuard';
+import { onHeldResult } from '@agent/runtime/runLaunchGuard';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { registryOf, RunRegistry } from '@agent/runtime/runRegistry';
@@ -472,12 +470,11 @@ const heldSession = (root: string) =>
 const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
   Effect.gen(function* () {
     if (!(yield* session.log.owns(runId))) return;
-    yield* endRunOutsideLifecycle(
-      session,
+    yield* finalizeRun(session, {
       runId,
-      RUN_OUTCOME.CANCELLED,
-      undefined,
-    );
+      outcome: RUN_OUTCOME.CANCELLED,
+      ownerless: true,
+    });
   }).pipe(
     Effect.catchCause((cause) =>
       logFailure(

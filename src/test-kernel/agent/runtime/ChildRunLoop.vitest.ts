@@ -147,14 +147,14 @@ function createFakeStrategy(): FakeStrategyHandle {
 
 /** A process child's port for `runId`, untracked after the test. */
 const childRunPort = (runId: RunId) =>
-  createChildRun(session, runId, PARENT_RUN_ID, {
-    kind: 'agent',
-    agent: 'fake-cli',
-    tool: 'codex',
-  }).pipe(
-    Effect.provideService(Runs, session.runs),
-    Effect.tap(() => Effect.sync(() => trackedRunIds.add(runId))),
-  );
+  Effect.sync(() => {
+    trackedRunIds.add(runId);
+    return createChildRun(session, runId, PARENT_RUN_ID, {
+      kind: 'agent',
+      agent: 'fake-cli',
+      tool: 'codex',
+    });
+  });
 
 /**
  * Start a process child's loop with the fixture defaults (a port of its own
@@ -238,21 +238,26 @@ describe('childRunLoop E2E fixtures', () => {
         const runId = loopRunId();
         yield* session.log.settled;
         yield* session.log.hold(runId);
-        const launch = () => Effect.fail(new Error('Engine startup failed'));
+        const launch = () =>
+          Effect.andThen(
+            Effect.yieldNow,
+            Effect.fail(new Error('Engine startup failed')),
+          );
         let stop: ReturnType<typeof session.runs.stop> | undefined;
-        // The stop lands inside loop setup, once its target is reserved and
-        // before the launch.
-        const reserve = registryOf(session.runs).reserveChildActivation.bind(
-          session.runs,
-        );
+        // The stop lands once the launch opened its activation, before its
+        // program runs.
+        const registry = registryOf(session.runs);
+        const start = registry.start.bind(registry);
         const claim = vi
-          .spyOn(registryOf(session.runs), 'reserveChildActivation')
-          .mockImplementationOnce((activation) => {
-            const release = reserve(activation);
-            if (outcome === RUN_OUTCOME.CANCELLED)
-              stop = session.runs.stop(runId, { reason: 'user' });
-            return release;
-          });
+          .spyOn(registry, 'start')
+          .mockImplementationOnce((...args) =>
+            Effect.tap(start(...args), () =>
+              Effect.sync(() => {
+                if (outcome === RUN_OUTCOME.CANCELLED)
+                  stop = session.runs.stop(runId, { reason: 'user' });
+              }),
+            ),
+          );
         const loop = yield* startNativeLoop(runId, {
           stageLabel: 'Engine startup',
           launch,
@@ -260,7 +265,8 @@ describe('childRunLoop E2E fixtures', () => {
           formatError: () => 'error',
         }).pipe(Effect.ensuring(Effect.sync(() => claim.mockRestore())));
         if (stop) yield* stop.settlement;
-        yield* Fiber.join(loop);
+        // A stopped loop's fiber ends interrupted.
+        yield* Fiber.await(loop);
 
         expect(yield* runEnds(runId)).toMatchObject([{ outcome }]);
       }),

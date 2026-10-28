@@ -65,9 +65,6 @@ type LaunchVariant =
   | {
       readonly kind: 'resume';
       readonly onIdle?: () => void;
-      /** Read on the run's own fiber before its loop starts: a stop asked
-       *  before the run was reachable is that fiber's interruption. */
-      readonly isCancellationRequested?: () => boolean;
     };
 
 /**
@@ -128,17 +125,11 @@ function launchRun(
   /** A task's result, with its children's spend. */
   const withChildrenSpend = (ended: RunEndResult) =>
     task ? withChildSpend(ctx.session, ended) : Effect.succeed(ended);
-  // A stop asked before the run was reachable is this fiber's interruption,
-  // taken before the loop does any work.
-  return Effect.suspend(() =>
-    variant.kind === 'resume' && variant.isCancellationRequested?.()
-      ? Effect.interrupt
-      : runToolUse({
-          turns: shared.turns,
-          resume: variant.kind === 'resume',
-          attachment: handle,
-        }),
-  ).pipe(
+  return runToolUse({
+    turns: shared.turns,
+    resume: variant.kind === 'resume',
+    attachment: handle,
+  }).pipe(
     Effect.flatMap(withChildrenSpend),
     Effect.provide(
       runLayerFor(
@@ -328,8 +319,6 @@ export interface ResumeToolUseFromResumeDataOptions extends Omit<
 > {
   /** A resumed cycle is idle after its child delivery, while its run stays live. */
   readonly onIdle?: () => void;
-  /** Caller-owned cancellation, read on the run's fiber before its loop. */
-  readonly isCancellationRequested?: () => boolean;
 }
 
 /**
@@ -370,7 +359,6 @@ export function resumeToolUseFromResumeData(
         launchRun(ctx, handle, options, {
           kind: 'resume',
           onIdle: options.onIdle,
-          isCancellationRequested: options.isCancellationRequested,
         }),
       // Resume reads the parent edge from the persisted `run.start`.
       {

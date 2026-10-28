@@ -1,21 +1,21 @@
 // Third-party imports
-import { Cause, Effect, Exit, Stream } from 'effect';
+import { Effect, Stream } from 'effect';
 
 // Local imports
-import { TraceEmitter } from '@agent/trace';
-import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
+import { TraceEmitter, type StageHandle } from '@agent/trace';
 import type { ChildRunPause, ChildRunPort } from '@agent/runtime/childRunLoop';
-
-import { parentAdmission } from '@agent/runtime/childTurnResult';
+import {
+  parentAdmission,
+  type TransactionPart,
+} from '@agent/runtime/childTurnResult';
+import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { persistedParentRunId } from '@agent/storage/runRecords';
-import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import {
-  qualifyAggregateId,
   aggregateTarget,
+  qualifyAggregateId,
   RUN_OUTCOME,
   RUN_SUBSTATE,
   ToolError,
@@ -36,154 +36,49 @@ export function childRunDescription(raw: string): string {
 }
 
 /**
- * Create a child run's presentation and handle for a background child task.
- * Every launch site calls this inside `startDetachedChildRunLoop`, whose
- * owned-run launch guard owns a failed launch's compensation.
+ * A child run's trace and handle for a background child task. Every launch
+ * site calls this inside `startDetachedChildRunLoop`, whose launch guard
+ * owns a failed launch's compensation; the loop tracks the handle.
  */
-export const createChildRun = Effect.fn('createChildRun')(function* (
+export function createChildRun(
   session: SessionHandle,
   runId: RunId,
   parentRunId: RunId,
   /** What owns this run — the launch site declares the truth once. */
   identity: RunIdentity,
-): Effect.fn.Return<ChildRunPort, never, Runs> {
-  // No barrier here: registration committed the launch and its activation
-  // awaited (`registerRun`), and every write below is either awaited or this
-  // run's own queued fact, which its own drain answers for. A session-wide
-  // barrier (`log.settled`) would instead report whatever session-scoped
-  // publication anyone else queued and fail an otherwise sound launch over it.
-  const runs = registryOf(yield* Runs);
+): ChildRunPort {
   // The run's canonical event publication, from its first event: the trace
   // is built with the session as its sink, and closed with the run.
-  const trace = new TraceEmitter((event) => session.log.publish(runId, event));
-  const handle = new RunHandle({ runId, identity }, parentRunId);
-  // Registration already committed the launch, its configuration and its
-  // activation together. The handle is tracked by the loop (`track`) once
-  // its stop target exists, so a stop never finds this handle with nothing
-  // to interrupt.
   return {
-    logger: trace,
-    track: () => runs.track(handle),
-    finalize: (finalizeOptions) =>
-      finalizeChildRun({
-        handle,
-        session,
-        trace,
-        options: finalizeOptions,
-      }),
-  } satisfies ChildRunPort;
-});
-
-interface FinalizeChildRunArgs {
-  handle: RunHandle;
-  session: SessionHandle;
-  /** The child's trace: its diagnostics, closed with the run. */
-  trace: TraceEmitter;
-  options: Parameters<ChildRunPort['finalize']>[0];
+    logger: new TraceEmitter((event) => session.log.publish(runId, event)),
+    handle: new RunHandle({ runId, identity }, parentRunId),
+  };
 }
 
 /**
- * Finalize a child run: presentation logging plus the child's report of
- * its own exit, then the shared terminal finalizer (the `run.end` row with
- * the last turn's result, then untrack). Child runs never go through the run
- * lifecycle, so this is the only place their end is written.
- *
- * No `output` is passed, by rule rather than by omission: a child loop's
- * product is the per-turn delivery routed to its parent (and the result
- * manifest a strategy persists beside it), not a flow output. Its `run.end`
- * row therefore carries an empty output.
+ * Rest a stopped process child its parent's model can continue, instead of
+ * ending it: one transaction commits its last turn's result, the notice as
+ * its report, the `child.park` `paused` row with the resume id, and the
+ * notice queued for the parent, waking nobody. A child its rows show
+ * detached ends cancelled instead (false). A paused child's handle is
+ * untracked and its trace closed whatever the writes did.
  */
-const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
-  args: FinalizeChildRunArgs,
-) {
-  const { handle, session, trace: logger, options } = args;
-  const pause =
-    options.outcome === RUN_OUTCOME.CANCELLED
-      ? options.pauseNotice?.()
-      : undefined;
-  if (pause !== undefined && (yield* pauseChildRun(args, pause))) return;
-
-  // Describing the failure is fallible: `error` is `unknown`, and formatting
-  // a foreign value can throw (a throwing `message` getter or `toString`).
-  // That must never keep `finalizeRunTerminal` below from running, or the
-  // handle stays tracked and the run never gets its `run.end` row.
-  const described = yield* Effect.exit(
-    Effect.sync(() => {
-      if (options.outcome !== RUN_OUTCOME.FAILED) return undefined;
-      const message =
-        options.error != null ? toErrorMessage(options.error) : undefined;
-      if (message) logger.error(message);
-      return {
-        kind: classifyAgentError(options.error),
-        message: message ?? 'Child run failed',
-      };
-    }),
-  );
-  if (Exit.isFailure(described)) {
-    logger.error('Child run finalize prologue failed', {
-      data: { error: Cause.squash(described.cause) },
-    });
-  }
-
-  // What the child saw, in the shared vocabulary. Which of this and an
-  // already-landed stop is the run's terminal fact is decided upstream: the
-  // loop derives the outcome from its own interrupted signal, and
-  // `finalizeRunTerminal` applies that stop precedence.
-  const finalized = yield* finalizeRunTerminal({
-    session,
-    handle,
-    ...(Exit.isSuccess(described)
-      ? { outcome: options.outcome, error: described.value }
-      : {
-          outcome: RUN_OUTCOME.FAILED,
-          error: {
-            kind: 'unexpected' as const,
-            message: 'Child run finalize prologue failed',
-          },
-        }),
-    stage: options.stage,
-    stopped: options.stopped,
-    lastTurn: () => Effect.succeed(options.lastTurn),
-  });
-  logger.close();
-
-  // The port's contract is "resolves once the terminal finalizer has
-  // persisted": a `run.end` row that never wrote is this finalize's failure,
-  // so the loop's cleanup aggregation fails the loop over it rather than
-  // report a child whose terminal fact is gone.
-  if (finalized.persistFailure !== undefined) {
-    return yield* Effect.fail(
-      new Error(`Child run ${handle.runId} terminal state was not persisted`, {
-        cause: finalized.persistFailure,
-      }),
-    );
-  }
-}, Effect.uninterruptible);
-
-/**
- * Rest a stopped child that its parent's model can continue, instead of
- * ending it: one transaction commits the notice as its report with the
- * `child.park` `paused` row carrying the resume id (not `run.end`), and
- * queues the notice for the parent's next input, waking nobody. Calling the
- * child again activates it once more. Only a child a parent can continue
- * pauses: one its rows show detached, read in the pause's job, has nobody
- * to call it again, so it ends cancelled instead (false). A paused child's
- * handle is untracked and its trace closed whatever the writes did, so the
- * registry never keeps a finished generation live.
- */
-const pauseChildRun = (
-  { handle, session, trace: logger, options }: FinalizeChildRunArgs,
+export const pauseChildRun = (
+  session: SessionHandle,
+  { logger, handle }: ChildRunPort,
   { text: notice, resumeId }: ChildRunPause,
-) => {
+  lastTurn: TransactionPart | undefined,
+  stage: Pick<StageHandle, 'end'> | undefined,
+): Effect.Effect<boolean, Error, Runs> => {
+  const { runId } = handle;
   let paused = true;
   return Effect.gen(function* () {
-    const runId = handle.runId;
     const text = formatDelivery({
       tag: DELIVERY_TAG.childPaused,
       runId,
       lines: [escapeText(notice)],
     });
-    options.stage?.end(RUN_OUTCOME.CANCELLED);
+    stage?.end(RUN_OUTCOME.CANCELLED);
     const target = qualifyAggregateId('run', runId);
     // The last turn's result first: the pause notice is the newer report.
     // The notice is read with the parent's next input and offered to nobody:
@@ -192,17 +87,17 @@ const pauseChildRun = (
       Effect.gen(function* () {
         const parentRunId = yield* persistedParentRunId(session, runId);
         if (parentRunId === undefined) return undefined;
-        const lastTurn = yield* options.lastTurn ??
+        const last = yield* lastTurn ??
           Effect.succeed({ rows: [], held: false });
         // A last turn held for a parent open elsewhere already marks the
         // child as waiting: no pause after it (its notice would be refused
         // the same way).
-        if (lastTurn.held === true) {
-          yield* tx.append(lastTurn.rows);
+        if (last.held === true) {
+          yield* tx.append(last.rows);
           return { parentRunId, sent: { kind: 'duplicate' } };
         }
         // A parent that cannot take the notice refuses it: the pause stands.
-        const notice = yield* parentAdmission(
+        const admitted = yield* parentAdmission(
           session,
           parentRunId,
           { text, from: { kind: 'run', runId } },
@@ -211,7 +106,7 @@ const pauseChildRun = (
         );
         // One append: the pause and its notice commit together.
         yield* tx.append([
-          ...lastTurn.rows,
+          ...last.rows,
           { type: 'run.report', aggregateId: target, report: text },
           {
             type: 'child.park',
@@ -219,9 +114,9 @@ const pauseChildRun = (
             phase: 'paused',
             resumeId,
           },
-          ...notice.rows,
+          ...admitted.rows,
         ]);
-        return { parentRunId, sent: notice.sent };
+        return { parentRunId, sent: admitted.sent };
       }).pipe(Effect.scoped),
     );
     paused = submitted !== undefined;
@@ -239,7 +134,6 @@ const pauseChildRun = (
         logger.close();
       }),
     ),
-    Effect.withSpan('pauseChildRun'),
   );
 };
 

@@ -1,8 +1,8 @@
 /**
- * The ends a run's driver does not write (a failed process-child handoff;
- * a held child's end, delivered by whoever next admits its parent:
- * `deliverHeld`), and the terminal a run's launch owns: the host's final
- * artifacts and the claim.
+ * The ends a run's driver does not write (a failed child hand-off; a held
+ * child's end, delivered by whoever next admits its parent: `deliverHeld`),
+ * and the terminal a run's launch owns: the host's final artifacts and the
+ * claim.
  */
 import { Cause, Effect, Exit, Schedule, type Scope } from 'effect';
 
@@ -16,7 +16,6 @@ import {
   RUN_OUTCOME,
   RUN_SUBSTATE,
   type RunId,
-  type RunOutcome,
   type SessionEvent,
 } from '@shared/schemas';
 import {
@@ -29,40 +28,9 @@ import type { Append } from '@shared/session/sessionEvents';
 import { aggregateError } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { parentAdmission, warn, type TransactionPart } from './childTurnResult';
+import { parentAdmission, warn } from './childTurnResult';
 import { presentRunFailure } from './terminalResultToast';
 import type { SessionHandle } from './SessionHandle';
-
-/**
- * End a run no driver ends: the one writer of an ownerless `run.end` (a
- * stop that reached no live target, a process child whose handoff failed,
- * a native child's loop that outlived its lifecycle, a session close). An
- * outcome the run already wrote stands (`keepExistingOutcome`), so a row
- * lands only for a run that failed or stopped outside its driver; a failure
- * carries its classified error, and a child's `lastTurn` result commits
- * with the row.
- */
-export const endRunOutsideLifecycle = (
-  session: SessionHandle,
-  runId: RunId,
-  outcome: RunOutcome,
-  error: unknown,
-  lastTurn?: TransactionPart,
-): Effect.Effect<void, Error> =>
-  finalizeRun(session, {
-    runId,
-    outcome,
-    keepExistingOutcome: true,
-    ...(lastTurn !== undefined && { lastTurn }),
-    ...(outcome === RUN_OUTCOME.FAILED && error != null
-      ? {
-          error: {
-            kind: classifyAgentError(error),
-            message: getSdkErrorMessage(error),
-          },
-        }
-      : {}),
-  }).pipe(Effect.asVoid);
 
 /**
  * Let go of `runId`'s claim where no hold of this process keeps it (a
@@ -92,7 +60,7 @@ export const letGoOfClaim = (
  * read and its launch; a fresh run is born with its claim at its opening.
  * Otherwise `operation` only hands a registered child to its loop,
  * which owns the ending from there: the guard ends the run when the
- * handoff fails ({@link endRunOutsideLifecycle}). Either way a claim no hold
+ * handoff fails. Either way a claim no hold
  * here took (a birth's) is let go once the operation is done; a loop still
  * holding its own keeps it.
  *
@@ -112,17 +80,27 @@ export function runWithLaunchGuard<A, E, R>(
     };
     const terminal = (held: boolean) => (exit: Exit.Exit<A, E>) =>
       Effect.gen(function* () {
-        if (!owned && Exit.isFailure(exit))
+        // A hand-off that failed: an ownerless end (an end the run already
+        // wrote stands), a failure with its classified error.
+        if (!owned && Exit.isFailure(exit)) {
+          const outcome = outcomeFromCause(exit.cause);
+          const error = Cause.squash(exit.cause);
           collect(
             yield* Effect.exit(
-              endRunOutsideLifecycle(
-                session,
+              finalizeRun(session, {
                 runId,
-                outcomeFromCause(exit.cause),
-                Cause.squash(exit.cause),
-              ),
+                outcome,
+                ownerless: true,
+                ...(outcome === RUN_OUTCOME.FAILED && {
+                  error: {
+                    kind: classifyAgentError(error),
+                    message: getSdkErrorMessage(error),
+                  },
+                }),
+              }),
             ),
           );
+        }
         if (!held) yield* letGoOfClaim(session, runId);
       }).pipe(Effect.uninterruptible);
     const guarded: Effect.Effect<A, E | Error, R> = !owned

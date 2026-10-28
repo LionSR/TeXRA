@@ -191,10 +191,10 @@ describe('BashTool', () => {
         const followUps = testDefaultSession().followUps;
         const resumeOnce = followUps.resumes.once.bind(followUps.resumes);
         vi.spyOn(followUps.resumes, 'once').mockImplementation(
-          (resumed, resume) => {
+          (resumed, resume, fork) => {
             Deferred.doneUnsafe(wakeReached, Effect.void);
             handleAtResumeTime ??= testDefaultSession().runs.get(runId)?.handle;
-            return resumeOnce(resumed, resume);
+            return resumeOnce(resumed, resume, fork);
           },
         );
         yield* Effect.promise(() => parkRunWaiting(parentRunId));

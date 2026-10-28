@@ -117,13 +117,18 @@ export class Resumes {
     { readonly done: Deferred.Deferred<ResumeAttempt, Error>; joiners: number }
   >();
 
-  /** One resume of `runId` at a time; a joiner (`onJoined`) hears its result. */
+  /** One resume of `runId` at a time, on the fiber `fork` starts it on (the
+   *  session's): a joiner (`onJoined`) hears its result, and the caller
+   *  that started it stops it when it stops waiting, unless one joined. */
   once<R>(
     runId: RunId,
     resume: Effect.Effect<ResumeAttempt, Error, R>,
+    fork: (
+      resume: Effect.Effect<ResumeAttempt, Error, R>,
+    ) => Effect.Effect<Fiber.Fiber<ResumeAttempt, Error>>,
     onJoined?: () => void,
-  ): Effect.Effect<Resumed, Error, R> {
-    return Effect.suspend((): Effect.Effect<Resumed, Error, R> => {
+  ): Effect.Effect<Resumed, Error> {
+    return Effect.suspend((): Effect.Effect<Resumed, Error> => {
       const running = this.running.get(runId);
       if (running !== undefined) {
         running.joiners += 1;
@@ -133,17 +138,25 @@ export class Resumes {
           joined: true,
         })).pipe(Effect.ensuring(Effect.sync(() => (running.joiners -= 1))));
       }
-      const done = Deferred.makeUnsafe<ResumeAttempt, Error>();
-      this.running.set(runId, { done, joiners: 0 });
-      return resume.pipe(
-        Effect.onExit((exit) =>
-          Effect.sync(() => {
-            this.running.delete(runId);
-            Deferred.doneUnsafe(done, exit);
-          }),
-        ),
-        Effect.map((result) => ({ result, joined: false })),
-      );
+      const entry = {
+        done: Deferred.makeUnsafe<ResumeAttempt, Error>(),
+        joiners: 0,
+      };
+      this.running.set(runId, entry);
+      return Effect.flatMap(fork(resume), (fiber) => {
+        fiber.addObserver((exit) => {
+          this.running.delete(runId);
+          Deferred.doneUnsafe(entry.done, exit);
+        });
+        return Effect.map(Deferred.await(entry.done), (result) => ({
+          result,
+          joined: false,
+        })).pipe(
+          Effect.onInterrupt(() =>
+            entry.joiners > 0 ? Effect.void : Fiber.interrupt(fiber),
+          ),
+        );
+      });
     });
   }
 
@@ -194,45 +207,45 @@ function startResume(
   session: SessionHandle,
 ): Effect.Effect<Effect.Effect<ResumeRunResult>> {
   const attempt = Effect.suspend(() => {
+    // Cancelled for good once the run has left the view.
     let runMissing = false;
     const isCancellationRequested = (): boolean => {
       runMissing ||= session.view.run(runId) === undefined;
       return runMissing;
     };
-    return session.runs
-      .resume(runId, { session, isCancellationRequested })
-      .pipe(
-        Effect.tap((result) => {
-          if (isCancellationRequested()) return Effect.void;
-          // A run that started and ended without reading what it was
-          // resumed for leaves that input queued.
-          let message: string | null = null;
-          if ('failed' in result)
-            message = describeFollowUpFailure(result.failed);
-          else if ('started' in result && !result.delivered)
-            message = FOLLOW_UP_WAKE_FAILED_MESSAGE;
-          return message === null
-            ? Effect.void
-            : session.interactions.emit(
-                'requestShowInstruction',
-                { key: 'resumeRefused', message, showSuppress: false },
-                { replayWhenAttached: true },
-              );
-        }),
-        Effect.catchCause((cause) => {
-          if (Cause.hasInterruptsOnly(cause) || isCancellationRequested())
-            return Effect.succeed(RESUME_REFUSED);
-          const error = Cause.squash(cause);
-          return Effect.logError(`Failed to resume run ${runId}`).pipe(
-            Effect.annotateLogs({ data: error }),
-            withLogChannel(CHANNEL),
-            Effect.andThen(
-              presentRunFailure(session.interactions, error, 'Resume failed: '),
-            ),
-            Effect.as(RESUME_REFUSED),
-          );
-        }),
-      );
+    if (isCancellationRequested()) return Effect.succeed(RESUME_REFUSED);
+    return session.runs.resume(runId, { session }).pipe(
+      Effect.tap((result) => {
+        if (isCancellationRequested()) return Effect.void;
+        // A run that started and ended without reading what it was
+        // resumed for leaves that input queued.
+        let message: string | null = null;
+        if ('failed' in result)
+          message = describeFollowUpFailure(result.failed);
+        else if ('started' in result && !result.delivered)
+          message = FOLLOW_UP_WAKE_FAILED_MESSAGE;
+        return message === null
+          ? Effect.void
+          : session.interactions.emit(
+              'requestShowInstruction',
+              { key: 'resumeRefused', message, showSuppress: false },
+              { replayWhenAttached: true },
+            );
+      }),
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause) || isCancellationRequested())
+          return Effect.succeed(RESUME_REFUSED);
+        const error = Cause.squash(cause);
+        return Effect.logError(`Failed to resume run ${runId}`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+          Effect.andThen(
+            presentRunFailure(session.interactions, error, 'Resume failed: '),
+          ),
+          Effect.as(RESUME_REFUSED),
+        );
+      }),
+    );
   });
   // The attempt is the session's from the fork on; the join is observation
   // only, so it stays interruptible even where the caller is masked (a

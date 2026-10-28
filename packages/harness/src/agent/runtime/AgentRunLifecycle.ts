@@ -50,16 +50,18 @@ export interface RunLifecycleOptions {
   finishLastTurn?: ChildRunTurns<RunEndResult>['finishLastTurn'];
 }
 
-interface FinalizeRunTerminalParams {
+interface EndActivationParams {
   /** Owns the registry tracking the handle (untracked after the `run.end`
    *  row) and the publisher every row of the run goes through in order. */
   readonly session: SessionHandle;
-  /** Live handle of the run this terminal ends. */
-  readonly handle: RunHandle;
+  readonly runId: RunId;
+  /** The live handle of the run this end untracks; none for an end no
+   *  driver here writes, which retires the run's open owned children. */
+  readonly handle?: RunHandle;
   /**
    * The exiting run's own report. The `run.end` row is the run's terminal
    * fact; the run phase only supplies stop precedence, so this report stands
-   * while that phase is still non-terminal — see {@link finalizeRunTerminal}.
+   * while that phase is still non-terminal — see {@link endActivation}.
    */
   readonly outcome: RunOutcome;
   /** Classified error facts on the `run.end` row, dropped when stop
@@ -74,16 +76,12 @@ interface FinalizeRunTerminalParams {
   readonly lastTurn?: (
     outcome: RunOutcome,
   ) => Effect.Effect<TransactionPart | undefined>;
-  /**
-   * Stop precedence: a stop that reached the run before this finalizer —
-   * `Cause.hasInterrupts` on the cause that brought the run here, or the
-   * child loop's own interrupted signal — outranks the run's own report, so
-   * the stage and the `run.end` row say cancelled.
-   */
+  /** Stop precedence: a stop that reached the run before its end outranks
+   *  the run's own report, on the stage and on the `run.end` row. */
   readonly stopped?: boolean;
 }
 
-interface FinalizeRunTerminalResult {
+interface EndActivationResult {
   readonly event: ResultEvent;
   /** The `run.end` row write's failure: the terminal still ran and
    *  untracked the handle, and the event reports FAILED with its reason. */
@@ -94,21 +92,20 @@ interface FinalizeRunTerminalResult {
 }
 
 /**
- * The single owner of terminal run choreography, shared by the run lifecycle
- * below and agent-CLI child runs (`finalizeChildRun`), in this order: the
- * transcript stage end, the `run.end` row (through `finalizeRun`, its one
- * writer), then registry untrack. The publisher commits in order, so every
- * row the run published lands before its end, and a refusal of one of them
- * is the end's own write failure. Each run has one caller of this: the
- * lifecycle's masked terminal, or the child loop's exit for a run with no
- * lifecycle.
+ * The one end of a run's activation, in this order: the transcript stage
+ * end, the `run.end` row (through `finalizeRun`, its one writer), then
+ * registry untrack. The publisher commits in order, so every row the run
+ * published lands before its end, and a refusal of one of them is the end's
+ * own write failure. Its callers: the lifecycle's masked terminal, a child
+ * loop's exit, and an end no driver writes (a failed hand-off).
  */
-export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
+export const endActivation = Effect.fn('endActivation')(
   function* (
-    params: FinalizeRunTerminalParams,
-  ): Effect.fn.Return<FinalizeRunTerminalResult, Error, Runs> {
-    const { session, handle } = params;
+    params: EndActivationParams,
+  ): Effect.fn.Return<EndActivationResult, Error, Runs> {
+    const { session, handle, runId } = params;
     const runs = registryOf(yield* Runs);
+    const agentIdentifier = handle?.agentName ?? runId;
     // Stop precedence, read once: a stop that reached the run before its exit
     // outranks the flow's report, on the stage here as on the row below.
     const stopped = params.stopped === true;
@@ -123,7 +120,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
       }).pipe(
         Effect.catch((stageErr) =>
           logLifecycleWarning('Failed to end parent stage', {
-            agentIdentifier: handle.agentName,
+            agentIdentifier,
             error: stageErr,
           }),
         ),
@@ -131,7 +128,7 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
     }
     // A trace row the store refused means the run's record is incomplete:
     // the run failed, whatever it reported, and its row says why.
-    const lost = yield* session.trace.lost(handle.runId);
+    const lost = yield* session.trace.lost(runId);
     const reported = lost === undefined ? params.outcome : RUN_OUTCOME.FAILED;
     // The `run.end` row written below is the run's terminal fact: the report
     // is only the verdict for a run no stop reached.
@@ -144,28 +141,29 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
     const event: ResultEvent = {
       type: 'run.end',
       outcome,
-      runId: handle.runId,
+      runId,
       ...(error ? { error } : {}),
       output,
     };
     const lastTurn = params.lastTurn && (yield* params.lastTurn(outcome));
     const finalization = yield* finalizeRun(session, {
-      runId: handle.runId,
+      runId,
       outcome,
       error,
       output,
       lastTurn,
+      ownerless: handle === undefined,
     }).pipe(Effect.result);
     // Guard the cleanup: a defect in the registry edit must not escape past
     // a saved result. Only this handle's registration goes; a run that
     // started again is its successor's.
     yield* Effect.try({
-      try: () => runs.untrackIfCurrent(handle),
+      try: () => handle && runs.untrackIfCurrent(handle),
       catch: ensureError,
     }).pipe(
       Effect.catch((cleanupErr) =>
         logLifecycleWarning('Post-terminal cleanup threw', {
-          agentIdentifier: handle.agentName,
+          agentIdentifier,
           error: cleanupErr,
         }),
       ),
@@ -175,8 +173,8 @@ export const finalizeRunTerminal = Effect.fn('finalizeRunTerminal')(
     // A run whose `run.end` did not commit failed, whatever it reported.
     const unsaved = finalization.failure;
     yield* logLifecycleWarning('Failed to finalize durable run state', {
-      agentIdentifier: handle.agentName,
-      runId: handle.runId,
+      agentIdentifier,
+      runId,
       error: unsaved,
     });
     const message = `The run's end could not be saved: ${unsaved.message}`;
@@ -258,12 +256,12 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
   const finalizeTerminal = ({
     lastResult,
     ...arm
-  }: Pick<
-    FinalizeRunTerminalParams,
-    'outcome' | 'error' | 'output' | 'stopped'
-  > & { lastResult?: RunEndResult }) =>
-    finalizeRunTerminal({
+  }: Pick<EndActivationParams, 'outcome' | 'error' | 'output' | 'stopped'> & {
+    lastResult?: RunEndResult;
+  }) =>
+    endActivation({
       session,
+      runId,
       handle,
       stage: ctx.parentStage,
       ...arm,

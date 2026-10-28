@@ -31,7 +31,6 @@ import type { AgentTrace } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  RUN_OUTCOME,
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
   type RunIdentity,
@@ -61,7 +60,7 @@ export type DetachedChildRunInput<
   (
     | {
         /** Create the stream inside the launch guard, before any stream-dependent setup. */
-        readonly createChildRun: () => Effect.Effect<ChildRunPort, Error, Runs>;
+        readonly createChildRun: () => Effect.Effect<ChildRunPort>;
         /** Build attempt-scoped setup around the stream retained by the launch
          * guard. It runs in the choreography's own context, so it may read the
          * session's `Runs` (the agent-CLI strategies resolve their registry there). */
@@ -122,24 +121,9 @@ export function startDetachedChildRunLoop<
           });
         }),
       );
+      // A setup that failed before the loop: the launch guard ends the run.
       if (Exit.isFailure(setup)) {
-        const error = Cause.squash(setup.cause);
-        if (childRun) {
-          const finalized = yield* Effect.exit(
-            childRun.finalize({
-              outcome: RUN_OUTCOME.FAILED,
-              error,
-            }),
-          );
-          if (Exit.isFailure(finalized)) {
-            return yield* Effect.fail(
-              new AggregateError(
-                [error, Cause.squash(finalized.cause)],
-                `Detached child run ${input.runId} failed and its child stream could not be finalized`,
-              ),
-            );
-          }
-        }
+        childRun?.logger.close();
         return yield* Effect.failCause(setup.cause);
       }
       const started = setup.value;
@@ -227,7 +211,7 @@ export const launchProcessChild = <TTurn>(
         // leaves the run CANCELLED with no loop behind it.
         createChildRun: () =>
           restore(Effect.void).pipe(
-            Effect.andThen(
+            Effect.as(
               createChildRun(session, runId, parentRunId, launch.identity),
             ),
           ),

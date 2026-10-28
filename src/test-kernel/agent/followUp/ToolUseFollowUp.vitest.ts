@@ -202,6 +202,7 @@ function fakeSession(state: RunState): SessionHandle {
             completion: Effect.never,
           };
         }),
+        (attempt) => Effect.forkDetach(attempt, { startImmediately: true }),
       )
       .pipe(Effect.map(({ result }) => result));
   const session = {

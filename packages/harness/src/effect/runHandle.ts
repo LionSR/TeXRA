@@ -140,9 +140,6 @@ const traceHandover = Effect.fn('runHandle.traceHandover')(function* (
 /** What a launch reports to its handle: the moment the run exists in its
  *  session, and that it joined a resume already in flight. */
 interface LaunchHooks {
-  /** Whether the handoff was abandoned before the run could be stopped by
-   *  id: a launch that reads it starts no run once it is true. */
-  readonly isCancellationRequested: () => boolean;
   /** The run is admitted at `commit`, its activation's: the batch with its
    *  `run.start` or its `run.activate`. */
   readonly onAdmitted: (
@@ -205,22 +202,18 @@ export function handOver(
     // The launch and the drain are the run's, and until the caller holds
     // the `Run` that names them they are nobody's: whatever ends this
     // handoff short of that ends them too. So the handoff is
-    // uninterruptible but for the admission wait, where the launch's own
-    // abort signal is what an interruption reaches, and the exit handler
+    // uninterruptible but for the admission wait, where an interruption
+    // stops the launch by run id, and the exit handler
     // outside the mask covers the rest, the boundary included: an interrupt
     // that lands while the tail runs is raised the moment the mask lifts,
     // with a `Run` built that reaches no one.
-    let cancelled = false;
-    const interruptLaunch = (): boolean => {
-      cancelled = true;
-      return registryOf(session.runs).interrupt(runId);
-    };
+    const interruptLaunch = (): boolean =>
+      registryOf(session.runs).interrupt(runId);
     const spawned: Fiber.Fiber<unknown, Error>[] = [];
     return yield* Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
         const runFiber = yield* Effect.forkDetach(
           launch({
-            isCancellationRequested: () => cancelled,
             onAdmitted: (_, commit) =>
               Deferred.done(admitted, Exit.succeed(commit)),
             onJoined: () => {
@@ -292,11 +285,15 @@ export function handOver(
           ),
           view,
           events: trace.events,
-          interrupt: Effect.suspend(() =>
-            !joined && interruptLaunch()
-              ? Effect.void
-              : Fiber.interrupt(runFiber),
-          ),
+          // A launch not yet admitted is stopped where it stands, and then
+          // by id, in case it started a run meanwhile.
+          interrupt: Effect.suspend(() => {
+            if (joined) return Fiber.interrupt(runFiber);
+            if (interruptLaunch()) return Effect.void;
+            return Fiber.interrupt(runFiber).pipe(
+              Effect.andThen(Effect.sync(interruptLaunch)),
+            );
+          }),
         };
       }),
     ).pipe(
@@ -310,8 +307,11 @@ export function handOver(
               if (!Cause.hasInterrupts(exit.cause) || joined)
                 return Fiber.interruptAll(spawned);
               if (session.followUps.resumes.joined(runId)) return Effect.void;
+              // Again once the launch has unwound: a run it started meanwhile.
               interruptLaunch();
-              return Fiber.interruptAll(spawned);
+              return Fiber.interruptAll(spawned).pipe(
+                Effect.andThen(Effect.sync(interruptLaunch)),
+              );
             }),
       ),
     );
