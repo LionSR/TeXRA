@@ -79,7 +79,7 @@ const SetTabMessageSchema = Schema.Struct({
  * catalog rows (`profile`, `models`); those arms still declare their own shape
  * below or in their own module.
  */
-const DERIVED_SETTINGS_SNAPSHOTS = [
+export const DERIVED_SETTINGS_SNAPSHOTS = [
   'agents',
   'approval',
   'git-author',
