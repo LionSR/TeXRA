@@ -15,25 +15,27 @@ import * as vscode from 'vscode';
 import { Effect, FiberHandle, Scope } from 'effect';
 
 import {
-  AgentDirectories,
-  type StateStore,
-  type StateReadFailed,
-  type StateWriteFailed,
   Cancelled,
   Rejected,
   type HostRequestFailure,
   type RequestRefusal,
+  type Session,
+} from '@texra-ai/harness';
+import {
+  AgentDirectories,
+  type StateStore,
+  type StateReadFailed,
+  type StateWriteFailed,
   Secrets,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
-  type Session,
   withLogChannel,
   withSessionFs,
   WorkspaceFs,
   type StorageFs,
   pathToLocationIn,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import {

@@ -19,16 +19,16 @@ import {
 } from 'effect';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
+import { type Sessions } from '@texra-ai/harness';
 import {
   AppState,
   type GlobalValues,
   setLogSink,
   withLogChannel,
-  type Sessions,
   withPerKeyLane,
   type PerKeyLane,
   StateStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   createNodeWorkspaceRoots,
   canonicalizeWorkspacePath,

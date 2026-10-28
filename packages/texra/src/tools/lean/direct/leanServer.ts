@@ -46,7 +46,7 @@ import {
   type PerKeyLane,
   withLogChannel,
   withPerKeyLane,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   makeJsonRpcConnection,

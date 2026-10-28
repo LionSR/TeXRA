@@ -1,6 +1,6 @@
 // Standard library imports
 import * as path from 'node:path';
-import { isStrictlyWithin } from '@texra-ai/harness';
+import { isStrictlyWithin } from '@texra-ai/harness/host';
 
 export interface AgentWorkspaceOptions {
   workingDirectory?: string;

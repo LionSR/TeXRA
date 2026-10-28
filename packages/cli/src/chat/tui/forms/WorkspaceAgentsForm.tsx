@@ -6,7 +6,7 @@ import {
   AgentCatalog,
   type AgentEntry,
   type WorkspaceAgentsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   type AgentModePreset,
   AGENT_MODE_PRESETS,
@@ -31,7 +31,7 @@ import type {
   ProcessRuntime,
   ProcessServices,
   SettingsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 type WorkspaceAgentsFormMode =
   'overview' | 'workspace' | 'default' | 'chat-default' | 'custom';

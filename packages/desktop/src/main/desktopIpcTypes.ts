@@ -1,5 +1,5 @@
 import { Effect, Result, Schema } from 'effect';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 /** A renderer command: a named command and whatever fields it carries. */
 export const DesktopCommandMessageSchema = Schema.StructWithRest(

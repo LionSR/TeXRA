@@ -12,7 +12,7 @@ import {
   type SlashCommandOutput,
   transcriptSlashCommandOutput,
 } from './handlers/slashContext';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 
 export type ErrorHandler = (error: unknown) => void;
 type SelectionCompletion = 'afterAction' | 'beforeAction' | 'busy';

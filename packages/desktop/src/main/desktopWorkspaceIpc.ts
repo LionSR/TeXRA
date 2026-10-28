@@ -16,19 +16,19 @@ import { normalizeFilePath, toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
+import { Rejected } from '@texra-ai/harness';
 import {
-  Rejected,
   isPathWithin,
   OFFICE_EXTENSIONS,
   pathToLocationIn,
   withPerKeyLane,
   type PerKeyLane,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   entryTypeIn,
   readDirectoryTypedTolerant,
 } from '@texra-ai/harness/node';
-import { onAppSignal, type AppSignals } from '@texra-ai/harness';
+import { onAppSignal, type AppSignals } from '@texra-ai/harness/host';
 import { FILE_HANDLING_RULES } from '@texra/common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
@@ -49,7 +49,7 @@ import {
   AgentDocumentUnavailable,
   resolveAgentDocument,
 } from './desktopAgentDocuments.js';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 import type { DesktopPtyHost } from './desktopPtyHost.js';
 import type { DesktopBrowserViews } from './desktopBrowserViews.js';
 

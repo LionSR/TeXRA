@@ -9,7 +9,7 @@ import { Effect } from 'effect';
 import {
   deleteStorageInventory,
   readStorageInventory,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { formatBytes } from '@ui/copy/format';
 

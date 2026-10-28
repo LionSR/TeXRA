@@ -5,7 +5,7 @@ import {
   withLogChannel,
   type ModelOptionStores,
   getSdkErrorMessage,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { extractTextFromTag } from '@texra/utils/text/xmlExtraction';
 
 import type { WorkspaceRoots } from '@texra-ai/harness';

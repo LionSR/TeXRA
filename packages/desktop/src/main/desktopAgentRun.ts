@@ -10,16 +10,16 @@
 
 import { Effect, Scope, type Stream } from 'effect';
 
+import { type Run } from '@texra-ai/harness';
 import {
   type ProcessRuntime,
-  type Run,
   withProcessServices,
   type HostPresentation,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
   type PresentationEventHandlers,
-} from '@texra-ai/harness';
-import { AppSignals } from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
+import { AppSignals } from '@texra-ai/harness/host';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';

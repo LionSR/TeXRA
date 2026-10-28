@@ -11,7 +11,8 @@
 
 import { Effect, Schema } from 'effect';
 
-import { defineTool, ToolContext } from '@texra-ai/harness';
+import { defineTool } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
 import {
   executed,
   nullishWithDefault,

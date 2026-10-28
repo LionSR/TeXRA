@@ -15,7 +15,7 @@ import { Effect } from 'effect';
 
 import { executeCommand } from '@texra-ai/harness/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 export function isGitRepository(
   rootPath: string | undefined,

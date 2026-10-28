@@ -2,14 +2,14 @@ import path from 'node:path';
 
 import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
+import { type Session } from '@texra-ai/harness';
 import {
   type ProcessRuntime,
   type ProcessServices,
-  type Session,
   withProcessServices,
   pathToLocationIn,
   Settings,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { openFirstLabelMatch } from '@latex/labelSearch';

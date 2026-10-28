@@ -32,10 +32,8 @@ import { Effect } from 'effect';
 
 // Local imports
 import { ToolRegistry } from '@texra-ai/harness/plugins';
-import {
-  seedDisabledToolDefaults,
-  type WorkspaceRoots,
-} from '@texra-ai/harness';
+import { type WorkspaceRoots } from '@texra-ai/harness';
+import { seedDisabledToolDefaults } from '@texra-ai/harness/host';
 import {
   initializeNodeRuntimeSkills,
   type NodeRuntimeSkillOptions,

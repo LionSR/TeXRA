@@ -31,8 +31,8 @@ import {
   type Run,
   type Session,
   type RunEnd,
-  presentRunFailure,
 } from '@texra-ai/harness';
+import { presentRunFailure } from '@texra-ai/harness/host';
 import {
   type SessionView,
   isLiveRun,
@@ -43,7 +43,7 @@ import {
   type RunId,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { appSignalStream } from '@texra-ai/harness';
+import { appSignalStream } from '@texra-ai/harness/host';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';

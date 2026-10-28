@@ -20,7 +20,11 @@
 
 import { Effect, Schema, type Scope, Semaphore, Stream } from 'effect';
 
-import { Settings, StateReadFailed, withLogChannel } from '@texra-ai/harness';
+import {
+  Settings,
+  StateReadFailed,
+  withLogChannel,
+} from '@texra-ai/harness/host';
 import {
   agentName,
   GlobalStateKey,
@@ -29,7 +33,8 @@ import {
 } from '@texra-ai/harness/schemas';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
-import type { Session, StateStore, StateWriteFailed } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
+import type { StateStore, StateWriteFailed } from '@texra-ai/harness/host';
 
 /** An onboarding flag: off until something sets it. */
 const OnboardingFlagSchema = Schema.Boolean.pipe(

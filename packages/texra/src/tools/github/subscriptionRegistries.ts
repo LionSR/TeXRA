@@ -11,7 +11,7 @@
 import { Effect, Layer } from 'effect';
 import * as RateLimiter from 'effect/persistence/RateLimiter';
 
-import { AppSignals } from '@texra-ai/harness';
+import { AppSignals } from '@texra-ai/harness/host';
 
 import {
   issueKeyToString,

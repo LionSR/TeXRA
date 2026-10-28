@@ -22,10 +22,13 @@ import {
   Scope,
 } from 'effect';
 
-import { SESSION_CLOSE_DEADLINE_MS, withLogChannel } from '@texra-ai/harness';
+import {
+  SESSION_CLOSE_DEADLINE_MS,
+  withLogChannel,
+} from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { jitteredExponentialBackoffMs } from '@texra-ai/harness/plugins';
-import { emitAppSignal, type AppSignals } from '@texra-ai/harness';
+import { emitAppSignal, type AppSignals } from '@texra-ai/harness/host';
 
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';

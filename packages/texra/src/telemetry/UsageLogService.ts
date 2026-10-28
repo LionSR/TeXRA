@@ -18,13 +18,13 @@ import {
   UsageLog,
   withLogChannel,
   type UsageLogEntry,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { envFlag } from '@texra-ai/harness/node';
 import { extractErrorMessage, toErrorMessage } from '@texra-ai/harness/schemas';
 import { readOrCreateInstallId } from '@telemetry/installId';
 import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
-import type { AppState, ConfigProvider } from '@texra-ai/harness';
+import type { AppState, ConfigProvider } from '@texra-ai/harness/host';
 
 const CHANNEL = 'UsageLogService';
 

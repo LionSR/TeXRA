@@ -6,7 +6,8 @@ import {
   runBypasses,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { readModelOptions, type Session } from '@texra-ai/harness';
+import { type Session } from '@texra-ai/harness';
+import { readModelOptions } from '@texra-ai/harness/host';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
   formatCliSessionStatus,

@@ -47,7 +47,8 @@ import {
   takeDraftRestoreRequests,
 } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
-import type { ProcessRuntime, WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { CursorEdit } from '../input/textInputEditing';
 import type { InputHistory } from '../history/inputHistory';
 

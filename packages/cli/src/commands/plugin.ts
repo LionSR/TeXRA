@@ -9,7 +9,7 @@ import {
   type PluginListing,
   type PluginReview,
   type PluginUpdate,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';

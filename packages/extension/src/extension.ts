@@ -17,14 +17,13 @@ import {
 } from 'effect';
 
 // Local imports
+import { Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import {
   AppState,
   processLayer,
   Secrets,
-  Sessions,
   type ProcessRuntime,
   type GlobalValues,
-  WorkspaceRoots,
   ToolMissingHandler,
   withProcessServices,
   StateStores,
@@ -32,7 +31,7 @@ import {
   setLogSink,
   ToolAvailability,
   Settings,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
   createNodeWorkspaceRoots,
@@ -48,7 +47,11 @@ import {
   type ApprovalPolicy,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { appSignalStream, emitAppSignal, onAppSignal } from '@texra-ai/harness';
+import {
+  appSignalStream,
+  emitAppSignal,
+  onAppSignal,
+} from '@texra-ai/harness/host';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';

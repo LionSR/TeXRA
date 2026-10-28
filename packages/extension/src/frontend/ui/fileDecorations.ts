@@ -1,7 +1,7 @@
 import { Cause, Effect, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
-import { onAppSignal, type AppSignals } from '@texra-ai/harness';
+import { onAppSignal, type AppSignals } from '@texra-ai/harness/host';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 import type { Session } from '@texra-ai/harness';
 

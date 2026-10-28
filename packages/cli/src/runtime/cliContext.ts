@@ -11,12 +11,12 @@ import {
   type LogLevel,
 } from 'effect';
 
+import { DatabaseOpenFailed } from '@texra-ai/harness';
 import {
-  DatabaseOpenFailed,
   type ConfigProvider,
   type SkillSourceOptions,
   Settings,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { modelConfig } from '@texra-ai/llm';
 import {
   absentReason,

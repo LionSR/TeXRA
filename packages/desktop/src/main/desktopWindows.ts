@@ -1,9 +1,9 @@
 import { Cause, Effect, Exit, FiberSet, Scope, Semaphore } from 'effect';
 import { Menu, type BrowserWindow } from 'electron';
 
-import { workspaceEnvironmentLayer } from '@texra-ai/harness';
+import { workspaceEnvironmentLayer } from '@texra-ai/harness/host';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /**

@@ -10,7 +10,7 @@ import {
   ToolAvailability,
   ToolCatalog,
   withLogChannel,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   detectLatexSettingsStatus,

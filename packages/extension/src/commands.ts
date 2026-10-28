@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel, withSessionFs } from '@texra-ai/harness';
+import { withLogChannel, withSessionFs } from '@texra-ai/harness/host';
 import { runExecuteCommand as agentRunExecuteCommand } from '@commands/agent/executeCommand';
 import { downloadArXivSource as latexDownloadArXivSource } from '@commands/latex/arXivCommands';
 import { confirmCleanBuild } from '@commands/housekeeping/cleanCommands';
@@ -35,12 +35,8 @@ import { dispatchCommandFromRegistry } from '@texra/shared/commands/registry';
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
-import type {
-  ProcessRuntime,
-  Session,
-  PlatformSecrets,
-  WorkspaceRoots,
-} from '@texra-ai/harness';
+import type { Session, WorkspaceRoots } from '@texra-ai/harness';
+import type { ProcessRuntime, PlatformSecrets } from '@texra-ai/harness/host';
 
 /*
  * Duplicate-registration audit (#3787 follow-up):

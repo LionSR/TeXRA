@@ -1,5 +1,5 @@
 import { Cache, Cause, Clock, Duration, Effect } from 'effect';
-import { Settings, withLogChannel } from '@texra-ai/harness';
+import { Settings, withLogChannel } from '@texra-ai/harness/host';
 import { HttpClientError } from 'effect/http';
 
 import { codexCoordinator, SubscriptionOAuthError } from '@texra-ai/llm/node';
@@ -20,7 +20,7 @@ import {
   GLM_CODING_PLAN_USAGE_URL,
 } from './glmCodingPlanUsageAdapter';
 import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
-import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness';
+import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness/host';
 import type { ParsedSubscriptionUsage } from './subscriptionUsageParsing';
 import type { HttpClient } from 'effect/http';
 

@@ -40,7 +40,7 @@ import {
   TexraRpcs,
   type ServiceInfo,
 } from './protocol';
-import type { GlobalValues } from '@texra-ai/harness';
+import type { GlobalValues } from '@texra-ai/harness/host';
 import type { SocketError } from 'effect/socket/Socket';
 
 /** The procedures as a client calls them. */

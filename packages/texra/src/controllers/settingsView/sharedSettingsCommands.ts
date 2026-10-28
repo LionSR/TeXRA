@@ -24,12 +24,12 @@ import {
   withLogChannel,
   withPerKeyLane,
   withSessionFs,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   SUBSCRIPTION_AUTH_PROVIDERS,
 } from '@texra-ai/harness/schemas';
-import { appSignalStream } from '@texra-ai/harness';
+import { appSignalStream } from '@texra-ai/harness/host';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
@@ -72,11 +72,8 @@ import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import type { SettingsViewSnapshot } from '@texra-ai/harness/schemas';
-import type {
-  PlatformSecrets,
-  ProcessServices,
-  WorkspaceRoots,
-} from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { PlatformSecrets, ProcessServices } from '@texra-ai/harness/host';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 type SettingsArms = SettingsViewInboundHandlerRegistry<

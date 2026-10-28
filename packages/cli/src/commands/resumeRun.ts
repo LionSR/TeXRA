@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
-import { describeFollowUpFailure } from '@texra-ai/harness';
+import { describeFollowUpFailure } from '@texra-ai/harness/host';
 import { pathExists } from '@texra-ai/harness/node';
 import {
   ensureError,

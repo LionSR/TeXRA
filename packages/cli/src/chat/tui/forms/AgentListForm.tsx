@@ -9,9 +9,9 @@ import {
   AgentCatalog,
   type ProcessRuntime,
   type WorkspaceAgentsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { type TeamOptionData, agentName } from '@texra-ai/harness/schemas';
-import { loadTeamOptions } from '@texra-ai/harness';
+import { loadTeamOptions } from '@texra-ai/harness/host';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,

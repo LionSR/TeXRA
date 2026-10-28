@@ -4,9 +4,9 @@ import {
   LoopbackTransportUnavailableError,
   type SubscriptionDeviceCodePrompt,
 } from '@texra-ai/llm/node';
-import { Skills, withLogChannel } from '@texra-ai/harness';
+import { Skills, withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { onAppSignal } from '@texra-ai/harness';
+import { onAppSignal } from '@texra-ai/harness/host';
 import { unsupported } from '@texra/shared/utils/dispatcher';
 import type { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
@@ -23,12 +23,12 @@ import {
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
   StorageFs,
   ProcessServices,
   PlatformSecrets,
-  WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 const NO_EXTENSION_HOSTING =

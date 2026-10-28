@@ -15,7 +15,11 @@ import {
 } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 
-import { Secrets, withPerKeyLane, type PerKeyLane } from '@texra-ai/harness';
+import {
+  Secrets,
+  withPerKeyLane,
+  type PerKeyLane,
+} from '@texra-ai/harness/host';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   DESKTOP_PROJECT_COMMANDS,
@@ -68,7 +72,7 @@ import {
 } from './desktopWindows.js';
 import { isFatalDesktopShutdownRequested } from './fatalStartupError.js';
 import { installDesktopHostBridge } from './hostBridge.js';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type {
   DesktopProjectRegistry,
   DesktopProjectsState,

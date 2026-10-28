@@ -2,7 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect, FileSystem, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { AppSignals } from '@texra-ai/harness';
+import { AppSignals } from '@texra-ai/harness/host';
 import type { RunId } from '@shared/schemas';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
 

@@ -16,7 +16,8 @@ import {
 } from '@cli/runtime/historyLabels';
 import { rootRunId } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
-import type { LocalSession, ProcessRuntime } from '@texra-ai/harness';
+import type { LocalSession } from '@texra-ai/harness';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 interface ResumeListFormProps {

@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { ToolCatalog } from '@texra-ai/harness';
+import { ToolCatalog } from '@texra-ai/harness/host';
 import { ToolRegistry } from '@texra-ai/harness/plugins';
 import { visibleToolPlugins } from '@texra/controllers/settingsView/ToolDashboardData';
 

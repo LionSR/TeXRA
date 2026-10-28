@@ -12,7 +12,7 @@ import path from 'node:path';
 
 import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
 
-import { GlobalValues } from '@texra-ai/harness';
+import { GlobalValues } from '@texra-ai/harness/host';
 import { nodePlatformServices } from '@texra-ai/harness/node';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';

@@ -1,5 +1,6 @@
 import { Effect, FileSystem, Schema } from 'effect';
-import { ToolContext, type ToolResult } from '@texra-ai/harness';
+import { type ToolResult } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import {

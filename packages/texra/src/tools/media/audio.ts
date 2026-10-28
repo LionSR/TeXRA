@@ -16,7 +16,7 @@ import {
 } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
-import { withLogChannel, getSdkErrorMessage } from '@texra-ai/harness';
+import { withLogChannel, getSdkErrorMessage } from '@texra-ai/harness/host';
 import {
   inheritedEnv,
   withExtendedPath,

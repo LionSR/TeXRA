@@ -20,7 +20,7 @@ import {
   type PluginEnv,
   type PluginReview,
   type ProcessServices,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { PluginActionMessage } from '@texra/shared/settingsView/pluginMessages';
 
 // Local imports - this module's neighbours

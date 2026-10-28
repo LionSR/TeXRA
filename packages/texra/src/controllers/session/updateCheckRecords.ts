@@ -1,6 +1,6 @@
 /** The update-check row of the global root, on the process's one handle. */
 import { Effect, Layer, Result, type Context } from 'effect';
-import { GlobalValues } from '@texra-ai/harness';
+import { GlobalValues } from '@texra-ai/harness/host';
 import {
   UPDATE_CHECKS,
   UpdateCheckRecords,

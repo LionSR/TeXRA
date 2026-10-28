@@ -4,7 +4,7 @@ import {
   agentKey,
   isPackagedAgentSource,
 } from '@texra-ai/harness/schemas';
-import { AgentCatalog } from '@texra-ai/harness';
+import { AgentCatalog } from '@texra-ai/harness/host';
 import {
   agentDocumentIdentity,
   agentDocumentTarget,

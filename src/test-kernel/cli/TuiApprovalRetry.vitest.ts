@@ -80,7 +80,7 @@ import {
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import type { PlatformSecrets } from '@texra-ai/harness/host';
 
 /** The settings the TUI's retry decisions write through, if any. */
 const settingsStores = makeFakeSettingsStores('cli');

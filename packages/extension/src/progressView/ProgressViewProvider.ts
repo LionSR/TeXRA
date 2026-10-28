@@ -21,7 +21,7 @@ import {
   type HostInteractions,
   AgentCatalog,
   withLogChannel,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   ensureError,
   toErrorMessage,
@@ -30,7 +30,7 @@ import {
   type RunId,
   GlobalStateKey,
 } from '@texra-ai/harness/schemas';
-import { AppSignals, appSignalStream } from '@texra-ai/harness';
+import { AppSignals, appSignalStream } from '@texra-ai/harness/host';
 import { BundledViewContentProvider } from '@common/webview';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
@@ -88,17 +88,15 @@ import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
+import type { LocalSession, Session, WorkspaceRoots } from '@texra-ai/harness';
 import type {
-  LocalSession,
   ProcessRuntime,
   ProcessServices,
-  Session,
-  WorkspaceRoots,
   PlatformSecrets,
   StateStore,
   StateReadFailed,
   StateWriteFailed,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 const CHANNEL = 'ProgressViewProvider';
 const CATALOG_RESCAN_FAILED =

@@ -9,13 +9,13 @@
  */
 import { Cause, Effect, Queue, type Scope, Stream } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
+import type { LocalSession } from '@texra-ai/harness';
 import type {
   ToolEditApprovalRequest,
   HostInteractions,
-  LocalSession,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { DisplaySessionEvent } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'SessionHost';

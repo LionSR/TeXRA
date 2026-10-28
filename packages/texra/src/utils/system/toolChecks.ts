@@ -9,7 +9,7 @@
 import { Effect, Option } from 'effect';
 
 // Local imports
-import { ToolMissingReporter } from '@texra-ai/harness';
+import { ToolMissingReporter } from '@texra-ai/harness/host';
 import {
   executeCommand,
   type ExecuteCommandBaseOptions,

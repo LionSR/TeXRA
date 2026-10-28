@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
+import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/host';
 import type { FileOpResult } from '@texra/shared/session/hostRequest';
 
 import { CHANNEL, TEMP_EXTENSIONS } from './constants';

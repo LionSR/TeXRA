@@ -1,6 +1,7 @@
 import { app } from 'electron';
 import { Effect, Layer, ManagedRuntime, Scope } from 'effect';
 
+import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   AgentDirectories,
   AppState,
@@ -8,9 +9,8 @@ import {
   AgentDirectoryService,
   Secrets,
   type ProcessServices,
-  type WorkspaceRoots,
   StateStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
   createNodeWorkspaceRoots,
@@ -19,7 +19,7 @@ import {
   resolveWorkspaceStoragePath,
   secretsDirectory,
 } from '@texra-ai/harness/node';
-import { emitAppSignal } from '@texra-ai/harness';
+import { emitAppSignal } from '@texra-ai/harness/host';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';

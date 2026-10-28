@@ -11,11 +11,10 @@ import { Effect, Option, Config } from 'effect';
 // Local imports
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@texra-ai/llm';
 import {
-  Secrets,
   type ToolAvailabilityChecks,
   type ToolProbeServices,
-  withLogChannel,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/plugins';
+import { Secrets, withLogChannel } from '@texra-ai/harness/host';
 import { findCommand } from '@texra-ai/harness/node';
 import {
   importCodexClass,

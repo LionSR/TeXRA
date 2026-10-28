@@ -29,12 +29,11 @@ import type {
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import type { ApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
+import type { HostRequestFailure, WorkspaceRoots } from '@texra-ai/harness';
 import type {
-  HostRequestFailure,
   ProcessRuntime,
   ToolEditApprovalRequest,
-  WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 const CHANNEL = 'ToolEditApproval';
 

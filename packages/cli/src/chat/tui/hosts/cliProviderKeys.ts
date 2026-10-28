@@ -10,7 +10,7 @@ import { Effect } from 'effect';
 
 import { type ApiKeyProviderId, apiProviderOfSecretName } from '@texra-ai/llm';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { onAppSignal, type AppSignals } from '@texra-ai/harness';
+import { onAppSignal, type AppSignals } from '@texra-ai/harness/host';
 import {
   ProviderKeyActionFailed,
   SettingsProfileKeyController,
@@ -18,7 +18,7 @@ import {
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { tuiUi } from './tuiUiHost';
-import type { Secrets, SettingsStores } from '@texra-ai/harness';
+import type { Secrets, SettingsStores } from '@texra-ai/harness/host';
 
 /** Run one controller action on the TUI's prompt; a failure names its cause
  *  and stays in the Effect channel. */
