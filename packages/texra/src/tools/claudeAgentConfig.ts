@@ -4,7 +4,6 @@ import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import * as os from 'node:os';
 import { Effect } from 'effect';
 
 // Local imports
@@ -15,7 +14,11 @@ import {
   type SecretsFailed,
 } from '@texra-ai/llm';
 import { Secrets, withLogChannel } from '@texra-ai/harness/host';
-import { executeCommand, inheritedEnv } from '@texra-ai/harness/node';
+import {
+  executeCommand,
+  homeDirectory,
+  inheritedEnv,
+} from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -90,18 +93,6 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
 
     return false;
   },
-);
-
-/** The home directory, or `undefined` (logged) where none resolves. */
-const homeDirectory = Effect.try({
-  try: () => os.homedir(),
-  catch: ensureError,
-}).pipe(
-  Effect.catch((error) =>
-    Effect.logWarning(
-      `The home directory could not be resolved; a Claude Code login under it reads as not found: ${error.message}`,
-    ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
-  ),
 );
 
 /** Claude Code's config directory: an explicit `CLAUDE_CONFIG_DIR` as is,
