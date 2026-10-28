@@ -1,9 +1,8 @@
 // Third-party imports
 import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
-import { MODELS, formatModelRef, parseModelRef } from 'llm-zoo';
 
 // Local imports - platform
-import { modelConfig } from '@texra-ai/llm';
+import { modelConfig, MODELS } from '@texra-ai/llm';
 import {
   Settings,
   mcpConfigPathOf,
@@ -75,8 +74,7 @@ function modelLookupKeys(id: string): string[] {
 export function resolveKnownCliModelId(model: string): string | undefined {
   const trimmed = model.trim();
   if (!trimmed) return undefined;
-  const selection = parseModelRef(trimmed);
-  if (selection) return formatModelRef(selection);
+  if (modelConfig(trimmed)) return trimmed;
 
   const lower = trimmed.toLowerCase();
   const ids = MODELS;
@@ -128,20 +126,20 @@ export function cliCommandDefaults(
   stores: SettingsStores,
   role: CliCommandRole,
 ): CliCommandDefaults {
-  const sectionKey = `texra.${role}`;
+  const sectionKey = role;
   const section =
     Settings.getConfig<CliCommandDefaults | undefined>(
       stores.config,
       sectionKey,
     ) ?? {};
-  const modelKey = section.model ? sectionKey : 'texra.model';
+  const modelKey = section.model ? sectionKey : 'model';
   const model =
     section.model ??
     Settings.getConfig<string | undefined>(stores.config, modelKey);
   return {
     agent:
       section.agent ??
-      Settings.getConfig<string | undefined>(stores.config, 'texra.agent'),
+      Settings.getConfig<string | undefined>(stores.config, 'agent'),
     model,
     ...(model === undefined
       ? {}
@@ -169,7 +167,7 @@ export const setWorkspaceCliChatAgent = Effect.fn(
       new Error('The default chat agent must not be empty.'),
     );
   }
-  const sectionKey = 'texra.chat';
+  const sectionKey = 'chat';
   // The workspace file's own section, not the merged read: the write below
   // lands in the workspace target, so seeding from `workspace over user` would
   // copy a user-level `texra.chat.model` into the project file and pin it
@@ -186,18 +184,13 @@ export const setWorkspaceCliChatAgent = Effect.fn(
   );
 });
 
-/** Canonical `texra.*` keys the CLI recognizes in `.texra/config.json`. */
-const KNOWN_CONFIG_KEYS: ReadonlySet<string> = new Set(
-  TEXRA_SETTINGS.configSlotKeys,
-);
-
 /**
  * The members each command section accepts. `texra run` takes its agent as a
  * required argument, so its section sets only the model.
  */
 const COMMAND_SECTION_KEYS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  ['texra.chat', new Set(['agent', 'model'])],
-  ['texra.run', new Set(['model'])],
+  ['chat', new Set(['agent', 'model'])],
+  ['run', new Set(['model'])],
 ]);
 
 /**
@@ -219,24 +212,21 @@ function configFileWarnings(
   for (const { store, isProjectFile } of files) {
     const { filePath } = store;
     for (const key of store.keys()) {
-      if (!KNOWN_CONFIG_KEYS.has(key)) {
+      const entry = TEXRA_SETTINGS.byStoredKey(key);
+      if (entry?.slot !== 'config') {
         if (isProjectFile) {
           warnings.push(`Ignoring unknown ${filePath} key "${key}".`);
         }
         continue;
       }
       const value = store.get<unknown>(key);
-      const entry = TEXRA_SETTINGS.byKey(key);
-      if (
-        entry &&
-        Result.isFailure(Schema.decodeUnknownResult(entry.schema)(value))
-      ) {
+      if (Result.isFailure(Schema.decodeUnknownResult(entry.schema)(value))) {
         warnings.push(
           `Ignoring invalid ${filePath} value ${JSON.stringify(value)} for "${key}".`,
         );
         continue;
       }
-      const sectionKeys = COMMAND_SECTION_KEYS.get(key);
+      const sectionKeys = COMMAND_SECTION_KEYS.get(entry.key);
       if (!isProjectFile || !sectionKeys) continue;
       if (!Predicate.isObject(value)) continue;
       for (const nested of Object.keys(value)) {
@@ -284,7 +274,7 @@ export function loadCliStartupConfig(
       const withoutInvalid = (store: JsonStore): ConfigStore => ({
         get: <T>(key: string): T | undefined => {
           const value = store.get<T>(key);
-          const entry = TEXRA_SETTINGS.byKey(key);
+          const entry = TEXRA_SETTINGS.byStoredKey(key);
           return value !== undefined &&
             entry &&
             Result.isFailure(Schema.decodeUnknownResult(entry.schema)(value))

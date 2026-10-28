@@ -3,7 +3,7 @@
  * carry, and the reasoning-level labels. Plain data and pure predicates, so
  * the settings webview renders the same words the hosts build rows with.
  */
-import { ReasoningEffort } from 'llm-zoo';
+import { ReasoningEffort } from '@texra-ai/llm';
 
 /**
  * Display labels for llm-zoo's reasoning efforts, written low → high because

@@ -92,8 +92,8 @@ function bundleFailure(
 }
 
 /** The run records an export reads: from this process's session
- *  (`windowRecords`), or from the service that holds the run. */
-export interface ChatExportRecords {
+ *  (`openGuiWindow`), or from the service that holds the run. */
+interface ChatExportRecords {
   /** The run's setup and assembled export input (`loadChatExportInput`). */
   readonly input: (
     runId: RunId,

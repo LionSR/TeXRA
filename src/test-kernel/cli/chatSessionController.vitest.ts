@@ -473,12 +473,10 @@ describe('createChatSessionController', () => {
           async (_config: unknown, runId: RunId) => {
             const rootHandle = testRunHandle({
               runId,
-              parent: null,
               agent: 'root',
             });
             const childHandle = testRunHandle({
               runId: childRun,
-              parent: runId,
               agent: 'child',
             });
             // A launch states both runs in the plane before it tracks them: the
@@ -536,7 +534,9 @@ describe('createChatSessionController', () => {
         // The local sever follows the committed `run.detach` now, so the
         // promotion lands with that batch rather than with the stop's admission.
         yield* Effect.promise(() =>
-          vi.waitFor(() => expect(runs.parentOf(childRun)).toBeNull()),
+          vi.waitFor(() =>
+            expect(runtimeSession.view.run(childRun)?.parentId).toBeNull(),
+          ),
         );
 
         // The request opens on the child's own aggregate, which the launch

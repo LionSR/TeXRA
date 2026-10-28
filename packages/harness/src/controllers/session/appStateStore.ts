@@ -14,6 +14,7 @@ import {
   type AppStateStore,
 } from '@platform/interfaces';
 import { JsonValueSchema, type JsonValue } from '@shared/schemas';
+import type { SettingsCatalog } from '@shared/state/stateSettings';
 import {
   DatabaseWriteFailed,
   GlobalDatabase,
@@ -32,17 +33,20 @@ import { executeCommand } from '@utils/system/execUtils';
 /**
  * A settings store over one family of a root's current values, captured from
  * an owned handle; the store neither opens nor closes it. `app-state` is
- * keyed by the setting key; `repo-state` by the repository root and the key,
- * so every checkout of one repository reads one value.
+ * keyed by `<namespace>.<key>`; `repo-state` by the repository root and that
+ * key, so every checkout of one repository reads one value.
  */
 function appStateStoreFromDatabase(
   storage: string,
   values: CurrentValues,
+  namespace: string,
   scope?: { readonly repoRoot: string },
 ): AppStateStore {
   const family = scope === undefined ? APP_STATE : REPO_STATE;
   const rowKey = (key: string) =>
-    scope === undefined ? key : JSON.stringify([scope.repoRoot, key]);
+    scope === undefined
+      ? `${namespace}.${key}`
+      : JSON.stringify([scope.repoRoot, `${namespace}.${key}`]);
   const refused = (key: string, cause: unknown) =>
     new StateWriteFailed({
       key,
@@ -112,6 +116,7 @@ const openProjectStateStore = Effect.fn('appStateStore.openProjectStateStore')(
   function* (
     projects: ProjectDatabases['Service'],
     values: CurrentValues,
+    namespace: string,
     storage: string,
     workspaceRoot: string | undefined,
   ) {
@@ -132,7 +137,7 @@ const openProjectStateStore = Effect.fn('appStateStore.openProjectStateStore')(
           ),
         );
     }
-    return appStateStoreFromDatabase(storage, database.values);
+    return appStateStoreFromDatabase(storage, database.values, namespace);
   },
 );
 
@@ -149,11 +154,12 @@ const openProjectStateStore = Effect.fn('appStateStore.openProjectStateStore')(
 const openRepoStateStore = Effect.fn('appStateStore.openRepoStateStore')(
   function* (
     values: CurrentValues,
+    namespace: string,
     storage: string,
     workspaceRoot: string | undefined,
   ) {
     const store = (repoRoot: string) =>
-      appStateStoreFromDatabase(storage, values, {
+      appStateStoreFromDatabase(storage, values, namespace, {
         repoRoot: normalizeFilePath(repoRoot),
       });
     if (workspaceRoot === undefined) return store(storage);
@@ -200,34 +206,42 @@ const globalValuesLayer = Layer.effect(
 );
 
 /** `GlobalValues` and `StateStores`, over the process's databases. */
-export const processStoresLayer = Layer.mergeAll(
-  globalValuesLayer,
-  Layer.effect(
-    StateStores,
-    Effect.gen(function* () {
-      const projects = yield* ProjectDatabases;
-      const { values } = yield* GlobalDatabase;
-      const spawner = yield* ChildProcessSpawner;
-      return {
-        project: (storage, workspaceRoot) =>
-          openProjectStateStore(projects, values, storage, workspaceRoot),
-        repo: (storage, workspaceRoot) =>
-          openRepoStateStore(values, storage, workspaceRoot).pipe(
-            Effect.provideService(ChildProcessSpawner, spawner),
-          ),
-      };
-    }),
-  ),
-);
+export const processStoresLayer = ({
+  namespace,
+}: SettingsCatalog): Layer.Layer<
+  GlobalValues | StateStores,
+  never,
+  GlobalDatabase | ProjectDatabases | ChildProcessSpawner
+> =>
+  Layer.mergeAll(
+    globalValuesLayer,
+    Layer.effect(
+      StateStores,
+      Effect.gen(function* () {
+        const projects = yield* ProjectDatabases;
+        const { values } = yield* GlobalDatabase;
+        const spawner = yield* ChildProcessSpawner;
+        return {
+          project: (storage, root) =>
+            openProjectStateStore(projects, values, namespace, storage, root),
+          repo: (storage, root) =>
+            openRepoStateStore(values, namespace, storage, root).pipe(
+              Effect.provideService(ChildProcessSpawner, spawner),
+            ),
+        };
+      }),
+    ),
+  );
 
 /** The process's application state, in the global root's current values at
- *  `globalStorage`: what every host keeps. */
+ *  `globalStorage` under the catalog's namespace: what every host keeps. */
 export const globalAppStateLayer = (
   globalStorage: string,
+  { namespace }: SettingsCatalog,
 ): Layer.Layer<AppState, never, GlobalDatabase> =>
   Layer.effect(
     AppState,
     Effect.map(GlobalDatabase, (database) =>
-      appStateStoreFromDatabase(globalStorage, database.values),
+      appStateStoreFromDatabase(globalStorage, database.values, namespace),
     ),
   );

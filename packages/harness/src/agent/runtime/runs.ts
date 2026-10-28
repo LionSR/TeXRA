@@ -28,13 +28,15 @@ export interface LiveRun {
   readonly controls: RunControls | undefined;
   /** A generation of it is live here: its fiber, a hold, or a launch. */
   readonly live: boolean;
+  /** Its attached parent: the view's edge, or for a child whose `run.start`
+   *  the view has not folded yet, the parent its activation launched under;
+   *  null for a root. */
+  readonly parent: RunId | null;
   /** Whether the generation live here reads a message: a one-shot loop
    *  (headless, or an in-band child) ends after its turn and reads none,
    *  and a run with no loop of its own (a background command) reads what
    *  its launch said it takes. */
   readonly readsMessages: boolean;
-  /** Its parent edge (`RunRegistry.parentOf`). */
-  readonly parent: RunId | null;
   /** Why it was stopped here, while it unwinds from that stop. */
   readonly stopReason: RunStopReason | undefined;
   /** Resolves once every owner of it here has left. */

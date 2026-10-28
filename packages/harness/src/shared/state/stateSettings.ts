@@ -9,8 +9,12 @@ import {
 } from '@shared/approvalPolicy';
 import {
   ActiveSkillSourceScopeSchema,
+  AGENT_SKILLS_CONFIG_KEY,
   AGENT_SKILLS_ENABLED_DEFAULT,
-  AgentModePresetSchema,
+  BASH_APPROVAL_CONFIG_KEY,
+  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
+  DEBUG_MODE_KEY,
+  TOOL_EDIT_APPROVAL_CONFIG_KEY,
   WorkspaceAgentsSelectionSchema,
   AgentSkillsEnabledSchema,
   HiddenCustomAgentKeysSchema,
@@ -47,8 +51,7 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * The settings catalog, by owner. This module declares the row shape and the
  * harness's own rows (model, approvals, retries, compaction, concurrency,
  * skills, logging). An app declares its rows (its plugins' among them)
- * beside its code; `settingsCatalog` concatenates them after these, and
- * `processLayer` installs that catalog for the harness's own readers.
+ * beside its code, and `settingsCatalog` puts them after these.
  *
  * One row carries the catalog facts:
  *
@@ -79,17 +82,6 @@ export type SettingHost = 'vscode' | 'cli' | 'desktop' | 'sdk';
 export type SettingStore =
   'config' | 'workspaceState' | 'repoState' | 'globalState';
 
-export type SettingsViewSnapshot =
-  | 'agents'
-  | 'approval'
-  | 'git-author'
-  | 'latex'
-  | 'memory'
-  | 'models'
-  | 'profile'
-  | 'skills'
-  | 'telemetry';
-
 /** One provider's control group in the Models tab. */
 export interface ModelsTabSurface {
   /** Canonical provider id whose expanded settings show this control. */
@@ -105,10 +97,10 @@ export interface ModelsTabSurface {
 export interface SettingSurfaces {
   /**
    * Rendered by the extension/desktop settings view; the value names the
-   * snapshot rebroadcast after a write. Presence also makes the row writable
-   * through the generic `UPDATE_STATE_SETTING` boundary.
+   * snapshot (the app's id) rebroadcast after a write. Presence also makes
+   * the row writable through the generic `UPDATE_STATE_SETTING` boundary.
    */
-  readonly settingsView?: SettingsViewSnapshot;
+  readonly settingsView?: string;
   /** Listed as an editable row in the CLI `/config` panel. */
   readonly cliConfig?: true;
   /** Shown as a per-provider toggle in the Models tab. */
@@ -125,10 +117,8 @@ export interface SettingWriteEffects {
 }
 
 export interface StateSettingEntry {
-  /**
-   * Canonical `texra.*` key — identical to the config / WorkspaceState /
-   * GlobalState slot the extension already uses.
-   */
+  /** The row's key, relative to its catalog's namespace (`memory.enabled`),
+   *  which the stores add (`<namespace>.memory.enabled`). */
   readonly key: string;
   /**
    * The row's schema, carrying both validation and the decoding default
@@ -180,7 +170,7 @@ export type SurfacedSettingEntry = StateSettingEntry & {
 /** A row the extension/desktop settings view owns the write path for. */
 export type SettingsViewStateSettingEntry = SurfacedSettingEntry & {
   readonly surfaces: SettingSurfaces & {
-    readonly settingsView: SettingsViewSnapshot;
+    readonly settingsView: string;
   };
 };
 
@@ -230,7 +220,7 @@ function globalProviderToggle(opts: {
 // ============================================================================
 
 /**
- * Every config-file-backed setting, keyed by its dotted path under `texra.`.
+ * Every config-file-backed setting, keyed by its dotted path.
  *
  * All three hosts read `.texra/config.json` and that storage is flat, so the
  * key and the slot are derived rather than restated; a row carries the schema
@@ -244,7 +234,7 @@ const HARNESS_CONFIG_ROWS: Record<
   string,
   Omit<StateSettingEntry, 'key' | 'slot'>
 > = {
-  childRunConcurrencyBudget: {
+  [CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY]: {
     schema: Schema.Int.check(
       Schema.isGreaterThanOrEqualTo(CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min),
     )
@@ -262,7 +252,7 @@ const HARNESS_CONFIG_ROWS: Record<
     surfaces: { settingsView: 'agents', cliConfig: true },
   },
   // Global: how one person wants their windows to open.
-  resumeOnOpen: {
+  [RESUME_ON_OPEN_SETTING.configKey]: {
     schema: Schema.Literals(RESUME_ON_OPEN_SETTING.values).pipe(
       Schema.withDecodingDefault(
         Effect.succeed(RESUME_ON_OPEN_SETTING.defaultValue),
@@ -276,7 +266,7 @@ const HARNESS_CONFIG_ROWS: Record<
     surfaces: { settingsView: 'approval', cliConfig: true },
   },
   // Global: a committed project config must not raise or remove the user's cap.
-  'goal.maxCostUsd': {
+  [GOAL_MAX_COST_SETTING.configKey]: {
     schema: Schema.Number.check(
       Schema.isGreaterThanOrEqualTo(GOAL_MAX_COST_SETTING.min),
     )
@@ -342,7 +332,7 @@ const HARNESS_CONFIG_ROWS: Record<
   // No `configTarget`: both runtime readers resolve the *merged* config value
   // through `Settings.get`, so narrowing the row to the global scope would
   // hide (and block writes to) a workspace override the runtime honors.
-  'model.compactionThresholdPercent': {
+  [MODEL_COMPACTION_THRESHOLD_SETTING.configKey]: {
     schema: Schema.Number.check(
       Schema.isGreaterThanOrEqualTo(MODEL_COMPACTION_THRESHOLD_SETTING.min),
     )
@@ -357,7 +347,7 @@ const HARNESS_CONFIG_ROWS: Record<
     category: 'model',
     surfaces: { settingsView: 'agents', cliConfig: true },
   },
-  'model.retry.maxAttempts': {
+  [MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey]: {
     schema: Schema.Int.check(
       Schema.isGreaterThanOrEqualTo(MODEL_RETRY_MAX_ATTEMPTS_SETTING.min),
     )
@@ -379,7 +369,7 @@ const HARNESS_CONFIG_ROWS: Record<
     description:
       'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing takes the input window the Codex backend grants each model; use chatgptCodex.contextWindowK to override it.',
   },
-  'chatgptCodex.contextWindowK': {
+  [CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey]: {
     schema: Schema.NullOr(
       Schema.Int.check(
         Schema.isGreaterThanOrEqualTo(CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.min),
@@ -423,7 +413,7 @@ const HARNESS_CONFIG_ROWS: Record<
     schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
     description: 'Path to the SoX executable. Overrides automatic detection.',
   },
-  'logger.debugMode': {
+  [DEBUG_MODE_KEY]: {
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(false)),
     ),
@@ -437,7 +427,7 @@ const HARNESS_CONFIG_ROWS: Record<
     description:
       'Save what is sent to and received from the model: the request messages and raw responses as JSON, plus the final input prompt as XML.',
   },
-  'skills.enabled': {
+  [AGENT_SKILLS_CONFIG_KEY]: {
     schema: AgentSkillsEnabledSchema.pipe(
       Schema.withDecodingDefault(Effect.succeed(AGENT_SKILLS_ENABLED_DEFAULT)),
     ),
@@ -447,7 +437,7 @@ const HARNESS_CONFIG_ROWS: Record<
     category: 'tools',
     surfaces: { settingsView: 'skills', cliConfig: true },
   },
-  'toolUse.requireEditApproval': {
+  [TOOL_EDIT_APPROVAL_CONFIG_KEY]: {
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
     ),
@@ -458,7 +448,7 @@ const HARNESS_CONFIG_ROWS: Record<
     configTarget: 'local',
     surfaces: { settingsView: 'approval' },
   },
-  'toolUse.requireBashApproval': {
+  [BASH_APPROVAL_CONFIG_KEY]: {
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
     ),
@@ -471,22 +461,22 @@ const HARNESS_CONFIG_ROWS: Record<
 };
 
 /**
- * Config-file-backed rows from a record keyed by dotted path under `texra.`:
- * the key and the uniform `config` slot are derived, not restated. The
- * record's declaration order is the catalog order.
+ * Config-file-backed rows from a record keyed by dotted path: the key and the
+ * uniform `config` slot are derived, not restated. The record's declaration
+ * order is the catalog order.
  */
 export function configTreeRows(
   rows: Readonly<Record<string, Omit<StateSettingEntry, 'key' | 'slot'>>>,
 ): StateSettingEntry[] {
-  return Object.entries(rows).map(([path, row]) => ({
+  return Object.entries(rows).map(([key, row]) => ({
     ...row,
-    key: `texra.${path}`,
+    key,
     slot: 'config',
   }));
 }
 
 /**
- * `texra.approvalPolicy`, written out beside the config tree because the
+ * `approvalPolicy`, written out beside the config tree because the
  * approval-policy module owns its schema and its legacy-spelling
  * normalization.
  */
@@ -604,13 +594,6 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     key: WorkspaceStateKey.WORKSPACE_AGENTS,
     schema: WorkspaceAgentsSelectionSchema.pipe(
       Schema.withDecodingDefault(Effect.succeed(INHERITED_WORKSPACE_AGENTS)),
-    ),
-    slot: 'repoState',
-  },
-  {
-    key: WorkspaceStateKey.CUSTOM_TEAMS,
-    schema: Schema.Array(AgentModePresetSchema).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
     ),
     slot: 'repoState',
   },
@@ -828,10 +811,15 @@ function isSurfaced(entry: StateSettingEntry): entry is SurfacedSettingEntry {
 
 /** One settings catalog and the lookups every settings surface reads from it. */
 export interface SettingsCatalog {
+  /** The app's prefix on every stored key (`texra`): the config and state
+   *  stores write a row's relative key as `<namespace>.<key>`. */
+  readonly namespace: string;
   /** Every row, in catalog order. */
   readonly rows: readonly StateSettingEntry[];
   /** Look up any row, config-file-backed or state-backed, by its key. */
   readonly byKey: (key: string) => StateSettingEntry | undefined;
+  /** Look up a row by its stored key, as a store lists it. */
+  readonly byStoredKey: (storedKey: string) => StateSettingEntry | undefined;
   /** Look up a row the settings view's unified write path owns. */
   readonly settingsViewByKey: (
     key: string,
@@ -843,14 +831,12 @@ export interface SettingsCatalog {
    * `surfaces.settingsView: '<snapshot>'` to a row puts it on the wire.
    */
   readonly snapshotEntries: (
-    snapshot: SettingsViewSnapshot,
+    snapshot: string,
   ) => readonly SettingsViewStateSettingEntry[];
   /** The `/config` panel's rows: `surfaces.cliConfig` is the one predicate. */
   readonly cliRows: readonly SurfacedSettingEntry[];
   /** Look up a row the CLI `/config` panel lists, and so may write. */
   readonly cliByKey: (key: string) => SurfacedSettingEntry | undefined;
-  /** Keys of the config-file-backed rows: the CLI's unknown-key whitelist's catalog half. */
-  readonly configSlotKeys: readonly string[];
   /** The Models tab's controls for one provider, in catalog order. */
   readonly modelsTab: (provider: string) => readonly {
     readonly entry: StateSettingEntry;
@@ -858,30 +844,21 @@ export interface SettingsCatalog {
   }[];
   /**
    * A fresh copy of a config-file-backed row's default, or `undefined` for a
-   * key no such row owns: the step every `ConfigProvider` applies between the
-   * stored value and the caller's fallback. Parsed defaults are memoized
+   * key no such row owns: what every `ConfigProvider` answers for an absent
+   * key. Parsed defaults are memoized
    * because this is on the read path of every absent setting; object values
    * are cloned so a caller cannot mutate the catalog's own default.
    */
   readonly configDefault: (key: string) => unknown;
 }
 
-/**
- * The stored spelling of a config key. Hosts store settings as flat
- * `texra.<key>` entries; callers may pass either spelling.
- */
-export function canonicalConfigKey(key: string): string {
-  return key.startsWith('texra.') ? key : `texra.${key}`;
-}
-
-/**
- * The catalog of the harness's rows, then `appRows` (an app's own, its
- * plugins' included). A key declared twice is a defect and throws.
- */
-export function settingsCatalog(
-  appRows: readonly StateSettingEntry[],
-): SettingsCatalog {
-  const rows = [...HARNESS_SETTINGS, ...appRows];
+/** The harness's rows, then `rows` (an app's own, its plugins' included),
+ *  stored under `namespace`. A key declared twice is a defect and throws. */
+export function settingsCatalog(options: {
+  readonly namespace: string;
+  readonly rows: readonly StateSettingEntry[];
+}): SettingsCatalog {
+  const rows = [...HARNESS_SETTINGS, ...options.rows];
   const byKey = new Map<string, StateSettingEntry>();
   for (const row of rows) {
     if (byKey.has(row.key)) {
@@ -902,8 +879,13 @@ export function settingsCatalog(
   const cliByKey = new Map(cliRows.map((entry) => [entry.key, entry]));
   const defaults = new Map<string, unknown>();
   return {
+    namespace: options.namespace,
     rows,
     byKey: (key) => byKey.get(key),
+    byStoredKey: (storedKey) =>
+      storedKey.startsWith(`${options.namespace}.`)
+        ? byKey.get(storedKey.slice(options.namespace.length + 1))
+        : undefined,
     settingsViewByKey: (key) => settingsView.get(key),
     snapshotEntries: (snapshot) =>
       [...settingsView.values()].filter(
@@ -911,9 +893,6 @@ export function settingsCatalog(
       ),
     cliRows,
     cliByKey: (key) => cliByKey.get(key),
-    configSlotKeys: rows
-      .filter((entry) => entry.slot === 'config')
-      .map((entry) => entry.key),
     modelsTab: (provider) =>
       rows.flatMap((entry) =>
         (entry.surfaces?.models ?? [])
@@ -921,16 +900,12 @@ export function settingsCatalog(
           .map((surface) => ({ entry, surface })),
       ),
     configDefault: (key) => {
-      const canonicalKey = canonicalConfigKey(key);
-      const entry = byKey.get(canonicalKey);
+      const entry = byKey.get(key);
       if (entry?.slot !== 'config') return undefined;
-      if (!defaults.has(canonicalKey)) {
-        defaults.set(
-          canonicalKey,
-          Schema.decodeUnknownSync(entry.schema)(undefined),
-        );
+      if (!defaults.has(key)) {
+        defaults.set(key, Schema.decodeUnknownSync(entry.schema)(undefined));
       }
-      const value = defaults.get(canonicalKey);
+      const value = defaults.get(key);
       return value !== null && typeof value === 'object'
         ? structuredClone(value)
         : value;

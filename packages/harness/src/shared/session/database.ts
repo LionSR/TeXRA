@@ -301,8 +301,8 @@ export class Database extends Context.Service<
     readonly readBlobs: (
       digests: readonly string[],
     ) => Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
-    /** The latest listing row of each type on one open run: its private
-     *  records beside its creation, status and tombstone. */
+    /** The latest listing row of each type on one open run, its requests
+     *  and follow-ups left out: its private records beside its status. */
     readonly readRunRecords: (id: AggregateId) => EventsRead;
     /** The bounded CLI input rows, oldest first, and a new last one. */
     readonly inputHistory: {

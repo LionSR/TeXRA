@@ -1,22 +1,25 @@
 /**
  * TeXRA's required tools: each one's version command, the message that tells
  * the user how to install it (the install guides of the LaTeX toolchain
- * table), and the checks that hand a missing one to the host. The probe
- * itself is the harness's (`probeTool`).
+ * table), the version probe that falls back to `findCommand`, and the
+ * checks that hand a missing one to the host.
  */
 
 // Third-party imports
 import { Effect, Option } from 'effect';
+import { parse as shellParse } from 'shell-quote';
 
 // Local imports
-import { ToolMissingReporter } from '@texra-ai/harness/host';
+import { ToolMissingReporter, withLogChannel } from '@texra-ai/harness/host';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   executeCommand,
   type ExecuteCommandBaseOptions,
-  probeTool,
   whichOnExtendedPath,
   type ExecResult,
 } from '@texra-ai/harness/node';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
+import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
   PDFLATEX_INSTALL_GUIDE,
   LATEXDIFF_INSTALL_GUIDE,
@@ -148,6 +151,64 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
   biber: withDocs(texTool('biber', PDFLATEX_INSTRUCTIONS)),
 };
 
+/** Whether a probe result carries a version-like pattern (e.g., "3.7.1"). */
+function hasVersionOutput(result: { stdout: string; stderr: string }): boolean {
+  return /\d+\.\d+/.test(result.stdout) || /\d+\.\d+/.test(result.stderr);
+}
+
+/** Split a probe command string into an executable and its arguments. */
+function parseCommand(cmd: string): { cmdName: string; args: string[] } | null {
+  const parts = shellParse(cmd).filter(
+    (arg): arg is string => typeof arg === 'string',
+  );
+  if (parts.length === 0) return null;
+  const [cmdName, ...args] = parts;
+  return { cmdName, args };
+}
+
+/**
+ * Run one `<tool> --version` probe. A `--version` probe answers the same from
+ * any directory and for any project, so it names the process cwd and no
+ * setting slots. An interrupted probe's scope kills the child.
+ */
+const runProbe = (cmd: string, args: string[]) =>
+  executeCommand([cmd, ...args], {
+    cwd: process.cwd(),
+    settings: undefined,
+    timeout: 5000,
+    quiet: true,
+  });
+
+/**
+ * Probe one command, falling back to a common-paths-resolved path when the
+ * direct spawn neither exits 0 nor prints version-like output.
+ */
+const executeWithFallback = Effect.fn('toolChecks.executeWithFallback')(
+  function* (
+    cmd: string,
+    args: string[],
+  ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
+    let result = yield* runProbe(cmd, args);
+    // Accept if exit code is 0, OR if we got version-like output
+    // (some tools return non-zero for --version but still output version info)
+    if (result.exitCode === 0 || hasVersionOutput(result)) return true;
+
+    const fallback = yield* findCommand(cmd);
+    if (fallback) {
+      result = yield* runProbe(fallback.command, [...fallback.args, ...args]);
+      if (result.exitCode === 0 || hasVersionOutput(result)) return true;
+    }
+
+    // Log at info level so it shows in output channel by default
+    yield* Effect.logInfo(
+      `Tool '${cmd}' not detected. Last result: exitCode=${result.exitCode}, ` +
+        `stdout=${result.stdout.slice(0, 200) || '(empty)'}, ` +
+        `stderr=${result.stderr.slice(0, 200) || '(empty)'}`,
+    ).pipe(withLogChannel('toolUtils'));
+    return false;
+  },
+);
+
 /**
  * Whether a tool is installed.
  *
@@ -178,7 +239,32 @@ export const checkToolInstalled = Effect.fn('toolChecks.checkToolInstalled')(
       return false;
     }
 
-    const outcome = yield* probeTool(toolName, config.command);
+    // Each of the tool's version commands in turn, until one answers.
+    const command = config.command ?? `${toolName} --version`;
+    const probe = Effect.gen(function* () {
+      for (const cmd of typeof command === 'string' ? [command] : command) {
+        const parsed = parseCommand(cmd);
+        if (parsed && (yield* executeWithFallback(parsed.cmdName, parsed.args)))
+          return true;
+      }
+      return false;
+    });
+    // A probe that throws (the binary resolution and the PATH build are
+    // ordinary code) reads as an absent tool, marked: a caller that reports
+    // the absence links no install docs for a probe that never answered.
+    // Interruption is not a defect, so it still unwinds the fiber instead of
+    // reporting a missing tool.
+    const outcome = yield* probe.pipe(
+      Effect.map((installed) => ({ installed, probeFailed: false })),
+      Effect.catchDefect((err) =>
+        Effect.logWarning(
+          `Tool check for '${toolName}' failed: ${toErrorMessage(err)}`,
+        ).pipe(
+          withLogChannel('toolUtils'),
+          Effect.as({ installed: false, probeFailed: true }),
+        ),
+      ),
+    );
     if (!outcome.installed && showError) {
       yield* reportMissingTool(
         config.errorMessage,
@@ -303,7 +389,7 @@ export function hasPackageManager(name: SystemPackageManager): boolean {
   const cached = packageManagerAvailability.get(name);
   if (cached !== undefined) return cached;
 
-  const available = whichOnExtendedPath(name) !== null;
+  const available = whichOnExtendedPath(name, commandDirs()) !== null;
   packageManagerAvailability.set(name, available);
   return available;
 }

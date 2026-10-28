@@ -1,6 +1,5 @@
 import { Array as Arr, Result, String as Str } from 'effect';
 import {
-  AGENT_MODE_PRESETS,
   agentKeyOf,
   agentMatchesIdentifier,
   type AgentDelegationScope,
@@ -9,11 +8,40 @@ import {
 } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 
-import {
-  findTeamPreset,
-  launchableTeamPresets,
-  type TeamPreset,
-} from './TeamPresets';
+/** A team preset: its members by name, and where it came from. The app
+ *  supplies the catalog (`AgentDirectoriesPort.teams`). */
+export interface TeamPreset {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  /** An icon name the host's icon set draws. */
+  readonly icon: string;
+  readonly agents: readonly string[];
+  readonly source: 'built-in' | 'custom';
+  /** The setup starter: an agent list a workspace can select, never a launch. */
+  readonly setupOnly?: true;
+}
+
+export function findTeamPreset(
+  presets: readonly TeamPreset[],
+  query: string,
+): TeamPreset | undefined {
+  const key = lookupKey(query);
+  return presets.find(
+    (preset) =>
+      lookupKey(preset.id) === key ||
+      lookupKey(preset.name) === key ||
+      slugKey(preset.name) === key,
+  );
+}
+
+function lookupKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function slugKey(value: string): string {
+  return lookupKey(value).replaceAll(/\s+/g, '-');
+}
 
 export interface TeamCatalogAgent {
   readonly name: string;
@@ -166,22 +194,16 @@ function teamExecutionFields<T extends TeamCatalogAgent>(
   };
 }
 
+/** Built-in teams in catalog order, then custom teams by name. */
 function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
-  const builtInOrder = new Map(
-    AGENT_MODE_PRESETS.map((preset, index) => [preset.id, index]),
-  );
   return plans
     .toSorted((left, right) => {
       if (left.preset.source !== right.preset.source) {
         return left.preset.source === 'built-in' ? -1 : 1;
       }
-      if (left.preset.source === 'custom') {
-        return left.preset.name.localeCompare(right.preset.name);
-      }
-      return (
-        (builtInOrder.get(left.preset.id) ?? Number.MAX_SAFE_INTEGER) -
-        (builtInOrder.get(right.preset.id) ?? Number.MAX_SAFE_INTEGER)
-      );
+      return left.preset.source === 'custom'
+        ? left.preset.name.localeCompare(right.preset.name)
+        : 0;
     })
     .map((plan) => {
       const blockReason = teamLaunchBlockReason(plan);
@@ -200,13 +222,16 @@ function buildTeamOptions(plans: readonly TeamRunPlan[]): TeamOptionData[] {
     });
 }
 
+/** The catalog's launchable teams: every preset but the setup starter. */
+const launchable = (presets: readonly TeamPreset[]): TeamPreset[] =>
+  presets.filter((preset) => !preset.setupOnly);
+
 export function loadTeamOptions<T extends TeamCatalogAgent>(
   ports: Omit<TeamRunOptions<T>, 'agentOverride'> & {
-    customPresetsRaw: unknown;
+    presets: readonly TeamPreset[];
   },
 ): TeamOptionData[] {
-  const presets = launchableTeamPresets(ports.customPresetsRaw);
-  return buildTeamOptions(planTeamRuns(presets, ports));
+  return buildTeamOptions(planTeamRuns(launchable(ports.presets), ports));
 }
 
 export type TeamLaunchResolution =
@@ -221,13 +246,10 @@ export type TeamLaunchResolution =
 export function resolveTeamLaunch<T extends TeamCatalogAgent>(
   args: Omit<TeamRunOptions<T>, 'agentOverride'> & {
     teamId: string;
-    customPresetsRaw: unknown;
+    presets: readonly TeamPreset[];
   },
 ): TeamLaunchResolution {
-  const preset = findTeamPreset(
-    launchableTeamPresets(args.customPresetsRaw),
-    args.teamId,
-  );
+  const preset = findTeamPreset(launchable(args.presets), args.teamId);
   if (!preset) return { status: 'unknown-team' };
 
   const plan = planTeamRun(preset, args);

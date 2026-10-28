@@ -89,7 +89,12 @@ function expectClonedInto(cwd: string): void {
   expect(command?.args).toEqual(clone.args);
   expect(command?.options).toMatchObject({
     cwd,
-    env: { ...makeMachineGitEnv(), ...clone.env, LC_ALL: 'C', LANGUAGE: 'C' },
+    env: {
+      ...testRuntime().runSync(makeMachineGitEnv),
+      ...clone.env,
+      LC_ALL: 'C',
+      LANGUAGE: 'C',
+    },
     extendEnv: false,
   });
   const approve = spawn.calls.find((call) => call.args[0] === 'credential');

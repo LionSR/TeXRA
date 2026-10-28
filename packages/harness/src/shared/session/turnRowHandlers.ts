@@ -15,7 +15,7 @@
 import { Result } from 'effect';
 
 import { assistantMessageFromResult } from '@texra-ai/llm';
-import { addTurnUsage, type SessionEvent } from '@shared/schemas';
+import { addTurnUsage, type DispatchFacts } from '@shared/schemas';
 import { byId, copyById, ownCopy, type BatchCopies } from './runRows';
 import { resultFacts, withInput } from './runFacts';
 import {
@@ -112,6 +112,19 @@ const withCall = (
   const records = ownCopy(copies, pending.records, copyById);
   records[callId] = call;
   return { ...state, pendingResponse: { ...pending, records } };
+};
+
+/** `state` with the calls `at.responseId` issued (`RunFacts.calls`). */
+const withIssued = (
+  copies: BatchCopies,
+  state: RunState,
+  issued: readonly Pick<DispatchFacts, 'callId' | 'toolName' | 'logId'>[],
+  at: Omit<RunState['calls'][string], 'toolName' | 'logId'>,
+): RunState => {
+  const calls = ownCopy(copies, state.calls, copyById);
+  for (const { callId, toolName, logId } of issued)
+    calls[`${at.responseId}/${callId}`] = { ...at, toolName, logId };
+  return { ...state, calls };
 };
 
 /** Why the delivery's tool group does not answer every call of `pending`,
@@ -281,8 +294,13 @@ export const TURN_ROW_HANDLERS: {
       isSummaryAttempt(p) || (p.kind === 'append' && p.sourceResponse === null)
         ? 'any'
         : 'opened',
-    apply: (state, { payload: p }, copies) =>
-      isSummaryAttempt(p) ? null : applyMessage(p.kind, state, p, copies),
+    apply: (state, { payload: p, commit, seq }, copies) => {
+      if (isSummaryAttempt(p)) return null;
+      const next = applyMessage(p.kind, state, p, copies);
+      if (p.kind !== 'response') return next;
+      const at = { responseId: p.responseId, commit, seq };
+      return Result.map(next, (s) => withIssued(copies, s, p.calls, at));
+    },
   },
   'script.call': {
     requires: 'opened',
@@ -295,11 +313,14 @@ export const TURN_ROW_HANDLERS: {
         );
       if (Object.hasOwn(pending.records, p.callId))
         return outOfOrder(`${p.callId} is already recorded`);
+      const called = withCall(copies, state, pending, p.callId, {
+        script: p,
+        status: { kind: 'issued' },
+      });
+      // Issued where its script was (a handed-down one, by no response).
+      const script = state.calls[`${pending.responseId}/${p.scriptCallId}`];
       return Result.succeed(
-        withCall(copies, state, pending, p.callId, {
-          script: p,
-          status: { kind: 'issued' },
-        }),
+        script === undefined ? called : withIssued(copies, called, [p], script),
       );
     },
   },
@@ -373,27 +394,3 @@ export const TURN_ROW_HANDLERS: {
     },
   },
 };
-
-const ISSUING = ['model.message', 'script.call'] as const;
-/** The rows {@link issuedCalls} reads. */
-export const ISSUING_ROW_TYPES = Object.freeze(ISSUING);
-type Issuer = Pick<SessionEvent, 'commit' | 'seq'> & { responseId: string };
-type Call = { callId: string; toolName: string; logId: string };
-type Issued = { readonly call: Call; readonly issuer: Issuer | undefined };
-
-/** Every call `rows` issue, in issue order, with the response that issued
- *  it: for a script's call, the latest response before it to issue its
- *  `script` call. The one index of a call's issuer, script calls included. */
-export function issuedCalls(rows: readonly SessionEvent[]): Issued[] {
-  const by = new Map<string, Issuer>();
-  return rows.flatMap((row): Issued[] => {
-    if (row.type === 'script.call')
-      return [{ call: row.payload, issuer: by.get(row.payload.scriptCallId) }];
-    if (row.type !== 'model.message' || row.payload.kind !== 'response')
-      return [];
-    const { commit, seq, payload } = row;
-    const issuer = { commit, seq, responseId: payload.responseId };
-    for (const { callId } of payload.calls) by.set(callId, issuer);
-    return payload.calls.map((call) => ({ call, issuer }));
-  });
-}

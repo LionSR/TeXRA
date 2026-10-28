@@ -182,7 +182,7 @@ export class SubscriptionUsageService {
       },
       glmCodingPlan: {
         resolveVariant: () =>
-          Settings.get<boolean>(this.stores, 'texra.glm.useChina'),
+          Settings.get<boolean>(this.stores, 'glm.useChina'),
         fetch: (useChina) =>
           Effect.flatMap(lookupStoredKey('glm'), (apiKey) =>
             apiKey

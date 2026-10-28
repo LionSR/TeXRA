@@ -11,6 +11,7 @@ import {
   Schema,
   Stream,
 } from 'effect';
+import type { TeamPreset } from '@common/teams/TeamPlan';
 import { AgentSourceSchema } from '@shared/schemas';
 import type { SettingsCatalog } from '@shared/state/stateSettings';
 
@@ -59,10 +60,9 @@ export class ConfigWriteFailed extends Schema.TaggedError<ConfigWriteFailed>()(
 export interface ConfigProvider {
   /**
    * Resolution order an implementation must honor: stored workspace value,
-   * stored global value, the setting catalog's own default
-   * (`catalog.configDefault`), and only then the caller's `defaultValue`.
-   * Callers of a cataloged `texra.*` key therefore omit `defaultValue`; it is
-   * for keys the catalog does not own.
+   * stored global value, then the setting catalog's own default
+   * (`catalog.configDefault`); a key no row owns reads as `undefined` when
+   * absent.
    *
    * It is synchronous, and it casts: the value it returns is whatever the
    * store holds. A reader that needs the value checked reads through
@@ -72,12 +72,10 @@ export interface ConfigProvider {
    * Nothing may cache what either read returns: a setting the user changes
    * mid-process is read on the next call.
    *
-   * Path conventions:
-   * - Use dot notation with or without the canonical `texra.` prefix.
-   * - Host settings such as `latex-workshop.*` must use the host adapter
-   *   rather than this shared configuration path.
+   * Keys are relative to `catalog.namespace` (`memory.enabled`), which the
+   * provider adds to every key it stores.
    */
-  get<T>(key: string, defaultValue?: T): T;
+  get<T>(key: string): T;
   /**
    * Persist one value to the target's store. The write is an `Effect` so it
    * composes directly into the caller's program: the store's own write is an
@@ -223,6 +221,11 @@ export interface AgentDirectoriesPort {
     FileSystem.FileSystem
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
+  /** The team presets a workspace offers, built-in and its own, read from its
+   *  repository state; absent, the app has no teams. */
+  readonly teams?: (
+    repoState: StateStore,
+  ) => Effect.Effect<readonly TeamPreset[], StateReadFailed>;
   /**
    * The packaged resources root a host ships its bundled agents under,
    * the tool plugins' agent directories among them. Absent where none ships:
@@ -236,21 +239,13 @@ export interface AgentDirectoriesPort {
  * composition root through `processLayer`. The shape is the port itself: a
  * program that resolves one of the three local agent directories yields the
  * port's own readers instead of reaching for the process platform's copy.
- *
- * `layer` takes the port itself, for the same reason `Secrets.layer` does:
- * every root builds its agent directories before it installs the runtime that
- * serves them, so the service is the value the root already holds.
+ * A root holds its port before it installs the runtime that serves it, so the
+ * layer is `Layer.succeed(AgentDirectories)(port)`.
  */
 export class AgentDirectories extends Context.Service<
   AgentDirectories,
   AgentDirectoriesPort
->()('@texra-ai/harness/platform/AgentDirectories') {
-  static layer(
-    directories: AgentDirectoriesPort,
-  ): Layer.Layer<AgentDirectories> {
-    return Layer.succeed(AgentDirectories)(directories);
-  }
-}
+>()('@texra-ai/harness/platform/AgentDirectories') {}
 
 // ---------------------------------------------------------------------------
 // Tool-missing reporter
@@ -272,16 +267,10 @@ export type ToolMissingHandler = (
  * The process's tool-missing reporter as an Effect service, provided once
  * by the composition root through `processLayer`. A program that needs to surface a
  * missing tool yields it via `Effect.serviceOption`, so an absent reporter is
- * silence rather than a missing requirement.
- *
- * `layer` takes the reporter the root already holds; a host without a
- * tool-missing UI omits the service, exactly as it omitted the platform port.
+ * silence rather than a missing requirement. A host without a tool-missing UI
+ * omits the service.
  */
 export class ToolMissingReporter extends Context.Service<
   ToolMissingReporter,
   ToolMissingHandler
->()('@texra-ai/harness/platform/ToolMissingReporter') {
-  static layer(report: ToolMissingHandler): Layer.Layer<ToolMissingReporter> {
-    return Layer.succeed(ToolMissingReporter)(report);
-  }
-}
+>()('@texra-ai/harness/platform/ToolMissingReporter') {}

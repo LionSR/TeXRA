@@ -44,7 +44,7 @@ import {
   type RunRequest,
   type ValidatedRunRequest,
 } from '@texra/controllers/session/runRequests';
-import { forkRun } from '@texra/controllers/session/runActionPolicy';
+import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { packDestination } from '@texra/tools/documents/runOutputs';
 import type {
@@ -81,7 +81,7 @@ export interface WorkflowDiffRequest {
 
 /** What the workflow toolbar's pack or clean of a run's files did, and the
  *  input file its message names. */
-export interface WorkflowFileOperationResult {
+interface WorkflowFileOperationResult {
   readonly result: FileOpResult;
   readonly inputFile: string;
 }
@@ -114,13 +114,12 @@ class RunConfigUnreadable extends Schema.TaggedError<RunConfigUnreadable>()(
  *  session's `start` takes them. */
 type RunValidatedOptions = Pick<StartInput, 'helperModel' | 'approval'>;
 
-/** What the run actions read and present beside the window's `Session`:
- *  filled from this process's session where the window holds one, from
- *  the service where it runs there (`windowRecords`). */
-export interface RunActionRecordPorts {
+export interface HostRunActionPorts {
   /** The window's roots: its workspace and its settings stores. */
   readonly roots: WorkspaceRoots;
-  /** The run's saved setup; null when it saved none. */
+  /** The run's saved setup, from this process's session where the window
+   *  holds it, from the service where it runs there; null when it saved
+   *  none. */
   readonly readConfig: (
     runId: RunId,
   ) => Effect.Effect<
@@ -129,9 +128,6 @@ export interface RunActionRecordPorts {
   >;
   /** Where a failure before a run opens is presented. */
   readonly present: Pick<SessionHostInteractions, 'emit'>;
-}
-
-export interface HostRunActionPorts extends RunActionRecordPorts {
   /** Where this window's run actions land: its own session, or the
    *  background service's. Run state is read from its view. */
   readonly session: Session;
@@ -519,15 +515,12 @@ export const createHostRunActions = Effect.fn(
      */
     resume: Effect.fn('HostRunActions.resume')(function* (runId) {
       yield* nativeAgentRun(runId, 'resume');
-      const run = yield* session.resume(runId, { interactive: true }).pipe(
-        Effect.map((resumed): Run | null => resumed),
-        Effect.catch((refusal) =>
-          refusal._tag === 'ResumeRefused' && refusal.reason === 'blocked'
-            ? Effect.succeed(null)
-            : Effect.fail(new Unavailable({ runId, reason: refusal.message })),
+      const run = yield* resumeRun(session, runId).pipe(
+        Effect.catchTag('RunFailure', (failure) =>
+          Effect.fail(new Unavailable({ runId, reason: failure.message })),
         ),
       );
-      if (run === null) return;
+      if (run === 'waiting') return;
       const config = yield* readConfig(run.runId);
       if (config === undefined || !isTaskConfig(config)) return;
       const result = yield* run.result.pipe(
@@ -661,23 +654,12 @@ export const createHostRunActions = Effect.fn(
       });
     },
     fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
-      const fork = yield* forkRun(session, runId, at).pipe(
-        Effect.mapError((error): RequestRefusal =>
-          isRequestRefusal(error)
-            ? error
-            : new Unavailable({
-                runId,
-                reason: 'The task could not be forked.',
-              }),
-        ),
-      );
+      const forked = yield* forkRun(session, runId, at);
       // The fork waits for its host: continuing it waits on the user's
       // next message. A refusal is told by the resume itself, and the fork
       // keeps its Resume.
-      yield* session
-        .resume(fork, { interactive: true })
-        .pipe(Effect.ignore({ log: 'Warn' }));
-      return fork;
+      yield* resumeRun(session, forked).pipe(Effect.ignore({ log: 'Warn' }));
+      return forked;
     }),
   };
 });

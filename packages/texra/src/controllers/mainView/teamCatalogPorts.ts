@@ -1,7 +1,7 @@
 // Local imports
 import { Effect } from 'effect';
 import { AgentCatalog, type StateStore } from '@texra-ai/harness/host';
-import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
+import { workspaceTeams } from '@texra/shared/agentTeams';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
 
 /**
@@ -13,7 +13,7 @@ import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
 export const createTeamCatalogPorts = Effect.fn('createTeamCatalogPorts')(
   function* (repoState: StateStore) {
     return {
-      customPresetsRaw: yield* repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
+      presets: yield* workspaceTeams(repoState),
       resolveAgent: (yield* AgentCatalog).get,
       rootAgentNames: BUILTIN_TEAM_ROOT_AGENT_NAMES,
     };

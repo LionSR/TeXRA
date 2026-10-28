@@ -11,6 +11,7 @@
  */
 import { Effect, Result, Schema } from 'effect';
 
+import type { TeamPreset } from '@common/teams/TeamPlan';
 import {
   StateReadFailed,
   type StateStore,
@@ -18,7 +19,6 @@ import {
 } from '@platform/interfaces';
 import {
   AGENT_SOURCE,
-  type AgentModePreset,
   agentKeyOf,
   agentMatchesIdentifier,
   type WorkspaceAgentsSelection,
@@ -189,7 +189,7 @@ export function forgetHiddenAgent(
 /** The identifiers a selection lists; `undefined` means every agent. */
 export function selectedIdentifiers(
   selection: Exclude<WorkspaceAgentsSelection, { readonly kind: 'inherit' }>,
-  presets: readonly AgentModePreset[],
+  presets: readonly TeamPreset[],
 ): readonly string[] | undefined {
   if (selection.kind === 'all') return undefined;
   if (selection.kind === 'custom') return selection.agentKeys;

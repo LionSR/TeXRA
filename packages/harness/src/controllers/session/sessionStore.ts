@@ -41,7 +41,6 @@ import {
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
-import { unlessRemoved } from '@shared/session/runRows';
 import {
   ProcessIdentity,
   afterCommit,
@@ -50,6 +49,7 @@ import {
   type SessionEventsShape,
   type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
+import { runRowsFrom } from '@shared/session/runRows';
 
 import { makeRunTrace } from './runTrace';
 import { SessionViewService } from './SessionView';
@@ -331,25 +331,25 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       now: () => SubscriptionRef.getUnsafe(database.observedCommit),
       rows: (id, types) => database.readAggregate(id, 1, types),
       blobs: database.readBlobs,
-      records: (runId) =>
-        database.readRunRecords(qualifyAggregateId('run', runId)),
-      display: (runId) =>
+      facts: (runId) =>
         database
-          .readDisplayAggregate(qualifyAggregateId('run', runId), 1)
-          .pipe(Effect.map(unlessRemoved)),
+          .readRunRecords(qualifyAggregateId('run', runId))
+          .pipe(Effect.map((rows) => (rows[0] ? runRowsFrom(rows) : null))),
+      display: (runId) =>
+        Effect.map(
+          database.readDisplayAggregate(qualifyAggregateId('run', runId), 1),
+          (rows) => (rows.at(-1)?.type === 'run.removed' ? [] : rows),
+        ),
       tail: events.all,
       listing: events.listing,
       hold: yield* claimHolds(database),
       owns: (runId) =>
         Effect.map(
           database.aggregateState([qualifyAggregateId('run', runId)]),
-          (states) =>
-            states.some(
-              (state) =>
-                state.startCommit !== null &&
-                !state.closed &&
-                state.ownerId === ownerId,
-            ),
+          ([state]) =>
+            state?.startCommit != null &&
+            !state.closed &&
+            state.ownerId === ownerId,
         ),
       owner: (runId) => database.claimOwner(qualifyAggregateId('run', runId)),
       movedAside: database.movedAside,

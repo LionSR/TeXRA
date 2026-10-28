@@ -81,10 +81,9 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
     return yield* refused('Only a conversation can be forked.');
   }
   const aggregate = qualifyAggregateId('run', from);
-  const start = (yield* session.log.records(from)).find(
-    (row) => row.type === 'run.start',
-  );
-  if (start?.type !== 'run.start') {
+  const facts = yield* session.log.facts(from);
+  const start = facts?.start;
+  if (start == null) {
     return yield* refused(
       `The ${runNoun(session, from)} ${from} has no recorded start.`,
     );
@@ -131,7 +130,7 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
     ...launched
   } = config;
   const record = { ...launched, model: found.state.modelId ?? launched.model };
-  return { ...found, start, record };
+  return { ...found, start, title: facts?.title ?? null, record };
 });
 
 /**
@@ -187,18 +186,17 @@ export const forkRun = Effect.fn('forkRun')(function* (
   from: { readonly id: RunId; readonly uid: string },
   at: number | null,
 ): Effect.fn.Return<RunId, Rejected | Error> {
-  const { seq: cut, state, start, record } = yield* cutOf(session, from.id, at);
-  // The title the source shows, with its authorship, from the view as the
-  // log holds it: the live view may not have applied a rename just made.
-  const source = (yield* session.view.read([])).runs.get(from.id);
+  // The title the source shows, with its authorship.
+  const cutAt = yield* cutOf(session, from.id, at);
+  const { seq: cut, state, start, title, record } = cutAt;
   const runId = generateRunId();
   const registration = yield* registrationRows(session, runId, record, {
     identity: start.identity,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     provenance: { kind: 'fork', from, at: cut },
-    ...(source?.description != null && {
-      description: source.description,
-      descriptionBy: source.descriptionBy ?? 'model',
+    ...(title !== null && {
+      description: title.description,
+      descriptionBy: title.by,
     }),
   });
   // Registration and history are one commit, through the fork's cell: a

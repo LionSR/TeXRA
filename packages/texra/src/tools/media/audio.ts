@@ -24,12 +24,15 @@ import {
 import {
   inheritedEnv,
   withExtendedPath,
-  findCommand,
-  type FoundCommand,
   absentReason,
   pathExists,
 } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
+import {
+  findCommand,
+  type FoundCommand,
+} from '@texra/utils/system/binaryResolver';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ChildProcessHandle,
@@ -100,7 +103,7 @@ const resolveSoxCommand = Effect.fnUntraced(function* (
 > {
   const configuredPath = Settings.getConfig<string>(
     roots.config,
-    'texra.audio.soxPath',
+    'audio.soxPath',
   );
   if (configuredPath) {
     // The path is validated before being probed, so a non-absolute
@@ -184,7 +187,7 @@ export function startRecording(
       soxCommand.command,
       [...soxCommand.args, ...soxArgs],
       {
-        env: withExtendedPath(yield* inheritedEnv()),
+        env: withExtendedPath(yield* inheritedEnv(), commandDirs()),
         extendEnv: false,
         stdin: 'ignore',
         stdout: 'ignore',

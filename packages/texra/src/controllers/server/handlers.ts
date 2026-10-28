@@ -47,7 +47,6 @@ import { appSignalStream } from '@texra-ai/harness/host';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
-import type { EditorHostShape } from '@texra/tools/editorHost';
 
 import {
   PROTOCOL_VERSION,
@@ -58,7 +57,7 @@ import {
   type ServiceInfo,
 } from './protocol';
 
-import { makeHostWindows } from './hostWindows';
+import { HostWindows } from './hostWindows';
 import { listTasks } from './taskList';
 import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 
@@ -75,9 +74,6 @@ export class ServiceProjects extends Context.Service<
   {
     /** The storage root every project's store sits under. */
     readonly storageRoot: string;
-    /** The editor registry the service's plugins read (`texraPlugins`):
-     *  each presented project's windows attach their editors to it. */
-    readonly editors: EditorHostShape;
     /** The session of `workspace`, opened on first use and leased for the
      *  caller's scope: a leased session is never closed for idleness. */
     readonly open: (
@@ -263,7 +259,6 @@ export const serviceHandlers = TexraRpcs.toLayer(
     const control = yield* ServiceControl;
     // A task's start and resume are its session's, as every host's are.
     const runs = yield* FiberSet.make();
-    const scope = yield* Effect.scope;
     // The admission is held until the handler's scope ends, by when the
     // run is the registry's: a drain waits for a start already under way.
     const refuseWhileDraining = Effect.gen(function* () {
@@ -274,7 +269,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
           }),
         );
     });
-    const hosts = yield* makeHostWindows;
+    const hosts = yield* HostWindows;
     yield* Effect.forkScoped(
       // The files this process's sessions announce their tasks wrote.
       Stream.runForEach(
@@ -282,48 +277,29 @@ export const serviceHandlers = TexraRpcs.toLayer(
         ({ absolutePaths }) => hosts.filesWritten(absolutePaths),
       ),
     );
-    /** Each session's presentation surface, given once (claimed in one
-     *  step) and closed with the session: what its runs ask of a host goes
-     *  to the project's windows. Keyed by the session itself: a project
-     *  reopened after an idle close is a new session, given its own. */
-    const presented = new Map<Session, Scope.Closeable>();
-    const present = (session: Session): Effect.Effect<void> =>
-      Effect.suspend(() => {
-        if (presented.has(session)) return Effect.void;
-        const surface = Scope.forkUnsafe(scope);
-        presented.set(session, surface);
-        return hosts
-          .adopt(session, projects.editors)
-          .pipe(Scope.provide(surface));
-      });
     // A session no client leases and no run holds closes once idle long
-    // enough, with its surface: a service that lives for weeks keeps only
-    // the projects in use.
+    // enough: a service that lives for weeks keeps only the projects in use.
     const idleMs = Duration.toMillis(control.idleAfter);
     yield* Effect.forkScoped(
       Effect.gen(function* () {
-        for (const session of yield* projects.closeIdle(control.idleAfter)) {
+        for (const session of yield* projects.closeIdle(control.idleAfter))
           yield* Effect.logInfo(
             `Closed the idle session of ${session.roots.storage}`,
           );
-          const surface = presented.get(session);
-          presented.delete(session);
-          if (surface !== undefined) yield* Scope.close(surface, Exit.void);
-        }
       }).pipe(
         Effect.repeat(
           Schedule.spaced(Duration.millis(Math.min(60_000, idleMs / 2))),
         ),
       ),
     );
-    const openSession = (workspace: string) =>
+    const open = (workspace: string) =>
       projects
         .open(workspace)
-        .pipe(Effect.tap((project) => present(project.session)));
-    const open = (workspace: string) =>
-      openSession(workspace).pipe(
-        Effect.mapError((error) => new TaskFailed({ message: error.message })),
-      );
+        .pipe(
+          Effect.mapError(
+            (error) => new TaskFailed({ message: error.message }),
+          ),
+        );
     /** What `read` answers from `runId`'s records in the project's session,
      *  read where the run is held; a run the session does not hold is
      *  unknown, not a run without records. */
@@ -333,7 +309,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
       read: (session: LocalSession) => Effect.Effect<A, Error>,
     ): Effect.Effect<A, TaskRecordsFailed> =>
       Effect.scoped(
-        openSession(workspace).pipe(
+        projects.open(workspace).pipe(
           Effect.mapError(
             (error) =>
               new TaskRecordsFailed({
@@ -426,7 +402,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
         ),
       'task.request': ({ workspace, request }) =>
         Effect.scoped(
-          openSession(workspace).pipe(
+          projects.open(workspace).pipe(
             Effect.mapError((error) => new Rejected({ reason: error.message })),
             Effect.flatMap(({ session }) => session.request(request)),
             Effect.catchDefect((defect) =>
@@ -489,14 +465,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
                   (error) => new TaskFailed({ message: error.message }),
                 ),
               ),
-            ({ session }) =>
-              hosts.attach(session, capabilities).pipe(
-                // The session's surface is given once the window is held,
-                // so a first attach is never told that no window is.
-                Stream.tap((frame) =>
-                  frame.kind === 'attached' ? present(session) : Effect.void,
-                ),
-              ),
+            ({ session }) => hosts.attach(session, capabilities),
           ),
         ),
       // The project's state store, the service's own: a window opens none.

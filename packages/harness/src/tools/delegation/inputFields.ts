@@ -56,7 +56,7 @@ export const memoriesField = nullishWithDefault(
 );
 
 const WORKTREE_DISABLED_MESSAGE =
-  "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `texra.git.worktreeSupport` ('Subagent worktrees' in Settings > General > Git).";
+  "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `git.worktreeSupport` ('Subagent worktrees' in Settings > General > Git).";
 
 /**
  * The `working_directory` gate, over the settings of the project the call
@@ -147,7 +147,7 @@ export const workingDirectoryField = Schema.optional(
 )
   .annotate({
     description:
-      'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support (`texra.git.worktreeSupport`) is enabled for this workspace.',
+      'Absolute path for the subagent to operate in (e.g. a git worktree). All tool calls within the subagent will automatically use this as their root directory. Defaults to workspace root. Only accepted when git worktree support (`git.worktreeSupport`) is enabled for this workspace.',
   })
   .pipe(
     Schema.decodeTo(Schema.optional(Schema.String), {

@@ -366,12 +366,12 @@ const awaitInBand = Effect.fn('inBandSubagentRun.awaitInBand')(function* (
   return yield* Fiber.join(child).pipe(
     Effect.onInterrupt(() =>
       Effect.suspend(() =>
-        runs.interruptActive(runId)
+        runs.interrupt(runId)
           ? Fiber.await(child)
           : // No run to stop yet: a loop the launch's hand-off started
             // meanwhile is stopped once it returns, and awaited to the end.
             Fiber.interrupt(child).pipe(
-              Effect.andThen(Effect.sync(() => runs.interruptActive(runId))),
+              Effect.andThen(Effect.sync(() => runs.interrupt(runId))),
               Effect.andThen(runs.awaitDrained(runId)),
             ),
       ),

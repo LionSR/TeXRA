@@ -37,17 +37,12 @@ describe('Concurrent session tool edit approval handlers', () => {
         function attachWindow(session: SessionHandle, appliedContent: string) {
           return Effect.gen(function* () {
             const seen: string[] = [];
-            Effect.runSync(
-              session.interactions.use({
-                presentToolEdit: (staged) =>
-                  seen.push(staged.permission.relativePath),
-              }),
-            );
             yield* Effect.forkScoped(
               Stream.runForEach(session.log.tail(session.log.now()), (event) =>
                 Effect.sync(() => {
                   if (event.type !== 'request.opened') return;
                   if (event.payload.kind !== 'toolEdit') return;
+                  seen.push(event.payload.data.relativePath);
                   publishTestRows(session, [
                     {
                       type: 'request.decided',

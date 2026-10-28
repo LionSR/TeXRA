@@ -18,13 +18,16 @@ import { AgentCatalog } from '@texra-ai/harness/host';
 
 import { executed, ToolError } from '@texra-ai/harness/plugins';
 import { agentName } from '@texra-ai/harness/schemas';
-import { teamPresets } from '@texra-ai/harness/host';
+import {
+  AGENT_MODE_PRESETS,
+  STARTER_AGENT_MODE_PRESET,
+} from '@texra/shared/agentTeams';
 
 /**
- * The shared catalog's built-in teams (the setup starter included), so the
- * enum can't drift from the presets the agent list accepts.
+ * The built-in teams (the setup starter included), the list the agent list's
+ * catalog starts with, so the enum can't drift from the presets it accepts.
  */
-const TEAM_CHOICES = teamPresets(undefined);
+const TEAM_CHOICES = [STARTER_AGENT_MODE_PRESET, ...AGENT_MODE_PRESETS];
 const TEAM_IDS = TEAM_CHOICES.map((preset) => preset.id);
 
 function describeTeams(): string {

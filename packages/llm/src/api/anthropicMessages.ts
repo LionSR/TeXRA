@@ -27,7 +27,7 @@ import {
   type TurnResult,
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
-import { decodeTurnRequest, fitLimit, resolveTurn } from './turnInput.js';
+import { fitLimit, resolveTurn } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
 import { ModelError, fillModelError, sdkModelError } from '../errors.js';
@@ -624,44 +624,37 @@ export function anthropicMessagesModel(
       ),
     remove: (fileId, signal) => client.files.delete(fileId, null, { signal }),
   });
-  const prepareTurn: Model['prepareTurn'] = Effect.fn(
-    'llm.anthropic.prepareTurn',
-  )(function* (request) {
-    const input = yield* decodeTurnRequest(
-      'The canonical Anthropic input is invalid.',
+  const prepareTurn: Model['prepareTurn'] = (request) =>
+    resolveTurn(
       request,
+      origin,
+      undefined,
+      (input) =>
+        // Anthropic keeps no response state a later turn could chain on.
+        input.store !== undefined
+          ? Effect.fail(
+              new ModelError({
+                kind: 'unsupported',
+                message: 'Anthropic does not store responses.',
+              }),
+            )
+          : Effect.succeed({
+              ...origin,
+              mode: 'foreground',
+              system: input.system,
+              messages: input.messages,
+              tools: input.tools ?? [],
+              controls: {
+                ...fitLimit(config.defaults, input.maxOutputTokens),
+                parallelToolCalls: config.defaults.parallelToolCalls,
+                toolChoice: input.toolChoice ?? 'auto',
+                effort: config.defaults.effort,
+                cache: config.defaults.cache,
+                stopSequences: config.defaults.stopSequences,
+              },
+            }),
+      (turn) => invocationBody(turn, origin, config, uploads),
     );
-    if (
-      input.mode === 'background' ||
-      input.continuation !== undefined ||
-      input.store !== undefined
-    )
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message:
-          'The selected Anthropic model does not support these authored controls.',
-      });
-    const prepared = yield* resolveTurn(
-      'Anthropic requires complete supported invocation controls.',
-      {
-        ...origin,
-        mode: 'foreground',
-        system: input.system,
-        messages: input.messages,
-        tools: input.tools ?? [],
-        controls: {
-          ...fitLimit(config.defaults, input.maxOutputTokens),
-          parallelToolCalls: config.defaults.parallelToolCalls,
-          toolChoice: input.toolChoice ?? 'auto',
-          effort: config.defaults.effort,
-          cache: config.defaults.cache,
-          stopSequences: config.defaults.stopSequences,
-        },
-      },
-    );
-    yield* invocationBody(prepared, origin, config, uploads);
-    return prepared;
-  });
 
   const streamTurn: Model['streamTurn'] = (input) =>
     Stream.unwrap(

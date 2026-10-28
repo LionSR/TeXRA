@@ -3,17 +3,16 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 import { LRUCache } from 'lru-cache';
 
-import { withLogChannel } from '@logger/effectLog';
-import { hasExtension } from '@utils/core/pathCore';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import { executeCommand } from './execUtils';
+import { hasExtension, withLogChannel } from '@texra-ai/harness/host';
 import {
-  IS_WINDOWS,
+  executeCommand,
   existsAtAbsolute,
-  getExtraDirs,
   whichOnExtendedPath,
-} from './platformPaths';
+} from '@texra-ai/harness/node';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+
+const IS_WINDOWS = process.platform === 'win32';
 
 const WINDOWS_EXTENSIONLESS_PERL_TOOLS = new Set([
   'latexdiff',
@@ -45,29 +44,9 @@ export interface FoundCommand {
   readonly resolvedPath: string;
 }
 
-/** How long a miss is remembered before the tool is looked up again. */
-const MISS_TTL_MS = 60_000;
-
-// Lookups by tool name, bounded so a long-lived session that probes many
-// distinct names can't grow this unbounded. A hit is kept for the session; a
-// miss expires after MISS_TTL_MS, so repeated session opens do not repeat the
-// search and a tool installed mid-session is still picked up.
-const findToolCache = new LRUCache<string, { readonly path: string | null }>({
-  max: 64,
-});
-
-const findToolLanes = new Map<string, PerKeyLane>();
-
-/**
- * Drop every remembered miss, so the next lookup of a tool the user may have
- * just installed searches again. Found paths are kept.
- */
-export function forgetToolMisses(): void {
-  const misses = [...findToolCache.entries()].filter(
-    ([, entry]) => entry.path === null,
-  );
-  for (const [tool] of misses) findToolCache.delete(tool);
-}
+// Found paths by tool name, kept for the session (bounded). A miss is not
+// kept: a tool installed mid-session is found by the next lookup.
+const foundTools = new LRUCache<string, string>({ max: 64 });
 
 function toolCandidates(tool: string): string[] {
   const candidates = [tool];
@@ -92,7 +71,7 @@ const findToolUncached = Effect.fnUntraced(function* (tool: string) {
     return null;
   }
   const candidates = toolCandidates(tool);
-  for (const dir of getExtraDirs()) {
+  for (const dir of commandDirs()) {
     for (const name of candidates) {
       const candidate = path.join(dir, name);
       if (existsAtAbsolute(candidate)) return candidate;
@@ -116,41 +95,25 @@ const findToolUncached = Effect.fnUntraced(function* (tool: string) {
     if (result.exitCode === 0 && result.stdout) return result.stdout;
   }
   for (const name of candidates) {
-    const found = whichOnExtendedPath(name);
+    const found = whichOnExtendedPath(name, commandDirs());
     if (found) return found;
   }
   return null;
 });
 
 /**
- * Locate a tool in the common directories, the TeX database (TeX Live
- * scripts only), then PATH. Unsafe tool names are rejected. Found paths are
- * cached for the session; a miss is remembered for a minute, so a tool
- * installed mid-session is picked up after that without a reload.
+ * Locate a tool in the TeX directories, the TeX database (TeX Live scripts
+ * only), then the extended PATH. Unsafe tool names are rejected. A found
+ * path is kept for the session.
  */
 const findTool = Effect.fn('findTool')(function* (
   tool: string,
-  fresh: boolean,
 ): Effect.fn.Return<string | null, never, ChildProcessSpawner> {
-  const cached = findToolCache.get(tool);
-  if (cached !== undefined && !(fresh && cached.path === null))
-    return cached.path;
-  // Lookups of one tool run one at a time, and a caller that waited reads
-  // the answer the one before it cached, so racing misses search once.
-  return yield* Effect.suspend(() => {
-    const settled = findToolCache.get(tool);
-    if (settled !== undefined && !(fresh && settled.path === null))
-      return Effect.succeed(settled.path);
-    return Effect.tap(findToolUncached(tool), (result) =>
-      Effect.sync(() => {
-        findToolCache.set(
-          tool,
-          { path: result },
-          result === null ? { ttl: MISS_TTL_MS } : undefined,
-        );
-      }),
-    );
-  }).pipe(withPerKeyLane(findToolLanes, tool));
+  const cached = foundTools.get(tool);
+  if (cached !== undefined) return cached;
+  const found = yield* findToolUncached(tool);
+  if (found !== null) foundTools.set(tool, found);
+  return found;
 });
 
 /**
@@ -171,23 +134,18 @@ function needsPerlLauncher(
 }
 
 /**
- * Find `name` on this machine (the common tool directories, the TeX
- * database for TeX Live scripts, then the extended PATH) and say how to
- * launch it: a Perl script runs through `perl`. Null when the tool is not
- * there now. A miss is remembered for a minute unless `fresh` asks again.
+ * Find `name` on this machine (the TeX directories, the TeX database for
+ * TeX Live scripts, then the extended PATH) and say how to launch it: a
+ * Perl script runs through `perl`. Null when the tool is not there now.
  */
 export const findCommand = Effect.fn('findCommand')(function* (
   name: string,
   options: {
     /** Launch this path instead of searching for the tool. */
     readonly path?: string;
-    /** Search again even when the tool was missed a moment ago: the caller
-     *  follows an install. A found path is never searched again. */
-    readonly fresh?: boolean;
   } = {},
 ): Effect.fn.Return<FoundCommand | null, never, ChildProcessSpawner> {
-  const resolvedPath =
-    options.path ?? (yield* findTool(name, options.fresh ?? false));
+  const resolvedPath = options.path ?? (yield* findTool(name));
   if (!resolvedPath) return null;
   return needsPerlLauncher(name, resolvedPath, IS_WINDOWS)
     ? { command: 'perl', args: [resolvedPath], resolvedPath }

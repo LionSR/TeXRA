@@ -19,7 +19,6 @@ import {
 import {
   APPROVAL_BYPASS_KINDS,
   NO_APPROVAL_GRANTS,
-  recordedGrants,
   resolveBypass,
   runPolicy,
   type ApprovalBypassKind,
@@ -30,7 +29,6 @@ import {
   qualifyAggregateId,
   type PermissionPayload,
   type RunId,
-  type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
 import {
@@ -48,9 +46,9 @@ import {
   type RequestError,
   type RuntimeRequest,
 } from '@shared/session/runtimeRequest';
-import { parentEdgeOf } from '@shared/session/runRows';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { Settings } from '@shared/config/settings';
+import type { RunRows } from '@shared/session/runRowsShape';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { SessionHandle } from './SessionHandle';
 
@@ -148,7 +146,7 @@ export interface SessionApprovals {
   ): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed>;
   /**
    * The approval policy `runId`'s requests are decided under: the
-   * project's persisted `texra.approvalPolicy`, read at each call, narrowed
+   * project's persisted `approvalPolicy`, read at each call, narrowed
    * by the strictest launch limit on the run's ancestry (`runPolicy`).
    * The persisted setting is the one owner of a project's policy; a client
    * changes it by writing that setting, never by telling a session, and a
@@ -194,11 +192,10 @@ export function createSessionApprovals(
         const runs = new Map<RunId, { parentId: RunId | null }>();
         const policy = new Map<RunId, ApprovalGrants>();
         for (let id: RunId | null = runId; id !== null && !runs.has(id);) {
-          const rows: readonly SessionEvent[] =
-            yield* session().log.records(id);
-          const parentId: RunId | null = parentEdgeOf(rows)?.id ?? null;
+          const facts: RunRows | null = yield* session().log.facts(id);
+          const parentId: RunId | null = facts?.parent?.id ?? null;
           runs.set(id, { parentId });
-          policy.set(id, recordedGrants(rows));
+          policy.set(id, facts?.grants ?? NO_APPROVAL_GRANTS);
           id = parentId;
         }
         const next = afterActivation(
@@ -220,7 +217,8 @@ export function createSessionApprovals(
         return Effect.void;
       return session().log.transact((tx) =>
         Effect.gen(function* () {
-          const recorded = recordedGrants(yield* session().log.records(runId));
+          const recorded =
+            (yield* session().log.facts(runId))?.grants ?? NO_APPROVAL_GRANTS;
           const next = edit(recorded);
           const all: readonly UnfoldedDraft[] = sameGrants(recorded, next)
             ? rows
@@ -294,10 +292,10 @@ const COVERED_KINDS: Record<
  * committed rows in the session's publisher, so a request a surface decided
  * meanwhile is left with that surface's answer. The request the surface
  * decides itself (its own decision may carry more than a plain approval) is
- * left to it, a tool edit staged on a host is approved by that host with the
- * user's edits, and so is a bash command that is another tool's call, which
- * offers no bypass. A request whose opening is still committing is not
- * listed yet and stays pending for the user.
+ * left to it, and so is a bash command that is another tool's call, which
+ * offers no bypass; a tool edit's approval applies the edit the user made in
+ * a host's view (`request.edit`). A request whose opening is still
+ * committing is not listed yet and stays pending for the user.
  */
 function approvePendingUnderBypass(
   session: SessionHandle,
@@ -312,20 +310,8 @@ function approvePendingUnderBypass(
         kinds.includes(payload.kind) &&
         !(payload.kind === 'bash' && !payload.data.allowBypass),
     ),
-    ({ requestId, payload }) =>
-      // A tool edit a host staged a diff view for is approved with the
-      // content the user edited there; the host answers `false` for one it
-      // staged nothing for, which the payload decides.
-      (payload.kind === 'toolEdit'
-        ? session.interactions.approveToolEdit(requestId)
-        : Effect.succeed(false)
-      ).pipe(
-        Effect.flatMap((hostDecided) =>
-          hostDecided
-            ? Effect.void
-            : session.requests.decide(runId, requestId, { action: 'approve' }),
-        ),
-      ),
+    ({ requestId }) =>
+      session.requests.decide(runId, requestId, { action: 'approve' }),
     { discard: true },
   ).pipe(
     Effect.mapError(

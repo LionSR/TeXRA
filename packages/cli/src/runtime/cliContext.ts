@@ -32,7 +32,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import {
-  CLI_OUTPUT_FORMAT_CONFIG_KEY,
   CliOutputFormatSchema,
   type CliOutputFormat,
 } from '@texra/shared/cliOutputFormat';
@@ -450,7 +449,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
           Schema.is(CliOutputFormatSchema)(format) ? format : undefined,
         configWarnings,
       )) ??
-      Settings.getConfig<CliOutputFormat>(config, CLI_OUTPUT_FORMAT_CONFIG_KEY);
+      Settings.getConfig<CliOutputFormat>(config, 'outputFormat');
     let minimumLogLevel: LogLevel.LogLevel = 'Info';
     if (init.globalArgs.quiet) minimumLogLevel = 'None';
     else if (init.globalArgs.verbose) minimumLogLevel = 'Debug';

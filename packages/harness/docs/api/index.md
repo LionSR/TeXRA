@@ -85,6 +85,8 @@ interface AgentPlatform {
    *  `ToolMissingReporter`; absent, a missing-tool probe answers without
    *  surfacing. */
   readonly toolMissingHandler?: ToolMissingHandler;
+  /** The app's directories on every command's PATH (`CommandDirs`). */
+  readonly commandDirs?: () => readonly string[];
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;
@@ -428,7 +430,7 @@ interface LocalSession extends Session {
   readonly deleteRuns: (
     target: RunId | 'all',
   ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
-  /** Show a notice through the most recently attached host. With
+  /** Show a notice through the attached host. With
    *  `replayWhenAttached`, a notice raised while no host is attached waits
    *  for the next one. */
   readonly emit: SessionHostInteractions['emit'];
@@ -472,7 +474,7 @@ interface OpenOptions {
    * `interruptedTasks` handles runs that a closed or crashed process left
    * unfinished. Both values resume such a run once what it was missing (an
    * agent, a plugin) is back. `offer` also lists them when the session
-   * opens, and continues them when the `texra.resumeOnOpen` setting is
+   * opens, and continues them when the `resumeOnOpen` setting is
    * `auto`.
    */
   readonly host?: { readonly interruptedTasks?: 'offer' | 'retry' };
@@ -831,9 +833,9 @@ interface Session {
   readonly request: (
     request: RuntimeRequest,
   ) => Effect.Effect<Outcome, RequestError>;
-  /** Attach `host` until the caller's scope closes. The most recently
-   *  attached host shows notices, and its `approve` answers the runs'
-   *  approval requests. */
+  /** Attach `host` until the caller's scope closes: it shows notices, and
+   *  its `approve` answers the runs' approval requests. A session has one
+   *  host at a time; attaching a second while one is attached is a defect. */
   readonly attach: (
     host: SessionHost,
   ) => Effect.Effect<void, never, Scope.Scope>;

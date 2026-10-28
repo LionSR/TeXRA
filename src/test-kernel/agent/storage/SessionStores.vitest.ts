@@ -32,7 +32,6 @@ describe('committed run removal', () => {
             yield* session.log.settled;
             const handle = testRunHandle({
               runId: child,
-              parent,
               agent: 'chat',
             });
             registryOf(session.runs).track(handle);
@@ -76,9 +75,7 @@ describe('committed run removal', () => {
             expect(
               SubscriptionRef.getUnsafe(session.view.ref).requests,
             ).toEqual([]);
-            expect(registryOf(session.runs).parentOf(handle.runId)).not.toBe(
-              parent,
-            );
+            expect(session.view.run(handle.runId)?.parentId).not.toBe(parent);
             expect(session.log.now()).toBe(before + 1);
           }),
         closeSessionOf,

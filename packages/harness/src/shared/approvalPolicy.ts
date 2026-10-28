@@ -9,7 +9,7 @@ export type ApprovalPolicy = typeof ApprovalPolicySchema.Type;
  * enum. Reached only through {@link parseApprovalPolicy}, which every
  * reader of typed-in text — `TEXRA_APPROVAL_POLICY`, `--approval-policy`,
  * `/approval`, the settings dropdown — calls. Persisted config values keep the
- * strict enum: the `texra.approvalPolicy` catalog row validates the stored
+ * strict enum: the `approvalPolicy` catalog row validates the stored
  * value for all three hosts and warns when it no longer parses, and the
  * dropdown's options are derived from that same literal list.
  */
@@ -30,8 +30,8 @@ export const APPROVAL_POLICY_DEFAULT: ApprovalPolicy = 'ask';
  * Changing that requires changing headless discipline, not just this constant.
  */
 export const APPROVAL_POLICY_NO_INPUT_DEFAULT: ApprovalPolicy = 'never';
-/** Canonical persisted spelling in `.texra/config.json` for every host. */
-export const APPROVAL_POLICY_CONFIG_KEY = 'texra.approvalPolicy';
+/** The approval policy's config key, the same on every host. */
+export const APPROVAL_POLICY_CONFIG_KEY = 'approvalPolicy';
 const APPROVAL_POLICY_DENIED_MESSAGE = 'Denied by the approval policy.';
 const APPROVAL_UNPRESENTABLE_MESSAGE =
   'Interactive approval requires a prompt; this run cannot present one.';

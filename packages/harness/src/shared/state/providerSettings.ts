@@ -13,11 +13,11 @@
  * catalog exactly, which `modelSettings.ts` checks at compile time.
  */
 
-/** A provider's custom-endpoint row; its setting key is `texra.endpoint.<id>`. */
+/** A provider's custom-endpoint row, stored as `texra.endpoint.<id>`. */
 const endpointRow = <const Id extends string>(id: Id, displayName: string) => ({
   id,
   displayName,
-  endpointKey: `texra.endpoint.${id}` as const,
+  endpointKey: `endpoint.${id}` as const,
 });
 
 /** The providers with a custom-endpoint setting, in catalog order. */
@@ -41,7 +41,7 @@ export const PROVIDER_REGION_SETTINGS = [
     // toggled off (international), keys come from platform.moonshot.ai. Keys
     // are platform-specific — a .cn key does not work on .ai.
     provider: 'moonshot',
-    key: 'texra.moonshot.useChina',
+    key: 'moonshot.useChina',
     default: true,
     control: {
       label: 'Kimi/Moonshot China region',
@@ -55,7 +55,7 @@ export const PROVIDER_REGION_SETTINGS = [
   },
   {
     provider: 'dashscope',
-    key: 'texra.dashscope.useChina',
+    key: 'dashscope.useChina',
     default: false,
     control: {
       label: 'Qwen China region (Bailian)',
@@ -65,7 +65,7 @@ export const PROVIDER_REGION_SETTINGS = [
   },
   {
     provider: 'minimax',
-    key: 'texra.minimax.useChina',
+    key: 'minimax.useChina',
     default: false,
     control: {
       label: 'MiniMax China region',
@@ -81,7 +81,7 @@ export const PROVIDER_REGION_SETTINGS = [
     // China is the default since bigmodel.cn is the primary platform; when
     // toggled off (international), the key URL is z.ai.
     provider: 'glm',
-    key: 'texra.glm.useChina',
+    key: 'glm.useChina',
     default: true,
     control: {
       label: 'GLM China region',

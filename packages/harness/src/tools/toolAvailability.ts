@@ -55,7 +55,6 @@ import {
 } from '@tools/toolAvailabilityService';
 import { ToolCatalog } from '@tools/liveTools';
 import { ToolRegistry } from '@tools/toolTable';
-import { forgetToolMisses } from '@utils/system/binaryResolver';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'toolAvailability';
@@ -251,11 +250,6 @@ export const toolAvailabilityLayer: Layer.Layer<
           }),
         )
         .pipe(Effect.uninterruptible);
-    // Every trigger (Re-check, a key saved, an extension or folder added)
-    // may follow an install, so a tool it just installed must not be
-    // answered from a remembered miss.
-    const trigger = (inputs: ToolProbeInputs) =>
-      Effect.andThen(Effect.sync(forgetToolMisses), start(inputs));
 
     // A committed write to a declared secret re-probes every held root with
     // its newest inputs. The bus delivers to a synchronous listener, so the
@@ -277,7 +271,7 @@ export const toolAvailabilityLayer: Layer.Layer<
         Effect.andThen(Queue.take(changes), () =>
           Effect.forEach(
             [...held.values()].flatMap((holders) => holders.slice(-1)),
-            trigger,
+            start,
             { discard: true },
           ),
         ),
@@ -286,7 +280,7 @@ export const toolAvailabilityLayer: Layer.Layer<
 
     return {
       results,
-      refresh: (inputs) => Effect.flatMap(trigger(inputs), Fiber.join),
+      refresh: (inputs) => Effect.flatMap(start(inputs), Fiber.join),
       // A session's own probe answers from the miss cache, so opening
       // sessions back to back does not repeat the lookups.
       hold: (roots) =>

@@ -18,7 +18,6 @@ import {
 
 import { type LocalSession, type Session, Sessions } from '@texra-ai/harness';
 import {
-  SessionHostInteractions,
   withPerKeyLane,
   type PerKeyLane,
   StateStores,
@@ -41,6 +40,8 @@ import {
   serviceSession,
 } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
+import { HostWindows } from '@texra/controllers/server/hostWindows';
+import type { WindowClient } from '@texra/controllers/server/windowHost';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
@@ -59,10 +60,6 @@ interface DesktopProjectFacts {
    *  for it, derived once from `key` and `root`. */
   readonly display: ProjectDisplay;
   readonly roots: WorkspaceRoots;
-  /** Where a failure this window meets before a run opens, and a run's
-   *  final output, are presented: the local session, or the window's own
-   *  host, which its run wiring attaches. */
-  readonly present: Pick<SessionHostInteractions, 'emit'>;
   /** Release the session from its owner; settles once its entry has unwound. */
   dispose(): Effect.Effect<void>;
 }
@@ -71,13 +68,17 @@ interface DesktopProjectFacts {
  *  this process holds no store, run or claim of. */
 export type DesktopProject = DesktopProjectFacts &
   (
-    | { readonly session: LocalSession; readonly service?: undefined }
+    | {
+        readonly session: LocalSession;
+        readonly service?: undefined;
+        /** What the window attaches through: this process's windows. */
+        readonly link: ServiceLink<WindowClient>;
+      }
     | {
         /** Where this project's runs run: the background service. */
         readonly session: Session;
         readonly service: ServiceLink;
         readonly root: string;
-        readonly present: SessionHostInteractions;
       }
   );
 
@@ -271,6 +272,7 @@ function openProjectSession(
   scope: Scope.Closeable,
   service: ServiceLink | undefined,
   sessions: Sessions['Service'],
+  hosts: Context.Service.Shape<typeof HostWindows>,
 ): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {
     const facts = {
@@ -287,11 +289,6 @@ function openProjectSession(
         root,
         service,
         session: yield* serviceSession(service, root, roots),
-        // Disposed with the project, its window's attachment with it.
-        present: yield* Effect.acquireRelease(
-          Effect.sync(() => new SessionHostInteractions()),
-          (present) => present.dispose(),
-        ),
       };
     // The no-workspace session's runs, and every run without a service, run
     // here.
@@ -310,7 +307,7 @@ function openProjectSession(
     // extension and the CLI say it.
     if (session.storeMovedAside)
       warnInDialog(sessionStoreMovedAsideMessage(session.storeMovedAside));
-    return { ...facts, root, session, present: session };
+    return { ...facts, root, session, link: yield* hosts.localLink(session) };
   });
 }
 
@@ -323,11 +320,12 @@ export function openDesktopProjectRegistry(
 ): Effect.Effect<
   DesktopProjectRegistry,
   Error,
-  DesktopProjectRecords | StateStores | Sessions
+  DesktopProjectRecords | StateStores | Sessions | HostWindows
 > {
   return Effect.gen(function* () {
     // The process's sessions: each project's session is opened through them.
     const sessions = yield* Sessions;
+    const hosts = yield* HostWindows;
     const records = yield* DesktopProjectRecords;
     const stateStores = yield* StateStores;
     const lanes = new Map<string | symbol, PerKeyLane>();
@@ -339,6 +337,7 @@ export function openDesktopProjectRegistry(
         options.processScope,
         undefined,
         sessions,
+        hosts,
       ).pipe(
         Scope.provide(options.processScope),
         Effect.onError(() => Scope.close(options.processScope, Exit.void)),
@@ -426,6 +425,7 @@ export function openDesktopProjectRegistry(
                 projectScope,
                 options.service,
                 sessions,
+                hosts,
               ).pipe(
                 Effect.tap((project) =>
                   Effect.gen(function* () {

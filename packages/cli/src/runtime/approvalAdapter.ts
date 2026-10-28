@@ -5,17 +5,13 @@
  * `view.requests` until a `request.decided` answers it. This host watches
  * that list and answers each request with the prompt the operator sees. The
  * session already settled what its approval policy decides, so what is listed
- * needs a person, or a denial on a run with nobody to ask. Nothing else is
- * staged: the port it attaches presents events, mirrors bypass state, and
- * holds a tool edit's preview so the diff can be printed.
+ * needs a person, or a denial on a run with nobody to ask. Nothing is
+ * staged here: a tool edit's diff is the session's preview of it, and the
+ * port this attaches presents events and denials.
  */
-import { Effect, Exit, Result, Stream } from 'effect';
+import { Effect, Result } from 'effect';
 
-import {
-  withLogChannel,
-  type HostInteractions,
-  type ToolEditApprovalRequest,
-} from '@texra-ai/harness/host';
+import { withLogChannel, type HostInteractions } from '@texra-ai/harness/host';
 import {
   type RequestDecision,
   approvalPolicyDenialMessage,
@@ -27,6 +23,7 @@ import {
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
+import { followPendingRequests } from '@texra/controllers/session/followPendingRequests';
 import {
   type CliApprovalContent,
   type CliApprovalPromptHooks,
@@ -49,7 +46,7 @@ import {
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
 import type { Session } from '@texra-ai/harness';
-import type { SessionView } from '@texra-ai/harness/schemas';
+import type { PendingRequest } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'cli.approval';
 
@@ -72,7 +69,7 @@ type AnswerablePayload = Exclude<
 >;
 
 /** A pending request under {@link AnswerablePayload}. */
-type AnswerableRequest = SessionView['requests'][number] & {
+type AnswerableRequest = PendingRequest & {
   readonly payload: AnswerablePayload;
 };
 
@@ -141,10 +138,6 @@ export function createHeadlessCliHostInteractions(
 ) {
   /** Only an interactive run can answer a prompt. */
   const promptsUnavailable = context.mode !== 'interactive';
-  /** Requests this host has taken on, pruned as the fold drops them. */
-  const acted = new Set<string>();
-  /** The preview a tool edit's durable payload cannot carry. */
-  const previews = new Map<string, ToolEditApprovalRequest>();
 
   /** Write one decision, and say whether it landed: a refused write leaves
    *  the request listed and unanswered, so reporting the refusal as a
@@ -167,14 +160,24 @@ export function createHeadlessCliHostInteractions(
         }),
       );
 
-  /** The prompt content for a tool edit: the staged preview when the tool
-   *  boundary reached this host, else the payload's own summary. */
+  /** The prompt content for a tool edit: the session's preview of it, else
+   *  the payload's own summary. */
   const toolEditContent = Effect.fn('approvalAdapter.toolEditContent')(
-    function* (payload: Extract<PermissionPayload, { kind: 'toolEdit' }>) {
-      const preview = previews.get(payload.data.requestId);
-      if (preview) return buildToolEditApprovalContent(preview);
+    function* (
+      runId: RunId,
+      payload: Extract<PermissionPayload, { kind: 'toolEdit' }>,
+    ) {
+      const { requestId } = payload.data;
+      const outcome = yield* Effect.result(
+        session.request({ kind: 'request.preview', runId, requestId }),
+      );
+      if (Result.isSuccess(outcome) && outcome.success.kind === 'preview') {
+        const { preview } = outcome.success;
+        if (preview !== null)
+          return buildToolEditApprovalContent({ ...payload.data, ...preview });
+      }
       yield* Effect.logWarning(
-        `No preview was staged for tool edit ${payload.data.requestId}: prompting without the diff.`,
+        `No preview is held for tool edit ${requestId}: prompting without the diff.`,
       ).pipe(withLogChannel(CHANNEL));
       const { data } = payload;
       return {
@@ -211,7 +214,7 @@ export function createHeadlessCliHostInteractions(
         return yield* decide(
           runId,
           requestId,
-          yield* ask(yield* toolEditContent(payload)),
+          yield* ask(yield* toolEditContent(runId, payload)),
         );
       case 'planApproval':
         return yield* decide(
@@ -261,68 +264,38 @@ export function createHeadlessCliHostInteractions(
     }
   });
 
-  const take = (view: SessionView) =>
-    Effect.forEach(
-      view.requests.filter(
-        (pending): pending is AnswerableRequest =>
-          requestParksItsCaller(pending.payload) &&
-          !acted.has(pending.requestId),
-      ),
-      (pending) => {
-        acted.add(pending.requestId);
-        // Forked so one prompt does not hold the fold's tail: the context's
-        // prompt lane still serializes the reads from stdin.
-        return Effect.forkChild(
-          answer(pending.runId, pending.payload).pipe(
-            // A refused write answered nobody, and a prompt that died or was
-            // interrupted never wrote at all: release the claim on every
-            // exit but a landed decision, so the next view update prompts
-            // for the request again instead of filtering it out for the life
-            // of the process.
-            Effect.onExit((exit) =>
-              Effect.sync(() => {
-                if (Exit.isSuccess(exit) && exit.value) return;
-                acted.delete(pending.requestId);
-              }),
-            ),
-          ),
-        );
-      },
-      { discard: true },
-    ).pipe(
-      Effect.tap(() =>
-        Effect.sync(() => {
-          // A preview is staged before its `request.opened` commits, so only
-          // a request this host has already seen listed counts as settled.
-          const live = new Set(view.requests.map((r) => r.requestId));
-          for (const id of acted) {
-            if (live.has(id)) continue;
-            acted.delete(id);
-            previews.delete(id);
-          }
-        }),
-      ),
-    );
-
   const host: HostInteractions = {
     emit: hooks.emit,
     approvalPromptsUnavailable: promptsUnavailable,
     approvalDenied: (denial, runId) =>
       warnApprovalDenied(context, denial, runId),
-    presentToolEdit(request) {
-      previews.set(request.permission.requestId, request);
-    },
-    // The prune above only reaches a request the fold has listed, so a
-    // request whose `request.opened` never committed would keep its preview
-    // for the life of the process. This is that release, the program the
-    // session runs for that one case.
-    releaseToolEdit: (requestId) =>
-      Effect.sync(() => {
-        previews.delete(requestId);
-      }),
   };
+  // One prompt per listed request, each on its own fiber so one prompt does
+  // not hold the others: the context's prompt lane still serializes the
+  // reads from stdin. A decision that did not land (refused, or a prompt
+  // that failed) answered nobody, so it is asked again on the next view that
+  // still lists the request; one that landed waits for the view to drop it.
   return Effect.as(
-    Effect.forkScoped(Stream.runForEach(session.view.changes, take)),
+    Effect.forkScoped(
+      followPendingRequests(
+        session.view,
+        (pending): pending is AnswerableRequest =>
+          requestParksItsCaller(pending.payload),
+        (pending) =>
+          answer(pending.runId, pending.payload).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning(
+                `The prompt for request ${pending.requestId} failed`,
+              ).pipe(
+                Effect.annotateLogs({ data: cause }),
+                withLogChannel(CHANNEL),
+                Effect.as(false),
+              ),
+            ),
+            Effect.flatMap((landed) => (landed ? Effect.never : Effect.void)),
+          ),
+      ),
+    ),
     host,
   );
 }

@@ -36,10 +36,8 @@ import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { rootRun } from '@agent/runtime/rootLaunch';
-import {
-  endRunOutsideLifecycle,
-  onHeldResult,
-} from '@agent/runtime/runLaunchGuard';
+import { onHeldResult } from '@agent/runtime/runLaunchGuard';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { registryOf, RunRegistry } from '@agent/runtime/runRegistry';
@@ -93,6 +91,7 @@ import {
   SessionOptionsConflict,
   type SessionOpenError,
 } from '@shared/session/database';
+import type { SettingsCatalog } from '@shared/state/stateSettings';
 import { UsageLog } from '@shared/usageLog';
 import { ToolCatalogOwner } from '@tools/liveTools';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
@@ -182,14 +181,14 @@ const sessionHandleLayer = (key: SessionKey) =>
       const collectDeletions = yield* deletionCollector(database, key.storage);
       const view = yield* makeSessionViewAccess(key.storage, store.closed);
       // Capture the startup cohort before callers can publish new launches.
-      const initialListing = yield* database.readListing();
+      const cohort = (yield* view.read([])).runs.values();
       // The publisher drains inside the one close deadline, after the runs'
       // fibers (registered before their fork) published their last rows.
       yield* Effect.addFinalizer(() => store.close);
       // The runs' fork and the project's tools end with this scope.
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
       const tools = yield* (yield* ToolCatalogOwner).session;
-      const interactions = new SessionHostInteractions();
+      const interactions = new SessionHostInteractions(key.open.interactions);
       // Each run's `.env`, read as it launches.
       const env = workspaceEnvironmentLayer(key.open.roots.workspace);
       const runs = new RunRegistry({
@@ -247,10 +246,6 @@ const sessionHandleLayer = (key: SessionKey) =>
       );
       yield* Effect.addFinalizer(() => session.interactions.dispose());
       yield* Effect.addFinalizer(() => Effect.sync(() => runs.dispose()));
-      // An opener's presentation host attaches as its own step: `use`
-      // replays its queue, a program a constructor cannot run.
-      if (key.open.interactions)
-        yield* session.interactions.use(key.open.interactions);
       // The local half of a committed removal; its plugin rows go with it.
       yield* store
         .deliver((runId) => session.followUps.forget(runId))
@@ -285,7 +280,7 @@ const sessionHandleLayer = (key: SessionKey) =>
         ),
         Effect.forkIn(consumerScope),
       );
-      yield* sweepLeftoverRuns(session, initialListing).pipe(Effect.forkScoped);
+      yield* sweepLeftoverRuns(session, cohort).pipe(Effect.forkScoped);
       if (key.open.interruptedTasks !== undefined)
         yield* followInterruptedTasks(
           session,
@@ -477,12 +472,11 @@ const heldSession = (root: string) =>
 const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
   Effect.gen(function* () {
     if (!(yield* session.log.owns(runId))) return;
-    yield* endRunOutsideLifecycle(
-      session,
+    yield* finalizeRun(session, {
       runId,
-      RUN_OUTCOME.CANCELLED,
-      undefined,
-    );
+      outcome: RUN_OUTCOME.CANCELLED,
+      ownerless: true,
+    });
   }).pipe(
     Effect.catchCause((cause) =>
       logFailure(
@@ -559,6 +553,8 @@ export interface ProcessLayerOptions {
   >;
   /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
   readonly storageRoot: string;
+  /** The config's catalog: the state stores key rows under its namespace. */
+  readonly settings: SettingsCatalog;
   /**
    * The app's plugins, in order, `harnessBuiltins` among them (the harness
    * names no plugin of its own): the process serves them as `ToolRegistry`
@@ -573,6 +569,8 @@ export interface ProcessLayerOptions {
   /** The host's tool-missing reporter, served as `ToolMissingReporter`;
    *  absent (no UI for it), a probe still answers, without surfacing. */
   readonly toolMissingReporter?: ToolMissingHandler;
+  /** The app's directories on every command's PATH (`CommandDirs`). */
+  readonly commandDirs?: () => readonly string[];
   /**
    * The host's global application-state layer, acquired in this runtime's
    * scope. Absent, the global root's values (`globalAppStateLayer`); the
@@ -607,8 +605,7 @@ export interface ProcessLayerOptions {
   /** The runtime's emission threshold for Effect diagnostics, from facts that
    *  cannot change mid-process: the surface (the extension's channel filters
    *  itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
-   *  `--quiet` / `--verbose`. It is read before any logger runs, so a live
-   *  user setting arrives by another road (the fold's `debug` flag). */
+   *  `--quiet` / `--verbose`; no live setting changes it. */
   readonly minimumLogLevel: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;
@@ -620,9 +617,10 @@ export interface ProcessLayerOptions {
 export function ownerProcessLayer({
   processStart = nodeProcesses.selfIdentity(),
   storageRoot,
+  settings,
   plugins,
   secrets,
-  appState = globalAppStateLayer(resolveGlobalStoragePath(storageRoot)),
+  appState: appStateOption,
   agentDirectories,
   toolMissingReporter,
   toolAvailability = toolAvailabilityLayer,
@@ -632,11 +630,12 @@ export function ownerProcessLayer({
   workspace,
 }: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
+  const appState =
+    appStateOption ?? globalAppStateLayer(globalStorage, settings);
   const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
-  const identity = Layer.effect(
-    ProcessIdentity,
-    Effect.map(processStart, (start) => ({ ownerId: processOwnerId(start) })),
+  const identity = Layer.unwrap(
+    Effect.map(processStart, (s) => ProcessIdentity.layer(processOwnerId(s))),
   );
   // Keep the global handle outside session `Layer.fresh`; open failure is fatal.
   const globalDatabase = (
@@ -651,7 +650,7 @@ export function ownerProcessLayer({
     ),
     toolMissingReporter === undefined
       ? Layer.empty
-      : ToolMissingReporter.layer(toolMissingReporter),
+      : Layer.succeed(ToolMissingReporter)(toolMissingReporter),
     catalog,
     // One retry gate per process: a 429 cools a credential for every project.
     Layer.effect(RouteRetries, ModelRetryGate.make),
@@ -661,7 +660,7 @@ export function ownerProcessLayer({
   );
   return sessionOwnerLayer.pipe(
     Layer.provideMerge(SessionMap.layer),
-    Layer.provideMerge(processStoresLayer),
+    Layer.provideMerge(processStoresLayer(settings)),
     Layer.provideMerge(projectDatabaseLayer),
     // The usage log's own lifetime: its sender and ticker run with this
     // runtime, its finalizer drains the queue while HTTP is up, and it is

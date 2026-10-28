@@ -128,7 +128,7 @@ export function runResumeCommand(
         );
         return CliExitCode.Usage;
       }
-      const forked = yield* Effect.result(forkRun(session, id));
+      const forked = yield* Effect.result(forkRun(session, id, null));
       if (Result.isFailure(forked)) {
         writeTextStderr(requestErrorText(forked.failure));
         return CliExitCode.Usage;

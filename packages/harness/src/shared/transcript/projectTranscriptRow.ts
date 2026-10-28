@@ -240,9 +240,7 @@ export function logPayloadRow(
         ...(payload.data?.attachments
           ? { attachments: payload.data.attachments }
           : {}),
-        ...(payload.data?.mediaFiles
-          ? { mediaFiles: payload.data.mediaFiles }
-          : {}),
+        ...(payload.data?.media ? { media: payload.data.media } : {}),
         ...(forkAt === undefined ? {} : { forkAt }),
       };
     }

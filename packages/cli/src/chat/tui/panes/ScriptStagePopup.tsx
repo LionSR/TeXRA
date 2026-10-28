@@ -33,7 +33,11 @@ import {
   COLOR_WARNING,
 } from '@cli/tui/ui/colors';
 import { fillRows, safeTerminalText } from '@cli/runtime/terminalText';
-import { SCRIPT_CALL_STATUS_LABEL } from '@ui/copy/scriptStage';
+import {
+  SCRIPT_CALL_STATUS_LABEL,
+  scriptCallSummary,
+  scriptStageSummary,
+} from '@ui/copy/scriptStage';
 
 // Local imports - shared schemas and model
 import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
@@ -87,7 +91,7 @@ function CallRow({
   readonly call: ScriptCallView;
 }): React.JSX.Element {
   const waiting = call.needsYou;
-  const last = call.summary;
+  const last = scriptCallSummary(call);
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
@@ -202,9 +206,7 @@ export function ScriptStagePopup({
   const title = [
     'Script',
     stages.length > 1 ? `${stageIndex + 1}/${stages.length}` : undefined,
-    stage === undefined || stage.summary === ''
-      ? `${stage?.calls.length ?? 0} calls`
-      : stage.summary,
+    (stage && scriptStageSummary(stage)) || `${stage?.calls.length ?? 0} calls`,
   ]
     .filter((part) => part !== undefined)
     .join(' · ');

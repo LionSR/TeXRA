@@ -86,11 +86,13 @@ export const READ_LISTING = `SELECT * FROM (
     JOIN run_model m ON m."commit" = p."commit" AND p.type = 'run.model'
 ) ORDER BY "commit"`;
 
-/** One open run's listing rows, its pending sets left out. */
+/** One open run's listing rows, its requests and follow-ups left out:
+ *  none for a run never started or closed by its tombstone. */
 export const READ_RUN_RECORDS = `SELECT ${EVENT_COLUMNS} FROM ${LISTED}
-  WHERE l.aggregate = (SELECT id FROM event_sequence
-      WHERE kind = ? AND logical_id = ? AND closed_by IS NULL)
-    AND e.type NOT IN ('request.opened', 'followup.queued')
+  WHERE l.aggregate = (SELECT id FROM event_sequence WHERE kind = ?
+      AND logical_id = ? AND closed_by IS NULL AND start_commit IS NOT NULL)
+    AND e.type NOT IN ('request.opened', 'request.decided',
+      'followup.queued', 'followup.consumed')
   ORDER BY e."commit"`;
 /** The blobs of the digests bound as one `json_each` array. */
 const READ_BLOBS = `SELECT digest, value FROM blob

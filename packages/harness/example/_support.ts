@@ -157,7 +157,7 @@ export async function makeExampleWorkspace(
       unknown
     >;
 
-    if (rawBody.includes('Generate a short TeXRA session label')) {
+    if (rawBody.includes('Generate a short session label')) {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       res.end(formatAnthropicSse({ text: 'Reviewing manuscript section' }, 0));
       return;

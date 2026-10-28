@@ -22,9 +22,9 @@ Node.js platform implementation and host building blocks for
 - **SQLite stores & process identity**: [`GlobalDatabase`](#globaldatabase),
   [`ProjectDatabases`](#projectdatabases), and
   [`ProcessIdentity`](#processidentity).
-- **Commands, binary probes & atomic file I/O**:
-  [`executeCommand`](#executecommand), [`findCommand`](#findcommand),
-  [`probeTool`](#probetool), [`writeFileAtomic`](#writefileatomic), and
+- **Commands & atomic file I/O**:
+  [`executeCommand`](#executecommand), [`CommandDirs`](#commanddirs),
+  [`writeFileAtomic`](#writefileatomic), and
   [`readNormalizedFile`](#readnormalizedfile).
 
 ## absentReason
@@ -48,6 +48,16 @@ propagates.
 
 ```ts
 function canonicalizeWorkspacePath(workspacePath: string): string
+```
+
+## CommandDirs
+
+The directories an app adds to the PATH a command runs and resolves on:
+the package-manager and tool installs a GUI-launched process may lack.
+Absent, none.
+
+```ts
+const CommandDirs: Reference<() => readonly string[]>
 ```
 
 ## ConfigStore
@@ -127,6 +137,14 @@ run read).
 const envFlag: (name: string, env?: Readonly<Record<string, string | undefined>> | undefined) => Effect<boolean, never, never>
 ```
 
+## envVar
+
+One variable; unset and `''` both read as undefined.
+
+```ts
+const envVar: (name: string) => Effect<string | undefined, never, never>
+```
+
 ## ExecResult
 
 ```ts
@@ -139,11 +157,11 @@ Execute an external command in `cwd` with the workspace env, over the
 process's `ChildProcessSpawner`.
 
 Never fails: a spawn failure or missing cwd (127), a non-zero exit, a
-timeout (`timedOut`), an abort (130) and a max-buffer trip (2,
+timeout (`timedOut`) and a max-buffer trip (2,
 `outputLimitExceeded`) are all reported in the {@link ExecResult}.
 
 The process lives exactly as long as this call's scope. A deadline, an
-abort, an output-limit trip or an interrupted fiber closes that scope, and
+output-limit trip or an interrupted fiber closes that scope, and
 that is the whole teardown: SIGTERM to the process (its group when it has
 one), SIGKILL after five seconds, and a join on its exit. A command that
 ends by itself gets the same release, so jobs its shell backgrounded end
@@ -194,21 +212,10 @@ interface ExecuteCommandBaseOptions {
   readonly buffer?: boolean;
   /** Maximum decoded characters retained per output stream before the command is stopped. */
   readonly maxBuffer?: number;
-  /**
-   * A caller-owned cancellation channel, for the one case fiber interruption
-   * cannot express: a command whose **result still has to be delivered** after
-   * it is stopped (the background bash child run, whose strategy sets
-   * `deliverAfterInterrupt`). Aborting it terminates the subprocess and any
-   * shell children, and the call still resolves with exit code 130.
-   *
-   * Every other caller stops the command by interrupting the fiber: teardown
-   * is identical and the abandoned result is exactly what interruption means.
-   */
-  readonly signal?: AbortSignal;
   /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
   readonly quiet?: boolean;
   /**
-   * Terminate the whole process tree on abort or timeout instead of only the
+   * Terminate the whole process tree on interruption or timeout instead of only the
    * tracked process. Array form only: the shell form already signals its whole
    * group. Opt in for tools that hand the work to a delegate (ImageMagick and
    * GraphicsMagick rasterize PDF pages through Ghostscript) so the delegate is
@@ -217,6 +224,18 @@ interface ExecuteCommandBaseOptions {
    */
   readonly killProcessTree?: boolean;
 }
+```
+
+## existsAtAbsolute
+
+An existence probe that asserts an absolute path and then asks `node:fs`.
+A relative one is refused with a thrown `Path must be absolute`: some of
+the roots searched come straight from the environment, so a probe that
+quietly answered "absent" would drop those directories from PATH with
+nothing to show for it.
+
+```ts
+function existsAtAbsolute(target: string): boolean
 ```
 
 ## FileSecrets
@@ -228,32 +247,6 @@ it (`credentialChanged`, `Secrets.announcing`), as
 
 ```ts
 class FileSecrets implements PlatformSecrets
-```
-
-## findCommand
-
-Find `name` on this machine (the common tool directories, the TeX
-database for TeX Live scripts, then the extended PATH) and say how to
-launch it: a Perl script runs through `perl`. Null when the tool is not
-there now. A miss is remembered for a minute unless `fresh` asks again.
-
-```ts
-const findCommand: (name: string, options?: { readonly path?: string | undefined; readonly fresh?: boolean | undefined; } | undefined) => Effect<FoundCommand | null, never, ChildProcessSpawner>
-```
-
-## FoundCommand
-
-A command found on this machine, and how to launch it.
-
-```ts
-interface FoundCommand {
-  /** The program to spawn: the tool itself, or `perl` for a Perl script. */
-  readonly command: string;
-  /** The arguments that come before the caller's own (the script's path). */
-  readonly args: readonly string[];
-  /** The absolute path the lookup found. */
-  readonly resolvedPath: string;
-}
 ```
 
 ## GlobalDatabase
@@ -307,9 +300,9 @@ const INPUT_HISTORY_LIMIT: 1000
 
 ## JsonConfigProvider
 
-Store-backed {@link ConfigProvider}. Keys are stored flat with the canonical
-`texra.*` prefix. Workspace values shadow global values on read and
-`update()` routes writes by {@link ConfigTarget}. The project file answers
+Store-backed {@link ConfigProvider}. Keys are relative to the catalog's
+namespace and stored flat under it (`<namespace>.<key>`). Workspace values
+shadow global values on read and `update()` routes writes by {@link ConfigTarget}. The project file answers
 only where {@link projectValueIgnored} lets it; past it, `local` shadows
 `global` for `local` rows, and `global` alone answers for the others.
 
@@ -394,7 +387,7 @@ interface JsonStoreOptions {
 Build an environment for a non-interactive git subprocess: the current
 environment with the helper-invoking keys in {@link GIT_UNSAFE_ENV_KEYS}
 removed, `GIT_TERMINAL_PROMPT=0` so git never blocks on a tty prompt, and
-`PATH` extended via {@link withExtendedPath} so GUI-launched hosts (whose
+`PATH` extended via {@link withCommandDirs} so GUI-launched hosts (whose
 minimal PATH may omit Homebrew / /usr/local/bin, or Windows' Git\cmd when
 git was installed for Git Bash only) can still resolve the `git` binary.
 
@@ -405,7 +398,7 @@ ChildProcess command the env replaces the child environment unless
 `extendEnv: true` cannot merge the stripped keys back in.
 
 ```ts
-function makeMachineGitEnv(): NodeJS.ProcessEnv
+const makeMachineGitEnv: Effect.Effect<NodeJS.ProcessEnv>
 ```
 
 ## nodeFileServices
@@ -444,9 +437,9 @@ interface NodePlatformOptions {
    * never falls back to a per-user default directory.
    */
   readonly storageDir: string;
-  /** The setting rows the embedder's plugins read, resolved beside the
-   *  harness's own by the platform's config. */
-  readonly settings?: readonly StateSettingEntry[];
+  /** The catalog the platform's config resolves against (`settingsCatalog`);
+   *  absent, the harness's rows alone, under the `harness` namespace. */
+  readonly settings?: SettingsCatalog;
 }
 ```
 
@@ -510,31 +503,24 @@ rest.
 const pathExists: (fs: FileSystem, target: string) => Effect<boolean, PlatformError, never>
 ```
 
-## probeTool
-
-Probe `toolName` with `command` (by default `<toolName> --version`), or
-with each of several commands in turn until one answers.
-
-The spawned probes are cancelled by the fiber's own interruption, so no
-caller threads an `AbortSignal` in. The probe's own failure is answered,
-not raised: the cause is logged and the tool reads as absent with
-`probeFailed` set, which leaves no error channel for callers to handle.
-
-```ts
-const probeTool: (toolName: string, command?: string | readonly string[] | undefined) => Effect<ToolProbe, never, ChildProcessSpawner>
-```
-
 ## ProcessIdentity
 
 The canonical hostname, pid, and nullable process-start tuple: the
 `ownerId` stamped on every event the process appends and the `self` entry
 of its local runtime snapshot. Resolved once at each process entry, where
 the start identity can be awaited, and provided to the process layer.
+Beside it, its liveness verdicts on claim owners, which every liveness
+proof goes through (`proveRecorded`): a `dead` one is final.
 
 ```ts
 class ProcessIdentity extends Context.Service<
   ProcessIdentity,
-  { readonly ownerId: OwnerId }
+  {
+    readonly ownerId: OwnerId;
+    readonly owners: SubscriptionRef.SubscriptionRef<
+      ReadonlyMap<OwnerId, OwnerLiveness>
+    >;
+  }
 >()('@texra-ai/harness/session/ProcessIdentity')
 ```
 
@@ -561,16 +547,16 @@ class ProjectDatabases extends Context.Service<
 
 ## projectValueIgnored
 
-Whether a project file's `value` for `key` is ignored: the one scope rule
-every read and the open-time warning share. A row the catalog leaves at the
-workspace scope reads its project value; a `global` or `local` row (the
-approval settings) does not, so a cloned repository cannot set it, except
-that a `projectMayOptOut` row (telemetry) still takes anything but `true`.
+Whether a project file's `value` for a key of catalog row `row` is ignored:
+the one scope rule every read and the open-time warning share. A row the
+catalog leaves at the workspace scope reads its project value; a `global` or
+`local` row (the approval settings) does not, so a cloned repository cannot
+set it, except that a `projectMayOptOut` row (telemetry) still takes
+anything but `true`.
 
 ```ts
 function projectValueIgnored(
-  catalog: SettingsCatalog,
-  key: string,
+  row: StateSettingEntry | undefined,
   value: unknown,
 ): boolean
 ```
@@ -666,26 +652,18 @@ production).
 function secretsDirectory(storageRoot: string): string
 ```
 
-## ToolProbe
-
-What a probe found: whether the tool answered, and whether the probe
-itself failed rather than finding nothing.
-
-```ts
-interface ToolProbe {
-  readonly installed: boolean;
-  readonly probeFailed: boolean;
-}
-```
-
 ## whichOnExtendedPath
 
-Resolve `name` on the extended PATH the way a shell would, or null on a
-miss. In-process (npm `which`), and PATHEXT-aware on Windows, so a bare
-`npm` resolves to its `npm.cmd` shim without spawning `where`/`which`.
+Resolve `name` on the process PATH extended with `appDirs` the way a shell
+would, or null on a miss. In-process (npm `which`), and PATHEXT-aware on
+Windows, so a bare `npm` resolves to its `npm.cmd` shim without spawning
+`where`/`which`.
 
 ```ts
-function whichOnExtendedPath(name: string): string | null
+function whichOnExtendedPath(
+  name: string,
+  appDirs: readonly string[],
+): string | null
 ```
 
 ## withExtendedPath
@@ -702,7 +680,10 @@ Windows the extension silently applied or did not, per spawn. Writing the
 key that is already present is the whole fix.
 
 ```ts
-function withExtendedPath<T extends NodeJS.ProcessEnv>(env: T): T
+function withExtendedPath<T extends NodeJS.ProcessEnv>(
+  env: T,
+  appDirs: readonly string[],
+): T
 ```
 
 ## WORKSPACE_STORES

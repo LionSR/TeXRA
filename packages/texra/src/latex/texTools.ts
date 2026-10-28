@@ -218,11 +218,11 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
 
     const tikzInputDirectory = yield* Settings.get<string>(
       roots,
-      'texra.latex.tikzInputDirectory',
+      'latex.tikzInputDirectory',
     );
     const includeWorkspace = yield* Settings.get<boolean>(
       roots,
-      'texra.latex.includeWorkspaceInTexinputs',
+      'latex.includeWorkspaceInTexinputs',
     );
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({
       documentDir,

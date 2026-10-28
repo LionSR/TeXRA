@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, SubscriptionRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -37,8 +37,8 @@ import { generateRunId } from '@utils/core';
 setupPlatform({ workspacePath: '/workspace' });
 
 /** Builds a `RunHandle` for a toolUse test-subagent, the shape most tests need. */
-function createHandle(runId: RunId, parent: RunId | null = null): RunHandle {
-  return testRunHandle({ runId, parent, agent: 'test-subagent' });
+function createHandle(runId: RunId): RunHandle {
+  return testRunHandle({ runId, agent: 'test-subagent' });
 }
 
 /**
@@ -122,8 +122,8 @@ function trackInterruptibleHandle(
   parent: RunId | null,
   interrupt: () => void,
 ): void {
-  registry.track(createHandle(runId, parent));
-  admitInterruptibleRun(registry, runId, interrupt);
+  registry.track(createHandle(runId));
+  admitInterruptibleRun(registry, runId, interrupt, parent);
 }
 
 describe('runRegistry', () => {
@@ -183,7 +183,18 @@ describe('runRegistry', () => {
         const postFoldChildRunId = generateRunId();
         const childInterrupt = vi.fn();
 
-        trackInterruptibleHandle(registry, rootRunId, null, vi.fn());
+        // The parent's generation unwinds from its stop until `ended`, as a
+        // terminal writing its `run.end` does.
+        const ended = yield* Deferred.make<void>();
+        registry.track(createHandle(rootRunId));
+        const root = yield* Effect.forkChild(
+          startAwaited(
+            registry,
+            rootRunId,
+            Effect.never.pipe(Effect.onInterrupt(() => Deferred.await(ended))),
+          ),
+          { startImmediately: true },
+        );
         trackInterruptibleHandle(
           registry,
           childRunId,
@@ -191,38 +202,38 @@ describe('runRegistry', () => {
           childInterrupt,
         );
         setPhase(rootRunId, RUN_PHASE.RUNNING);
+        /** The refusal a child launched under the root meets, if any. */
+        const refusal = (childRunId: RunId) =>
+          Effect.map(
+            Effect.exit(
+              registry.start(childRunId, Effect.void, (run) => run, rootRunId),
+            ),
+            (exit) => Exit.isFailure(exit) && Cause.squash(exit.cause),
+          );
+        const stopped = {
+          message: expect.stringMatching(/that run was stopped/),
+        };
 
         // The detaching stop settles completely, its children severed,
         // while the parent's `run.end` has not folded yet. The stop still
-        // stands on the parent's entry, so a child whose lineage read
+        // stands on the parent's activation, so a child whose lineage read
         // preceded the stop is refused as it registers.
         yield* registry.stop(rootRunId, {
           detachActiveChildren: true,
           reason: 'user',
         }).settlement;
-        expect(registry.parentOf(childRunId)).toBeNull();
-        expect(() =>
-          registry.track(createHandle(lateChildRunId, rootRunId)),
-        ).toThrow(/that run was stopped/);
-        expect(registry.get(lateChildRunId)?.handle).toBeUndefined();
+        expect(registry.bornDetached(childRunId)).toBe(true);
+        expect(yield* refusal(lateChildRunId)).toMatchObject(stopped);
 
         // The fold changes nothing for the detached child: its sever stands.
         setPhase(rootRunId, RUN_PHASE.CANCELLED);
+        yield* Deferred.succeed(ended, undefined);
+        yield* Fiber.await(root);
         expect(childInterrupt).not.toHaveBeenCalled();
-        expect(registry.parentOf(childRunId)).toBeNull();
+        expect(registry.bornDetached(childRunId)).toBe(true);
 
         // From the fold on, admission itself refuses the stopped parent.
-        expect(() =>
-          registry.track(createHandle(postFoldChildRunId, rootRunId)),
-        ).toThrow(/that run was stopped/);
-        expect(() =>
-          registry.reserveChildActivation({
-            runId: postFoldChildRunId,
-            launchParent: rootRunId,
-            interrupt: vi.fn(),
-          }),
-        ).toThrow(/that run was stopped/);
-        expect(registry.get(postFoldChildRunId)?.handle).toBeUndefined();
+        expect(yield* refusal(postFoldChildRunId)).toMatchObject(stopped);
       }),
   );
 });
@@ -257,7 +268,7 @@ it.effect(
       yield* Effect.yieldNow;
 
       // A parked turn may have no running generation, but its handle retains ownership.
-      const parked = createHandle(runId, generateRunId());
+      const parked = createHandle(runId);
       registry.track(parked);
       expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
       untrackRun(registry, runId);
