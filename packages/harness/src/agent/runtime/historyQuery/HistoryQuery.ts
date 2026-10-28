@@ -1,9 +1,9 @@
 /**
  * A session's history query store: the model's SQL runs against a separate
- * in-memory database that holds only the session's display rows, copied in
- * from `SessionEvents.all` up to the commit the query was asked at. Nothing
- * a statement names can reach the session database, a run history row, a private
- * run record or an envelope column: those were never copied.
+ * in-memory database that holds only the session's display rows and the
+ * view's runs, both as of the first view that applied the commit the query
+ * was asked at. Nothing a statement names can reach the session database, a
+ * run history row, a private run record or an envelope column.
  *
  * The store is a child process (`childSource.ts`), started on the first
  * query and closed with the session's scope. Queries run one at a time; a
@@ -32,6 +32,7 @@ import {
   type DisplaySessionEvent,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
+import type { SessionView } from '@shared/session/sessionView';
 
 import { HISTORY_QUERY_CHILD_SOURCE } from './childSource';
 import {
@@ -99,6 +100,8 @@ interface Store {
   readonly requests: Queue.Queue<string>;
   readonly replies: Queue.Queue<string, Cause.Done | PlatformError>;
   cursor: CommitOrdinal;
+  /** The view's `runs` the store's `runs` table was last filled from. */
+  runs?: SessionView['runs'];
 }
 
 const ENVELOPE_KEYS = new Set([
@@ -308,7 +311,16 @@ export class HistoryQuery {
 
   private run(sql: string, params: readonly HistoryCell[]) {
     return Effect.gen({ self: this }, function* () {
-      const target = this.session().log.now();
+      const { log, view } = this.session();
+      const now = log.now();
+      // One watermark for both tables: the first view that applied every row
+      // committed by this call, and `events` through that view's cursor.
+      const { cursor: target, runs } = yield* view.changes.pipe(
+        Stream.filter(({ cursor }) => cursor >= now),
+        Stream.runHead,
+        Effect.flatMap(Effect.fromOption),
+        failedWith('The session view stopped before this query could read it.'),
+      );
       // A cleared database restarts its commits below what the store holds.
       if (this.store && target < this.store.cursor) {
         yield* this.discard('the session database was cleared');
@@ -316,13 +328,18 @@ export class HistoryQuery {
       const store = this.store ?? (yield* openStore(this.scope, this.spawner));
       this.store = store;
       if (target > store.cursor) {
-        let cursor = target;
-        yield* this.readThrough(store.cursor, target).pipe(
+        // The display rows committed after the store's cursor, through
+        // `target`: the tail stops once its reads covered `target`.
+        const drained = yield* SubscriptionRef.make(store.cursor);
+        const reached = SubscriptionRef.changes(drained).pipe(
+          Stream.filter((commit) => commit >= target),
+          Stream.runHead,
+        );
+        yield* log.tail(store.cursor, drained).pipe(
+          Stream.interruptWhen(reached),
+          Stream.takeWhile((row) => row.commit <= target),
           Stream.grouped(APPEND_ROWS),
           Stream.runForEach((rows) => {
-            // Not a spread: a group can carry more rows than a call takes
-            // arguments.
-            cursor = rows.reduce((at, row) => Math.max(at, row.commit), cursor);
             const ops = storeOps(rows);
             return ops.length === 0
               ? Effect.void
@@ -331,12 +348,15 @@ export class HistoryQuery {
                 );
           }),
         );
-        store.cursor = cursor;
+        store.cursor = target;
       }
-      const { runs } = SubscriptionRef.getUnsafe(this.session().view.ref);
-      yield* request(store, { kind: 'append', ops: replaceRuns(runs) }).pipe(
-        Effect.flatMap(failedStep('runs')),
-      );
+      // View snapshots are immutable: the same `runs` is already in the store.
+      if (runs !== store.runs) {
+        yield* request(store, { kind: 'append', ops: replaceRuns(runs) }).pipe(
+          Effect.flatMap(failedStep('runs')),
+        );
+        store.runs = runs;
+      }
       const reply = yield* request(store, {
         kind: 'query',
         sql,
@@ -360,22 +380,6 @@ export class HistoryQuery {
         reply.value.value,
       ).pipe(failedWith('The history query process sent an unreadable page.'));
     });
-  }
-
-  /** The display rows committed after `from`, through at least `target`. */
-  private readThrough(from: CommitOrdinal, target: CommitOrdinal) {
-    return Stream.unwrap(
-      Effect.gen({ self: this }, function* () {
-        const drained = yield* SubscriptionRef.make(from);
-        const reached = SubscriptionRef.changes(drained).pipe(
-          Stream.filter((commit) => commit >= target),
-          Stream.runHead,
-        );
-        return this.session()
-          .log.tail(from, drained)
-          .pipe(Stream.interruptWhen(reached));
-      }),
-    );
   }
 
   private discard(why: string): Effect.Effect<void> {
