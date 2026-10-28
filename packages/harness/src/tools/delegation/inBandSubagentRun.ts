@@ -23,7 +23,7 @@ import {
 } from '@agent/runtime/AgentLaunchContext';
 import type { ResumeTurnIdentity } from '@agent/runtime/executeAgent';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
-import { runRejection } from '@agent/runtime/runClassification';
+import { runRejection } from '@agent/storage/resumability';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import {

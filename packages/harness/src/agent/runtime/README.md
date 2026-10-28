@@ -55,7 +55,7 @@ is the module map by concern. Run-loop rules are in
   `ModelRetryGate` (process-shared recovery probes per model route);
   `nativeSubagentStrategy`; `scriptRun`; `recipeResult`; `subagentResults` and
   `deliveryEnvelope` (the XML envelope every child path builds).
-- **Classification and control**: `runClassification`; `runApprovalQueue`;
+- **Control**: `runApprovalQueue`;
   `requestPolicy` (what the approval policy decides when a request opens).
 - **Helper model**: `helperModel` (`helperCall`, the gated, priced and logged
   one-shot path through `ModelAccess`); `helperModelName`;

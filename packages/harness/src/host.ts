@@ -17,7 +17,7 @@
 export { processLayer } from './effect/processLayer.js';
 // A project's view read cold from its store, for a multi-project listing.
 export { readSessionView } from '@controllers/session/readSessionView';
-export type { RunRejection } from '@agent/runtime/runClassification';
+export type { RunRejection } from '@agent/storage/resumability';
 export { ExportNodeSchema, type ExportNode } from '@agent/export/schemas';
 export {
   formatConversationMessage,
