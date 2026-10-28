@@ -1,6 +1,6 @@
 import { Effect, type FileSystem, type Path } from 'effect';
 
-import { withSessionFs } from '@texra-ai/harness';
+import { withSessionFs } from '@texra-ai/harness/host';
 import { MemoryStore } from '@texra-ai/harness/plugins';
 import {
   formatCliMemoryList,

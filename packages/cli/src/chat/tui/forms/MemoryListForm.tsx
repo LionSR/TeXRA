@@ -4,7 +4,7 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
-import { withSessionFs } from '@texra-ai/harness';
+import { withSessionFs } from '@texra-ai/harness/host';
 import { MemoryStore } from '@texra-ai/harness/plugins';
 import {
   CLI_MEMORY_LIST_LIMIT,
