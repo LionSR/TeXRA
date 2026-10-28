@@ -1,9 +1,8 @@
 // Third-party imports
 import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
-import { MODELS, formatModelRef, parseModelRef } from 'llm-zoo';
 
 // Local imports - platform
-import { modelConfig } from '@texra-ai/llm';
+import { modelConfig, MODELS } from '@texra-ai/llm';
 import {
   Settings,
   mcpConfigPathOf,
@@ -75,8 +74,7 @@ function modelLookupKeys(id: string): string[] {
 export function resolveKnownCliModelId(model: string): string | undefined {
   const trimmed = model.trim();
   if (!trimmed) return undefined;
-  const selection = parseModelRef(trimmed);
-  if (selection) return formatModelRef(selection);
+  if (modelConfig(trimmed)) return trimmed;
 
   const lower = trimmed.toLowerCase();
   const ids = MODELS;

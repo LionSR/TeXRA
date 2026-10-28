@@ -1,13 +1,14 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 import { afterEach, describe, expect } from 'vitest';
 
 // Local imports
 import {
   apiKeySecretName,
   decideModelRoute,
+  MODEL_CONFIGS,
+  type ModelConfig,
   resolveRouteEndpoint,
 } from '@texra-ai/llm';
 import { readModelOptions } from '@model/computeModelOptions';

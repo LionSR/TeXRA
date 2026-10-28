@@ -63,7 +63,9 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
    `packages/desktop/package.json`, for every dispatch, stable as well as
    preview.
 
-5. **`llm-zoo` pin.** If the release changes `llm-zoo`, also update the exact
+5. **`llm-zoo` pin.** `packages/llm/package.json` is the one workspace
+   manifest that declares `llm-zoo`, pinned exactly; everything else imports
+   the catalog from `@texra-ai/llm`. If the release changes `llm-zoo`, also update the exact
    pin in `supabase/functions/log-usage/deno.json` and `log-usage-v2/deno.json`, then refresh their adjacent
    `deno.lock` files. It is easy to miss, since it isn't part of the automated
    bump.

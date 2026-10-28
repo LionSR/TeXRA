@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty';
 import { Cause, Effect, Exit } from 'effect';
 
-import { MODELS } from 'llm-zoo';
+import { MODELS } from '@texra-ai/llm';
 
 import { getEnabledModels } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';

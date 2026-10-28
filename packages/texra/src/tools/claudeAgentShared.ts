@@ -21,7 +21,7 @@ import {
 } from './agentCliModel';
 import type { AgentTrace, ToolError } from '@texra-ai/harness/plugins';
 import type { StateReadFailed, SettingsStores } from '@texra-ai/harness/host';
-import type { ModelConfig } from 'llm-zoo';
+import type { ModelConfig } from '@texra-ai/llm';
 
 import type {
   EffortLevel,

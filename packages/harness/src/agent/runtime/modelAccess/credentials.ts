@@ -7,12 +7,13 @@
 import { Effect } from 'effect';
 
 import {
-  exposeApiKey,
-  lookupApiKey,
-  resolveRouteEndpoint,
   type ApiKeyProviderId,
+  exposeApiKey,
   type HostRouteFacts,
+  lookupApiKey,
+  type ModelConfig,
   type ModelRoute,
+  resolveRouteEndpoint,
 } from '@texra-ai/llm';
 import {
   codexCoordinator,
@@ -27,8 +28,6 @@ import type { PlatformSecrets } from '@platform/secrets';
 import { SUBSCRIPTION_AUTH_NAMES } from '@shared/model/subscriptionAuth';
 import type { UsageRoute } from '@shared/schemas';
 import type { HttpClient } from 'effect/http';
-
-import type { ModelConfig } from 'llm-zoo';
 
 /** The routes that bill a credential. */
 type CredentialRoute = Extract<

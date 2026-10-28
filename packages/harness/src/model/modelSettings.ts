@@ -6,11 +6,12 @@
 import { Effect } from 'effect';
 
 import {
+  type EndpointProviderId,
   findModelProviderPlugin,
   hasUsableApiKey,
-  MODEL_PROVIDER_PLUGINS,
-  type EndpointProviderId,
   type HostRouteFacts,
+  MODEL_PROVIDER_PLUGINS,
+  type ReasoningEffort,
   type RegionalProviderId,
 } from '@texra-ai/llm';
 import { getCodexStatus, getXaiStatus } from '@texra-ai/llm/node';
@@ -34,7 +35,6 @@ import type { SettingsStores } from '@shared/config/settings';
 import { reasoningEffortOverrides } from './reasoningLevel';
 import { SubscriptionPreference } from './subscriptionAccess';
 import type { ModelOptionStores } from './computeModelOptions';
-import type { ReasoningEffort } from 'llm-zoo';
 
 type AssertNever<T extends never> = T;
 

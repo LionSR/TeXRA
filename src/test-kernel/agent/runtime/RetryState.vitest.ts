@@ -24,11 +24,11 @@ import {
 } from 'effect';
 import { TestClock } from 'effect/testing';
 import { it } from '@effect/vitest';
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
   type Model,
+  MODEL_CONFIGS,
   ModelError,
   type ModelOrigin,
   RemoteOperationSchema,

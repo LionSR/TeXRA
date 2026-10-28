@@ -21,8 +21,11 @@ supplies the one copy of it:
 npm install @texra-ai/llm effect
 ```
 
-`llm-zoo` (the catalog) and the Anthropic and Google SDKs come in as
-dependencies. A binding loads only its own protocol's SDK, on demand.
+`llm-zoo` (the catalog, pinned to one exact version) and the Anthropic and
+Google SDKs come in as dependencies. The `.` entry re-exports the catalog
+types and values a caller needs (`ModelConfig`, `MODEL_CONFIGS`,
+`ReasoningEffort`, `parseModelRef`, …), so import them from `@texra-ai/llm`,
+not from `llm-zoo`. A binding loads only its own protocol's SDK, on demand.
 OpenAI's runtime is bundled, so `openai` is not installed.
 
 A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) that an

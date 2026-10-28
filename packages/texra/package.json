@@ -26,7 +26,6 @@
     "identifiers-arxiv": "catalog:",
     "katex": "^0.19.1",
     "lit": "^3.3.3",
-    "llm-zoo": "catalog:",
     "lru-cache": "catalog:",
     "markdown-it": "^15.0.3",
     "markdown-it-texmath": "^1.0.0",

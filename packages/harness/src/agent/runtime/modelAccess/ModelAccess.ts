@@ -14,10 +14,11 @@
 import { ConfigProvider, Context, Effect, Layer, type Scope } from 'effect';
 import { HttpClient } from 'effect/http';
 import {
-  selectModel,
   type Model,
+  type ModelConfig,
   type ModelOrigin,
   type ModelRoute,
+  selectModel,
   type TurnRequest,
 } from '@texra-ai/llm';
 
@@ -46,7 +47,6 @@ import {
   type SwitchRefusal,
 } from './routeDecision';
 import type { CallFailure } from './failureInfo';
-import type { ModelConfig } from 'llm-zoo';
 
 /**
  * One bound model: the llm `Model` and the facts of its binding the run

@@ -1,7 +1,6 @@
 import { Cause, Effect, Exit, FileSystem, Schema, Scope } from 'effect';
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import { selectModel } from '@texra-ai/llm';
+import { type ModelConfig, ModelProvider, selectModel } from '@texra-ai/llm';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { agentEntryOf } from '@agent/index/agentYamlScanner';
 import { requirePluginAgentLoads } from '@agent/index/pluginAgents';

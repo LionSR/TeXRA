@@ -72,9 +72,6 @@ catalogs:
     is-wsl:
       specifier: ^3.1.1
       version: 3.1.1
-    llm-zoo:
-      specifier: ^4.2.0
-      version: 4.2.0
     lru-cache:
       specifier: ^11.5.3
       version: 11.5.3
@@ -222,9 +219,6 @@ importers:
       knip:
         specifier: ^6.43.0
         version: 6.43.0
-      llm-zoo:
-        specifier: 'catalog:'
-        version: 4.2.0(effect@4.0.6)
       openai:
         specifier: 'catalog:'
         version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.12.3)(ws@8.22.0)(zod@4.6.5)
@@ -318,9 +312,6 @@ importers:
       ink:
         specifier: ^7.1.1
         version: 7.1.1(patch_hash=db8f5740efe4e780f6517316175dfed1e68d62e76e533c06bf0b8f5e94b48aa6)(@types/react@19.3.0)(react@19.3.1)
-      llm-zoo:
-        specifier: 'catalog:'
-        version: 4.2.0(effect@4.0.6)
       lru-cache:
         specifier: ^11.5.3
         version: 11.5.3
@@ -523,9 +514,6 @@ importers:
       is-wsl:
         specifier: 'catalog:'
         version: 3.1.1
-      llm-zoo:
-        specifier: 'catalog:'
-        version: 4.2.0(effect@4.0.6)
       lru-cache:
         specifier: 'catalog:'
         version: 11.5.3
@@ -621,7 +609,7 @@ importers:
         specifier: 2.31.0
         version: 2.31.0(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.6.5))(supports-color@10.2.2)
       llm-zoo:
-        specifier: 'catalog:'
+        specifier: 4.2.0
         version: 4.2.0(effect@4.0.6)
       ws:
         specifier: 8.22.0
@@ -714,9 +702,6 @@ importers:
       lit:
         specifier: ^3.3.3
         version: 3.3.3
-      llm-zoo:
-        specifier: 'catalog:'
-        version: 4.2.0(effect@4.0.6)
       lru-cache:
         specifier: 'catalog:'
         version: 11.5.3

@@ -17,9 +17,10 @@ import * as path from 'node:path';
 
 import { Effect, Stream } from 'effect';
 import {
-  originOf,
   type Model,
+  type ModelConfig,
   type ModelOrigin,
+  originOf,
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
@@ -27,7 +28,6 @@ import {
 import { envVar } from '@utils/system/envFlags';
 import { COMPACTION_SYSTEM_PROMPT } from './compaction';
 import { SKIPPED_NOT_STARTED } from './tools';
-import type { ModelConfig } from 'llm-zoo';
 
 const VALIDATION_OUTPUT = `\\section{Validated CLI Runtime}
 

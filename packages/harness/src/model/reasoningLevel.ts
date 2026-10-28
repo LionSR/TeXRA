@@ -1,16 +1,18 @@
 import { Effect, Result, Schema } from 'effect';
-import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
-import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import {
   acceptedEfforts,
   BACKEND_PROTOCOLS,
+  type BackendProviderId,
   chooseReasoning,
   CODEX_ROUTE_EFFORTS,
-  type BackendProviderId,
+  type ModelConfig,
   type ModelOrigin,
+  ModelProvider,
   type ModelRoute,
   type ReasoningChoice,
+  ReasoningEffort,
+  ReasoningEffortSchema,
   type ReasoningRequest,
   wireEffort,
 } from '@texra-ai/llm';

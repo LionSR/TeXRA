@@ -94,7 +94,6 @@
     "ignore": "catalog:",
     "jsdom": "^30.1.3",
     "knip": "^6.43.0",
-    "llm-zoo": "catalog:",
     "openai": "catalog:",
     "prettier": "^3.9.10",
     "semver": "^7.8.5",

@@ -10,9 +10,10 @@ import { hash } from 'node:crypto';
 
 import { Effect, type Scope } from 'effect';
 import {
-  routeConfig,
+  type ModelConfig,
   type ModelOrigin,
   type ReasoningRequest,
+  routeConfig,
 } from '@texra-ai/llm';
 import { bindModel as bindWireModel } from '@texra-ai/llm/node';
 
@@ -36,7 +37,6 @@ import { routeCredential, usageRouteOf } from './credentials';
 import { routePolicies, type CallFailure } from './failureInfo';
 import type { RouteDecision } from './routeDecision';
 import type { BindRequest, BoundModel } from './ModelAccess';
-import type { ModelConfig } from 'llm-zoo';
 import type { HttpClient } from 'effect/http';
 
 /** Tool-use runs keep output headroom for context growth. */

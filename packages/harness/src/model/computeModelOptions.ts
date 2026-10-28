@@ -1,5 +1,4 @@
 import { Effect, Result, Schema } from 'effect';
-import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 
 import {
   type ApiKeyProviderId,
@@ -7,11 +6,14 @@ import {
   hasUsableApiKey,
   type HostRouteFacts,
   isUnservedModel,
+  MODEL_CONFIGS,
   modelConfig,
+  type ModelConfig,
   type ModelRoute,
   providerDisplayName,
-  resolveModelSource,
+  type ReasoningEffort,
   type ReasoningRequest,
+  resolveModelSource,
   routeConfig,
   selectModel,
 } from '@texra-ai/llm';

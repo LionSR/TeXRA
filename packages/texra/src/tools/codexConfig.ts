@@ -1,8 +1,11 @@
 import { Effect, Option, Predicate, Schema } from 'effect';
-import { EFFORT_SCALE, ReasoningEffort } from 'llm-zoo';
 
 // Local imports - agent config
-import { codexBackendModelId } from '@texra-ai/llm';
+import {
+  codexBackendModelId,
+  EFFORT_SCALE,
+  ReasoningEffort,
+} from '@texra-ai/llm';
 import {
   withLogChannel,
   withPerKeyLane,

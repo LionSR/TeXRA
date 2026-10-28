@@ -3,11 +3,12 @@
  * harness's), worded for display — label, source, context window, prices,
  * tooltip, reasoning column and route badge. Pure.
  */
-import { hint, type ModelConfig } from 'llm-zoo';
 
 import {
+  hint,
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
+  type ModelConfig,
   providerDisplayName,
 } from '@texra-ai/llm';
 import {

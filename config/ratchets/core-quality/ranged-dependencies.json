@@ -1,4 +1,3 @@
 {
-  "packages/harness/package.json": 24,
-  "packages/llm/package.json": 1
+  "packages/harness/package.json": 23
 }

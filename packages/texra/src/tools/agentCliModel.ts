@@ -12,6 +12,7 @@ import { Effect, Result, Schema } from 'effect';
 import {
   chooseReasoning,
   type ChooseReasoningOptions,
+  type ModelConfig,
   type ReasoningChoice,
   ReasoningChoiceError,
   type SelectedModel,
@@ -22,7 +23,6 @@ import {
   AgentCliEffortSchema,
   type AgentCliEffort,
 } from '@texra/shared/agentCliSettings';
-import type { ModelConfig } from 'llm-zoo';
 
 /** Which models an agent CLI accepts, for validation and its error message. */
 export interface AgentCliModelRule {

@@ -8,7 +8,6 @@
  * dispatchers.
  */
 import { Effect, Schema, Struct } from 'effect';
-import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
@@ -22,6 +21,7 @@ import {
   SkillDisplayItemSchema,
   WorkspaceStateKey,
 } from '@texra-ai/harness/schemas';
+import { type ModelProvider, ReasoningEffortSchema } from '@texra-ai/llm';
 import { SubscriptionAuthStatusSchema } from '@texra/shared/model/subscriptionAuth';
 import { SubscriptionUsageSnapshotsSchema } from '@texra/shared/model/subscriptionUsage';
 import { settingSchemaWithoutDefault } from '@texra/shared/settingsView/settingRows';
@@ -53,7 +53,6 @@ import {
   PluginActionMessageSchema,
   PluginListItemSchema,
 } from './pluginMessages';
-import type { ModelProvider } from 'llm-zoo';
 
 /** An absolute URL the host may open. */
 const UrlSchema = Schema.String.check(

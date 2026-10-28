@@ -10,9 +10,11 @@ import { Effect } from 'effect';
 import {
   decideModelRoute,
   hasUsableApiKey,
-  OWN_KEY_ROUTE_FACTS,
   type HostRouteFacts,
+  type ModelConfig,
   type ModelRoute,
+  OWN_KEY_ROUTE_FACTS,
+  type ReasoningMode,
   type SelectedModel,
 } from '@texra-ai/llm';
 
@@ -32,7 +34,6 @@ import {
   type ModelBackend,
   type ProviderError,
 } from '@shared/schemas';
-import type { ModelConfig, ReasoningMode } from 'llm-zoo';
 
 /** The routes a binding can take: the unserved one fails in the decision. */
 type BindableRoute = Exclude<ModelRoute, { kind: 'unserved' }>;

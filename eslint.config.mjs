@@ -747,6 +747,20 @@ export default tseslint.config(
       ],
       'local/no-unused-imports': 'error',
       'local/no-vscode-import-in-free-zones': 'error',
+      // The catalog reaches everything outside the model package through
+      // `@texra-ai/llm`, which pins the one llm-zoo version. The core rule's
+      // options are replaced per block, so this uses the typescript-eslint one.
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'llm-zoo', message: 'Import it from @texra-ai/llm.' },
+          ],
+          patterns: [
+            { group: ['llm-zoo/**'], message: 'Import it from @texra-ai/llm.' },
+          ],
+        },
+      ],
       'prefer-const': 'error',
 
       // No temporary adapters (owner ruling 2026-09-06, Effect 4 migration
@@ -793,6 +807,7 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: { project: ['./packages/llm/tsconfig.json'] },
     },
+    rules: { '@typescript-eslint/no-restricted-imports': 'off' },
   },
 
   // The live tier is a separate program over the same package: its own
