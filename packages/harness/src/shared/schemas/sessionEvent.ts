@@ -244,9 +244,10 @@ const DisplayRowDraftSchema = Schema.Union([
   durable('run.detach', {}),
   /**
    * The terminal fact: outcome, the classified error behind a failure, and
-   * a tool-use run's reply (usage and workflow files have their own rows). Written once per lifecycle, by the storage
-   * finalizer, after the run's last transcript row; the fold derives the
-   * terminal phase from it and from nothing else.
+   * a tool-use run's reply (usage and workflow files have their own rows).
+   * Written once per lifecycle, by the storage finalizer, after the run's
+   * last transcript row; the fold derives the terminal phase from it and
+   * from nothing else.
    */
   durable('run.end', RunEndRowSchema.fields),
   durable('run.fact', { fact: RunFactSchema }),
@@ -544,7 +545,7 @@ export function pendingKeyOf(
   }
 }
 
-/** The rows a run's trace (`AgentEvent`) is, besides its text chunks. */
+/** Every `AgentEvent` arm but the chunk: each is stored as a row of its run. */
 // prettier-ignore
 export const TRACE_ROW_TYPES = Object.freeze(['log', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'run.fact', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplaySessionEvent['type'][]);
 

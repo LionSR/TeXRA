@@ -531,12 +531,13 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         runId,
         ...(redirectedFrom !== undefined && { redirectedFrom }),
         result,
-        // A resumed run's levels can still show the outcome its previous
-        // activation ended with: the slice starts at a level where it is
-        // live, and ends with the outcome after that, or with the result.
+        // From the first level at or past the activation, as a run here
+        // slices it (an earlier one can show the run absent, interrupted, or
+        // with its previous activation's outcome), to this activation's
+        // outcome, or the result.
         view: graph.view.changes.pipe(
           Stream.dropWhile(
-            (level) => level.runs.get(runId)?.durableOutcome !== null,
+            (level) => level.cursor < activation || !level.runs.has(runId),
           ),
           Stream.takeUntil(
             (level) => level.runs.get(runId)?.durableOutcome != null,
@@ -546,18 +547,22 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         // The service's rows, through the watch; the service's log is the
         // store, settled once it answered.
         events: replayTrace(
-          (set, cursor, debug) => watch(set, { cursor, debug }),
-          runId,
-          result,
           {
-            settled: Effect.exit(answer).pipe(
-              Effect.map((exit) => {
-                if (Exit.isSuccess(exit)) answeredAt = exit.value.at;
-              }),
-            ),
-            now: () => answeredAt,
+            view: {
+              inputs: (set, cursor, debug) => watch(set, { cursor, debug }),
+            },
+            log: {
+              settled: Effect.exit(answer).pipe(
+                Effect.map((exit) => {
+                  if (Exit.isSuccess(exit)) answeredAt = exit.value.at;
+                }),
+              ),
+              now: () => answeredAt,
+            },
           },
+          runId,
           activation,
+          result,
         ),
         interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
           Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),

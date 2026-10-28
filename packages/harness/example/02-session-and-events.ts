@@ -45,7 +45,7 @@ const program = Effect.gen(function* () {
   );
   console.log(`[02] refusal: ${refusal._tag} - ${refusal.message}`);
 
-  // 3. Start a run with the inline persona and stream its live trace events
+  // 3. Start a run with the inline persona and stream its events
   const run = yield* session.start({
     agent: personaResult.success,
     instruction: 'Check the abstract length.',
@@ -65,8 +65,8 @@ const program = Effect.gen(function* () {
     `[02] run ended: outcome=${end.outcome} streamed="${chunks.join('')}"`,
   );
 
-  // 4. A second reader, after the run has ended, reads its trace back from
-  // the session's rows: the same answer text, whole.
+  // 4. A second reader, after the run has ended, reads the same events
+  // back: the same answer text, whole.
   const replayed = yield* Stream.runCollect(run.events.pipe(responseText));
   if ([...replayed].join('') !== chunks.join(''))
     return yield* Effect.fail(

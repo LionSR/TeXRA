@@ -84,7 +84,6 @@ class FakeSession {
   };
   readonly requests = { request: () => Effect.succeed({ kind: 'done' }) };
   readonly log = { movedAside: null, settled: Effect.void };
-  readonly trace = { listen: () => () => undefined };
   readonly followUps = { resumes: { joined: () => false } };
   readonly view = {
     ref: this.viewRef,

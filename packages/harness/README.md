@@ -200,20 +200,14 @@ const program = Effect.gen(function* () {
 | `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts; `interrupt`. `start` returns once the run exists, before its first model call.                                                        |
 
 `run.events` is the run's trace as a `Stream`, and any number of readers
-can read it at any time. Each gets the run's events from the start of its
-current activation, then follows the run until it ends, and fails with
-`RunFailure` if the run failed. Ending a read stops that reader, not the run.
-
-The first reader is served from memory: events are buffered from the moment
-the run enters its session, so a reader begun right after `start` misses
-none of them, chunks included. The buffer only bridges that handover and is
-bounded, so taking only `result` never keeps a long run's trace in memory.
-Every other reader, including one that comes after the buffer is gone, a
-second reader, and a window whose run the background service runs, reads
-the trace back from the session's stored rows. Every event except
-`stream.chunk` is stored. A stream that finished streaming before such a
-reader came arrives as one chunk holding its final text, so a reader's
-chunks always add up to each stream's final text.
+can read it at any time. Each read is the run's events read back from the
+session, from the start of the activation the handle is for, following the
+run until that activation ends; it fails with `RunFailure` if the run
+failed. Ending a read stops that reader, not the run, and taking only
+`result` keeps nothing in memory. Every event except `stream.chunk` is a
+stored row, and streamed text arrives as the session holds it: a stream
+that ended before the read reached it comes as one chunk of its final text,
+so a reader's chunks always add up to each stream's final text.
 
 Every failure is a typed error on the effect that owns it. A refusal before
 any model work fails `session.start` with one of the tagged errors the

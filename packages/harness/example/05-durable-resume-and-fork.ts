@@ -12,7 +12,7 @@
  *    the first `run1` handle again: they are its own activation's, and the
  *    read ends without waiting for the resumed one.
  */
-import { Effect, Exit, Option, Stream } from 'effect';
+import { Effect, Option, Stream } from 'effect';
 import { responseText, Sessions } from '@texra-ai/harness';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
@@ -47,8 +47,8 @@ const program = Effect.gen(function* () {
     ),
   );
 
-  // The first read of a run's events takes its live trace; any later read
-  // replays it from the session.
+  // A read of a run's events reads them back from the session: this one
+  // while run1 waits for its next message.
   const drafted = yield* Stream.runHead(run1.events.pipe(responseText));
   console.log('[05] run1 drafted:', Option.getOrThrow(drafted));
 
@@ -107,22 +107,11 @@ const program = Effect.gen(function* () {
     ),
   );
   // The first handle still reads its own activation, and its read ends
-  // while the resumed one is running: with that activation's end, the stop
-  // that interrupted it.
-  let firstText = '';
-  const firstEnd = yield* Effect.exit(
-    Stream.runForEach(run1.events.pipe(responseText), (text) =>
-      Effect.sync(() => {
-        firstText += text;
-      }),
-    ),
-  );
-  if (
-    firstText !== 'Drafted section 1 with an informal proof sketch.' ||
-    !Exit.hasInterrupts(firstEnd)
-  ) {
+  // while the resumed one is running, with that activation's stored end.
+  const reread = yield* Stream.runCollect(run1.events.pipe(responseText));
+  const firstText = [...reread].join('');
+  if (firstText !== 'Drafted section 1 with an informal proof sketch.')
     throw new Error(`run1's first activation replayed: ${firstText}`);
-  }
   console.log(`[05] first activation reread: ${firstText}`);
   yield* resumed.interrupt;
   yield* session.settled;

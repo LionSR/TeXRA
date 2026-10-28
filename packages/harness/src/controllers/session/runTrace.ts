@@ -3,7 +3,8 @@
  * transient text of what it streams, and what it left open. A row the store
  * refused is the run's own to hear at its end (`lost`), never another
  * writer's; the text a committed row closes is dropped as the tail delivers
- * it (`committed`).
+ * it (`committed`). The trace's one read side is those rows and that text
+ * read back (`replayTrace`).
  */
 import { Effect, Stream, Struct, SubscriptionRef } from 'effect';
 
@@ -59,25 +60,6 @@ export interface RunTraceInit {
   readonly settled: Effect.Effect<void>;
   /** Whether the session's doors are shut. */
   readonly closed: () => boolean;
-}
-
-/** Each run's trace port: every caller reading the run's events, the
- *  launcher's and a joiner's alike, hears what the run emits from then on. */
-function tracePorts(): Pick<RunTrace, 'tap' | 'listen'> {
-  const ports = new Map<RunId, Set<(event: AgentEvent) => void>>();
-  return {
-    tap: (runId, event) => {
-      for (const listener of ports.get(runId) ?? []) listener(event);
-    },
-    listen: (runId, listener) => {
-      const port = ports.get(runId) ?? new Set();
-      ports.set(runId, port.add(listener));
-      return () => {
-        port.delete(listener);
-        if (port.size === 0) ports.delete(runId);
-      };
-    },
-  };
 }
 
 /** Build a session's {@link RunTraceSink}. */
@@ -151,7 +133,6 @@ export function makeRunTrace({
       });
   }
   return {
-    ...tracePorts(),
     publish: (runId, event) => {
       if (refusedAfterClose()) return;
       if (event.type === 'stream.chunk') {
@@ -227,77 +208,10 @@ export function makeRunTrace({
   };
 }
 
-/** An `AgentEvent` arm, other than the chunk, that `TRACE_ROW_TYPES` misses. */
-type UnstoredArm = Exclude<
-  AgentEvent['type'],
-  'stream.chunk' | (typeof TRACE_ROW_TYPES)[number]
->;
-
-/** Every trace event the session stores as a row (all but the chunk); its
- *  type fails to compile, naming the arm, while `TRACE_ROW_TYPES` misses one. */
-const STORED_TRACE: ReadonlySet<string> &
-  ([UnstoredArm] extends [never]
-    ? unknown
-    : { readonly missing: UnstoredArm }) = new Set(TRACE_ROW_TYPES);
-
-/** Where a replay is in its run's inputs. */
-interface Replay {
-  readonly runId: RunId;
-  /** History until `replay.complete` (it may span frames); null once read. */
-  history: SessionViewInput[] | null;
-  /** Rows at or below this `seq` are read or precede the activation. */
-  seq: number;
-  /** Each open row's text so far, by stream or card id; null once its
-   *  stream ended, when later text is already in its final text. */
-  readonly text: Map<string, string | null>;
-  /** The commit read through (the last `drained`), and the store's head once
-   *  the run was over (null before): past it, every row the run wrote. */
-  drainedTo: number;
-  endAt: number | null;
-  /** Its `run.end`, a later `run.activate` or `run.removed` is read (a run
-   *  that ended without one is done once read through `endAt`). */
-  ended: boolean;
-}
-
-/** A live text input as the chunk it extends its row with, if it does. */
-function chunkOf(replay: Replay, input: TextChunk): AgentEvent[] {
-  const stored = replay.text.get(input.rowId);
-  if (input.runId !== replay.runId || stored === null) return [];
-  const held = stored ?? '';
-  if (input.to <= held.length || input.from > held.length) return [];
-  const text = input.text.slice(held.length - input.from);
-  replay.text.set(input.rowId, held + text);
-  return [{ type: 'stream.chunk', id: input.rowId, text }];
-}
-
+/** The rows a trace event is stored as: every one but the chunk's. */
+const STORED_TRACE: ReadonlySet<string> = new Set(TRACE_ROW_TYPES);
 /** The columns the store adds to a trace event's row. */
 const ENVELOPE = ['aggregateId', 'seq', 'commit', 'origin', 'at'] as const;
-
-/** A row of the run as the trace events it stands for. */
-function eventsOf(replay: Replay, row: DisplaySessionEvent): AgentEvent[] {
-  if (row.seq <= replay.seq) return [];
-  replay.seq = row.seq;
-  if (
-    row.type === 'run.removed' ||
-    lastLifecycleRow([row], replay.runId) !== undefined
-  ) {
-    replay.ended = true;
-    return [];
-  }
-  if (!STORED_TRACE.has(row.type)) return [];
-  // cast: a stored trace row is its trace event plus the envelope the store and `runEventDraft` add.
-  const event = Struct.omit(row, ENVELOPE) as AgentEvent;
-  if (row.type !== 'stream.end') return [event];
-  // A stream that ends with text no chunk carried gets it as one chunk.
-  const held = replay.text.get(row.id) ?? '';
-  replay.text.set(row.id, null);
-  const missing = row.finalText?.startsWith(held)
-    ? row.finalText.slice(held.length)
-    : '';
-  return missing
-    ? [{ type: 'stream.chunk', id: row.id, text: missing }, event]
-    : [event];
-}
 
 /** The `seq` the lifecycle `rows` end in starts after: its activation, or
  *  for a lifecycle that ended, the one before that end. */
@@ -310,30 +224,36 @@ function lifecycleStart(rows: readonly SessionEvent[], runId: RunId): number {
 }
 
 /**
- * A run's trace read back from its session's view inputs, for a reader its
- * in-memory trace cannot serve: the rows of the reader's activation, then each
- * as it commits, until its `run.end` (or, with none stored, every row
- * committed when the run was over: `store`); then `result`'s failure. A
- * stream that ended before the reader came arrives as one chunk of its final
- * text, so a reader's chunks always add up to each stream's final text.
+ * A run's trace read back from its session's view inputs, for every reader
+ * of `Run.events`: the rows of the reader's activation, then each as it
+ * commits with the text streamed between them, until its `run.end` (or,
+ * with none stored, every row committed when the run was over);
+ * then `result`'s failure. A stream that ended before the reader came
+ * arrives as one chunk of its final text, so a reader's chunks always add
+ * up to each stream's final text.
  */
 export function replayTrace<E>(
-  /** The session's ordered view inputs for one reader: a session handle's
-   *  `view.inputs`, or a `Session.view.watch` with its arguments spread. */
-  read: (
-    set: readonly TranscriptSubscription[],
-    fromCommit: CommitOrdinal,
-    debug: boolean,
-  ) => Stream.Stream<readonly SessionViewInput[]>,
-  runId: RunId,
-  result: Effect.Effect<unknown, E>,
-  /** `settled`: every write enqueued so far is committed; `now()`: the head. */
-  store: {
-    readonly settled: Effect.Effect<void>;
-    readonly now: () => CommitOrdinal;
+  session: {
+    /** Ordered view inputs for one reader: a session handle's, or a
+     *  `Session.view.watch` with its arguments spread. */
+    readonly view: {
+      readonly inputs: (
+        set: readonly TranscriptSubscription[],
+        fromCommit: CommitOrdinal,
+        debug: boolean,
+      ) => Stream.Stream<readonly SessionViewInput[]>;
+    };
+    /** `settled`: every write enqueued so far is committed; `now()`: the
+     *  head. */
+    readonly log: {
+      readonly settled: Effect.Effect<void>;
+      readonly now: () => CommitOrdinal;
+    };
   },
+  runId: RunId,
   /** A commit in the reader's activation: it reads the latest at or before. */
   activation: CommitOrdinal,
+  result: Effect.Effect<unknown, E>,
 ): Stream.Stream<AgentEvent, E> {
   const id = qualifyAggregateId('run', runId);
   /** A row of this run; the listing is a summary of every run, not history. */
@@ -344,50 +264,91 @@ export function replayTrace<E>(
     input.read !== 'listing' &&
     input.event.aggregateId === id;
   return Stream.suspend(() => {
-    const replay: Replay = {
-      runId,
-      history: [],
-      seq: -1,
-      text: new Map(),
-      drainedTo: -1,
-      endAt: null,
-      ended: false,
+    /** The inputs until `replay.complete`, which a watch can split over
+     *  frames; null once read. */
+    let history: SessionViewInput[] | null = [];
+    /** Rows at or below this `seq` are read, or precede the activation. */
+    let seq = -1;
+    /** Each open stream's or card's text so far; null once it ended, when
+     *  its final text or result holds the rest. */
+    const text = new Map<string, string | null>();
+    /** The commit read through, and the store's head once the run was
+     *  over: past it, every row the run wrote, its end stored or not. */
+    let drainedTo = -1;
+    let endAt: CommitOrdinal | null = null;
+    let ended = false;
+    const done = (): boolean => ended || (endAt !== null && drainedTo >= endAt);
+    /** A live text input as the chunk it extends its stream with, if any. */
+    const chunkOf = (input: TextChunk): AgentEvent[] => {
+      const held = text.get(input.rowId);
+      if (input.runId !== runId || held === null) return [];
+      const at = held?.length ?? 0;
+      if (input.to <= at || input.from > at) return [];
+      const chunk = input.text.slice(at - input.from);
+      text.set(input.rowId, (held ?? '') + chunk);
+      return [{ type: 'stream.chunk', id: input.rowId, text: chunk }];
     };
-    const done = (): boolean =>
-      replay.ended ||
-      (replay.endAt !== null && replay.drainedTo >= replay.endAt);
+    /** A row of the run as the trace events it stands for. */
+    const eventsOf = (row: DisplaySessionEvent): AgentEvent[] => {
+      if (row.seq <= seq) return [];
+      seq = row.seq;
+      // Its end, the next activation, or the run's removal ends the read.
+      ended ||=
+        row.type === 'run.removed' ||
+        lastLifecycleRow([row], runId) !== undefined;
+      if (!STORED_TRACE.has(row.type)) return [];
+      // cast: a stored trace row is its trace event plus the envelope the store and `runEventDraft` add.
+      const event = Struct.omit(row, ENVELOPE) as AgentEvent;
+      // A closed card's output text is done with, as the session drops it.
+      if (
+        row.type === 'tool.end' &&
+        row.status !== TOOL_CALL_STATUS.IN_PROGRESS
+      )
+        text.set(row.logId, null);
+      if (row.type !== 'stream.end') return [event];
+      // A stream that ends with text no chunk carried gets it as one chunk.
+      const held = text.get(row.id) ?? '';
+      text.set(row.id, null);
+      const missing = row.finalText?.startsWith(held)
+        ? row.finalText.slice(held.length)
+        : '';
+      return missing
+        ? [{ type: 'stream.chunk', id: row.id, text: missing }, event]
+        : [event];
+    };
     const readInput = (input: SessionViewInput): AgentEvent[] => {
       if (done()) return [];
-      if (input._tag === 'chunk') return chunkOf(replay, input);
-      if (input._tag === 'drained') replay.drainedTo = input.cursor;
-      return own(input) ? eventsOf(replay, input.event) : [];
+      if (input._tag === 'chunk') return chunkOf(input);
+      if (input._tag === 'drained') drainedTo = input.cursor;
+      return own(input) ? eventsOf(input.event) : [];
     };
     /** One batch of inputs, or the store's head once the run is over. */
     const take = (
       next: readonly SessionViewInput[] | CommitOrdinal,
     ): AgentEvent[] => {
       if (typeof next === 'number') {
-        replay.endAt = next;
+        endAt = next;
         return [];
       }
-      if (replay.history === null) return next.flatMap(readInput);
-      replay.history.push(...next);
+      if (history === null) return next.flatMap(readInput);
+      for (const input of next) history.push(input);
       if (!next.some((input) => input._tag === 'replay.complete')) return [];
-      // The whole history: start at the reader's activation, as a reader
-      // of its live trace does.
-      const history = replay.history;
-      replay.history = null;
-      const rows = history.flatMap((input) =>
-        own(input) && input.event.commit <= activation ? [input.event] : [],
+      // The whole history: read from the reader's activation on.
+      const read = history;
+      history = null;
+      seq = lifecycleStart(
+        read
+          .filter(own)
+          .flatMap(({ event }) => (event.commit <= activation ? [event] : [])),
+        runId,
       );
-      replay.seq = lifecycleStart(rows, runId);
-      return history.flatMap(readInput);
+      return read.flatMap(readInput);
     };
     const over = Effect.exit(result).pipe(
-      Effect.andThen(store.settled),
-      Effect.andThen(Effect.sync(store.now)),
+      Effect.andThen(session.log.settled),
+      Effect.andThen(Effect.sync(session.log.now)),
     );
-    return read([{ id, fromSeq: 0 }], 0, false).pipe(
+    return session.view.inputs([{ id, fromSeq: 0 }], 0, false).pipe(
       Stream.merge(Stream.fromEffect(over)),
       // `done` as of each batch: a whole chunk maps before any is tested.
       Stream.map((next) => ({ events: take(next), last: done() })),

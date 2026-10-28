@@ -44,19 +44,7 @@ Discriminated union of every event the SDK surface emits.
 
 ```ts
 type AgentEvent =
-  | TraceArm<
-      | 'log'
-      | 'stage.start'
-      | 'stage.end'
-      | 'tool.start'
-      | 'tool.end'
-      | 'usage'
-      | 'run.fact'
-      | 'context.state'
-      | 'stream.start'
-      | 'stream.end'
-    >
-  | StreamChunkEvent;
+  TraceArm<(typeof TRACE_ROW_TYPES)[number]> | StreamChunkEvent;
 ```
 
 ## AgentNotFound
@@ -658,10 +646,11 @@ interface Run {
    * What the run does as it does it: streamed text, tool calls, stages,
    * usage. Pipe it through `responseText` for just the answer's text.
    * Ends when the run ends, and fails with {@link RunFailure} if the run
-   * failed. Read it as often as you like and whenever you like: every
-   * reader gets the run's events from its start, and stopping early stops
-   * your reading, not the run. A reader that comes after the run's text
-   * has streamed gets each stream's text whole, as one chunk.
+   * failed. Read it as often as you like and whenever you like: each read
+   * is this activation's events read back from the session, from the
+   * activation's start, and stopping early stops your reading, not the
+   * run. A stream that ended before the read reached it arrives whole, as
+   * one chunk.
    */
   readonly events: Stream.Stream<AgentEvent, RunFailure>;
   /** Stop the run. */
