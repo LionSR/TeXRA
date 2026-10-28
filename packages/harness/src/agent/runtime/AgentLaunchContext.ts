@@ -31,6 +31,7 @@ import {
   isTaskConfig,
   RUN_OUTCOME,
   type RunId,
+  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -39,7 +40,7 @@ import { ToolRegistry } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { declaredToolNames } from './agentToolResolution';
-import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
+import type { AgentRunShape } from './run/AgentRun';
 import type { SessionHandle } from './SessionHandle';
 import type { SessionHostInteractions } from './HostInteractions';
 import type {
@@ -87,8 +88,6 @@ interface AgentLaunchInput {
   onAdmitted?: AgentRunShape['entry']['entered'];
   /** Session owning this run's coordination state. */
   session: SessionHandle;
-  /** Immutable per-run tool policy carried on the launch context for cycle flows. */
-  toolPolicy?: ToolPolicy;
 }
 
 /**
@@ -158,6 +157,8 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     config: AgentConfig;
     session: SessionHandle;
     suppressErrorNotification?: boolean;
+    /** The launch ends the run after one cycle (an awaited child). */
+    stopAfterCycle?: boolean;
   }) {
     const fullConfig = input.config;
     const interactions = input.session.interactions;
@@ -213,7 +214,12 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       ...fullConfig,
       agentSource: agentEntry.source,
     };
-    return { config, persona, agentEntry, modelConfig };
+    // Whether the run takes follow-ups, decided once: a run whose launch
+    // ends it after one cycle, or whose script is its only turn, does not,
+    // and registers as such.
+    const stopAfterCycle =
+      input.stopAfterCycle === true || config.script != null;
+    return { config, persona, agentEntry, modelConfig, stopAfterCycle };
   },
   // No run exists yet, so no `result` event will present this failure: the
   // generic toast is its one surface. Once assembly begins, the terminal
@@ -250,19 +256,23 @@ export type PreparedAgentDefinition = Effect.Success<
  * the run's stage commit with the opening), the rest is published once that
  * settled. One that never enters drops it. A run that exists is refused.
  */
-const enterRun = Effect.fn('enterRun')(function* (
-  input: AgentLaunchInput,
-  config: AgentConfig,
-) {
+const enterRun = Effect.fn('enterRun')(function* (input: AgentLaunchInput) {
   const { session, runId } = input;
-  const registration =
+  const { config, stopAfterCycle } = input.definition;
+  const registered =
     input.registration === undefined
       ? null
-      : yield* registrationRows(session, runId, config, input.registration);
-  if (registration !== null && registration[0]?.type !== 'run.start')
+      : yield* registrationRows(session, runId, config, {
+          ...input.registration,
+          userFollowUpSupport: stopAfterCycle
+            ? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED
+            : USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+        });
+  if (registered !== null && !registered.born)
     return yield* new AgentError({
       message: `Run ${runId} already exists; resume it.`,
     });
+  const registration = registered?.rows ?? null;
   let held: AgentEvent[] | null = [];
   const logger = new TraceEmitter(
     (event) =>
@@ -317,7 +327,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     // policy and a root launch gets the process default exactly once.
     const { session, runId } = input;
     const resumed = input.registration === undefined;
-    const { logger: agentLogger, entry } = yield* enterRun(input, config);
+    const { logger: agentLogger, entry } = yield* enterRun(input);
 
     // Log the initial instruction as a user message so the run's tab
     // displays it inline with the stream log (no separate panel).
@@ -373,12 +383,8 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       resolvedAgentDescription: agentEntry.description,
       persona,
       modelConfig,
-      // Frozen so nothing mutates it mid-run. A script's run ends when its
-      // script settles, launched or resumed: it has no later turn for
-      // anything to wait for.
       toolPolicy: Object.freeze({
-        ...input.toolPolicy,
-        ...(config.script != null && { stopAfterCycle: true }),
+        stopAfterCycle: input.definition.stopAfterCycle,
       }),
       // The session's own setting slots, so routing and the provider
       // switches answer for this run's workspace.

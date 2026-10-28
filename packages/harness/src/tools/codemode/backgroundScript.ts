@@ -13,11 +13,7 @@ import { offeredBy } from '@agent/runtime/loop/step';
 import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
 import { type RunToolCall } from '@agent/runtime/RunCall';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
-import {
-  AgentConfigSchema,
-  USER_FOLLOW_UP_SUPPORT,
-  type RunId,
-} from '@shared/schemas';
+import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 import { agentChildRunId, earlierChild } from '@tools/delegation/agentChild';
 import { childRunDescription } from '@tools/delegation/childRun';
@@ -106,7 +102,6 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
               // Registered with its opening, which its run commits.
               registration: {
                 identity: { kind: 'script', title },
-                userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
                 parentRunId,
                 parentCall: { callId: call.callId, card: call.logId },
                 description: childRunDescription(title),

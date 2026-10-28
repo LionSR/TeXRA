@@ -103,14 +103,13 @@ describe('runWithLifecycle', () => {
             ctx.session.runs,
             runId,
             runLifecycle(
-              ctx,
+              { ...ctx, entry: { ...ctx.entry, parent: PARENT_RUN_ID } },
               () =>
                 Effect.succeed({
                   outcome: RUN_OUTCOME.COMPLETED,
                   runId,
                   output: { response: '', files: [] },
                 } satisfies RunEndResult),
-              { parentRunId: PARENT_RUN_ID },
             ),
           ),
         );

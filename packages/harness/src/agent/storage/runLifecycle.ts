@@ -116,27 +116,28 @@ export const registerRun = Effect.fn('registerRun')(function* (
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error> {
   return yield* Effect.gen(function* () {
-    const rows = yield* registrationRows(session, runId, record, options);
-    const born = rows[0]?.type === 'run.start';
+    const opens = yield* registrationRows(session, runId, record, options);
+    const rows = Effect.succeed(opens.rows);
     const cell = yield* session.runHistory.open(
       runId,
-      born
-        ? { registration: Effect.succeed(rows) }
-        : { activation: () => Effect.succeed(rows) },
+      opens.born ? { registration: rows } : { activation: () => rows },
     );
-    if (born) yield* cell.append([]);
+    if (opens.born) yield* cell.append([]);
   }).pipe(defectAsFailure); // one that died wrote nothing: launch refused
 });
 
-/** The rows that register a run, uncommitted (`run.start` first for a
- *  birth), which a caller commits with the run's first history in one
- *  batch, so no crash leaves it registered without that history. */
+/** The rows that register a run, uncommitted (`born`: they open it, with
+ *  `run.start` first), which a caller commits with the run's first history
+ *  in one batch, so no crash leaves it registered without that history. */
 export const registrationRows = Effect.fn('registrationRows')(function* (
   session: SessionHandle,
   runId: RunId,
   record: RunRecord,
   options: RegisterRunOptions,
-): Effect.fn.Return<readonly SessionEventDraft[], Error> {
+): Effect.fn.Return<
+  { readonly born: boolean; readonly rows: readonly SessionEventDraft[] },
+  Error
+> {
   return yield* Effect.gen(function* () {
     // A re-registration takes the existing run's claim over as it commits.
     const prior = yield* getRunRecords(session, runId).exists();
@@ -189,7 +190,7 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
         description: options.description,
         by: options.descriptionBy ?? 'model',
       });
-    return events;
+    return { born: !prior, rows: events };
   }).pipe(defectAsFailure);
 });
 

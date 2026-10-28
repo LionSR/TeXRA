@@ -28,8 +28,8 @@ is the module map by concern. Run-loop rules are in
   (the effective tool list); `runLaunchGuard` (the run's terminal `run.end`
   and claim, including a held child's end).
 - **Start and resume**: `rootLaunch` (what `Runs.launch({ request, options })`
-  runs: assigns the `runId`, registers, runs); `executeAgent` (lower-level
-  execution and `resumeToolUseFromResumeData`); `AgentRunLifecycle`
+  runs: assigns the `runId`, registers, runs); `executeAgent` (the one
+  run program, fresh or resumed); `AgentRunLifecycle`
   (completion side effects, error classification); `RunEndResult`;
   `resumeRun` (the cross-host resume entry, root or recovered child);
   `forkRun` (a new root seeded from another run's view); `resumeBlocker` (a
