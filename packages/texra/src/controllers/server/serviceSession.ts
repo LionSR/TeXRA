@@ -523,8 +523,10 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         Effect.flatMap(answer, (end) => endOf(runId, end)),
       );
       // The service's commit when it answered, past every row the run
-      // wrote, failed or not; with no answer, the window's own cursor.
-      let answeredAt: CommitOrdinal | null = null;
+      // wrote, failed or not. With no answer (no service will give one,
+      // and no row is coming through the watch), none: the replay ends at
+      // once with the result's failure.
+      let answeredAt: CommitOrdinal = -1;
       return {
         runId,
         ...(redirectedFrom !== undefined && { redirectedFrom }),
@@ -553,7 +555,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                 if (Exit.isSuccess(exit)) answeredAt = exit.value.at;
               }),
             ),
-            now: () => answeredAt ?? graph.view.current().cursor,
+            now: () => answeredAt,
           },
           activation,
         ),
