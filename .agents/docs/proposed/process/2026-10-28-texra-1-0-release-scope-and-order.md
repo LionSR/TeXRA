@@ -277,20 +277,21 @@ program (P2).
 
 ## Decisions this plan needs
 
-| #   | Decision                                                                                       | Recommendation                                                                            |
-| --- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| R1  | 1.0 is the app with a frozen store; harness and llm stay 0.x                                   | Yes. Everything below assumes it.                                                         |
-| R2  | Media stored by blob digest (D4)                                                               | Yes. Already written (8994563 on the tech-debt branch); needs its own PR.                 |
-| R3  | `wakeAt` on `run.position` now, or later                                                       | Later. It is an optional field, which the additive rule adds at any time.                 |
-| R4  | `script.call`'s `callId` and `stageId`                                                         | Drop both; derive at read.                                                                |
-| R5  | Goal stored as a `builtIn:goal` module import, not a template body                             | Yes.                                                                                      |
-| R6  | Goal grants: a grant that names its grantor, with its lifetime derived from the grantor's rows | Yes. Deletes `goal: kind[]` and `own: 'parent'`; a resume that skips the goal asks again. |
-| R7  | AppSignals (#14313)                                                                            | Done by #14347: a process service on `./host`. Close #14313.                              |
-| R8  | `childRunLoop.ts` off the `AbortController` residents (D1)                                     | Yes, after 1.0. No row changes.                                                           |
-| R9  | Setting namespace as a catalog parameter, stored keys unchanged                                | Yes, before the freeze; it is the one rename preparation that costs nothing later.        |
-| R10 | The Promise entry of the general-package design                                                | Deferred with the rest of that design.                                                    |
-| R11 | Rows evolve additively from 1.0; the golden store is the freeze (against ruling Q2)            | Yes. Deletes the upcast arrays, the floors, the fingerprints and the freeze mode.         |
-| R12 | The sandbox door reads results from the committed rows live as well as on replay               | Yes. One path; the ordering problem and its tests do not exist.                           |
+| #   | Decision                                                                                                                                              | Recommendation                                                                                            |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| R1  | 1.0 is the app with a frozen store; harness and llm stay 0.x                                                                                          | Yes. Everything below assumes it.                                                                         |
+| R2  | Media stored by blob digest (D4)                                                                                                                      | Yes. Already written (8994563 on the tech-debt branch); needs its own PR.                                 |
+| R3  | `wakeAt` on `run.position` now, or later                                                                                                              | Later. It is an optional field, which the additive rule adds at any time.                                 |
+| R4  | `script.call`'s `callId` and `stageId`                                                                                                                | Drop both; derive at read.                                                                                |
+| R5  | Goal stored as a `builtIn:goal` module import, not a template body                                                                                    | Yes.                                                                                                      |
+| R6  | Goal grants: a grant that names its grantor, with its lifetime derived from the grantor's rows                                                        | Yes. Deletes `goal: kind[]` and `own: 'parent'`; a resume that skips the goal asks again.                 |
+| R7  | AppSignals (#14313)                                                                                                                                   | Done by #14347: a process service on `./host`. Close #14313.                                              |
+| R8  | `childRunLoop.ts` off the `AbortController` residents (D1)                                                                                            | Yes, after 1.0. No row changes.                                                                           |
+| R9  | Setting namespace as a catalog parameter, stored keys unchanged                                                                                       | Yes, before the freeze; it is the one rename preparation that costs nothing later.                        |
+| R10 | The Promise entry of the general-package design                                                                                                       | Deferred with the rest of that design.                                                                    |
+| R11 | Rows evolve additively from 1.0; the golden store is the freeze (against ruling Q2)                                                                   | Yes. Deletes the upcast arrays, the floors, the fingerprints and the freeze mode.                         |
+| R12 | The sandbox door reads results from the committed rows live as well as on replay                                                                      | Yes. One path; the ordering problem and its tests do not exist.                                           |
+| R13 | Collapse the five `ExhaustionReason` literals (`shared/schemas/errors.ts`), stored in the `failed` attempt row through `RetryErrorInfoSchema`, to one | Decide now: a literal removed after the freeze is a breaking change. If wanted, it rides the P3 shape PR. |
 
 ## The pre-freeze set
 
@@ -345,6 +346,14 @@ What else is in flight that touches this plan, as of `main` at `fa6fb1e`
   when PRs open, D4 (8994563 with its golden regeneration and 43c10db) goes
   alone as the one shape PR, with the approval store, the llm refactors and
   the dispatcher changes in separate PRs that touch no `rowVersions.ts`.
+- **`claude/single-owner-refactor`** (the dual-systems session, local,
+  rebased on `fa6fb1e`): partial S1, S4 and S5, the onboarding refresh (§3
+  of the tech-debt note), one wording for a failed model call, with parallel
+  workers on H4, H5, V2 (#14321's onboarding-key move), M1 and M4. By its own
+  check, no commit changes a row schema, a version, the codec or current
+  values, and its workers are told to skip S2, D4 and D5. It deferred one
+  lead that would change stored bytes, the `ExhaustionReason` collapse (R13),
+  to this plan's shape PR.
 - **Nothing else in flight changes a row.** #14340, #14343, #14346, #14348,
   #14349, #14351 and `claude/run-events-replay` were read; none touches a
   stored schema. #14342 was closed as superseded: its completion change
