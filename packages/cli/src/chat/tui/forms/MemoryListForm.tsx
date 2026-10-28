@@ -21,10 +21,7 @@ interface MemoryListFormProps {
    *  registered this form. */
   readonly runtime: ProcessRuntime;
   /** The roots the listing's storage view is built from. */
-  readonly roots: Pick<
-    WorkspaceRoots,
-    'workspace' | 'storage' | 'globalStorage'
-  >;
+  readonly roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>;
   readonly availableRows?: number;
   readonly onSelect: (storagePath: string) => void;
   readonly onClose: () => void;

@@ -11,10 +11,7 @@ import { openInfoPane } from '@cli/chat/tui/state/cliState';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 /** The roots the chat surface holds, which its memory reads run over. */
-type MemoryRoots = Pick<
-  WorkspaceRoots,
-  'workspace' | 'storage' | 'globalStorage'
->;
+type MemoryRoots = Pick<WorkspaceRoots, 'workspace' | 'storage'>;
 
 export const showCliMemoryList = (
   roots: MemoryRoots,
