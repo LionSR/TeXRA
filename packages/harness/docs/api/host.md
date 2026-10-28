@@ -655,14 +655,6 @@ type AvailabilityResults = ReadonlyMap<
 >;
 ```
 
-## availableTeamMemberCount
-
-Distinct member keys available to the run, excluding the root itself.
-
-```ts
-function availableTeamMemberCount(plan: TeamRunPlan): number
-```
-
 ## buildDiffHunks
 
 Unified-diff hunks between two texts — the one diff engine behind every
@@ -692,14 +684,6 @@ Why a model call failed: the vendor's verdict, or no route to send it on.
 
 ```ts
 type CallFailure = ModelError | RouteUnavailable;
-```
-
-## canLaunchTeam
-
-```ts
-function canLaunchTeam<T extends TeamCatalogAgent>(
-  plan: TeamRunPlan<T>,
-): plan is TeamRunPlan<T> & { readonly rootAgent: T }
 ```
 
 ## causeChain
@@ -1087,21 +1071,6 @@ so a crash dialog is never the one surface that shows a secret unredacted.
 function formatFatalErrorDetail(error: unknown): string
 ```
 
-## formatTeamLaunchBlockedMessage
-
-```ts
-function formatTeamLaunchBlockedMessage(
-  teamId: string,
-  reason: string,
-): string
-```
-
-## formatUnknownTeamMessage
-
-```ts
-function formatUnknownTeamMessage(teamId: string): string
-```
-
 ## getEnabledModels
 
 The models the pickers show — the single reader of
@@ -1387,16 +1356,6 @@ walks the storage of the session it names.
 const listRunGeneratedFiles: (runId: string & Brand<"RunId">, storage: string) => Effect<RunGeneratedFile[], PlatformError, FileSystem>
 ```
 
-## loadTeamOptions
-
-```ts
-function loadTeamOptions<T extends TeamCatalogAgent>(
-  ports: Omit<TeamRunOptions<T>, 'agentOverride'> & {
-    presets: readonly TeamPreset[];
-  },
-): TeamOptionData[]
-```
-
 ## LOG_CHANNEL
 
 Annotation naming the logical channel an entry belongs to.
@@ -1611,15 +1570,6 @@ function planTeamRun<T extends TeamCatalogAgent>(
   preset: TeamPreset,
   options: TeamRunOptions<T>,
 ): TeamRunPlan<T>
-```
-
-## planTeamRuns
-
-```ts
-function planTeamRuns<T extends TeamCatalogAgent>(
-  presets: readonly TeamPreset[],
-  options: TeamRunOptions<T>,
-): TeamRunPlan<T>[]
 ```
 
 ## PlatformSecrets
@@ -2082,17 +2032,6 @@ function replayTrace<E>(
   activation: CommitOrdinal,
   result: Effect.Effect<unknown, E>,
 ): Stream.Stream<AgentEvent, E>
-```
-
-## resolveTeamLaunch
-
-```ts
-function resolveTeamLaunch<T extends TeamCatalogAgent>(
-  args: Omit<TeamRunOptions<T>, 'agentOverride'> & {
-    teamId: string;
-    presets: readonly TeamPreset[];
-  },
-): TeamLaunchResolution
 ```
 
 ## RootedFileSystem
@@ -2676,53 +2615,6 @@ its write in the scope that controls it (`set`).
 const SubscriptionPreference: Readonly<{ get: (provider: "chatgpt" | "grok", stores: SettingsStores) => boolean; set: (provider: "chatgpt" | "grok", stores: SettingsStores, enabled: boolean) => Effect<void, Error | ConfigWriteFailed, never>; }>
 ```
 
-## TEAM_SELECTION_REQUIRED_MESSAGE
-
-```ts
-const TEAM_SELECTION_REQUIRED_MESSAGE: "Team selection required."
-```
-
-## TeamAgentAvailability
-
-```ts
-interface TeamAgentAvailability {
-  readonly available: number;
-  readonly total: number;
-  readonly missing: readonly string[];
-  readonly label: string;
-}
-```
-
-## TeamAgentResolver
-
-The workspace agents' member identity rule (`AgentCatalog.get` in
-production): a bare name matches by name, a `source:name` key exactly.
-
-```ts
-type TeamAgentResolver<T> = (identifier: string) => T | undefined;
-```
-
-## teamAvailability
-
-```ts
-function teamAvailability(plan: TeamRunPlan): TeamAvailability
-```
-
-## TeamAvailability
-
-```ts
-interface TeamAvailability {
-  readonly status: TeamPlanStatus;
-  readonly agents: TeamAgentAvailability;
-  readonly rootAgent?: {
-    readonly key: string;
-    readonly name: string;
-    readonly source: AgentSource;
-  };
-  readonly missingAgentOverride?: string;
-}
-```
-
 ## TeamCatalogAgent
 
 ```ts
@@ -2731,37 +2623,6 @@ interface TeamCatalogAgent {
   readonly source: AgentSource;
   readonly tools?: string[];
 }
-```
-
-## teamLaunchBlockReason
-
-```ts
-function teamLaunchBlockReason(plan: TeamRunPlan): string | undefined
-```
-
-## TeamLaunchResolution
-
-```ts
-type TeamLaunchResolution =
-  | {
-      readonly status: 'ready';
-      readonly fields: ReturnType<typeof teamExecutionFields>;
-      readonly missingNames: readonly string[];
-    }
-  | { readonly status: 'unknown-team' }
-  | { readonly status: 'blocked'; readonly reason: string };
-```
-
-## teamPlanStatus
-
-```ts
-function teamPlanStatus(plan: TeamRunPlan): TeamPlanStatus
-```
-
-## TeamPlanStatus
-
-```ts
-type TeamPlanStatus = 'available' | 'degraded' | 'unavailable';
 ```
 
 ## TeamPreset
@@ -2787,7 +2648,11 @@ interface TeamPreset {
 
 ```ts
 interface TeamRunOptions<T extends TeamCatalogAgent> {
-  readonly resolveAgent: TeamAgentResolver<T>;
+  /**
+   * The workspace agents' member identity rule (`AgentCatalog.get` in
+   * production): a bare name matches by name, a `source:name` key exactly.
+   */
+  readonly resolveAgent: (identifier: string) => T | undefined;
   /**
    * The agents a built-in team runs as its root, in preference order: the
    * first one among the team's delegating members leads it, and a built-in
