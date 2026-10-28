@@ -640,8 +640,11 @@ async function generate(root) {
   // chat's turn that reports it.
   await shows("the goal's result", 'Golden chat goal complete.');
   let turn = await waitingAfter('the chat waiting on the goal result', 0);
-  await send('/model gemini38f');
-  await shows('the model switch notice', 'Model switched to gemini38f');
+  await send('/model google/gemini-3.8-flash@medium');
+  await shows(
+    'the model switch notice',
+    'Model switched to google/gemini-3.8-flash@medium',
+  );
   await send('After the model switch.');
   turn = await waitingAfter('the chat waiting after the model switch', turn);
   // A `/compact` wakes the chat: its turn's request commits the
@@ -1202,6 +1205,10 @@ function normalize(file, root) {
     [/\(exit (\d+), [\d.]+s\)/g, '(exit $1, 1s)'],
     // A call's wall time in its run-log line.
     [/ · (?:\d+m )?\d+s · \$/g, ' · 0s · $'],
+    // A script summary's wall time, after its cost.
+    [/(\$[\d.]+) · (?:\d+m )?[\d.]+s/g, '$1 · 0s'],
+    // A finished phase's wall time in its run-log line.
+    [/(✓ [^"·]+) · [\d.]+s/g, '$1 · 0s'],
   ];
   const digests = new Map();
   const scrubText = (text) => {

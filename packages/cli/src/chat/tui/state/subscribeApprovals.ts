@@ -15,11 +15,7 @@
 
 import { Cause, Effect } from 'effect';
 
-import {
-  hasUsableApiKey,
-  lookupApiKey,
-  providerDisplayName,
-} from '@texra-ai/llm';
+import { providerDisplayName } from '@texra-ai/llm';
 import { withLogChannel, type HostInteractions } from '@texra-ai/harness';
 import {
   toErrorMessage,
@@ -51,19 +47,15 @@ import {
   useHostCapability,
 } from './approvalQueue';
 import { appendLocalNotice } from './transcript';
-import type {
-  PlatformSecrets,
-  ProcessRuntime,
-  SettingsStores,
-} from '@texra-ai/harness';
+import type { ProcessRuntime, SettingsStores } from '@texra-ai/harness';
 import type { ToolEditContent } from '@texra-ai/harness/schemas';
 
 /**
  * What this host holds for its lifetime: the session its denial notices read
- * the policy from and its decisions land on, the secret store and settings
- * slots a retry's credential switch goes through, and the runtime its
- * decisions are issued on. All four come from the chat session's caller,
- * which holds them already.
+ * the policy from and its decisions land on, the settings slots a retry's
+ * credential switch goes through, and the runtime its decisions are issued
+ * on, which serves the secret store that switch reads. All three come from
+ * the chat session's caller, which holds them already.
  */
 interface TuiApprovalStores {
   /** Where its decisions land: the chat's session, here or in the
@@ -75,7 +67,6 @@ interface TuiApprovalStores {
     runId: RunId,
     requestId: string,
   ) => Effect.Effect<ToolEditContent | null, Error>;
-  readonly secrets: PlatformSecrets;
   /** The settings slots a key prompt reads a provider's display name and key
    *  URL from, so a retry that has to ask for a credential words the ask the
    *  same way `/key` does. */
@@ -117,20 +108,14 @@ export function createTuiHostInteractions(
   };
 
   /**
-   * The shared key entry, bound to this host's stores: whether the user
-   * already has a usable key for the provider the run's offer names, and the
-   * prompt that asks for one when they do not. Only the decision this host
-   * lands on the request is its own.
+   * The shared key entry, bound to this host's settings slots: the prompt
+   * that asks for a key when the user has no usable one for the provider the
+   * run's offer names. Only the decision this host lands on the request is
+   * its own.
    */
   const apiKeyRetry = new ProgressApiKeyRetryController({
-    readKey: (provider) => lookupApiKey(stores.secrets, provider),
-    hasUsableKey: (provider) => hasUsableApiKey(stores.secrets, provider),
     promptForApiKey: (provider) =>
-      promptForCliProviderApiKey(
-        stores.secrets,
-        stores.settings,
-        provider,
-      ).pipe(
+      promptForCliProviderApiKey(stores.settings, provider).pipe(
         Effect.mapError(
           (cause) =>
             new ApiKeyPromptFailed({

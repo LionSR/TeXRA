@@ -1,6 +1,6 @@
 /**
- * What a surface does with one decision on a pending request (PRD
- * one-fold-three-renderers, 8.2): the `request.decide`, `policy.set`, and
+ * What a surface does with one decision on a pending request: the
+ * `request.decide`, `policy.set`, and
  * `host.request` arms it names. Both surfaces that present requests, the
  * progress view's request panels and the TUI's approval modal, map through
  * here, so one decision means one thing on both.
@@ -67,7 +67,7 @@ const BYPASS_OF_KIND: Partial<
 };
 
 /**
- * The arms one decision names (PRD 8.2): a session-wide approval is the
+ * The arms one decision names: a session-wide approval is the
  * bypass change and the approval itself, in that order; a tool-edit preview
  * verb is a host capability that leaves the request pending; a retry on the
  * user's own key is the host's `useOwnApiKey`, which stores the key and then

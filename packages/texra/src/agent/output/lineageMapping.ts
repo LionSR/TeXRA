@@ -17,7 +17,18 @@ import {
 import { createFileMapping } from './fileMapping';
 
 import type { OutputState } from './outputState';
-import type { RoundFileEntry, RoundFileMapping } from './types';
+
+/** File relationship facts for a single output path. All fields optional — absence means no match. */
+interface RoundFileEntry {
+  /** Base FileLocation for round-based diffs (rewrite agents). */
+  base?: FileLocation;
+  /**
+   * Original base FileLocation for lineage tracking. `traceFileLineage`
+   * coalesces `base: origin ?? …`, so `origin` set implies `base` set — do
+   * not reintroduce an "origin but no base" fallback.
+   */
+  origin?: FileLocation;
+}
 
 interface PathKeys {
   readonly relativePath: string;
@@ -96,7 +107,7 @@ export function traceFileLineage(
   state: OutputState,
   baseFiles: FileLocation[],
   currRound: number,
-): RoundFileMapping {
+): Map<string, RoundFileEntry> {
   const currentOutputs = state.rounds.get(currRound)?.outputs ?? [];
 
   const baseEntries: BaseEntry[] = baseFiles.map((loc) => ({

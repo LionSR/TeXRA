@@ -34,7 +34,7 @@ export function childElapsed(
     readonly status: RunPhase | undefined;
     readonly startedAt: number | undefined;
   },
-  nowMs = Date.now(),
+  nowMs: number,
 ): string | undefined {
   if (child.status !== undefined && child.status !== RUN_PHASE.RUNNING) {
     return undefined;

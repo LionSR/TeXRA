@@ -91,7 +91,7 @@ export function dispatchCommandFromRegistry<
     return false;
   }
 
-  // Legacy no-arg handlers stay callable directly.
+  // A no-arg handler is a plain callable.
   if (typeof handler === 'function') return handler(actions);
 
   // Typed handlers decode the positional argument list at the boundary so

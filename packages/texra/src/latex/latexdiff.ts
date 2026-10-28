@@ -129,7 +129,7 @@ export class LaTeXdiffService {
   runDiff(
     inputLocation: FileLocation,
     editedLocation: FileLocation,
-    suffix = '_diff',
+    suffix: string,
     mathMarkup: LatexdiffMathMarkupValue | undefined,
     options: {
       /**

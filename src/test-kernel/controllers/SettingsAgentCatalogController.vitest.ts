@@ -7,7 +7,7 @@ import { describe } from 'vitest';
 
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { agentMatchesIdentifier, parseAgentModePresets } from '@shared/schemas';
+import { agentMatchesIdentifier } from '@shared/schemas';
 import type { AgentModePreset } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
@@ -67,10 +67,6 @@ function createController(customPresets: unknown) {
     getAgents,
     resolveAgent: (identifier) =>
       AGENTS.find((entry) => agentMatchesIdentifier(entry, identifier)),
-    getPresets: () =>
-      workspaceState
-        .get(WorkspaceStateKey.CUSTOM_TEAMS)
-        .pipe(Effect.map(parseAgentModePresets)),
   });
   return {
     controller: new SettingsAgentCatalogController({

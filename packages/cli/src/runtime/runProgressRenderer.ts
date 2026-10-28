@@ -26,19 +26,23 @@ import {
   truncateSummaryToWidth,
 } from './terminalText';
 import { getStderrColumns, writeRawStderr } from './logSinks';
-import { claimRootRun, type RunProgressSession } from './sessionViewFollow';
 import type { CliContext } from './cliContext';
+import type { LocalSession } from '@texra-ai/harness';
 
 const CLEAR_LINE = '\r\x1b[2K';
 const ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH = 48;
 
+/** What the status line reads of a session: its view, followed level by
+ *  level. */
+interface RunProgressSession {
+  readonly view: Pick<LocalSession['view'], 'changes'>;
+}
+
 export interface RunProgressRenderer {
-  /** Follow the session's view until the scope closes; `runId` names the run
-   *  to describe (the first root run the view gains after attach, when
-   *  omitted). */
+  /** Follow the session's view until the scope closes, describing `runId`. */
   attach(
     session: RunProgressSession,
-    options?: { readonly runId?: RunId },
+    runId: RunId,
   ): Effect.Effect<void, never, Scope.Scope>;
   clear(): void;
   preserve(): void;
@@ -80,9 +84,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private lastLine = '';
   private liveLine = false;
   private view: SessionView | undefined;
+  /** The run this line describes, once the view holds it. */
   private rootRunId: RunId | undefined;
   private wantedRunId: RunId | undefined;
-  private attachCursor = 0;
   /** The last root phase the renderer painted; a repeat is not a change. */
   private paintedPhase: RunPhase | undefined;
   private heartbeat: Fiber.Fiber<never> | undefined;
@@ -100,11 +104,10 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
   attach(
     session: RunProgressSession,
-    options: { readonly runId?: RunId } = {},
+    runId: RunId,
   ): Effect.Effect<void, never, Scope.Scope> {
     return Effect.suspend(() => {
-      this.wantedRunId = options.runId;
-      this.attachCursor = session.view.current().cursor;
+      this.wantedRunId = runId;
       return Effect.addFinalizer(() =>
         Effect.sync(() => {
           this.view = undefined;
@@ -182,7 +185,8 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private applyView(view: SessionView): void {
     const previous = this.view;
     this.view = view;
-    this.rootRunId ??= claimRootRun(view, this.wantedRunId, this.attachCursor);
+    if (this.wantedRunId !== undefined && view.runs.has(this.wantedRunId))
+      this.rootRunId ??= this.wantedRunId;
     const root = this.root();
     if (!root) return;
     const wasTerminal = isTerminalOutcomePhase(

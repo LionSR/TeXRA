@@ -13,11 +13,10 @@ interface CopyButtonConfig {
   defaultTitle?: string;
   /** Title shown after successful copy */
   successTitle?: string;
-  /** CSS class applied during success state */
-  successClass?: string;
-  /** Delay before resetting to default state (ms) */
-  resetDelay?: number;
 }
+
+/** CSS class applied during the success state. */
+const SUCCESS_CLASS = 'copy-success';
 
 /**
  * Computed state for copy button (used in templates).
@@ -70,13 +69,11 @@ export class CopyButtonController implements ReactiveController {
     this._config = {
       defaultTitle: config.defaultTitle ?? 'Copy to clipboard',
       successTitle: config.successTitle ?? 'Copied!',
-      successClass: config.successClass ?? 'copy-success',
-      resetDelay: config.resetDelay ?? COPY_RESET_DELAY_MS,
     };
     this._resetTimer = createFlushableDebounce(() => {
       this._copied = false;
       this.host.requestUpdate();
-    }, this._config.resetDelay);
+    }, COPY_RESET_DELAY_MS);
     this.host.addController(this);
   }
 
@@ -96,13 +93,13 @@ export class CopyButtonController implements ReactiveController {
       title,
       ariaLabel: title,
       copied: this._copied,
-      successClass: this._config.successClass,
+      successClass: SUCCESS_CLASS,
     };
   }
 
   /**
    * Copy text to clipboard and show success feedback.
-   * Automatically resets to default state after the configured delay.
+   * Automatically resets to default state after `COPY_RESET_DELAY_MS`.
    */
   copy = async (text: string): Promise<boolean> => {
     if (!text.trim()) {

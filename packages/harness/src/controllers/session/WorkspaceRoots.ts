@@ -1,6 +1,5 @@
 /**
- * The workspace a session graph works on (PRD one-fold-three-renderers,
- * 7.3): the storage root of `@platform/workspaceRoots`, provided per session
+ * The workspace a session graph works on: the storage root of `@platform/workspaceRoots`, provided per session
  * by `sessionLayer.ts` from the session's own roots and per remote view by
  * `RemoteSessionView.layer` from the session key on the wire.
  * `SessionView.key` is `storage`, the same value that keys both layer maps,

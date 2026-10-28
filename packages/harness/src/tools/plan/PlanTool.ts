@@ -68,13 +68,6 @@ const PlanToolInputSchema = Schema.Struct({
 
 type PlanToolInput = typeof PlanToolInputSchema.Type;
 
-function buildApprovedResult(): ToolResult {
-  return executed(
-    'Plan approved by the user. Work toward the objective.',
-    'Plan approved: proceed with implementation',
-  );
-}
-
 /**
  * Run the just-approved plan as a goal: the goal template, a background
  * script of this conversation whose rounds are this agent again (`self()`),
@@ -216,7 +209,10 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
     yield* Effect.logInfo('Plan approved by user').pipe(
       withLogChannel(CHANNEL),
     );
-    return buildApprovedResult();
+    return executed(
+      'Plan approved by the user. Work toward the objective.',
+      'Plan approved: proceed with implementation',
+    );
   }
 
   if (result.action === 'approve_and_goal') {

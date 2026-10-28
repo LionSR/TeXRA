@@ -11,7 +11,7 @@ import { dispatchCommandFromRegistry } from '@texra/shared/commands/registry';
 
 // `extensionCommandHandlers.ts` is deliberately free of `vscode` imports, so
 // the production handler map is exercised directly here. Only
-// `extensionCommandSurface.ts`, which wires the real actions against VS Code
+// `packages/extension/src/commands.ts`, which wires the real actions against VS Code
 // APIs, needs the extension host.
 
 // Settles the handler's program the way the registration boundary does (the

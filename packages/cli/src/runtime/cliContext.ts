@@ -254,26 +254,17 @@ export function readCliVersion(): string {
 }
 
 /**
- * The issue-tracker URL declared in the CLI's `package.json` (`bugs.url`), used
- * to point users at the bug tracker on an unexpected crash. Read from the
- * manifest rather than hard-coded so it tracks the published metadata.
- */
-export function readCliBugsUrl(): string | undefined {
-  return loadCliPackageManifest()?.bugs?.url;
-}
-
-/**
  * The follow-up line appended to the top-level crash message pointing users at
- * the issue tracker. Returns `undefined` for usage errors (so the exit-2 path
- * stays clean), for a store this process could not open (a remote mount, a
- * store a newer build wrote: the message says what to do), or when no tracker
- * URL is configured — only an UNEXPECTED crash with a known `bugs.url` gets
- * the report prompt.
+ * the issue tracker, the `bugs.url` the CLI's `package.json` declares (read
+ * from the manifest rather than hard-coded so it tracks the published
+ * metadata). Returns `undefined` for usage errors (so the exit-2 path stays
+ * clean), for a store this process could not open (a remote mount, a store a
+ * newer build wrote: the message says what to do), or when no tracker URL is
+ * configured — only an UNEXPECTED crash with a known `bugs.url` gets the
+ * report prompt.
  */
-export function formatCrashReportLine(
-  error: unknown,
-  bugsUrl: string | undefined,
-): string | undefined {
+export function formatCrashReportLine(error: unknown): string | undefined {
+  const bugsUrl = loadCliPackageManifest()?.bugs?.url;
   if (
     error instanceof CliUsageError ||
     error instanceof DatabaseOpenFailed ||
@@ -449,7 +440,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
           ));
     const approvalPolicy = effectiveApprovalPolicy(
       requestedApprovalPolicy,
-      Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY),
+      projectApprovalPolicy(config),
     );
     const outputFormat: CliOutputFormat =
       init.globalArgs.outputFormat ??
@@ -513,6 +504,12 @@ export function launchApproval(requested: ApprovalPolicy | undefined): {
     ...(requested !== undefined && { approvalPolicy: requested }),
     approveDelegatedWork: requested === 'yolo',
   };
+}
+
+/** The project's persisted approval policy, as the session reads it at each
+ *  decision. */
+export function projectApprovalPolicy(config: ConfigProvider): ApprovalPolicy {
+  return Settings.getConfig<ApprovalPolicy>(config, APPROVAL_POLICY_CONFIG_KEY);
 }
 
 /** The policy a launch runs under: the project's, narrowed by what the

@@ -4,7 +4,7 @@
  *
  * Every fact comes off the session fold's `RunView`. The fold already decides
  * what a run is, what it is called, what may be said about its status and who
- * its parent is (PRD one-fold-three-renderers, 5.2), so nothing here reads a
+ * its parent is, so nothing here reads a
  * durable row or re-derives liveness from a missing in-process handle.
  */
 

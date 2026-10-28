@@ -323,7 +323,6 @@ export function logPayloadRow(
         data,
         label: CONTEXT_MANAGEMENT_LABEL[data.action] ?? 'Context management',
         items,
-        ...(data.summary ? { summary: transcriptText(data.summary) } : {}),
       };
     }
 

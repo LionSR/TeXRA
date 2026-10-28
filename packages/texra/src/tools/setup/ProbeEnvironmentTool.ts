@@ -2,7 +2,8 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import * as os from 'node:os';
+import { Config, Effect, Option, Schema } from 'effect';
 
 // Local imports
 import {
@@ -18,7 +19,6 @@ import {
 } from '@texra-ai/harness';
 import { homeDirectory, withExtendedPath } from '@texra-ai/harness/node';
 import { executed, ToolError } from '@texra-ai/harness/plugins';
-import { nodeHostEnvironment } from '@texra/platform/defaults/nodeHostEnvironment';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import {
   IMAGE_TOOL_LABEL,
@@ -47,6 +47,21 @@ const ProbeEnvironmentInputSchema = Schema.Struct({
 type ProbeInput = typeof ProbeEnvironmentInputSchema.Type;
 
 const OPTIONAL_TOOLS = ['git', 'node', 'python3'] as const;
+
+/** OS, arch and shell; the shell comes from the ambient ConfigProvider. */
+const readHostInfo = Effect.map(
+  Effect.all([
+    Config.String('SHELL').pipe(Config.option, Effect.orDie),
+    Config.String('ComSpec').pipe(Config.option, Effect.orDie),
+  ]),
+  ([shell, comSpec]) => ({
+    platform: process.platform,
+    arch: process.arch,
+    osRelease: os.release(),
+    shell:
+      Option.getOrUndefined(Option.orElse(shell, () => comSpec)) ?? 'unknown',
+  }),
+);
 
 const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
   input: ProbeInput,
@@ -105,7 +120,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
   const homedir = (yield* homeDirectory) ?? '<unresolved>';
   const extendedPath = withExtendedPath({ PATH: process.env.PATH }).PATH ?? '';
   const pm = detectPackageManager();
-  const hostInfo = yield* nodeHostEnvironment.hostInfo();
+  const hostInfo = yield* readHostInfo;
   const [
     coreTools,
     optionalTools,

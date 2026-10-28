@@ -17,7 +17,7 @@ import { TickerController } from '@texra/shared/litControllers/TickerController'
 import type {
   ProviderKeyStatus,
   ProviderSetting,
-} from '@texra/shared/settingsView/settingsViewMessages';
+} from '@texra/shared/settingsView/profileViewMessages';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import { ANTHROPIC_PLAN_CREDITS } from '@ui/copy/modelAccess';
 import { commonViewStyles, designTokens } from '@ui/styles';

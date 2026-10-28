@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import {
+  Secrets,
   withLogChannel,
   type RootedFileSystem,
   WorkspaceFs,
@@ -288,7 +289,7 @@ function buildOverleafClonePorts(
   };
 }
 
-export function cloneOverleafProject(secrets: PlatformSecrets) {
+export function cloneOverleafProject() {
   return Effect.gen(function* () {
     const input = yield* promptInput(
       'Clone Overleaf/ShareLaTeX Project',
@@ -319,7 +320,7 @@ export function cloneOverleafProject(secrets: PlatformSecrets) {
       remote,
       workspacePath,
       buildOverleafClonePorts(
-        secrets,
+        yield* Secrets,
         remote,
         workspaceFs,
         yield* ChildProcessSpawner,

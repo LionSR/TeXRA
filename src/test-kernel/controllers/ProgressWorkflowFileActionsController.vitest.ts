@@ -1,6 +1,5 @@
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
 import type { RunId } from '@shared/schemas';
@@ -23,7 +22,6 @@ function createDeps(
       acceptEditedFile: () => Effect.void,
       latexdiffFile: () => Effect.void,
       openDirectory: () => Effect.void,
-      readFile: () => Effect.succeed(''),
       showInfo: () => Effect.void,
       showError: () => Effect.void,
       ...overrides,
@@ -36,18 +34,17 @@ function createDeps(
 describe('ProgressWorkflowFileActionsController', () => {
   it.effect(
     'keeps the accept follow-up backup when the host cancels acceptance',
-    () =>
-      Effect.gen(function* () {
+    () => {
+      const readResults = [
+        'original model output',
+        'user edited output',
+        'user edited output',
+      ];
+      return Effect.gen(function* () {
         const followUps: string[] = [];
         const acceptResults = [false, true];
-        const readResults = [
-          'original model output',
-          'user edited output',
-          'user edited output',
-        ];
         const deps = createDeps({
           acceptEditedFile: () => Effect.sync(() => acceptResults.shift()),
-          readFile: () => Effect.sync(() => readResults.shift() ?? ''),
         });
         deps.runs.sendFollowUp = (_stream, text) =>
           Effect.sync(() => {
@@ -76,6 +73,13 @@ describe('ProgressWorkflowFileActionsController', () => {
 
         expect(followUps).toHaveLength(1);
         expect(followUps[0]).toMatch(/edited\.tex/);
-      }).pipe(Effect.provide(NodeFileSystem.layer)),
+      }).pipe(
+        Effect.provide(
+          FileSystem.layerNoop({
+            readFileString: () => Effect.sync(() => readResults.shift() ?? ''),
+          }),
+        ),
+      );
+    },
   );
 });

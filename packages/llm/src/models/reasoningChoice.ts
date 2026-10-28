@@ -191,17 +191,6 @@ export function chooseReasoning(
 }
 
 /**
- * The level a run uses for this model when nothing names one: `none` when it
- * does not think by default, `undefined` when it thinks without levels.
- */
-export function defaultReasoningLevel(
-  config: Pick<ModelConfig, 'label' | 'reasoning' | 'modes'>,
-): ReasoningEffort | undefined {
-  const choice = chooseReasoning(config);
-  return choice.thinking ? (choice.effort ?? undefined) : ReasoningEffort.NONE;
-}
-
-/**
  * The effort values a route may send for a model: the levels it accepts
  * while thinking, plus `none` where `none` is how thinking is turned off.
  */

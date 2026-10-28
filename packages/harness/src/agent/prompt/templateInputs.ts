@@ -105,9 +105,7 @@ export function buildTemplatePassthrough(): Readonly<Record<string, string>> {
  * The roots of the session this run belongs to, held as data, so a run never
  * reads whichever roots the calling fiber carries: the workspace that prompt
  * file names, file reads and `CWD` resolve against (`undefined` with no
- * folder open), the storage its attached memories live in, and the
- * configuration and setting slots its skills switch and disabled-skill lists
- * answer from.
+ * folder open), and the storage its attached memories live in.
  */
 interface BuildTemplateInputsOptions {
   workspacePath: string | undefined;

@@ -126,7 +126,6 @@ export type {
   ModelAvailabilityKind,
   ModelBackend,
   NormalizedToolUse,
-  OfferedTool,
   OwnerId,
   OwnerLiveness,
   PermissionPayload,
@@ -158,7 +157,6 @@ export type {
   ToolFact,
   ToolUseLog,
   UsageRoute,
-  UserFollowUpSupport,
   WorkspaceFileLocation,
 } from '@shared/schemas';
 // Where a run's lifecycle status stands: in flight (running, or waiting for
@@ -203,7 +201,6 @@ export {
 export {
   Cancelled,
   formatHunkLines,
-  Internal,
   Invalid,
   NotOwner,
   OutcomeSchema,
@@ -211,7 +208,6 @@ export {
   RequestErrorSchema,
   RuntimeRequestSchema,
   ToolEditContentSchema,
-  Unavailable,
   type RequestError,
   type RuntimeRequest,
   type ToolEditContent,
@@ -223,14 +219,13 @@ export {
 } from '@shared/tools/memoryView';
 // A model's display name.
 export { getModelLabel } from '@shared/model/modelLabel';
-// Error messages, and JSON parsed without a throw.
+// Error messages.
 export {
   ensureError,
   extractErrorMessage,
   formatError,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
-export { safeParseJson } from '@common/parsing/safeParseJson';
 // An exported run (`assembleTrace`), as a static viewer parses it back.
 export {
   readTraceFacts,
@@ -385,7 +380,6 @@ export {
   type TokenUsageStats,
   TOOL_CALL_STATUS,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
-  ToolCardSchema,
   ToolEditPermissionSchema,
   type UserQuestionAnswers,
   UserQuestionAnswersSchema,

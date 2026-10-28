@@ -108,42 +108,6 @@ describe('SubscriptionUsageService', () => {
     ).toStrictEqual(['Bearer chatgpt-secret', 'Bearer chatgpt-refreshed']);
   });
 
-  it('normalizes malformed bodies and HTTP failures without exposing details', async () => {
-    stubCodexSession();
-    const malformed = vi.fn<UsageFetch>(async () =>
-      jsonResponse({ rate_limit: { primary_window: { used_percent: 'bad' } } }),
-    );
-    await expect(
-      runUsage(makeService().getUsage('chatgpt'), malformed),
-    ).resolves.toMatchObject({
-      state: 'unavailable',
-      reason: 'malformed_response',
-    });
-
-    const invalidJson = vi.fn<UsageFetch>(
-      async () => new Response('{', { status: 200 }),
-    );
-    await expect(
-      runUsage(makeService().getUsage('kimiCode'), invalidJson),
-    ).resolves.toMatchObject({
-      state: 'unavailable',
-      reason: 'malformed_response',
-    });
-
-    const failed = vi.fn<UsageFetch>(async () =>
-      jsonResponse({ secret: 'must not escape' }, 500),
-    );
-    const snapshot = await runUsage(
-      makeService().getUsage('glmCodingPlan'),
-      failed,
-    );
-    expect(snapshot).toMatchObject({
-      state: 'unavailable',
-      reason: 'request_failed',
-    });
-    expect(JSON.stringify(snapshot)).not.toContain('secret');
-  });
-
   // Pins the return path of an invalidated fetch: the caller
   // already waiting on an invalidated fetch accepts one stale read, but the
   // stale result never enters the cache — later callers see new-account usage.

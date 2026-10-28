@@ -2,6 +2,7 @@
 
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
+import { SignalWatcher } from '@lit-labs/signals';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
@@ -9,7 +10,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { isUnrecognizedCommand } from '@texra/shared/utils/dispatcher';
-import { SignalWatcher } from '@texra/shared/signals';
 import { installToolbarTooltips } from '@texra/shared/litControllers/TooltipController';
 
 // Local imports - shared styles

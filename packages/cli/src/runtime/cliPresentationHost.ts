@@ -28,7 +28,7 @@ export interface CliRuntimeHost {
   ): boolean;
   attachRunProgressRenderer(
     session: LocalSession,
-    options?: { readonly runId?: RunId },
+    runId: RunId,
   ): Effect.Effect<void, never, Scope.Scope>;
   prepareInteractivePrompt?: () => void;
   /** {@link prepareInteractivePrompt}, held until the returned release is
@@ -108,8 +108,8 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     };
 
   return {
-    attachRunProgressRenderer: (session, options) =>
-      runProgress ? runProgress.attach(session, options) : Effect.void,
+    attachRunProgressRenderer: (session, runId) =>
+      runProgress ? runProgress.attach(session, runId) : Effect.void,
     prepareInteractivePrompt: () => runProgress?.preserve(),
     holdForPrompt: () => runProgress?.suspend(),
     emit<K extends RuntimePresentationEvent>(

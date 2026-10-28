@@ -6,15 +6,18 @@
  */
 import {
   Cause,
-  type Context,
+  Context,
   Deferred,
   Effect,
   FiberHandle,
+  FileSystem,
+  Path,
   Ref,
   type Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { withLogChannel, type HostInteractions } from '@texra-ai/harness';
 import { toErrorMessage, toJsonValue } from '@texra-ai/harness/schemas';
@@ -122,7 +125,8 @@ function perform(
 }
 
 /** A tool-edit call on the window's preview controller, under the services
- *  its previews take. */
+ *  its previews take: exactly those, picked from what the window handed
+ *  over, never the rest of the window's context in place of the call's. */
 function previews(
   host: WindowHost,
   call: HostCall,
@@ -132,7 +136,14 @@ function previews(
 ): Effect.Effect<unknown, Error> {
   const { toolEdits } = host;
   if (toolEdits === undefined) return unoffered(call);
-  return Effect.provideContext(program(toolEdits), toolEdits.services);
+  return Effect.provide(
+    program(toolEdits),
+    Context.pick(
+      FileSystem.FileSystem,
+      Path.Path,
+      ChildProcessSpawner,
+    )(toolEdits.services),
+  );
 }
 
 const unofferedError = (call: HostCall) =>

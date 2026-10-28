@@ -45,11 +45,12 @@ import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
 import { type InputPart, mediaInputParts } from './run/mediaInput';
 import { blobRows } from './run/requestContext';
-import { appendRow, positionRow, type Message } from './loop/rows';
+import { appendRow, positionRow } from './loop/rows';
 import { promptHooks } from './loop/hooks';
 import { resolveActivations } from './loop/step';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { AgentRunShape } from './run/AgentRun';
+import type { AppendedMessage } from './storedTurn';
 
 /** A batch as the rows that consume it: its message's `append` carries what
  *  the delivery changes (the instruction it stores, the skills it
@@ -118,7 +119,10 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
     followUps: readonly QueuedFollowUp[],
   ): Effect.fn.Return<
-    { message: Message; kinds: readonly (readonly MediaAttachmentKind[])[] },
+    {
+      message: Extract<AppendedMessage, { readonly role: 'user' }>;
+      kinds: readonly (readonly MediaAttachmentKind[])[];
+    },
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
@@ -173,7 +177,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
             message: {
               role: 'user',
               content: [{ kind: 'text', text: batch.text }],
-            } satisfies Message,
+            } satisfies AppendedMessage,
             kinds: [],
           })
         : batchMessage(followUps)
@@ -200,13 +204,10 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
             typed[0].followUpId,
             typed.map(({ content }) => content.text).join('\n\n'),
           );
-    const message: Message =
-      built.message.role === 'user'
-        ? {
-            ...built.message,
-            content: [...built.message.content, ...hooked.parts],
-          }
-        : built.message;
+    const message: AppendedMessage = {
+      ...built.message,
+      content: [...built.message.content, ...hooked.parts],
+    };
     // A skill the user activated, and the run's current step resolves,
     // joins the run's recorded activations by name, the latest
     // `ACTIVATED_SKILLS_MAX` kept; each step resolves them again.

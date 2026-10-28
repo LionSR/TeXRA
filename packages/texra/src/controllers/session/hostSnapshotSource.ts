@@ -1,5 +1,5 @@
 /**
- * The `host` snapshot of one session (PRD one-fold-three-renderers, 8.1):
+ * The `host` snapshot of one session:
  * what the shell renders but does not own. It rides on every frame that
  * follows a change and on every subscribe, so a surface never asks for a
  * catalog and never holds a stale one. Every producer is a read the host
