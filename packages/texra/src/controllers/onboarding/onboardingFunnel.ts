@@ -28,7 +28,6 @@ import {
 } from '@texra-ai/harness/host';
 import {
   agentName,
-  GlobalStateKey,
   isLiveRun,
   RUN_PHASE,
   type RunView,
@@ -38,6 +37,12 @@ import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
 import type { Session } from '@texra-ai/harness';
 import type { StateStore, StateWriteFailed } from '@texra-ai/harness/host';
+
+/** "Skip for now" on the State 0 picker. The key keeps the CLI's spelling,
+ *  under which it was first stored. */
+const DECLINED_KEY = 'texra.cli.onboardingDeclined';
+/** A real run completed, or the user skipped setup. */
+const FIRST_RUN_DONE_KEY = 'texra.onboarding.firstRunDone';
 
 /** An onboarding flag: off until something sets it. */
 const OnboardingFlagSchema = Schema.Boolean.pipe(
@@ -49,23 +54,19 @@ export function setOnboardingDeclined(
   state: StateStore,
   declined: boolean,
 ): Effect.Effect<void, StateWriteFailed> {
-  return state.update(GlobalStateKey.ONBOARDING_DECLINED, declined);
+  return state.update(DECLINED_KEY, declined);
 }
 
 /** Whether a real run has completed (or the user skipped setup). */
 export function getFirstRunDone(state: StateStore) {
-  return Settings.state(
-    state,
-    GlobalStateKey.ONBOARDING_FIRST_RUN_DONE,
-    OnboardingFlagSchema,
-  );
+  return Settings.state(state, FIRST_RUN_DONE_KEY, OnboardingFlagSchema);
 }
 
 /** Record that a real run completed or the user skipped setup. */
 export function setFirstRunDone(
   state: StateStore,
 ): Effect.Effect<void, StateWriteFailed> {
-  return state.update(GlobalStateKey.ONBOARDING_FIRST_RUN_DONE, true);
+  return state.update(FIRST_RUN_DONE_KEY, true);
 }
 
 /** The agent `run` runs, or undefined for a run that is not an agent's. */
@@ -144,9 +145,7 @@ export const followFirstRunDone = (
   refresh: Effect.Effect<void>,
 ): Effect.Effect<void, never, AppState> =>
   Stream.unwrap(
-    Effect.map(AppState, (state) =>
-      state.changes([GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]),
-    ),
+    Effect.map(AppState, (state) => state.changes([FIRST_RUN_DONE_KEY])),
   ).pipe(Stream.runForEach(() => refresh));
 
 interface OnboardingFunnelInputs {
@@ -281,7 +280,7 @@ export class OnboardingFunnelRefresher {
         hasCredential,
         declined: yield* Settings.state(
           this.host.flags,
-          GlobalStateKey.ONBOARDING_DECLINED,
+          DECLINED_KEY,
           OnboardingFlagSchema,
         ),
         firstRunDone: yield* getFirstRunDone(this.host.flags),

@@ -90,11 +90,9 @@ export const GlobalStateKey = Object.freeze({
   // Installed Claude Code and Codex plugins, and the trust given to each
   INSTALLED_PLUGINS: 'texra.plugins.installed',
 
-  // Onboarding funnel (user-scoped; see texra's onboardingFunnel)
-  /** Canonical shared key; the CLI-originated spelling is intentionally stable. */
-  ONBOARDING_DECLINED: 'texra.cli.onboardingDeclined',
-  ONBOARDING_FIRST_RUN_DONE: 'texra.onboarding.firstRunDone',
-  ONBOARDING_DEFAULT_TEAM_ID: 'texra.onboarding.defaultTeamId',
+  /** The team a workspace runs (`apply_team`, the settings view). The stored
+   *  key keeps the spelling it was first written under. */
+  ACTIVE_TEAM_ID: 'texra.onboarding.defaultTeamId',
 } as const);
 export type GlobalStateKey =
   (typeof GlobalStateKey)[keyof typeof GlobalStateKey];
