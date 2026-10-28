@@ -65,7 +65,10 @@ Once the format is frozen, each stored-shape change means a migration plus
 an audit of up to 20 readers that each derive the row's meaning themselves.
 Several pre-freeze shape cleanups are still open:
 
-- `run.start.parentCard` duplicates `run.start.parent.callId`
+- `run.start.parentCard` and `run.start.parent.callId` both name the
+  launching call, written together by every launcher. The card is not
+  redundant (a provider may reuse a call id, never a card), so the fix is
+  one field holding both
   (`packages/harness/src/shared/schemas/sessionEvent.ts`; 21 references
   in 11 files). See item 1 of
   [the durable-harness residue note](./2026-10-03-durable-harness-residue.md).
@@ -121,7 +124,7 @@ The parent is fixed at launch (`RunHandle.launchParent`), live
 the view, an in-memory `unbornDetached` set and the activation), stored
 (`persistedParentRunId` and `owningCall` in
 `packages/harness/src/agent/storage/runRecords.ts`), or read raw from the
-view (`packages/harness/src/tools/delegation/agentChild.ts:251`). `parentOf(` has 13 call sites in 7 files.
+view (`packages/harness/src/tools/delegation/agentChild.ts:251`). `parentOf(` has 13 call sites in 6 files.
 
 - `AgentRun.ts:211` computes `root` once, but `toolUse.ts:155` checks
   `isChild()` on every pass, so the two can differ after a detach.
@@ -224,8 +227,8 @@ and delete suites that only test a seam being removed.
   (#14321).
 - TeX Live and MiKTeX paths in `utils/system/platformPaths.ts`.
 - A LaTeX math instruction in `agent/prompt/PromptBuilder.ts:32`.
-- About 160 strings of user-facing English (a heuristic count; #13826,
-  #14179).
+- About 160 strings of user-facing English (a heuristic count; #14179,
+  which absorbed #13826).
 
 `config/ratchets/core-quality/undocumented-exports.json` holds 306
 undocumented exports in 130 files, 190 of them under `shared/`.

@@ -7,7 +7,7 @@
 // was empty at the merge base and is listed here, and fails a listed file
 // that still exists. check-core-quality.mjs holds every core-quality rule
 // listed here at zero.
-export const ZERO_RULES = {
+export const ZERO_RULES = Object.freeze({
   'config/ratchets/core-quality/durable-invariants.json':
     'scripts/check-core-quality.mjs',
   'config/ratchets/core-quality/effect-run.json':
@@ -27,4 +27,4 @@ export const ZERO_RULES = {
   // Its sites are core-module-mocks rows, which keep their own baseline.
   'config/ratchets/host-agent-mock-baseline.json':
     'scripts/check-core-quality.mjs, core-module-mocks',
-};
+});
