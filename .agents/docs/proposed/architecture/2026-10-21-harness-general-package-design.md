@@ -171,13 +171,13 @@ and the test kernel, so a deep import from the app or a host fails to compile.
 
 ### Ports
 
-| Port      | Contract                                                                                                                                                                                                                                                                   | Default (`./node`)                  | Conformance (internal suites)                                                                         |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Storage   | Effect `SqlClient` taken from context by `databaseLayer`; one dialect                                                                                                                                                                                                      | `sqliteStorage(path)`               | golden store and crash suites, parameterised by client layer                                          |
-| Execution | the existing `FileSystem \| ChildProcessSpawner` pair, named on `AgentPlatform`; the settings reads in `utils/system/execUtils.ts:9` and `gitAuthorEnv.ts:15` become arguments                                                                                             | the Node pair                       | the crash suite's command and file cases                                                              |
-| Clock     | Effect `Clock`, `sleep` and `Schedule` only (R8); `run.position` gains `wakeAt`; a live session keeps one scoped `Effect.sleep` to the earliest `wakeAt` and re-arms it on each new park, and the next `Sessions.open` scans for due runs a crashed or closed process left | Effect's default                    | park, advance `TestClock`, assert resume in the open session; then park, close, reopen, assert resume |
-| Host      | `SessionHost` with neutral names (`openFile`, `showNotice`, `showError`, `focusSession`)                                                                                                                                                                                   | no-op                               | none; it decides no recorded fact                                                                     |
-| Settings  | `settingsCatalog(rows, { namespace })`, prefixed at the store boundary, so stored keys are unchanged and nothing migrates                                                                                                                                                  | `'harness'`; TeXRA passes `'texra'` | the existing catalog suites                                                                           |
+| Port      | Contract                                                                                                                                                                                                                                                            | Default (`./node`)                  | Conformance (internal suites)                                                                         |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Storage   | Deferred past 1.0 (re-check below): `openStore` is bound to a file, so a client from context cannot replace it                                                                                                                                                      | the Node SQLite file                | the golden store and crash suites as they are                                                         |
+| Execution | the existing `FileSystem \| ChildProcessSpawner` pair, named on `AgentPlatform`; the settings reads in `utils/system/execUtils.ts:9` and `gitAuthorEnv.ts:15` become arguments                                                                                      | the Node pair                       | the crash suite's command and file cases                                                              |
+| Clock     | Effect `Clock`, `sleep` and `Schedule` only (R8); a timed wake is a follow-up held until its time (`followup.queued` gains `notBefore`), not a `run.position` field (re-check below); one scoped `Effect.sleep` per session to the earliest `notBefore` in the view | Effect's default                    | queue a timed follow-up, advance `TestClock`, assert the turn; then close, reopen, advance, assert it |
+| Host      | `SessionHost` with neutral names (`openFile`, `showNotice`, `showError`, `focusSession`)                                                                                                                                                                            | no-op                               | none; it decides no recorded fact                                                                     |
+| Settings  | `settingsCatalog(rows, { namespace })`, prefixed at the store boundary, so stored keys are unchanged and nothing migrates                                                                                                                                           | `'harness'`; TeXRA passes `'texra'` | the existing catalog suites                                                                           |
 
 The durable doc dropped "a storage contract suite parameterised by backend".
 This design parameterises the suite by client of one dialect, not by backend,
@@ -260,7 +260,7 @@ ruling holds, the file is deleted and nothing else changes.
 | What goes                                         | Count                  |
 | ------------------------------------------------- | ---------------------- |
 | Root exports                                      | 246 → ~30              |
-| `export *` in `shared/schemas/index.ts`           | 47 → 0                 |
+| `export *` in `shared/schemas/index.ts`           | kept (re-check below)  |
 | `harness-deep-import-baseline.json` and its suite | deleted                |
 | `architecture-edges` rows                         | 67 → ~45, harness only |
 | `forgotten-exports` rows                          | 277 → ~180             |
@@ -272,7 +272,8 @@ ruling holds, the file is deleted and nothing else changes.
 ## Lanes
 
 Each lane leaves `npm run gate` and `test:pure` green. The only row change is
-`wakeAt`, in lane 5, which lands before the freeze.
+the timed follow-up's `notBefore`, in lane 5, which lands before the freeze if
+the 1.0 PRD takes it.
 
 | #   | Lane                                                                                                                                                                                         | Effort | Files moved |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------- |
@@ -282,7 +283,7 @@ Each lane leaves `npm run gate` and `test:pure` green. The only row change is
 | 3   | Vocabulary as data: namespace, `SettingHost` → probe, branding, the prompt section, data files to texra, the validation model to cli, llm branding as bind facts, the OAuth `.catch` removal | M      | 9           |
 | 4   | Done (#14211): `satisfies never` after `transcriptUpdate.ts`'s `record` switch; the writer items closed on re-check (below)                                                                  | —      | 0           |
 | 4b  | Built-ins fence                                                                                                                                                                              | M      | ~53         |
-| 5   | Ports, and the conformance suites parameterised by layer (internal); `wakeAt` with the Clock port; `defineTool({ deferred: true })`                                                          | M      | 0           |
+| 5   | The timed follow-up with its first consumer tool; `defineTool({ deferred: true })` when tool counts need it; the storage port only for a named second driver                                 | M      | 0           |
 | 6   | Freeze: `storage:freeze` at the first release (a `releasing` step, not a lane)                                                                                                               | S      | 0           |
 | 7   | Host dedup: `createGuiHostRequests`, one service reach, the agent-directories layer from options, the CLI notices through `LocalSession.emit`                                                | L      | 0           |
 | 8   | `./promise`                                                                                                                                                                                  | S      | 0           |
@@ -334,7 +335,58 @@ items needs code; one guard does:
   only the vendor that issued it accepts. Its refusal text says "conversation
   format" for both cases.
 
-`wakeAt` and `deferred` are features, not fixes, and move to lane 5.
+A timed wake (now the timed follow-up, see the 2026-10-28 re-check) and
+`deferred` are features, not fixes, and move to lane 5.
+
+### Re-check (2026-10-28, at `5d6fd81`)
+
+A measured comparison against pi-durable 1.4.0 and DeepSeek Harness 0.2.2
+re-read the surface and the ports. Where it changes this design:
+
+- **Lane 1, the doors.** The root entry is 48 names (#14337) and no app or host
+  `src/` file imports a harness internal. Five tooling and test files outside
+  `src/` still do (`packages/cli/scripts/{tui-harness.tsx,service-host-harness.ts}`,
+  `packages/desktop/design-harness/scenes/{desktop,extension}.ts`,
+  `packages/desktop/tests/e2e/sessionLifecycle.spec.ts`); those that import
+  `@shared/schemas` reach the internal barrel through the alias. `./schemas` is
+  already a named list in `schemas.ts`; the 46 `export *` lines are that
+  internal barrel, `shared/schemas/index.ts`, which no app or host `src/` file
+  reaches. Naming its 367 exports, or importing leaves instead, adds about 519
+  import lines, so the barrel stays. Of the 487 names on `./host` and
+  `./schemas`, 114 have no consumer outside the harness, but the
+  forgotten-exports rule keeps 108 of them because a consumed signature names
+  them; #14371 removed five of the six that were free. Shrinking further means
+  narrowing the root signatures (the run-lifecycle work in the 1.0 PRD) or
+  moving app vocabulary: the team launch code in `common/teams/TeamPlan.ts`
+  (its lines 111-328, which would free 15 `./host` names) and the picker wire
+  types in `shared/schemas/pickerOptions.ts` (lines 82-150, which would free 7
+  of the 10 `./schemas` names the file contributes).
+- **Lane 3, vocabulary.** #14364 made the namespace data and moved the
+  presets, the LaTeX prompt, the TeX paths and the validation model to the app.
+  #14369 replaces `ITool.unavailableHosts` with the host-capability check and
+  deletes the code-mode `WeakSet`. `defineBuiltinPlugin` remains as a typed
+  alias until the lane 4b fence moves the built-ins' services onto
+  `ToolContext`.
+- **Lane 5, the clock.** A `run.position.wakeAt` field fits poorly: the loop
+  rewrites positions at every boundary, so a user message drops the timer
+  unless the loop restates it; a wake still needs input the parked run can
+  read; only the loop writes positions, so a tool cannot set one; and the
+  open-time scan in `tools/interruptedTasks.ts` does not run headless or in the
+  SDK. A follow-up held until `notBefore` uses the existing inbox, wake and
+  claim paths, and the view already lists every queued follow-up. It is a
+  feature (about +105 lines with a first `remind` tool) and only its row field
+  is cheaper before the freeze.
+- **Lane 5, storage.** `openStore` checks stamps with a read-only probe, moves a
+  damaged file aside by rename and reconnects, and copies a pre-1.0 store, so a
+  ready-made `SqlClient` cannot stand in for it. A port would move about 40
+  lines and add about 20, and the crash suite writes files directly, so it gains
+  nothing from a client parameter. Browser and edge targets need more than a
+  client (WAL, `data_version` polling, process-identity liveness,
+  `BEGIN IMMEDIATE`). The 1.0 PRD excludes several backends; revisit on a named
+  second driver.
+- **Lane 5, deferred tools.** `OfferedTool.sent`, the script-only dispatch path
+  and `searchTools` already exist; marking a tool deferred is about seven lines
+  and changes no row, so it can follow the freeze.
 
 ### Sequencing with work in flight
 
@@ -392,7 +444,7 @@ fold. Putting the other built-ins on `ToolContext` stays part of the fence.
   extends the root `tsconfig.json`.
 - **`./host`** is smaller but nothing forces it to shrink. Its api-report diff
   is the only check.
-- **`wakeAt`** is free only before the freeze.
+- **The timed follow-up's `notBefore`** is free only before the freeze.
 - Non-goals: a second dialect, third-party code in process, a daemon, request or
   task kinds, in-process hooks, and cross-protocol history conversion. A model
   switch across protocols is refused early.
@@ -410,7 +462,9 @@ CLAUDE.md rules with no check (the barrel ban, the single-caller ban, renderer
    it costs one file._
 2. **`./host`.** Keep about 37 host-composition names on a subpath with no
    stability promise, or move them into `packages/texra`? _Recommend: the
-   subpath now, and move them as the hosts' imports shrink._
+   subpath now, and move them as the hosts' imports shrink._ Answered by the
+   2026-10-28 re-check: the subpath stays; only the team launch code and the
+   picker wire types are app vocabulary to move.
 3. **History as a package.** Keep it as a lint zone in `session/` until a second
    embedder is named? _Recommend: yes; the rename stays cheap._
 4. **The `texra.` namespace.** Prefix at the store boundary, with stored keys
