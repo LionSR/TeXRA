@@ -9,7 +9,9 @@
  * run or state; a projection that rebuilds to other rows than its
  * incremental tables hold; a listing that differs from the fold over the
  * whole history; a store a newer build wrote that opens, or is rewritten;
- * and the durable harness's row shapes read back other than written: a fork
+ * a stored protocol unavailable for execution being treated as damaged history,
+ * or a malformed protocol being accepted; and the durable harness's row
+ * shapes read back other than written: a fork
  * whose `run.start` does not name its source, a fork's seed
  * `context.edit` missing, an awaited child without the call
  * that owns it. Interrupted states are the crash-point suite's
@@ -38,12 +40,13 @@ import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer, Schema, Stream, SubscriptionRef } from 'effect';
+import { Effect, Layer, Result, Schema, Stream, SubscriptionRef } from 'effect';
 import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
+import { runHistoryRows } from '@agent/runtime/storedTurn';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { databaseLayer } from '@controllers/session/Database';
 import { EVENT_COLUMNS, EVENT_FROM } from '@controllers/session/rowCodec';
@@ -369,6 +372,95 @@ describe('the golden 1.0 store', () => {
         );
         expect(shared.length).toBeGreaterThan(0);
       });
+    },
+  );
+
+  it.effect(
+    'reads an unavailable protocol as history, not executable work',
+    () => {
+      const storage = goldenRoot();
+      const setProtocol = (protocol: string | number) =>
+        raw(storage, (db) =>
+          db
+            .prepare(
+              `UPDATE event SET data = json_set(data,
+             '$.payload.turn.requestedOrigin.protocol', ?,
+             '$.payload.usage.provider', ?) WHERE "commit" = 24`,
+            )
+            .run(protocol, protocol),
+        );
+      expect(setProtocol('unavailable-protocol').changes).toBe(1);
+      raw(storage, (db) =>
+        db.exec("DELETE FROM projection_state WHERE name = 'usage'"),
+      );
+      const saved = () =>
+        raw(storage, (db) =>
+          db.prepare('SELECT data FROM event WHERE "commit" = 24').get(),
+        );
+      const before = saved();
+      return Effect.gen(function* () {
+        const db = yield* Database;
+        const read = () =>
+          db.readAggregate(qualifyAggregateId('run', PARENT), 0, [
+            'model.message',
+          ]);
+        const response = (yield* read()).find((event) => event.commit === 24);
+        expect(response).toMatchObject({
+          type: 'model.message',
+          payload: {
+            kind: 'response',
+            turn: {
+              requestedOrigin: { protocol: 'unavailable-protocol' },
+              content: [
+                {
+                  kind: 'local-call',
+                  name: 'read_file',
+                  argumentsText: '{"path":"notes.tex"}',
+                },
+              ],
+            },
+            usage: { provider: 'unavailable-protocol', cost: 0.000024 },
+          },
+        });
+        if (response === undefined)
+          throw new Error('The stored response is missing');
+        const executable = runHistoryRows([response]);
+        if (Result.isSuccess(executable))
+          throw new Error('An unavailable protocol became executable');
+        expect(executable.failure).toMatchObject({
+          reason: 'unreadable-turn',
+          commit: 24,
+        });
+        const listing = yield* db.readListing();
+        const view = makeSessionViewUpdater('golden').apply(
+          listing.filter(isDisplaySessionEvent).map((event) => ({
+            _tag: 'event' as const,
+            read: 'listing' as const,
+            event,
+          })),
+        );
+        expect(view.runs.get(PARENT)?.usage).toMatchObject({
+          inputTokens: 4,
+          outputTokens: 4,
+          cost: 0.000096,
+        });
+        const display = yield* db.readDisplayAggregate(
+          qualifyAggregateId('run', PARENT),
+          0,
+        );
+        expect(display.find((event) => event.commit === 24)).toMatchObject({
+          type: 'usage',
+          usage: { inputTokens: 1, outputTokens: 1, cost: 0.000024 },
+        });
+        expect(saved()).toEqual(before);
+        for (const malformed of ['', 42]) {
+          setProtocol(malformed);
+          expect(yield* Effect.flip(read())).toMatchObject({
+            _tag: 'DatabaseReadFailed',
+            cause: { _tag: 'DatabaseRowCorrupt', commit: 24 },
+          });
+        }
+      }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
     },
   );
 

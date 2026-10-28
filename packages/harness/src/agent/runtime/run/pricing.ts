@@ -94,7 +94,7 @@ export const reportUsage = Effect.fn('pricing.reportUsage')(function* (
     .log(
       {
         model: bound.config.id,
-        provider: usage.provider,
+        provider: bound.origin.protocol,
         agentName: attribution.agentName,
         // Billing needs a real number, so a provider that reported no
         // cache-miss count is billed the derived estimate (input minus

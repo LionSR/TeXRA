@@ -24,12 +24,9 @@ const ProviderEvidenceSchema = Schema.Struct({
   data: Schema.Record(Schema.String, JsonValueSchema),
 });
 
-/** Every wire surface a stored turn or usage record names. */
-export const StoredProtocolSchema = Schema.Literals([
-  'google-interactions',
-  'openai-responses',
-  'anthropic-messages',
-]);
+/** The wire surface recorded by a turn or usage fact. Its identity outlives
+ *  the installed adapters; the execution boundary validates support. */
+export const StoredProtocolSchema = Schema.String.check(Schema.isMinLength(1));
 
 /** The selected binding: protocol, deployment and model, never a secret. */
 export const StoredOriginSchema = Schema.Struct({
