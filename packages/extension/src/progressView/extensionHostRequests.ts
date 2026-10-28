@@ -90,12 +90,9 @@ import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
 import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { normalizeMainViewFileExtension } from '@texra/controllers/mainView/MainViewDroppedFilesController';
+import type { ChatExportRecords } from '@texra/controllers/progressView/ChatExportController';
 import {
-  ChatExportController,
-  type ChatExportRecords,
-} from '@texra/controllers/progressView/ChatExportController';
-import {
-  exportRunTranscript,
+  windowTranscriptExport,
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
   type TranscriptExportOpenKind,
 } from '@texra/controllers/progressView/exportTranscript';
@@ -320,7 +317,14 @@ export function createExtensionHostRequests(
     runs: runActions,
   });
 
-  let chatExportController: ChatExportController | undefined;
+  const exportRun = runtime.runSync(
+    windowTranscriptExport({
+      roots,
+      records: options.exportRecords,
+      latexPreamble,
+      resourcesPath: path.join(options.extensionPath, 'resources'),
+    }),
+  );
 
   /** The export port's open verb. The editor APIs behind it are thenables, so
    *  this is where they are lifted -- once, at the host boundary. */
@@ -357,7 +361,7 @@ export function createExtensionHostRequests(
   /** The transcript export, over the session's rooted filesystems the
    *  dispatch root already provided. */
   function exportTranscript(runId: RunId) {
-    return exportRunTranscript(runId, {
+    return exportRun(runId, {
       // A refusal to show the pick is worded into the export's tag.
       pickFormat: quickPick(TRANSCRIPT_EXPORT_FORMAT_CHOICES, {
         title: 'Export transcript',
@@ -378,21 +382,6 @@ export function createExtensionHostRequests(
       showInfo: (message) => vscodeUi.showInfoMessage(message),
       showWarning: (message) => vscodeUi.showWarningMessage(message),
       showError: (message) => vscodeUi.showErrorMessage(message),
-      getController: Effect.sync(
-        () =>
-          (chatExportController ??= new ChatExportController({
-            roots,
-            records: options.exportRecords,
-            latexPreamble,
-          })),
-      ),
-      getTraceViewerTemplate: () =>
-        path.join(
-          options.extensionPath,
-          'resources',
-          'traceViewer',
-          'index.html',
-        ),
     });
   }
 

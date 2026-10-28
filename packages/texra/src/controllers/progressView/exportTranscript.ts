@@ -9,10 +9,12 @@
 // Node imports
 import * as path from 'node:path';
 
-import { Effect, type FileSystem, type PlatformError } from 'effect';
+import { Effect, Exit, type FileSystem, type PlatformError } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness/host';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import type {
   ExternalOpenFailed,
@@ -21,13 +23,14 @@ import type {
 } from '@texra/hosts/uiHosts';
 import type { ChatExportInputUnreadable } from '@texra/agent/export/loadChatExportInput';
 import type { TaskRecordsFailed } from '@texra/controllers/server/protocol';
-import type { Rejected } from '@texra-ai/harness';
+import { TranscriptExportFailed } from './transcriptExportFailure';
+import type { Rejected, WorkspaceRoots } from '@texra-ai/harness';
 import type { StorageFs, WorkspaceFs } from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { TranscriptExportFailed } from './transcriptExportFailure';
 import type {
   ChatExportController,
+  ChatExportRecords,
   ExportInputStatus,
   HtmlExportOutcome,
 } from './ChatExportController';
@@ -58,7 +61,7 @@ export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = [
   readonly description: string;
 }>;
 
-interface TranscriptExportPorts {
+interface TranscriptExportHostPorts {
   /** Ask the host which format to write; a cancelled picker answers
    *  `undefined`. The member is a program: each host wraps its own picker's
    *  foreign edge exactly once and words a refusal into the port's one tag,
@@ -82,14 +85,16 @@ interface TranscriptExportPorts {
   showError(
     message: string,
   ): Effect.Effect<void, NotificationFailed | Rejected>;
-  /** The host's controller. The memo lives on the host -- the desktop loads
-   *  the controller's module graph on the first export -- and a failed load
-   *  is not memoized, so the next export retries. */
+}
+
+/** What {@link windowTranscriptExport} adds to the host's verbs. */
+interface TranscriptExportOwnPorts {
   readonly getController: Effect.Effect<
     ChatExportController,
     TranscriptExportFailed
   >;
-  getTraceViewerTemplate(): string;
+  /** The trace viewer's single-file bundle the HTML export embeds into. */
+  readonly templatePath: string;
 }
 
 const CHANNEL = 'ExportTranscript';
@@ -143,6 +148,50 @@ function exportedFileMessage(storagePath: string): string {
   return `Transcript exported: ${path.basename(storagePath)}`;
 }
 
+type TranscriptExportPorts = TranscriptExportHostPorts &
+  TranscriptExportOwnPorts;
+
+/**
+ * A window's transcript export over its roots and run records. The
+ * controller is loaded on the first export, so its module graph -- the
+ * formatters, the trace assembler, the LaTeX compiler -- stays out of host
+ * startup; a successful load is kept for the window's life, and a failed one
+ * expires at once so the next export retries. Running this only allocates
+ * that memo. It answers the export of one run, given the host's verbs.
+ */
+export const windowTranscriptExport = (source: {
+  readonly roots: WorkspaceRoots;
+  readonly records: ChatExportRecords;
+  /** The `.tex` export's document preamble, a host resource. */
+  readonly latexPreamble: string;
+  /** The host's resources directory, which holds the trace viewer. */
+  readonly resourcesPath: string;
+}) =>
+  Effect.map(
+    Effect.cachedWithTTL(
+      Effect.tryPromise({
+        try: async () => {
+          const { ChatExportController: Controller } =
+            await import('@texra/controllers/progressView/ChatExportController');
+          return new Controller(source);
+        },
+        catch: (cause) =>
+          new TranscriptExportFailed({
+            step: 'openController',
+            message: toErrorMessage(cause),
+            cause,
+          }),
+      }),
+      (exit) => (Exit.isSuccess(exit) ? 'Infinity' : 0),
+    ),
+    (getController) => (runId: RunId, host: TranscriptExportHostPorts) =>
+      exportRunTranscript(runId, {
+        ...host,
+        getController,
+        templatePath: traceViewerTemplatePath(source.resourcesPath),
+      }),
+  );
+
 /**
  * Ask the host for a format, write the export, and open the result.
  *
@@ -150,7 +199,7 @@ function exportedFileMessage(storagePath: string): string {
  * `showError` rather than thrown so a missing transcript is not an
  * unexpected failure.
  */
-export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
+const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
   runId: RunId,
   ports: TranscriptExportPorts,
 ): Effect.fn.Return<
@@ -241,10 +290,7 @@ const exportHtml = Effect.fn('exportHtml')(function* (
   | TranscriptExportFailed,
   FileSystem.FileSystem | StorageFs
 > {
-  const outcome = yield* controller.exportAsHtml(
-    runId,
-    ports.getTraceViewerTemplate(),
-  );
+  const outcome = yield* controller.exportAsHtml(runId, ports.templatePath);
   if (outcome.status !== 'ok') {
     yield* ports.showError(htmlExportErrorMessage(outcome.status));
     return;

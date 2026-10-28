@@ -5,9 +5,7 @@
 // an outcome or a request error; an arm the desktop does not perform is
 // `Rejected` with its reason, never dropped.
 
-import path from 'node:path';
-
-import { Effect, Exit, Layer, type Scope } from 'effect';
+import { Effect, Layer, type Scope } from 'effect';
 import {
   Cancelled,
   Rejected,
@@ -41,11 +39,9 @@ import type {
 } from '@texra/shared/session/sessionFrames';
 import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
-import type { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
-import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
+import { windowTranscriptExport } from '@texra/controllers/progressView/exportTranscript';
 import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
-import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
@@ -232,38 +228,13 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
         ),
       );
 
-  /**
-   * The chat export controller, loaded on the first export so its module
-   * graph — the formatters, the trace assembler, the LaTeX compiler — stays
-   * out of app startup. The memo is the library's: a successful load is kept
-   * for the window's life, and a failed one expires at once so the next
-   * export retries. `runSync` only allocates the memo; the load runs inside
-   * the export's own program.
-   */
-  const getChatExportController: Effect.Effect<
-    ChatExportController,
-    TranscriptExportFailed
-  > = runtime.runSync(
-    Effect.cachedWithTTL(
-      Effect.tryPromise({
-        try: async () => {
-          const { ChatExportController: Controller } =
-            await import('@texra/controllers/progressView/ChatExportController');
-          return new Controller({
-            roots,
-            records: exportRecords,
-            latexPreamble,
-          });
-        },
-        catch: (cause) =>
-          new TranscriptExportFailed({
-            step: 'openController',
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      }),
-      (exit) => (Exit.isSuccess(exit) ? 'Infinity' : 0),
-    ),
+  const exportRun = runtime.runSync(
+    windowTranscriptExport({
+      roots,
+      records: exportRecords,
+      latexPreamble,
+      resourcesPath: options.resourcesPath,
+    }),
   );
 
   const exportTranscript = (runId: RunId) =>
@@ -273,7 +244,7 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
           new Unavailable({ runId, reason: 'The run is no longer open.' }),
         );
       }
-      yield* exportRunTranscript(runId, {
+      yield* exportRun(runId, {
         pickFormat: host.pickTranscriptExportFormat(),
         // The preview host has already shown its own notice; the port's
         // tag carries that refusal and its wording out unchanged.
@@ -292,9 +263,6 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
         showInfo: (message) => host.showInfoMessage(message),
         showWarning: (message) => host.showWarningMessage(message),
         showError: rejectRequestEffect,
-        getController: getChatExportController,
-        getTraceViewerTemplate: () =>
-          path.join(options.resourcesPath, 'traceViewer', 'index.html'),
       });
     });
 
