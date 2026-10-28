@@ -2,11 +2,7 @@ import { Effect } from 'effect';
 import { modelConfig, modelRefOf } from '@texra-ai/llm';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  getEnabledModels,
-  readModelOptions,
-  type ModelOptionStores,
-} from '@model/computeModelOptions';
+import { getEnabledModels, readModelOptions } from '@model/computeModelOptions';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { Settings } from '@shared/config/settings';
@@ -49,13 +45,13 @@ export function getHelperModelName(stores: SettingsStores) {
  * when the helper model already equals it, the helper model can't call
  * functions (the agent needs its tools), or the helper model is unavailable.
  *
- * `stores` are the secret store and the session's setting slots the launching
- * run already holds, so the preference and the availability answer are read
- * from the same stores as the run itself.
+ * `stores` are the setting slots the launching run already holds, so the
+ * preference and the availability answer are read from the same stores as
+ * the run itself.
  */
 export const applyHelperModelPreference = Effect.fn(
   'applyHelperModelPreference',
-)(function* (config: AgentConfig, stores: ModelOptionStores) {
+)(function* (config: AgentConfig, stores: SettingsStores) {
   const helperModel = yield* getHelperModelName(stores);
   if (helperModel === config.model) return config;
 

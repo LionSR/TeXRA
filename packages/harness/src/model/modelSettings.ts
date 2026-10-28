@@ -16,6 +16,7 @@ import {
 import { getCodexStatus, getXaiStatus } from '@texra-ai/llm/node';
 
 import { StateReadFailed } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -33,7 +34,6 @@ import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { reasoningEffortOverrides } from './reasoningLevel';
 import { SubscriptionPreference } from './subscriptionAccess';
-import type { ModelOptionStores } from './computeModelOptions';
 import type { ReasoningEffort } from 'llm-zoo';
 
 type AssertNever<T extends never> = T;
@@ -177,9 +177,9 @@ function hostPath(input: string): string {
  * catalog read that throws, kept in the typed channel.
  */
 const subscriptionOn = (
-  stores: ModelOptionStores,
+  stores: SettingsStores,
   provider: 'chatgpt' | 'grok',
-): Effect.Effect<boolean, StateReadFailed> =>
+): Effect.Effect<boolean, StateReadFailed, Secrets> =>
   Effect.try({
     try: () => SubscriptionPreference.get(provider, stores),
     catch: (cause) =>
@@ -191,8 +191,8 @@ const subscriptionOn = (
   }).pipe(
     Effect.flatMap((on) =>
       on
-        ? (provider === 'chatgpt' ? getCodexStatus : getXaiStatus)(
-            stores.secrets,
+        ? Effect.flatMap(Secrets, (secrets) =>
+            (provider === 'chatgpt' ? getCodexStatus : getXaiStatus)(secrets),
           ).pipe(
             Effect.map((status) => status.signedIn),
             Effect.mapError(
@@ -208,10 +208,12 @@ const subscriptionOn = (
     ),
   );
 
-/** Read every model-access setting from `stores`, once. */
+/** Read every model-access setting from `stores` and the process
+ *  {@link Secrets}, once. */
 export const readModelSettings = Effect.fn('readModelSettings')(function* (
-  stores: ModelOptionStores,
-): Effect.fn.Return<ModelSettings, StateReadFailed> {
+  stores: SettingsStores,
+): Effect.fn.Return<ModelSettings, StateReadFailed, Secrets> {
+  const secrets = yield* Secrets;
   const flag = (key: string) => Settings.get<boolean>(stores, key);
   // One read decides both the route and how an unreadable key fails.
   const preferKimiCode = yield* flag(GlobalStateKey.KIMI_CODE_PREFER);
@@ -231,7 +233,7 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
           // so an unreadable one fails the read rather than routing to the
           // pay-per-token key. Otherwise it reads as absent and warns, the
           // rule the picker applies to every key status.
-          kimiCodeKey: hasUsableApiKey(stores.secrets, 'kimiCode').pipe(
+          kimiCodeKey: hasUsableApiKey(secrets, 'kimiCode').pipe(
             Effect.catchTag('SecretsFailed', (failure) =>
               preferKimiCode
                 ? Effect.fail(

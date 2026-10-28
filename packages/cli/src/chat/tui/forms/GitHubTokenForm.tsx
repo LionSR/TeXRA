@@ -11,7 +11,7 @@ import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
+import type { ProcessRuntime, Secrets } from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 
 /**
@@ -79,8 +79,8 @@ interface GitHubTokenFormProps {
   readonly availableRows?: number;
   readonly statusView?: GitHubTokenStatusView;
   /** The credential writes as programs; this form owns their one run. */
-  readonly onSave: (token: string) => Effect.Effect<void, Error>;
-  readonly onRemove: () => Effect.Effect<void, Error>;
+  readonly onSave: (token: string) => Effect.Effect<void, Error, Secrets>;
+  readonly onRemove: () => Effect.Effect<void, Error, Secrets>;
   /** The runtime those programs settle on, from the surface that mounted this
    *  form — Ink components run no Effect of their own. */
   readonly runtime: ProcessRuntime;
@@ -96,7 +96,9 @@ export function GitHubTokenForm(
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
 
-  const runAction = (action: () => Effect.Effect<void, Error>): void => {
+  const runAction = (
+    action: () => Effect.Effect<void, Error, Secrets>,
+  ): void => {
     setSaving(true);
     runFormWrite(props.runtime, action, {
       onSuccess: props.onDone,

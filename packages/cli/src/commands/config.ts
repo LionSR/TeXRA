@@ -264,7 +264,6 @@ const configEditCommand = defineCliCommand({
       );
       yield* runConfigTui({
         roots: services.roots,
-        secrets: services.secrets,
         runtime: services.runtime,
         colorEnabled: context.stdoutColorEnabled,
         onError: writeErrorStderr,

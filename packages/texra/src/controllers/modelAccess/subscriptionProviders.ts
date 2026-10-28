@@ -125,14 +125,16 @@ export interface SubscriptionProvider {
    * The sign-out program. A host runs it at its own edge; a failure is the
    * provider's own auth error or the secret store's rejection.
    */
-  signOut(secrets: PlatformSecrets): Effect.Effect<void, SecretsFailed>;
+  signOut(): Effect.Effect<void, SecretsFailed, Secrets>;
   /**
    * The signed-in status. A store that cannot be read, or a stored session
    * that does not parse, fails rather than reading as signed out.
    */
-  getStatus(
-    secrets: PlatformSecrets,
-  ): Effect.Effect<SubscriptionAccount, SubscriptionStatusError>;
+  getStatus(): Effect.Effect<
+    SubscriptionAccount,
+    SubscriptionStatusError,
+    Secrets
+  >;
   isPreferSubscription(stores: SettingsStores): boolean;
   /**
    * Persist the preference. An `Effect`, like
@@ -253,9 +255,10 @@ function defineSubscriptionProvider<
     setPreferSubscription: (stores: SettingsStores, enabled: boolean) =>
       SubscriptionPreference.set(descriptor.id, stores, enabled),
     signIn,
-    signOut: (secrets: PlatformSecrets) => bindCoordinator(secrets).signOut(),
-    getStatus: (secrets: PlatformSecrets) =>
-      Effect.map(getStatus(secrets), (status) => ({
+    signOut: () =>
+      Effect.flatMap(Secrets, (secrets) => bindCoordinator(secrets).signOut()),
+    getStatus: () =>
+      Effect.map(Effect.flatMap(Secrets, getStatus), (status) => ({
         ...status,
         label: accountLabel(status),
       })),
@@ -325,10 +328,9 @@ export function subscriptionProvider(
 export function subscriptionAuthStatus(
   providerId: SubscriptionProviderId,
   stores: SettingsStores,
-  secrets: PlatformSecrets,
-): Effect.Effect<SubscriptionAuthStatus, SubscriptionStatusError> {
+): Effect.Effect<SubscriptionAuthStatus, SubscriptionStatusError, Secrets> {
   const provider = subscriptionProvider(providerId);
-  return Effect.map(provider.getStatus(secrets), (status) => ({
+  return Effect.map(provider.getStatus(), (status) => ({
     provider: providerId,
     signedIn: status.signedIn,
     email: status.email,

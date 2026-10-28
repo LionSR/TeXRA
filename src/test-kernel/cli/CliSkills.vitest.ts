@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, expect } from 'vitest';
+import { expect } from 'vitest';
 
 import { InstalledPlugins, Skills } from '@texra-ai/harness/host';
 import { pluginDataDir } from '@common/plugins/pluginHooks';
@@ -12,11 +12,12 @@ import {
   enablePlugin,
   readInstalledPluginLoad,
 } from '@common/plugins/pluginTrust';
-import { initializeNodeRuntimeSkills } from '@platform/defaults/nodeHost';
 import { foldSkillSources, hostSkillContributions } from '@skills/skillSources';
-import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
+import {
+  HostSkillSources,
+  loadRuntimeSkillCatalog,
+} from '@skills/runtimeSkills';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { installTestSkillRoots } from '@test/support/skillFixtures';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -35,10 +36,6 @@ async function writeSkill(
     `---\nname: ${dirName}\ndescription: ${description}\n---\n\nUse ${dirName}.\n`,
   );
 }
-
-afterEach(() => {
-  installTestSkillRoots([]);
-});
 
 it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
   it('deduplicates repeated source paths while preserving required custom roots', () => {
@@ -136,14 +133,18 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
                 storageRoot: path.join(resources, 'no-storage-root'),
               } satisfies Parameters<typeof Skills.enabled>[0],
               plugins,
-            }),
+            }).pipe(
+              Effect.provideService(HostSkillSources, {
+                resourcesPath: resources,
+                options: {},
+                contributions: hostSkillContributions([]),
+              }),
+            ),
           );
         const env = {
           globalState: stores.globalState,
           globalStorage: resources,
         };
-        initializeNodeRuntimeSkills({ resourcesPath: resources }, []);
-
         const [installed] = yield* InstalledPlugins.install(
           { kind: 'local', path: plugin },
           [],

@@ -24,7 +24,7 @@ import {
   reasoningRouteOf,
   servingBackend,
 } from '@model/reasoningLevel';
-import type { PlatformSecrets } from '@platform/secrets';
+import { Secrets } from '@platform/secrets';
 import {
   getExhaustionReason,
   type CredentialSwitch,
@@ -165,8 +165,7 @@ export const credentialSwitch = Effect.fn('credentialSwitch')(function* (
   failed: { readonly config: ModelConfig; readonly route: ModelRoute },
   recorded: Pick<ProviderError, 'classification'>,
   declinedRoutes: readonly DeclinableUsageRoute[],
-  secrets: PlatformSecrets,
-): Effect.fn.Return<CredentialSwitch | null> {
+): Effect.fn.Return<CredentialSwitch | null, never, Secrets> {
   const reason = getExhaustionReason(recorded);
   if (reason === undefined) return null;
   const { route } = failed;
@@ -194,7 +193,7 @@ export const credentialSwitch = Effect.fn('credentialSwitch')(function* (
   const automatic =
     CODING_PLAN_ROUTES.includes(declined) &&
     !declinedRoutes.includes(declined) &&
-    (yield* hasUsableApiKey(secrets, fallback.provider).pipe(
+    (yield* hasUsableApiKey(yield* Secrets, fallback.provider).pipe(
       Effect.catchTag('SecretsFailed', (failure) =>
         Effect.logWarning(
           `Could not read the ${fallback.provider} API key; the quota fallback waits for a decision.`,

@@ -156,11 +156,7 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
       const selection = yield* selectCliRunnableModel(
         [{ model: nextModel, reason: 'explicit-override' }],
         {
-          stores: {
-            ...context.stores,
-            secrets: context.secrets,
-            runtime: context.runtime,
-          },
+          stores: { ...context.stores, runtime: context.runtime },
           noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
             CHAT_API_MODE_MODEL_RECOVERY,
           ),

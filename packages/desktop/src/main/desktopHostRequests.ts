@@ -16,7 +16,6 @@ import {
 } from '@texra-ai/harness';
 import {
   AgentDirectories,
-  Secrets,
   withProcessServices,
   workspaceEnvironmentLayer,
   type ProcessRuntime,
@@ -167,9 +166,7 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
       loadModelOptions: () =>
         withProcessServices(
           runtime,
-          Effect.flatMap(Secrets, (secrets) =>
-            loadModelOptions({ ...roots, secrets }),
-          ).pipe(Effect.provide(projectEnv)),
+          loadModelOptions(roots).pipe(Effect.provide(projectEnv)),
         ),
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal prompt.
