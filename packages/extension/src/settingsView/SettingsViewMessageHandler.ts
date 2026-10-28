@@ -41,7 +41,6 @@ import type {
   StorageFs,
   ProcessRuntime,
   ProcessServices,
-  PlatformSecrets,
 } from '@texra-ai/harness/host';
 
 /** The webview shapes SettingsView dispatches for. */
@@ -95,7 +94,6 @@ export class SettingsViewMessageHandler {
 
   constructor(
     context: vscode.ExtensionContext,
-    secrets: PlatformSecrets,
     runtime: ProcessRuntime,
     roots: WorkspaceRoots,
     progressView: Pick<
@@ -106,7 +104,6 @@ export class SettingsViewMessageHandler {
     this.body = createSettingsViewBody({
       host: 'vscode',
       roots,
-      secrets,
       resourcesPath: path.join(context.extensionPath, 'resources'),
       skillDisplay: Skills.display(roots),
       accountCopy: ACCOUNT_OUTCOME,

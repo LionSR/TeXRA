@@ -13,7 +13,8 @@ import {
   modelAccessLayer,
   ModelAccess,
 } from '@agent/runtime/modelAccess/ModelAccess';
-import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { Secrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settings';
 import type { UsageLog } from '@shared/usageLog';
 
 import { callModel } from './run/modelCall';
@@ -35,12 +36,12 @@ export interface HelperPrompt {
  * run one completion through the one retry loop (`run/invocation.ts`),
  * gated on the process's retry gate, priced and reported to the usage log as
  * `attribution`. No row is written. Returns the turn's assistant text.
- * `stores` are the asking session's setting slots and the process secret
- * store: the binding, the retry limit and the usage consent read them.
+ * `stores` are the asking session's setting slots: the binding, the retry
+ * limit and the usage consent read them, beside the process `Secrets`.
  */
 export const helperCall = Effect.fn('helperCall')(
   function* (
-    stores: ModelOptionStores,
+    stores: SettingsStores,
     { userPrompt, systemPrompt }: HelperPrompt,
     attribution: UsageAttribution,
     /** Automatic retries; the configured batch when absent. */
@@ -48,7 +49,7 @@ export const helperCall = Effect.fn('helperCall')(
   ): Effect.fn.Return<
     string,
     CallFailure | Error,
-    Scope.Scope | HttpClient.HttpClient | UsageLog | RouteRetries
+    Scope.Scope | HttpClient.HttpClient | UsageLog | RouteRetries | Secrets
   > {
     const access = yield* Effect.provide(ModelAccess, modelAccessLayer(stores));
     // ScopedRef masks its acquisition; a caller's deadline must still

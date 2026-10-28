@@ -36,7 +36,7 @@ import { dispatchCommandFromRegistry } from '@texra/shared/commands/registry';
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessRuntime, PlatformSecrets } from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 
 /*
  * Duplicate-registration audit (#3787 follow-up):
@@ -62,7 +62,6 @@ import type { ProcessRuntime, PlatformSecrets } from '@texra-ai/harness/host';
 export function registerCommands(
   context: vscode.ExtensionContext,
   progressViewProvider: ProgressViewProvider,
-  secrets: PlatformSecrets,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
   /** Where this window's runs run. */
@@ -70,7 +69,6 @@ export function registerCommands(
 ): SettingsViewProvider {
   const settingsViewProvider = new SettingsViewProvider(
     context,
-    secrets,
     runtime,
     roots,
     progressViewProvider,

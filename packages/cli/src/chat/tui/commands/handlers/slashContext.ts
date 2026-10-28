@@ -9,7 +9,6 @@ import type { LocalSession, Session } from '@texra-ai/harness';
 import type {
   ProcessRuntime,
   ProcessServices,
-  PlatformSecrets,
   SettingsStores,
 } from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
@@ -33,11 +32,10 @@ export interface SlashCommandContext {
    *  the background service. */
   readonly runSession: Session;
   /**
-   * The process secret store and the three setting slots the account,
-   * model-access and model-selection commands read, filled from the
-   * `CliPlatformServices` the chat entry point already holds.
+   * The three setting slots the account, model-access and model-selection
+   * commands read, filled from the `CliPlatformServices` the chat entry point
+   * already holds.
    */
-  readonly secrets: PlatformSecrets;
   readonly stores: SettingsStores;
   /**
    * The runtime the chat entry point holds. Model access is read as an Effect,

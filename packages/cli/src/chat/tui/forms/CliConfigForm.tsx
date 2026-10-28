@@ -1,4 +1,4 @@
-import { Settings } from '@texra-ai/harness/host';
+import { Secrets, Settings } from '@texra-ai/harness/host';
 import { Effect } from 'effect';
 
 import { loadApiKeyStatusMap } from '@texra-ai/llm';
@@ -33,7 +33,7 @@ import {
 import { SkillsSettingsForm } from './SkillsSettingsForm';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessRuntime, PlatformSecrets } from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;
@@ -41,13 +41,8 @@ export interface CliConfigFormProps {
    *  writes, and the project the process opened, for the agents and skills
    *  rows. */
   readonly roots: WorkspaceRoots;
-  /**
-   * The secret store the API-key and GitHub-token rows read and write. Ink
-   * components run no Effect, so the process store arrives as a prop from the
-   * surface that opened this form.
-   */
-  readonly secrets: PlatformSecrets;
-  /** The process runtime the rows' reads and writes run on, from the same surface. */
+  /** The process runtime the rows' reads and writes run on, from the same
+   *  surface; the API-key and GitHub-token rows read and write its `Secrets`. */
   readonly runtime: ProcessRuntime;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
@@ -64,11 +59,11 @@ export interface CliConfigFormProps {
  * it, so persistence and runtime side effects cannot diverge between them.
  */
 export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
-  const { roots, secrets, runtime } = props;
+  const { roots, runtime } = props;
   // The status reads are programs like the save and remove rows below them,
   // so this surface settles all of them on the runtime it was handed.
   const apiKeys = useAsyncResource({
-    load: () => loadApiKeyStatusMap(secrets),
+    load: () => Effect.flatMap(Secrets, loadApiKeyStatusMap),
     runtime,
     onError: props.onError,
   });
@@ -78,7 +73,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     error: apiKeys.error !== undefined,
   };
   const githubToken = useAsyncResource({
-    load: () => resolveGitHubTokenSource(secrets),
+    load: () => Effect.flatMap(Secrets, resolveGitHubTokenSource),
     runtime,
     onError: props.onError,
   });
@@ -222,7 +217,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             runtime={runtime}
             onSave={(token) =>
               Effect.gen(function* () {
-                yield* storeCredential(secrets, {
+                yield* storeCredential(yield* Secrets, {
                   secretName: GITHUB_TOKEN_STORAGE_KEY,
                   value: token,
                   kind: 'github',
@@ -233,7 +228,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             }
             onRemove={() =>
               Effect.gen(function* () {
-                yield* secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
+                yield* (yield* Secrets).delete(GITHUB_TOKEN_STORAGE_KEY);
                 yield* githubToken.refresh();
               })
             }

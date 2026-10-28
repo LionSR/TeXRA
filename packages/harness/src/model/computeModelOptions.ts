@@ -17,7 +17,7 @@ import {
 } from '@texra-ai/llm';
 import { StateWriteFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
+import { Secrets } from '@platform/secrets';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
   MODEL_AVAILABILITY_STATUS,
@@ -34,21 +34,6 @@ import {
   servingBackend,
   type RouteReasoning,
 } from './reasoningLevel';
-
-/**
- * Every store an availability answer here reads: the secret store behind the
- * provider-key checks, and the three setting slots behind the picker's
- * persisted choices and the routing switches (the two "prefer my
- * subscription" preferences, the Kimi Code preference). Callers
- * hold them (a session's `roots`, the `Secrets` service, the stores a host
- * root threaded down) and pass them in, so this module never looks a host up
- * and never needs the caller's workspace-roots frame to answer for the
- * caller's workspace.
- */
-export interface ModelOptionStores extends SettingsStores {
-  readonly secrets: PlatformSecrets;
-  readonly globalState: StateStore;
-}
 
 /** Availability verdict; its wording reads the route it was decided over. */
 interface ModelAvailabilityStatus {
@@ -248,8 +233,8 @@ const hostFact = <A, E, R>(fact: string, read: Effect.Effect<A, E, R>) =>
  * so it seeds the key statuses.
  */
 function buildAvailabilityContext(
-  stores: ModelOptionStores,
-): Effect.Effect<ModelAvailabilityContext, ModelHostFactUnreadable> {
+  stores: SettingsStores,
+): Effect.Effect<ModelAvailabilityContext, ModelHostFactUnreadable, Secrets> {
   return Effect.gen(function* () {
     const settings = yield* hostFact(
       'the model settings',
@@ -301,10 +286,9 @@ function routeModels(
  * again, so no model is charged a second read (or a second warning) for it.
  */
 function withConsultedKeyStatuses(
-  secrets: PlatformSecrets,
   routed: RoutedModels,
   ctx: ModelAvailabilityContext,
-): Effect.Effect<ModelAvailabilityContext> {
+): Effect.Effect<ModelAvailabilityContext, never, Secrets> {
   const consulted = new Set<ApiKeyProviderId>();
   for (const { gate } of routed.values()) {
     if (
@@ -318,19 +302,21 @@ function withConsultedKeyStatuses(
   // A failed read is that provider's `unreadable` status, never "no key"
   // (which would send a user with a working key to enter it again), and warns
   // once for the provider, never once per model that consults it (#11508).
-  return Effect.forEach(
-    consulted,
-    (provider) =>
-      hasUsableApiKey(secrets, provider).pipe(
-        Effect.catchTag('SecretsFailed', (failure) =>
-          Effect.logWarning(
-            `Failed to read ${providerDisplayName(provider)} API key status.`,
-            failure.cause,
-          ).pipe(Effect.as<KeyStatus>('unreadable')),
+  return Effect.flatMap(Secrets, (secrets) =>
+    Effect.forEach(
+      consulted,
+      (provider) =>
+        hasUsableApiKey(secrets, provider).pipe(
+          Effect.catchTag('SecretsFailed', (failure) =>
+            Effect.logWarning(
+              `Failed to read ${providerDisplayName(provider)} API key status.`,
+              failure.cause,
+            ).pipe(Effect.as<KeyStatus>('unreadable')),
+          ),
+          Effect.map((usable) => [provider, usable] as const),
         ),
-        Effect.map((usable) => [provider, usable] as const),
-      ),
-    { concurrency: 'unbounded' },
+      { concurrency: 'unbounded' },
+    ),
   ).pipe(
     Effect.map((entries) => ({
       ...ctx,
@@ -592,10 +578,12 @@ function optionOf(
  * per-model awaits. Every host read fails in its typed channel
  * ({@link ModelHostFactUnreadable}). `models`, when given, is honored
  * verbatim, one option each, in order. Nothing is cached here: the sign-in
- * state is read live by design.
+ * state is read live by design. `stores` are the caller's setting slots (a
+ * session's `roots`); provider keys and sign-ins come from the process
+ * {@link Secrets} service.
  */
 export const readModelOptions = Effect.fn('readModelOptions')(function* (
-  stores: ModelOptionStores,
+  stores: SettingsStores,
   models?: readonly string[],
 ) {
   const routeCtx = yield* buildAvailabilityContext(stores);
@@ -609,11 +597,7 @@ export const readModelOptions = Effect.fn('readModelOptions')(function* (
       routeCtx,
     );
   const routed = routeModels(visible, routeCtx);
-  const context = yield* withConsultedKeyStatuses(
-    stores.secrets,
-    routed,
-    routeCtx,
-  );
+  const context = yield* withConsultedKeyStatuses(routed, routeCtx);
   return visible.map((model) => optionOf(model, routed.get(model), context));
 });
 

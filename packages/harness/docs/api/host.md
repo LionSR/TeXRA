@@ -1194,11 +1194,11 @@ One helper call: bind the configured helper model for this call alone and
 run one completion through the one retry loop (`run/invocation.ts`),
 gated on the process's retry gate, priced and reported to the usage log as
 `attribution`. No row is written. Returns the turn's assistant text.
-`stores` are the asking session's setting slots and the process secret
-store: the binding, the retry limit and the usage consent read them.
+`stores` are the asking session's setting slots: the binding, the retry
+limit and the usage consent read them, beside the process `Secrets`.
 
 ```ts
-const helperCall: (stores: ModelOptionStores, args_1: HelperPrompt, attribution: UsageAttribution, retries?: number | undefined) => Effect<string, Error | CallFailure, HttpClient | UsageLog | RouteRetries>
+const helperCall: (stores: SettingsStores, args_1: HelperPrompt, attribution: UsageAttribution, retries?: number | undefined) => Effect<string, Error | CallFailure, Secrets | HttpClient | UsageLog | RouteRetries>
 ```
 
 ## HelperPrompt
@@ -1524,24 +1524,6 @@ type ModelOption =
     };
 ```
 
-## ModelOptionStores
-
-Every store an availability answer here reads: the secret store behind the
-provider-key checks, and the three setting slots behind the picker's
-persisted choices and the routing switches (the two "prefer my
-subscription" preferences, the Kimi Code preference). Callers
-hold them (a session's `roots`, the `Secrets` service, the stores a host
-root threaded down) and pass them in, so this module never looks a host up
-and never needs the caller's workspace-roots frame to answer for the
-caller's workspace.
-
-```ts
-interface ModelOptionStores extends SettingsStores {
-  readonly secrets: PlatformSecrets;
-  readonly globalState: StateStore;
-}
-```
-
 ## OFFICE_EXTENSIONS
 
 File extensions for binary office document formats (case-insensitive, with leading dot).
@@ -1574,7 +1556,7 @@ request llm does not model (audio transcription): the route a model of
 `config` takes with every preference off.
 
 ```ts
-const ownKeyCredential: (stores: ModelOptionStores, config: ModelConfig, provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode") => Effect<RouteCredential, RouteUnavailable, never>
+const ownKeyCredential: (stores: SettingsStores, config: ModelConfig, provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode") => Effect<RouteCredential, RouteUnavailable, Secrets>
 ```
 
 ## pathToLocationIn
@@ -2024,10 +2006,12 @@ finished purely over them, so the ~157-model settings pass costs no
 per-model awaits. Every host read fails in its typed channel
 ({@link ModelHostFactUnreadable}). `models`, when given, is honored
 verbatim, one option each, in order. Nothing is cached here: the sign-in
-state is read live by design.
+state is read live by design. `stores` are the caller's setting slots (a
+session's `roots`); provider keys and sign-ins come from the process
+{@link Secrets} service.
 
 ```ts
-const readModelOptions: (stores: ModelOptionStores, models?: readonly string[] | undefined) => Effect<ModelOption[], ModelHostFactUnreadable, never>
+const readModelOptions: (stores: SettingsStores, models?: readonly string[] | undefined) => Effect<ModelOption[], ModelHostFactUnreadable, Secrets>
 ```
 
 ## readSessionView

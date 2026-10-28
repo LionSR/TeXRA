@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import {
   helperCall,
   withLogChannel,
-  type ModelOptionStores,
   getSdkErrorMessage,
 } from '@texra-ai/harness/host';
 import { extractTextFromTag } from '@texra/utils/text/xmlExtraction';
@@ -37,17 +36,15 @@ const POLISH_PROMPT_PREFIX =
  * helper could not answer, formatted for the user.
  *
  * The helper model is resolved and bound against the requesting roots'
- * setting slots and the process secret store, and the call is gated on the
- * process's retry gate.
+ * setting slots, and the call is gated on the process's retry gate.
  */
 export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
   text: string,
   roots: WorkspaceRoots,
-  secrets: ModelOptionStores['secrets'],
 ) {
   return yield* Effect.gen(function* () {
     const responseText = yield* helperCall(
-      { ...roots, secrets },
+      roots,
       { userPrompt: POLISH_PROMPT_PREFIX + text },
       // A draft polish serves no run and no agent category.
       { agentName: 'polish', runId: null },

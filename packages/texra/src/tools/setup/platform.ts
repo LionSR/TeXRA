@@ -169,9 +169,7 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   );
   // Routing is only consulted for a signed-in account, as the `&&` did.
   if (!status.signedIn) return { signedIn: false, enabled: false };
-  const [option] = yield* readModelOptions({ ...stores, secrets }, [
-    CHATGPT_SETUP_MODEL,
-  ]).pipe(
+  const [option] = yield* readModelOptions(stores, [CHATGPT_SETUP_MODEL]).pipe(
     Effect.mapError(
       (cause) =>
         new SubscriptionProbeFailed({
