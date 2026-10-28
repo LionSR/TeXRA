@@ -107,8 +107,7 @@ const program = Effect.gen(function* () {
     ),
   );
   // The first handle still reads its own activation, and its read ends
-  // while the resumed one is running: with that activation's end, the stop
-  // that interrupted it.
+  // while the resumed one is running, at that activation's `cancelled` end.
   let firstText = '';
   const firstEnd = yield* Effect.exit(
     Stream.runForEach(run1.events.pipe(responseText), (text) =>
@@ -119,7 +118,7 @@ const program = Effect.gen(function* () {
   );
   if (
     firstText !== 'Drafted section 1 with an informal proof sketch.' ||
-    !Exit.hasInterrupts(firstEnd)
+    !Exit.isSuccess(firstEnd)
   ) {
     throw new Error(`run1's first activation replayed: ${firstText}`);
   }
