@@ -353,7 +353,13 @@ What else is in flight that touches this plan, as of `main` at `fa6fb1e`
   check, no commit changes a row schema, a version, the codec or current
   values, and its workers are told to skip S2, D4 and D5. It deferred one
   lead that would change stored bytes, the `ExhaustionReason` collapse (R13),
-  to this plan's shape PR.
+  to this plan's shape PR. Its later commit "one random-id minter" makes new
+  trace, card and `logId` values 36-character UUIDs instead of 21-character
+  nanoids; ruled not a shape change here, as for the delivery-id formats: no
+  row schema constrains those ids and run ids keep their 12-hex form. The
+  one format-aware reader is the golden-store normalizer
+  (`packages/cli/scripts/generate-golden-store.mjs`, its `NANO` and `UUID`
+  patterns), so that branch regenerates the fixture and runs `--twice`.
 - **Nothing else in flight changes a row.** #14340, #14343, #14346, #14348,
   #14349, #14351 and `claude/run-events-replay` were read; none touches a
   stored schema. #14342 was closed as superseded: its completion change
