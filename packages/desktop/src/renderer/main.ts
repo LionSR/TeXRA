@@ -805,7 +805,8 @@ const routeMessage = createMessageRoutes({
         const conversationView = document.createElement(
           'progress-app',
         ) as ProgressApp;
-        conversationView.placement = 'desktop';
+        // The attribute sets the property, and the desktop styles select it,
+        // as the extension's page markup does.
         conversationView.setAttribute('placement', 'desktop');
         conversationView.setAttribute('data-desktop-view', 'progress');
         const project = createProjectWorkbench({
