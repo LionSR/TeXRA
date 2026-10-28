@@ -12,28 +12,30 @@
 import * as path from 'node:path';
 
 import * as vscode from 'vscode';
-import { Effect, FiberHandle, FileSystem, Scope } from 'effect';
+import { Effect, FiberHandle, Scope } from 'effect';
 
+import {
+  Cancelled,
+  Rejected,
+  type HostRequestFailure,
+  type RequestRefusal,
+  type Session,
+} from '@texra-ai/harness';
 import {
   AgentDirectories,
   type StateStore,
   type StateReadFailed,
   type StateWriteFailed,
-  Cancelled,
-  Rejected,
-  type HostRequestFailure,
-  type RequestRefusal,
-  PlatformSecrets,
+  Secrets,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
-  type Session,
   withLogChannel,
   withSessionFs,
   WorkspaceFs,
   type StorageFs,
   pathToLocationIn,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import {
@@ -136,8 +138,6 @@ interface ExtensionHostRequestsOptions {
   /** The extension's id, which names its getting-started walkthrough. */
   readonly extensionId: string;
   readonly globalState: StateStore;
-  /** The process secret store the extension root holds (model availability). */
-  readonly secrets: PlatformSecrets;
   readonly snapshot: HostSnapshotSource;
   readonly draftRequests: HostDraftRequests;
   readonly toolEditApprovals: ToolEditApprovalController;
@@ -180,21 +180,9 @@ interface ExtensionHostRequests {
     port: string,
   ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices>;
   closePort(port: string): void;
-  /** Stops a recording this host owns; the take is discarded. */
-  dispose(): void;
 }
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
-
-const logCommandFailure =
-  (command: string) =>
-  <A, E, R>(self: Effect.Effect<A, E, R>) => {
-    const log = (failure: unknown) =>
-      Effect.logError(
-        `Command ${command} failed: ${toErrorMessage(failure)}`,
-      ).pipe(withLogChannel(CHANNEL));
-    return self.pipe(Effect.tapError(log), Effect.tapDefect(log));
-  };
 
 /** One of this extension's own command handlers, or a VS Code command, run
  *  in the arm's fiber: a typed failure or a defect is named and logged. */
@@ -202,9 +190,14 @@ function runHandler<A, E, R>(
   command: string,
   handler: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, HostCallFailed | RequestRefusal, R> {
+  const log = (failure: unknown) =>
+    Effect.logError(
+      `Command ${command} failed: ${toErrorMessage(failure)}`,
+    ).pipe(withLogChannel(CHANNEL));
   return handler.pipe(
     Effect.mapError((cause) => hostFailure(command, cause)),
-    logCommandFailure(command),
+    Effect.tapError(log),
+    Effect.tapDefect(log),
   );
 }
 
@@ -228,15 +221,10 @@ export function createExtensionHostRequests(
     runSession,
     snapshot,
     toolEditApprovals,
-    secrets,
     globalState,
     runtime,
   } = options;
   const { roots } = records;
-  const draftRequests = options.draftRequests.attach(roots, (recording) => {
-    // Recorder notifications can arrive outside a request fiber.
-    runtime.runFork(options.snapshot.setRecording(recording));
-  });
 
   /** The native picker of each multi-file launcher list. */
   const multipleFilePickers = createFileSelectionPickers(roots);
@@ -254,11 +242,16 @@ export function createExtensionHostRequests(
           openFinalOutputIfAvailable(roots, config)(result),
         ),
       loadModelOptions: () =>
-        withProcessServices(runtime, loadModelOptions({ ...roots, secrets })),
+        withProcessServices(
+          runtime,
+          Effect.flatMap(Secrets, (secrets) =>
+            loadModelOptions({ ...roots, secrets }),
+          ),
+        ),
       // The set-key prompt either runs or faults, so its failure is the one
       // failure, as `ApiKeyPromptFailed`.
       promptForApiKey: (provider) =>
-        runHandler('setApiKey', setApiKey(roots, secrets, provider)).pipe(
+        runHandler('setApiKey', setApiKey(roots, provider)).pipe(
           Effect.mapError(
             (failure) =>
               new ApiKeyPromptFailed({
@@ -278,6 +271,16 @@ export function createExtensionHostRequests(
   // and the view's scope ends it.
   const diffRefresh = runtime.runSync(
     FiberHandle.make().pipe(Scope.provide(options.scope)),
+  );
+  // Closing the view's scope stops a recording this host owns; the take is
+  // discarded.
+  const draftRequests = runtime.runSync(
+    options.draftRequests
+      .attach(roots, (recording) => {
+        // Recorder notifications can arrive outside a request fiber.
+        runtime.runFork(options.snapshot.setRecording(recording));
+      })
+      .pipe(Scope.provide(options.scope)),
   );
   /** A file action that schedules a PDF viewer opens it in the view's
    *  scope, so a close of the view cancels a delayed open. */
@@ -311,16 +314,6 @@ export function createExtensionHostRequests(
           inViewScope(handleLatexdiff(roots, base, edited)),
         ),
       openDirectory: (directory) => revealFileInOS(directory),
-      // An accepted-edit backup names an absolute workspace path the
-      // controller already resolved, so this reads through the process
-      // filesystem rather than a rooted view that would refuse a path the
-      // user picked outside the workspace.
-      readFile: (file) =>
-        Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
-          Effect.map(fs.readFileString(file), (text: string) =>
-            text.replaceAll('\r\n', '\n'),
-          ),
-        ),
       showInfo: (message) => vscodeUi.showInfoMessage(message),
       showError: (message) => vscodeUi.showErrorMessage(message),
     },
@@ -563,7 +556,7 @@ export function createExtensionHostRequests(
       case 'createSampleProject':
         return createSampleProject(options.extensionPath);
       case 'cloneOverleaf':
-        return cloneOverleafProject(secrets);
+        return cloneOverleafProject();
       case 'downloadArxiv':
         return downloadArXivSource(roots);
     }
@@ -599,7 +592,7 @@ export function createExtensionHostRequests(
       runHandler('openSettings', options.openSettings(target)),
     // SecretManager has no key-changed event, so the set-key flow's
     // completion is the explicit refresh point for the funnel.
-    setApiKey: runHandler('setApiKey', setApiKey(roots, secrets)).pipe(
+    setApiKey: runHandler('setApiKey', setApiKey(roots)).pipe(
       Effect.andThen(refreshOnboardingFunnel),
     ),
     openApiKeyGuide: Effect.asVoid(
@@ -646,7 +639,6 @@ export function createExtensionHostRequests(
         yield* runHandler(
           'runSetupAssistant',
           launchSetupAssistant(
-            secrets,
             roots,
             runSession,
             (runId) => Effect.sync(() => options.presentLaunchedRun(runId)),
@@ -748,6 +740,5 @@ export function createExtensionHostRequests(
     handleHostRequest: (request, port) =>
       withSessionFs(roots, dispatch(request, port)),
     closePort: draftRequests.closePort,
-    dispose: draftRequests.dispose,
   };
 }

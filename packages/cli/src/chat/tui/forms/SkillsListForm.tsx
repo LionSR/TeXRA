@@ -6,13 +6,13 @@ import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
+import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   Skills,
   type EnabledSkill,
   type ProcessRuntime,
   type SkillLoadIssue,
-  type WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { readCliSkillsOffNotice } from '@cli/runtime/skills';
 

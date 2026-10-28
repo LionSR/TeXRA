@@ -8,7 +8,7 @@
 import { Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 
 import { firstEventOrTimeout } from './vscodeEventWait';
 
@@ -24,12 +24,8 @@ const CHANNEL = 'VscodeDiagnostics';
  */
 export function waitForDiagnosticsChange(
   uri: vscode.Uri,
-  timeoutMs: number = 3000,
+  timeoutMs: number,
 ): Effect.Effect<void> {
-  if (timeoutMs <= 0) {
-    return Effect.void;
-  }
-
   const targetKey = uri.toString().toLowerCase();
 
   return firstEventOrTimeout<void>(

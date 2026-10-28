@@ -16,7 +16,7 @@ import { Effect, type FileSystem, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { executeCommand, makeMachineGitEnv } from '@texra-ai/harness/node';
 import {
   overleafGitClone,

@@ -35,7 +35,7 @@ import {
   pathToLocationIn,
   type AgentEntry,
   Settings,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import {
@@ -52,7 +52,6 @@ import type { DocumentDiffs } from '@texra/shared/plugins/documentOutputs';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
 import { documentTaskKey } from '@texra/agent/output/documentRecipe';
 import {
-  createOutputState,
   roundsFromPersisted,
   roundsToPersisted,
   type OutputDependencies,
@@ -68,7 +67,7 @@ import {
   documentTaskOf,
   taskFileVars,
 } from '@texra/tools/documents/documentTask';
-import type { CallRequests, ToolEnv } from '@texra-ai/harness';
+import type { CallRequests, ToolEnv } from '@texra-ai/harness/plugins';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 /** What the documents read of the run their tool call serves. */
@@ -165,11 +164,11 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
       ),
     );
   const rows = yield* (yield* ChildRuns).rows(runId, ['plugin.fact']);
-  const state = createOutputState(
-    roundsFromPersisted(
+  const state: OutputState = {
+    rounds: roundsFromPersisted(
       latestDocumentRounds(rows, qualifyAggregateId('run', runId)) ?? [],
     ),
-  );
+  };
   const sources: FileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles
   ).map((file) => fileService.locateSource(file));

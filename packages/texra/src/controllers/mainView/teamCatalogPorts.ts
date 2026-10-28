@@ -1,6 +1,6 @@
 // Local imports
 import { Effect } from 'effect';
-import { AgentCatalog, type StateStore } from '@texra-ai/harness';
+import { AgentCatalog, type StateStore } from '@texra-ai/harness/host';
 import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
 

@@ -7,24 +7,25 @@
 
 import path from 'node:path';
 
-import { Effect, Exit, FileSystem, Layer } from 'effect';
+import { Effect, Exit, Layer, type Scope } from 'effect';
 import {
   Cancelled,
   Rejected,
   Unavailable,
   type HostRequestFailure,
-  PlatformSecrets,
-  AgentDirectoriesFailed,
+} from '@texra-ai/harness';
+import {
+  AgentDirectories,
+  Secrets,
   withProcessServices,
   workspaceEnvironmentLayer,
   type ProcessRuntime,
   type ProcessServices,
   sessionFsLayer,
-  type GlobalStorageFs,
   type StorageFs,
   type WorkspaceFs,
   pathToLocationIn,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
 import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import {
@@ -82,8 +83,6 @@ interface DesktopHostRequestsOptions {
   /** The project this window serves: its runs run in its session, here or
    *  in the service, whose records answer what the window reads of them. */
   project: DesktopProject;
-  /** The process secret store the model catalog reads. */
-  secrets: PlatformSecrets;
   host: DesktopAgentRunHost;
   run: DesktopAgentRun;
   files: DesktopFileSelection;
@@ -95,11 +94,6 @@ interface DesktopHostRequestsOptions {
   postToRenderer(message: unknown): boolean | void;
   /** A host-initiated change to the surface (PRD 8.5). */
   postSurfaceAction(action: SurfaceActionMessage['action']): void;
-  getCustomAgentDirectory(): Effect.Effect<
-    string,
-    AgentDirectoriesFailed,
-    GlobalStorageFs | FileSystem.FileSystem
-  >;
   onboarding: Pick<
     DesktopOnboardingIpc,
     'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'
@@ -122,15 +116,15 @@ export interface DesktopHostRequests {
     port: string,
   ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices>;
   closePort(port: string): void;
-  /** Stops a recording this window owns; the take is discarded. */
-  dispose(): void;
 }
 
 const CHANNEL = 'DesktopHostRequests';
 
-export function createDesktopHostRequests(
+/** The window's request handler; closing the caller's scope stops a
+ *  recording this window owns, and the take is discarded. */
+export const createDesktopHostRequests = Effect.fnUntraced(function* (
   options: DesktopHostRequestsOptions,
-): DesktopHostRequests {
+): Effect.fn.Return<DesktopHostRequests, never, Scope.Scope> {
   const { project, host, run, runtime } = options;
   const { roots } = project;
   /** Where the window reads its runs' records: its own session, or the
@@ -149,13 +143,16 @@ export function createDesktopHostRequests(
   // A shared controller's notice IS the refusal the request answers with.
   const rejectRequestEffect = (reason: string): Effect.Effect<void, Rejected> =>
     Effect.fail(new Rejected({ reason }));
-  const draftRequests = options.draftRequests.attach(roots, (recording) => {
-    // Recorder notifications can arrive outside a request fiber; the first
-    // steps run in the caller's, so the snapshot takes them in order.
-    options.spawn(options.snapshot.setRecording(recording), {
-      startImmediately: true,
-    });
-  });
+  const draftRequests = yield* options.draftRequests.attach(
+    roots,
+    (recording) => {
+      // Recorder notifications can arrive outside a request fiber; the first
+      // steps run in the caller's, so the snapshot takes them in order.
+      options.spawn(options.snapshot.setRecording(recording), {
+        startImmediately: true,
+      });
+    },
+  );
   const runActions = runtime.runSync(
     createHostRunActions({
       ...run, // this window's launch follow-up and output opener
@@ -170,9 +167,9 @@ export function createDesktopHostRequests(
       loadModelOptions: () =>
         withProcessServices(
           runtime,
-          loadModelOptions({ ...roots, secrets: options.secrets }).pipe(
-            Effect.provide(projectEnv),
-          ),
+          Effect.flatMap(Secrets, (secrets) =>
+            loadModelOptions({ ...roots, secrets }),
+          ).pipe(Effect.provide(projectEnv)),
         ),
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal prompt.
@@ -244,15 +241,6 @@ export function createDesktopHostRequests(
             ),
           ),
       openDirectory: (directory) => host.openPath(directory),
-      // An accepted-edit backup names an absolute path the controller already
-      // resolved, so this reads through the process filesystem rather than a
-      // rooted view that would refuse a path outside the workspace.
-      readFile: (file) =>
-        Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
-          Effect.map(fs.readFileString(file), (text) =>
-            text.replaceAll('\r\n', '\n'),
-          ),
-        ),
       showInfo: (message) => host.showInfoMessage(message),
       showError: rejectRequestEffect,
     },
@@ -426,7 +414,9 @@ export function createDesktopHostRequests(
       options.openExternalUrl('https://texra.ai/guide/configuration.html'),
     ),
     openCustomAgentDirectory: Effect.gen(function* () {
-      const directory = yield* options.getCustomAgentDirectory();
+      const directory = yield* AgentDirectories.use((directories) =>
+        directories.custom(),
+      );
       yield* host.openPath(directory);
     }),
     openAgentDocs: Effect.suspend(() =>
@@ -538,6 +528,5 @@ export function createDesktopHostRequests(
     runValidated: runActions.runValidated,
     handleHostRequest,
     closePort: draftRequests.closePort,
-    dispose: draftRequests.dispose,
   };
-}
+});

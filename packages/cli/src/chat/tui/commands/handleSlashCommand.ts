@@ -20,7 +20,7 @@ import {
   suggestSlashCommand,
   type SlashCommand,
 } from './slashRegistry';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 /**
  * Run a command body with centralized echo and error persistence. A typed

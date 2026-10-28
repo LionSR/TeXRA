@@ -1,5 +1,5 @@
 /**
- * The transport framer (PRD one-fold-three-renderers, 7.4 and 8.1): one per
+ * The transport framer: one per
  * transport port, answering each Subscribe with the same ordered input
  * reader the runtime fold uses: listing, named histories, local state,
  * completion marker, then durable events before live text. Host snapshots
@@ -138,7 +138,7 @@ function cutFrame(
 }
 
 /**
- * The frames that answer one `Subscribe` (7.4): a stream that replays, marks,
+ * The frames that answer one `Subscribe`: a stream that replays, marks,
  * then tails until interrupted. Pure over its sources, so a test drives it
  * under `TestClock`.
  */

@@ -53,6 +53,8 @@ export const countEquationsTool = defineTool({
 });
 ```
 
+`execute` succeeds with the text the model reads back (`Effect.succeed(text)`), or, as here, with a whole `ToolResult` from [`executed(output, summary)`](./harness/plugins#executed) when the tool also reports a summary. Failing with an `Error` gives the model its message as the tool's error.
+
 ### Tool options
 
 - **Optional parameters (`nullishWithDefault`)**: OpenAI-compatible structured output APIs require optional tool fields to accept `null` as well as `undefined`. Use [`nullishWithDefault(schema, fallback, description)`](./harness/plugins#nullishwithdefault) or `Schema.optional(Schema.NullOr(S))`.

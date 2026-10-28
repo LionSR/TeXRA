@@ -5,7 +5,7 @@ import {
   AgentCatalog,
   type AgentEntry,
   type WorkspaceAgentsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { agentKeyOf } from '@texra-ai/harness/schemas';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 

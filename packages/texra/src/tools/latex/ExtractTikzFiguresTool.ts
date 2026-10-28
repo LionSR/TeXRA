@@ -1,12 +1,9 @@
 // Third-party imports
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, type FileSystem, Schema } from 'effect';
-import {
-  defineTool,
-  ToolContext,
-  type ToolResult,
-  pathToLocationIn,
-} from '@texra-ai/harness';
+import { defineTool, type ToolResult } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
+import { pathToLocationIn } from '@texra-ai/harness/host';
 
 // Local imports - tools
 import {
@@ -20,7 +17,7 @@ import {
   resolveLatexFile,
   texPathField,
 } from './figureExtractionShared';
-import type { WorkspaceFs } from '@texra-ai/harness';
+import type { WorkspaceFs } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const ExtractTikzInputSchema = Schema.Struct({
@@ -78,7 +75,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
         call.env.roots,
       );
       if (compiledPaths.length > 0) {
-        // Convert FileLocation[] to string[] for legacy attachment API
+        // The attachment builder takes absolute paths.
         const compiledPathStrings = compiledPaths.map(
           (loc) => loc.absolutePath,
         );

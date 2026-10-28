@@ -17,7 +17,8 @@ import { HttpBody, HttpClientError } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 
 // Local imports
-import { ToolContext, type ToolResult } from '@texra-ai/harness';
+import { type ToolResult } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
 import {
   isTransportReason,
   scopedClient,

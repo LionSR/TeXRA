@@ -14,7 +14,7 @@ import { ApiKeyEntryForm } from './ApiKeyEntryForm';
 import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type { ProcessRuntime, Secrets } from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 
 type ProviderApiKeyStatuses = Partial<
@@ -89,7 +89,7 @@ interface ProviderApiKeyFormProps {
   readonly onSave: (
     provider: ApiKeyProviderId,
     key: string,
-  ) => Effect.Effect<string | void, Error>;
+  ) => Effect.Effect<string | void, Error, Secrets>;
   /** The runtime that program settles on, from the surface that mounted this
    *  form — Ink components run no Effect of their own. */
   readonly runtime: ProcessRuntime;

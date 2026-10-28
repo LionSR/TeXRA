@@ -1,12 +1,14 @@
-import { Effect, Equal, Redacted, Schema } from 'effect';
+import { Effect, Equal, Schema } from 'effect';
 
 // Local imports
 import {
+  hasUsableApiKey,
   isApiProvider,
+  lookupApiKey,
   type ApiKeyProviderId,
-  type SecretsFailed,
 } from '@texra-ai/llm';
-import type { RequestRefusal } from '@texra-ai/harness';
+import { type RequestRefusal } from '@texra-ai/harness';
+import { Secrets } from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 interface ProgressApiKeyRetryRequest {
@@ -38,15 +40,11 @@ export class ApiKeyPromptFailed extends Schema.TaggedError<ApiKeyPromptFailed>()
 ) {}
 
 interface ProgressApiKeyRetryControllerDeps {
-  readKey(
-    provider: ApiKeyProviderId,
-  ): Effect.Effect<Redacted.Redacted<string> | undefined, SecretsFailed>;
-  hasUsableKey(
-    provider: ApiKeyProviderId,
-  ): Effect.Effect<boolean, SecretsFailed>;
+  /** Ask the user for the key; the prompt writes to the `Secrets` store
+   *  this controller re-reads. */
   promptForApiKey(
     provider: ApiKeyProviderId,
-  ): Effect.Effect<void, ApiKeyPromptFailed>;
+  ): Effect.Effect<void, ApiKeyPromptFailed, Secrets>;
   isRetryPending(stream: RunId, requestId: string): boolean;
   /** Settles the retry on the user's own key; a refusal fails it, for the
    *  host arm that took the request to present. */
@@ -105,16 +103,17 @@ export class ProgressApiKeyRetryController {
     provider: ApiKeyProviderId,
     requireNewKey: boolean,
   ) {
+    const secrets = yield* Secrets;
     if (requireNewKey) {
-      const before = yield* this.deps.readKey(provider);
+      const before = yield* lookupApiKey(secrets, provider);
       yield* this.deps.promptForApiKey(provider);
-      const after = yield* this.deps.readKey(provider);
+      const after = yield* lookupApiKey(secrets, provider);
       // Sealed values are compared by `Equal`, never unwrapped: this only
       // needs to know whether the credential changed, not what it is.
       return after !== undefined && !Equal.equals(after, before);
     }
-    if (yield* this.deps.hasUsableKey(provider)) return true;
+    if (yield* hasUsableApiKey(secrets, provider)) return true;
     yield* this.deps.promptForApiKey(provider);
-    return yield* this.deps.hasUsableKey(provider);
+    return yield* hasUsableApiKey(secrets, provider);
   });
 }

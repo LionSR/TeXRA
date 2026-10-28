@@ -8,12 +8,6 @@
       "name": "runHeadlessAgent"
     },
     {
-      "file": "packages/cli/src/runtime/executeCli.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "executeCliRequest"
-    },
-    {
       "file": "packages/cli/src/runtime/logSinks.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -42,18 +36,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "applyReplacements"
-    },
-    {
-      "file": "packages/texra/src/shared/commands/catalog.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "commandKeybindings"
-    },
-    {
-      "file": "packages/texra/src/shared/commands/catalog.ts",
-      "category": "unused",
-      "kind": "exports",
-      "name": "packageCommandContributions"
     }
   ]
 }

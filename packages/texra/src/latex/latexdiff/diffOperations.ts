@@ -19,7 +19,7 @@ import * as path from 'node:path';
 import { Effect, type FileSystem, type Path } from 'effect';
 
 // Local imports
-import { withLogChannel, Settings } from '@texra-ai/harness';
+import { withLogChannel, Settings } from '@texra-ai/harness/host';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
@@ -35,12 +35,30 @@ import { LaTeXdiffService } from '../latexdiff';
 import { buildBetweenRoundDiffSuffix } from './diffFileNameManager';
 import type { FileLocation, RunId } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type {
-  DiffProgressReporter,
-  DiffRunOutcome,
-  DiffRunResult,
-} from './types';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+
+/**
+ * Minimal progress sink for long-running diff runs. Host-neutral so the core
+ * latexdiff logic stays free of `vscode` — the VS Code command layer passes its
+ * `vscode.Progress<…>`, which structurally satisfies this interface.
+ */
+interface DiffProgressReporter {
+  report(value: { message?: string; increment?: number }): void;
+}
+
+export type DiffRunResult =
+  | {
+      success: true;
+      /** Absolute path of the generated diff, as reported by the diff service. */
+      diffPath: string;
+      message: string;
+      description: string;
+    }
+  | {
+      success: false;
+      message: string;
+      description: string;
+    };
 
 /** One latexdiff a round's recorded outputs call for. */
 export interface LatexdiffPair {
@@ -118,7 +136,7 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
     readonly channel: string;
     readonly progress: DiffProgressReporter;
   }): Effect.fn.Return<
-    DiffRunOutcome,
+    { results: DiffRunResult[] },
     Error,
     FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   > {

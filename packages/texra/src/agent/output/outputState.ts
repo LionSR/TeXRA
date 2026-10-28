@@ -35,12 +35,6 @@ export interface OutputDependencies {
   readonly roots: WorkspaceRoots;
 }
 
-export function createOutputState(
-  rounds: Map<number, RoundState> = new Map(),
-): OutputState {
-  return { rounds };
-}
-
 /**
  * Build a live `rounds` map from the persisted array shape, keyed by each
  * entry's own `round` field (not array index) so a hydration source with

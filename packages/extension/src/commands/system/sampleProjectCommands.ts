@@ -6,7 +6,7 @@ import { Cause, Effect, FileSystem, type PlatformError } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - fs
-import { WorkspaceFs } from '@texra-ai/harness';
+import { WorkspaceFs } from '@texra-ai/harness/host';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import {
   showLoggedErrorMessage,
@@ -15,7 +15,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFolder } from '@frontend/ui/dialogs';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 const CHANNEL = 'SampleProjectCommands';
 

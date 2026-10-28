@@ -3,10 +3,8 @@ import { defineCommand } from 'citty';
 import { Effect, absurd } from 'effect';
 
 import { type RunId } from '@texra-ai/harness/schemas';
-import {
-  formatChatAsMarkdown,
-  injectStandaloneTrace,
-} from '@texra/agent/export';
+import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
+import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
 import { formatCliHistoryDeletionSummary } from '@ui/copy/runHistory';
 
 import { CliExitCode } from '../runtime/exitCodes';

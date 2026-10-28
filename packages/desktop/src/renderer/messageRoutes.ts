@@ -8,7 +8,7 @@ import { DesktopOutboundMessageSchema } from '../shared/desktopOutboundMessages'
 type Push = typeof DesktopOutboundMessageSchema.Type;
 
 /** One handler per main-process push, keyed by its command. */
-export type DesktopPushRoutes = {
+type DesktopPushRoutes = {
   [P in Push as P['command']]: (message: P) => void;
 };
 

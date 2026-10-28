@@ -1,12 +1,9 @@
 // Third-party imports
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Context, Effect, Option, Schema } from 'effect';
-import {
-  defineTool,
-  ToolContext,
-  withLogChannel,
-  type ToolResult,
-} from '@texra-ai/harness';
+import { defineTool, type ToolResult } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/harness/host';
 
 // Internal imports
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';

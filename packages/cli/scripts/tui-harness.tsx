@@ -21,7 +21,7 @@ import { nanoid } from 'nanoid';
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { AgentCatalog, describeFollowUpFailure } from '@texra-ai/harness';
+import { AgentCatalog, describeFollowUpFailure } from '@texra-ai/harness/host';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { nodeFileServices } from '@platform/defaults/jsonStore';
@@ -488,7 +488,6 @@ HARNESS_DISPOSERS.push(
     session().interactions.use(
       createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
         requests: session().requests,
-        secrets: HARNESS_PLATFORM_SERVICES.secrets,
         settings: HARNESS_PLATFORM_SERVICES,
         runtime: harnessRuntime,
       }),

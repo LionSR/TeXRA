@@ -80,7 +80,7 @@ import {
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
-import type { PlatformSecrets } from '@texra-ai/harness';
+import type { PlatformSecrets } from '@texra-ai/harness/host';
 
 /** The settings the TUI's retry decisions write through, if any. */
 const settingsStores = makeFakeSettingsStores('cli');
@@ -103,9 +103,6 @@ function tui(): void {
     testDefaultSession().interactions.use(
       createTuiHostInteractions(presentationHost, cliContext, {
         requests: testDefaultSession().requests,
-        // The installed fake host's secret store: the key-check
-        // expectations name exactly this object.
-        secrets: installedHost().secrets,
         settings: settingsStores.stores,
         runtime: testRuntime(),
       }),

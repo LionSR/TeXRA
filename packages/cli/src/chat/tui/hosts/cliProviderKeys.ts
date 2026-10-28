@@ -18,24 +18,17 @@ import {
 
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { tuiUi } from './tuiUiHost';
-import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness';
+import type { Secrets, SettingsStores } from '@texra-ai/harness/host';
 
 /** Run one controller action on the TUI's prompt; a failure names its cause
  *  and stays in the Effect channel. */
 const viaTui = (
-  secrets: PlatformSecrets,
   stores: SettingsStores,
   action: (
     controller: SettingsProfileKeyController,
-  ) => Effect.Effect<void, Error>,
-): Effect.Effect<void, Error> =>
-  action(
-    new SettingsProfileKeyController({
-      secrets,
-      prompt: tuiUi,
-      stores,
-    }),
-  ).pipe(
+  ) => Effect.Effect<void, Error, Secrets>,
+): Effect.Effect<void, Error, Secrets> =>
+  action(new SettingsProfileKeyController({ prompt: tuiUi, stores })).pipe(
     Effect.mapError((error) =>
       error instanceof ProviderKeyActionFailed
         ? new Error(`${error.message}: ${toErrorMessage(error.cause)}`, {
@@ -47,14 +40,11 @@ const viaTui = (
 
 /** Write a key the calling surface already holds. */
 export const commitCliProviderApiKey = (
-  secrets: PlatformSecrets,
   stores: SettingsStores,
   provider: ApiKeyProviderId,
   key: string,
-): Effect.Effect<void, Error> =>
-  viaTui(secrets, stores, (controller) =>
-    controller.commitProviderKey(provider, key),
-  );
+): Effect.Effect<void, Error, Secrets> =>
+  viaTui(stores, (controller) => controller.commitProviderKey(provider, key));
 
 /**
  * Ask for a provider key and write it: the `promptForApiKey` the shared
@@ -64,11 +54,10 @@ export const commitCliProviderApiKey = (
  * itself.
  */
 export const promptForCliProviderApiKey = (
-  secrets: PlatformSecrets,
   stores: SettingsStores,
   provider: ApiKeyProviderId,
-): Effect.Effect<void, Error> =>
-  viaTui(secrets, stores, (controller) => controller.setProviderKey(provider));
+): Effect.Effect<void, Error, Secrets> =>
+  viaTui(stores, (controller) => controller.setProviderKey(provider));
 
 /**
  * The chat TUI's `credentialChanged` subscriber, which the chat forks into

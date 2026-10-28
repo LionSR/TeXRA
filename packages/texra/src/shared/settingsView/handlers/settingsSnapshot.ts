@@ -1,4 +1,4 @@
-import { Settings } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness/host';
 import { Effect } from 'effect';
 /**
  * The one builder for every catalog-derived settings-view snapshot.
@@ -13,7 +13,7 @@ import { Effect } from 'effect';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { DerivedSettingsSnapshot } from '@texra/shared/settingsView/settingsViewMessages';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 /** Read one settings-view snapshot from the host's stores. */
 export const buildSettingsSnapshotMessage = Effect.fn(

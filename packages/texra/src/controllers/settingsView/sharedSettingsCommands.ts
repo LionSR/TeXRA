@@ -18,13 +18,13 @@ import { apiProviderOfSecretName } from '@texra-ai/llm';
 
 import {
   type PerKeyLane,
-  readModelOptions,
+  setModelEnabled,
   Settings,
   type StorageFs,
   withLogChannel,
   withPerKeyLane,
   withSessionFs,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   SUBSCRIPTION_AUTH_PROVIDERS,
@@ -47,7 +47,10 @@ import {
   type SettingsHostBindings,
 } from '@texra/controllers/settingsView/settingsHostBindings';
 import { settingsMemoryCommands } from '@texra/controllers/settingsView/settingsMemoryCommands';
-import { SettingsModelSelectionController } from '@texra/controllers/settingsView/SettingsModelSelectionController';
+import {
+  buildModelSelectionMessage,
+  setReasoningLevel,
+} from '@texra/controllers/settingsView/modelSelection';
 import { settingsPluginCommands } from '@texra/controllers/settingsView/settingsPluginCommands';
 import { buildProfileMessage } from '@texra/controllers/settingsView/profileMessage';
 import { SettingsProfileKeyController } from '@texra/controllers/settingsView/SettingsProfileKeyController';
@@ -68,11 +71,8 @@ import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import type { SettingsViewSnapshot } from '@texra-ai/harness/schemas';
-import type {
-  PlatformSecrets,
-  ProcessServices,
-  WorkspaceRoots,
-} from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { PlatformSecrets, ProcessServices } from '@texra-ai/harness/host';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 type SettingsArms = SettingsViewInboundHandlerRegistry<
@@ -120,11 +120,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   // ── Controllers ──
 
-  const modelSelection = new SettingsModelSelectionController({
-    stores: roots,
-    secrets,
-    resolveModelOptions: readModelOptions,
-  });
   const usage = new SubscriptionUsageService({ secrets, stores: roots });
   const memoryPage = settingsMemoryCommands({ bindings, present });
   const gitPage = settingsGitCommands({ bindings, present, secrets });
@@ -150,7 +145,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   const postProfile = bindings.post(buildProfileMessage(roots, secrets));
   const postModelSelection = bindings.post(
-    modelSelection.buildModelSelectionMessage(),
+    buildModelSelectionMessage(roots, secrets),
   );
   const postSnapshot = (snapshot: DerivedSettingsSnapshot) =>
     bindings.post(buildSettingsSnapshotMessage(snapshot, roots));
@@ -307,7 +302,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     ).pipe(withPerKeyLane(skillListLanes, key));
 
   const profileKeys = new SettingsProfileKeyController({
-    secrets,
     prompt: bindings.prompt,
     stores: roots,
   });
@@ -374,23 +368,20 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     openGitHubTokenUrl: () =>
       bindings.externalOpener.openExternal(GITHUB_TOKEN_CREATE_URL),
     setModelEnabled: (message) =>
-      modelSelection
-        .setModelEnabled({
-          modelName: message.modelName,
-          enabled: message.enabled,
-        })
-        .pipe(
-          Effect.andThen(postModelSelection),
-          // The options cache is invalidated by the writer itself.
-          Effect.andThen(bindings.refreshCatalogs()),
-        ),
+      setModelEnabled({
+        model: message.modelName,
+        enabled: message.enabled,
+        state: roots.globalState,
+      }).pipe(
+        Effect.andThen(postModelSelection),
+        // The options cache is invalidated by the writer itself.
+        Effect.andThen(bindings.refreshCatalogs()),
+      ),
     setModelReasoningLevel: (message) =>
-      modelSelection
-        .setReasoningLevel({
-          modelName: message.modelName,
-          level: message.level,
-        })
-        .pipe(Effect.andThen(postModelSelection)),
+      setReasoningLevel(roots.globalState, {
+        modelName: message.modelName,
+        level: message.level,
+      }).pipe(Effect.andThen(postModelSelection)),
     updateStateSetting: (message) =>
       updateStateSetting(message.key, message.value),
     setSkillEnabled: (message) =>

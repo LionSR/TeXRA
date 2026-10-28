@@ -32,7 +32,7 @@ import {
 } from 'effect';
 
 import { ChildProcessSpawner } from 'effect/process';
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { pathExists } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 

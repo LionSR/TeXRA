@@ -5,10 +5,11 @@ import * as vscode from 'vscode';
 
 // Local imports - utilities
 import {
+  Secrets,
   withLogChannel,
   type RootedFileSystem,
   WorkspaceFs,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { executeCommand, findCommand } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
@@ -29,7 +30,8 @@ import {
 } from '@latex/overleafProject';
 import { COMMIT_HASH_PATTERN } from '@texra/utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@texra/utils/git/commitLogFormat';
-import type { PlatformSecrets, WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { PlatformSecrets } from '@texra-ai/harness/host';
 
 const CHANNEL = 'gitCommands';
 
@@ -288,7 +290,7 @@ function buildOverleafClonePorts(
   };
 }
 
-export function cloneOverleafProject(secrets: PlatformSecrets) {
+export function cloneOverleafProject() {
   return Effect.gen(function* () {
     const input = yield* promptInput(
       'Clone Overleaf/ShareLaTeX Project',
@@ -319,7 +321,7 @@ export function cloneOverleafProject(secrets: PlatformSecrets) {
       remote,
       workspacePath,
       buildOverleafClonePorts(
-        secrets,
+        yield* Secrets,
         remote,
         workspaceFs,
         yield* ChildProcessSpawner,

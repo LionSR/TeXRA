@@ -26,7 +26,7 @@ import { sessionView } from './sessionView';
 import type {
   RunModelDecisionReason,
   AgentDelegationScope,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { RunView } from '@texra-ai/harness/schemas';
 import type { PastedImageEntry } from '../input/draftAttachments';
 

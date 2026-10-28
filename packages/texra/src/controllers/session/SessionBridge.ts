@@ -1,6 +1,6 @@
 /**
- * The host-neutral bridge owner of a session's webview ports (PRD
- * one-fold-three-renderers, 7.4, 8.1 to 8.5): one framer fiber per attached
+ * The host-neutral bridge owner of a session's webview ports: one framer
+ * fiber per attached
  * port, the `Subscribe` handler, and the two request handlers. The
  * extension attaches its sidebar webview and its editor tab as two ports,
  * the desktop attaches its renderer per open paper; each port's frames are
@@ -9,7 +9,7 @@
  * rides every port's frames as the `host` snapshot, one level per session
  * that the host's producers write through `setHost`.
  *
- * Ownership is scoped (7.7): `make` builds the bridge in the scope its host
+ * Ownership is scoped: `make` builds the bridge in the scope its host
  * holds and closes; `attach` forks a port scope from it, and the port's
  * framer fiber runs in a scope forked from that one, so closing a port
  * releases its transcript set and tells the host before it interrupts the
@@ -44,8 +44,8 @@ import {
   Internal,
   isRequestRefusal,
   type Session,
-  withLogChannel,
 } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import {
   Invalid,
   RequestErrorSchema,
@@ -62,7 +62,7 @@ import {
   type SurfaceActionMessage,
 } from '@texra/shared/session/sessionFrames';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 const CHANNEL = 'SessionBridge';
 
@@ -77,7 +77,7 @@ interface SessionBridgeOptions {
   /** The session this bridge frames and requests through. */
   readonly session: Session;
   readonly onPortClosed: (port: string) => void;
-  /** The host's capabilities (8.3), performed on the surface's behalf, as
+  /** The host's capabilities, performed on the surface's behalf, as
    *  one program per request that takes the process services from the fiber
    *  the host's transport runs `receive` on. A handler cancels with
    *  `Cancelled` or refuses with `Unavailable` or `Rejected`; anything else
@@ -174,12 +174,12 @@ export class SessionBridge {
     this.key = options.session.roots.storage;
   }
 
-  /** The host's producers write the snapshot every port frames (8.1). */
+  /** The host's producers write the snapshot every port frames. */
   setHost(snapshot: HostSnapshot): Effect.Effect<void> {
     return SubscriptionRef.set(this.host, snapshot);
   }
 
-  /** The host acting on surface-owned state (8.5): every attached port
+  /** The host acting on surface-owned state: every attached port
    *  applies it, so the sidebar and the editor tab follow together. */
   surfaceAction(action: SurfaceActionMessage['action']): void {
     for (const entry of this.ports.values()) this.act(entry, action);

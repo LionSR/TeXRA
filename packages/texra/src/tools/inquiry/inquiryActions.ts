@@ -8,7 +8,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { Effect } from 'effect';
 /**
- * The inquiry's side of a `request.decided` (one run model, 3.7): an inquiry
+ * The inquiry's side of a `request.decided`: an inquiry
  * is a request whose thread names its predecessor, so it rides the one
  * request protocol; what stays here is what is specific to the kind. The
  * answer is recorded on the thread's cross-project record (the record stays,
@@ -19,7 +19,7 @@ import { Effect } from 'effect';
  */
 
 // Local imports - agent
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 
 // Local imports - shared
 import {

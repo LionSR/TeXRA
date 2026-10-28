@@ -24,13 +24,29 @@ import * as path from 'node:path';
 import { Effect, FileSystem, SynchronizedRef } from 'effect';
 import which from 'which';
 
-import { withLogChannel, isModuleNotFoundError } from '@texra-ai/harness';
+import { withLogChannel, isModuleNotFoundError } from '@texra-ai/harness/host';
 import { executeCommand, withExtendedPath } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
-import { nodeHostEnvironment } from '@texra/platform/defaults/nodeHostEnvironment';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'ExternalBinaryUtils';
+
+type ElectronProcess = NodeJS.Process & {
+  defaultApp?: boolean;
+  resourcesPath?: string;
+};
+
+/**
+ * `process.resourcesPath` when running inside a packaged Electron app;
+ * undefined in development mode (`defaultApp === true`) and in
+ * non-Electron runtimes (VS Code extension host, CLI, plain Node.js).
+ */
+function packagedElectronResourcesPath(): string | undefined {
+  const electronProcess = process as ElectronProcess;
+  if (electronProcess.versions.electron == null) return undefined;
+  if (electronProcess.defaultApp === true) return undefined;
+  return electronProcess.resourcesPath;
+}
 
 // ---------------------------------------------------------------------------
 // SDK import
@@ -146,7 +162,7 @@ const resolveBinary = Effect.fn('externalBinaryUtils.resolveBinary')(function* (
   // Strategy 1: packaged Electron app.asar.unpacked resources
   // Highest priority when present — packaged apps cannot execute binaries
   // from inside app.asar.
-  const resourcesPath = nodeHostEnvironment.packagedElectronResourcesPath();
+  const resourcesPath = packagedElectronResourcesPath();
   if (resourcesPath != null) {
     for (const pkg of config.platformPackages) {
       const platformPkgDir = path.join(

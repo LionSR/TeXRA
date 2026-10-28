@@ -462,11 +462,11 @@ The installed `AgentDirectoriesPort` is the whole of the core agent bundle:
 `resourcesPath` it was given and the files are read where they sit, so a port
 pointed at a tree that does not hold them leaves the `AgentCatalog` with no
 packaged agents (§2). Tool plugins that ship agents (today `lean4`) keep them at
-`<resourcesPath>/plugins/<id>/agents`, and the `builtIn` scan adds
-those directories only once
-`installPluginAgentDirectories(resourcesPath, pluginIds)`
-(`packages/harness/src/agent/index/BundledAgentDirectories.ts`) has run, as `bootstrapHost`
-does. Skipping it drops the Lean agents and nothing else.
+`<resourcesPath>/plugins/<id>/agents`, and the `builtIn` scan adds the
+directory of each plugin in the process's `ToolRegistry` that is on, under the
+port's `resourcesRoot` (`enabledBuiltInRoots`,
+`packages/harness/src/agent/index/BundledAgentDirectories.ts`). A port with no
+`resourcesRoot` drops the Lean agents and nothing else.
 
 ---
 

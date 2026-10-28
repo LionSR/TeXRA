@@ -15,7 +15,7 @@ const CHANNEL = 'dialogs';
  * the host's own dialog machinery faults, which is the one failure either
  * picker below can raise. `member` names which picker asked.
  */
-export class OpenDialogFailed extends Schema.TaggedError<OpenDialogFailed>()(
+class OpenDialogFailed extends Schema.TaggedError<OpenDialogFailed>()(
   'OpenDialogFailed',
   {
     member: Schema.Literals(['selectFiles', 'selectFolder']),

@@ -1,4 +1,4 @@
-import { Settings } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness/host';
 import { Effect } from 'effect';
 import {
   API_KEY_PROVIDER_IDS,
@@ -8,9 +8,9 @@ import {
 import { providerEndpointKey } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import type { UpdateProfileMessage } from '@texra/shared/settingsView/settingsViewMessages';
+import type { UpdateProfileMessage } from '@texra/shared/settingsView/profileViewMessages';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * Assemble the canonical `UPDATE_PROFILE` message for either host: every

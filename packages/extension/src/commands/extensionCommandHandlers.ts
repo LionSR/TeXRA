@@ -17,17 +17,17 @@ import {
   definedHandler,
   type CommandHandler,
 } from '@texra/shared/commands/registry';
+import type { Sessions } from '@texra-ai/harness';
 import type {
   StorageFs,
   WorkspaceFs,
   ProcessServices,
-  Sessions,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 
 /**
  * This module is deliberately free of `vscode` imports (unlike
- * `extensionCommandSurface.ts`, which wires the real actions against VS
+ * `commands.ts`, which wires the real actions against VS
  * Code APIs) so it — and the catalog-derived types/handler map it
  * exports — can be imported directly from Vitest suites without a
  * `vscode` mock, the same way `packages/desktop/src/shared/desktopCommandSurface.ts`
@@ -61,7 +61,7 @@ type ExtensionRegistryCommandId =
 
 /**
  * A command's program. The registration boundary in
- * `extensionCommandSurface.ts` runs it once, over the session's rooted
+ * `commands.ts` runs it once, over the session's rooted
  * filesystems, and settles `executeCommand` with its value.
  */
 type CommandProgram<A = void> = Effect.Effect<

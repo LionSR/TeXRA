@@ -16,15 +16,13 @@ import {
   type Path,
 } from 'effect';
 
+import { type LocalSession, type Session, Sessions } from '@texra-ai/harness';
 import {
   SessionHostInteractions,
-  type LocalSession,
-  type Session,
-  type Sessions,
   withPerKeyLane,
   type PerKeyLane,
   StateStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   absentReason,
   createNodeWorkspaceRoots,
@@ -113,9 +111,6 @@ interface DesktopProjectRegistryOptions {
   /** The background service, when the app is its client: a folder's
    *  runs run there. */
   readonly service: ServiceLink | undefined;
-  /** The process's sessions: each project's session is opened through
-   *  them. */
-  readonly sessions: Sessions['Service'];
 }
 
 export interface DesktopProjectRegistry {
@@ -328,10 +323,11 @@ export function openDesktopProjectRegistry(
 ): Effect.Effect<
   DesktopProjectRegistry,
   Error,
-  DesktopProjectRecords | StateStores
+  DesktopProjectRecords | StateStores | Sessions
 > {
   return Effect.gen(function* () {
-    const { sessions } = options;
+    // The process's sessions: each project's session is opened through them.
+    const sessions = yield* Sessions;
     const records = yield* DesktopProjectRecords;
     const stateStores = yield* StateStores;
     const lanes = new Map<string | symbol, PerKeyLane>();

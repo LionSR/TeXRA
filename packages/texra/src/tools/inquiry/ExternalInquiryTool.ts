@@ -3,8 +3,8 @@
  *
  * The agent dispatches a self-contained question; the user later pastes
  * the external model's answer back via the inquiry panel. The question is a
- * request like any other (`request.opened { kind: 'externalInquiry' }`, one
- * run model, 3.7), whose payload names its thread (`threadId`); dispatch is non-blocking: the tool returns immediately with `dispatched`
+ * request like any other (`request.opened { kind: 'externalInquiry' }`),
+ * whose payload names its thread (`threadId`); dispatch is non-blocking: the tool returns immediately with `dispatched`
  * and the cycle continues. When the decision arrives, even hours later,
  * even after a restart, `recordInquiryDecision` records it on the thread and
  * delivers a `[inquiry]` follow-up that wakes or resumes the run.
@@ -17,7 +17,8 @@
 
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Cause, Effect, Schema } from 'effect';
-import { defineTool, withLogChannel, type ToolResult } from '@texra-ai/harness';
+import { defineTool, type ToolResult } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import {
   callerRun,
   ChildRuns,
@@ -40,8 +41,6 @@ import {
   type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
 import { inquiryRecordsLayer } from '@texra/tools/inquiry/inquiryRecords';
-
-import { collectKnownSessionLinks } from './inquiryRecordFormatting';
 
 const CHANNEL = 'InquiryTool';
 
@@ -130,6 +129,26 @@ const InquiryInputSchema = Schema.Union([
 ]);
 
 type InquiryInput = typeof InquiryInputSchema.Type;
+
+/**
+ * Collect distinct external session links (most-recent-first) across all
+ * turns of a thread. Used by the inquiry panel to render "known external
+ * session links" so the user can continue the same outside conversation.
+ */
+function collectKnownSessionLinks(
+  manifest: InquiryThreadRecord,
+): string[] | undefined {
+  const known = [
+    ...new Set(
+      manifest.turns
+        .toReversed()
+        .filter((turn) => turn.kind !== 'open')
+        .flatMap((turn) => turn.sessionLinks ?? []),
+    ),
+  ];
+
+  return known.length ? known : undefined;
+}
 
 // ============================================================================
 // Read / list subcommand outputs

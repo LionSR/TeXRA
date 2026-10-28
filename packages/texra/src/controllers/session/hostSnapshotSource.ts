@@ -1,5 +1,5 @@
 /**
- * The `host` snapshot of one session (PRD one-fold-three-renderers, 8.1):
+ * The `host` snapshot of one session:
  * what the shell renders but does not own. It rides on every frame that
  * follows a change and on every subscribe, so a surface never asks for a
  * catalog and never holds a stale one. Every producer is a read the host
@@ -25,12 +25,12 @@ import {
   type PerKeyLane,
   Settings,
   withPerKeyLane,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
-import { loadTeamOptions } from '@texra-ai/harness';
+import { loadTeamOptions } from '@texra-ai/harness/host';
 import type {
   FileOptions,
   HostSnapshot,
@@ -40,7 +40,7 @@ import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
-import type { AgentCatalog, SettingsStores } from '@texra-ai/harness';
+import type { AgentCatalog, SettingsStores } from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type Banners = HostSnapshot['banners'];

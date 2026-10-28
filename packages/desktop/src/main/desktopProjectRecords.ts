@@ -1,7 +1,7 @@
 /** The desktop profile's ordered project selection, independent of project sessions. */
 import { Context, Effect, Result, Schema } from 'effect';
 
-import type { CurrentValues, ValueFamily } from '@texra-ai/harness';
+import type { CurrentValues, ValueFamily } from '@texra-ai/harness/host';
 
 /** How many closed projects File > Open Recent offers. */
 const RECENT_PROJECT_LIMIT = 10;
@@ -36,11 +36,9 @@ export const DESKTOP_PROJECTS: ValueFamily<ProjectLists> = {
  * The remembered projects, on the process's handle on the global root.
  *
  * That root is the shared `~/.texra` this process already keeps its sessions,
- * inquiry threads and update check in, not the Electron profile directory
- * this list used to be written to: the same ruling that moved the
- * update-check row onto the one process handle moves this row with it, since
- * one handle per process is the point and a second root would mean a second
- * connection and a second change poll for one list.
+ * inquiry threads and update check in, not the Electron profile directory:
+ * one handle per process, since a second root would mean a second connection
+ * and a second change poll for one list.
  *
  * Two lists in one current value: `remembered` is what reopens at launch,
  * the one shown last; `recent` is the closed projects File > Open Recent

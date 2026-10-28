@@ -9,11 +9,11 @@
  */
 
 // Third-party imports
-import { Context, Effect, Layer, Schema } from 'effect';
+import { Context, Effect, Schema } from 'effect';
 
 // Local imports
 import { getCodexStatus } from '@texra-ai/llm/node';
-import { readModelOptions, Secrets } from '@texra-ai/harness';
+import { readModelOptions, Secrets } from '@texra-ai/harness/host';
 import { ToolError } from '@texra-ai/harness/plugins';
 import type {
   TerminalRunFailed,
@@ -21,7 +21,7 @@ import type {
   TerminalRunResult,
 } from '@texra/hosts/uiHosts';
 import { CHATGPT_SETUP_MODEL } from '@texra/model/setupModelDefaults';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * A host command that was dispatched and rejected (the VS Code host's own
@@ -110,11 +110,7 @@ export interface SetupPlatformShape {
 export class SetupPlatform extends Context.Service<
   SetupPlatform,
   SetupPlatformShape
->()('@texra/setup/SetupPlatform') {
-  static layer(setup: SetupPlatformShape): Layer.Layer<SetupPlatform> {
-    return Layer.succeed(SetupPlatform)(setup);
-  }
-}
+>()('@texra/setup/SetupPlatform') {}
 
 /**
  * Fail with a uniform, sorted-allowlist error when `id` is not a member of

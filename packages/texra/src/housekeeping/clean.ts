@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { glob } from 'glob';
 
 // Internal imports
-import { withLogChannel, WorkspaceFs } from '@texra-ai/harness';
+import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/host';
 import { EXCLUDED_DIRS } from '@texra/shared/constants/latexTiming';
 
 // Local file imports

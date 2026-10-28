@@ -10,7 +10,8 @@ import {
   type ProcessRuntime,
   type RunModelCandidate,
   type RunModelDecisionReason,
-} from '@texra-ai/harness';
+  type RunModelFallbackMode,
+} from '@texra-ai/harness/host';
 import {
   type ModelOptionData,
   type UsageRoute,
@@ -49,8 +50,6 @@ interface CliRunnableModelResolution {
   readonly notice?: string;
 }
 
-type CliModelFallbackMode = 'reject' | 'notice' | 'silent';
-
 const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
   'explicit-override': 'reject',
   environment: 'reject',
@@ -60,11 +59,10 @@ const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
   'user-config': 'notice',
   history: 'notice',
   'parent-run': 'notice',
-  'router-config': 'reject',
   credential: 'reject',
   'builtin-default': 'silent',
   'access-list-default': 'silent',
-} satisfies Record<RunModelDecisionReason, CliModelFallbackMode>;
+} satisfies Record<RunModelDecisionReason, RunModelFallbackMode>;
 
 /** Stores and runtime held by command actions and form loaders. */
 export type CliModelStores = ModelOptionStores & {

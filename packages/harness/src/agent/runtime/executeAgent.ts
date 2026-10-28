@@ -136,10 +136,7 @@ function launchRun(
       : runToolUse({
           turns: shared.turns,
           resume: variant.kind === 'resume',
-          attachment: {
-            attach: (controls) => handle.attachControls(controls),
-            detach: (controls) => handle.detachControls(controls),
-          },
+          attachment: handle,
         }),
   ).pipe(
     Effect.flatMap(withChildrenSpend),

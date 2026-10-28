@@ -13,7 +13,7 @@ import {
   type ProcessRuntime,
   withProcessServices,
   withSessionFs,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { ExternalOpenFailed, type MessageHost } from '@texra/hosts/uiHosts';
@@ -147,9 +147,16 @@ export function createDesktopPreviewHost(
     });
   }
 
-  function openExternalProgram(
+  /** The reported form is the default; only the unreported one carries the
+   *  shell's rejection. */
+  function openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
+  function openExternal(
     url: string,
-    reportFailure: boolean,
+    options: { readonly reportFailure?: boolean },
+  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed>;
+  function openExternal(
+    url: string,
+    { reportFailure = true }: { readonly reportFailure?: boolean } = {},
   ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed> {
     return Effect.tryPromise({
       try: () => options.shell.openExternal(url),
@@ -170,20 +177,6 @@ export function createDesktopPreviewHost(
       ),
       Effect.asVoid,
     );
-  }
-
-  /** The two forms above as one implementation: the reported one is the
-   *  default, and only the unreported one carries the shell's rejection. */
-  function openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
-  function openExternal(
-    url: string,
-    options: { readonly reportFailure?: boolean },
-  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed>;
-  function openExternal(
-    url: string,
-    { reportFailure = true }: { readonly reportFailure?: boolean } = {},
-  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed> {
-    return openExternalProgram(url, reportFailure);
   }
 
   // Opens the PDF in the renderer's pdf workbench tab (an `<iframe>` on

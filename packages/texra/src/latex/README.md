@@ -42,8 +42,7 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   `labelSearch.ts` (`\label{}` lookup); `criticismParser.ts` (`\criticize{}`
   annotations; `replacement/advanced.ts` strips them with the same macro
   scanner).
-- **Output**: `texraResponseTextProcessing.ts` (cleaning and joining a model's
-  continued LaTeX output); `texcount.ts` (word counts); `latexdiff.ts`
+- **Output**: `texcount.ts` (word counts); `latexdiff.ts`
   (`LaTeXdiffService`: one diff in its direct, VC, per-round or between-round
   form).
 - **Media and files**: `LatexMediaManager.ts` (compiles PDFs and mirrors
@@ -67,5 +66,5 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   CLI goes through the agent's `LatexDiffManager` instead.
   `diffCommandExecutor.ts` runs the operations, `diffFileNameManager.ts` names
   outputs, `diffFileProcessor.ts` post-processes a direct or VC diff (restores
-  bibliography directives, sanitizes `\DIFadd`/`\DIFdel`), `latexdiffCopy.ts`
-  holds the outcome strings both hosts print, and `types.ts` the shared types.
+  bibliography directives, sanitizes `\DIFadd`/`\DIFdel`), and `latexdiffCopy.ts`
+  holds the outcome strings both hosts print.

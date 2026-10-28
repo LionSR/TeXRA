@@ -2,7 +2,7 @@ import {
   Settings,
   AgentCatalog,
   InvalidAgentTeamError,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 

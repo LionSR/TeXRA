@@ -4,12 +4,9 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Path, Schema } from 'effect';
 
 // Local imports
-import {
-  defineTool,
-  ToolContext,
-  WorkspaceFs,
-  toPosixPath,
-} from '@texra-ai/harness';
+import { defineTool } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
+import { WorkspaceFs, toPosixPath } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   nullishWithDefault,

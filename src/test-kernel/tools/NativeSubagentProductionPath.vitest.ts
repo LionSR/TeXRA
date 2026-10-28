@@ -54,7 +54,7 @@ vi.mock('@agent/runtime/modelAccess/ModelAccess', async (importActual) => {
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { getRunRecords, readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import type { Message } from '@agent/runtime/loop/rows';
+import type { AppendedMessage } from '@agent/runtime/storedTurn';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
@@ -199,7 +199,7 @@ function scriptedResult(
 /** One request the transport was asked to prepare, as the loop assembled it. */
 interface ObservedRequest {
   readonly model: string;
-  readonly messages: readonly Message[];
+  readonly messages: readonly AppendedMessage[];
   /** The tool names the request offered. */
   readonly tools: readonly string[];
 }

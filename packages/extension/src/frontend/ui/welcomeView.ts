@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { withLogChannel, type ProcessRuntime } from '@texra-ai/harness';
+import { withLogChannel, type ProcessRuntime } from '@texra-ai/harness/host';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { ONBOARDING_CARD_TITLE } from '@ui/copy/onboarding';

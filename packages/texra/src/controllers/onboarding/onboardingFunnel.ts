@@ -1,5 +1,5 @@
 /**
- * Host-neutral onboarding funnel (PRD: agent-native onboarding).
+ * Host-neutral onboarding funnel.
  *
  * The funnel state is derived, never a mode the user (or code) sets:
  *
@@ -20,7 +20,11 @@
 
 import { Effect, Schema, type Scope, Semaphore, Stream } from 'effect';
 
-import { Settings, StateReadFailed, withLogChannel } from '@texra-ai/harness';
+import {
+  Settings,
+  StateReadFailed,
+  withLogChannel,
+} from '@texra-ai/harness/host';
 import {
   agentName,
   GlobalStateKey,
@@ -29,7 +33,8 @@ import {
 } from '@texra-ai/harness/schemas';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
-import type { Session, StateStore, StateWriteFailed } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
+import type { StateStore, StateWriteFailed } from '@texra-ai/harness/host';
 
 /** An onboarding flag: off until something sets it. */
 const OnboardingFlagSchema = Schema.Boolean.pipe(
@@ -133,7 +138,7 @@ interface OnboardingFunnelTransition {
   state: OnboardingFunnelState;
   /** Select the setup agent in the launcher (entering State 1). */
   selectSetupAgent: boolean;
-  /** Configuring a credential clears a previous skip (PRD edge case). */
+  /** Configuring a credential clears a previous skip. */
   clearDeclined: boolean;
 }
 

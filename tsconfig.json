@@ -13,6 +13,7 @@
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "paths": {
+      "@texra-ai/harness/host": ["./packages/harness/src/host.ts"],
       "@texra-ai/harness/node": ["./packages/harness/src/node.ts"],
       "@texra-ai/harness/plugins": ["./packages/harness/src/plugins.ts"],
       "@texra-ai/harness/schemas": ["./packages/harness/src/schemas.ts"],
@@ -35,7 +36,9 @@
         "./packages/texra/src/*.ts",
         "./packages/texra/src/*/index.ts"
       ],
-      "@common/webview": ["./packages/extension/src/common/webview/index.ts"],
+      "@common/webview": [
+        "./packages/extension/src/common/webview/BundledViewContentProvider.ts"
+      ],
       "@common/*": [
         "./packages/harness/src/common/*",
         "./packages/harness/src/common/*.ts",

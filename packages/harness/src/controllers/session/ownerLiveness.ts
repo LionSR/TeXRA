@@ -15,7 +15,7 @@ import type { SessionView } from '@shared/session/sessionView';
 import { LocalRuntimeSource } from './sessionSources';
 import { SessionViewService } from './SessionView';
 
-/** How often the owners the view names are re-probed (PRD 5.2). */
+/** How often the owners the view names are re-probed. */
 const OWNER_LIVENESS_PROBE_INTERVAL = '5 seconds';
 
 /** The owner ids of the non-terminal runs another process wrote; with no

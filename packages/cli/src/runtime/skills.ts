@@ -7,7 +7,7 @@ import {
   type EnabledSkill,
   type SettingsStores,
   type SkillLoadIssue,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { AGENT_SKILLS_CONFIG_KEY } from '@texra-ai/harness/schemas';
 
 /**

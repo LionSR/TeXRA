@@ -22,7 +22,7 @@ import { createDesktopDialogs } from './desktopDialogs.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
 import { createDesktopPreviewHost } from './desktopPreviewHost.js';
 import { DESKTOP_RELEASES_PAGE_URL } from './desktopUpdateChecker.js';
-import type { ProcessRuntime } from '@texra-ai/harness';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { DesktopProject } from './desktopProjects.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopAgentRunOptions } from './desktopAgentRun.js';
@@ -216,7 +216,6 @@ export function createDesktopWindowHost(options: {
     reported,
     reportBackgroundError,
     openExternalProgram,
-    openExternalInBackground,
     showDiscardDialog: () =>
       dialog.showMessageBoxSync(window, {
         type: 'warning',

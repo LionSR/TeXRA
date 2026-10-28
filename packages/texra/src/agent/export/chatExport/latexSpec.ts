@@ -1,13 +1,14 @@
 /**
  * LaTeX format spec for chat export.
  *
- * The document preamble is injected via `createLatexSpec(latexPreamble)` rather
+ * The document preamble is passed into `formatChatAsLatex` rather
  * than imported here: the `.tex` template lives under the extension package's
  * `resources/` (host-specific), so this core formatter stays free of any
  * `@resources` import and is buildable from any host.
  */
 
 import type {
+  ChatExportInput,
   DocumentMeta,
   ExportAttachmentType,
 } from '@texra/agent/export/schemas';
@@ -15,7 +16,7 @@ import type {
 import { escapeLatex, latexListing } from './escapeUtils';
 import {
   HEADER_FIELDS,
-  type FormatSpec,
+  renderDocument,
   type NodeRenderers,
 } from './formatSpec';
 
@@ -92,14 +93,14 @@ const TEX_NODES: NodeRenderers = {
     `\\begin{websearchbox}\n\\textbf{Query:} ${escapeLatex(query)}\n\\end{websearchbox}\n`,
 };
 
-/**
- * Build the LaTeX format spec, binding the host-supplied document preamble
- * into the header renderer.
- */
-export function createLatexSpec(latexPreamble: string): FormatSpec {
-  return {
+/** Render a conversation as a LaTeX document under the host-supplied preamble. */
+export function formatChatAsLatex(
+  input: ChatExportInput,
+  latexPreamble: string,
+): string {
+  return renderDocument(input, {
     header: (meta) => latexHeader(meta, latexPreamble),
     footer: '\\end{document}',
     nodes: TEX_NODES,
-  };
+  });
 }

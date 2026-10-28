@@ -1,7 +1,10 @@
 import { Effect } from 'effect';
 
 import { type ApiKeyProviderId } from '@texra-ai/llm';
-import { quotaFallbackRouteFor, type PlatformSecrets } from '@texra-ai/harness';
+import {
+  quotaFallbackRouteFor,
+  type PlatformSecrets,
+} from '@texra-ai/harness/host';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
@@ -14,7 +17,7 @@ import {
   type SlashCommandContext,
   transcriptSlashCommandOutput,
 } from './slashContext';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * Save a provider key through the shared key controller and answer the extra
@@ -23,13 +26,8 @@ import type { SettingsStores } from '@texra-ai/harness';
  * on every host, so only the coding-plan tip is worded here.
  */
 export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
-  function* (
-    secrets: PlatformSecrets,
-    stores: SettingsStores,
-    provider: ApiKeyProviderId,
-    key: string,
-  ) {
-    yield* commitCliProviderApiKey(secrets, stores, provider, key);
+  function* (stores: SettingsStores, provider: ApiKeyProviderId, key: string) {
+    yield* commitCliProviderApiKey(stores, provider, key);
     const codingPlan = CODING_PLAN_BY_API_PROVIDER.get(provider);
     if (!codingPlan) return undefined;
     if (!codingPlan.exclusiveCredential) {

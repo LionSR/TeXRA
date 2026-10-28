@@ -21,23 +21,21 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
+import { type LocalSession } from '@texra-ai/harness';
 import {
   StorageFs,
   type AssembleTraceResult,
-  type LocalSession,
   type WorkspaceFs,
   pathToLocationIn,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { absentReason, readNormalizedFile } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 
-import {
-  formatChatAsMarkdown,
-  formatChatAsLatex,
-  generateExportFilename,
-} from '@texra/agent/export/chatExportFormatter';
+import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
+import { formatChatAsLatex } from '@texra/agent/export/chatExport/latexSpec';
+import { generateExportFilename } from '@texra/agent/export/chatExport/filenames';
 import {
   loadChatExportInput,
   type ChatExportInputUnreadable,

@@ -12,14 +12,14 @@ import {
   teamPlanStatus,
   type TeamAvailability,
   type TeamRunPlan,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   findTeamPreset,
   launchableTeamPresets,
   type TeamPreset,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import type { AgentEntry, StateStore } from '@texra-ai/harness';
+import type { AgentEntry, StateStore } from '@texra-ai/harness/host';
 
 export type CliTeamRunPlan = TeamRunPlan<AgentEntry>;
 

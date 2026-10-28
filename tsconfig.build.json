@@ -9,6 +9,7 @@
   },
   "include": [
     "packages/harness/src/index.ts",
+    "packages/harness/src/host.ts",
     "packages/harness/src/node.ts",
     "packages/harness/src/plugins.ts",
     "packages/harness/src/schemas.ts",

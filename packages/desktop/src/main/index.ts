@@ -1,7 +1,8 @@
 import { Cause, Effect, Exit, Result, Scope } from 'effect';
 import { app, BrowserWindow, dialog, session } from 'electron';
 
-import { GlobalValues, Sessions, withProcessServices } from '@texra-ai/harness';
+import { Sessions } from '@texra-ai/harness';
+import { GlobalValues, withProcessServices } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { NotificationFailed } from '@texra/hosts/uiHosts';
@@ -25,7 +26,7 @@ import {
 import { reachDesktopService } from './desktopService.js';
 import { openDesktopWindow } from './desktopWindow.js';
 import { installDesktopBeforeQuitWiring } from './desktopWindowLifecycle.js';
-import { createDesktopWindows, type DesktopWindows } from './desktopWindows.js';
+import { createDesktopWindows } from './desktopWindows.js';
 import { reportFatalStartupError } from './fatalStartupError.js';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 import { initializeElectronPlatform } from './platform/index.js';
@@ -34,17 +35,6 @@ import { showDesktopWarningDialog } from './platform/warningDialog.js';
 const moduleDirname = import.meta.dirname;
 if (DESKTOP_HEADLESS && process.platform === 'darwin')
   app.setActivationPolicy('accessory');
-
-/**
- * The process's windows, once the startup program has built them. A second
- * launch can land before the process runtime exists, so the handler below
- * reads this at the event and finds nothing to focus until then.
- */
-let desktopWindows: DesktopWindows | undefined;
-
-// This process holds the single-instance lock (`bootstrap.ts`): a second
-// launch focuses the running window and quits itself.
-app.on('second-instance', () => desktopWindows?.focus());
 
 // The packaged renderer uses Lit style attributes and bundled font data URLs
 // (codicons/KaTeX). Keep script run locked to app files while allowing
@@ -93,7 +83,7 @@ void Effect.runPromise(
     let projects: DesktopProjectRegistry | undefined;
     // The shutdown handlers, the startup program, and every surface they
     // wire run on the process runtime the platform builds.
-    const { runtime, processScope, initialize, sessions } =
+    const { runtime, processScope, initialize } =
       yield* initializeElectronPlatform(moduleDirname);
     // Recording has one process owner, shared by every project and window.
     const draftRequests = new HostDraftRequests();
@@ -103,7 +93,9 @@ void Effect.runPromise(
     // its artifacts flushed), the recording stops, the external-editor patch
     // directories every window's diff host recorded are removed, every
     // project is released (or, before the registry opened, the fallback
-    // project's scope), and the runtime goes last.
+    // project's scope), and the runtime goes last. The window's release is
+    // registered once the windows exist, after every other step, so it runs
+    // first: the sessions never close under a window still tearing down.
     const shutdownScope = Scope.makeUnsafe();
     const shutdown = yield* Effect.cached(
       Scope.close(shutdownScope, Exit.void),
@@ -141,12 +133,6 @@ void Effect.runPromise(
         Effect.flatMap(Sessions, (sessions) => sessions.closeAll),
       ).pipe(Effect.asVoid),
     );
-    // Registered last, so it runs first: the sessions never close under a
-    // window still tearing down.
-    yield* Scope.addFinalizer(
-      shutdownScope,
-      Effect.suspend(() => desktopWindows?.released ?? Effect.void),
-    );
 
     // Until the initial window is fully wired, any startup failure (platform
     // init included) runs the shutdown an ordinary application exit does.
@@ -179,7 +165,6 @@ void Effect.runPromise(
           );
         const registry = yield* openDesktopProjectRegistry({
           service: Result.isSuccess(service) ? service.success : undefined,
-          sessions: yield* sessions,
           dataRoot: platformInit.dataRoot,
           processRoots: platformInit.processRoots,
           processScope,
@@ -217,9 +202,6 @@ void Effect.runPromise(
               {
                 projects: registry,
                 draftRequests,
-                globalState: platformInit.globalState,
-                secrets: platformInit.secrets,
-                agentDirectories: platformInit.agentDirectories,
                 resourcesPath: platformInit.resourcesPath,
                 mainDir: platformInit.mainDir,
                 runtime,
@@ -227,7 +209,11 @@ void Effect.runPromise(
               hooks,
             ),
         });
-        desktopWindows = windows;
+        yield* Scope.addFinalizer(shutdownScope, windows.released);
+        // This process holds the single-instance lock (`bootstrap.ts`): a
+        // second launch focuses the running window and quits itself. One
+        // that lands before the windows exist has nothing to focus.
+        app.on('second-instance', () => windows.focus());
         // Ask the renderer to close before draining process services. A dirty
         // editor can veto that close and remain fully operational. Once the
         // window really closes, its handler calls app.quit() again and this

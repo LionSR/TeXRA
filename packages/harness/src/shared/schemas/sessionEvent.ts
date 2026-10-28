@@ -169,15 +169,15 @@ export type RunProvenance = typeof RunProvenanceSchema.Type;
 
 /**
  * Per-run launch facts. Existence fact: a run exists iff its `run.start`
- * exists, once per incarnation, seq 1 of its aggregate (decision 9); the
+ * exists, once per incarnation, seq 1 of its aggregate; the
  * aggregate's logical id is the run id, so the row carries no second copy of
  * it. `worktree` is absent for a run that executes in the workspace itself
  * rather than in a dedicated worktree. `category`
  * and `userFollowUpSupport` are explicit on every run: the
  * launcher knows them for an agent, a process, and a script alike,
- * and the fold reads them verbatim and derives nothing (PRD 6, item 6). The
- * initial approval-policy snapshot rides here rather than as its own event
- * (PRD 6, item 2): under the latest-of-type rule a run never edited would
+ * and the fold reads them verbatim and derives nothing. The
+ * initial approval-policy snapshot rides here rather than as its own event:
+ * under the latest-of-type rule a run never edited would
  * otherwise have no policy entry, and on the payload it is atomic with the
  * run's existence.
  */
@@ -229,11 +229,11 @@ export const PluginFactDraftSchema = durable('plugin.fact', {
  * run vocabulary: the trace's `AgentEvent` (`packages/harness/src/agent/trace/events.ts`) is
  * derived from these arms, minus the aggregate qualification. Session-scoped
  * arms carry the session facts with the payload flattened. `run.removed` is
- * the tombstone: the last row of its aggregate, final (PRD 5.2, "Existence").
+ * the deletion marker: the last row of its aggregate, final.
  */
 const DisplayRowDraftSchema = Schema.Union([
-  /** Every activation of a run, the first launch and each resume (PRD 6,
-   *  item 8); `run.start` is the creation fact and happens once. */
+  /** Every activation of a run, the first launch and each resume;
+   *  `run.start` is the creation fact and happens once. */
   durable('run.activate', {}),
   /** What the run runs with: the newest row's model and `binding` hold. */
   durable('run.config', {

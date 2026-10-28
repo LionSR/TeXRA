@@ -1,5 +1,5 @@
 import { Cache, Cause, Clock, Duration, Effect } from 'effect';
-import { Settings, withLogChannel } from '@texra-ai/harness';
+import { Settings, withLogChannel } from '@texra-ai/harness/host';
 import { HttpClientError } from 'effect/http';
 
 import { codexCoordinator, SubscriptionOAuthError } from '@texra-ai/llm/node';
@@ -20,14 +20,15 @@ import {
   GLM_CODING_PLAN_USAGE_URL,
 } from './glmCodingPlanUsageAdapter';
 import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
-import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness';
+import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness/host';
 import type { ParsedSubscriptionUsage } from './subscriptionUsageParsing';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'SubscriptionUsage';
 
 const CACHE_TTL = Duration.seconds(30);
-const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+/** The one deadline over a usage request and its body read. */
+const REQUEST_TIMEOUT_MS = 15_000;
 
 type CodingPlanUsageProvider =
   (typeof CODING_PLAN_SUBSCRIPTIONS)[number]['usageProvider'];
@@ -50,11 +51,10 @@ const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
   ...mapCodingPlanSubscriptions('displayName'),
 };
 
-/** The credential stores this service reads, plus a test-only deadline. */
+/** The credential stores this service reads. */
 interface SubscriptionUsageServiceInit {
   readonly secrets: PlatformSecrets;
   readonly stores: SettingsStores;
-  readonly requestTimeoutMs?: number;
 }
 
 /** One cache entry per provider and request variant (the GLM region). */
@@ -88,7 +88,6 @@ interface SubscriptionUsageAdapter {
 export class SubscriptionUsageService {
   private readonly secrets: PlatformSecrets;
   private readonly stores: SettingsStores;
-  private readonly requestTimeoutMs: number;
   private readonly adapters: Readonly<
     Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
   >;
@@ -104,7 +103,6 @@ export class SubscriptionUsageService {
   constructor(init: SubscriptionUsageServiceInit) {
     this.secrets = init.secrets;
     this.stores = init.stores;
-    this.requestTimeoutMs = init.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.adapters = this.createAdapters();
   }
 
@@ -137,7 +135,7 @@ export class SubscriptionUsageService {
   > {
     // Each adapter fetch is already a program over the `HttpClient` service,
     // so the client's own failure reaches the fold below unchanged.
-    // `requestTimeoutMs` is the one deadline over the request and body read.
+    // `REQUEST_TIMEOUT_MS` is the one deadline over the request and body read.
     return Object.freeze({
       chatgpt: {
         // A 401 on a token its stored expiry still calls fresh refreshes
@@ -149,13 +147,13 @@ export class SubscriptionUsageService {
             this.loadChatGptCredential(),
             (credential) =>
               credential
-                ? fetchChatGptUsage(credential, this.requestTimeoutMs)
+                ? fetchChatGptUsage(credential, REQUEST_TIMEOUT_MS)
                 : Effect.succeed(null),
           );
           return Effect.flatMap(this.loadChatGptCredential(), (sent) =>
             sent === null
               ? Effect.succeed(null)
-              : fetchChatGptUsage(sent, this.requestTimeoutMs).pipe(
+              : fetchChatGptUsage(sent, REQUEST_TIMEOUT_MS).pipe(
                   Effect.catchIf(
                     (error) =>
                       HttpClientError.isHttpClientError(error) &&
@@ -174,7 +172,7 @@ export class SubscriptionUsageService {
         fetch: () =>
           Effect.flatMap(lookupApiKey(this.secrets, 'kimiCode'), (apiKey) =>
             apiKey
-              ? fetchKimiCodeUsage(apiKey, this.requestTimeoutMs)
+              ? fetchKimiCodeUsage(apiKey, REQUEST_TIMEOUT_MS)
               : Effect.succeed(null),
           ),
       },
@@ -186,7 +184,7 @@ export class SubscriptionUsageService {
             apiKey
               ? fetchGlmCodingPlanUsage(
                   apiKey,
-                  this.requestTimeoutMs,
+                  REQUEST_TIMEOUT_MS,
                   (useChina ?? true)
                     ? GLM_CODING_PLAN_USAGE_URL
                     : GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,

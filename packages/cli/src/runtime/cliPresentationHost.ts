@@ -12,12 +12,12 @@ import {
 } from './logSinks';
 import { createRunProgressRenderer } from './runProgressRenderer';
 import { missingAgentMessage } from './agents';
+import type { LocalSession } from '@texra-ai/harness';
 import type {
   PresentationEventHandlers,
-  LocalSession,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { LogLevel, RunId } from '@texra-ai/harness/schemas';
 import type { CliContext } from './cliContext';
 
@@ -28,7 +28,7 @@ export interface CliRuntimeHost {
   ): boolean;
   attachRunProgressRenderer(
     session: LocalSession,
-    options?: { readonly runId?: RunId },
+    runId: RunId,
   ): Effect.Effect<void, never, Scope.Scope>;
   prepareInteractivePrompt?: () => void;
   /** {@link prepareInteractivePrompt}, held until the returned release is
@@ -108,8 +108,8 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     };
 
   return {
-    attachRunProgressRenderer: (session, options) =>
-      runProgress ? runProgress.attach(session, options) : Effect.void,
+    attachRunProgressRenderer: (session, runId) =>
+      runProgress ? runProgress.attach(session, runId) : Effect.void,
     prepareInteractivePrompt: () => runProgress?.preserve(),
     holdForPrompt: () => runProgress?.suspend(),
     emit<K extends RuntimePresentationEvent>(

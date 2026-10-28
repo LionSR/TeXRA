@@ -37,8 +37,9 @@ import type {
   ProcessRuntime,
   ProcessServices,
   PlatformSecrets,
+  Secrets,
   SettingsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type {
   SlashCommandEffect,
@@ -56,7 +57,7 @@ export type FormActionHandler<T> = (
 type ApiKeySaveHandler = (
   provider: ApiKeyProviderId,
   key: string,
-) => Effect.Effect<string | void, Error>;
+) => Effect.Effect<string | void, Error, Secrets>;
 
 /** `registerBuiltinSlashCommands`' picker binding, shared with this plugin. */
 type BindSelection = <T>(
@@ -91,7 +92,7 @@ export function modelAccessContribution(deps: {
     ((selection, output) =>
       applyCliModelAccessSelection(stores, selection, undefined, output));
   const onApiKeySave: ApiKeySaveHandler = (provider, key) =>
-    applyCliProviderApiKey(secrets, stores, provider, key);
+    applyCliProviderApiKey(stores, provider, key);
   const onLoginSelect: FormActionHandler<LoginFormValue> =
     deps.onLoginSelect ??
     ((value, output) => loginFromChat(value, stores, undefined, output));

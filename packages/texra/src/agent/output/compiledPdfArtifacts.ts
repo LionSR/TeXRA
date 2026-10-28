@@ -11,7 +11,7 @@ import {
   hasExtension,
   isFileNotFoundError,
   createRunStorageLocation,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 // Third-party imports
 import { Effect, FileSystem, type PlatformError } from 'effect';

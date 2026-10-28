@@ -13,7 +13,8 @@ import {
 
 import { AsyncListForm } from './_shared/ListForm';
 import type { MemoryViewItem } from '@texra-ai/harness/schemas';
-import type { ProcessRuntime, WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 
 interface MemoryListFormProps {
   /** The process runtime the listing runs on, from the surface that

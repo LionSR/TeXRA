@@ -20,7 +20,7 @@ import {
   type HostInteractions,
   type PresentationEventHandlers,
   withLogChannel,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   toErrorMessage,
   INSTRUCTION_ACTION,
@@ -35,11 +35,8 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import type {
-  PlatformSecrets,
-  StateStore,
-  WorkspaceRoots,
-} from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { StateStore } from '@texra-ai/harness/host';
 
 const CHANNEL = 'agentEventListeners';
 
@@ -69,13 +66,13 @@ const INSTRUCTION_ACTION_VIEW: Record<
     title: string;
     run: (
       roots: WorkspaceRoots,
-      secrets: PlatformSecrets,
+      runtime: ProcessRuntime,
     ) => Effect.Effect<void, Error>;
   }
 > = {
   [INSTRUCTION_ACTION.SET_API_KEY]: {
     title: 'Set API Key',
-    run: (roots, secrets) => setApiKey(roots, secrets),
+    run: (roots, runtime) => withProcessServices(runtime, setApiKey(roots)),
   },
   [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: {
     title: 'Open Settings Guide',
@@ -112,7 +109,7 @@ function handleRequestShowError({
 function handleRequestShowInstruction(
   globalState: StateStore,
   roots: WorkspaceRoots,
-  secrets: PlatformSecrets,
+  runtime: ProcessRuntime,
   payload: RequestShowInstructionPayload,
 ): Effect.Effect<void, Error> {
   const actions = (payload.actions ?? []).map((token) => {
@@ -121,7 +118,7 @@ function handleRequestShowInstruction(
       title: view.title,
       callback: () =>
         warnOnFailure(
-          view.run(roots, secrets),
+          view.run(roots, runtime),
           `The instruction action "${view.title}" failed`,
         ),
     };
@@ -214,7 +211,6 @@ function handleRequestEnsureProgressView(
 export function createAgentPresentationHost(
   progressViewProvider: ProgressViewProvider,
   globalState: StateStore,
-  secrets: PlatformSecrets,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
   /** The view's scope, which a scheduled PDF viewer open runs in. */
@@ -235,7 +231,7 @@ export function createAgentPresentationHost(
         }).pipe(Effect.provideService(Scope.Scope, scope)),
       ).pipe(Effect.asVoid),
     requestShowInstruction: (payload) =>
-      handleRequestShowInstruction(globalState, roots, secrets, payload),
+      handleRequestShowInstruction(globalState, roots, runtime, payload),
     showAgentConfigBanner: (payload) =>
       progressViewProvider.showAgentConfigBanner(payload.agentName),
     requestShowError: handleRequestShowError,

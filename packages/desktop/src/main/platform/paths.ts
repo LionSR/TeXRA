@@ -1,9 +1,8 @@
 import { dirname, join } from 'node:path';
 
-import { app } from 'electron';
 import { Config, Effect, FileSystem, Option, Schema } from 'effect';
 
-import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness';
+import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness/host';
 import { absentReason, pathExists } from '@texra-ai/harness/node';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 
@@ -63,16 +62,18 @@ export const resolveDesktopMainDir = Effect.fn('resolveDesktopMainDir')(
   },
 );
 
+/**
+ * The bundled `packages/extension/resources` tree: beside the packaged app's
+ * `Resources/` (`extraResources` in `electron-builder.yml`), or the extension
+ * package's own copy in a development run from `packages/desktop/dist/main`.
+ */
 export const resolveResourcesPath = Effect.fn('resolveResourcesPath')(
   function* (mainDirname: string) {
     const fs = yield* FileSystem.FileSystem;
-    const appPath = app.getAppPath();
     const resourcesPath = process.resourcesPath;
     const candidates = [
-      join(appPath, 'resources'),
       resourcesPath ? join(resourcesPath, 'resources') : undefined,
       join(mainDirname, '../../../extension/resources'),
-      join(mainDirname, '../../../../resources'),
     ].filter((candidate): candidate is string => Boolean(candidate));
 
     for (const candidate of candidates) {

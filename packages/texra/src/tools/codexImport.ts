@@ -22,7 +22,7 @@
  */
 
 import * as path from 'node:path';
-import { Settings } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness/host';
 
 import { Effect, type FileSystem } from 'effect';
 
@@ -35,7 +35,7 @@ import {
   importForeignSdk,
   resolvePackageDir,
 } from '@texra/tools/support/externalBinaryUtils';
-import type { StateReadFailed, SettingsStores } from '@texra-ai/harness';
+import type { StateReadFailed, SettingsStores } from '@texra-ai/harness/host';
 
 type SandboxMode = import('@openai/codex-sdk').SandboxMode;
 type PlatformInfo = { pkg: string; triple: string };

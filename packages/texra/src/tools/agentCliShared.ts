@@ -5,12 +5,9 @@
 import { Effect, Schema, type Context } from 'effect';
 
 // Local imports
-import {
-  presentFollowUpResult,
-  ToolContext,
-  type ToolContextShape,
-  type ToolResult,
-} from '@texra-ai/harness';
+import { type ToolResult } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
+import { presentFollowUpResult } from '@texra-ai/harness/host';
 import {
   ChildRuns,
   requireRun,
@@ -36,7 +33,7 @@ import type {
   AgentCliSessionEntry,
   AgentCliSessionRegistry,
 } from './agentCliSessionRegistry';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * The tool cards one streamed agent-CLI turn opens, keyed by the id its SDK
@@ -286,24 +283,12 @@ export const agentCliApprovalCommand = Effect.fn(
   return `[${agentName} ${resolved}] ${prompt}`;
 });
 
-/** Run context resolved for an agent-CLI launch, handed to the provider's
- * `launch` callback by {@link dispatchAgentCliTool}. */
-export interface AgentCliLaunchContext {
-  parentWorkingDirectory: string | undefined;
-  /** Release the disk-based fallback claim if the launch fails before promoting
-   * it. Undefined for a fresh (non-resumed) launch. */
-  releaseFallbackClaim: (() => void) | undefined;
-  /** The session's registry the step served the tool (`store`). */
-  registry: AgentCliSessionRegistry;
-}
-
 /**
  * The shared execute() dispatch skeleton for an agent-CLI tool. Wraps the
  * boilerplate-identical chain both providers (codex, claudeAgent) run: refuse
  * a call that has no run to launch under or cannot collect the result, choose
  * atomically between queueing onto an owned session and launching a disk-based
- * fallback, and resolve the run context a launch needs (parent
- * stream/run/working-directory). A missing in-memory entry denotes a
+ * fallback. A missing in-memory entry denotes a
  * disk-based SDK fallback, so `launch` receives the `releaseFallbackClaim` it
  * must promote or release. Callers supply only their session store, resume id,
  * resume labels, and the provider-specific launch. The command each tool gets
@@ -313,7 +298,6 @@ export interface AgentCliLaunchContext {
  * runs it as is.
  */
 export function dispatchAgentCliTool<R = never, S = never>(params: {
-  toolCall: ToolContextShape;
   agentName: string;
   /** The plugin's session registry, served by the step that pinned it. */
   store: Context.Key<S, AgentCliSessionRegistry>;
@@ -322,8 +306,12 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
   sourceId?: string;
   prompt: string;
   labels: AgentCliResumeLabels;
+  /** The provider's launch. It reads the tool call and the session registry
+   * from context, as this dispatch does; `releaseFallbackClaim` releases the
+   * disk-based fallback claim if the launch fails before promoting it, and
+   * is undefined for a fresh (non-resumed) launch. */
   launch: (
-    context: AgentCliLaunchContext,
+    releaseFallbackClaim: (() => void) | undefined,
   ) => Effect.Effect<ToolResult, ToolError, R>;
 }): Effect.Effect<ToolResult, ToolError, R | S | ToolContext> {
   const { agentName, store, resumeId, sourceId, prompt, labels, launch } =
@@ -359,12 +347,7 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
       prompt,
       callerRunId,
       labels,
-      launch: (releaseFallbackClaim) =>
-        launch({
-          parentWorkingDirectory: params.toolCall.env.workingDirectory,
-          releaseFallbackClaim,
-          registry,
-        }),
+      launch,
     });
   });
 }

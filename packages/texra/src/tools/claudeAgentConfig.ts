@@ -14,7 +14,7 @@ import {
   lookupApiKey,
   type SecretsFailed,
 } from '@texra-ai/llm';
-import { Secrets, withLogChannel } from '@texra-ai/harness';
+import { Secrets, withLogChannel } from '@texra-ai/harness/host';
 import { executeCommand, inheritedEnv } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';

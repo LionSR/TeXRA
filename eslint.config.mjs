@@ -109,7 +109,7 @@ for (const dir of VSCODE_FREE_ZONE_DIRS) {
 // entries, since a `group` pattern for the bare package name would also
 // match its browser-safe subpaths.
 const BROWSER_HARNESS_ENTRY_PATTERN = {
-  regex: '^@texra-ai/harness(/node|/plugins)?$',
+  regex: '^@texra-ai/harness(/host|/node|/plugins)?$',
   message:
     'A browser bundle takes nothing from this harness entry, types included: use @texra-ai/harness/schemas or @texra-ai/harness/transcript.',
 };
@@ -118,6 +118,7 @@ const BROWSER_HARNESS_ENTRY_PATTERN = {
 // boundary, as opposed to the harness modules under it.
 const HARNESS_ENTRY_FILES = [
   'packages/harness/src/index.ts',
+  'packages/harness/src/host.ts',
   'packages/harness/src/node.ts',
   'packages/harness/src/plugins.ts',
   'packages/harness/src/schemas.ts',

@@ -1,7 +1,6 @@
 /**
  * The step: the one boundary where a run's tools and prompt contributions
- * change, and where the change is recorded (`2026-09-26-core-concepts.md`,
- * invariant 7).
+ * change, and where the change is recorded.
  *
  * Each model request opens a step, and so does a conversation's park. It
  * applies the user's plugin switches, and the installed plugins enabled and
@@ -45,6 +44,7 @@ import type { PluginContext } from '@platform/processRuntime';
 import { Settings } from '@shared/config/settings';
 import {
   AGENT_SKILLS_CONFIG_KEY,
+  qualifyAggregateId,
   SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
   type SkillCatalogEntry,
@@ -66,7 +66,7 @@ import {
 } from '../agentToolResolution';
 import { hostCapabilitiesOf, liveToolGates } from '../requestPolicy';
 import { blobRows, contextAt, stored } from '../run/requestContext';
-import { appendRow, rowAggregate, SCRIPT_TOOL_NAME } from './rows';
+import { appendRow, SCRIPT_TOOL_NAME } from './rows';
 import { stepHooks, type StepHook } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
 
@@ -387,7 +387,7 @@ const openStep = Effect.fn('Step.open')(function* (
           ]),
           {
             type: 'tools.offered',
-            aggregateId: rowAggregate(run.runId),
+            aggregateId: qualifyAggregateId('run', run.runId),
             payload: {
               tools: step.tools.offered,
               skills,

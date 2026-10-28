@@ -14,6 +14,7 @@ import {
   Stream,
 } from 'effect';
 
+import { type RunStopReason, type Session } from '@texra-ai/harness';
 import {
   describeFollowUpFailure,
   hasErrorPresentationClaimed,
@@ -23,10 +24,8 @@ import {
   type PlatformSecrets,
   type ProcessRuntime,
   type ProcessServices,
-  type RunStopReason,
-  type Session,
   withPerKeyLane,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   type RuntimeRequest,
   type RunView,
@@ -88,7 +87,7 @@ import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { SessionRequests } from './tui/state/approvalQueue';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { PastedImageEntry } from './tui/input/draftAttachments';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 // ---------------------------------------------------------------------------
 // Controller
@@ -210,9 +209,9 @@ export interface ChatSessionControllerInit {
    *  process's store. */
   readonly records: (runId: RunId) => ChatRunRecords;
 
-  /** The chat session's {@link CliContext}, read once: the controller
-   *  attaches one interaction host for the session's lifetime. */
-  readonly getSessionContext: () => CliContext;
+  /** The chat session's {@link CliContext}: the controller attaches one
+   *  interaction host for the session's lifetime. */
+  readonly sessionContext: CliContext;
 
   /** The chat's scope: the host attachment and the resumed-root watch
    *  close with it, which the exit drain awaits. */
@@ -294,7 +293,7 @@ export function createChatSessionController(
     session,
     runSession,
     served,
-    getSessionContext,
+    sessionContext,
     chatScope,
     shutdownScope,
     cwd,
@@ -426,7 +425,6 @@ export function createChatSessionController(
   // and desktop attach theirs. The session routes every request to its last
   // attachment, so a detached child of an earlier turn keeps an answerable
   // approval path after its root finalizes, with no per-turn generation.
-  const sessionContext = getSessionContext();
   const presentationHost = createCliRuntimeHost(sessionContext);
   runtime.runSync(
     Scope.addFinalizer(
@@ -457,7 +455,6 @@ export function createChatSessionController(
                       ),
                 ),
               ),
-      secrets,
       settings: stores,
       runtime,
     },
@@ -466,17 +463,17 @@ export function createChatSessionController(
   // host; in the service, one of its project's windows, whose notices its
   // tasks raise here.
   // The attachment closes after the interactions are disposed.
-  const attached = runtime.runSync(Scope.fork(chatScope));
   runtime.runSync(
-    Scope.addFinalizer(
-      chatScope,
-      Effect.sync(() => interactions.dispose?.()),
-    ),
-  );
-  runtime.runSync(
-    runSession
-      .attach(interactions)
-      .pipe(Scope.provide(attached), Effect.forkIn(chatScope)),
+    Effect.gen(function* () {
+      const attached = yield* Scope.fork(chatScope);
+      yield* Scope.addFinalizer(
+        chatScope,
+        Effect.sync(() => interactions.dispose?.()),
+      );
+      yield* runSession
+        .attach(interactions)
+        .pipe(Scope.provide(attached), Effect.forkIn(chatScope));
+    }),
   );
 
   // -----------------------------------------------------------------------

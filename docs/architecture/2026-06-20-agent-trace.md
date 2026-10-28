@@ -77,7 +77,7 @@ packages/harness/src/logger/             ← host diagnostics, not the trace
 └── redaction.ts       ← provider-key redaction for logged text
 
 packages/harness/src/transcript/         ← run transcripts read from rows
-├── runTranscript.ts   ← a run's transcript, rebuilt from its committed rows
+├── completedRunArchive.ts ← a run's conversation, rebuilt from its committed rows
 └── traceAssembler.ts  ← a static trace document from the run's rows
 
 packages/texra/src/telemetry/

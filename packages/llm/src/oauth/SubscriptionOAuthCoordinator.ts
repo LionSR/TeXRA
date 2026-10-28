@@ -43,26 +43,6 @@ export interface SubscriptionSessionStorage {
   delete(): Effect.Effect<void, SecretsFailed>;
 }
 
-/** Token grants compose in the calling fiber, including request cancellation. */
-interface SubscriptionOAuthClient {
-  exchangeAuthorizationCode(params: {
-    code: string;
-    verifier: string;
-    redirectUri: string;
-  }): Effect.Effect<
-    SubscriptionTokenResponse,
-    SubscriptionOAuthError,
-    HttpClient.HttpClient
-  >;
-  refreshTokens(
-    refreshToken: string,
-  ): Effect.Effect<
-    SubscriptionTokenResponse,
-    SubscriptionOAuthError,
-    HttpClient.HttpClient
-  >;
-}
-
 /** Provider-specific policy: every magic URL/claim out of the machine. */
 export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
   /** The persisted session bundle's schema. */
@@ -119,26 +99,12 @@ function grantFailure(error: OAuthRequestError): SubscriptionOAuthError {
   }
 }
 
-/** The form-grant client over a policy's token endpoint. */
-function formGrantClient(endpoint: OAuthFormEndpoint): SubscriptionOAuthClient {
-  return {
-    exchangeAuthorizationCode: (params) =>
-      Effect.mapError(
-        exchangeAuthorizationCode(endpoint, params),
-        grantFailure,
-      ),
-    refreshTokens: (refreshToken) =>
-      Effect.mapError(refreshOAuthTokens(endpoint, refreshToken), grantFailure),
-  };
-}
-
 /** The {@link SubscriptionCoordinator} over a provider's policy. */
 export class SubscriptionOAuthCoordinator<
   S extends SubscriptionSession,
 > implements SubscriptionCoordinator<S> {
   private readonly storage: SubscriptionSessionStorage;
   private readonly policy: SubscriptionOAuthPolicy<S>;
-  private readonly client: SubscriptionOAuthClient;
   private readonly refreshes = new SharedAttempt<S, MachineFailure>();
   private readonly sessionMutations = new SerializedWrites();
   private sessionGeneration = 0;
@@ -146,7 +112,6 @@ export class SubscriptionOAuthCoordinator<
   constructor(init: SubscriptionOAuthCoordinatorInit<S>) {
     this.storage = init.storage;
     this.policy = init.policy;
-    this.client = formGrantClient(init.policy.tokenEndpoint);
   }
 
   /**
@@ -333,7 +298,10 @@ export class SubscriptionOAuthCoordinator<
     this: SubscriptionOAuthCoordinator<S>,
     params: { code: string; verifier: string; redirectUri: string },
   ) {
-    const tokens = yield* this.client.exchangeAuthorizationCode(params);
+    const tokens = yield* Effect.mapError(
+      exchangeAuthorizationCode(this.policy.tokenEndpoint, params),
+      grantFailure,
+    );
     return yield* this.storeTokens(tokens);
   });
 
@@ -354,20 +322,13 @@ export class SubscriptionOAuthCoordinator<
       !this.isExpiringSoon(session, yield* Clock.currentTimeMillis)
     )
       return session;
-    return yield* this.refresh(session, generation);
+    // Single-flight refresh: concurrent callers share one attempt, which runs
+    // detached (`SharedAttempt`), so an interrupted caller abandons only
+    // its own wait and a rotated refresh token is still stored.
+    return yield* this.refreshes.run(() =>
+      this.performRefresh(session, generation),
+    );
   });
-
-  /**
-   * Single-flight refresh: concurrent callers share one attempt, which runs
-   * detached ({@link SharedAttempt}), so an interrupted caller abandons only
-   * its own wait and a rotated refresh token is still stored.
-   */
-  private refresh(
-    previous: S,
-    generation: number,
-  ): Effect.Effect<S, MachineFailure, HttpClient.HttpClient> {
-    return this.refreshes.run(() => this.performRefresh(previous, generation));
-  }
 
   private readonly performRefresh = Effect.fn(
     'SubscriptionOAuthCoordinator.performRefresh',
@@ -376,7 +337,11 @@ export class SubscriptionOAuthCoordinator<
     previous: S,
     generation: number,
   ) {
-    const tokens = yield* this.client.refreshTokens(previous.refreshToken).pipe(
+    const tokens = yield* refreshOAuthTokens(
+      this.policy.tokenEndpoint,
+      previous.refreshToken,
+    ).pipe(
+      Effect.mapError(grantFailure),
       // Fatal: clear the session unless a login or a refresh replaced it.
       Effect.tapError((error) =>
         error instanceof SubscriptionOAuthError && error.kind === 'fatal'

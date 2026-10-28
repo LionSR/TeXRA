@@ -58,8 +58,8 @@ that declare that block with its own recipe script; `@texra-ai/harness` ships
 no built-in task-block plugins.
 
 ```ts
-import { Effect, Fiber, Stream } from 'effect';
-import { Sessions } from '@texra-ai/harness';
+import { Effect, Stream } from 'effect';
+import { responseText, Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
@@ -75,18 +75,12 @@ const program = Effect.gen(function* () {
     agent: 'polish',
     instruction: 'Tighten the summary in notes.md.',
   });
-  const events = yield* Effect.forkScoped(
-    Stream.runForEach(run.events, (event) =>
-      Effect.sync(() => {
-        if (event.type === 'stream.chunk') process.stdout.write(event.text);
-      }),
-    ),
+  // The events end when the run does; `responseText` keeps the answer's
+  // text and drops the model's thinking and tool output.
+  yield* Stream.runForEach(run.events.pipe(responseText), (text) =>
+    Effect.sync(() => process.stdout.write(text)),
   );
-  const result = yield* run.result;
-  // The run's trace ends with it; join so the consumer drains what the
-  // result may have outrun instead of being interrupted with the scope.
-  yield* Fiber.join(events);
-  return result;
+  return yield* run.result;
 }).pipe(
   Effect.scoped,
   Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
@@ -199,11 +193,11 @@ const program = Effect.gen(function* () {
 });
 ```
 
-| Service    | What it is                                                                                                                                                                                                                                                               |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` serves it; `Sessions.layer({ platform, plugins })` composes that process for the layer's lifetime. Build it once per process.            |
-| `Session`  | `roots`; `view.current()`, `view.changes`, and `view.watch(set, from)`, a reader's view inputs whose transcript subscription lives as long as the stream; `start`, `resume`, `request`; `attach(host)`, a host for the caller's scope. A value, one per root, not a tag. |
-| `Run`      | `runId`, `result`, `view`, `events`, `interrupt`, and `redirectedFrom` on a resume that continued a child's parent. `start` succeeds when accepted: the run exists in the session, its row published and its trace live.                                                 |
+| Service    | What it is                                                                                                                                                                                                                                                                                                        |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` (`./host`) serves it; `Sessions.layer({ platform, plugins })` composes that process for the layer's lifetime. Build it once per process.                                          |
+| `Session`  | One workspace's runs: `start` and `resume` give a `Run`; `request` sends everything else (follow-ups, approvals, stop, fork); `attach(host)` answers approvals until the caller's scope closes; `view.current()` and `view.changes` read the session's state as immutable snapshots. `roots` names the workspace. |
+| `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts; `interrupt`. `start` returns once the run exists, before its first model call.                                                        |
 
 `run.events` is the run's trace as a `Stream`. Trace events are buffered from
 the moment the run enters its session, so a reader begun right after `start`
@@ -368,13 +362,14 @@ files.
 
 ## Entry points
 
-| Entry                          | Contents                                                                                                                                                                                                       |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@texra-ai/harness`            | `Sessions`, `Session`, `Run`, the tagged errors, the tool-definition helper (`defineTool`) with its types, and `readSessionView`, a project's view read cold from its store                                    |
-| `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages |
-| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them           |
-| `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin is written with: `definePlugin`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`                  |
-| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                                                                                            |
+| Entry                          | Contents                                                                                                                                                                                                                                                                                        |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@texra-ai/harness`            | What an embedder needs to run agents: `Sessions`, `Session`, `Run`, their inputs, `AgentEvent`, `defineTool`, and every tagged error the surface fails with. About fifty names; start here                                                                                                      |
+| `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                  |
+| `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                            |
+| `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin or tool is written with: `definePlugin`, `ToolContext`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`                                                                            |
+| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                                                                                                                                                                             |
+| `@texra-ai/harness/host`       | What a full application host composes beyond the root: `processLayer`, the agent catalog, settings and stores, skills, installed plugins, model options, the presentation surface (`HostInteractions`), and shared file, error and log helpers. TeXRA's own hosts read it; no stability promise |
 
 Every entry needs the peers installed. See [Install](#install). Each entry's
 exports, with their TSDoc and declarations, are listed in its API reference
@@ -432,12 +427,16 @@ const EchoTool = defineTool({
   name: 'echo',
   description: 'Return the supplied text.',
   schema: Schema.Struct({ text: Schema.String }),
-  execute: ({ text }) =>
-    Effect.succeed({ status: 'executed' as const, output: text }),
+  execute: ({ text }) => Effect.succeed(text),
 });
 
 const tools = [EchoTool];
 ```
+
+`execute` succeeds with the text the model reads back, or with a whole
+`ToolResult` (`executed(output, summary)` from `./plugins`) when the tool
+also reports a summary, attachments or facts. Failing with an `Error` gives
+the model its message as the tool's error.
 
 Pass `tools` to `session.start`. A custom tool that requires
 approval runs only on a session opened with an approval handler; on any

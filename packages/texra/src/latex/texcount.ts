@@ -4,13 +4,13 @@ import {
   withLogChannel,
   hasExtension,
   pathToLocationIn,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { runToolWithCheck } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 const CHINESE_PACKAGES = [
   'xeCJK',

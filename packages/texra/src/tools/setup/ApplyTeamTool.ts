@@ -3,7 +3,7 @@
  *
  * Applies a discipline team (an agent team) to the current workspace and
  * records it as the user-level default team, so fresh workspaces are seeded
- * with the same agent list (PRD: agent-native onboarding). The discipline-picker
+ * with the same agent list. The discipline-picker
  * UI is never built — the setup agent asks in conversation and calls this.
  *
  * The workspace agents write is the same `WorkspaceAgentsController.applyTeam` the
@@ -12,11 +12,13 @@
  */
 
 import { Effect, Schema } from 'effect';
-import { AgentCatalog, defineTool, ToolContext } from '@texra-ai/harness';
+import { defineTool } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
+import { AgentCatalog } from '@texra-ai/harness/host';
 
 import { executed, ToolError } from '@texra-ai/harness/plugins';
 import { agentName } from '@texra-ai/harness/schemas';
-import { teamPresets } from '@texra-ai/harness';
+import { teamPresets } from '@texra-ai/harness/host';
 
 /**
  * The shared catalog's built-in teams (the setup starter included), so the

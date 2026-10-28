@@ -21,6 +21,7 @@
     "packages/harness": {
       "entry": [
         "src/index.ts!",
+        "src/host.ts!",
         "src/node.ts!",
         "src/plugins.ts!",
         "src/schemas.ts!",
@@ -30,6 +31,10 @@
       ],
       "project": ["src/**/*.{ts,mts}!", "scripts/*.mjs!"],
       "ignoreDependencies": ["@typescript/native"]
+    },
+    "packages/texra": {
+      "entry": ["src/shared/commands/catalog.ts!"],
+      "project": ["src/**/*.{ts,tsx,mts}!"]
     },
     "packages/llm": {
       "entry": ["test-live/**/*.ts"],

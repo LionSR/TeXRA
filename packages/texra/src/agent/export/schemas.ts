@@ -11,7 +11,7 @@
 
 import { Schema } from 'effect';
 
-import { ExportNodeSchema } from '@texra-ai/harness';
+import { ExportNodeSchema } from '@texra-ai/harness/host';
 import type { MediaAttachmentKind } from '@texra-ai/harness/schemas';
 
 // ============================================================

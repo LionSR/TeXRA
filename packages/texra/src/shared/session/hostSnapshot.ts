@@ -1,5 +1,5 @@
 /**
- * The `host` snapshot the shell reads (PRD one-fold-three-renderers, 8.1):
+ * The `host` snapshot the shell reads:
  * host-provided data no surface may disagree about. A selection may differ
  * between two surfaces on one session; a catalog may not, so catalogs live
  * here and never in `Surface`. Components take it as a property; the root
@@ -75,7 +75,7 @@ export function projectDisplayOf(
 }
 
 /**
- * Where the onboarding funnel stands (PRD: agent-native onboarding): the
+ * Where the onboarding funnel stands: the
  * state hosts push to webviews. `onboardingFunnel.ts` derives it.
  */
 const OnboardingFunnelStateSchema = Schema.Literals([

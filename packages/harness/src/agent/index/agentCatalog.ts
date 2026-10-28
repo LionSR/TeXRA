@@ -34,7 +34,6 @@ import {
   agentMatchesIdentifier,
   agentName,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 
@@ -266,7 +265,6 @@ function catalogReads(state: CatalogState) {
       repoState,
       globalState,
       getAgents: list,
-      getPresets: () => repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
       resolveAgent: get,
     });
   const visible = (

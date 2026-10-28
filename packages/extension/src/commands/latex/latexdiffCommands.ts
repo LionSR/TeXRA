@@ -8,7 +8,7 @@ import {
   withSessionFs,
   pathToLocationIn,
   Settings,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import {
   prepareBuildDisplay,
@@ -31,8 +31,10 @@ import {
 } from '@housekeeping/packLatexdiffvc';
 import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
-import type { DiffRunResult } from '@latex/latexdiff/types';
-import { runLatexdiffForRun } from '@latex/latexdiff/diffOperations';
+import {
+  runLatexdiffForRun,
+  type DiffRunResult,
+} from '@latex/latexdiff/diffOperations';
 import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,

@@ -7,7 +7,7 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Stream } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import {
   attentionOf,
   ensureError,

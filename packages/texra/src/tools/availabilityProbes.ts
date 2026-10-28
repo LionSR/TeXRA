@@ -9,7 +9,7 @@
 import { Duration, Effect, type FileSystem } from 'effect';
 
 // Local imports
-import { causeChain, isModuleNotFoundError } from '@texra-ai/harness';
+import { causeChain, isModuleNotFoundError } from '@texra-ai/harness/host';
 import { runsInWsl } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { scopedClient, ToolProbeFailed } from '@texra-ai/harness/plugins';
@@ -23,7 +23,7 @@ import type {
   ToolProbeError,
   ToolProbeInputs,
   ToolProbeServices,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/plugins';
 
 import type { Cause } from 'effect';
 import type { HttpClient, HttpClientError } from 'effect/http';

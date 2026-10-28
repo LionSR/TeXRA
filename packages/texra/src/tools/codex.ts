@@ -23,12 +23,11 @@ import { Effect, type FileSystem, Result, Schema, Stream } from 'effect';
 // Local imports
 import {
   defineTool,
-  ToolContext,
-  withLogChannel,
   type WorkspaceRoots,
   type ToolResult,
-  Settings,
 } from '@texra-ai/harness';
+import { ToolContext } from '@texra-ai/harness/plugins';
+import { withLogChannel, Settings } from '@texra-ai/harness/host';
 import {
   ensureError,
   toErrorMessage,
@@ -59,7 +58,6 @@ import {
 import { CodexThreads } from './agentCliSessionStores';
 import {
   agentCliApprovalCommand,
-  type AgentCliLaunchContext,
   buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
@@ -428,11 +426,12 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
   ToolError,
   ToolContext | CodexThreads | ChildProcessSpawner | FileSystem.FileSystem
 > {
-  const toolCall = yield* ToolContext;
-  const sandboxMode = yield* codexSandboxMode(input, toolCall.env.roots);
+  const sandboxMode = yield* codexSandboxMode(
+    input,
+    (yield* ToolContext).env.roots,
+  );
 
   return yield* dispatchAgentCliTool({
-    toolCall,
     agentName: CODEX_AGENT_NAME,
     store: CodexThreads,
     resumeId: input.thread_id ?? undefined,
@@ -443,7 +442,8 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
       summaryLabel: 'Codex',
       queuedLabel: 'Codex thread',
     },
-    launch: (context) => launchCodexSession(input, sandboxMode, context),
+    launch: (releaseFallbackClaim) =>
+      launchCodexSession(input, sandboxMode, releaseFallbackClaim),
   });
 });
 
@@ -479,18 +479,19 @@ export const CodexTool = defineTool({
 const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   input: CodexInput,
   sandboxMode: SandboxMode,
-  context: AgentCliLaunchContext,
+  releaseFallbackClaim: (() => void) | undefined,
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  ToolContext | ChildProcessSpawner | FileSystem.FileSystem
+  ToolContext | CodexThreads | ChildProcessSpawner | FileSystem.FileSystem
 > {
-  const { roots } = (yield* ToolContext).env;
+  const { roots, workingDirectory } = (yield* ToolContext).env;
+  const registry = yield* CodexThreads;
   const { thread, run } = yield* createCodexThread(
     input,
     sandboxMode,
     roots,
-    context.parentWorkingDirectory,
+    workingDirectory,
   ).pipe(
     Effect.catch((error) =>
       error instanceof ToolError ? Effect.fail(error) : Effect.die(error),
@@ -509,8 +510,8 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
         runId,
         initialPrompt: input.prompt,
         resumeThreadId: input.thread_id ?? undefined,
-        releaseFallbackClaim: context.releaseFallbackClaim,
-        registry: context.registry,
+        releaseFallbackClaim,
+        registry,
       }),
     summaryLabel: 'Codex',
     launchedLine: `Codex agent launched (model: ${run.ref}, effort: ${run.effort ?? 'none'}, sandbox: ${sandboxMode}).${run.note ? ` ${run.note}` : ''}`,

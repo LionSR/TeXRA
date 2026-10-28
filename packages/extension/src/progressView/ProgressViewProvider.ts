@@ -21,7 +21,7 @@ import {
   type HostInteractions,
   AgentCatalog,
   withLogChannel,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   ensureError,
   toErrorMessage,
@@ -54,10 +54,7 @@ import {
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import { DOCUMENTS_OUTPUT_KEY } from '@texra/shared/plugins/documents';
-import type {
-  DownMessage,
-  SurfaceActionMessage,
-} from '@texra/shared/session/sessionFrames';
+import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
 import { serviceRecords } from '@texra/controllers/server/serviceSession';
@@ -91,17 +88,15 @@ import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
+import type { LocalSession, Session, WorkspaceRoots } from '@texra-ai/harness';
 import type {
-  LocalSession,
   ProcessRuntime,
   ProcessServices,
-  Session,
-  WorkspaceRoots,
   PlatformSecrets,
   StateStore,
   StateReadFailed,
   StateWriteFailed,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 const CHANNEL = 'ProgressViewProvider';
 const CATALOG_RESCAN_FAILED =
@@ -114,7 +109,7 @@ type ProgressRunRevealResult = 'revealed' | 'missing';
  * attaching to a bridge that has closed. Tagged because these reach the
  * request channel, whose failures are tags without exception.
  */
-export class SurfacePlacementFailed extends Schema.TaggedError<SurfacePlacementFailed>()(
+class SurfacePlacementFailed extends Schema.TaggedError<SurfacePlacementFailed>()(
   'SurfacePlacementFailed',
   {
     member: Schema.String,
@@ -126,7 +121,8 @@ export class SurfacePlacementFailed extends Schema.TaggedError<SurfacePlacementF
 /** One transport port: a VS Code webview attached to the bridge. */
 interface Port {
   readonly attached: AttachedPort;
-  readonly disposables: vscode.Disposable[];
+  /** The webview's listeners and its page render, closed with the port. */
+  readonly scope: Scope.Closeable;
 }
 
 /** The window's session: the service's, or, when the service could not be
@@ -138,9 +134,9 @@ export type WindowSession =
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.mainView';
 
-  public readonly bridge: SessionBridge;
-  public readonly snapshot: HostSnapshotSource;
-  public readonly toolEditApprovals: ToolEditApprovalController;
+  private readonly bridge: SessionBridge;
+  private readonly snapshot: HostSnapshotSource;
+  private readonly toolEditApprovals: ToolEditApprovalController;
 
   /** Everything the provider holds ends when {@link dispose} closes this,
    *  last-in first-out: the ports, attached later, close before the host. */
@@ -176,7 +172,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     isViewVisible: () => this.isViewVisible(),
     showInSidebar: () => this.showInSidebar(),
     showSessions: (runId) =>
-      this.surfaceAction({ kind: 'showSessions', runId }),
+      this.bridge.surfaceAction({ kind: 'showSessions', runId }),
   });
 
   /**
@@ -232,7 +228,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             AgentCatalog,
           );
           const entry = catalog.get('setup');
-          this.surfaceAction({
+          this.bridge.surfaceAction({
             kind: 'launch',
             patch: { agent: entry ? agentKeyOf(entry) : 'setup' },
           });
@@ -339,13 +335,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       session: runSession,
     });
     this.runtime.runSync(
-      Effect.forkIn(this.attention.follow(runSession), this.scope),
+      Effect.gen({ self: this }, function* () {
+        yield* Effect.forkIn(this.attention.follow(runSession), this.scope);
+        yield* Effect.forkIn(this.chimeOnDocuments(), this.scope);
+      }),
     );
-    this.runtime.runSync(Effect.forkIn(this.chimeOnDocuments(), this.scope));
     const presentation = createAgentPresentationHost(
       this,
       globalState,
-      secrets,
       this.runtime,
       roots,
       this.scope,
@@ -366,18 +363,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       showConnectModel: () => this.showConnectModel(),
       showProgressView: () => this.showProgressView(),
       globalState,
-      secrets,
       snapshot: this.snapshot,
       draftRequests: this.draftRequests,
       toolEditApprovals: this.toolEditApprovals,
-      surfaceAction: (action) => this.surfaceAction(action),
+      surfaceAction: (action) => this.bridge.surfaceAction(action),
       presentLaunchedRun: (runId) => this.presentLaunchedRun(runId),
       popOutToEditor: () => this.popOutToEditor(),
       showInSidebar: () => this.showInSidebar(),
       refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
       refreshApiKeyStatus: this.refreshApiKeyStatus,
     });
-    this.own(hostRequests);
     this.runValidated = hostRequests.runValidated;
 
     // Attached for the window's life, before the first run of this window
@@ -423,14 +418,16 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this.runtime.runSync(
         this.editors
           .attach(roots.storage, editor)
-          .pipe(Scope.provide(this.scope)),
-      );
-      this.runtime.runSync(
-        attachSessionHost(
-          windowSession.session,
-          this.toolEditApprovals,
-          presentation,
-        ).pipe(Scope.provide(this.scope)),
+          .pipe(
+            Effect.andThen(
+              attachSessionHost(
+                windowSession.session,
+                this.toolEditApprovals,
+                presentation,
+              ),
+            ),
+            Scope.provide(this.scope),
+          ),
       );
     }
     const { service } = windowSession;
@@ -599,21 +596,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   // --- The host snapshot's producers ---
 
   private watchWorkspace(): void {
-    // Only a non-first workspace folder can be added or removed here: VS
-    // Code restarts the extension host for a first-folder change, so the
-    // storage root never moves under a live window (#11432).
-    this.own(
-      vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        this.runtime.runSync(
-          Effect.forkIn(
-            this.snapshot
-              .refreshWorkspaceRoots()
-              .pipe(Effect.andThen(this.snapshot.refreshFiles)),
-            this.scope,
-          ),
-        );
-      }),
-    );
     // Watch exactly the categories the launcher file lists are built from
     // (fileListingRules), including user-configured extension overrides, so
     // the watched set cannot drift from what the lists display.
@@ -638,42 +620,50 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       ),
     );
     this.runtime.runSync(
-      Effect.forkIn(
-        filesChanged.pipe(
-          Stream.debounce('300 millis'),
-          Stream.runForEach(() => this.snapshot.refreshFiles),
-        ),
-        this.scope,
-      ),
-    );
-    // The catalog reloads itself on every change to its sources
-    // (`agentCatalogFollower`); this launcher repaints what it lists, at most
-    // once per 300ms burst of changes.
-    this.runtime.runSync(
-      Effect.forkIn(
-        appSignalStream('workspaceAgentsChanged').pipe(
-          Stream.debounce('300 millis'),
-          Stream.runForEach(() =>
-            this.refreshCatalogs({ agentCatalogAlreadyFresh: true }).pipe(
-              Effect.ignore({ log: 'Warn', message: CATALOG_RESCAN_FAILED }),
-            ),
-          ),
-          withLogChannel(CHANNEL),
-        ),
-        this.scope,
-      ),
-    );
-  }
-
-  /** VS Code disposables as finalizers of the provider's scope. */
-  private own(...disposables: vscode.Disposable[]): void {
-    for (const disposable of disposables)
-      this.runtime.runSync(
-        Scope.addFinalizer(
+      Effect.gen({ self: this }, function* () {
+        // Only a non-first workspace folder can be added or removed here: VS
+        // Code restarts the extension host for a first-folder change, so the
+        // storage root never moves under a live window (#11432).
+        const foldersChanged = vscode.workspace.onDidChangeWorkspaceFolders(
+          () => {
+            this.runtime.runSync(
+              Effect.forkIn(
+                this.snapshot
+                  .refreshWorkspaceRoots()
+                  .pipe(Effect.andThen(this.snapshot.refreshFiles)),
+                this.scope,
+              ),
+            );
+          },
+        );
+        yield* Scope.addFinalizer(
           this.scope,
-          Effect.sync(() => disposable.dispose()),
-        ),
-      );
+          Effect.sync(() => foldersChanged.dispose()),
+        );
+        yield* Effect.forkIn(
+          filesChanged.pipe(
+            Stream.debounce('300 millis'),
+            Stream.runForEach(() => this.snapshot.refreshFiles),
+          ),
+          this.scope,
+        );
+        // The catalog reloads itself on every change to its sources
+        // (`agentCatalogFollower`); this launcher repaints what it lists, at
+        // most once per 300ms burst of changes.
+        yield* Effect.forkIn(
+          appSignalStream('workspaceAgentsChanged').pipe(
+            Stream.debounce('300 millis'),
+            Stream.runForEach(() =>
+              this.refreshCatalogs({ agentCatalogAlreadyFresh: true }).pipe(
+                Effect.ignore({ log: 'Warn', message: CATALOG_RESCAN_FAILED }),
+              ),
+            ),
+            withLogChannel(CHANNEL),
+          ),
+          this.scope,
+        );
+      }),
+    );
   }
 
   /** The agent, team, and model catalogs. */
@@ -692,7 +682,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       Effect.andThen(
         Effect.sync(() => {
           const agent = options.selectedAgent;
-          if (agent) this.surfaceAction({ kind: 'launch', patch: { agent } });
+          if (agent)
+            this.bridge.surfaceAction({ kind: 'launch', patch: { agent } });
         }),
       ),
     );
@@ -729,19 +720,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     // The slot is VS Code's own synchronous entry: it hands back a resolved
     // view, so the attachment settles here.
     this.sidebarPort = this.runtime.runSync(
-      this.attach('sidebar', webviewView),
-    );
-    this.sidebarPort.disposables.push(
-      webviewView.onDidDispose(() => {
-        this.closeSidebarPort();
+      this.attach('sidebar', webviewView, () => {
+        this.sidebarPort = undefined;
         this.sidebarView = undefined;
       }),
     );
   }
 
+  /** Attach `view` as a port; when VS Code disposes the view, the port
+   *  closes and `onDisposed` runs. */
   private attach(
     id: 'sidebar' | 'editor',
     view: vscode.WebviewView | vscode.WebviewPanel,
+    onDisposed: () => void,
   ): Effect.Effect<Port, SurfacePlacementFailed, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
       // The post starts synchronously inside runFork, so sends keep their order.
@@ -779,18 +770,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       );
       // The template is read off this tick (it never fails: a failed render
       // is a logged error page); a port closed before it lands paints nothing,
-      // because closing the port interrupts the render.
-      const portScope = yield* Scope.make();
-      const disposables: vscode.Disposable[] = [
-        view.webview.onDidReceiveMessage((message) => {
-          this.runtime.runFork(attached.receive(message));
-        }),
-        {
-          dispose: () => {
-            this.runtime.runFork(Scope.close(portScope, Exit.void));
-          },
-        },
-      ];
+      // because closing the port interrupts the render. The listeners are
+      // registered after the render, so closing removes them first.
+      const port: Port = { attached, scope: yield* Scope.make() };
       yield* Effect.forkIn(
         this.contentProvider
           .getHtmlContent(view.webview, {
@@ -804,26 +786,34 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               }),
             ),
           ),
-        portScope,
+        port.scope,
       );
-      return { attached, disposables };
+      for (const listener of [
+        view.onDidDispose(() => {
+          this.closePort(port);
+          onDisposed();
+        }),
+        view.webview.onDidReceiveMessage((message) => {
+          this.runtime.runFork(attached.receive(message));
+        }),
+      ])
+        yield* Scope.addFinalizer(
+          port.scope,
+          Effect.sync(() => listener.dispose()),
+        );
+      return port;
     });
   }
 
   private closePort(port: Port | undefined): void {
     if (!port) return;
-    for (const disposable of port.disposables) disposable.dispose();
+    this.runtime.runFork(Scope.close(port.scope, Exit.void));
     this.runtime.runFork(port.attached.close);
   }
 
   private closeSidebarPort(): void {
     this.closePort(this.sidebarPort);
     this.sidebarPort = undefined;
-  }
-
-  /** The host acting on the surfaces' shared state (PRD 8.5). */
-  public surfaceAction(action: SurfaceActionMessage['action']): void {
-    this.bridge.surfaceAction(action);
   }
 
   /**
@@ -906,7 +896,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public showLauncher() {
     return Effect.gen({ self: this }, function* () {
       yield* this.showInSidebar();
-      this.surfaceAction({ kind: 'selectNew' });
+      this.bridge.surfaceAction({ kind: 'selectNew' });
     });
   }
 
@@ -921,7 +911,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // state opens the newest session, one showing a session keeps it.
       const newest = this.runSession.view.current().order.at(0);
       if (newest !== undefined)
-        this.surfaceAction({ kind: 'showSessions', runId: newest });
+        this.bridge.surfaceAction({ kind: 'showSessions', runId: newest });
     });
   }
 
@@ -929,7 +919,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    *  `onAdmitted` hook): the launching surface selects it, and a
    *  resolved agent retires the missing-agent warning. */
   public presentLaunchedRun(runId: RunId): void {
-    this.surfaceAction({ kind: 'select', runId });
+    this.bridge.surfaceAction({ kind: 'select', runId });
     this.runtime.runFork(this.snapshot.clearAgentConfigBanner);
   }
 
@@ -940,7 +930,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       const view = this.runSession.view.current();
       if (!view.runs.has(runId)) return 'missing' as const;
       yield* this.showProgressView();
-      this.surfaceAction({ kind: 'select', runId });
+      this.bridge.surfaceAction({ kind: 'select', runId });
       return 'revealed' as const;
     });
   }
@@ -967,14 +957,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         },
       );
       panel.iconPath = new vscode.ThemeIcon('pulse');
-      const port = yield* this.attach('editor', panel);
+      const port = yield* this.attach('editor', panel, () => {
+        this.editor = undefined;
+      });
       this.editor = { panel, port };
-      port.disposables.push(
-        panel.onDidDispose(() => {
-          this.closePort(port);
-          this.editor = undefined;
-        }),
-      );
     });
   }
 

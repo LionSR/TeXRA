@@ -9,7 +9,8 @@
  */
 import { Effect, Exit, FileSystem, Schema } from 'effect';
 
-import { defineTool, Settings } from '@texra-ai/harness';
+import { defineTool } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness/host';
 import {
   ChildRuns,
   requireRun,
@@ -24,7 +25,9 @@ import {
   toErrorMessage,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
-import { postProcessResponse } from '@latex/texraResponseTextProcessing';
+import replacementEngine, {
+  logReplacementDiagnostics,
+} from '@replacement/engine';
 import {
   documentsSummary,
   documentTaskOptions,
@@ -255,11 +258,14 @@ export const DocumentExtractTool = defineTool({
   execute: Effect.fn('document_extract')(function* ({ revision, run }) {
     const docs = yield* documentsOfCall('document_extract');
     const end = yield* (yield* ChildRuns).records(run).end;
-    // The host's cleanup of provider text (TeXRA's LaTeX replacements).
-    const reply = yield* postProcessResponse(
+    // TeXRA's LaTeX replacements over the provider text, with the rules of
+    // the workspace this run belongs to.
+    const replaced = replacementEngine.applyAll(
       end?.output.response ?? '',
-      docs.deps.roots.config,
+      (key) => docs.deps.roots.config.get(key),
     );
+    yield* logReplacementDiagnostics(replaced.diagnostics);
+    const reply = replaced.text;
     if (end?.outcome !== 'completed' || !reply.trim())
       return yield* Effect.fail(
         new ToolError(`Run ${run} gave no reply to take documents from.`),
