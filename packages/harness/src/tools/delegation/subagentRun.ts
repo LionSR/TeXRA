@@ -113,38 +113,27 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
       suppressErrorNotification: true,
     });
     const { config } = definition;
-    yield* Effect.uninterruptibleMask((restore) =>
-      Effect.gen(function* () {
+    yield* startDetachedChildRunLoop({
+      session: parentSession,
+      runId,
+      parentRunId,
+      agentName,
+      strategy: createNativeSubagentStrategy({
+        definition,
         // The child registers with its opening, which its run commits.
-        const strategyParams = {
-          definition,
-          registration: {
-            identity: { kind: 'agent' as const, agent: config.agent },
-            parentRunId,
-            parentCall: { callId: parent.callId, card: parent.logId },
-            grants,
-          },
-          runId,
+        registration: {
+          identity: { kind: 'agent', agent: config.agent },
           parentRunId,
-          session: parentSession,
-          startedAt,
-          workingDirectory,
-        };
-
-        yield* startDetachedChildRunLoop({
-          session: parentSession,
-          runId,
-          parentRunId,
-          agentName,
-          buildLaunch: () =>
-            restore(Effect.void).pipe(
-              Effect.andThen(
-                Effect.sync(() => createNativeSubagentStrategy(strategyParams)),
-              ),
-            ),
-        });
+          parentCall: { callId: parent.callId, card: parent.logId },
+          grants,
+        },
+        runId,
+        parentRunId,
+        session: parentSession,
+        startedAt,
+        workingDirectory,
       }),
-    );
+    });
 
     const meta = launch.approvalMeta;
     const metaLines: string[] = [];

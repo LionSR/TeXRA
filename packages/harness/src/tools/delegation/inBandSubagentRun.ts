@@ -153,42 +153,31 @@ const executeInBand = Effect.fn('executeInBand')(
       // budget slot (child-run budget design note).
       awaited: true,
       ...(options.notify !== undefined && { notify: options.notify }),
-      // Built inside the loop's launch guard, like every attempt-scoped
-      // setup: a throw here ends the run and releases its claim.
-      buildLaunch: () =>
-        Effect.succeed(
-          createNativeSubagentStrategy({
-            ...options,
-            ...(launch.kind === 'fresh'
-              ? {
-                  definition: launch.definition,
-                  // Registered with its opening, which the child's run
-                  // commits as it starts.
-                  registration: {
-                    identity: { kind: 'agent', agent: config.agent },
-                    parentRunId: options.parentRunId,
-                    ...(options.parentCall !== undefined && {
-                      parentCall: options.parentCall,
-                    }),
-                    ...(options.grants !== undefined && {
-                      grants: options.grants,
-                    }),
-                  },
-                }
-              : // Awaited: it ends after one cycle, resumed too.
-                {
-                  resume: {
-                    config,
-                    parent: launch.parent,
-                    stopAfterCycle: true,
-                  },
+      strategy: createNativeSubagentStrategy({
+        ...options,
+        ...(launch.kind === 'fresh'
+          ? {
+              definition: launch.definition,
+              // Registered with its opening, which the child's run commits
+              // as it starts.
+              registration: {
+                identity: { kind: 'agent', agent: config.agent },
+                parentRunId: options.parentRunId,
+                ...(options.parentCall !== undefined && {
+                  parentCall: options.parentCall,
                 }),
-            runId,
-            startedAt,
-            workingDirectory,
-            inBand: true,
-          }),
-        ),
+                ...(options.grants !== undefined && { grants: options.grants }),
+              },
+            }
+          : // Awaited: it ends after one cycle, resumed too.
+            {
+              resume: { config, parent: launch.parent, stopAfterCycle: true },
+            }),
+        runId,
+        startedAt,
+        workingDirectory,
+        inBand: true,
+      }),
     });
 
     const completionExit = yield* Effect.exit(Fiber.join(fiber));

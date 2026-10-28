@@ -34,9 +34,9 @@ export function childRunDescription(raw: string): string {
 }
 
 /**
- * A child run's trace for a background child task. Every launch site calls
- * this inside `startDetachedChildRunLoop`, whose launch guard owns a failed
- * launch's compensation.
+ * A child run's trace for a background process child. Every launch site
+ * calls this inside `startDetachedChildRunLoop`'s launch guard, which ends
+ * a run whose hand-off failed.
  */
 export function createChildRun(
   session: SessionHandle,

@@ -88,35 +88,28 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
     session,
     suppressErrorNotification: true,
   });
-  yield* Effect.uninterruptibleMask((restore) =>
-    startDetachedChildRunLoop({
-      session,
+  yield* startDetachedChildRunLoop({
+    session,
+    runId,
+    parentRunId,
+    agentName: title,
+    strategy: createScriptRunStrategy({
+      definition,
+      // Registered with its opening, which its run commits.
+      registration: {
+        identity: { kind: 'script', title },
+        parentRunId,
+        parentCall: { callId: call.callId, card: call.logId },
+        description: childRunDescription(title),
+        ...(grants !== undefined && { grants }),
+      },
       runId,
       parentRunId,
-      agentName: title,
-      buildLaunch: () =>
-        restore(Clock.currentTimeMillis).pipe(
-          Effect.map((startedAt) =>
-            createScriptRunStrategy({
-              definition,
-              // Registered with its opening, which its run commits.
-              registration: {
-                identity: { kind: 'script', title },
-                parentRunId,
-                parentCall: { callId: call.callId, card: call.logId },
-                description: childRunDescription(title),
-                ...(grants !== undefined && { grants }),
-              },
-              runId,
-              parentRunId,
-              session,
-              startedAt,
-              ...(workingDirectory != null && { workingDirectory }),
-              title,
-            }),
-          ),
-        ),
+      session,
+      startedAt: yield* Clock.currentTimeMillis,
+      ...(workingDirectory != null && { workingDirectory }),
+      title,
     }),
-  );
+  });
   return receipt(title, runId, false);
 });
