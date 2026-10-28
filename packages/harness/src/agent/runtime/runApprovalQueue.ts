@@ -48,7 +48,7 @@ import {
   type RequestError,
   type RuntimeRequest,
 } from '@shared/session/runtimeRequest';
-import { parentEdgeOf } from '@shared/session/runRelation';
+import { parentEdgeOf } from '@shared/session/runRows';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { Settings } from '@shared/config/settings';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';

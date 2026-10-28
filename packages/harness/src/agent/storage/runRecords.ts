@@ -15,8 +15,8 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import { attemptOf } from '@shared/session/inFlight';
 import { unloadable } from '@shared/session/runHistory';
 import { applyRunRows, type RunState } from '@shared/session/runState';
-import { parentEdgeOf } from '@shared/session/runRelation';
 import { runEndFromEvents } from '@shared/session/runFacts';
+import { parentEdgeOf } from '@shared/session/runRows';
 import {
   qualifyAggregateId,
   aggregateTarget,

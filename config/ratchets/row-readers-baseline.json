@@ -53,7 +53,6 @@
       "packages/harness/src/agent/storage/runListing.ts",
       "packages/harness/src/agent/storage/runRecords.ts"
     ],
-    "run.detach": ["packages/harness/src/shared/session/runRelation.ts"],
     "run.end": [
       "packages/harness/src/agent/followUp/Inbox.ts",
       "packages/harness/src/agent/runtime/runLaunchGuard.ts",
@@ -97,7 +96,6 @@
       "packages/harness/src/controllers/session/sweepLeftoverRuns.ts",
       "packages/harness/src/effect/sessionReads.ts",
       "packages/harness/src/shared/approvalBypassKind.ts",
-      "packages/harness/src/shared/session/runRelation.ts",
       "packages/harness/src/tools/codemode/SelfTool.ts",
       "packages/harness/src/transcript/traceAssembler.ts",
       "packages/texra/src/controllers/progressView/ChatExportController.ts",

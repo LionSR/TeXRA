@@ -24,7 +24,7 @@ import {
   outcomeFromCause,
 } from '@shared/runs/runStatus';
 import { heldElsewhereBy } from '@shared/session/database';
-import { lastLifecycleRow } from '@shared/session/runFacts';
+import { lastLifecycleRow, runEndFromEvents } from '@shared/session/runFacts';
 import type { Append } from '@shared/session/sessionEvents';
 import { aggregateError } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -195,8 +195,8 @@ export const lifecycleParks = (
   rows: readonly SessionEvent[],
   runId: RunId,
 ): Extract<SessionEvent, { type: 'child.park' }>[] => {
+  if (runEndFromEvents(rows, runId) !== null) return [];
   const since = lastLifecycleRow(rows, runId);
-  if (since?.type === 'run.end') return [];
   const id = qualifyAggregateId('run', runId);
   return rows.filter(
     (row): row is Extract<SessionEvent, { type: 'child.park' }> =>

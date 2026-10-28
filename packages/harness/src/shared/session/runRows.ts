@@ -9,7 +9,8 @@
  * `request.decided`) and the input it has not taken (`followup.queued`,
  * `followup.consumed`). `applyRunRow` handles each of them once, so a row
  * type cannot reach one reader and miss the other; each reader copies the
- * fields it returns into its own shape.
+ * fields it returns into its own shape. `parentEdgeOf` beside it is the one
+ * reading of a run's parent edge from its rows (`run.start`, `run.detach`).
  *
  * Pure: no IO, no clock, no platform, no synthetic id. It returns a result
  * instead of throwing because the two readers treat a decision for an
@@ -340,6 +341,17 @@ export function runRowsFrom(rows: readonly SessionEvent[]): RunRows {
   }
   return slice;
 }
+
+/** The run's parent edge as its rows leave it: null for a root, and for a
+ *  child a `run.detach` severed. */
+export const parentEdgeOf = (
+  rows: readonly SessionEvent[],
+): Extract<SessionEvent, { type: 'run.start' }>['parent'] => {
+  const edge = rows.findLast(
+    (row) => row.type === 'run.start' || row.type === 'run.detach',
+  );
+  return edge?.type === 'run.start' ? edge.parent : null;
+};
 
 /**
  * The phase a lifecycle row puts its run in, or null for a row that changes
