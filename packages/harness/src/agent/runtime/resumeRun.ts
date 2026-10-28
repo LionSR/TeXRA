@@ -18,6 +18,7 @@ import {
  * same continuous delivery driver as newly launched children and
  * acknowledge each resumed turn separately.
  */
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { openResume, REFUSED } from '@agent/followUp/ToolUseFollowUp';
 import { runRejection } from '@agent/storage/resumability';
 import {
@@ -43,12 +44,9 @@ import { createScriptRunStrategy } from './scriptRun';
 import { resumeBlocker } from './resumeBlocker';
 
 import { type RunEndResult } from './RunEndResult';
-import {
-  resumeToolUseFromResumeData,
-  type ResumeToolUseFromResumeDataOptions,
-  type ResumeTurnIdentity,
-} from './executeAgent';
-import { deliverHeld } from './runLaunchGuard';
+import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
+import { prepareAgentDefinition } from './AgentLaunchContext';
+import { deliverHeld, runWithLaunchGuard } from './runLaunchGuard';
 import { startChildRunLoop } from './childRunLoop';
 import { registryOf, type AgentRunServices, RunLive } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
@@ -72,9 +70,12 @@ export type ResumeRunResult =
 export type ResumeAttempt = ResumeRunResult | { readonly ownedBy: RunId };
 
 export interface ResumeRunOptions extends Pick<
-  ResumeToolUseFromResumeDataOptions,
-  'onRun' | 'stopAfterCycle' | 'tools'
+  ExecuteAgentOptions,
+  'onRun' | 'tools'
 > {
+  /** Stop the run after one model/tool cycle instead of waiting for
+   *  follow-up input. */
+  readonly stopAfterCycle?: boolean;
   /** Session owning the resumed run's coordination state. */
   readonly session: SessionHandle;
   /** This caller's hook once the run is admitted at `commit`, its
@@ -211,12 +212,7 @@ export const decideResume = Effect.fn('decideResume')(function* (
   );
   if (blocker !== null) return { failed: 'blocked' };
   // The launched run is admitted once its `run.activate` commits.
-  return yield* resumeQueuedToolUse(
-    session,
-    { runId, agentConfig: config },
-    options,
-    activated,
-  );
+  return yield* resumeQueuedToolUse(session, runId, config, options, activated);
 }, Effect.scoped);
 
 /**
@@ -282,11 +278,11 @@ function refusalFor(
  */
 const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   session: SessionHandle,
-  resume: ResumeTurnIdentity,
+  runId: RunId,
+  config: AgentConfig,
   options: ResumeRunOptions,
   activated: (commit: CommitOrdinal) => Effect.Effect<unknown>,
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
-  const runId = resume.runId;
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
       // The receipt reads the rows committed from here on.
@@ -298,38 +294,53 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           .filter((input) => input.control?.kind !== 'model')
           .map((input) => input.followUpId),
       );
-      // What every resumed run takes from the resume's caller.
+      // What a resumed run takes from the resume's caller; it admits the run
+      // as the resume's own.
       const launchOptions = {
-        session: options.session,
+        ...options,
         onAdmitted: (_: RunId, commit: CommitOrdinal) =>
           Effect.asVoid(activated(commit)),
-        onRun: options.onRun,
-        stopAfterCycle: options.stopAfterCycle,
-        tools: options.tools,
       };
+      // Its parent, read once under the claim: the run's edge for this
+      // activation.
       const parentRunId = yield* persistedParentRunId(session, runId);
       let launched: Fiber.Fiber<RunEndResult | undefined, Error>;
       if (parentRunId === undefined) {
+        const program = prepareAgentDefinition({
+          config,
+          session,
+          suppressErrorNotification: true,
+          stopAfterCycle: options.stopAfterCycle,
+        }).pipe(
+          Effect.flatMap((definition) =>
+            executeAgent(definition, runId, launchOptions),
+          ),
+        );
         launched = yield* registryOf(session.runs).start(
           runId,
-          resumeToolUseFromResumeData(resume, launchOptions),
+          runWithLaunchGuard(session, runId, program, true),
           (admitted) => admitted,
         );
       } else {
         const native = {
-          ...launchOptions,
+          session,
           runId,
-          parentRunId,
           startedAt: yield* Clock.currentTimeMillis,
-          workingDirectory: resume.agentConfig.workingDirectory ?? undefined,
-          resume: { identity: resume, options: launchOptions },
+          workingDirectory: config.workingDirectory ?? undefined,
+          // What a resumed run takes from the resume's caller; its parent was
+          // read under the claim this resume holds until the loop takes it.
+          resume: {
+            ...launchOptions,
+            config,
+            parent: Effect.succeed(parentRunId),
+          },
         };
-        const { script } = resume.agentConfig;
+        const { script } = config;
         ({ fiber: launched } = yield* startChildRunLoop({
           session,
           runId,
           parentRunId,
-          agentName: resume.agentConfig.agent,
+          agentName: config.agent,
           strategy:
             script?.kind === 'background'
               ? createScriptRunStrategy({ ...native, title: script.title })

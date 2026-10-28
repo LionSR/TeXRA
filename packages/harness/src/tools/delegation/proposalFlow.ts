@@ -52,14 +52,14 @@ const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
 export const requireAgent = Effect.fn('requireAgent')(function* (
   stores: WorkspaceAgentsStores,
   name: string,
-  run: Pick<RunToolCall['run'], 'config' | 'delegationAgentScope'>,
+  run: Pick<RunToolCall['run'], 'config'>,
 ) {
   const catalog = yield* AgentCatalog;
   const pinned = isTrustedScript(run.config) ? catalog.get(name) : undefined;
   if (pinned) return pinned;
   const agents = yield* catalog.visible(
     stores,
-    run.delegationAgentScope ?? undefined,
+    run.config.delegationAgentScope ?? undefined,
   );
   const agent = findAgentByIdentifier(agents, name);
   if (agent) return agent;
@@ -312,7 +312,7 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
     ? findAgentByIdentifier(
         yield* (yield* AgentCatalog).visible(
           parent.env.roots,
-          parent.run.delegationAgentScope ?? undefined,
+          parent.run.config.delegationAgentScope ?? undefined,
         ),
         agentOverride,
       )

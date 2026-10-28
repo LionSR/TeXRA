@@ -3,13 +3,11 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports
-import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
+import type { RunLaunch } from '@agent/runtime/run/AgentRun';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { AgentConfigSchema, PersonaSchema } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
-import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 interface TestLaunchContextInit {
@@ -18,11 +16,11 @@ interface TestLaunchContextInit {
   session?: SessionHandle;
   agent?: string;
   /** Trace the run publishes through; defaults to the silent trace. */
-  logger?: AgentLaunchContext['logger'];
+  logger?: RunLaunch['logger'];
 }
 
 /**
- * A minimal conversation `AgentLaunchContext` for driving `runWithLifecycle`
+ * A minimal conversation `RunLaunch` for driving `runWithLifecycle`
  * without a real model handler or flow.
  */
 export function createTestLaunchContext({
@@ -30,18 +28,15 @@ export function createTestLaunchContext({
   session = testDefaultSession(),
   agent = 'assistant',
   logger = noopTrace,
-}: TestLaunchContextInit): AgentLaunchContext {
+}: TestLaunchContextInit): RunLaunch {
   const config = Schema.decodeUnknownSync(AgentConfigSchema)({
     agent,
     model: 'test-model',
   });
 
-  const { stores } = makeFakeSettingsStores();
   return {
     config,
     persona: Schema.decodeUnknownSync(PersonaSchema)({}),
-    // The launch stores a real run carries; no fixture reads through them.
-    stores,
     runId,
     session,
     logger,
@@ -60,6 +55,5 @@ export function createTestLaunchContext({
       initialUserMessage: undefined,
     },
     toolPolicy: {},
-    modelConfig: buildTestModelConfig(),
   };
 }

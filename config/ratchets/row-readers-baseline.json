@@ -50,10 +50,8 @@
       "packages/harness/src/controllers/session/sessionStore.ts"
     ],
     "run.start": [
-      "packages/harness/src/agent/runtime/AgentLaunchContext.ts",
       "packages/harness/src/agent/runtime/loop/runProgram.ts",
       "packages/harness/src/agent/runtime/requestPolicy.ts",
-      "packages/harness/src/agent/storage/runLifecycle.ts",
       "packages/harness/src/controllers/session/Database.ts",
       "packages/harness/src/controllers/session/rowReader.ts",
       "packages/harness/src/controllers/session/sessionStore.ts",

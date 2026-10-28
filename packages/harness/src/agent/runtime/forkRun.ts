@@ -190,7 +190,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
   const cutAt = yield* cutOf(session, from.id, at);
   const { seq: cut, state, start, title, record } = cutAt;
   const runId = generateRunId();
-  const registration = yield* registrationRows(session, runId, record, {
+  const { rows } = yield* registrationRows(session, runId, record, {
     identity: start.identity,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     provenance: { kind: 'fork', from, at: cut },
@@ -202,7 +202,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
   // Registration and history are one commit, through the fork's cell: a
   // fork exists with its history or not at all.
   const cell = yield* session.runHistory.open(runId, {
-    registration: Effect.succeed(registration),
+    registration: Effect.succeed(rows),
   });
   yield* cell.append([
     ...viewRows(runId, state, state.messages),

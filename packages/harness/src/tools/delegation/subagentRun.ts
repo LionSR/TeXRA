@@ -19,7 +19,6 @@ import {
 } from '@shared/approvalBypassKind';
 import {
   AgentConfigSchema,
-  USER_FOLLOW_UP_SUPPORT,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -114,13 +113,6 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
       suppressErrorNotification: true,
     });
     const { config } = definition;
-    // A conversation takes follow-ups; a run opened on a script (a document
-    // task) ends with its script. One decision: the child row it registers
-    // under and the run it launches must agree.
-    const conversation = config.script == null;
-    const userFollowUpSupport = conversation
-      ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
-      : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
     yield* Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
         // The child registers with its opening, which its run commits.
@@ -128,13 +120,11 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
           definition,
           registration: {
             identity: { kind: 'agent' as const, agent: config.agent },
-            userFollowUpSupport,
             parentRunId,
             parentCall: { callId: parent.callId, card: parent.logId },
             grants,
           },
           runId,
-          parentRunId,
           session: parentSession,
           startedAt,
           workingDirectory,
@@ -174,11 +164,13 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
         `Run ID: ${runId}`,
         ...metaLines,
         `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
-        ...(conversation
-          ? [
+        // A run opened on a script (a document task) ends with its script,
+        // so only a conversation takes follow-ups.
+        ...(definition.stopAfterCycle
+          ? []
+          : [
               `To send follow-up instructions: executions tool, action=send, path=/executions/${runId}.`,
-            ]
-          : []),
+            ]),
       ].join('\n'),
       `Launched '${agentName}' (async)`,
     );

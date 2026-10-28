@@ -47,7 +47,7 @@ import type {
   RunStop,
   RunStopOptions,
 } from './runs';
-import type { executeAgent, resumeToolUseFromResumeData } from './executeAgent';
+import type { executeAgent } from './executeAgent';
 import type { decideResume } from './resumeRun';
 
 /** A generation, a hold or a launch already has the run here: the one
@@ -87,12 +87,11 @@ export interface RunRegistryInit {
   readonly wake: (runId: RunId) => void;
 }
 
-/** The run programs: a root launch, a fresh run's turn, a resumed run's
- *  turn (`resumeTurn`), and a resume for the input a run holds. */
+/** The run programs: a root launch, a run's program (fresh or resumed),
+ *  and a resume's decision. */
 export interface RunPrograms {
   readonly root: typeof rootRun;
   readonly executeAgent: typeof executeAgent;
-  readonly resumeTurn: typeof resumeToolUseFromResumeData;
   readonly resume: typeof decideResume;
 }
 

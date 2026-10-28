@@ -16,13 +16,15 @@
 import { Cause, Clock, Effect, Exit, Fiber, Schema } from 'effect';
 
 // Local imports
-import { getRunRecords } from '@agent/storage/runRecords';
+import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
 import {
   prepareAgentDefinition,
   type PreparedAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
-import type { ResumeTurnIdentity } from '@agent/runtime/executeAgent';
-import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import type {
+  AgentConfig,
+  AgentConfigPayload,
+} from '@agent/core/definition/AgentConfig';
 import { runRejection } from '@agent/storage/resumability';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
@@ -35,7 +37,6 @@ import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   AgentConfigSchema,
   RUN_OUTCOME,
-  USER_FOLLOW_UP_SUPPORT,
   type RunEnd,
   type RunId,
   type RunParent,
@@ -62,6 +63,9 @@ export class SubagentDurabilityError extends Schema.TaggedError<SubagentDurabili
 ) {}
 
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
+  /** The launching run: a fresh child's parent edge, and the run its loop
+   *  answers to. */
+  readonly parentRunId: RunId;
   /** The run this attempt executes under; the caller owns its derivation. */
   readonly runId: RunId;
   /** The parent's call that launches the child, which owns it, and its
@@ -90,7 +94,7 @@ type InBandLaunch =
       readonly kind: 'fresh';
       readonly definition: PreparedAgentDefinition;
     }
-  | { readonly kind: 'resume'; readonly identity: ResumeTurnIdentity };
+  | { readonly kind: 'resume'; readonly config: AgentConfig };
 
 /** A defect as a failed `Error`; an interruption stays one. */
 const defectsAsErrors = <A, R>(
@@ -135,9 +139,7 @@ const executeInBand = Effect.fn('executeInBand')(
   ): Effect.fn.Return<InBandSubagentRunResult, Error, AgentRunServices> {
     const { runId } = options;
     const config =
-      launch.kind === 'fresh'
-        ? launch.definition.config
-        : launch.identity.agentConfig;
+      launch.kind === 'fresh' ? launch.definition.config : launch.config;
     const startedAt = yield* Clock.currentTimeMillis;
     const workingDirectory = config.workingDirectory ?? undefined;
     const { fiber, lastTurn } = yield* startDetachedChildRunLoop({
@@ -162,7 +164,6 @@ const executeInBand = Effect.fn('executeInBand')(
                   // commits as it starts.
                   registration: {
                     identity: { kind: 'agent', agent: config.agent },
-                    userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
                     parentRunId: options.parentRunId,
                     ...(options.parentCall !== undefined && {
                       parentCall: options.parentCall,
@@ -172,10 +173,14 @@ const executeInBand = Effect.fn('executeInBand')(
                     }),
                   },
                 }
-              : {
+              : // Awaited: it ends after one cycle, resumed too.
+                {
                   resume: {
-                    identity: launch.identity,
-                    options: { session: options.session },
+                    config,
+                    // Its rows' parent, read as its run starts, under the
+                    // claim the child loop holds by then.
+                    parent: persistedParentRunId(options.session, runId),
+                    stopAfterCycle: true,
                   },
                 }),
             runId,
@@ -324,6 +329,7 @@ export const executeSubagentInBand = (
         ),
         session: options.session,
         suppressErrorNotification: true,
+        stopAfterCycle: true,
       });
       return yield* executeInBand(options, { kind: 'fresh', definition });
     }).pipe(defectsAsErrors),
@@ -347,18 +353,15 @@ export const resumeSubagentInBand = (
         return yield* new SubagentDurabilityError({
           message: `Subagent ${options.runId} cannot be resumed here (${rejection.kind}).`,
         });
-      const agentConfig = yield* getRunRecords(
+      const config = yield* getRunRecords(
         options.session,
         options.runId,
       ).readConfig();
-      if (agentConfig === null)
+      if (config === null)
         return yield* new SubagentDurabilityError({
           message: `Subagent ${options.runId} has no stored configuration to resume.`,
         });
-      return yield* executeInBand(options, {
-        kind: 'resume',
-        identity: { runId: options.runId, agentConfig },
-      });
+      return yield* executeInBand(options, { kind: 'resume', config });
     }).pipe(defectsAsErrors),
   );
 

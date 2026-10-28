@@ -9,7 +9,7 @@ import {
   type ApprovalPolicyLimit,
 } from '@shared/approvalBypassKind';
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
-import { type RunId, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
 import { humanGrant } from './runApprovalQueue';
 import { prepareAgentDefinition } from './AgentLaunchContext';
@@ -29,8 +29,11 @@ import type { RunEndResult } from './RunEndResult';
  */
 export interface RootLaunchOptions extends Pick<
   ExecuteAgentOptions,
-  'stopAfterCycle' | 'tools' | 'onRun' | 'onAdmitted'
+  'tools' | 'onRun' | 'onAdmitted'
 > {
+  /** Stop the run after one model/tool cycle instead of waiting for
+   *  follow-up input. */
+  stopAfterCycle?: boolean;
   /**
    * The caller owns presentation for failures before registration; after
    * that the run's `result` event presents.
@@ -133,6 +136,7 @@ const admittedRun = Effect.fn('admittedRun')(function* (
     continues,
     approveDelegatedWork,
     approvalPolicy,
+    stopAfterCycle,
     ...executeAgentOptions
   } = options;
   const runSession = options.session;
@@ -146,12 +150,8 @@ const admittedRun = Effect.fn('admittedRun')(function* (
     config,
     session: runSession,
     suppressErrorNotification,
+    stopAfterCycle,
   });
-  const userFollowUpSupport =
-    definition.config.script == null &&
-    executeAgentOptions.stopAfterCycle !== true
-      ? USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE
-      : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
   // A chat round takes the human grants of the round it continues, never
   // its launch limit: the round asks with the chat's policy now. An
   // Auto-approve launch grants every bypass over them.
@@ -177,7 +177,6 @@ const admittedRun = Effect.fn('admittedRun')(function* (
       ...executeAgentOptions,
       registration: {
         identity: { kind: 'agent', agent: definition.config.agent },
-        userFollowUpSupport,
         grants: limit === undefined ? grants : { ...grants, limit },
       },
     }),

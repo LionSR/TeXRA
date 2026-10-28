@@ -24,24 +24,22 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
 import type { Secrets } from '@platform/secrets';
-import type { SettingsStores } from '@shared/config/settings';
 import type { Persona, SessionEventDraft } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import {
   AGENT_SOURCE,
-  type AgentDelegationScope,
   type DeclinableUsageRoute,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import { RunFileService } from '@utils/files/runStorage';
+import type { ModelConfig } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 
 import type { OpenStep } from '../loop/step';
-import type { AgentLaunchContext } from '../AgentLaunchContext';
 import type { SessionHandle } from '../SessionHandle';
 
 /**
@@ -69,8 +67,8 @@ interface LaunchEntry {
  * Immutable per-run tool policy, resolved by the launch and read from the
  * run's `AgentRun` service.
  *
- * A frozen value the loop takes from context, with no ambient frame anywhere
- * beneath it — the property an SDK embedder wants.
+ * A readonly value the loop takes from context, with no ambient frame
+ * anywhere beneath it — the property an SDK embedder wants.
  */
 export interface ToolPolicy {
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
@@ -85,7 +83,9 @@ interface RunCallbacks {
 /** The tool a script's run makes its one call to. */
 const SCRIPT_TOOL = 'script';
 
-export interface AgentRunShape {
+/** What a launch resolved for its run (`buildAgentLaunchContext`), which
+ *  the run's `AgentRun` carries whole. */
+export interface RunLaunch {
   readonly runId: RunId;
   readonly session: SessionHandle;
   readonly config: AgentConfig;
@@ -94,16 +94,16 @@ export interface AgentRunShape {
   readonly logger: AgentTrace;
   readonly parentStage: StageHandle;
   readonly toolPolicy: ToolPolicy;
+  /** Absolute or absent, parsed once at launch. */
   readonly workingDirectory?: string;
-  readonly delegationAgentScope?: AgentDelegationScope | null;
-  /** The session's setting slots the launch read, for what the run reads
-   *  besides its model (`ModelAccess` owns that). */
-  readonly stores: SettingsStores;
   /** What the run opens from; null for a tool-use run whose rows hold its
    *  opening, which a resume never renders again. */
   readonly opening: TemplateOpening | null;
   /** How the launch enters the run's cell. */
   readonly entry: LaunchEntry;
+}
+
+export interface AgentRunShape extends RunLaunch {
   readonly fileService: RunFileService;
   /** What each step resolves its tools from (`loop/step.ts`). */
   readonly toolInputs: Omit<
@@ -155,6 +155,9 @@ export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
 ) {}
 
 interface AgentRunLayerInput {
+  /** The launch model's registry config (a resumed run's stored one's),
+   *  which the run binds first; a mid-run switch rebinds in `model`. */
+  readonly modelConfig: ModelConfig;
   /** Caller-supplied tools available only to this run. */
   readonly tools?: readonly ITool[];
   readonly callbacks: RunCallbacks;
@@ -168,7 +171,7 @@ interface AgentRunLayerInput {
  * built here, in the run's fiber, under its project's environment.
  */
 export const agentRunLayer = (
-  ctx: AgentLaunchContext,
+  launch: RunLaunch,
   input: AgentRunLayerInput,
 ): Layer.Layer<
   AgentRun | ModelAccess,
@@ -178,15 +181,12 @@ export const agentRunLayer = (
   Layer.effect(
     AgentRun,
     Effect.gen(function* () {
-      const { runId, session } = ctx;
-      const { logger, config } = ctx;
+      const { runId, session, logger, config, persona } = launch;
       const runHistory = yield* RunHistory;
       const layerScope = yield* Effect.scope;
       // One parallel child holds what the run holds for its life; at close
       // each release runs concurrently under its own deadline.
       const scope = yield* Scope.fork(layerScope, 'parallel');
-
-      const { persona } = ctx;
 
       // Unforced structured-output floor: when the config declares an output
       // schema, a synthetic `submit_output` terminal tool joins the run's own
@@ -212,7 +212,7 @@ export const agentRunLayer = (
       // tools stay out, and its turns get the model's whole output budget.
       const textOnly =
         script === null && !inherits && persona.tools.length === 0;
-      const root = ctx.entry.parent === null;
+      const root = launch.entry.parent === null;
       // A resumed run rebinds what its rows fold to (its model is its
       // newest config's); a fresh run binds the launch model under today's
       // default route.
@@ -255,19 +255,19 @@ export const agentRunLayer = (
           !textOnly &&
           (root || config.asCaller === true || inherits) &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
-        stores: ctx.stores,
+        stores: session.roots,
         workspaceRoot: session.roots.workspace,
         held,
       };
       // A fork binds as its source was bound at the cut (its seed's row).
-      const seeded = ctx.entry.seed?.findLast(
+      const seeded = launch.entry.seed?.findLast(
         (row) => row.type === 'run.config',
       );
       const fromSeed = seeded?.type === 'run.config' ? seeded.binding : null;
       const persisted = folded?.backend != null ? folded : fromSeed;
       const backend = persisted?.backend ?? undefined;
       const modelId = config.model;
-      const modelConfig = ctx.modelConfig;
+      const { modelConfig } = input;
       // The routes this run declines: a resumed run replays the set its rows
       // record; a fresh run declines none. Nothing here reads or writes the
       // user's stored preferences.
@@ -309,18 +309,7 @@ export const agentRunLayer = (
         );
 
       return {
-        runId,
-        session,
-        config,
-        persona,
-        logger,
-        parentStage: ctx.parentStage,
-        toolPolicy: ctx.toolPolicy,
-        workingDirectory: ctx.workingDirectory,
-        delegationAgentScope: ctx.delegationAgentScope,
-        stores: ctx.stores,
-        opening: ctx.opening,
-        entry: ctx.entry,
+        ...launch,
         fileService: new RunFileService(runId, session.roots),
         toolInputs,
         steps: yield* SynchronizedRef.make<OpenStep | null>(null),
@@ -332,4 +321,4 @@ export const agentRunLayer = (
         callbacks: input.callbacks,
       };
     }),
-  ).pipe(Layer.provideMerge(modelAccessLayer(ctx.stores)));
+  ).pipe(Layer.provideMerge(modelAccessLayer(launch.session.roots)));

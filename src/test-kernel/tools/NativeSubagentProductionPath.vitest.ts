@@ -466,7 +466,6 @@ async function launchWaitingChild(options: {
         Effect.flatMap((definition) =>
           executeAgent(definition, PARENT_RUN_ID, {
             session,
-            parentRunId: OUTER_RUN_ID,
             registration: {
               identity: { kind: 'agent', agent: PARENT_AGENT },
               parentRunId: OUTER_RUN_ID,

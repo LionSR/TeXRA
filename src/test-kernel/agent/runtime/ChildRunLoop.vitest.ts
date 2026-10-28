@@ -304,7 +304,7 @@ describe('childRunLoop E2E fixtures', () => {
     () =>
       Effect.gen(function* () {
         // Regression: parent continuation submission can await the ENTIRE resumed
-        // turn (`wakeRun` → … → `resumeToolUseFromResumeData`).
+        // turn (`wakeRun` → … → `executeAgent`).
         // Before #8093, the loop awaited split enqueue/wake work inline in the
         // turn loop, and only finalized this child afterward in the outer
         // `finally` — so a resumed parent that
