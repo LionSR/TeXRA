@@ -192,12 +192,14 @@ export { mcpConfigPathOf, readMcpConfig } from '@tools/mcp/mcpConfig';
 export type { McpServerConfig } from '@common/plugins/mcpServers';
 export { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 // The skills a session's roots discover (the settings inventory, the enabled
-// ones a person activates) with their issues, and a host's source options.
+// ones a person activates) with their issues, and a host's skill sources and
+// source options.
 export {
   Skills,
   type EnabledSkill,
   type SkillRoots,
 } from '@skills/runtimeSkills';
+export type { HostSkillOptions } from '@platform/processRuntime';
 export type { SkillSourceOptions } from '@skills/skillSources';
 export type {
   SkillIssueCode,

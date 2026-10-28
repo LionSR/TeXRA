@@ -43,6 +43,7 @@ import {
   Secrets,
   StateWriteFailed,
   type ProcessServices,
+  type SkillSourceOptions,
   type StateStore,
 } from '@texra-ai/harness/host';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
@@ -131,10 +132,13 @@ interface CliProcessRuntimeInstall {
   /** The argv-selected diagnostics floor for this process runtime. */
   readonly minimumLogLevel?: LogLevel.LogLevel;
   /**
-   * The packaged resources root the CLI's built-in agent directories resolve
-   * against. Absent only for the platform-less entries, which load no agents.
+   * The packaged resources root the CLI's built-in agent directories and
+   * bundled skills resolve against. Absent only for the platform-less
+   * entries, which load no agents and discover no skills.
    */
   readonly resourcesPath?: string;
+  /** The `--source` / `--include-interop` flags every skill read uses. */
+  readonly skillSourceOptions?: SkillSourceOptions;
   /** The project the process serves, whose `.env` its own reads see. */
   readonly workspace?: string;
 }
@@ -233,6 +237,12 @@ export function installCliProcessRuntime(
         processLayer({
           storageRoot,
           plugins: texraPlugins({ editors }),
+          ...(options?.resourcesPath !== undefined && {
+            skills: {
+              resourcesPath: options.resourcesPath,
+              skillSourceOptions: options.skillSourceOptions,
+            },
+          }),
           // The one credential store under `storageRoot`, telling this
           // process's surfaces about every key it writes.
           secrets: Secrets.announcing(

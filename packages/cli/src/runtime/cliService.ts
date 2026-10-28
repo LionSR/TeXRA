@@ -74,15 +74,12 @@ const CHANNEL = 'cliService';
 
 /**
  * The service's projects over the CLI's node roots, opened in `scope` and
- * closed with it. The process bootstrap (skills, the tool seed) runs once
- * here over the no-workspace roots, as the desktop's does, so serving never
- * records a folder of its own as a project.
+ * closed with it. The process bootstrap (the tool seed) runs once here over
+ * the no-workspace roots, as the desktop's does, so serving never records a
+ * folder of its own as a project.
  */
 export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
-  context: Pick<
-    CliContext,
-    'storageRoot' | 'resourcesPath' | 'skillSourceOptions'
-  >,
+  context: Pick<CliContext, 'storageRoot'>,
   scope: Scope.Scope,
   /** The process's sessions, which each project's session is also opened
    *  through. */
@@ -134,13 +131,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       globalState,
     });
   });
-  yield* bootstrapHost({
-    roots: yield* openRoots(undefined, scope),
-    skills: {
-      resourcesPath: context.resourcesPath,
-      skillSourceOptions: context.skillSourceOptions,
-    },
-  });
+  yield* bootstrapHost({ roots: yield* openRoots(undefined, scope) });
 
   // What opening a project reads, captured once: `open` is the port's,
   // called from handlers that hold no process context of their own.

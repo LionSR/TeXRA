@@ -1,29 +1,16 @@
 /**
- * Node host composition helpers.
- *
- * Every Node composition root (a CLI runtime, a desktop main process, an
- * editor extension host) opens a workspace's roots and registers its
- * runtime skill sources the same way. This module owns those
- * two steps so the hosts cannot drift; each host still installs its process
- * runtime in its own composition root.
- *
- * This file is a composition helper, not a core platform abstraction: it
- * deliberately reaches "up" into `@agent` and `@skills` for the registration
- * helpers, mirroring what each host's composition root would otherwise inline.
- * Nothing in `@agent` / `@skills` imports it back, so there is no cycle. A
- * plugin's language server adapter is not here: each Node root hands its
- * layer to `processLayer`, so the adapter stays out of hosts that only need
- * the composition helpers. The platform literal itself is not here either:
- * every field of it is host-specific, so each root writes its own.
+ * Node host composition helper: every Node composition root (a CLI runtime,
+ * a desktop main process, an editor extension host, the SDK's default
+ * platform) opens a workspace's roots here, so the config-provider choice
+ * cannot drift. Each host still installs its process runtime in its own
+ * composition root. A plugin's language server adapter is not here: each
+ * Node root hands its layer to `processLayer`. The platform literal itself
+ * is not here either: every field of it is host-specific, so each root
+ * writes its own.
  */
 
 // Local imports
 import type { SettingHost } from '@shared/state/stateSettings';
-import { installSkillContributions } from '@skills/runtimeSkills';
-import {
-  hostSkillContributions,
-  type SkillSourceOptions,
-} from '@skills/skillSources';
 
 // Local file imports
 import { JsonConfigProvider } from './jsonConfigProvider';
@@ -79,33 +66,4 @@ export function createNodeWorkspaceRoots(
     repoState: init.repoState,
     globalState: init.globalState,
   };
-}
-
-export interface NodeRuntimeSkillOptions {
-  readonly resourcesPath: string;
-  readonly skillSourceOptions?: SkillSourceOptions;
-}
-
-/**
- * Install the runtime skill contributions for a host.
- *
- * All three hosts use the same precedence: explicit custom roots, project
- * skills, user skills, and bundled skills, where the bundled tier also holds
- * the skills each tool plugin in `pluginIds` ships. The CLI supplies
- * custom and interop options from command-line flags; desktop and the
- * extension use the defaults so they always get project, user, and bundled
- * runtime skills. The plugin ids are required so a caller that forgets them
- * fails to compile rather than quietly losing plugin skills.
- */
-export function initializeNodeRuntimeSkills(
-  options: NodeRuntimeSkillOptions,
-  pluginIds: readonly string[],
-): void {
-  // The workspace folder is not fixed here: project and interop sources are
-  // resolved from the calling session's workspace at discovery time.
-  installSkillContributions({
-    resourcesPath: options.resourcesPath,
-    options: options.skillSourceOptions ?? {},
-    contributions: hostSkillContributions(pluginIds),
-  });
 }

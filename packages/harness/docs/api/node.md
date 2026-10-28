@@ -288,25 +288,6 @@ matches variable names case-insensitively, as its environment does.
 const inheritedEnv: (keep?: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode" | undefined) => Effect<Record<string, string>, never, never>
 ```
 
-## initializeNodeRuntimeSkills
-
-Install the runtime skill contributions for a host.
-
-All three hosts use the same precedence: explicit custom roots, project
-skills, user skills, and bundled skills, where the bundled tier also holds
-the skills each tool plugin in `pluginIds` ships. The CLI supplies
-custom and interop options from command-line flags; desktop and the
-extension use the defaults so they always get project, user, and bundled
-runtime skills. The plugin ids are required so a caller that forgets them
-fails to compile rather than quietly losing plugin skills.
-
-```ts
-function initializeNodeRuntimeSkills(
-  options: NodeRuntimeSkillOptions,
-  pluginIds: readonly string[],
-): void
-```
-
 ## INPUT_HISTORY_LIMIT
 
 ```ts
@@ -465,15 +446,6 @@ interface NodePlatformOptions {
 const nodePlatformServices: Layer.Layer<
   FileSystem.FileSystem | Path.Path | ChildProcessSpawner
 >
-```
-
-## NodeRuntimeSkillOptions
-
-```ts
-interface NodeRuntimeSkillOptions {
-  readonly resourcesPath: string;
-  readonly skillSourceOptions?: SkillSourceOptions;
-}
 ```
 
 ## NodeWorkspaceRootsInit
