@@ -65,14 +65,13 @@ function backgroundOn(
   toggles: BackgroundToggles,
   turn: {
     readonly protocol: ModelOrigin['protocol'];
-    readonly modelName: string;
     readonly textOnly: boolean;
   },
 ): boolean {
   if (!turn.textOnly) return false;
-  if (turn.protocol === 'google-interactions')
-    return toggles.googleInteractions;
-  return turn.modelName.toLowerCase().startsWith('gpt') && toggles.responses;
+  return turn.protocol === 'google-interactions'
+    ? toggles.googleInteractions
+    : toggles.responses;
 }
 
 /** A binding that never runs background work. */
@@ -157,7 +156,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
   );
   const codex = credential.route === 'chatgpt-subscription';
   const reasoning = yield* reasoningOf(plan, config);
-  const turn = { protocol, modelName: config.id, textOnly: request.textOnly };
+  const turn = { protocol, textOnly: request.textOnly };
   const bound = yield* bindWireModel({
     protocol,
     model: config,

@@ -190,7 +190,7 @@ covers, which the operation handle deliberately does not copy.
 | File                              | What it owns                                                                                                                                                            |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `turn.ts`                         | the `.` entry's turn contract: the `Model` interface, the request, configuration, result and event contract, the tool and reasoning schemas, `completedTurn`            |
-| `protocol.ts`                     | the protocol enum, binding identity (`BindingSchema`, `ModelOriginSchema`) and JSON materialization                                                                     |
+| `protocol.ts`                     | the protocol enum, binding identity (`BindingSchema`, `ModelOriginSchema`), background capability and JSON materialization                                              |
 | `message.ts`                      | the wire message and history schemas, the content parts, and the continuation prefixes                                                                                  |
 | `errors.ts`                       | `ModelError` and the failure classification along it, `RemoteOperation` included                                                                                        |
 | `api/transport.ts`                | stream pull, tool-argument parsing, the abort-safe request helper                                                                                                       |
@@ -256,9 +256,9 @@ media or evidence it cannot represent. The current explicit failures:
 
 Two tiers, deliberately separate.
 
-`src/test-kernel/llm/` is about 9 700 lines of synthetic-transport suites: they
-pin lowering, decoding, ordering and every explicit failure, against fixtures.
-They stay hermetic and free, so no suite in them calls a provider, and they run
+`src/test-kernel/llm/` is three synthetic-transport suites, one per protocol
+family, about 1 500 lines and eight cases: they pin lowering, decoding, ordering
+and the explicit failures they name, against fixtures. They stay hermetic and free, so no suite in them calls a provider, and they run
 in `npm test`.
 
 `test-live/` is the wire evidence: one key-gated suite per HTTP provider route,

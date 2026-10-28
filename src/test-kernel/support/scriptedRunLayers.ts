@@ -296,7 +296,7 @@ export function testAgentRun(
     entry: {
       registration: null,
       opening: Effect.succeed([]),
-      entered: Effect.void,
+      entered: () => Effect.void,
       initialUserMessage: 'Do the thing.',
     },
     fileService: new RunFileService(runId, session.roots),
@@ -370,7 +370,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
                 entry: {
                   registration: null,
                   opening: Effect.succeed([]),
-                  entered: Effect.void,
+                  entered: () => Effect.void,
                   initialUserMessage: init.initialUserMessage,
                 },
               }

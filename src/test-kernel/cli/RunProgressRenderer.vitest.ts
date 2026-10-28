@@ -161,7 +161,7 @@ describe('CLI run progress renderer', () => {
                 aggregateId: qualifyAggregateId('run', childRunId),
                 identity: { kind: 'agent', agent: 'review' },
                 userFollowUpSupport: 'unsupported',
-                parent: { id: parentRunId, callId: null },
+                parent: { id: parentRunId, call: null },
                 provenance: null,
               },
             ]);

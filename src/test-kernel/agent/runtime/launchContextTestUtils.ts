@@ -55,7 +55,7 @@ export function createTestLaunchContext({
     entry: {
       registration: null,
       opening: Effect.succeed([]),
-      entered: Effect.void,
+      entered: () => Effect.void,
       initialUserMessage: undefined,
     },
     toolPolicy: {},

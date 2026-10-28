@@ -207,7 +207,7 @@ export interface RunCallShape {
    *  one more for each re-run a resume admitted. */
   readonly attempt: number;
   /** The card this call's rows open under: what a run the call launches
-   *  names as its `parentCard`. */
+   *  names as its `parent.call.card`. */
   readonly logId: string;
   /** The script that issued this call; null for a call a response issued. */
   readonly script: ScriptScope | null;

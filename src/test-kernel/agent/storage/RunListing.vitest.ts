@@ -36,7 +36,7 @@ const startRun = (id: RunId, identity: RunIdentity, parentRunId?: RunId) =>
       identity,
       userFollowUpSupport: 'unsupported',
       parent:
-        parentRunId === undefined ? null : { id: parentRunId, callId: null },
+        parentRunId === undefined ? null : { id: parentRunId, call: null },
       provenance: null,
     },
   ]);
