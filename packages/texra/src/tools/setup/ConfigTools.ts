@@ -76,6 +76,9 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
   schema: ReadConfigInputSchema,
   execute: Effect.fn('ConfigTools.execute')(function* (input: ReadConfigInput) {
     const { config } = (yield* ToolContext).env.roots;
+    // The stored value as is, not Settings.get: the key may name no catalog
+    // row, and a malformed value is shown rather than replaced by its
+    // default, so the setup agent sees what the workspace holds.
     const value = config.get(input.key);
     const json = JSON.stringify(value, null, 2) ?? 'undefined';
     const description = config.catalog.byKey(input.key)?.description;
