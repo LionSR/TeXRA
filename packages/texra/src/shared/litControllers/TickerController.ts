@@ -18,10 +18,11 @@ export class TickerController implements ReactiveController {
   private _now = Date.now();
   private _timer: ReturnType<typeof setInterval> | undefined;
 
-  constructor(
-    private readonly host: ReactiveControllerHost,
-    private readonly intervalMs: number,
-  ) {
+  private readonly host: ReactiveControllerHost;
+  private readonly intervalMs: number;
+  constructor(host: ReactiveControllerHost, intervalMs: number) {
+    this.host = host;
+    this.intervalMs = intervalMs;
     host.addController(this);
   }
 

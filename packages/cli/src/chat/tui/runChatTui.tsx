@@ -33,6 +33,8 @@ import {
   isTranscriptSettlementPhase,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
+import { FileSecrets, secretsDirectory } from '@texra-ai/harness/node';
+import { emitAppSignal } from '@texra-ai/harness/host';
 import {
   CliUsageError,
   effectiveApprovalPolicy,
@@ -63,7 +65,6 @@ import {
   acquireTuiTerminal,
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
-import { cliSecrets } from '@cli/runtime/cliSecrets';
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
@@ -477,7 +478,12 @@ export async function runChat(
     Effect.gen(function* () {
       yield* Effect.forkIn(followCliCredentialChanges, chatScope);
       // Keys another TeXRA window or the service saves reach this chat too.
-      yield* Effect.forkIn(cliSecrets(context.storageRoot).watch(), chatScope);
+      yield* Effect.forkIn(
+        FileSecrets.watch(secretsDirectory(context.storageRoot), (key) =>
+          emitAppSignal('credentialChanged', { key }),
+        ),
+        chatScope,
+      );
     }),
   );
   // The runs this terminal paints, watched on the session for as long as

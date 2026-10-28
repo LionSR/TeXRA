@@ -1,7 +1,7 @@
 import { Cause, Effect, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
-import { onAppSignal } from '@eventBus/AppSignals';
+import { onAppSignal, type AppSignals } from '@texra-ai/harness/host';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 import type { Session } from '@texra-ai/harness';
 
@@ -53,7 +53,7 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
 export function registerFileDecorations(
   context: vscode.ExtensionContext,
   session: Pick<Session, 'view'>,
-): Effect.Effect<void, never, Scope.Scope> {
+): Effect.Effect<void, never, Scope.Scope | AppSignals> {
   return Effect.gen(function* () {
     const provider = new TeXRAFileDecorationProvider();
     yield* Effect.forkScoped(

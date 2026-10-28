@@ -32,6 +32,7 @@ import {
   type PollEventListener,
   PollingSourceBase,
   type PollingLifetime,
+  type PollServices,
 } from './PollingSourceBase';
 import { dedupeComments, type DedupedResource } from './pollingDedup';
 import {
@@ -100,7 +101,7 @@ export class IssuePollingSource extends PollingSourceBase<
   subscribe(
     issue: IssueKey,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, GitHubServices> {
+  ): Effect.Effect<Disposable, never, PollServices> {
     const key = issueKeyToString(issue);
     return this.register(key, (now) => createInitialState(issue, now), onEvent);
   }

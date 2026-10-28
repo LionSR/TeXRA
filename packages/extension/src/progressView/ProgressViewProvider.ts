@@ -30,8 +30,8 @@ import {
   type RunId,
   GlobalStateKey,
 } from '@texra-ai/harness/schemas';
+import { AppSignals, appSignalStream } from '@texra-ai/harness/host';
 import { BundledViewContentProvider } from '@common/webview';
-import { appSignalStream, emitAppSignal } from '@eventBus/AppSignals';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
@@ -185,28 +185,40 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly onboardingFunnel: OnboardingFunnelRefresher;
   private readonly draftRequests = new HostDraftRequests();
 
+  private readonly globalState: StateStore;
+  private readonly secrets: PlatformSecrets;
+  private readonly runtime: ProcessRuntime;
+  private readonly roots: WorkspaceRoots;
+  private readonly editors: EditorRegistry;
+  private readonly paintSetupPill: (credentialUsable: boolean) => void;
   constructor(
     context: vscode.ExtensionContext,
-    private readonly globalState: StateStore,
-    private readonly secrets: PlatformSecrets,
+    globalState: StateStore,
+    secrets: PlatformSecrets,
     /** Process runtime shared with every extension surface. */
-    private readonly runtime: ProcessRuntime,
+    runtime: ProcessRuntime,
     /** The window's roots: its workspace, storage and settings stores. */
-    private readonly roots: WorkspaceRoots,
+    roots: WorkspaceRoots,
     /** Where this window's runs run: the service's session, or this
      *  process's own with the handle that owns it. */
     windowSession: WindowSession,
     /** The editor registry the extension's plugins read (`texraPlugins`). */
-    private readonly editors: EditorRegistry,
+    editors: EditorRegistry,
     /** The setup pill: painted from the same credential answer the funnel
      *  reads, so the pill and the "Connect a model" card agree. */
-    private readonly paintSetupPill: (credentialUsable: boolean) => void,
+    paintSetupPill: (credentialUsable: boolean) => void,
     /** The settings view at a target. The settings view is built after
      *  this one, so this waits for it. */
     openSettings: (
       target: SettingsTarget | undefined,
     ) => Effect.Effect<void, Error, ProcessServices>,
   ) {
+    this.globalState = globalState;
+    this.secrets = secrets;
+    this.runtime = runtime;
+    this.roots = roots;
+    this.editors = editors;
+    this.paintSetupPill = paintSetupPill;
     this.contentProvider = new BundledViewContentProvider(
       context,
       'ProgressView',
@@ -433,16 +445,18 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const { service } = windowSession;
     if (service !== undefined)
       this.runtime.runFork(
-        this.attachToService(service, {
-          ...presentation,
-          ...editor,
-          // What a service task wrote, told here as a task here tells
-          // it: the file decorations follow it.
-          filesWritten: (absolutePaths) =>
-            emitAppSignal('workspaceFilesWritten', {
-              absolutePaths: [...absolutePaths],
-            }),
-        }).pipe(Scope.provide(this.scope)),
+        AppSignals.use((signals) =>
+          this.attachToService(service, {
+            ...presentation,
+            ...editor,
+            // What a service task wrote, told here as a task here tells
+            // it: the file decorations follow it.
+            filesWritten: (absolutePaths) =>
+              signals.emit('workspaceFilesWritten', {
+                absolutePaths: [...absolutePaths],
+              }),
+          }),
+        ).pipe(Scope.provide(this.scope)),
       );
 
     this.watchWorkspace();

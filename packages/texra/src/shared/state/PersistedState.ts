@@ -65,11 +65,17 @@ export function createWebviewStorage(hostBridge: {
 export class PersistedState<T extends Record<string, unknown>> {
   private state: T;
 
+  private readonly storage: KeyValueStore;
+  private readonly key: string;
+  private readonly schema: Schema.Codec<T, unknown>;
   constructor(
-    private readonly storage: KeyValueStore,
-    private readonly key: string,
-    private readonly schema: Schema.Codec<T, unknown>,
+    storage: KeyValueStore,
+    key: string,
+    schema: Schema.Codec<T, unknown>,
   ) {
+    this.storage = storage;
+    this.key = key;
+    this.schema = schema;
     this.state = this.load();
   }
 

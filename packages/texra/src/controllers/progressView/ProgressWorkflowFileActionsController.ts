@@ -13,6 +13,7 @@ import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
 import { type AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
+import type { AppSignals } from '@texra-ai/harness/host';
 import type { HostRequestFailure } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { HostRunActions } from '../session/hostRunActions';
@@ -27,13 +28,14 @@ type ProgressWorkflowFileActionsState = RunOutputsSource;
  * host answers a request with a tag ({@link HostRequestFailure}), so a
  * refusal a host already worded — the desktop error notice is one — travels
  * as itself and no arm re-enters a runtime to settle this. It runs on the
- * process `FileSystem` its run-storage reads take, which both hosts' request
- * dispatchers already carry, so it is `yield*`ed there, not settled here.
+ * process `FileSystem` its run-storage reads take, and an accept announces
+ * its write on the process's signal hub; both hosts' request dispatchers
+ * already carry them, so it is `yield*`ed there, not settled here.
  */
 type FileAction<A> = Effect.Effect<
   A,
   HostRequestFailure,
-  FileSystem.FileSystem
+  FileSystem.FileSystem | AppSignals
 >;
 
 interface ProgressWorkflowFileActionsHost {
@@ -70,9 +72,10 @@ export class ProgressWorkflowFileActionsController {
     string
   >();
 
-  constructor(
-    private readonly deps: ProgressWorkflowFileActionsControllerDeps,
-  ) {}
+  private readonly deps: ProgressWorkflowFileActionsControllerDeps;
+  constructor(deps: ProgressWorkflowFileActionsControllerDeps) {
+    this.deps = deps;
+  }
 
   /** Apply an output-file request from either GUI host. */
   handle(

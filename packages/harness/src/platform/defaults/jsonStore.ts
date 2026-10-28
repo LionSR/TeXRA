@@ -179,12 +179,16 @@ export class JsonStore {
   private version: string | undefined;
   private readonly follow: boolean;
 
+  readonly filePath: string;
+  private data: JsonRecord;
   private constructor(
     /** The file this store reads and writes; warnings name it. */
-    readonly filePath: string,
-    private data: JsonRecord,
+    filePath: string,
+    data: JsonRecord,
     follow: boolean,
   ) {
+    this.filePath = filePath;
+    this.data = data;
     this.follow = follow;
   }
 

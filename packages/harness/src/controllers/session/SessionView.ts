@@ -30,6 +30,7 @@ import {
 } from 'effect';
 
 import type { SessionViewAccess } from '@agent/runtime/SessionHandle';
+import type { AppSignals } from '@platform/appSignals';
 import {
   qualifyAggregateId,
   type LocalRuntimeState,
@@ -199,6 +200,7 @@ export const makeSessionViewAccess = Effect.fn(
   | TranscriptSubscriptions
   | LocalRuntimeSource
   | ToolRegistry
+  | AppSignals
 > {
   const { ref, changes } = yield* SessionViewService;
   const inputs = yield* SessionInputs;

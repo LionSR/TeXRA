@@ -65,14 +65,20 @@ export class Disposable {
       for (const disposable of disposables) disposable.dispose();
     });
   }
-  constructor(private callOnDispose: () => unknown) {}
+  private callOnDispose: () => unknown;
+  constructor(callOnDispose: () => unknown) {
+    this.callOnDispose = callOnDispose;
+  }
   dispose() {
     this.callOnDispose();
   }
 }
 
 export const ThemeColor = class {
-  constructor(public id: string) {}
+  public id: string;
+  constructor(id: string) {
+    this.id = id;
+  }
 };
 
 export const ProgressLocation = {

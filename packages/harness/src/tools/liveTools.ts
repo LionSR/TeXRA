@@ -30,6 +30,7 @@ import {
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { withLogChannel } from '@logger/effectLog';
+import { AppSignals } from '@platform/appSignals';
 import {
   AppState,
   type StateReadFailed,
@@ -155,6 +156,7 @@ export const toolCatalogLayer = (
         Path.Path,
         ChildProcessSpawner,
         AppState,
+        AppSignals,
       )(yield* Effect.context<Exclude<PluginLayerServices, ToolCatalog>>());
       const on = yield* SubscriptionRef.make(
         onOf(new Set(table.entries.keys())),

@@ -38,7 +38,10 @@ class LineColCursor {
   private offset = 0;
   private line = 0;
   private lineStart = 0;
-  constructor(private readonly source: string) {}
+  private readonly source: string;
+  constructor(source: string) {
+    this.source = source;
+  }
 
   advanceTo(target: number): { line: number; column: number } {
     while (this.offset < target) {

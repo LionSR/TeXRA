@@ -1,7 +1,8 @@
 import { it } from '@effect/vitest';
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
+import { AppSignals } from '@texra-ai/harness/host';
 import type { RunId } from '@shared/schemas';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
 
@@ -75,9 +76,13 @@ describe('ProgressWorkflowFileActionsController', () => {
         expect(followUps[0]).toMatch(/edited\.tex/);
       }).pipe(
         Effect.provide(
-          FileSystem.layerNoop({
-            readFileString: () => Effect.sync(() => readResults.shift() ?? ''),
-          }),
+          Layer.merge(
+            FileSystem.layerNoop({
+              readFileString: () =>
+                Effect.sync(() => readResults.shift() ?? ''),
+            }),
+            AppSignals.layer,
+          ),
         ),
       );
     },
