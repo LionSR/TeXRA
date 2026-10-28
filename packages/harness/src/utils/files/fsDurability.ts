@@ -18,6 +18,7 @@ import * as nodeFs from 'node:fs/promises';
 
 // Third-party imports
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import * as NodePath from '@effect/platform-node/NodePath';
 import { Effect, FileSystem, Layer, Path, PlatformError } from 'effect';
 
 import writeFileAtomicLib from 'write-file-atomic';
@@ -69,20 +70,27 @@ function systemErrorFrom(
  * gets the native call); the native call answers the same in one syscall.
  * Its errors classify as the library's do.
  */
-export const nodeFileSystemLayer: Layer.Layer<FileSystem.FileSystem> =
-  Layer.effect(
-    FileSystem.FileSystem,
-    Effect.map(FileSystem.FileSystem, (fs) =>
-      FileSystem.make({
-        ...fs,
-        realPath: (target) =>
-          Effect.tryPromise({
-            try: () => nodeFs.realpath(target),
-            catch: (cause) => systemErrorFrom('realPath', target, cause),
-          }),
-      }),
-    ),
-  ).pipe(Layer.provide(NodeFileSystem.layer));
+const nodeFileSystemLayer: Layer.Layer<FileSystem.FileSystem> = Layer.effect(
+  FileSystem.FileSystem,
+  Effect.map(FileSystem.FileSystem, (fs) =>
+    FileSystem.make({
+      ...fs,
+      realPath: (target) =>
+        Effect.tryPromise({
+          try: () => nodeFs.realpath(target),
+          catch: (cause) => systemErrorFrom('realPath', target, cause),
+        }),
+    }),
+  ),
+).pipe(Layer.provide(NodeFileSystem.layer));
+
+/**
+ * Node's file services: `FileSystem` (with the one-call native `realPath`)
+ * and `Path`. The process platform, the JSON and credential stores and the
+ * hosts' own reads all provide this one layer.
+ */
+export const nodeFileServices: Layer.Layer<FileSystem.FileSystem | Path.Path> =
+  Layer.mergeAll(nodeFileSystemLayer, NodePath.layer);
 
 /**
  * Crash-safe replace, delegated to `write-file-atomic` rather than

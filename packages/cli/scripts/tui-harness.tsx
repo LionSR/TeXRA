@@ -24,7 +24,6 @@ import { apiKeySecretName } from '@texra-ai/llm';
 import { AgentCatalog, describeFollowUpFailure } from '@texra-ai/harness/host';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { SessionOwner } from '@platform/processRuntime';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { runBypasses } from '@shared/approvalBypassKind';
@@ -83,6 +82,7 @@ import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+import { nodeFileServices } from '@utils/files/fsDurability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
