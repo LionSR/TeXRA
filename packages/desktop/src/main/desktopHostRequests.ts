@@ -59,6 +59,7 @@ import {
 import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
 import { windowRecords } from '@texra/controllers/server/serviceSession';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import { texraGuideUrl } from '@ui/copy/guide';
 
 import {
   DESKTOP_DOCS_URL,
@@ -345,7 +346,7 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
       postDesktopSettingsView(options.postToRenderer, 'models/keys'),
     ),
     openApiKeyGuide: Effect.suspend(() =>
-      options.openExternalUrl('https://texra.ai/guide/configuration.html'),
+      options.openExternalUrl(texraGuideUrl('configuration')),
     ),
     openCustomAgentDirectory: Effect.gen(function* () {
       const directory = yield* AgentDirectories.use((directories) =>
@@ -353,8 +354,10 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
       );
       yield* host.openPath(directory);
     }),
+    // The desktop guide has no agents section: both hosts open the custom
+    // agents page.
     openAgentDocs: Effect.suspend(() =>
-      options.openExternalUrl(`${DESKTOP_DOCS_URL}#agents`),
+      options.openExternalUrl(texraGuideUrl('custom-agents')),
     ),
     recheckDependencies: Effect.suspend(() => options.recheckTools()),
     openInstallGuide: () =>

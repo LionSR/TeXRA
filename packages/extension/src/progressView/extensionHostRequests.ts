@@ -120,6 +120,7 @@ import {
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
 import { getToolDocsPage } from '@texra/utils/system/toolChecks';
+import { texraGuideUrl } from '@ui/copy/guide';
 
 const CHANNEL = 'ExtensionHostRequests';
 
@@ -588,7 +589,7 @@ export function createExtensionHostRequests(
       fromHost('env.openExternal', () =>
         vscode.env.openExternal(
           vscode.Uri.parse(
-            'https://texra.ai/guide/installation#setting-up-api-keys',
+            texraGuideUrl('installation', 'setting-up-api-keys'),
           ),
         ),
       ),
