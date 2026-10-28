@@ -62,7 +62,7 @@ its kind is its `type` column.
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row (`controllers/session/storeSchema.ts:54-65`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
-  `RunState` the loop continues from (`shared/session/runState.ts:533-546`).
+  `RunState` the loop continues from (`shared/session/runState.ts:532-545`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
   (`agent/runtime/SessionEvents.ts:219-370`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
@@ -465,8 +465,8 @@ requests, and the offered tools and contents
 ### 5.2 Grammar
 
 `applyRunRows(state, rows)` folds rows in order
-(`shared/session/runState.ts:533-546`). It MUST refuse a row whose commit is not
-above the last folded one (`shared/session/runState.ts:495-499`). Each folded
+(`shared/session/runState.ts:532-545`). It MUST refuse a row whose commit is not
+above the last folded one (`shared/session/runState.ts:494-498`). Each folded
 kind has one handler in a table keyed by row type: the state it requires (any
 state, an existing one, or an opened run) and its move
 (`shared/session/runState.ts:293-310`, `:343-472`). A handler that requires an
@@ -757,7 +757,7 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   unless the session is closed. This is best effort: a write the session refuses
   (it is draining, or the claim is gone) is logged and leaves the request open,
   for the next resume to cancel as unbound
-  (`agent/runtime/requestPolicy.ts:366-388`).
+  (`agent/runtime/requestPolicy.ts:361-383`).
 - A request is a row, so it outlives its process. A resume cancels the unbound
   ones (section 7.2) and re-enters the bound ones under the same id
   (`shared/session/inFlight.ts:347-371`). An open `externalInquiry` is neither:
