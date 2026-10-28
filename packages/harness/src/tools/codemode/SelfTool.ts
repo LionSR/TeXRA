@@ -85,9 +85,10 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   const missing = new ToolError(
     `self() needs the conversation the script ${run.runId} launched from, and the call that launched it.`,
   );
-  const parent = start?.type === 'run.start' ? start.parent?.id : undefined;
-  const card = start?.type === 'run.start' ? start.parentCard : null;
-  if (parent === undefined || card == null) return yield* Effect.fail(missing);
+  const edge = start?.type === 'run.start' ? start.parent : null;
+  if (edge?.call == null) return yield* Effect.fail(missing);
+  const { id: parent } = edge;
+  const { card } = edge.call;
   const config = yield* getRunRecords(run.session, parent).readConfig();
   // The cut is the response that issued the script, not the script's own
   // start, which a full child-run budget can delay past later turns: the
@@ -203,8 +204,7 @@ const runSelf = Effect.fn('self.call')(function* (
           asCaller: true,
         }),
         ...(forked !== null && { seed: forked.seed }),
-        parentCard: call.logId,
-        parentCallId: call.callId,
+        parentCall: { callId: call.callId, card: call.logId },
         notify,
       });
     }),

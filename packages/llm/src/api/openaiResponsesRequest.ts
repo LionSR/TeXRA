@@ -13,7 +13,7 @@ import {
   type TurnRequest,
 } from '../turn.js';
 import { decodeTurnRequest } from './turnInput.js';
-import { sameModelOrigin } from '../protocol.js';
+import { backgroundCapable, sameModelOrigin } from '../protocol.js';
 import { ModelError } from '../errors.js';
 import { responseInput } from './openaiResponsesLower.js';
 import type { ResponseOrigin } from './openaiResponsesCodec.js';
@@ -42,7 +42,7 @@ export const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(
       (author.continuation !== undefined &&
         author.continuation.origin.protocol !== 'openai-responses') ||
       (author.mode === 'background' &&
-        (config.background !== 'supported' || transport.kind !== 'http')) ||
+        (!backgroundCapable(config) || transport.kind !== 'http')) ||
       (!config.supportsMaxOutputTokens &&
         author.maxOutputTokens !== undefined) ||
       (!config.supportsStorage && author.store === true)
@@ -111,8 +111,7 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
       turn.protocol !== 'openai-responses' ||
       turn.mode !== mode ||
       !isDeepStrictEqual(turn.transport, transport) ||
-      !sameModelOrigin(turn, origin) ||
-      (mode === 'background' && config.background !== 'supported')
+      !sameModelOrigin(turn, origin)
     ) {
       return yield* new ModelError({
         kind: 'unsupported',

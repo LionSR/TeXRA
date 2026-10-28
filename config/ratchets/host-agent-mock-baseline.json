@@ -1,4 +1,0 @@
-{
-  "semantics": "Retired host mock measurement. scripts/core-quality-measure.mjs (core-module-mocks) is the active measurement owner, including CLI, desktop and shared-support internal @agent mocks. The empty sites list records retirement and remains because the baseline comparison forbids deleting budget files.",
-  "sites": []
-}
