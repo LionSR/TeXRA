@@ -197,48 +197,111 @@ block schema Zod.
 `RunSubscriptionRegistry.ts` (#14313). Signals are not persisted, so this
 is not freeze-gated; it is the last baseline row.
 
+## Design rule: delete the mechanism, do not patch it
+
+The owner's direction (2026-10-28): write each of these the smart way, so
+the complexity goes away, rather than keep handling it. Applied to the items
+above, three mechanisms disappear.
+
+**Rows evolve additively; the golden store is the freeze.** This argues
+against ruling Q2 of the storage design ("released rows are read forever
+through upcasters, in the codec only") and asks for the rule `config.json`
+already has (ruling D12): from 1.0, a released row kind only gains optional
+fields, a released field keeps its meaning, and a change that cannot be made
+that way is a new kind name, with the old one retired as kinds are retired
+today. Under this rule there is nothing to upcast, so the per-kind `upcast`
+arrays, `readableFrom` and `pluginFactFloor`
+(`packages/harness/src/controllers/session/rowCodec.ts`), the dispatch on
+`CURRENT_VALUE_VERSION`, the `upcasts >= version - 1` test and the frozen
+JSON fingerprints with their `--mode freeze` run are all deleted. The
+`version` column stays as a write stamp, read only by the "a newer build
+wrote this" refusal. What remains as the freeze is one dynamic check that
+already exists: `src/test-kernel/fixtures/storage/golden-1.0.sql` decodes
+and reduces to the same facts in every later build
+(`src/test-kernel/controllers/session/goldenStore.vitest.ts`). It catches a
+new required field, a retyped field and a changed meaning, because the
+golden rows stop decoding or stop reducing to the asserted facts. One
+assertion is added to it: every kind in `ROW_KINDS` appears in the golden
+store, so no kind is unprotected by accident. The cost of a breaking change
+after 1.0 is a new kind and a reducer that reads both while old data lasts,
+which is the same work an upcaster is, placed in the one owner of the fact
+instead of in a codec stage with its own numbering. If Q2 stands, the
+fallback is P1 as a keyed table: `upcast` becomes a record from stored
+version to step, applied in a loop until the current version; the count
+check is deleted. About 20 lines.
+
+**The sandbox door has one path.** The run loop's own rule is that live and
+resume are one function over the rows. The script door breaks it in one
+place: live, it hands results to the guest from a queue in finishing order;
+on resume, from the rows in commit order. Make the live path read the same
+source as the replay path: the guest receives each call's result when the
+run state shows it committed, in commit order, whether the call ran a
+moment ago or in an earlier process. The `settled` queue, the `delivered`
+map of `Deferred`s and the `handedBack` gate go; the ordering question and
+its tests go with them, since there is one order and it is the store's.
+`RunCell` exposes `current`; the door needs the stream of applied rows
+behind it, which the session view's `SubscriptionRef` already carries.
+
+**A grant names its grantor; its lifetime is derived.** Instead of the
+`goal: kind[]` array and the derived `own: 'parent'` marker that exist to
+end a goal's grants when a resume ends the goal
+(`packages/harness/src/shared/approvalBypassKind.ts`), a grant row records
+which run granted it. Whether the grant still holds is read from that run's
+lifecycle rows at resolution time: a goal's grants end when the goal ends,
+and a resume that does not resume the goal ends them the same way, with no
+marker written. One owner per fact, and the grant shape has no goal in it.
+
+Two items stay as they are because they are already the simple form:
+content addressing for media (P3) and a module reference for the goal
+program (P2).
+
 ## Decisions this plan needs
 
-| #   | Decision                                                                                          | Recommendation                                                                     |
-| --- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| R1  | 1.0 is the app with a frozen store; harness and llm stay 0.x                                      | Yes. Everything below assumes it.                                                  |
-| R2  | Media stored by blob digest (D4)                                                                  | Yes. The only change an upcaster cannot make later.                                |
-| R3  | `wakeAt` on `run.position` now, or later as a v2 with an upcaster                                 | Later. Once P1 lands, a one-field additive upcaster is cheap.                      |
-| R4  | `script.call`'s `callId` and `stageId`                                                            | Drop both; derive at read.                                                         |
-| R5  | Goal stored as a `builtIn:goal` module import, not a template body                                | Yes.                                                                               |
-| R6  | Goal grants: an ordinary launch grant with a documented resume rule, or a user re-arm action      | Ordinary launch grant; document that a resume asks again.                          |
-| R7  | AppSignals (#14313): move the two GitHub signals into `packages/texra`, or a public plugin signal | Move them into the app. No third party needs them.                                 |
-| R8  | `childRunLoop.ts` off the `AbortController` residents (D1)                                        | Yes, after 1.0. No row changes.                                                    |
-| R9  | Setting namespace as a catalog parameter, stored keys unchanged                                   | Yes, before the freeze; it is the one rename preparation that costs nothing later. |
-| R10 | The Promise entry of the general-package design                                                   | Deferred with the rest of that design.                                             |
+| #   | Decision                                                                                          | Recommendation                                                                            |
+| --- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| R1  | 1.0 is the app with a frozen store; harness and llm stay 0.x                                      | Yes. Everything below assumes it.                                                         |
+| R2  | Media stored by blob digest (D4)                                                                  | Yes. The only change an upcaster cannot make later.                                       |
+| R3  | `wakeAt` on `run.position` now, or later                                                          | Later. It is an optional field, which the additive rule adds at any time.                 |
+| R4  | `script.call`'s `callId` and `stageId`                                                            | Drop both; derive at read.                                                                |
+| R5  | Goal stored as a `builtIn:goal` module import, not a template body                                | Yes.                                                                                      |
+| R6  | Goal grants: a grant that names its grantor, with its lifetime derived from the grantor's rows    | Yes. Deletes `goal: kind[]` and `own: 'parent'`; a resume that skips the goal asks again. |
+| R7  | AppSignals (#14313): move the two GitHub signals into `packages/texra`, or a public plugin signal | Move them into the app. No third party needs them.                                        |
+| R8  | `childRunLoop.ts` off the `AbortController` residents (D1)                                        | Yes, after 1.0. No row changes.                                                           |
+| R9  | Setting namespace as a catalog parameter, stored keys unchanged                                   | Yes, before the freeze; it is the one rename preparation that costs nothing later.        |
+| R10 | The Promise entry of the general-package design                                                   | Deferred with the rest of that design.                                                    |
+| R11 | Rows evolve additively from 1.0; the golden store is the freeze (against ruling Q2)               | Yes. Deletes the upcast arrays, the floors, the fingerprints and the freeze mode.         |
+| R12 | The sandbox door reads results from the committed rows live as well as on replay                  | Yes. One path; the ordering problem and its tests do not exist.                           |
 
 ## The pre-freeze set
 
 Each item is one PR unless noted. Sizes are estimates from the audits. A PR
 here changes stored bytes, the freeze mechanism, or copy; nothing else.
 
-| #   | PR                                                                                                                                                                                                                                                                                                                                        | Rows changed                                                 | Size      | Done when                                                                                                                                     |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| P1  | Freeze mechanism: upcasters numbered from the released floor; a per-family version and upcast step for current values; a real schema for `app-state` or its removal from the frozen set; one test that runs a real upcaster through `decodeRow`                                                                                           | none (mechanism)                                             | ~80 lines | A kind frozen at v6 bumps to v7 with one upcaster; `npm run storage:freeze` then `npm run test:pure` passes with the frozen directory present |
-| P2  | Goal rows (R5, R6): `builtIn:goal` module import in `run.config.script` (the `scriptModules` mechanism in `packages/harness/src/tools/plugins.ts` already exists); goal grants as a launch grant                                                                                                                                          | `run.config`, `approval.policy` / `run.start.approvalPolicy` | ~120      | No prompt text in any row; `approvalBypassKind.ts` has no `own: 'parent'`                                                                     |
-| P3  | Media by digest (R2): `followup.queued` v3, `request.opened` v4, `run.config` v7; golden store regenerated                                                                                                                                                                                                                                | three kinds                                                  | ~100      | No `mediaFiles: string[]` path field in a stored schema; fork-from-here restores media by digest (#13874)                                     |
-| P4  | Codemode: drop `script.call`'s derived fields (R4); deliver live results to the guest in commit order; tests for replay, divergence and reuse                                                                                                                                                                                             | `script.call` v2                                             | ~120      | A script with `Promise.race` over two calls resumes identically from its rows; the three tests fail against the old delivery order            |
-| P5  | Namespace as data (R9) and AppSignals into the app (R7)                                                                                                                                                                                                                                                                                   | none                                                         | ~60       | `stateSettings.ts` has no literal `texra.` prefix; the deep-import baseline file is empty and deleted with its suite                          |
-| P6  | Golden store independent of installed TeX tools (#14338)                                                                                                                                                                                                                                                                                  | none (fixture)                                               | ~20       | The generator's `--twice` check passes on a machine with and without TeX                                                                      |
-| P7  | Copy and doc drift: the plugin-architecture note (`continuation`, Zod, `requires`, `scriptModules`); the `import` contradiction in `docs/guide/multi-agent-workflows.md`; goal copy in `packages/texra/src/tools/pluginCards.ts` and `packages/texra/src/ui/copy/delegationApproval.ts`; the stale "#14201 open" line in the 10-21 design | none                                                         | ~40       | Every statement about goal mode in UI and docs matches `goalScript.ts`                                                                        |
+| #   | PR                                                                                                                                                                                                                                                                                                                                                                                                                                     | Rows changed                                                 | Size     | Done when                                                                                                             |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| P1  | Additive rows (R11): delete `upcast`, `readableFrom`, `pluginFactFloor`, the current-value version dispatch, the fingerprint half of `rowVersions.vitest.ts` and the `storage:freeze` script; add the kind-coverage assertion to `goldenStore.vitest.ts`; reword the storage sections of `packages/harness/AGENTS.md` and the storage design. Fallback if Q2 stands: `upcast` as a keyed record applied in a loop, count check deleted | none (mechanism)                                             | net −150 | `goldenStore.vitest.ts` names every kind in `ROW_KINDS`; no code reads a row's version except the newer-build refusal |
+| P2  | Goal rows (R5, R6): `builtIn:goal` module import in `run.config.script` (the `scriptModules` mechanism in `packages/harness/src/tools/plugins.ts` already exists); a grant records its grantor and its lifetime is derived                                                                                                                                                                                                             | `run.config`, `approval.policy` / `run.start.approvalPolicy` | ~80      | No prompt text in any row; `approvalBypassKind.ts` has neither `goal` nor `own: 'parent'`                             |
+| P3  | Media by digest (R2): `followup.queued` v3, `request.opened` v4, `run.config` v7; golden store regenerated                                                                                                                                                                                                                                                                                                                             | three kinds                                                  | ~100     | No `mediaFiles: string[]` path field in a stored schema; fork-from-here restores media by digest (#13874)             |
+| P4  | Codemode: drop `script.call`'s derived fields (R4); the door reads results from the committed rows on both paths (R12), deleting the `settled` queue, the `delivered` map and `handedBack`; one regression test, a `Promise.race` script resumed from its rows                                                                                                                                                                         | `script.call` v2                                             | net −60  | A script with `Promise.race` over two calls resumes identically from its rows; the door has one delivery function     |
+| P5  | Namespace as data (R9) and AppSignals into the app (R7)                                                                                                                                                                                                                                                                                                                                                                                | none                                                         | ~60      | `stateSettings.ts` has no literal `texra.` prefix; the deep-import baseline file is empty and deleted with its suite  |
+| P6  | Golden store independent of installed TeX tools (#14338)                                                                                                                                                                                                                                                                                                                                                                               | none (fixture)                                               | ~20      | The generator's `--twice` check passes on a machine with and without TeX                                              |
+| P7  | Copy and doc drift: the plugin-architecture note (`continuation`, Zod, `requires`, `scriptModules`); the `import` contradiction in `docs/guide/multi-agent-workflows.md`; goal copy in `packages/texra/src/tools/pluginCards.ts` and `packages/texra/src/ui/copy/delegationApproval.ts`; the stale "#14201 open" line in the 10-21 design                                                                                              | none                                                         | ~40      | Every statement about goal mode in UI and docs matches `goalScript.ts`                                                |
 
-Order: P1 first (everything after it is measured by its test), then P2 to P6
-in any order, P7 last. P2 and P3 both bump `run.config`, so they coordinate on
-one version number or land in sequence. About 550 lines in seven PRs.
+Order: P1 first (it decides what "frozen" means for every PR after it), then
+P2 to P6 in any order, P7 last. P2 and P3 both change `run.config`, so they
+land in sequence and the golden store is regenerated once after both. Seven
+PRs, net about 100 lines added: the three mechanism deletions pay for the
+shape changes.
 
 ## Freeze and release
 
-1. **Freeze PR.** `npm run storage:freeze` writes `config/storage/frozen/`;
-   the same PR changes the "Storage format" section of
-   `packages/harness/AGENTS.md` to the wording the storage design's §12
-   specifies, and the "Compatibility and format retirement" section of the
-   root `AGENTS.md` to say that released rows are read through upcasters
-   from now on.
+1. **Freeze PR.** Regenerate `golden-1.0.sql` from the release commit, and
+   change the "Compatibility and format retirement" section of the root
+   `AGENTS.md` and the "Storage format" section of `packages/harness/AGENTS.md`
+   to the additive rule: a released kind gains only optional fields, a
+   released field keeps its meaning, a breaking change is a new kind. (Under
+   the Q2 fallback, this step is `npm run storage:freeze` and the upcaster
+   wording instead.)
 2. **Release notes.** The 349 unreleased entries become one 1.0 section with
    a migration guide up front: no import of 0.x state, OpenRouter and Copilot
    gone, model names as `provider/id[@effort]`, the helper-model key, the
@@ -253,8 +316,9 @@ independent of the tag.
 
 ## Acceptance for 1.0
 
-- `config/storage/frozen/` exists and `npm run test:pure` passes with it.
-- Every row kind in `config/storage/row-kinds-ever.json` is frozen or
+- `golden-1.0.sql` is regenerated from the release commit, holds a row of
+  every kind in `ROW_KINDS`, and `goldenStore.vitest.ts` passes.
+- Every row kind in `config/storage/row-kinds-ever.json` is current or
   retired.
 - No stored schema holds a workspace path for media, a program body for a
   goal, or a derivable id.
@@ -266,9 +330,14 @@ independent of the tag.
 
 - **P2 and P3 share `run.config`.** Two version bumps in flight on one kind
   conflict in `rowVersions.ts` and the golden store. Sequence them.
-- **P1 changes a convention the registry, the codec and the test share.**
-  No kind has an upcaster today, so the change is mechanical, but it must
-  land before any other PR adds one.
+- **P1 reverses a ruling.** Q2 was taken on 2026-09-28 with upcasters in
+  mind; the additive rule trades a codec stage for a reducer that reads two
+  kinds during a breaking change. If the owner keeps Q2, the keyed-record
+  fallback is the same size as the defect fix and nothing else in the plan
+  moves.
+- **The golden store must cover every kind.** It is the only freeze check
+  under R11. The coverage assertion in P1 makes a missing kind a red test,
+  and P6 makes the fixture independent of the machine.
 - **Two claims are from reading, not from running.** The live delivery-order
   race in codemode and the golden store's dependence on installed TeX tools
   (#14338) were not reproduced here; P4 and P6 confirm each before fixing it.
