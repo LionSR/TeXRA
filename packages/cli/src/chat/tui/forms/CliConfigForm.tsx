@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 import { loadApiKeyStatusMap } from '@texra-ai/llm';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
+  ensureError,
   toErrorMessage,
   type SurfacedSettingEntry,
 } from '@texra-ai/harness/schemas';
@@ -144,8 +145,19 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
         bumpCodexPreferenceVersion();
       }
       if (entry.key === APPROVAL_POLICY_CONFIG_KEY) {
-        props.onApprovalPolicyChanged?.(
-          yield* Settings.get<ApprovalPolicy>(roots, entry.key),
+        // The value is written: a failed repaint is reported, never rolled back.
+        yield* Settings.get<ApprovalPolicy>(roots, entry.key).pipe(
+          Effect.flatMap((policy) =>
+            Effect.try({
+              try: () => props.onApprovalPolicyChanged?.(policy),
+              catch: ensureError,
+            }),
+          ),
+          Effect.tapError((error) => Effect.sync(() => props.onError?.(error))),
+          Effect.ignore({
+            log: 'Warn',
+            message: 'Approval policy written; session repaint failed',
+          }),
         );
       }
     });
