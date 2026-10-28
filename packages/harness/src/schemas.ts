@@ -247,7 +247,6 @@ export {
   type SettingsCatalog,
   type SettingStore,
   type SettingSurfaces,
-  type SettingsViewSnapshot,
   type SettingsViewStateSettingEntry,
   type SettingWriteEffects,
   type StateSettingEntry,

@@ -82,17 +82,6 @@ export type SettingHost = 'vscode' | 'cli' | 'desktop' | 'sdk';
 export type SettingStore =
   'config' | 'workspaceState' | 'repoState' | 'globalState';
 
-export type SettingsViewSnapshot =
-  | 'agents'
-  | 'approval'
-  | 'git-author'
-  | 'latex'
-  | 'memory'
-  | 'models'
-  | 'profile'
-  | 'skills'
-  | 'telemetry';
-
 /** One provider's control group in the Models tab. */
 export interface ModelsTabSurface {
   /** Canonical provider id whose expanded settings show this control. */
@@ -108,10 +97,10 @@ export interface ModelsTabSurface {
 export interface SettingSurfaces {
   /**
    * Rendered by the extension/desktop settings view; the value names the
-   * snapshot rebroadcast after a write. Presence also makes the row writable
-   * through the generic `UPDATE_STATE_SETTING` boundary.
+   * snapshot (the app's id) rebroadcast after a write. Presence also makes
+   * the row writable through the generic `UPDATE_STATE_SETTING` boundary.
    */
-  readonly settingsView?: SettingsViewSnapshot;
+  readonly settingsView?: string;
   /** Listed as an editable row in the CLI `/config` panel. */
   readonly cliConfig?: true;
   /** Shown as a per-provider toggle in the Models tab. */
@@ -181,7 +170,7 @@ export type SurfacedSettingEntry = StateSettingEntry & {
 /** A row the extension/desktop settings view owns the write path for. */
 export type SettingsViewStateSettingEntry = SurfacedSettingEntry & {
   readonly surfaces: SettingSurfaces & {
-    readonly settingsView: SettingsViewSnapshot;
+    readonly settingsView: string;
   };
 };
 
@@ -842,7 +831,7 @@ export interface SettingsCatalog {
    * `surfaces.settingsView: '<snapshot>'` to a row puts it on the wire.
    */
   readonly snapshotEntries: (
-    snapshot: SettingsViewSnapshot,
+    snapshot: string,
   ) => readonly SettingsViewStateSettingEntry[];
   /** The `/config` panel's rows: `surfaces.cliConfig` is the one predicate. */
   readonly cliRows: readonly SurfacedSettingEntry[];

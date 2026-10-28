@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: settings-view snapshot ids are the app's.** `SettingsViewSnapshot`
+  leaves `@texra-ai/harness/schemas`; a row's `surfaces.settingsView` and
+  `snapshotEntries` take the app's id as a string.
 - **SDK: the package-validation model is the CLI's.** The harness reads it
   as the `ValidationModel` service (`@texra-ai/harness/host`), provided
   beneath `processLayer`; absent, no run takes the validation route and one

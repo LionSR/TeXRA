@@ -56,6 +56,7 @@ import {
   type PRSubscriptionEntry,
   type SettingsTeamPreset,
   type SettingsViewOutboundMessage,
+  type SettingsViewSnapshot,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
 import type {
@@ -65,10 +66,7 @@ import type {
 import { createTrackedSignalRegistry } from '@texra/shared/signals';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import type { Signal } from '@lit-labs/signals';
-import type {
-  MemoryViewItem,
-  SettingsViewSnapshot,
-} from '@texra-ai/harness/schemas';
+import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 
 // ---------------------------------------------------------------------------
 // Reset registry — populated by `trackedSignal` as each signal below is

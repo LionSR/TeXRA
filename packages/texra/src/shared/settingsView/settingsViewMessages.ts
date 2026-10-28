@@ -11,7 +11,6 @@ import { Effect, Schema, Struct } from 'effect';
 
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
-  type SettingsViewSnapshot,
   AgentScanIssueSchema,
   AgentSourceSchema,
   ModelAvailabilityFieldsSchema,
@@ -86,11 +85,15 @@ export const DERIVED_SETTINGS_SNAPSHOTS = Object.freeze([
   'telemetry',
   'latex',
   'memory',
-] as const satisfies readonly SettingsViewSnapshot[]);
+] as const);
 
 /** A snapshot whose whole payload is derived from the settings catalog. */
 export type DerivedSettingsSnapshot =
   (typeof DERIVED_SETTINGS_SNAPSHOTS)[number];
+
+/** Every settings-view snapshot: what a row's `surfaces.settingsView` names. */
+export type SettingsViewSnapshot =
+  DerivedSettingsSnapshot | 'models' | 'profile';
 
 /**
  * One snapshot's member of the outbound snapshot arm: its name plus one
