@@ -218,10 +218,12 @@ const responseLane = (fact: DispatchFacts): DispatchFacts['lane'] => {
 /** The one scheduler, for a response's calls and a script's guest's alike:
  *  calls take their places in issue order (`seq`), whatever order their
  *  fibers arrive in, and a call after a partition that ended the turn sees
- *  that it did while its own partition does not. */
-const makeScheduler = Effect.gen(function* () {
+ *  that it did while its own partition does not. What a resumed script's
+ *  rows settled (`replay`) reaches its guest in commit order, first. */
+const makeScheduler = Effect.fnUntraced(function* (replay: readonly number[]) {
   const taken = new Map<number, Deferred.Deferred<void>>();
   const finished = new Map<number, Deferred.Deferred<boolean>>();
+  const delivered = new Map<number, Deferred.Deferred<void>>();
   const slot = <A>(map: Map<number, Deferred.Deferred<A>>, seq: number) => {
     const existing = map.get(seq);
     if (existing !== undefined) return existing;
@@ -237,6 +239,14 @@ const makeScheduler = Effect.gen(function* () {
   /** Until the call issued before `seq` has taken its place. */
   const turn = (seq: number): Effect.Effect<void> =>
     seq === 0 ? Effect.void : Deferred.await(slot(taken, seq - 1));
+  /** Until the guest holds every replayed settlement before `seq`'s. */
+  const handedBack = (seq: number): Effect.Effect<void> => {
+    const at = replay.indexOf(seq);
+    const before = at === -1 ? replay.at(-1) : replay[at - 1];
+    return before === undefined
+      ? Effect.void
+      : Deferred.await(slot(delivered, before));
+  };
   return {
     turn,
     /** Take `seq`'s place with no lane: a call that runs nothing. */
@@ -244,8 +254,11 @@ const makeScheduler = Effect.gen(function* () {
       turn(seq).pipe(
         Effect.andThen(Deferred.succeed(slot(finished, seq), false)),
         Effect.andThen(Deferred.succeed(slot(taken, seq), undefined)),
-        Effect.asVoid,
+        Effect.andThen(handedBack(seq)),
       ),
+    /** The sandbox delivered `seq`'s settlement to the guest. */
+    delivered: (seq: number): Effect.Effect<void> =>
+      Effect.asVoid(Deferred.succeed(slot(delivered, seq), undefined)),
     /** Whether `seq` (or a call it waited for) ended the turn, once done. */
     finished: (seq: number): Effect.Effect<boolean> =>
       Deferred.await(slot(finished, seq)),
@@ -267,10 +280,9 @@ const makeScheduler = Effect.gen(function* () {
       let endedBefore = false;
       for (const call of after)
         if (call !== null && (yield* Deferred.await(call))) endedBefore = true;
-      const ran =
-        lane === 'parallel'
-          ? window.withPermits(1)(body(endedBefore))
-          : body(endedBefore);
+      // Nothing runs again until the guest holds all that settled.
+      const own = Effect.andThen(handedBack(seq), body(endedBefore));
+      const ran = lane === 'parallel' ? window.withPermits(1)(own) : own;
       // A call that did not finish (a stop, a durable write that failed)
       // lets nothing after it run: what follows it is interrupted too.
       yield* ran.pipe(
@@ -718,21 +730,15 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             ({ script: call, status }) =>
               call?.scriptCallId === script.callId ? [{ call, status }] : [],
           );
-        // Settled calls in commit order, each handed back after the one before.
-        const replayOrder = issued(yield* cell.current)
-          .flatMap(({ call, status }) =>
-            status.kind === 'settled' ? [[status.at, call.seq] as const] : [],
-          )
-          .toSorted(([a], [b]) => a - b)
-          .map(([, seq]) => seq);
-        const delivered = new Map(
-          replayOrder.map((seq) => [seq, Deferred.makeUnsafe<void>()]),
+        // The calls its rows settled, in commit order.
+        const lanes = yield* makeScheduler(
+          issued(yield* cell.current)
+            .flatMap(({ call, status }) =>
+              status.kind === 'settled' ? [[status.at, call.seq] as const] : [],
+            )
+            .toSorted(([a], [b]) => a - b)
+            .map(([, seq]) => seq),
         );
-        const handedBack = (seq: number | undefined) => {
-          const done = seq === undefined ? undefined : delivered.get(seq);
-          return done === undefined ? Effect.void : Deferred.await(done);
-        };
-        const lanes = yield* makeScheduler;
         const stageOpened = yield* Ref.make(false);
         // Labelled by the script's title, which its first call carries.
         const openStage = Effect.fn('toolUse.openScriptStage')(function* (
@@ -821,7 +827,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           if (known?.status.kind === 'settled') {
             // Replayed from its row: it takes no lane and does not run.
             yield* lanes.pass(op.seq);
-            yield* handedBack(replayOrder[replayOrder.indexOf(op.seq) - 1]);
             return {
               result: known.status.result,
               attachments: known.status.attachments,
@@ -842,7 +847,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           if (answer !== undefined) {
             // Reads the pinned catalog only and runs no tool: no lane, one commit.
             yield* lanes.pass(op.seq);
-            yield* handedBack(replayOrder.at(-1));
             const result = answer();
             yield* commitResult(fact, 1, {
               disposition: result.status === 'executed' ? 'executed' : 'failed',
@@ -854,8 +858,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           }
           yield* lanes.run(op.seq, tool?.lane ?? 'barrier', () =>
             Effect.gen(function* () {
-              // Nothing runs again until the guest holds all that settled.
-              yield* handedBack(replayOrder.at(-1));
               const status = recordOf(yield* cell.current, callId)?.status;
               if (status?.kind !== 'settled')
                 yield* resumeCall(fact, input, status ?? { kind: 'issued' }, {
@@ -905,12 +907,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               Effect.map(({ result }) => result),
               Effect.provideContext(services),
             ),
-          delivered: (seq: number) => {
-            const done = delivered.get(seq);
-            return done === undefined
-              ? Effect.void
-              : Deferred.succeed(done, undefined).pipe(Effect.asVoid);
-          },
+          delivered: lanes.delivered,
           // A call the guest never awaited to its end: skipped, card closed.
           settleAbandoned: Effect.flatMap(cell.current, (state) =>
             Effect.forEach(
@@ -948,7 +945,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     return door;
   });
 
-  const lanes = yield* makeScheduler;
+  const lanes = yield* makeScheduler([]);
   const ordinalOf = new Map(pending.calls.map((f, i) => [f.callId, i]));
 
   /** One call of the response, in its place: a duplicate derives its
