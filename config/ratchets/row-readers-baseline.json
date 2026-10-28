@@ -22,9 +22,7 @@
     ],
     "model.message": [
       "packages/harness/src/agent/runtime/RunHistory.ts",
-      "packages/harness/src/agent/runtime/storedTurn.ts",
-      "packages/harness/src/tools/codemode/SelfTool.ts",
-      "packages/harness/src/tools/plan/PlanTool.ts"
+      "packages/harness/src/agent/runtime/storedTurn.ts"
     ],
     "plugin.fact": [
       "packages/harness/src/controllers/session/Database.ts",
@@ -105,11 +103,7 @@
       "packages/texra/src/controllers/progressView/ChatExportController.ts",
       "packages/trace-viewer/src/traceFrames.ts"
     ],
-    "script.call": [
-      "packages/harness/src/agent/runtime/scriptRun.ts",
-      "packages/harness/src/tools/codemode/SelfTool.ts",
-      "packages/harness/src/tools/plan/PlanTool.ts"
-    ],
+    "script.call": ["packages/harness/src/agent/runtime/scriptRun.ts"],
     "tool.result": [
       "packages/harness/src/agent/runtime/scriptRun.ts",
       "packages/harness/src/controllers/session/rowReader.ts",

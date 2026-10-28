@@ -243,7 +243,7 @@ The vocabulary is one Effect Schema union, `SessionEventDraftSchema`, built
 from three groups (`shared/schemas/sessionEvent.ts:439-443`). The groups below
 follow it. A "folded" kind is one `applyRunRows` reads
 (`shared/session/runState.ts:343-472`,
-`shared/session/turnRowHandlers.ts:161-255`, `:267-371`); every other kind on a
+`shared/session/turnRowHandlers.ts:161-255`, `:271-375`); every other kind on a
 run aggregate is ignored by name, and an unknown kind is refused
 (`shared/session/runState.ts:166-202`, `:496-499`).
 
@@ -572,7 +572,7 @@ request id (`agent/runtime/ModelInvoker.ts:731-747`):
   so a crash does not refill it. A compaction summary or a helper call holds its
   invocation in memory (`agent/runtime/run/modelCall.ts:107-123`); a summary's
   `attempt` and `failed` rows are an audit the run fold skips
-  (`shared/session/turnRowHandlers.ts:272-282`, `:373-378`), so a resumed
+  (`shared/session/turnRowHandlers.ts:276-286`, `:265-267`), so a resumed
   summary starts a fresh budget.
 - Past the budget, a failure a person may retry answers `ask` under a fresh
   request id; where nobody can be asked, `stop`
