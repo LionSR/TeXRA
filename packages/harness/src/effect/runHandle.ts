@@ -19,7 +19,10 @@ import {
 } from 'effect';
 
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
+import {
+  buildTerminalRunEndResult,
+  type RunEndResult,
+} from '@agent/runtime/RunEndResult';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type { AgentEvent } from '@agent/trace';
 import { withLogChannel } from '@logger/effectLog';
@@ -27,6 +30,7 @@ import type { ProcessServices } from '@platform/processRuntime';
 import {
   type CommitOrdinal,
   qualifyAggregateId,
+  RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
 import { descendantRuns } from '@shared/session/sessionView';
@@ -39,6 +43,19 @@ import type { Run } from './sessions.js';
  *  why), or a launcher whose contract broke. A caller waiting on admission
  *  must hear it. */
 const NEVER_ENTERED = 'The run ended without entering the session.';
+
+/**
+ * A run's exit as its handle reports it. A stop interrupts the run's fiber,
+ * which re-raises the interruption once its `cancelled` end commits: the run
+ * ended, and passing the interruption on would interrupt whoever reads it.
+ */
+const readerExit = (
+  runId: RunId,
+  exit: Exit.Exit<RunEndResult, RunFailure>,
+): Exit.Exit<RunEndResult, RunFailure> =>
+  Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)
+    ? Exit.succeed(buildTerminalRunEndResult(RUN_OUTCOME.CANCELLED, runId))
+    : exit;
 
 const CHANNEL = 'agentPackage';
 
@@ -78,8 +95,8 @@ const traceHandover = Effect.fn('runHandle.traceHandover')(function* (
   const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
   let tapping = true;
   let reading = false;
-  /** How the run settled before any reader came: a failed run's reader
-   *  hears its failure, which the queue holds; a succeeded one's nothing. */
+  /** How the run settled before any reader came: a failed or stopped run's
+   *  reader hears its end, which the queue holds; a succeeded one's nothing. */
   let settledUnread: 'succeeded' | 'failed' | null = null;
   let buffered = 0;
   /** Stop taking the run's trace events: the reader's close does it while
@@ -109,7 +126,8 @@ const traceHandover = Effect.fn('runHandle.traceHandover')(function* (
         }
         // A run nobody read retains nothing: what it buffered goes with it.
         if (!reading) yield* Effect.orDie(Queue.clear(trace));
-        if (Exit.isFailure(exit)) yield* Queue.failCause(trace, exit.cause);
+        const end = readerExit(runId, exit);
+        if (Exit.isFailure(end)) yield* Queue.failCause(trace, end.cause);
         else yield* Queue.end(trace);
       }),
     events: Stream.unwrap(
@@ -287,7 +305,8 @@ export function handOver(
         spawned.push(drain);
         return {
           runId,
-          result: Fiber.join(runFiber).pipe(
+          result: Fiber.await(runFiber).pipe(
+            Effect.flatMap((exit) => readerExit(runId, exit)),
             Effect.flatMap((value) => Effect.as(Fiber.join(drain), value)),
           ),
           view,

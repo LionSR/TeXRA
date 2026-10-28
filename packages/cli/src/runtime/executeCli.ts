@@ -488,9 +488,8 @@ export function executeCliConfig(
     const detachPresentation = Scope.close(presentationScope, Exit.void);
     const exit = yield* Fiber.await(launched);
     ended = true;
-    // A run the shutdown stopped after admission commits its CANCELLED end
-    // and re-raises the stop, so its result is an interrupt too: only one
-    // interrupted before admission aborted its launch.
+    // A run the shutdown stopped after admission ends CANCELLED; only a
+    // launch the shutdown interrupted ends interrupted.
     let interrupted = false;
     if (Exit.isSuccess(exit)) {
       runResult = { ok: true as const, result: exit.value };
