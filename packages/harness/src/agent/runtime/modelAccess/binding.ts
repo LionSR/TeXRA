@@ -24,13 +24,14 @@ import {
   PROTOCOL_BY_BACKEND,
   reasoningRouteOf,
 } from '@model/reasoningLevel';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   readBackgroundToggles,
   type BackgroundToggles,
   type ModelSettings,
 } from '@model/modelSettings';
 import { modelFetch } from '@platform/defaults/longRunningModelTransport';
+import type { Secrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settings';
 import type { ModelBackend } from '@shared/schemas';
 
 import { routeCredential, usageRouteOf } from './credentials';
@@ -106,11 +107,11 @@ const commonOf = ({ request, backend, settings }: BindPlan) => ({
 /** Bind `plan`'s decided route into the caller's scope. */
 export const bindRoute = Effect.fn('bindRoute')(function* (
   plan: BindPlan,
-  stores: ModelOptionStores,
+  stores: SettingsStores,
 ): Effect.fn.Return<
   BoundModel,
   CallFailure,
-  Scope.Scope | HttpClient.HttpClient
+  Scope.Scope | HttpClient.HttpClient | Secrets
 > {
   const { request, requested, settings, backend } = plan;
   const { route, facts } = plan.decision;
@@ -151,7 +152,6 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     route,
     config,
     facts,
-    stores.secrets,
     request.rejected,
   );
   const codex = credential.route === 'chatgpt-subscription';

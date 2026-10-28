@@ -167,10 +167,8 @@ export function defineSubscriptionAuthCommand(
     },
     args: { ...GLOBAL_ARGS },
     run: Effect.fn('subscriptionAuthCommand.run')(function* (context) {
-      const services = yield* initCliPlatform(context);
-      const statusResult = yield* withCliAuthError(
-        provider.getStatus(services.secrets),
-      );
+      yield* initCliPlatform(context);
+      const statusResult = yield* withCliAuthError(provider.getStatus());
       if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
       const { label, ...status } = statusResult.value;
       emitCliResult(context, {

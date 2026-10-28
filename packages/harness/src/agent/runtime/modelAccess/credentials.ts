@@ -23,8 +23,8 @@ import {
 
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import { readProviderEndpoint } from '@model/modelSettings';
-import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { PlatformSecrets } from '@platform/secrets';
+import { Secrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settings';
 import { SUBSCRIPTION_AUTH_NAMES } from '@shared/model/subscriptionAuth';
 import type { UsageRoute } from '@shared/schemas';
 import type { HttpClient } from 'effect/http';
@@ -129,12 +129,16 @@ const routeEndpoint = (
  * stored expiry still calls it fresh (revoked, or expired server-side): it
  * is refreshed first, while stored.
  */
-const subscriptionCredential = (
+const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
   route: 'chatgpt-subscription' | 'xai-subscription',
   endpoint: string,
-  secrets: PlatformSecrets,
   rejected: string | undefined,
-): Effect.Effect<RouteCredential, RouteUnavailable, HttpClient.HttpClient> => {
+): Effect.fn.Return<
+  RouteCredential,
+  RouteUnavailable,
+  HttpClient.HttpClient | Secrets
+> {
+  const secrets = yield* Secrets;
   const session: Effect.Effect<RouteCredential, Error, HttpClient.HttpClient> =
     route === 'chatgpt-subscription'
       ? Effect.map(codexCoordinator(secrets).getFreshSession(), (fresh) => ({
@@ -155,12 +159,12 @@ const subscriptionCredential = (
     route === 'chatgpt-subscription'
       ? codexCoordinator(secrets).refreshRejected(token)
       : xaiCoordinator(secrets).refreshRejected(token);
-  return (
+  return yield* (
     rejected === undefined
       ? session
       : Effect.andThen(refresh(rejected), session)
   ).pipe(Effect.mapError((error) => subscriptionUnavailable(route, error)));
-};
+});
 
 /**
  * The key and endpoint of an API-key route: the provider key the decision
@@ -172,10 +176,9 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
   route: Extract<CredentialRoute, { kind: 'api-key' }>,
   config: ModelConfig,
   facts: Pick<HostRouteFacts, 'endpoints'>,
-  secrets: PlatformSecrets,
-): Effect.fn.Return<RouteCredential, RouteUnavailable> {
+): Effect.fn.Return<RouteCredential, RouteUnavailable, Secrets> {
   const { provider } = route;
-  const key = yield* lookupApiKey(secrets, provider).pipe(
+  const key = yield* lookupApiKey(yield* Secrets, provider).pipe(
     Effect.mapError(
       (cause) =>
         new RouteUnavailable({
@@ -206,14 +209,17 @@ export function routeCredential(
   route: CredentialRoute,
   config: ModelConfig,
   facts: Pick<HostRouteFacts, 'endpoints'>,
-  secrets: PlatformSecrets,
   rejected: string | undefined,
-): Effect.Effect<RouteCredential, RouteUnavailable, HttpClient.HttpClient> {
+): Effect.Effect<
+  RouteCredential,
+  RouteUnavailable,
+  HttpClient.HttpClient | Secrets
+> {
   switch (route.kind) {
     case 'chatgpt-subscription':
     case 'xai-subscription':
       return Effect.flatMap(routeEndpoint(config, route, facts), (endpoint) =>
-        subscriptionCredential(route.kind, endpoint, secrets, rejected),
+        subscriptionCredential(route.kind, endpoint, rejected),
       );
     case 'no-api-key':
       return Effect.fail(
@@ -223,7 +229,7 @@ export function routeCredential(
         }),
       );
     default:
-      return apiKeyCredential(route, config, facts, secrets);
+      return apiKeyCredential(route, config, facts);
   }
 }
 
@@ -233,10 +239,10 @@ export function routeCredential(
  * `config` takes with every preference off.
  */
 export const ownKeyCredential = Effect.fn('ownKeyCredential')(function* (
-  stores: ModelOptionStores,
+  stores: SettingsStores,
   config: ModelConfig,
   provider: ApiKeyProviderId,
-): Effect.fn.Return<RouteCredential, RouteUnavailable> {
+): Effect.fn.Return<RouteCredential, RouteUnavailable, Secrets> {
   // The key and its endpoint only: no other model setting can refuse it.
   const endpoints = yield* readProviderEndpoint(stores, provider).pipe(
     Effect.mapError(RouteUnavailable.of),
@@ -245,6 +251,5 @@ export const ownKeyCredential = Effect.fn('ownKeyCredential')(function* (
     { kind: 'api-key', provider, usageRoute: 'api-key' },
     config,
     { endpoints },
-    stores.secrets,
   );
 });

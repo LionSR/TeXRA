@@ -15,11 +15,7 @@ import {
 } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 
-import {
-  Secrets,
-  withPerKeyLane,
-  type PerKeyLane,
-} from '@texra-ai/harness/host';
+import { withPerKeyLane, type PerKeyLane } from '@texra-ai/harness/host';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   DESKTOP_PROJECT_COMMANDS,
@@ -102,7 +98,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
 ): Effect.fn.Return<OpenedDesktopWindow, never, Scope.Scope | ProcessServices> {
   const { runtime, projects } = options;
   const scope = yield* Scope.Scope;
-  const secrets = yield* Secrets;
   const spawn = desktopSpawner(runtime, scope);
   const initialProject = projects.active();
   const window = yield* openDesktopBrowserWindow({
@@ -186,7 +181,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     bindings,
     onboarding,
     promptController,
-    secrets,
     resourcesPath: options.resourcesPath,
   });
   const navigation = createProjectNavigation({

@@ -244,7 +244,6 @@ export function executeAgent(
             config,
             ctx.resolvedAgentDescription,
             runSession,
-            ctx.stores,
           ),
         ),
       ),

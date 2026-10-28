@@ -5,7 +5,6 @@ import { Effect, Schema, Scope } from 'effect';
 
 import {
   AppState,
-  Secrets,
   withProcessServices,
   type ProcessRuntime,
   withLogChannel,
@@ -52,20 +51,20 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
       readonly refreshFunnelAfterLaunch: Effect.Effect<void>;
     },
     never,
-    Scope.Scope | AppState | Secrets
+    Scope.Scope | AppState
   > {
     const { host, runtime, projects } = options;
     const scope = yield* Scope.Scope;
-    const secrets = yield* Secrets;
     const onboarding = createDesktopOnboardingIpc({
       state: yield* AppState,
       // Single source of truth for "does the user have a usable
       // credential", shared by every host (extension, desktop, CLI) so this
       // credential-gating logic can't drift between them.
       hasCredential: () =>
-        hasUsableSetupCredential(projects.active().roots, secrets).pipe(
-          withLogChannel('Setup Credentials'),
-        ),
+        withProcessServices(
+          runtime,
+          hasUsableSetupCredential(projects.active().roots),
+        ).pipe(withLogChannel('Setup Credentials')),
       // Suspended so the project and its launch path are read when the user
       // clicks "Run Setup", not when the port is built. The per-session
       // `setupKickoffStarted` dedup guard inside the onboarding IPC keeps
@@ -77,7 +76,6 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
             kickoffDesktopSetup({
               roots: projects.active().roots,
               run: options.activeRun(),
-              secrets,
             }),
           ),
         ),

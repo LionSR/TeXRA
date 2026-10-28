@@ -25,12 +25,11 @@ import {
 import { getHelperModelName } from '@agent/runtime/helperModelName';
 import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import {
-  readModelOptions,
-  type ModelOptionStores,
-} from '@model/computeModelOptions';
+import { readModelOptions } from '@model/computeModelOptions';
 import { readModelSettings } from '@model/modelSettings';
 import type { StateReadFailed } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
+import type { SettingsStores } from '@shared/config/settings';
 import type {
   CredentialSwitch,
   DeclinableUsageRoute,
@@ -133,13 +132,13 @@ export class ModelAccess extends Context.Service<
 >()('@texra-ai/harness/ModelAccess') {}
 
 /** The settings one binding reads. */
-const settingsOf = (stores: ModelOptionStores) =>
+const settingsOf = (stores: SettingsStores) =>
   Effect.mapError(readModelSettings(stores), RouteUnavailable.of);
 
 /** The helper model's request: the configured model, if it can serve now. */
 const helperRequest = Effect.fn('ModelAccess.helper')(function* (
-  stores: ModelOptionStores,
-): Effect.fn.Return<BindRequest, RouteUnavailable> {
+  stores: SettingsStores,
+): Effect.fn.Return<BindRequest, RouteUnavailable, Secrets> {
   const modelId = yield* Effect.mapError(
     getHelperModelName(stores),
     RouteUnavailable.of,
@@ -156,12 +155,12 @@ const helperRequest = Effect.fn('ModelAccess.helper')(function* (
 
 /** Bind `request` over one settings read. */
 const bindOver = Effect.fn('ModelAccess.bind')(function* (
-  stores: ModelOptionStores,
+  stores: SettingsStores,
   request: BindRequest,
 ): Effect.fn.Return<
   BoundModel,
   CallFailure,
-  Scope.Scope | HttpClient.HttpClient
+  Scope.Scope | HttpClient.HttpClient | Secrets
 > {
   const selected = selectModel(request.modelId);
   const catalog = request.config ?? selected?.config;
@@ -200,24 +199,26 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
 });
 
 /**
- * Model access over `stores` (a session's setting slots and the process
- * secret store), for the project whose environment is in force where the
+ * Model access over `stores` (a session's setting slots) and the process
+ * {@link Secrets}, for the project whose environment is in force where the
  * layer is built.
  */
 export const modelAccessLayer = (
-  stores: ModelOptionStores,
-): Layer.Layer<ModelAccess, never, HttpClient.HttpClient> =>
+  stores: SettingsStores,
+): Layer.Layer<ModelAccess, never, HttpClient.HttpClient | Secrets> =>
   Layer.effect(
     ModelAccess,
     Effect.gen(function* () {
       const http = yield* HttpClient.HttpClient;
       const env = yield* ConfigProvider.ConfigProvider;
       const project = yield* ProjectEnvironment;
+      const secrets = yield* Secrets;
       const inProject = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
         effect.pipe(
           Effect.provideService(HttpClient.HttpClient, http),
           Effect.provideService(ConfigProvider.ConfigProvider, env),
           Effect.provideService(ProjectEnvironment, project),
+          Effect.provideService(Secrets, secrets),
         );
       return {
         bind: (request) =>
@@ -242,7 +243,9 @@ export const modelAccessLayer = (
           );
         },
         credentialSwitch: (failed, recorded, declined) =>
-          credentialSwitch(failed, recorded, declined, stores.secrets),
+          credentialSwitch(failed, recorded, declined).pipe(
+            Effect.provideService(Secrets, secrets),
+          ),
       };
     }),
   );

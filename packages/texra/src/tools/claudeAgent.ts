@@ -593,7 +593,13 @@ const launchClaudeAgentSession = Effect.fn(
       ),
     );
   const pathToClaudeCodeExecutable = yield* findClaudeBinaryPath().pipe(
-    Effect.orDie,
+    Effect.mapError(
+      (failure) =>
+        new ToolError(
+          `Could not locate the Claude Code binary: ${failure.message}`,
+          { cause: failure },
+        ),
+    ),
   );
   return yield* launchAgentCliSession({
     resumeId: input.fork_session ? undefined : (input.session_id ?? undefined),

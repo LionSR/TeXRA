@@ -468,7 +468,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   reached: Result.Result<ServiceLink, Error>,
 ) {
   const { globalState } = roots;
-  const secrets = yield* Secrets;
   // A window of the service opens no session of its own: no store, run
   // or claims. Only a window that cannot reach the service runs its
   // tasks here, and says so once. While the link is down, the service's
@@ -529,7 +528,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const progressViewProvider = new ProgressViewProvider(
     context,
     globalState,
-    secrets,
     runtime,
     roots,
     windowSession,
@@ -553,7 +551,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const settingsViewProvider = registerCommands(
     context,
     progressViewProvider,
-    secrets,
     runtime,
     roots,
     session,

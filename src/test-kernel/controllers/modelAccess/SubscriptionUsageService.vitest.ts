@@ -3,6 +3,7 @@ import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as codexAuth from '@texra-ai/llm/node';
+import { Secrets } from '@platform/secrets';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets } from '@test/support/FakePlatform';
@@ -52,7 +53,6 @@ function stubCodexSession(
 
 function makeService(): SubscriptionUsageService {
   return new SubscriptionUsageService({
-    secrets: new FakeSecrets(CODING_PLAN_KEYS),
     stores: makeFakeSettingsStores().stores,
   });
 }
@@ -60,18 +60,21 @@ function makeService(): SubscriptionUsageService {
 /**
  * The suite's one run edge: `getUsage` is a program, and the kernel's fake
  * host installs the process runtime (and its HTTP client) it settles on. The
- * fake `fetch` is provided as the same reference the adapters read, so nothing
- * has to be threaded through the service to reach the transport.
+ * fake `fetch` is provided as the same reference the adapters read, and the
+ * coding-plan keys as the process `Secrets`, so nothing has to be threaded
+ * through the service to reach the transport or the keys.
  */
 function runUsage<A>(
-  program: Effect.Effect<A, never, HttpClient.HttpClient>,
+  program: Effect.Effect<A, never, HttpClient.HttpClient | Secrets>,
   http: UsageFetch,
 ): Promise<A> {
   return testRuntime().runPromise(
-    Effect.provideService(
-      program,
-      FetchHttpClient.Fetch,
-      http as unknown as typeof globalThis.fetch,
+    program.pipe(
+      Effect.provideService(
+        FetchHttpClient.Fetch,
+        http as unknown as typeof globalThis.fetch,
+      ),
+      Effect.provideService(Secrets, new FakeSecrets(CODING_PLAN_KEYS)),
     ),
   );
 }

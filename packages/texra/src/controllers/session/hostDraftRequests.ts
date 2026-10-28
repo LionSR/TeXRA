@@ -106,10 +106,7 @@ export class HostDraftRequests {
   > {
     switch (request.kind) {
       case 'polish': {
-        // A host port takes no services, so the secret store the helper
-        // model is resolved against is read here.
-        const secrets = yield* Secrets;
-        const text = yield* polishTextWithAI(request.text, roots, secrets).pipe(
+        const text = yield* polishTextWithAI(request.text, roots).pipe(
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
         return { kind: 'text', text };
@@ -197,9 +194,6 @@ export class HostDraftRequests {
       Rejected | Cancelled,
       Secrets | FileSystem.FileSystem | ChildProcessSpawner
     > = Effect.gen(function* () {
-      // Transcription binds its OpenAI credential against the process
-      // secret store the host root provides.
-      const secrets = yield* Secrets;
       // sox lives in this block's scope. Its close (SIGTERM, then a join on
       // the exit) is the stop, so the microphone is off before anything
       // below reads a credential. The recorder writes under the take's own
@@ -246,7 +240,7 @@ export class HostDraftRequests {
       // transcription as data.
       const postStop = Effect.gen(function* () {
         const credential = yield* ownKeyCredential(
-          { ...take.roots, secrets },
+          take.roots,
           MODEL_CONFIGS['openai/gpt-4o-2024-11-20'],
           'openai',
         ).pipe(

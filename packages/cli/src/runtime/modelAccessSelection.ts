@@ -1,7 +1,7 @@
 import { Effect, Schema } from 'effect';
 
 import { hasUsableApiKey } from '@texra-ai/llm';
-import { Secrets, type PlatformSecrets } from '@texra-ai/harness/host';
+import { Secrets } from '@texra-ai/harness/host';
 import {
   toErrorMessage,
   SUBSCRIPTION_AUTH_PROVIDERS,
@@ -55,14 +55,15 @@ class ModelAccessPreferenceFailed extends Schema.TaggedError<ModelAccessPreferen
  */
 export const readCliModelAccessStatus = Effect.fn(
   'modelAccessSelection.readCliModelAccessStatus',
-)(function* (stores: SettingsStores, secrets: PlatformSecrets) {
+)(function* (stores: SettingsStores) {
+  const secrets = yield* Secrets;
   const [subscriptionEntries, codingPlanEntries] = yield* Effect.all(
     [
       Effect.forEach(
         SUBSCRIPTION_AUTH_PROVIDERS,
         (provider) =>
           Effect.map(
-            subscriptionAuthStatus(provider, stores, secrets),
+            subscriptionAuthStatus(provider, stores),
             (status) => [provider, status] as const,
           ),
         { concurrency: 'unbounded' },
@@ -111,7 +112,6 @@ const updateSubscriptionCliModelAccess = Effect.fn(
   options: CliSubscriptionLoginOptions,
 ) {
   const provider = subscriptionProvider(providerId);
-  const secrets = yield* Secrets;
   const { displayName, modelFamily } = provider;
   if (selection.state === 'off') {
     yield* provider.setPreferSubscription(stores, false).pipe(
@@ -130,7 +130,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     } satisfies CliModelAccessSelectionResult;
   }
 
-  const status = yield* provider.getStatus(secrets);
+  const status = yield* provider.getStatus();
   let accountLabel = status.label;
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };

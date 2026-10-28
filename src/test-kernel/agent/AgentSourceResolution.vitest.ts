@@ -21,7 +21,7 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import {
   fakeHostAgentDirectories,
-  hostStores,
+  installedHost,
   installPlatform,
   storePluginsLayer,
 } from '@test/support/setupPlatform';
@@ -36,7 +36,7 @@ let catalog: AgentCatalogShape;
  * source the delegation captured at validation time (see `getAgentPath`). */
 function launchAs(entry: AgentEntry | undefined) {
   return entry
-    ? catalog.forLaunch(hostStores(), entry.name, entry.source)
+    ? catalog.forLaunch(installedHost().roots, entry.name, entry.source)
     : Effect.succeed(undefined);
 }
 
@@ -117,7 +117,7 @@ describe('shadowed agent resolution', () => {
         expect(builtIn?.source).toBe('builtIn');
 
         // The entry validation accepts: the name within the visible agents.
-        const visible = yield* catalog.visible(hostStores());
+        const visible = yield* catalog.visible(installedHost().roots);
         const custom = yield* launchAs(
           findAgentByIdentifier(visible, 'assistant'),
         );

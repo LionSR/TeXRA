@@ -6,6 +6,7 @@ import {
   providerDisplayName,
 } from '@texra-ai/llm';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
+import { Secrets, type SettingsStores } from '@texra-ai/harness/host';
 import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import { formatSubscriptionUsageSummary } from '@texra/shared/subscriptionUsagePresentation';
 import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
@@ -21,7 +22,6 @@ import {
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import { readCliModelAccessStatus } from './modelAccessSelection';
-import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness/host';
 
 function formatAccountStatus(signedIn: boolean, accountLabel?: string): string {
   if (!signedIn) return 'signed out';
@@ -40,8 +40,8 @@ interface CliModelAccessOverview {
  */
 export const loadCliModelAccessOverview = Effect.fn(
   'apiStatus.loadCliModelAccessOverview',
-)(function* (stores: SettingsStores, secrets: PlatformSecrets) {
-  const access = yield* readCliModelAccessStatus(stores, secrets);
+)(function* (stores: SettingsStores) {
+  const access = yield* readCliModelAccessStatus(stores);
   const lines = [
     ...SUBSCRIPTION_AUTH_PROVIDERS.map(
       (provider) =>
@@ -87,19 +87,19 @@ function formatModelPreferenceLine(
 /** Render each detailed account/access fact on its owning route. */
 export const loadCliDetailedAccountStatusLines = Effect.fn(
   'apiStatus.loadCliDetailedAccountStatusLines',
-)(function* (stores: SettingsStores, secrets: PlatformSecrets) {
+)(function* (stores: SettingsStores) {
   const [access, keyStatuses] = yield* Effect.all(
     [
-      readCliModelAccessStatus(stores, secrets),
-      loadApiKeyStatusMap(secrets),
+      readCliModelAccessStatus(stores),
+      Effect.flatMap(Secrets, loadApiKeyStatusMap),
     ] as const,
     { concurrency: 'unbounded' },
   );
   // Detailed `/login status` is user-invoked, so reopening it is the manual refresh
   // path. Ordinary chat startup and the status bar never call this service, and
   // every read below forces a refresh, so the service is built over the caller's
-  // secret store here rather than held as a module singleton.
-  const usageReader = new SubscriptionUsageService({ secrets, stores });
+  // stores here rather than held as a module singleton.
+  const usageReader = new SubscriptionUsageService({ stores });
   const [chatGptUsage, codingPlanUsageEntries] = yield* Effect.all(
     [
       access.subscriptions.chatgpt.signedIn

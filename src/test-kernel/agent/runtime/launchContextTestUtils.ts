@@ -36,12 +36,12 @@ export function createTestLaunchContext({
     model: 'test-model',
   });
 
-  const { stores, secrets } = makeFakeSettingsStores();
+  const { stores } = makeFakeSettingsStores();
   return {
     config,
     persona: Schema.decodeUnknownSync(PersonaSchema)({}),
     // The launch stores a real run carries; no fixture reads through them.
-    stores: { ...stores, secrets },
+    stores,
     runId,
     session,
     logger,

@@ -13,9 +13,14 @@ import {
 } from '@texra-ai/llm';
 import { readModelOptions } from '@model/computeModelOptions';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
+import { Secrets } from '@platform/secrets';
 import type { DeclinableUsageRoute } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { hostStores, setupPlatform } from '@test/support/setupPlatform';
+import {
+  fakeHostSecrets,
+  installedHost,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 
 const GLM53 = MODEL_CONFIGS['glm/glm-5.3'];
 
@@ -26,7 +31,9 @@ const boundEndpoint = (
 ) =>
   Effect.gen(function* () {
     const facts = routeFactsFor(
-      yield* readModelSettings(hostStores()),
+      yield* readModelSettings(installedHost().roots).pipe(
+        Effect.provideService(Secrets, fakeHostSecrets),
+      ),
       declinedRoutes ?? [],
     );
     const route = decideModelRoute(config, {
@@ -54,13 +61,19 @@ describe('coding-plan subscription runtime', () => {
   afterEach(async () => {
     delete MODEL_CONFIGS['glm/glm-5.3'].baseUrl;
     await Effect.runPromise(
-      hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, ''),
+      installedHost().roots.globalState.update(GlobalStateKey.ENDPOINT_GLM, ''),
     );
     await Effect.runPromise(
-      hostStores().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true),
+      installedHost().roots.globalState.update(
+        GlobalStateKey.GLM_CODING_PLAN,
+        true,
+      ),
     );
     await Effect.runPromise(
-      hostStores().globalState.update(GlobalStateKey.GLM_USE_CHINA, true),
+      installedHost().roots.globalState.update(
+        GlobalStateKey.GLM_USE_CHINA,
+        true,
+      ),
     );
   });
 
@@ -90,7 +103,7 @@ describe('coding-plan subscription runtime', () => {
     'keeps the bound endpoint and subscription usage aligned for $name',
     ({ providerEndpoint, modelBaseUrl, baseUrl, usageRoute }) =>
       Effect.gen(function* () {
-        yield* hostStores().globalState.update(
+        yield* installedHost().roots.globalState.update(
           GlobalStateKey.ENDPOINT_GLM,
           providerEndpoint,
         );
@@ -106,8 +119,9 @@ describe('coding-plan subscription runtime', () => {
           ...(usageRoute && { usageRoute }),
         });
         expect(
-          (yield* readModelOptions(hostStores(), ['glm/glm-5.3']))[0]
-            ?.usageRoute,
+          (yield* readModelOptions(installedHost().roots, ['glm/glm-5.3']).pipe(
+            Effect.provideService(Secrets, fakeHostSecrets),
+          ))[0]?.usageRoute,
         ).toBe(usageRoute);
       }),
   );
@@ -116,7 +130,7 @@ describe('coding-plan subscription runtime', () => {
     'leaves the stored preference alone for a run that declined the plan',
     () =>
       Effect.gen(function* () {
-        yield* hostStores().globalState.update(
+        yield* installedHost().roots.globalState.update(
           GlobalStateKey.GLM_CODING_PLAN,
           true,
         );
@@ -130,7 +144,9 @@ describe('coding-plan subscription runtime', () => {
         // The decline is the asking run's, so the user's switch is untouched and
         // a concurrent run still routes through the plan.
         expect(
-          yield* hostStores().globalState.get(GlobalStateKey.GLM_CODING_PLAN),
+          yield* installedHost().roots.globalState.get(
+            GlobalStateKey.GLM_CODING_PLAN,
+          ),
         ).toBe(true);
       }),
   );

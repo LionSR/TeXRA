@@ -255,7 +255,7 @@ interface GuiWindowPorts {
   /** The snapshot reads only this host answers. */
   readonly snapshot: Omit<
     Parameters<typeof createHostSnapshotSource>[0],
-    'project' | 'root' | 'stores' | 'secrets' | 'publish'
+    'project' | 'root' | 'stores' | 'publish'
   >;
   readonly toolEdits: ToolEditApprovalHost;
   /** Emits when the window gains focus, so the project's calls come here
@@ -337,7 +337,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     project: ports.project,
     root: roots.workspace,
     stores: roots,
-    secrets,
     publish: (next) => SubscriptionRef.set(hostSnapshot, next),
   });
   // Recorder notifications can arrive outside a request fiber.
@@ -418,7 +417,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     session,
     scope,
     loadModelOptions: () =>
-      loadModelOptions({ ...roots, secrets }).pipe(Effect.provide(env)),
+      loadModelOptions(roots).pipe(
+        Effect.provide(env),
+        Effect.provideService(Secrets, secrets),
+      ),
     showInfo: host.showInfoMessage,
     showWarning: host.showWarningMessage,
   });

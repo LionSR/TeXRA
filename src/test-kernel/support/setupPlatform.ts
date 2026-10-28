@@ -16,7 +16,6 @@ import { afterEach, beforeEach, vi } from 'vitest';
 
 import type { AgentCatalogShape } from '@agent/index/agentCatalog';
 import type { ProcessLayerOptions } from '@controllers/session/sessionLayer';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   GlobalValues,
   type ProcessServices,
@@ -200,17 +199,6 @@ let current: FakeHost | undefined;
 export function installedHost(): FakeHost {
   if (!current) throw new Error('No fake host is installed.');
   return current;
-}
-
-/**
- * The installed fake host's stores, as the model-option and CLI history
- * readers take them: the secret store plus the roots' three setting slots.
- * Read per call, not captured: a suite that reinstalls its host mid-test sees
- * the new one.
- */
-export function hostStores(): ModelOptionStores {
-  const { secrets, roots } = installedHost();
-  return { ...roots, secrets };
 }
 
 function installedSetup(): SetupPlatformShape {

@@ -2,8 +2,8 @@ import { Effect } from 'effect';
 
 import { Cancelled } from '@texra-ai/harness';
 import {
-  type PlatformSecrets,
   presentRunFailure,
+  type Secrets,
   type SessionHostInteractions,
 } from '@texra-ai/harness/host';
 import { validateRunRequest } from '@texra/controllers/session/runRequests';
@@ -36,18 +36,14 @@ export const kickoffDesktopSetup = (options: {
         readonly present: Pick<SessionHostInteractions, 'emit'>;
       })
     | undefined;
-  readonly secrets: PlatformSecrets;
-}): Effect.Effect<void> => {
+}): Effect.Effect<void, never, Secrets> => {
   const { run } = options;
   if (!run)
     return Effect.logWarning(
       'Setup did not start: the window has not bound its project yet.',
     );
   return Effect.gen(function* () {
-    const model = yield* resolveSetupLaunchModel(
-      options.roots,
-      options.secrets,
-    );
+    const model = yield* resolveSetupLaunchModel(options.roots);
     if (model === null) {
       return yield* Effect.fail(
         new Error(
