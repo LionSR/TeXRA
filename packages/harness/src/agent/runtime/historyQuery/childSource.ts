@@ -19,8 +19,7 @@ export const HISTORY_QUERY_CHILD_SOURCE = String.raw`
 const { DatabaseSync } = require('node:sqlite');
 const readline = require('node:readline');
 const db = new DatabaseSync(':memory:');
-let insert;
-let remove;
+let writes;
 const cell = (value) =>
   typeof value === 'bigint'
     ? Number(value)
@@ -40,18 +39,16 @@ const handle = (message) => {
     case 'init':
       db.exec('PRAGMA hard_heap_limit = ' + message.heapLimit);
       db.exec(message.schema);
-      insert = db.prepare(message.insert);
-      remove = db.prepare(message.remove);
+      writes = Object.fromEntries(
+        Object.entries(message.writes).map(([name, sql]) => [name, db.prepare(sql)]),
+      );
       db.exec('PRAGMA query_only = ON');
       return null;
     case 'append':
       writable(() => {
         db.exec('BEGIN');
         try {
-          for (const op of message.ops) {
-            if (op[0] === 'insert') insert.run(op[1], op[2], op[3], op[4]);
-            else remove.run(op[1]);
-          }
+          for (const [name, ...values] of message.ops) writes[name].run(...values);
           db.exec('COMMIT');
         } catch (error) {
           db.exec('ROLLBACK');

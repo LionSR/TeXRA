@@ -1,16 +1,14 @@
 /**
- * The history query contract: the one table the query store holds and the
- * views over it, as SQL, with the summary the executions tool description
- * renders. The store holds only display rows (`Database.readDisplay`), so
- * nothing a query names can reach a run history row, a private run record, or an
- * envelope column: they are never copied in.
- *
- * The views apply the session view's lifecycle rules (`sessionViewUpdate.ts`)
- * so a query never has to: a `run.detach` severs the parent edge, and a later
- * `run.activate` reopens a run whose earlier `run.end` belonged to its
- * previous lifecycle. A vocabulary change that moves a row these views read
- * updates them in the same change.
+ * The history query contract: the tables the query store holds and the
+ * views over them, as SQL, with the summary the executions tool description
+ * renders. The store holds only display rows (`Database.readDisplay`) and
+ * the session view's runs, so nothing a query names can reach a run history
+ * row, a private run record, or an envelope column: they are never copied in.
  */
+
+// Local imports
+import { RUN_LIFECYCLE_READY, runIdentityName } from '@shared/schemas';
+import type { SessionView } from '@shared/session/sessionView';
 
 /** `events.position` is load order, not the database's commit ordinal: a
  *  rebuilt store renumbers it. Times are ISO-8601 UTC text. */
@@ -26,56 +24,11 @@ CREATE INDEX events_run_type ON events(run_id, type, position);
 CREATE INDEX events_type ON events(type, position);
 CREATE INDEX events_tool_call
   ON events(run_id, type, json_extract(data, '$.logId'));
-`;
-
-const RUNS = `
-CREATE VIEW runs AS
-WITH lifecycle AS (
-  SELECT run_id, type, at, data,
-    ROW_NUMBER() OVER (PARTITION BY run_id ORDER BY position DESC) AS latest
-  FROM events WHERE type IN ('run.activate', 'run.end')
-)
-SELECT
-  s.run_id AS id,
-  CASE WHEN EXISTS (
-    SELECT 1 FROM events d WHERE d.run_id = s.run_id AND d.type = 'run.detach'
-  ) THEN NULL ELSE json_extract(s.data, '$.parent.id') END AS parent_id,
-  json_extract(s.data, '$.identity.kind') AS kind,
-  COALESCE(
-    json_extract(s.data, '$.identity.agent'),
-    json_extract(s.data, '$.identity.workflowName'),
-    json_extract(s.data, '$.identity.tool')
-  ) AS name,
-  COALESCE(
-    (SELECT json_extract(m.data, '$.model') FROM events m
-      WHERE m.run_id = s.run_id AND m.type = 'run.model'
-      ORDER BY m.position DESC LIMIT 1),
-    (SELECT json_extract(c.data, '$.config.model') FROM events c
-      WHERE c.run_id = s.run_id AND c.type = 'run.config'
-      ORDER BY c.position DESC LIMIT 1)
-  ) AS model,
-  (SELECT json_extract(x.data, '$.description') FROM events x
-    WHERE x.run_id = s.run_id AND x.type = 'run.description'
-    ORDER BY json_extract(x.data, '$.by') = 'user' DESC, x.position DESC
-    LIMIT 1) AS description,
-  s.at AS started_at,
-  CASE l.type WHEN 'run.end' THEN 'ended' WHEN 'run.activate' THEN 'activated'
-    ELSE 'created' END AS lifecycle,
-  CASE WHEN l.type = 'run.end' THEN l.at END AS ended_at,
-  CASE WHEN l.type = 'run.end' THEN json_extract(l.data, '$.outcome') END AS outcome,
-  CASE WHEN l.type = 'run.end' THEN json_extract(l.data, '$.error.message') END AS error,
-  CASE WHEN l.type = 'run.end' THEN u.cost END AS cost,
-  CASE WHEN l.type = 'run.end' THEN u.input_tokens END AS input_tokens,
-  CASE WHEN l.type = 'run.end' THEN u.output_tokens END AS output_tokens
-FROM events s
-LEFT JOIN lifecycle l ON l.run_id = s.run_id AND l.latest = 1
-LEFT JOIN (
-  SELECT run_id, total(json_extract(data, '$.usage.cost')) AS cost,
-    total(json_extract(data, '$.usage.inputTokens')) AS input_tokens,
-    total(json_extract(data, '$.usage.outputTokens')) AS output_tokens
-  FROM events WHERE type = 'usage' GROUP BY run_id
-) u ON u.run_id = s.run_id
-WHERE s.type = 'run.start';
+-- Copied whole from the session view's runs (replaceRuns), so a run's
+-- lifecycle, parent, title, model and usage follow the view's rules.
+CREATE TABLE runs (id TEXT PRIMARY KEY, parent_id TEXT, kind TEXT, name TEXT,
+  model TEXT, description TEXT, started_at TEXT, lifecycle TEXT, outcome TEXT,
+  cost REAL, input_tokens INTEGER, output_tokens INTEGER);
 `;
 
 const RUN_TREE = `
@@ -135,7 +88,6 @@ FROM events WHERE type = 'usage';
 /** Everything the store runs once, before the first row arrives. */
 export const HISTORY_SCHEMA_SQL = [
   TABLES,
-  RUNS,
   RUN_TREE,
   MESSAGES,
   TOOL_CALLS,
@@ -150,15 +102,51 @@ export const HISTORY_TEXT_LIMIT = 16 * 1024;
  *  longer one (many values, a large object) keeps only its length. */
 export const HISTORY_ROW_LIMIT = 64 * 1024;
 
-export const HISTORY_INSERT_SQL =
-  'INSERT INTO events (run_id, type, at, data) VALUES (?, ?, ?, ?)';
-export const HISTORY_REMOVE_SQL = 'DELETE FROM events WHERE run_id = ?';
+/** The store's writes, by the name an append op starts with: a run's rows
+ *  come and go by run, the runs table is replaced whole. */
+export const HISTORY_WRITE_SQL = {
+  insert: 'INSERT INTO events (run_id, type, at, data) VALUES (?, ?, ?, ?)',
+  remove: 'DELETE FROM events WHERE run_id = ?',
+  clearRuns: 'DELETE FROM runs',
+  run: 'INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+};
+
+/** One write: its `HISTORY_WRITE_SQL` statement's name, then its values. */
+export type HistoryWrite = readonly [
+  keyof typeof HISTORY_WRITE_SQL,
+  ...(string | number | null)[],
+];
+
+/** The writes that replace the runs table with the view's `runs`. */
+export const replaceRuns = (runs: SessionView['runs']): HistoryWrite[] => [
+  ['clearRuns'],
+  ...Array.from(runs.values(), (run): HistoryWrite => {
+    let lifecycle = 'activated';
+    if (run.durableOutcome !== null) lifecycle = 'ended';
+    else if (run.status === RUN_LIFECYCLE_READY) lifecycle = 'created';
+    return [
+      'run',
+      run.id,
+      run.parentId,
+      run.identity.kind,
+      runIdentityName(run.identity),
+      run.model,
+      run.description,
+      new Date(run.launchedAt).toISOString(),
+      lifecycle,
+      run.durableOutcome,
+      run.usage.cost,
+      run.usage.inputTokens,
+      run.usage.outputTokens,
+    ];
+  }),
+];
 
 /** What the tool description tells the model it can query. */
-export const HISTORY_VIEW_SUMMARY = `- runs(id, parent_id, kind, name, model, description, started_at, lifecycle, ended_at, outcome, error, cost, input_tokens, output_tokens) - one row per run. lifecycle is 'created', 'activated' (launched or resumed; it may still be running or may have died) or 'ended'; ended_at/outcome/error/cost/tokens are set only when ended, and cost/tokens are the sums of the run's usage rows. parent_id is NULL for a top-level or detached run.
+export const HISTORY_VIEW_SUMMARY = `- runs(id, parent_id, kind, name, model, description, started_at, lifecycle, outcome, cost, input_tokens, output_tokens) - one row per run. lifecycle is 'created', 'activated' (launched or resumed; it may still be running or may have died) or 'ended'; outcome is set only when ended. cost/tokens are the sums of the run's usage rows so far. parent_id is NULL for a top-level or detached run.
 - run_tree(ancestor_id, id, depth) - every ancestor of every run; depth 1 is the direct parent.
 - messages(position, run_id, at, role, text) - user turns and assistant replies, role 'user' or 'assistant'.
 - tool_calls(position, run_id, call_id, tool, input, status, result, started_at, ended_at) - input and result are JSON text; status/result are NULL while the call is open.
 - usage(position, run_id, at, input_tokens, output_tokens, cache_read_input_tokens, reasoning_tokens, cost) - one row per priced model call (turns and compaction summaries).
-- events(position, run_id, type, at, data) - every row above is derived from this: the session's display rows, data as JSON text.
+- events(position, run_id, type, at, data) - the session's display rows, data as JSON text, which every view above but runs reads.
 Times are ISO-8601 UTC text. Order by position for load order. A text value longer than ${HISTORY_TEXT_LIMIT} characters (a large tool input or result, most often) is stored cut to its first ${HISTORY_TEXT_LIMIT}, followed by '… [cut: N characters in all]'; a row whose data is still longer than ${HISTORY_ROW_LIMIT} characters is stored as {"cut": N}.`;
