@@ -182,10 +182,11 @@ export function handOver(
           ),
         );
         // The transcript tier folds only for subscribed aggregates, on a
-        // port of this run's own: its stream now, its descendants as the
-        // view gains them, cleared when the drain ends so a long-lived
-        // session does not keep every run's rows resident.
-        const port = `sdk/${runId}`;
+        // port of this handle's own (two callers may hold one run): its
+        // stream now, its descendants as the view gains them, cleared when
+        // the drain ends so a long-lived session does not keep every run's
+        // rows resident.
+        const port = `sdk/${runId}/${crypto.randomUUID()}`;
         let subscribed = '';
         const interest = (ids: readonly RunId[]): Effect.Effect<void> =>
           Effect.suspend(() => {

@@ -173,11 +173,15 @@ export const openResume = (
     };
     const { session } = options;
     const runs = registryOf(session.runs);
-    const decided = runs.programs
-      .resume(runId, options, (commit) =>
-        Deferred.succeed(attempt.admitted, commit),
-      )
-      .pipe(Effect.onExit(stoppedUnadmitted(session, runId, attempt)));
+    // A stop recorded before this fiber ran had no fiber to interrupt: the
+    // decision reads it first, under its exit's handler.
+    const decided = Effect.suspend(() =>
+      session.runs.get(runId)?.stopReason === undefined
+        ? runs.programs.resume(runId, options, (commit) =>
+            Deferred.succeed(attempt.admitted, commit),
+          )
+        : Effect.interrupt,
+    ).pipe(Effect.onExit(stoppedUnadmitted(session, runId, attempt)));
     const fiber = yield* runs.start(
       runId,
       wake ? woken(runId, session, decided) : decided,

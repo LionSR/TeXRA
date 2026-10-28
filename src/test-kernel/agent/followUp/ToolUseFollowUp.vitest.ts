@@ -3,6 +3,7 @@ import { Deferred, Effect, Exit, Fiber, Semaphore } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import * as resumability from '@agent/storage/resumability';
+import * as runLifecycle from '@agent/storage/runLifecycle';
 import { Inbox, type InboxPort } from '@agent/followUp/Inbox';
 import { RunInput } from '@agent/followUp/RunInput';
 import { submitFollowUp, wakeRun } from '@agent/followUp/ToolUseFollowUp';
@@ -181,7 +182,12 @@ let recorded = recordedFollowUps();
  */
 type RunState = 'live' | 'idle';
 
-function fakeSession(state: RunState): SessionHandle {
+/** `deferFork`: the session's fork starts a fiber a tick after it returns
+ *  it, as a fork whose layer resolves first may. */
+function fakeSession(
+  state: RunState,
+  { deferFork = false } = {},
+): SessionHandle {
   if (state === 'idle')
     vi.spyOn(resumability, 'runRejection').mockReturnValue(
       Effect.succeed(null),
@@ -215,7 +221,9 @@ function fakeSession(state: RunState): SessionHandle {
     session: () => session,
     // cast: the fake decision reads no process service.
     fork: ((effect: Effect.Effect<unknown, unknown>) =>
-      Effect.runFork(effect)) as unknown as RunRegistryInit['fork'],
+      Effect.runFork(
+        deferFork ? Effect.andThen(Effect.yieldNow, effect) : effect,
+      )) as unknown as RunRegistryInit['fork'],
     // cast: a wake reaches only the session's resume decision.
     programs: { resume } as unknown as RunPrograms,
     wake: () => {},
@@ -234,6 +242,7 @@ function fakeSession(state: RunState): SessionHandle {
     log: {
       records: () => Effect.succeed([]),
       owner: () => Effect.succeed({ ownerId: null, liveness: null }),
+      hold: () => Effect.void,
     },
     followUps,
   } as unknown as SessionHandle;
@@ -246,6 +255,38 @@ const childResult = (deliveryId: string) => ({
   text: 'child result',
   from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
   deliveryId,
+});
+
+describe('wakeRun', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.effect(
+    "a user's stop that lands before a resume's fiber runs ends the run cancelled, deciding nothing",
+    () =>
+      Effect.gen(function* () {
+        const runId = generateRunId();
+        const session = fakeSession('idle', { deferFork: true });
+        const decide = vi.fn(() => Effect.succeed(false));
+        const ended = vi
+          .spyOn(runLifecycle, 'finalizeRun')
+          .mockReturnValue(Effect.succeed({ recorded: true }));
+
+        const woken = yield* wakeRun(runId, session).pipe(
+          withResumePort(decide),
+        );
+        session.runs.stop(runId, { reason: 'user' });
+        yield* woken;
+
+        expect(decide).not.toHaveBeenCalled();
+        expect(ended).toHaveBeenCalledWith(session, {
+          runId,
+          outcome: 'cancelled',
+          ownerless: true,
+        });
+      }),
+  );
 });
 
 describe('submitFollowUp', () => {
