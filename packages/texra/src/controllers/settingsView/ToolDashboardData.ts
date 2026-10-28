@@ -92,23 +92,29 @@ export function visibleToolPlugins(
   });
 }
 
+/** The asking workspace, and whether its host installs an editor extension
+ *  (VS Code's settings view does; the desktop app and the CLI do not). */
+export type DashboardInputs = ToolProbeInputs & {
+  readonly installsExtensions?: boolean;
+};
+
 /**
  * Build the complete tool dashboard items list.
  *
  * Built-in plugins come first, then the probed plugins, each in card order.
  *
- * @param probeInputs - the asking host, its workspace folder and
- *   configuration,
+ * @param probeInputs - the asking workspace folder and configuration,
  *   carried as data for the probes that need them (the GitHub group asks
- *   whether the folder is a git repository, the Zotero group reads its port).
- *   Ignored when `cachedResults` skips the probes.
+ *   whether the folder is a git repository, the Zotero group reads its port),
+ *   and whether the host installs editor extensions. The probes are skipped
+ *   when `cachedResults` is given.
  * @param cachedResults - when provided, skips network probes and uses
  *   these results (including their `statusDetail`). Used by the toggle
  *   handler for instant UI updates.
  */
 export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
   function* (
-    probeInputs: ToolProbeInputs,
+    probeInputs: DashboardInputs,
     cachedResults?: readonly ExternalToolCheckResult[],
   ) {
     const visible = visibleToolPlugins((yield* ToolRegistry).entries);
@@ -167,10 +173,10 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
           ...(authCommand
             ? [{ kind: 'auth' as const, command: authCommand }]
             : []),
-          // The desktop app cannot host VS Code extensions, so it gets no
-          // "Install Extension" button; the install guide and URL still
-          // describe the standalone path (Lean 4's `lake` build, for one).
-          ...(installExtensionId && probeInputs.host !== 'desktop'
+          // Only a host that installs editor extensions gets an "Install
+          // Extension" button; the install guide and URL still describe the
+          // standalone path (Lean 4's `lake` build, for one).
+          ...(installExtensionId && probeInputs.installsExtensions
             ? [
                 {
                   kind: 'extension' as const,

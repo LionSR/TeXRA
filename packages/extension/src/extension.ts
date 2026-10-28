@@ -169,6 +169,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         settings: TEXRA_SETTINGS,
         commandDirs: commandDirs,
         plugins: texraPlugins({
+          name: 'vscode',
           editors,
           inquiryPanel: true,
           // The Comments UI behind the `inline_comment` tool. The provider reads
@@ -272,7 +273,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         ),
       );
       const roots = createNodeWorkspaceRoots({
-        host: 'vscode',
         workspacePath: workspaceRoot,
         storageRoot: defaultNodeStorageRoot(),
         storage,

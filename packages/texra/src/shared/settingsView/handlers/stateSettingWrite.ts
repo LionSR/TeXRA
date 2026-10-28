@@ -11,7 +11,7 @@
 //   - a settings view writes only rows tagged for a settings-view snapshot;
 //     the CLI writes only the rows its `/config` panel lists.
 
-import { Settings, type SettingHost } from '@texra-ai/harness/host';
+import { Settings } from '@texra-ai/harness/host';
 import { Effect, Result, Schema } from 'effect';
 
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -21,11 +21,14 @@ import type {
 } from '@texra-ai/harness/schemas';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
+/** The surfaces that write a setting: a settings view's host, or the CLI. */
+type SettingSurface = 'vscode' | 'desktop' | 'cli';
+
 /**
  * The rows a host may write: the settings views (extension, desktop) write
  * the rows they render, the CLI writes the rows its `/config` panel lists.
  */
-type WritableEntry<H extends SettingHost> = H extends 'cli'
+type WritableEntry<H extends SettingSurface> = H extends 'cli'
   ? SurfacedSettingEntry
   : SettingsViewStateSettingEntry;
 
@@ -39,11 +42,12 @@ export type StateSettingUpdateResult<
   | { readonly kind: 'applied'; readonly entry: E }
   | { readonly kind: 'failed'; readonly entry: E; readonly error: Error };
 
-export interface StateSettingUpdatePorts<H extends SettingHost = SettingHost> {
+export interface StateSettingUpdatePorts<
+  H extends SettingSurface = SettingSurface,
+> {
   readonly stores: SettingsStores;
   /**
-   * The calling surface: it selects which rows are writable (each row's
-   * slot is the stores' own host's).
+   * The calling surface: it selects which rows are writable.
    */
   readonly host: H;
   /**
@@ -60,7 +64,7 @@ export interface StateSettingUpdatePorts<H extends SettingHost = SettingHost> {
  * consequences (`onWrite`, the approval-policy repaint), its UI feedback and
  * its snapshot rebroadcast. A failed persist returns as the `failed` result.
  */
-export function applyStateSettingUpdate<H extends SettingHost>(
+export function applyStateSettingUpdate<H extends SettingSurface>(
   key: string,
   value: unknown,
   ports: StateSettingUpdatePorts<H>,

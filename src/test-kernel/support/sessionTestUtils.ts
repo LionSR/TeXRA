@@ -62,7 +62,6 @@ export const createTestSession = (
     return owner.open({
       ...open,
       roots: init.roots ?? {
-        host: installed.host,
         workspace: installed.workspace,
         storageRoot: installed.storageRoot,
         storage: `${installed.storage}/test-sessions/${opened}`,

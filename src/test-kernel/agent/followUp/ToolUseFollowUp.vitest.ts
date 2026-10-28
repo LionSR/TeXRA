@@ -297,6 +297,26 @@ describe('submitFollowUp', () => {
       }),
   );
 
+  it.effect("wakes an un-ended run that is not live for a run's message", () =>
+    Effect.gen(function* () {
+      const runId = generateRunId();
+      const session = fakeSession('idle');
+      const tryResumeRun = vi.fn(() => Effect.succeed(true));
+      const message = {
+        text: 'from a peer',
+        from: { kind: 'run' as const, runId: generateRunId() },
+      };
+
+      expect(
+        yield* submitFollowUp(runId, message, { session }).pipe(
+          withResumePort(tryResumeRun),
+        ),
+      ).toEqual({ status: 'queued' });
+      expect(recorded.queued(runId)).toEqual(['from a peer']);
+      expect(tryResumeRun).toHaveBeenCalledTimes(1);
+    }),
+  );
+
   it.effect('admits a replayed child delivery at most once', () =>
     Effect.gen(function* () {
       const runId = generateRunId();

@@ -5,16 +5,22 @@ import { Effect, Layer } from 'effect';
 import { fakeSetupPlatform } from '@test/support/setupPlatform';
 import type { TerminalRunResult } from '@texra/hosts/uiHosts';
 import {
+  SetupHost,
   SetupPlatform,
   type SetupPlatformShape,
 } from '@texra/tools/setup/platform';
 
-/** `layer` with the setup plugin's service over the installed host's setup
- *  platform, for a setup tool called outside a run's step. */
+/** `layer` with the setup plugin's services over the installed host's setup
+ *  platform, named `host`, for a setup tool called outside a run's step. */
 export const withSetup = <A, E, R>(
   layer: Layer.Layer<A, E, R>,
-): Layer.Layer<A | SetupPlatform, E, R> =>
-  Layer.merge(layer, Layer.succeed(SetupPlatform)(fakeSetupPlatform));
+  host: SetupHost['Service'] = 'vscode',
+): Layer.Layer<A | SetupPlatform | SetupHost, E, R> =>
+  Layer.mergeAll(
+    layer,
+    Layer.succeed(SetupPlatform)(fakeSetupPlatform),
+    Layer.succeed(SetupHost)(host),
+  );
 
 /**
  * Build a fully stubbed host-varying setup platform for tool unit tests.

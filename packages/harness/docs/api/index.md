@@ -44,19 +44,7 @@ Discriminated union of every event the SDK surface emits.
 
 ```ts
 type AgentEvent =
-  | TraceArm<
-      | 'log'
-      | 'stage.start'
-      | 'stage.end'
-      | 'tool.start'
-      | 'tool.end'
-      | 'usage'
-      | 'run.fact'
-      | 'context.state'
-      | 'stream.start'
-      | 'stream.end'
-    >
-  | StreamChunkEvent;
+  TraceArm<(typeof TRACE_ROW_TYPES)[number]> | StreamChunkEvent;
 ```
 
 ## AgentNotFound
@@ -658,12 +646,13 @@ interface Run {
    * What the run does as it does it: streamed text, tool calls, stages,
    * usage. Pipe it through `responseText` for just the answer's text.
    * Ends when the run ends, and fails with {@link RunFailure} if the run
-   * failed. Read it once, from the moment `start` returns: events wait
-   * for you only briefly, and stopping early stops your reading, not the
-   * run. A reader that comes too late fails with {@link TraceUnavailable}
-   * instead of seeing nothing.
+   * failed. Read it as often as you like and whenever you like: each read
+   * is this activation's events read back from the session, from the
+   * activation's start, and stopping early stops your reading, not the
+   * run. A stream that ended before the read reached it arrives whole, as
+   * one chunk.
    */
-  readonly events: Stream.Stream<AgentEvent, RunFailure | TraceUnavailable>;
+  readonly events: Stream.Stream<AgentEvent, RunFailure>;
   /** Stop the run. */
   readonly interrupt: Effect.Effect<void>;
 }
@@ -982,25 +971,6 @@ class ToolsRefused extends Schema.TaggedError<ToolsRefused>()(
 )
 ```
 
-## TraceUnavailable
-
-A run's trace that no reader can take any more: `ended` (the run settled
-with nobody reading, so its buffered trace went with it), `truncated`
-(it passed the handover buffer before a reader attached, so the trace
-was detached) or `remote` (the run runs in another process, which keeps
-its trace). The run itself is unaffected: its `result` still answers.
-
-```ts
-class TraceUnavailable extends Schema.TaggedError<TraceUnavailable>()(
-  'TraceUnavailable',
-  {
-    runId: Schema.String,
-    reason: Schema.Literals(['ended', 'truncated', 'remote']),
-    message: Schema.String,
-  },
-)
-```
-
 ## Unavailable
 
 The stream, request, or run the request names is gone or not in a state
@@ -1020,12 +990,6 @@ state stores, as the session opened over it holds them.
 
 ```ts
 interface WorkspaceRoots {
-  /**
-   * The product host this process is, named by its composition root. The
-   * catalog rows whose slot differs by host read it from here, so a read
-   * answers for the host that opened these roots rather than for a default.
-   */
-  readonly host: SettingHost;
   /** Canonical physical workspace root, or undefined when no folder is open. */
   readonly workspace: string | undefined;
   /**

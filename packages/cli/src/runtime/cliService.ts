@@ -121,7 +121,6 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
     );
     return createNodeWorkspaceRoots({
-      host: 'cli',
       workspacePath: workspace,
       storageRoot,
       storage,

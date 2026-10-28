@@ -33,7 +33,7 @@ describe('seedDisabledToolDefaults', () => {
 
         yield* seedDisabledToolDefaults(
           installedHost().roots.globalState,
-          texraPlugins(),
+          texraPlugins({ name: 'vscode' }),
         );
 
         expect(

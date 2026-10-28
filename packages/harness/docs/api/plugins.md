@@ -613,7 +613,7 @@ Why a submission could not be admitted, worded for the user by
 {@link presentFollowUpResult}: a resume's refusal (`ResumeRefusal`; a
 message to a run with no loop here is admitted only as a resume would be,
 and `not_resumable` there also covers a closed input, a disposed session,
-or a message that is not the user's own), or one of the message's alone:
+or a message that does not wake the run), or one of the message's alone:
 
 - `read_failed`: the run's claim or state could not be read just now
   (a busy or failing store), which says nothing about the run itself.
@@ -1963,15 +1963,11 @@ class ToolProbeFailed extends Schema.TaggedError<ToolProbeFailed>()(
 
 The asking workspace, carried into a plugin's probe as data rather than read
 from an ambient scope: the folder a probe asks whether it is a git
-repository, the configuration a probe reads a port from, and the host a
-probe asks whether the editor drives a tool for it: three fields of the
-roots every caller of the availability surface opened.
+repository and the configuration a probe reads a port from: two fields of
+the roots every caller of the availability surface opened.
 
 ```ts
-type ToolProbeInputs = Pick<
-  WorkspaceRoots,
-  'workspace' | 'config' | 'host'
->;
+type ToolProbeInputs = Pick<WorkspaceRoots, 'workspace' | 'config'>;
 ```
 
 ## ToolProbeServices

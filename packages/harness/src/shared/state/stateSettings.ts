@@ -68,12 +68,6 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  */
 
 /**
- * The product hosts, spelled once, for settings.
- * `sdk` is the agent package embedded in someone else's process.
- */
-export type SettingHost = 'vscode' | 'cli' | 'desktop' | 'sdk';
-
-/**
  * Storage slot a setting is read from / written to. `repoState` is shared by
  * every checkout of one git repository (keyed by its root in the global
  * database), so a repository has one value on every host and in every

@@ -8,7 +8,6 @@ import type { StateStore, StateReadFailed } from '@platform/interfaces';
 
 import type { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import type { SettingsStores } from '@shared/config/settings';
-import type { SettingHost } from '@shared/state/stateSettings';
 
 import { fakeConfig, FakeStateStore } from './FakePlatform';
 
@@ -20,15 +19,13 @@ interface FakeSettingsStores {
   readonly globalState: FakeStateStore;
 }
 
-export function makeFakeSettingsStores(
-  host: SettingHost = 'vscode',
-): FakeSettingsStores {
+export function makeFakeSettingsStores(): FakeSettingsStores {
   const config = fakeConfig();
   const workspaceState = new FakeStateStore();
   const repoState = new FakeStateStore();
   const globalState = new FakeStateStore();
   return {
-    stores: { host, config, workspaceState, repoState, globalState },
+    stores: { config, workspaceState, repoState, globalState },
     config,
     workspaceState,
     repoState,

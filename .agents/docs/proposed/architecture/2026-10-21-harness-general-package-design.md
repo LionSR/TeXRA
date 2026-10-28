@@ -192,7 +192,7 @@ The root entry has about 30 names: `Sessions`, `Session`, `Run`, `StartInput`,
 `PendingRequest`, `RequestDecision`, `RuntimeRequest`, `Outcome`, `SessionView`,
 `RunView`, `RunEndResult`, `AgentEvent`, `RunId`, `WorkspaceRoots`,
 `AgentPlatform`, `AgentDefinition`, `Plugin` and `defineTool`, plus the errors
-(`RunFailure`, `ResumeRefused`, `TraceUnavailable`, `PluginsRefused`,
+(`RunFailure`, `ResumeRefused`, `PluginsRefused`,
 `AgentNotFound`, `ToolsRefused`, `LaunchError`, `RequestError`,
 `SessionOpenError`).
 
@@ -357,16 +357,18 @@ re-read the surface and the ports. Where it changes this design:
   forgotten-exports rule keeps 108 of them because a consumed signature names
   them; #14371 removed five of the six that were free. Shrinking further means
   narrowing the root signatures (the run-lifecycle work in the 1.0 PRD) or
-  moving app vocabulary: the team launch code in `common/teams/TeamPlan.ts`
-  (its lines 111-328, which would free 15 `./host` names) and the picker wire
-  types in `shared/schemas/pickerOptions.ts` (lines 82-150, which would free 7
-  of the 10 `./schemas` names the file contributes).
+  moving app vocabulary: the team launch code moved to
+  `packages/texra/src/shared/teamLaunch.ts` (16 `./host` names freed); the
+  picker wire types in `shared/schemas/pickerOptions.ts` (lines 82-150, which
+  would free 7 of the 10 `./schemas` names the file contributes) remain.
 - **Lane 3, vocabulary.** #14364 made the namespace data and moved the
   presets, the LaTeX prompt, the TeX paths and the validation model to the app.
   #14369 replaces `ITool.unavailableHosts` with the host-capability check and
-  deletes the code-mode `WeakSet`. `defineBuiltinPlugin` remains as a typed
-  alias until the lane 4b fence moves the built-ins' services onto
-  `ToolContext`.
+  deletes the code-mode `WeakSet`. `SettingHost` is gone from
+  `WorkspaceRoots`, `SettingsStores` and the probes: the app reads a host's
+  capabilities instead, and the setup probe its `SetupHost`.
+  `defineBuiltinPlugin` remains as a typed alias until the lane 4b fence moves
+  the built-ins' services onto `ToolContext`.
 - **Lane 5, the clock.** A `run.position.wakeAt` field fits poorly: the loop
   rewrites positions at every boundary, so a user message drops the timer
   unless the loop restates it; a wake still needs input the parked run can

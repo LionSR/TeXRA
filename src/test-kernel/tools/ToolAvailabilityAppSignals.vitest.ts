@@ -48,7 +48,6 @@ const probeInputs: ToolProbeInputs = {
     inspect: unreadConfig,
     catalog: TEXRA_SETTINGS,
   } satisfies ConfigProvider,
-  host: 'cli',
 };
 
 const secretsLayer = Secrets.layer({
