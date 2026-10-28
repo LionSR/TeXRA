@@ -14,7 +14,7 @@ import type { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvid
 import type { SettingsStores } from '@shared/config/settings';
 import type { SettingHost } from '@shared/state/stateSettings';
 
-import { fakeConfig, FakeSecrets, FakeStateStore } from './FakePlatform';
+import { fakeConfig, FakeStateStore } from './FakePlatform';
 
 interface FakeSettingsStores {
   readonly stores: SettingsStores;
@@ -22,8 +22,6 @@ interface FakeSettingsStores {
   readonly workspaceState: FakeStateStore;
   readonly repoState: FakeStateStore;
   readonly globalState: FakeStateStore;
-  /** The secret store a model-options reader takes beside `stores`. */
-  readonly secrets: FakeSecrets;
 }
 
 export function makeFakeSettingsStores(
@@ -39,7 +37,6 @@ export function makeFakeSettingsStores(
     workspaceState,
     repoState,
     globalState,
-    secrets: new FakeSecrets(),
   };
 }
 

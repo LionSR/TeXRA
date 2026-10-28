@@ -1,5 +1,5 @@
 // Third-party imports
-import { Secrets, withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { Cause, Effect, Schema } from 'effect';
 
 // Local imports
@@ -75,7 +75,7 @@ export function launchSetupAssistant(
     // adapter-level checks, so a blank env key does not count and fail later
     // as "No model is available". No model is the missing-credential case; a
     // check that cannot be answered fails to the launch-failure report below.
-    const model = yield* resolveSetupLaunchModel(roots, yield* Secrets);
+    const model = yield* resolveSetupLaunchModel(roots);
     if (model === null) {
       yield* connectModel;
       return 'not-started' as const;

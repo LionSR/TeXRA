@@ -6,6 +6,12 @@ import { Effect } from 'effect';
 
 import { loadApiKeyStatusMap } from '@texra-ai/llm';
 
+import {
+  Secrets,
+  type ProcessRuntime,
+  type ProcessServices,
+  type SettingsStores,
+} from '@texra-ai/harness/host';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import {
   type CliLogoutTarget,
@@ -33,13 +39,6 @@ import {
   logoutFromChat,
 } from './handlers/loginCommands';
 import { openCliSlashCommandForm } from './slashForms';
-import type {
-  ProcessRuntime,
-  ProcessServices,
-  PlatformSecrets,
-  Secrets,
-  SettingsStores,
-} from '@texra-ai/harness/host';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type {
   SlashCommandEffect,
@@ -74,7 +73,6 @@ type BindSelection = <T>(
 type AccountAction = Exclude<AccountAccessFormValue, { kind: 'key' }>;
 
 export function modelAccessContribution(deps: {
-  readonly secrets: PlatformSecrets;
   readonly stores: SettingsStores;
   readonly runtime: ProcessRuntime;
   readonly bindSelection: BindSelection;
@@ -86,7 +84,7 @@ export function modelAccessContribution(deps: {
   /** Reports a failed key-status read; the rows then read "Status unavailable". */
   readonly onError?: ErrorHandler;
 }): SlashCommandContribution {
-  const { secrets, stores, runtime, bindSelection } = deps;
+  const { stores, runtime, bindSelection } = deps;
   const onModelAccessSelect: FormActionHandler<CliModelAccessSelection> =
     deps.onModelAccessSelect ??
     ((selection, output) =>
@@ -97,7 +95,7 @@ export function modelAccessContribution(deps: {
     deps.onLoginSelect ??
     ((value, output) => loginFromChat(value, stores, undefined, output));
   const onLogoutSelect: FormActionHandler<CliLogoutTarget> = (value, output) =>
-    logoutFromChat(value, stores, secrets, output);
+    logoutFromChat(value, stores, output);
   const recheck = (): Effect.Effect<void, never, ProcessServices> =>
     deps.onAccountChanged?.() ?? Effect.void;
 
@@ -140,7 +138,6 @@ export function modelAccessContribution(deps: {
     );
     return (
       <AccountAccessForm
-        secrets={secrets}
         stores={stores}
         runtime={runtime}
         availableRows={props.availableRows}
@@ -162,7 +159,7 @@ export function modelAccessContribution(deps: {
 
   function ProviderApiKeyFormAdapter(props: SlashFormProps): React.JSX.Element {
     const apiKeys = useAsyncResource({
-      load: () => loadApiKeyStatusMap(secrets),
+      load: () => Effect.flatMap(Secrets, loadApiKeyStatusMap),
       runtime,
       onError: deps.onError,
     });
@@ -221,7 +218,7 @@ export function modelAccessContribution(deps: {
         echo: 'never',
         handler: (remainder, context) =>
           remainder.trim().toLowerCase() === 'status'
-            ? showCliAccountStatus(stores, secrets)
+            ? showCliAccountStatus(stores)
             : loginFromChat(remainder, stores, context.cliContext).pipe(
                 Effect.andThen(recheck),
               ),

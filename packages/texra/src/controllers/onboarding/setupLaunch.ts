@@ -2,8 +2,8 @@ import { Effect } from 'effect';
 
 import { Cancelled } from '@texra-ai/harness';
 import {
-  type PlatformSecrets,
   presentRunFailure,
+  type Secrets,
   type SessionHostInteractions,
 } from '@texra-ai/harness/host';
 import { validateRunRequest } from '@texra/controllers/session/runRequests';
@@ -34,18 +34,14 @@ export const kickoffDesktopSetup = (options: {
   };
   /** The project's launch path; none when no folder is open. */
   readonly run: Pick<HostRunActions, 'runValidated'> | undefined;
-  readonly secrets: PlatformSecrets;
-}): Effect.Effect<void> =>
+}): Effect.Effect<void, never, Secrets> =>
   Effect.gen(function* () {
     if (!options.run) {
       return yield* Effect.fail(
         new Error('Open a folder before running setup.'),
       );
     }
-    const model = yield* resolveSetupLaunchModel(
-      options.project.roots,
-      options.secrets,
-    );
+    const model = yield* resolveSetupLaunchModel(options.project.roots);
     if (model === null) {
       return yield* Effect.fail(
         new Error(

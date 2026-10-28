@@ -5,7 +5,6 @@ import { describe, expect } from 'vitest';
 import { apiKeySecretName } from '@texra-ai/llm';
 import {
   fakeProcessServices,
-  hostStores,
   installedHost,
 } from '@test/support/setupPlatform';
 import { selectAvailableDelegationModel } from '@tools/delegation/delegationAvailability';
@@ -25,7 +24,7 @@ describe('delegation model availability', () => {
           selectAvailableDelegationModel({
             requestedModel: 'anthropic/claude-opus-5-5',
             parentModel: 'anthropic/claude-sonnet-5-5',
-            settings: hostStores(),
+            settings: installedHost().roots,
           }),
         );
 

@@ -49,6 +49,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
+import { Secrets } from '@platform/secrets';
 import {
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -76,7 +77,11 @@ import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import {
+  fakeHostSecrets,
+  installedHost,
+  installPlatform,
+} from '@test/support/setupPlatform';
 import { judgeFailure } from '../../../../packages/llm/src/api/verdict.js';
 import {
   BackgroundEventSchema,
@@ -336,7 +341,11 @@ const openRun = Effect.fn('openRun')(function* (
       Layer.mergeAll(
         Layer.succeed(AgentRun, agentRun(runId, session, bound)),
         UsageLog.disabled,
-        modelAccessLayer(hostStores()).pipe(Layer.provide(testHttpClientLayer)),
+        modelAccessLayer(installedHost().roots).pipe(
+          Layer.provide(
+            Layer.merge(testHttpClientLayer, Secrets.layer(fakeHostSecrets)),
+          ),
+        ),
       ),
     ),
     Layer.merge(Layer.succeed(RunHistory, session.runHistory)),

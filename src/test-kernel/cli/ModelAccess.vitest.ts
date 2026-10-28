@@ -66,7 +66,6 @@ function missingKeyModel(value: string): CliModelAccess {
 const fake = makeFakeSettingsStores();
 const stores = {
   ...fake.stores,
-  secrets: fake.secrets,
   // Read when a lookup runs: the kernel builds its runtime after collection.
   get runtime() {
     return testRuntime();

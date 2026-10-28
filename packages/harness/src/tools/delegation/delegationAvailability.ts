@@ -21,13 +21,8 @@ import { modelRefOf } from '@texra-ai/llm';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import type { StepTools } from '@agent/runtime/loop/step';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  readModelOptions,
-  type ModelOption,
-  type ModelOptionStores,
-} from '@model/computeModelOptions';
+import { readModelOptions, type ModelOption } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
-import { Secrets } from '@platform/secrets';
 import {
   MODEL_AVAILABILITY_STATUS,
   type AgentDelegationScope,
@@ -60,7 +55,7 @@ const availableModelNames = (options: readonly ModelOption[]): string[] =>
 export const readDelegationTargets = Effect.fn('readDelegationTargets')(
   function* (
     { definitions, registry }: Pick<StepTools, 'definitions' | 'registry'>,
-    stores: ModelOptionStores,
+    stores: SettingsStores,
     scope: AgentDelegationScope | undefined,
   ) {
     const chats = registry.get(AGENT_TOOL_NAME) !== undefined;
@@ -224,10 +219,7 @@ export const selectAvailableDelegationModel = Effect.fn(
    */
   readonly settings: SettingsStores;
 }) {
-  const options = yield* readModelOptions({
-    ...input.settings,
-    secrets: yield* Secrets,
-  });
+  const options = yield* readModelOptions(input.settings);
   const availableModels = [
     ...new Set(
       availableModelNames(options)

@@ -5,7 +5,7 @@ import { Effect, Result, type Scope } from 'effect';
 
 import { type RunId, runBypasses } from '@texra-ai/harness/schemas';
 import { type WorkspaceRoots } from '@texra-ai/harness';
-import { InstalledPlugins, type PlatformSecrets } from '@texra-ai/harness/host';
+import { InstalledPlugins } from '@texra-ai/harness/host';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
@@ -88,11 +88,10 @@ type SelectHandler<T> = (value: T) => SlashCommandEffect;
  */
 export function registerBuiltinSlashCommands(options: {
   /**
-   * The process secret store and the three setting slots the built-in forms and handlers
-   * read: every one of them runs outside Effect, so the stores arrive from the
-   * surface that registers the commands.
+   * The three setting slots the built-in forms and handlers read: every one
+   * of them runs outside Effect, so the stores arrive from the surface that
+   * registers the commands.
    */
-  secrets: PlatformSecrets;
   stores: SettingsStores;
   /** The process runtime the account commands and the `/resume` listing run
    *  their programs on, from the same surface. */
@@ -134,9 +133,9 @@ export function registerBuiltinSlashCommands(options: {
   configRoots?: WorkspaceRoots;
   onError?: ErrorHandler;
 }): void {
-  const { secrets, stores, runtime } = options;
+  const { stores, runtime } = options;
   const { runSession } = options;
-  const modelStores = { ...stores, secrets, runtime };
+  const modelStores = { ...stores, runtime };
   const onAgentSelect: SelectHandler<string> =
     options.onAgentSelect ??
     ((agent) => Effect.sync(() => patchSessionMeta({ agent })));
@@ -390,7 +389,6 @@ export function registerBuiltinSlashCommands(options: {
       return (
         <CliConfigForm
           roots={configRoots}
-          secrets={secrets}
           runtime={runtime}
           availableRows={props.availableRows}
           // The project's policy, written: the status bar follows it, and
@@ -474,7 +472,6 @@ export function registerBuiltinSlashCommands(options: {
       ],
     },
     modelAccessContribution({
-      secrets,
       stores,
       runtime,
       bindSelection,

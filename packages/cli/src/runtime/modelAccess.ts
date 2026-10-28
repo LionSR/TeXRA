@@ -6,11 +6,11 @@ import {
   decideRunModel,
   readModelOptions,
   type ModelOption,
-  type ModelOptionStores,
   type ProcessRuntime,
   type RunModelCandidate,
   type RunModelDecisionReason,
   type RunModelFallbackMode,
+  type SettingsStores,
 } from '@texra-ai/harness/host';
 import {
   type ModelOptionData,
@@ -65,7 +65,7 @@ const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
 } satisfies Record<RunModelDecisionReason, RunModelFallbackMode>;
 
 /** Stores and runtime held by command actions and form loaders. */
-export type CliModelStores = ModelOptionStores & {
+export type CliModelStores = SettingsStores & {
   readonly runtime: ProcessRuntime;
 };
 

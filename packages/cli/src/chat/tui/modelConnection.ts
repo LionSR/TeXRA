@@ -81,9 +81,7 @@ export function holdUntilConnected(message: HeldMessage): boolean {
  */
 export const checkModelConnection = Effect.fn('checkModelConnection')(
   function* (services: CliPlatformServices) {
-    const probe = yield* Effect.result(
-      hasUsableSetupCredential(services, services.secrets),
-    );
+    const probe = yield* Effect.result(hasUsableSetupCredential(services));
     if (probe._tag === 'Failure') {
       yield* Effect.logWarning(
         `Setup credential check failed: ${probe.failure.message}`,
@@ -114,10 +112,10 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
   send: (message: HeldMessage) => SlashCommandEffect,
 ) {
   if (!modelConnectionNeeded.get()) return;
-  const { stores, secrets, runtime } = context;
+  const { stores, runtime } = context;
   // A check that cannot be answered fails to the transcript report below and
   // leaves the panel state as it was.
-  const ready = yield* hasUsableSetupCredential(stores, secrets);
+  const ready = yield* hasUsableSetupCredential(stores);
   // Checked again after the read: a recheck forked by an earlier form may
   // have connected meanwhile, and only one may send the held message.
   if (!ready || !modelConnectionNeeded.get()) return;
@@ -126,7 +124,7 @@ export const connectChatModel = Effect.fn('connectChatModel')(function* (
     selectCliRunnableModel(
       [{ model: sessionMeta.get().model, reason: options.modelSource }],
       {
-        stores: { ...stores, secrets, runtime },
+        stores: { ...stores, runtime },
         noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
           options.recovery,
         ),

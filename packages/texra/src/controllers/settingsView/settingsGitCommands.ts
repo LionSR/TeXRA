@@ -4,6 +4,7 @@
  */
 import { Effect } from 'effect';
 
+import { Secrets } from '@texra-ai/harness/host';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import {
@@ -18,7 +19,6 @@ import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
 } from '@texra/tools/github/githubAuth';
-import type { PlatformSecrets } from '@texra-ai/harness/host';
 
 import type {
   SettingsHostBindings,
@@ -29,12 +29,11 @@ import type {
 export function settingsGitCommands(ports: {
   readonly bindings: SettingsHostBindings;
   readonly present: SettingsPresentation;
-  readonly secrets: PlatformSecrets;
 }) {
-  const { bindings, secrets } = ports;
+  const { bindings } = ports;
   const { notice, alert, reported } = ports.present;
   const postGitHubTokenStatus = bindings.post(
-    Effect.map(resolveGitHubTokenSource(secrets), (status) => ({
+    Effect.map(Effect.flatMap(Secrets, resolveGitHubTokenSource), (status) => ({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
       status,
     })),
@@ -60,7 +59,7 @@ export function settingsGitCommands(ports: {
         if (token == null) return;
         yield* reported(
           'Failed to save GitHub token',
-          storeCredential(secrets, {
+          storeCredential(yield* Secrets, {
             secretName: GITHUB_TOKEN_STORAGE_KEY,
             value: token,
             kind: 'github',
@@ -74,12 +73,12 @@ export function settingsGitCommands(ports: {
     removeGitHubToken: () =>
       reported(
         'Failed to remove GitHub token',
-        secrets
-          .delete(GITHUB_TOKEN_STORAGE_KEY)
-          .pipe(
-            Effect.andThen(notice(GITHUB_TOKEN_REMOVED_MESSAGE)),
-            Effect.andThen(postGitHubTokenStatus),
-          ),
+        Effect.flatMap(Secrets, (secrets) =>
+          secrets.delete(GITHUB_TOKEN_STORAGE_KEY),
+        ).pipe(
+          Effect.andThen(notice(GITHUB_TOKEN_REMOVED_MESSAGE)),
+          Effect.andThen(postGitHubTokenStatus),
+        ),
       ),
     unsubscribePR: ({ key }) =>
       Effect.flatMap(unsubscribeGitHubKey(key), (removed) =>
