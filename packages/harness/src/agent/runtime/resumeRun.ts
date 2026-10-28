@@ -312,15 +312,12 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       };
       const parentRunId = yield* persistedParentRunId(session, runId);
       let launched: Fiber.Fiber<RunEndResult | undefined, Error>;
-      let completion: ResumeRunCompletion;
       if (parentRunId === undefined) {
-        const root = yield* registryOf(session.runs).start(
+        launched = yield* registryOf(session.runs).start(
           runId,
           resumeToolUseFromResumeData(resume, { ...launchOptions, onIdle }),
           (admitted) => admitted,
         );
-        completion = Fiber.join(root);
-        launched = root;
       } else {
         const native = {
           ...launchOptions,
@@ -331,7 +328,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           resume: { identity: resume, options: { ...launchOptions, onIdle } },
         };
         const { script } = resume.agentConfig;
-        const { fiber } = yield* startChildRunLoop({
+        ({ fiber: launched } = yield* startChildRunLoop({
           session,
           runId,
           parentRunId,
@@ -340,17 +337,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
             script?.kind === 'background'
               ? createScriptRunStrategy({ ...native, title: script.title })
               : createNativeSubagentStrategy(native),
-        });
-        // A child's turn is its result; one that ended with none, its
-        // `run.end`'s.
-        completion = Fiber.join(fiber).pipe(
-          Effect.flatMap((turn) =>
-            turn === undefined
-              ? childEnd(session, runId)
-              : Effect.succeed(turn),
-          ),
-        );
-        launched = fiber;
+        }));
       }
       // Interrupting either observation below cannot interrupt the
       // launched run's lifetime.
@@ -358,7 +345,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         idle.pipe(Effect.as(RUN_PHASE.WAITING), Effect.interruptible),
         Fiber.join(launched).pipe(Effect.interruptible),
       );
-      return { settled, completion };
+      return { settled, launched };
     }),
   );
   if (Result.isFailure(resumed)) {
@@ -366,29 +353,30 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     if (refusal) return refusal;
     return yield* Effect.fail(resumed.failure);
   }
-  const { settled, completion } = resumed.success;
+  const { settled, launched } = resumed.success;
   const waiting = settled === RUN_PHASE.WAITING;
   const undelivered = !waiting && (yield* queuedInput).some(isAdmitted);
+  // A child loop that ended with no turn (a stop, a turn that threw) has
+  // its result on its `run.end`.
+  const completion = Effect.gen(function* () {
+    const turn = yield* Fiber.join(launched);
+    if (turn !== undefined) return turn;
+    const end = yield* getRunRecords(session, runId).readRunEnd();
+    if (end === null)
+      return yield* Effect.fail(new Error(`Run ${runId} has no run.end.`));
+    const { error, ...recorded } = end;
+    const message = error?.message ?? `Run ${runId} ${end.outcome}.`;
+    const userRetryable = error?.userRetryable ?? false;
+    return {
+      ...recorded,
+      runId,
+      ...(error && { error: { message, userRetryable } }),
+    };
+  });
   return {
     started: true,
     delivered: !undelivered,
     outcome: waiting ? settled : settled?.outcome,
     completion,
   };
-});
-
-/** A resumed child whose loop ended with no turn (a stop, a turn that
- *  threw): its result is what its `run.end` row recorded. */
-const childEnd = Effect.fn('resumeRun.childEnd')(function* (
-  session: SessionHandle,
-  runId: RunId,
-): Effect.fn.Return<RunEndResult, Error> {
-  const end = yield* getRunRecords(session, runId).readRunEnd();
-  if (end === null)
-    return yield* Effect.fail(new Error(`Run ${runId} ended with no run.end.`));
-  const { error, ...recorded } = end;
-  if (error === undefined) return { ...recorded, runId };
-  const { message = `Run ${runId} ${end.outcome}.`, userRetryable = false } =
-    error;
-  return { ...recorded, runId, error: { message, userRetryable } };
 });

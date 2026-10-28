@@ -193,8 +193,11 @@ export function handOver(
             if (Exit.isFailure(exit))
               return Deferred.failCause(admitted, exit.cause);
             const message = exit.value.error?.message ?? NEVER_ENTERED;
-            const cause = new Error(message);
-            return Deferred.fail(admitted, new RunFailure({ cause, message }));
+            const failure = new RunFailure({
+              cause: new Error(message),
+              message,
+            });
+            return Deferred.fail(admitted, failure);
           }),
         ),
       );
