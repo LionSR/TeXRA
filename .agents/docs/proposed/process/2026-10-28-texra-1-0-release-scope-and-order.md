@@ -361,8 +361,12 @@ What else is in flight that touches this plan, as of `main` at `ba42b90`
   sessions on 2026-10-28: #14358 lands first and does not widen into the
   rest of S1 or S3 to S6; after it merges, the tech-debt session merges
   `main` into its branch and resolves so one implementation remains, adding
-  only what #14358 does not cover. The D4 shape commit touches none of
-  those files and stays a separate PR. It deferred one
+  only what #14358 does not cover. From here the tech-debt branch owns S1
+  and S3 to S6; the single-owner session opens nothing further there. The
+  two overlap points it flagged are `decisionRow`'s request read and
+  `issuedCalls` (the call issuer), which the tech-debt branch's
+  `RunFacts.calls` may replace. The D4 shape commit touches none of those
+  files and stays a separate PR. It deferred one
   lead that would change stored bytes, the `ExhaustionReason` collapse (R13),
   to this plan's shape PR. Its later commit "one random-id minter" makes new
   trace, card and `logId` values 36-character UUIDs instead of 21-character
