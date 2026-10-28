@@ -165,12 +165,12 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(config.get('texra.toolUse.requireBashApproval')).toBe(false);
+    expect(config.get('toolUse.requireBashApproval')).toBe(false);
     // Security-adjacent scope pin: a per-workspace approval bypass must never
     // be written to the global config target (see issue #7085), nor to the
     // project file a cloned repository controls.
     expect(update).toHaveBeenCalledWith(
-      'texra.toolUse.requireBashApproval',
+      'toolUse.requireBashApproval',
       false,
       'local',
     );

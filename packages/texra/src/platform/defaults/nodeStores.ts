@@ -95,7 +95,8 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
     { concurrency: 'unbounded' },
   );
   for (const key of workspace.keys()) {
-    if (!projectValueIgnored(catalog, key, workspace.get(key))) continue;
+    const row = catalog.byStoredKey(key);
+    if (!projectValueIgnored(row, workspace.get(key))) continue;
     warn(
       `Ignoring "${key}" in ${projectConfigPath}: a project file cannot set it. Set it in the settings view or with /config.`,
     );

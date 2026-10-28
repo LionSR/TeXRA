@@ -717,10 +717,9 @@ Platform configuration provider interface.
 interface ConfigProvider {
   /**
    * Resolution order an implementation must honor: stored workspace value,
-   * stored global value, the setting catalog's own default
-   * (`catalog.configDefault`), and only then the caller's `defaultValue`.
-   * Callers of a cataloged `texra.*` key therefore omit `defaultValue`; it is
-   * for keys the catalog does not own.
+   * stored global value, then the setting catalog's own default
+   * (`catalog.configDefault`); a key no row owns reads as `undefined` when
+   * absent.
    *
    * It is synchronous, and it casts: the value it returns is whatever the
    * store holds. A reader that needs the value checked reads through
@@ -730,12 +729,10 @@ interface ConfigProvider {
    * Nothing may cache what either read returns: a setting the user changes
    * mid-process is read on the next call.
    *
-   * Path conventions:
-   * - Use dot notation with or without the canonical `texra.` prefix.
-   * - Host settings such as `latex-workshop.*` must use the host adapter
-   *   rather than this shared configuration path.
+   * Keys are relative to `catalog.namespace` (`memory.enabled`), which the
+   * provider adds to every key it stores.
    */
-  get<T>(key: string, defaultValue?: T): T;
+  get<T>(key: string): T;
   /**
    * Persist one value to the target's store. The write is an `Effect` so it
    * composes directly into the caller's program: the store's own write is an
@@ -1839,6 +1836,9 @@ interface ProcessLayerOptions {
   >;
   /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
   readonly storageRoot: string;
+  /** The catalog its config providers carry: the state stores key their
+   *  rows under its namespace. */
+  readonly settings: SettingsCatalog;
   /**
    * The app's plugins, in order, `harnessBuiltins` among them (the harness
    * names no plugin of its own): the process serves them as `ToolRegistry`

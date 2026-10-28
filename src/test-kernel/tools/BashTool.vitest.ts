@@ -75,7 +75,7 @@ async function parkRunWaiting(runId: RunId): Promise<void> {
 // Unit tests exercise the tool directly — no approval host is wired.
 const BASH_PLATFORM_OPTIONS = {
   workspacePath: '/workspace',
-  config: { 'texra.toolUse.requireBashApproval': false },
+  config: { 'toolUse.requireBashApproval': false },
 } as const;
 
 /** The run id a background launch reports in its output. */

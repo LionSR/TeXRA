@@ -254,10 +254,7 @@ export function createHostSnapshotSource(
     if (options.root === undefined) return;
     commits = yield* readRecentCommits(
       options.root,
-      yield* Settings.get<number>(
-        options.stores,
-        'texra.git.numberOfCommitsToShow',
-      ),
+      yield* Settings.get<number>(options.stores, 'git.numberOfCommitsToShow'),
       { settings: options.stores, onError: options.onError },
     );
   });

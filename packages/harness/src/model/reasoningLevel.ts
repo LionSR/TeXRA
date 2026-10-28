@@ -26,7 +26,7 @@ import { ensureError } from '@utils/errors/errorMessage';
  * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary,
  * keyed by model reference (`provider/id`).
  *
- * This is the one boundary between the persisted `texra.reasoningLevels`
+ * This is the one boundary between the persisted `reasoningLevels`
  * record and the runtime: the stored strings are parsed here, so no caller
  * carries a bare string and an entry that is not an effort is reported rather
  * than quietly disappearing. Reads only; the write path keeps the stored

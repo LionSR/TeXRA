@@ -18,14 +18,14 @@ import {
 
 /** The documents plugin's workspace-scoped keys. */
 export const DocumentsStateKey = Object.freeze({
-  WORKFLOW_AUTO_COMPILE: 'texra.workflow.autoCompileAfterOutput',
-  WORKFLOW_AUTO_COMPILE_TIMEOUT_MS: 'texra.workflow.autoCompileTimeoutMs',
-  WORKFLOW_AUTO_OPEN_PDF: 'texra.workflow.autoOpenPdf',
-  WORKFLOW_REJECT_ON_COMPILE_FAILURE: 'texra.workflow.rejectOnCompileFailure',
-  LATEXDIFF_BETWEEN_ROUNDS: 'texra.latexdiff.generateBetweenRoundDiffs',
-  LATEXDIFF_TIMEOUT_MS: 'texra.latexdiff.timeoutMs',
-  LATEXDIFF_MATH_MARKUP: 'texra.latexdiff.mathMarkup',
-  LATEXDIFF_CHANGES_ONLY: 'texra.latexdiff.changesOnly',
+  WORKFLOW_AUTO_COMPILE: 'workflow.autoCompileAfterOutput',
+  WORKFLOW_AUTO_COMPILE_TIMEOUT_MS: 'workflow.autoCompileTimeoutMs',
+  WORKFLOW_AUTO_OPEN_PDF: 'workflow.autoOpenPdf',
+  WORKFLOW_REJECT_ON_COMPILE_FAILURE: 'workflow.rejectOnCompileFailure',
+  LATEXDIFF_BETWEEN_ROUNDS: 'latexdiff.generateBetweenRoundDiffs',
+  LATEXDIFF_TIMEOUT_MS: 'latexdiff.timeoutMs',
+  LATEXDIFF_MATH_MARKUP: 'latexdiff.mathMarkup',
+  LATEXDIFF_CHANGES_ONLY: 'latexdiff.changesOnly',
 } as const);
 export type DocumentsStateKey =
   (typeof DocumentsStateKey)[keyof typeof DocumentsStateKey];

@@ -322,7 +322,7 @@ export const SessionViewSchema = Schema.Struct({
    *  Listing and history rows never advance it. */
   cursor: CommitOrdinalSchema,
   /**
-   * Transcript verbosity (`texra.logger.debugMode`), sampled by the process
+   * Transcript verbosity (`logger.debugMode`), sampled by the process
    * reader and carried with the replay — never stamped onto a row. The whole
    * view uses the replay's value, so a settings flip takes effect on the
    * next replay, not mid-batch.

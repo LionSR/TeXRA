@@ -72,7 +72,7 @@ const AGENT_MODE_PRESETS: AgentModePreset[]
 ## AGENT_SKILLS_CONFIG_KEY
 
 ```ts
-const AGENT_SKILLS_CONFIG_KEY: "texra.skills.enabled"
+const AGENT_SKILLS_CONFIG_KEY: "skills.enabled"
 ```
 
 ## AGENT_SOURCE
@@ -271,10 +271,10 @@ const APPROVAL_POLICIES: readonly ["never", "ask", "yolo"]
 
 ## APPROVAL_POLICY_CONFIG_KEY
 
-Canonical persisted spelling in `.texra/config.json` for every host.
+The approval policy's config key, the same on every host.
 
 ```ts
-const APPROVAL_POLICY_CONFIG_KEY: "texra.approvalPolicy"
+const APPROVAL_POLICY_CONFIG_KEY: "approvalPolicy"
 ```
 
 ## APPROVAL_POLICY_DEFAULT
@@ -405,7 +405,7 @@ function attentionOf<View extends ReadSessionView>(
 ## BASH_APPROVAL_CONFIG_KEY
 
 ```ts
-const BASH_APPROVAL_CONFIG_KEY: "texra.toolUse.requireBashApproval"
+const BASH_APPROVAL_CONFIG_KEY: "toolUse.requireBashApproval"
 ```
 
 ## BashPermission
@@ -438,15 +438,15 @@ lands inside the valid range instead of being rejected: `872` entered for
 and the failure then names a number the user never meant to set.
 
 ```ts
-const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING: Readonly<{ readonly configKey: "texra.chatgptCodex.contextWindowK"; readonly tokensPerUnit: 1000; readonly min: 1; readonly max: 872; readonly unitLabel: "K tokens"; readonly description: "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. Unset, each model takes the window the Codex backend grants it (500 for GPT-6.1 Sol, 272 for the others); a value overrides it for every model, up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. The model's output budget is added when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery."; }>
+const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING: Readonly<{ readonly configKey: "chatgptCodex.contextWindowK"; readonly tokensPerUnit: 1000; readonly min: 1; readonly max: 872; readonly unitLabel: "K tokens"; readonly description: "Input token budget for ChatGPT-subscription (Codex) routing, in thousands of tokens, mirroring Codex CLI's model_context_window. Unset, each model takes the window the Codex backend grants it (500 for GPT-6.1 Sol, 272 for the others); a value overrides it for every model, up to 872 (872,000 tokens). Automatic compaction may run earlier according to the separate compaction threshold. The model's output budget is added when displaying the total context window. The OpenAI backend enforces the real per-account limit — values above what your subscription allows fail and trigger compaction recovery."; }>
 ```
 
 ## CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY
 
-Canonical config key for the per-session child-run concurrency budget.
+Config key for the per-session child-run concurrency budget.
 
 ```ts
-const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY: "texra.childRunConcurrencyBudget"
+const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY: "childRunConcurrencyBudget"
 ```
 
 ## CHILD_RUN_CONCURRENCY_BUDGET_SETTING
@@ -499,9 +499,9 @@ type ConfigTarget = 'global' | 'workspace' | 'local';
 
 ## configTreeRows
 
-Config-file-backed rows from a record keyed by dotted path under `texra.`:
-the key and the uniform `config` slot are derived, not restated. The
-record's declaration order is the catalog order.
+Config-file-backed rows from a record keyed by dotted path: the key and the
+uniform `config` slot are derived, not restated. The record's declaration
+order is the catalog order.
 
 ```ts
 function configTreeRows(
@@ -871,7 +871,7 @@ function getProposalFileGroups(
 ## GlobalStateKey
 
 ```ts
-const GlobalStateKey: Readonly<{ readonly MEMORY_ENABLED: "texra.memory.enabled"; readonly SCRIPT_ONLY: "texra.codeMode.scriptOnly"; readonly ALLOW_ORCHESTRATOR_KILL: "texra.allowOrchestratorKill"; readonly DETACH_SUBAGENTS_ON_STOP: "texra.detachSubagentsOnStop"; readonly MODEL_SELECTION: "texra.modelSelection"; readonly HELPER_MODEL: "texra.helperModel"; readonly REASONING_LEVELS: "texra.reasoningLevels"; readonly PREFER_SHORT_MODEL_NAMES: "texra.preferShortModelNames"; readonly CUSTOM_AGENT_DIR: "texra.customAgentDir"; readonly GLM_CODING_PLAN: "texra.glm.codingPlan"; readonly KIMI_CODE_PREFER: "texra.kimiCode.prefer"; readonly WEBSOCKET_OPENAI: "texra.websocket.openai"; readonly DISABLED_TOOLS: "texra.tools.disabled"; readonly MCP_REVISION_KEY: "texra.mcp.revisionKey"; readonly INSTALLED_PLUGINS: "texra.plugins.installed"; readonly ACTIVE_TEAM_ID: "texra.onboarding.defaultTeamId"; }>
+const GlobalStateKey: Readonly<{ readonly MEMORY_ENABLED: "memory.enabled"; readonly SCRIPT_ONLY: "codeMode.scriptOnly"; readonly ALLOW_ORCHESTRATOR_KILL: "allowOrchestratorKill"; readonly DETACH_SUBAGENTS_ON_STOP: "detachSubagentsOnStop"; readonly MODEL_SELECTION: "modelSelection"; readonly HELPER_MODEL: "helperModel"; readonly REASONING_LEVELS: "reasoningLevels"; readonly PREFER_SHORT_MODEL_NAMES: "preferShortModelNames"; readonly CUSTOM_AGENT_DIR: "customAgentDir"; readonly GLM_CODING_PLAN: "glm.codingPlan"; readonly KIMI_CODE_PREFER: "kimiCode.prefer"; readonly WEBSOCKET_OPENAI: "websocket.openai"; readonly DISABLED_TOOLS: "tools.disabled"; readonly MCP_REVISION_KEY: "mcp.revisionKey"; readonly INSTALLED_PLUGINS: "plugins.installed"; readonly ACTIVE_TEAM_ID: "onboarding.defaultTeamId"; }>
 ```
 
 ## GOAL_MAX_COST_SETTING
@@ -883,7 +883,7 @@ the catalog row and the goal launch so the two cannot disagree about the
 range.
 
 ```ts
-const GOAL_MAX_COST_SETTING: Readonly<{ readonly configKey: "texra.goal.maxCostUsd"; readonly defaultValue: 5; readonly min: 0; readonly max: 10000; readonly description: "Spend in US dollars, across its rounds, at which an autonomous goal pauses instead of starting another round. Raise it, then run the goal again to continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key)."; }>
+const GOAL_MAX_COST_SETTING: Readonly<{ readonly configKey: "goal.maxCostUsd"; readonly defaultValue: 5; readonly min: 0; readonly max: 10000; readonly description: "Spend in US dollars, across its rounds, at which an autonomous goal pauses instead of starting another round. Raise it, then run the goal again to continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key)."; }>
 ```
 
 ## HookEvent
@@ -943,7 +943,7 @@ const InquiryThreadIdSchema: decodeTo<String, String, never, never>
 
 ## InstalledPluginSchema
 
-One installed plugin, persisted as a row of the `texra.plugins.installed`
+One installed plugin, persisted as a row of the `plugins.installed`
 state: the one install record every host reads and writes (a CLI's
 plugin command, a settings page). The plugin keeps its own manifest
 (`.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`); this row is
@@ -1249,7 +1249,7 @@ compaction, and `0` disables it. Shared by the catalog row and the runtime
 reader so the two cannot disagree about the range.
 
 ```ts
-const MODEL_COMPACTION_THRESHOLD_SETTING: Readonly<{ readonly configKey: "texra.model.compactionThresholdPercent"; readonly defaultValue: 75; readonly min: 0; readonly max: 100; readonly description: "When the conversation reaches this percentage of the model's context limit, earlier messages are summarized automatically to free up space. Lower values trigger summarization sooner. Set to 0 to disable."; }>
+const MODEL_COMPACTION_THRESHOLD_SETTING: Readonly<{ readonly configKey: "model.compactionThresholdPercent"; readonly defaultValue: 75; readonly min: 0; readonly max: 100; readonly description: "When the conversation reaches this percentage of the model's context limit, earlier messages are summarized automatically to free up space. Lower values trigger summarization sooner. Set to 0 to disable."; }>
 ```
 
 ## MODEL_RETRY_MAX_ATTEMPTS_SETTING
@@ -1259,7 +1259,7 @@ number of automatic retries after the initial model request. Shared by the
 catalog row's schema and its copy so the two cannot disagree about the range.
 
 ```ts
-const MODEL_RETRY_MAX_ATTEMPTS_SETTING: Readonly<{ readonly configKey: "texra.model.retry.maxAttempts"; readonly defaultValue: 2; readonly min: 0; readonly max: 5; readonly description: "Additional automatic retries after the initial model request (0–5). A resumed request keeps the retries it already used."; }>
+const MODEL_RETRY_MAX_ATTEMPTS_SETTING: Readonly<{ readonly configKey: "model.retry.maxAttempts"; readonly defaultValue: 2; readonly min: 0; readonly max: 5; readonly description: "Additional automatic retries after the initial model request (0–5). A resumed request keeps the retries it already used."; }>
 ```
 
 ## ModelAvailabilityFieldsSchema
@@ -1810,7 +1810,7 @@ crashed process left interrupted:
 neither, whatever this says.
 
 ```ts
-const RESUME_ON_OPEN_SETTING: Readonly<{ readonly configKey: "texra.resumeOnOpen"; readonly values: readonly ["ask", "auto"]; readonly defaultValue: "ask"; readonly description: "On opening, when tasks stopped before they finished: list them so you can choose, or continue them all."; }>
+const RESUME_ON_OPEN_SETTING: Readonly<{ readonly configKey: "resumeOnOpen"; readonly values: readonly ["ask", "auto"]; readonly defaultValue: "ask"; readonly description: "On opening, when tasks stopped before they finished: list them so you can choose, or continue them all."; }>
 ```
 
 ## ResumeRefusal
@@ -2178,13 +2178,14 @@ type SessionView = ReadonlyDeep<typeof SessionViewSchema.Type>;
 
 ## settingsCatalog
 
-The catalog of the harness's rows, then `appRows` (an app's own, its
-plugins' included). A key declared twice is a defect and throws.
+The harness's rows, then `rows` (an app's own, its plugins' included),
+stored under `namespace`. A key declared twice is a defect and throws.
 
 ```ts
-function settingsCatalog(
-  appRows: readonly StateSettingEntry[],
-): SettingsCatalog
+function settingsCatalog(options: {
+  readonly namespace: string;
+  readonly rows: readonly StateSettingEntry[];
+}): SettingsCatalog
 ```
 
 ## SettingsCatalog
@@ -2193,10 +2194,15 @@ One settings catalog and the lookups every settings surface reads from it.
 
 ```ts
 interface SettingsCatalog {
+  /** The app's prefix on every stored key (`texra`): the config and state
+   *  stores write a row's relative key as `<namespace>.<key>`. */
+  readonly namespace: string;
   /** Every row, in catalog order. */
   readonly rows: readonly StateSettingEntry[];
   /** Look up any row, config-file-backed or state-backed, by its key. */
   readonly byKey: (key: string) => StateSettingEntry | undefined;
+  /** Look up a row by its stored key, as a store lists it. */
+  readonly byStoredKey: (storedKey: string) => StateSettingEntry | undefined;
   /** Look up a row the settings view's unified write path owns. */
   readonly settingsViewByKey: (
     key: string,
@@ -2214,8 +2220,6 @@ interface SettingsCatalog {
   readonly cliRows: readonly SurfacedSettingEntry[];
   /** Look up a row the CLI `/config` panel lists, and so may write. */
   readonly cliByKey: (key: string) => SurfacedSettingEntry | undefined;
-  /** Keys of the config-file-backed rows: the CLI's unknown-key whitelist's catalog half. */
-  readonly configSlotKeys: readonly string[];
   /** The Models tab's controls for one provider, in catalog order. */
   readonly modelsTab: (provider: string) => readonly {
     readonly entry: StateSettingEntry;
@@ -2223,8 +2227,8 @@ interface SettingsCatalog {
   }[];
   /**
    * A fresh copy of a config-file-backed row's default, or `undefined` for a
-   * key no such row owns: the step every `ConfigProvider` applies between the
-   * stored value and the caller's fallback. Parsed defaults are memoized
+   * key no such row owns: what every `ConfigProvider` answers for an absent
+   * key. Parsed defaults are memoized
    * because this is on the read path of every absent setting; object values
    * are cloned so a caller cannot mutate the catalog's own default.
    */
@@ -2388,10 +2392,8 @@ const STARTER_AGENT_MODE_PRESET: AgentModePreset
 
 ```ts
 interface StateSettingEntry {
-  /**
-   * Canonical `texra.*` key — identical to the config / WorkspaceState /
-   * GlobalState slot the extension already uses.
-   */
+  /** The row's key, relative to its catalog's namespace (`memory.enabled`),
+   *  which the stores add (`<namespace>.memory.enabled`). */
   readonly key: string;
   /**
    * The row's schema, carrying both validation and the decoding default
@@ -2599,7 +2601,7 @@ holds only what a runtime reader needs to name a key or reuse a bounded
 schema without importing the catalog.
 
 ```ts
-const TOOL_EDIT_APPROVAL_CONFIG_KEY: "texra.toolUse.requireEditApproval"
+const TOOL_EDIT_APPROVAL_CONFIG_KEY: "toolUse.requireEditApproval"
 ```
 
 ## ToolCallStatus
@@ -2794,7 +2796,7 @@ type WorkspaceFileLocation = typeof WorkspaceFileLocationSchema.Type;
 The harness's workspace-scoped state keys (`roots.workspaceState`).
 
 ```ts
-const WorkspaceStateKey: Readonly<{ readonly WORKSPACE_AGENTS: "texra.workspaceAgents"; readonly CUSTOM_TEAMS: "texra.customTeams"; readonly HIDDEN_CUSTOM_AGENTS: "texra.hiddenCustomAgents"; readonly DISABLED_SKILLS: "texra.skills.disabled"; readonly DISABLED_SKILL_SOURCES: "texra.skills.disabledSources"; readonly GIT_MARK_COMMITS: "texra.git.markCommits"; readonly GIT_AUTHOR_NAME: "texra.git.authorName"; readonly GIT_AUTHOR_EMAIL: "texra.git.authorEmail"; readonly GIT_WORKTREE_SUPPORT: "texra.git.worktreeSupport"; readonly TOOL_PATH_PROTECTION_ENABLED: "texra.tools.restrictPathsToWorkingDirectory"; }>
+const WorkspaceStateKey: Readonly<{ readonly WORKSPACE_AGENTS: "workspaceAgents"; readonly CUSTOM_TEAMS: "customTeams"; readonly HIDDEN_CUSTOM_AGENTS: "hiddenCustomAgents"; readonly DISABLED_SKILLS: "skills.disabled"; readonly DISABLED_SKILL_SOURCES: "skills.disabledSources"; readonly GIT_MARK_COMMITS: "git.markCommits"; readonly GIT_AUTHOR_NAME: "git.authorName"; readonly GIT_AUTHOR_EMAIL: "git.authorEmail"; readonly GIT_WORKTREE_SUPPORT: "git.worktreeSupport"; readonly TOOL_PATH_PROTECTION_ENABLED: "tools.restrictPathsToWorkingDirectory"; }>
 ```
 
 ## WorktreeInfo

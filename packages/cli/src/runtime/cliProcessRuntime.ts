@@ -56,6 +56,7 @@ import { usageLogLayer } from '@telemetry/UsageLogService';
 import { makeEditorHost } from '@texra/tools/editorHost';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { texraPlugins } from '@texra/tools/registry';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 import { readCliVersion } from './cliContext';
 import { setCliLogRuntime } from './logSinks';
@@ -236,6 +237,7 @@ export function installCliProcessRuntime(
         HostWindows.layer(editors),
         processLayer({
           storageRoot,
+          settings: TEXRA_SETTINGS,
           plugins: texraPlugins({ editors }),
           ...(options?.resourcesPath !== undefined && {
             skills: {

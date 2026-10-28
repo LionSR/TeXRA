@@ -135,7 +135,7 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
 
   const template = Settings.getConfig<string>(
     roots.config,
-    'texra.latex.tikzTemplate',
+    'latex.tikzTemplate',
   );
   const compiledFiles: FileLocation[] = [];
 

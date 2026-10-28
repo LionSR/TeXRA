@@ -97,7 +97,7 @@ describe('model availability', () => {
     () =>
       Effect.gen(function* () {
         yield* installAccessPlatform({
-          config: { 'texra.chatgptCodex.preferSubscription': true },
+          config: { 'chatgptCodex.preferSubscription': true },
         });
 
         const [model] = modelOptionsFrom(yield* readHostModelOptions([GPT55]));

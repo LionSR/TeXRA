@@ -112,7 +112,7 @@ export interface OpenOptions {
    * `interruptedTasks` handles runs that a closed or crashed process left
    * unfinished. Both values resume such a run once what it was missing (an
    * agent, a plugin) is back. `offer` also lists them when the session
-   * opens, and continues them when the `texra.resumeOnOpen` setting is
+   * opens, and continues them when the `resumeOnOpen` setting is
    * `auto`.
    */
   readonly host?: { readonly interruptedTasks?: 'offer' | 'retry' };

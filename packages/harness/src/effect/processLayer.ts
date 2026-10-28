@@ -95,6 +95,7 @@ export class Sessions extends Context.Service<
         Effect.map(() =>
           sessionsLayer({
             storageRoot: platform.roots.storageRoot,
+            settings: platform.roots.config.catalog,
             plugins,
             skills,
             secrets: Secrets.layer(platform.secrets),

@@ -68,8 +68,8 @@ describe('provider capabilities', () => {
         yield* Effect.promise(() =>
           installPlatform({
             config: {
-              'texra.chatgptCodex.preferSubscription': true,
-              'texra.chatgptCodex.contextWindowK': 900,
+              'chatgptCodex.preferSubscription': true,
+              'chatgptCodex.contextWindowK': 900,
             },
           }),
         );

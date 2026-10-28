@@ -101,13 +101,10 @@ export function readBackgroundToggles(
   stores: SettingsStores,
 ): Effect.Effect<BackgroundToggles, StateReadFailed> {
   return Effect.all({
-    responses: Settings.get<boolean>(
-      stores,
-      'texra.model.useBackgroundResponses',
-    ),
+    responses: Settings.get<boolean>(stores, 'model.useBackgroundResponses'),
     googleInteractions: Settings.get<boolean>(
       stores,
-      'texra.model.useGoogleBackgroundResponses',
+      'model.useGoogleBackgroundResponses',
     ),
   });
 }
@@ -224,7 +221,7 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
           preferKimiCode: Effect.succeed(preferKimiCode),
           glmCodingPlan: flag(GlobalStateKey.GLM_CODING_PLAN),
           glmEndpoint: Effect.map(
-            Settings.get<string>(stores, 'texra.endpoint.glm'),
+            Settings.get<string>(stores, 'endpoint.glm'),
             Boolean,
           ),
           chatgptSubscription: subscriptionOn(stores, 'chatgpt'),
@@ -276,10 +273,10 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
         ),
       }),
       Effect.all({
-        parallelToolCalls: flag('texra.model.openaiParallelToolCalls'),
-        reasoningSummary: flag('texra.model.gpt5ReasoningSummary'),
-        serverState: flag('texra.model.useGoogleInteractionsServerState'),
-        fastTier: flag('texra.model.openaiFastTier'),
+        parallelToolCalls: flag('model.openaiParallelToolCalls'),
+        reasoningSummary: flag('model.gpt5ReasoningSummary'),
+        serverState: flag('model.useGoogleInteractionsServerState'),
+        fastTier: flag('model.openaiFastTier'),
         webSocket: flag(GlobalStateKey.WEBSOCKET_OPENAI),
       }),
     ],

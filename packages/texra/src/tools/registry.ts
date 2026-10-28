@@ -161,10 +161,7 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
       lean_loogle: LeanLoogleTool,
     },
     prompt: ({ config }) => {
-      const bibPath = Settings.getConfig<string>(
-        config,
-        'texra.bib.defaultPath',
-      );
+      const bibPath = Settings.getConfig<string>(config, 'bib.defaultPath');
       return bibPath
         ? `The default bibliography file is ${bibPath}. You can grep or read this file to search for citations and references.`
         : '';

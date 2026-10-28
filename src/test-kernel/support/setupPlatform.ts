@@ -32,6 +32,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { GlobalDatabase, type CurrentValues } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
 import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import {
@@ -104,6 +105,7 @@ export const testProcessOptions = (
   // Under the worker's storage root: its global storage, and its mcp.json
   // rather than the developer's `~/.texra/mcp.json`.
   storageRoot: root,
+  settings: TEXRA_SETTINGS,
   plugins,
   secrets: Secrets.layer(fakeHostSecrets),
   appState: AppState.layer(fakeHostAppState),

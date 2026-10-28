@@ -296,9 +296,9 @@ const INPUT_HISTORY_LIMIT: 1000
 
 ## JsonConfigProvider
 
-Store-backed {@link ConfigProvider}. Keys are stored flat with the canonical
-`texra.*` prefix. Workspace values shadow global values on read and
-`update()` routes writes by {@link ConfigTarget}. The project file answers
+Store-backed {@link ConfigProvider}. Keys are relative to the catalog's
+namespace and stored flat under it (`<namespace>.<key>`). Workspace values
+shadow global values on read and `update()` routes writes by {@link ConfigTarget}. The project file answers
 only where {@link projectValueIgnored} lets it; past it, `local` shadows
 `global` for `local` rows, and `global` alone answers for the others.
 
@@ -433,9 +433,9 @@ interface NodePlatformOptions {
    * never falls back to a per-user default directory.
    */
   readonly storageDir: string;
-  /** The setting rows the embedder's plugins read, resolved beside the
-   *  harness's own by the platform's config. */
-  readonly settings?: readonly StateSettingEntry[];
+  /** The catalog the platform's config resolves against (`settingsCatalog`);
+   *  absent, the harness's rows alone, under the `harness` namespace. */
+  readonly settings?: SettingsCatalog;
 }
 ```
 
@@ -557,16 +557,16 @@ class ProjectDatabases extends Context.Service<
 
 ## projectValueIgnored
 
-Whether a project file's `value` for `key` is ignored: the one scope rule
-every read and the open-time warning share. A row the catalog leaves at the
-workspace scope reads its project value; a `global` or `local` row (the
-approval settings) does not, so a cloned repository cannot set it, except
-that a `projectMayOptOut` row (telemetry) still takes anything but `true`.
+Whether a project file's `value` for a key of catalog row `row` is ignored:
+the one scope rule every read and the open-time warning share. A row the
+catalog leaves at the workspace scope reads its project value; a `global` or
+`local` row (the approval settings) does not, so a cloned repository cannot
+set it, except that a `projectMayOptOut` row (telemetry) still takes
+anything but `true`.
 
 ```ts
 function projectValueIgnored(
-  catalog: SettingsCatalog,
-  key: string,
+  row: StateSettingEntry | undefined,
   value: unknown,
 ): boolean
 ```

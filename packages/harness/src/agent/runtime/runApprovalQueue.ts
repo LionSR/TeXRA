@@ -146,7 +146,7 @@ export interface SessionApprovals {
   ): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed>;
   /**
    * The approval policy `runId`'s requests are decided under: the
-   * project's persisted `texra.approvalPolicy`, read at each call, narrowed
+   * project's persisted `approvalPolicy`, read at each call, narrowed
    * by the strictest launch limit on the run's ancestry (`runPolicy`).
    * The persisted setting is the one owner of a project's policy; a client
    * changes it by writing that setting, never by telling a session, and a

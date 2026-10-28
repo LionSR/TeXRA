@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: a settings catalog names its namespace, and keys are relative.**
+  `settingsCatalog({ namespace, rows })` replaces `settingsCatalog(rows)`,
+  and `nodePlatform({ settings })` takes that catalog instead of rows. Code
+  names a key without the namespace (`'memory.enabled'`); the config and
+  state stores add it, so TeXRA's stored keys are unchanged.
+  `ConfigProvider.get` no longer takes a default (the catalog row's default
+  answers), and `processLayer` takes the catalog as `settings`.
 - **The helper model is stored as `texra.helperModel`.** It was the one
   setting stored outside the `texra.` namespace (`polishModel`), and the old
   key is no longer read: if you picked a helper model, pick it again in

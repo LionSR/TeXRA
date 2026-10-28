@@ -16,6 +16,7 @@ import { ProcessIdentity } from '@shared/session/sessionEvents';
 
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 describe('application state on SQLite', () => {
   const tempDirs = useTempDirs();
@@ -23,7 +24,7 @@ describe('application state on SQLite', () => {
   const openAppStateStore = (storage: string) =>
     Effect.map(
       Layer.build(
-        globalAppStateLayer(storage).pipe(
+        globalAppStateLayer(storage, TEXRA_SETTINGS).pipe(
           Layer.provide(globalDatabaseLayer(storage)),
         ),
       ),
@@ -44,25 +45,25 @@ describe('application state on SQLite', () => {
       const two = yield* openStore(storage);
       // Interleaved, as two hosts on one project are: the whole-file store
       // this replaces would have lost whichever key flushed second.
-      yield* one.update('texra.kimiCode.prefer', true);
-      yield* two.update('texra.glm.codingPlan', false);
+      yield* one.update('kimiCode.prefer', true);
+      yield* two.update('glm.codingPlan', false);
 
-      expect(yield* two.get('texra.kimiCode.prefer')).toBe(true);
-      expect(yield* one.get('texra.glm.codingPlan')).toBe(false);
-      yield* two.update('texra.kimiCode.prefer', undefined);
-      expect(yield* one.get('texra.kimiCode.prefer')).toBeUndefined();
+      expect(yield* two.get('kimiCode.prefer')).toBe(true);
+      expect(yield* one.get('glm.codingPlan')).toBe(false);
+      yield* two.update('kimiCode.prefer', undefined);
+      expect(yield* one.get('kimiCode.prefer')).toBeUndefined();
 
       // Concurrent read-modify-writes of one key both land: each changes
       // the value the other committed, never a stale read of its own.
       const add = (store: typeof one, id: string) =>
-        store.modify('texra.disabledTools', (stored) =>
+        store.modify('disabledTools', (stored) =>
           Result.succeed([...((stored as string[] | undefined) ?? []), id]),
         );
       yield* Effect.all([add(one, 'a'), add(two, 'b')], {
         concurrency: 'unbounded',
       });
       expect(
-        [...((yield* one.get('texra.disabledTools')) as string[])].sort(),
+        [...((yield* one.get('disabledTools')) as string[])].sort(),
       ).toEqual(['a', 'b']);
     }),
   );

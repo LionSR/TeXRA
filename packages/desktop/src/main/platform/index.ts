@@ -116,6 +116,7 @@ export const initializeElectronPlatform = Effect.fn(
     ManagedRuntime.make(
       processLayer({
         storageRoot: dataRoot,
+        settings: TEXRA_SETTINGS,
         plugins: texraPlugins({ editors }),
         skills: { resourcesPath },
         // The one credential store every host shares (`~/.texra/secrets/`):

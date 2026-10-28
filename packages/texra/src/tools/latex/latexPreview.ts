@@ -230,7 +230,7 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
 
     const location = yield* Settings.get<
       (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number]
-    >(entry.request.roots, 'texra.latexdiff.tempFileLocation');
+    >(entry.request.roots, 'latexdiff.tempFileLocation');
 
     const originalPath = entry.request.path;
     const ext = path.extname(originalPath);

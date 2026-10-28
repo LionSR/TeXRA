@@ -91,6 +91,7 @@ import {
   SessionOptionsConflict,
   type SessionOpenError,
 } from '@shared/session/database';
+import type { SettingsCatalog } from '@shared/state/stateSettings';
 import { UsageLog } from '@shared/usageLog';
 import { ToolCatalogOwner } from '@tools/liveTools';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
@@ -552,6 +553,9 @@ export interface ProcessLayerOptions {
   >;
   /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
   readonly storageRoot: string;
+  /** The catalog its config providers carry: the state stores key their
+   *  rows under its namespace. */
+  readonly settings: SettingsCatalog;
   /**
    * The app's plugins, in order, `harnessBuiltins` among them (the harness
    * names no plugin of its own): the process serves them as `ToolRegistry`
@@ -613,9 +617,10 @@ export interface ProcessLayerOptions {
 export function ownerProcessLayer({
   processStart = nodeProcesses.selfIdentity(),
   storageRoot,
+  settings,
   plugins,
   secrets,
-  appState = globalAppStateLayer(resolveGlobalStoragePath(storageRoot)),
+  appState: appStateOption,
   agentDirectories,
   toolMissingReporter,
   toolAvailability = toolAvailabilityLayer,
@@ -625,6 +630,8 @@ export function ownerProcessLayer({
   workspace,
 }: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
+  const appState =
+    appStateOption ?? globalAppStateLayer(globalStorage, settings);
   const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.unwrap(
@@ -653,7 +660,7 @@ export function ownerProcessLayer({
   );
   return sessionOwnerLayer.pipe(
     Layer.provideMerge(SessionMap.layer),
-    Layer.provideMerge(processStoresLayer),
+    Layer.provideMerge(processStoresLayer(settings)),
     Layer.provideMerge(projectDatabaseLayer),
     // The usage log's own lifetime: its sender and ticker run with this
     // runtime, its finalizer drains the queue while HTTP is up, and it is

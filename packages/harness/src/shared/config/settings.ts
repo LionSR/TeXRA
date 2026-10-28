@@ -191,7 +191,7 @@ function inspect<T>(
 /**
  * {@link get} for a row whose slot is `config`, over a `ConfigProvider`
  * alone and synchronously. The CLI resolves its startup rows
- * (`texra.approvalPolicy`, `texra.outputFormat`) before the state stores of
+ * (`approvalPolicy`, `outputFormat`) before the state stores of
  * that process exist, and this is the whole rule for a config-backed row, so
  * both readers run the same body rather than two that can drift.
  */

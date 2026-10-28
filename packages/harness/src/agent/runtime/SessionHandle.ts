@@ -246,7 +246,7 @@ export interface SessionHandleInit {
    * The opener is a host window, which follows its interrupted tasks
    * (`followInterruptedTasks`): it resumes a task whose resume was blocked
    * once what it needs is back, and with `offer` also lists at open, or
-   * under `texra.resumeOnOpen: auto` continues, the tasks a closed or
+   * under `resumeOnOpen: auto` continues, the tasks a closed or
    * crashed host app left interrupted. Headless runs and the SDK leave it
    * unset: their policy is off.
    */

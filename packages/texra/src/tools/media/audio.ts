@@ -100,7 +100,7 @@ const resolveSoxCommand = Effect.fnUntraced(function* (
 > {
   const configuredPath = Settings.getConfig<string>(
     roots.config,
-    'texra.audio.soxPath',
+    'audio.soxPath',
   );
   if (configuredPath) {
     // The path is validated before being probed, so a non-absolute

@@ -237,7 +237,7 @@ describe('Tool edit approval gating', () => {
   it.effect('lets never override a disabled approval setting', () =>
     Effect.gen(function* () {
       yield* Effect.tryPromise(() =>
-        installPlatform({ 'texra.toolUse.requireEditApproval': false }),
+        installPlatform({ 'toolUse.requireEditApproval': false }),
       );
       setTestApprovalPolicy('never', testDefaultSession().roots);
 

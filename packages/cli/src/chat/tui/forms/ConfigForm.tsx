@@ -107,7 +107,7 @@ function formatSettingValue(value: unknown): string {
 }
 
 function settingDisplayName(entry: SurfacedSettingEntry): string {
-  return entry.title ?? entry.key.replace(/^texra\./, '');
+  return entry.title ?? entry.key;
 }
 
 function buildConfigListItems(

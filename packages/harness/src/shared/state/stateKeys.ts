@@ -14,69 +14,69 @@ import { Result, Schema } from 'effect';
 export const WorkspaceStateKey = Object.freeze({
   // Agent visibility
   /** Workspace agents selection; the `custom` member carries a category-keyed record. */
-  WORKSPACE_AGENTS: 'texra.workspaceAgents',
-  CUSTOM_TEAMS: 'texra.customTeams',
+  WORKSPACE_AGENTS: 'workspaceAgents',
+  CUSTOM_TEAMS: 'customTeams',
   /** Custom agents the user turned off; every other custom agent is shown. */
-  HIDDEN_CUSTOM_AGENTS: 'texra.hiddenCustomAgents',
+  HIDDEN_CUSTOM_AGENTS: 'hiddenCustomAgents',
 
   // Skill availability
-  DISABLED_SKILLS: 'texra.skills.disabled',
-  DISABLED_SKILL_SOURCES: 'texra.skills.disabledSources',
+  DISABLED_SKILLS: 'skills.disabled',
+  DISABLED_SKILL_SOURCES: 'skills.disabledSources',
 
   // Git commit author settings
-  GIT_MARK_COMMITS: 'texra.git.markCommits',
-  GIT_AUTHOR_NAME: 'texra.git.authorName',
-  GIT_AUTHOR_EMAIL: 'texra.git.authorEmail',
+  GIT_MARK_COMMITS: 'git.markCommits',
+  GIT_AUTHOR_NAME: 'git.authorName',
+  GIT_AUTHOR_EMAIL: 'git.authorEmail',
 
   // Git worktree support
-  GIT_WORKTREE_SUPPORT: 'texra.git.worktreeSupport',
+  GIT_WORKTREE_SUPPORT: 'git.worktreeSupport',
 
   // Tool path safety
-  TOOL_PATH_PROTECTION_ENABLED: 'texra.tools.restrictPathsToWorkingDirectory',
+  TOOL_PATH_PROTECTION_ENABLED: 'tools.restrictPathsToWorkingDirectory',
 } as const);
 export type WorkspaceStateKey =
   (typeof WorkspaceStateKey)[keyof typeof WorkspaceStateKey];
 
 export const GlobalStateKey = Object.freeze({
-  MEMORY_ENABLED: 'texra.memory.enabled',
+  MEMORY_ENABLED: 'memory.enabled',
   /** Code mode's "only" stage: every chat run gets `script`, and the model
    *  sees no other tool; the rest are callable from scripts alone. */
-  SCRIPT_ONLY: 'texra.codeMode.scriptOnly',
+  SCRIPT_ONLY: 'codeMode.scriptOnly',
 
   // Child-work policy. Global rather than per-workspace: these describe how the
   // user wants their own child runs handled, not anything about a checkout.
-  ALLOW_ORCHESTRATOR_KILL: 'texra.allowOrchestratorKill',
-  DETACH_SUBAGENTS_ON_STOP: 'texra.detachSubagentsOnStop',
+  ALLOW_ORCHESTRATOR_KILL: 'allowOrchestratorKill',
+  DETACH_SUBAGENTS_ON_STOP: 'detachSubagentsOnStop',
 
   // Model selection settings
   /** `{ enabledExtras, disabledDefaults }`: the user's delta over `DEFAULT_MODELS`. */
-  MODEL_SELECTION: 'texra.modelSelection',
-  HELPER_MODEL: 'texra.helperModel',
-  REASONING_LEVELS: 'texra.reasoningLevels',
-  PREFER_SHORT_MODEL_NAMES: 'texra.preferShortModelNames',
+  MODEL_SELECTION: 'modelSelection',
+  HELPER_MODEL: 'helperModel',
+  REASONING_LEVELS: 'reasoningLevels',
+  PREFER_SHORT_MODEL_NAMES: 'preferShortModelNames',
 
   // Agent settings (migrated from VS Code config)
-  CUSTOM_AGENT_DIR: 'texra.customAgentDir',
+  CUSTOM_AGENT_DIR: 'customAgentDir',
 
   // Coding plan settings
-  GLM_CODING_PLAN: 'texra.glm.codingPlan',
-  KIMI_CODE_PREFER: 'texra.kimiCode.prefer',
+  GLM_CODING_PLAN: 'glm.codingPlan',
+  KIMI_CODE_PREFER: 'kimiCode.prefer',
 
   // Transport settings
-  WEBSOCKET_OPENAI: 'texra.websocket.openai',
+  WEBSOCKET_OPENAI: 'websocket.openai',
 
   // Tool settings
-  DISABLED_TOOLS: 'texra.tools.disabled',
+  DISABLED_TOOLS: 'tools.disabled',
 
   /** The per-install key MCP env values are digested under (`mcpConfig`). */
-  MCP_REVISION_KEY: 'texra.mcp.revisionKey',
+  MCP_REVISION_KEY: 'mcp.revisionKey',
 
   // Installed Claude Code and Codex plugins, and the trust given to each
-  INSTALLED_PLUGINS: 'texra.plugins.installed',
+  INSTALLED_PLUGINS: 'plugins.installed',
 
   /** The team a workspace runs (`apply_team`, the settings view). The stored
    *  key keeps the spelling it was first written under. */
-  ACTIVE_TEAM_ID: 'texra.onboarding.defaultTeamId',
+  ACTIVE_TEAM_ID: 'onboarding.defaultTeamId',
 } as const);
 export type GlobalStateKey =
   (typeof GlobalStateKey)[keyof typeof GlobalStateKey];

@@ -165,6 +165,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     ManagedRuntime.make(
       processLayer({
         storageRoot: defaultNodeStorageRoot(),
+        settings: TEXRA_SETTINGS,
         plugins: texraPlugins({
           editors,
           // The Comments UI behind the `inline_comment` tool. The provider reads
@@ -726,7 +727,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // entries can fire before their handlers exist and produce "command not
   // found" errors.
   yield* executeVscodeCommand('setContext', 'texra.activated', true);
-  const welcomeKey = 'texra.welcomeShown';
+  const welcomeKey = 'welcomeShown';
   if (
     !(yield* Settings.state(
       globalState,
