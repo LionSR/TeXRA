@@ -7,12 +7,11 @@ import OpenAI from 'openai';
 
 // Local imports - canonical model contract
 import {
-  ResolvedTurnSchema,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
   type TurnRequest,
 } from '../turn.js';
-import { decodeTurnRequest } from './turnInput.js';
+import { decodeTurnRequest, resolveTurn } from './turnInput.js';
 import { backgroundCapable, sameModelOrigin } from '../protocol.js';
 import { ModelError } from '../errors.js';
 import { responseInput } from './openaiResponsesLower.js';
@@ -35,8 +34,8 @@ export const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(
     uploads: UploadCache | null,
   ) {
     const author = yield* decodeTurnRequest(
-      request,
       'The model input is invalid.',
+      request,
     );
     if (
       (author.continuation !== undefined &&
@@ -53,7 +52,7 @@ export const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(
           'The model does not support the requested controls or continuation.',
       });
     }
-    const turn = Schema.decodeUnknownSync(ResolvedTurnSchema)({
+    const turn = yield* resolveTurn('The model controls are incomplete.', {
       ...origin,
       mode: author.mode ?? 'foreground',
       transport,

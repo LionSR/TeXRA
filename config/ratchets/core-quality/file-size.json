@@ -30,7 +30,7 @@
   "packages/harness/src/tools/memory/memoryFileSystem.ts": 433,
   "packages/harness/src/tools/memory/MemoryTool.ts": 541,
   "packages/harness/src/tools/toolAvailability.ts": 412,
-  "packages/llm/src/api/anthropicMessages.ts": 701,
+  "packages/llm/src/api/anthropicMessages.ts": 700,
   "packages/llm/src/api/googleInteractions.ts": 945,
   "packages/llm/src/api/openaiResponses.ts": 498,
   "packages/llm/src/api/openaiResponsesCodec.ts": 472,
