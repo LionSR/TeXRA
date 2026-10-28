@@ -5,8 +5,8 @@ status: proposed
 
 # TeXRA 1.0: release scope, the pre-freeze set, and the order of work
 
-Baseline: `main` at `8fcd0a3` (2026-10-28). Line references point into that
-tree. The tracker is [#13736](https://github.com/LionSR/TeXRA/issues/13736);
+Baseline: `main` at `8fcd0a3` (2026-10-28), re-checked at `fa6fb1e` later
+the same day. Line references point into the former. The tracker is [#13736](https://github.com/LionSR/TeXRA/issues/13736);
 this note is the plan it lacks: what 1.0 is, what must land before the
 storage freeze, what explicitly waits, and the order.
 
@@ -32,8 +32,9 @@ app is:
 
 - the root entry has 48 exports, not 246 (`config/api-reports/harness.api.md`,
   #14337);
-- `config/ratchets/harness-deep-import-baseline.json` lists one specifier,
-  `@eventBus/AppSignals`, for four packages;
+- `config/ratchets/harness-deep-import-baseline.json` is empty for all five
+  packages since #14347 (`f4c9efd`): no app or host file imports a harness
+  internal;
 - 90 of the 92 files in `packages/texra/src/tools` import only public entries;
 - `run.start` v2 with `parent.call` landed (#14335), goal mode is a script
   (#14201), the golden store generates the same output twice (#14260 closed).
@@ -72,8 +73,8 @@ What this means for the open design work:
 
 ## Non-goals (explicitly deferred past 1.0)
 
-- Lanes 1 to 9 of the general-package design, except the two items named in
-  P5 below.
+- Lanes 1 to 9 of the general-package design, except the settings-namespace
+  parameter in P5 below.
 - The run-lifecycle redesign (L1 to L5 of the tech-debt note), the host dedup
   (H1 to H4), and storage readers S3 to S6, including the SQL `runs` view
   rewrite (`packages/harness/src/agent/runtime/historyQuery/views.ts`).
@@ -207,11 +208,14 @@ plugin block, no second format, user docs complete
 still lists a `continuation` field that `Plugin` no longer has and calls the
 block schema Zod.
 
-**Imports.** The app-to-harness boundary is closed except
-`emitAppSignal` from `packages/harness/src/eventBus/AppSignals.ts`, used by
-`packages/texra/src/tools/github/PollingSourceBase.ts` and
-`RunSubscriptionRegistry.ts` (#14313). Signals are not persisted, so this
-is not freeze-gated; it is the last baseline row.
+**Imports.** The app-to-harness boundary is closed. At `8fcd0a3` one row
+remained, `emitAppSignal` from the harness's `eventBus/`, used by two GitHub
+plugin files; #14347 (`f4c9efd`) made `AppSignals` a process service in
+`packages/harness/src/platform/appSignals.ts`, exported from
+`@texra-ai/harness/host`, and deleted the `eventBus/` module and its alias.
+On `main` the baseline is empty for every package and #14313 can close. The
+empty baseline file and its suite can go whenever the ratchet rule for
+finished baselines (D6 of the tech-debt note) allows; nothing waits on it.
 
 ## Design rule: delete the mechanism, do not patch it
 
@@ -273,20 +277,20 @@ program (P2).
 
 ## Decisions this plan needs
 
-| #   | Decision                                                                                          | Recommendation                                                                            |
-| --- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| R1  | 1.0 is the app with a frozen store; harness and llm stay 0.x                                      | Yes. Everything below assumes it.                                                         |
-| R2  | Media stored by blob digest (D4)                                                                  | Yes. Already written (8994563 on the tech-debt branch); needs its own PR.                 |
-| R3  | `wakeAt` on `run.position` now, or later                                                          | Later. It is an optional field, which the additive rule adds at any time.                 |
-| R4  | `script.call`'s `callId` and `stageId`                                                            | Drop both; derive at read.                                                                |
-| R5  | Goal stored as a `builtIn:goal` module import, not a template body                                | Yes.                                                                                      |
-| R6  | Goal grants: a grant that names its grantor, with its lifetime derived from the grantor's rows    | Yes. Deletes `goal: kind[]` and `own: 'parent'`; a resume that skips the goal asks again. |
-| R7  | AppSignals (#14313): move the two GitHub signals into `packages/texra`, or a public plugin signal | Move them into the app. No third party needs them.                                        |
-| R8  | `childRunLoop.ts` off the `AbortController` residents (D1)                                        | Yes, after 1.0. No row changes.                                                           |
-| R9  | Setting namespace as a catalog parameter, stored keys unchanged                                   | Yes, before the freeze; it is the one rename preparation that costs nothing later.        |
-| R10 | The Promise entry of the general-package design                                                   | Deferred with the rest of that design.                                                    |
-| R11 | Rows evolve additively from 1.0; the golden store is the freeze (against ruling Q2)               | Yes. Deletes the upcast arrays, the floors, the fingerprints and the freeze mode.         |
-| R12 | The sandbox door reads results from the committed rows live as well as on replay                  | Yes. One path; the ordering problem and its tests do not exist.                           |
+| #   | Decision                                                                                       | Recommendation                                                                            |
+| --- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| R1  | 1.0 is the app with a frozen store; harness and llm stay 0.x                                   | Yes. Everything below assumes it.                                                         |
+| R2  | Media stored by blob digest (D4)                                                               | Yes. Already written (8994563 on the tech-debt branch); needs its own PR.                 |
+| R3  | `wakeAt` on `run.position` now, or later                                                       | Later. It is an optional field, which the additive rule adds at any time.                 |
+| R4  | `script.call`'s `callId` and `stageId`                                                         | Drop both; derive at read.                                                                |
+| R5  | Goal stored as a `builtIn:goal` module import, not a template body                             | Yes.                                                                                      |
+| R6  | Goal grants: a grant that names its grantor, with its lifetime derived from the grantor's rows | Yes. Deletes `goal: kind[]` and `own: 'parent'`; a resume that skips the goal asks again. |
+| R7  | AppSignals (#14313)                                                                            | Done by #14347: a process service on `./host`. Close #14313.                              |
+| R8  | `childRunLoop.ts` off the `AbortController` residents (D1)                                     | Yes, after 1.0. No row changes.                                                           |
+| R9  | Setting namespace as a catalog parameter, stored keys unchanged                                | Yes, before the freeze; it is the one rename preparation that costs nothing later.        |
+| R10 | The Promise entry of the general-package design                                                | Deferred with the rest of that design.                                                    |
+| R11 | Rows evolve additively from 1.0; the golden store is the freeze (against ruling Q2)            | Yes. Deletes the upcast arrays, the floors, the fingerprints and the freeze mode.         |
+| R12 | The sandbox door reads results from the committed rows live as well as on replay               | Yes. One path; the ordering problem and its tests do not exist.                           |
 
 ## The pre-freeze set
 
@@ -299,7 +303,7 @@ here changes stored bytes, the freeze mechanism, or copy; nothing else.
 | P2  | Goal rows (R5, R6): `builtIn:goal` module import in `run.config.script` (the `scriptModules` mechanism in `packages/harness/src/tools/plugins.ts` already exists); a grant records its grantor and its lifetime is derived                                                                                                                                                                                                             | `run.config`, `approval.policy` / `run.start.approvalPolicy` | ~80      | No prompt text in any row; `approvalBypassKind.ts` has neither `goal` nor `own: 'parent'`                             |
 | P3  | Media by digest (R2): written as 8994563 and 43c10db on `claude/top-tech-debts-survey-sgf9k8`; to land as its own PR, separate from that branch's H1/H2 and llm refactors, with the golden store regenerated in it                                                                                                                                                                                                                     | `followup.queued` v3, `log` v3                               | written  | The PR is open and merged; no `mediaFiles` path field remains on a follow-up, user or request row (#13874)            |
 | P4  | Codemode: drop `script.call`'s derived fields (R4); the LIVE path reads results from the committed rows as the replay path already does after d3a64e6 (R12), deleting the `settled` queue in `codeSandbox.ts`; one regression test, a `Promise.race` script resumed from its rows                                                                                                                                                      | `script.call` v2                                             | net −40  | A script with `Promise.race` over two calls resumes identically from its rows; the door has one delivery function     |
-| P5  | Namespace as data (R9) and AppSignals into the app (R7)                                                                                                                                                                                                                                                                                                                                                                                | none                                                         | ~60      | `stateSettings.ts` has no literal `texra.` prefix; the deep-import baseline file is empty and deleted with its suite  |
+| P5  | Namespace as data (R9): `settingsCatalog(rows, { namespace })`, prefixed at the store boundary, stored keys unchanged                                                                                                                                                                                                                                                                                                                  | none                                                         | ~40      | `stateSettings.ts` has no literal `texra.` prefix; TeXRA's hosts pass `'texra'`, the SDK default is `'harness'`       |
 | P6  | Golden store independent of installed TeX tools (#14338)                                                                                                                                                                                                                                                                                                                                                                               | none (fixture)                                               | ~20      | The generator's `--twice` check passes on a machine with and without TeX                                              |
 | P7  | Copy and doc drift: the plugin-architecture note (`continuation`, Zod, `requires`, `scriptModules`); the `import` contradiction in `docs/guide/multi-agent-workflows.md`; goal copy in `packages/texra/src/tools/pluginCards.ts` and `packages/texra/src/ui/copy/delegationApproval.ts`; the stale "#14201 open" line in the 10-21 design                                                                                              | none                                                         | ~40      | Every statement about goal mode in UI and docs matches `goalScript.ts`                                                |
 
@@ -419,7 +423,9 @@ independent of the tag.
   three-day deletion), `currentValues.ts` and `valueFamily.ts`,
   `harness.api.md` (48 exports), the deep-import baseline (one specifier),
   and the import graph of `packages/texra/src/tools` (2 of 92 files reach a
-  harness alias).
+  harness alias). Re-checked on `origin/main` at `fa6fb1e`: `eventBus/` is
+  gone, `platform/appSignals.ts` exists, and the baseline is empty for all
+  five packages.
 - Counted with grep: Promise, `async`, `Effect.run*`, `AbortController` and
   Effect primitive uses per package.
 - Run on 2026-10-28 after `corepack pnpm install`:
