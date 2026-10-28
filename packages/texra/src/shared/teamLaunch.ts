@@ -17,11 +17,8 @@ import {
   type TeamRunPlan,
 } from '@texra-ai/harness/host';
 import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
-import {
-  agentKeyOf,
-  type AgentSource,
-  type TeamOptionData,
-} from '@texra-ai/harness/schemas';
+import { agentKeyOf, type AgentSource } from '@texra-ai/harness/schemas';
+import type { TeamOptionData } from '@texra/shared/pickerOptions';
 
 export function planTeamRuns<T extends TeamCatalogAgent>(
   presets: readonly TeamPreset[],

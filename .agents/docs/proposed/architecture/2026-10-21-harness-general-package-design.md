@@ -358,9 +358,9 @@ re-read the surface and the ports. Where it changes this design:
   them; #14371 removed five of the six that were free. Shrinking further means
   narrowing the root signatures (the run-lifecycle work in the 1.0 PRD) or
   moving app vocabulary: the team launch code moved to
-  `packages/texra/src/shared/teamLaunch.ts` (16 `./host` names freed); the
-  picker wire types in `shared/schemas/pickerOptions.ts` (lines 82-150, which
-  would free 7 of the 10 `./schemas` names the file contributes) remain.
+  `packages/texra/src/shared/teamLaunch.ts` (16 `./host` names freed) and the
+  picker wire types to `packages/texra/src/shared/pickerOptions.ts` (7
+  `./schemas` names freed, `ModelAvailabilityKindSchema` added).
 - **Lane 3, vocabulary.** #14364 made the namespace data and moved the
   presets, the LaTeX prompt, the TeX paths and the validation model to the app.
   #14369 replaces `ITool.unavailableHosts` with the host-capability check and

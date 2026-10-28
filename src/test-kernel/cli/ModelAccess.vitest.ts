@@ -6,10 +6,10 @@ import {
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
 import type { ProcessServices } from '@platform/processRuntime';
-import type { ModelOptionData } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { setupPlatform } from '@test/support/setupPlatform';
+import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import type { RunModelDecisionReason } from '@texra-ai/harness/host';
 
 const readModelOptionsMock = vi.hoisted(() => vi.fn());

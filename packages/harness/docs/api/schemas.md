@@ -149,18 +149,6 @@ identifier itself when it names no source ("paper:review", or a URL).
 function agentName(key: string): string
 ```
 
-## AgentOptionData
-
-```ts
-type AgentOptionData = typeof AgentOptionDataSchema.Type;
-```
-
-## AgentOptionDataSchema
-
-```ts
-const AgentOptionDataSchema: Struct<{ readonly value: String; readonly label: String; readonly isOrchestrator: optional<Boolean>; readonly source: optional<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>; }>
-```
-
 ## AgentProposal
 
 ```ts
@@ -1014,13 +1002,13 @@ function isLoopDriven(identity: RunIdentity): boolean
 
 Whether an option row can be run as shipped: `readModelOptions`
 already resolved the access question, so a caller only has to read its
-verdict. Lives with the type so delegation's model list and the CLI's
+verdict. Lives with the kind so delegation's model list and the CLI's
 picker can never drift apart on what "available" means.
 
 ```ts
-function isModelOptionAvailable(
-  model: Pick<ModelOptionData, 'availability'>,
-): boolean
+function isModelOptionAvailable(model: {
+  readonly availability?: ModelAvailabilityKind;
+}): boolean
 ```
 
 ## isPackagedAgentSource
@@ -1236,17 +1224,6 @@ catalog row's schema and its copy so the two cannot disagree about the range.
 const MODEL_RETRY_MAX_ATTEMPTS_SETTING: Readonly<{ readonly configKey: "model.retry.maxAttempts"; readonly defaultValue: 2; readonly min: 0; readonly max: 5; readonly description: "Additional automatic retries after the initial model request (0–5). A resumed request keeps the retries it already used."; }>
 ```
 
-## ModelAvailabilityFieldsSchema
-
-Resolved per-model access. Computed once by `readModelOptions` and
-shared verbatim across hosts (CLI picker, extension Models tab) so
-availability and routing are never re-derived at render time: the kind is
-the whole verdict, and {@link MODEL_AVAILABILITY_STATUS} reads it.
-
-```ts
-const ModelAvailabilityFieldsSchema: Struct<{ readonly availability: optional<Literals<readonly ["provider-key", "missing-key", "key-unreadable", "retired", "unserved", "subscription-access", "xai-subscription-access", "unknown-model"]>>; readonly routeLabel: optional<String>; }>
-```
-
 ## ModelAvailabilityKind
 
 Why a model option can or cannot run.
@@ -1255,24 +1232,20 @@ Why a model option can or cannot run.
 type ModelAvailabilityKind = typeof ModelAvailabilityKindSchema.Type;
 ```
 
+## ModelAvailabilityKindSchema
+
+Why a model option can or cannot run, as it travels on the wire.
+
+```ts
+const ModelAvailabilityKindSchema: Literals<readonly ["provider-key", "missing-key", "key-unreadable", "retired", "unserved", "subscription-access", "xai-subscription-access", "unknown-model"]>
+```
+
 ## ModelBackend
 
 Who serves a run's conversation ({@link ModelBackendSchema}).
 
 ```ts
 type ModelBackend = typeof ModelBackendSchema.Type;
-```
-
-## ModelOptionData
-
-```ts
-type ModelOptionData = typeof ModelOptionDataSchema.Type;
-```
-
-## ModelOptionDataSchema
-
-```ts
-const ModelOptionDataSchema: Struct<{ readonly value: String; readonly label: String; readonly availability: optional<Literals<readonly ["provider-key", "missing-key", "key-unreadable", "retired", "unserved", "subscription-access", "xai-subscription-access", "unknown-model"]>>; readonly routeLabel: optional<String>; readonly provider: optional<String>; readonly context: optional<String>; readonly cost: optional<String>; readonly hint: optional<String>; readonly reasoning: optional<String>; }>
 ```
 
 ## ModelsTabSurface
@@ -2451,24 +2424,6 @@ type TaskGroup = typeof TaskGroupSchema.Type;
 
 ```ts
 type TaskGroupStatus = typeof TaskGroupStatusSchema.Type;
-```
-
-## TeamOptionData
-
-```ts
-type TeamOptionData = typeof TeamOptionDataSchema.Type;
-```
-
-## TeamOptionDataSchema
-
-Team picker option row for the main-view "Run with: Team" target. `value`
-carries the preset id (a built-in team or a user-saved custom one); hosts
-resolve the agent list, so the renderer only ever sends team identity back.
-Availability is resolved against the full live catalog, not just the
-workspace's enabled agents.
-
-```ts
-const TeamOptionDataSchema: Struct<{ readonly value: String; readonly label: String; readonly source: Literals<readonly ["built-in", "custom"]>; readonly icon: String; readonly description: withDecodingDefault<String, never>; readonly unavailableMembers: withDecodingDefault<$Array<String>, never>; readonly disabled: optional<Boolean>; readonly disabledReason: optional<NullOr<String>>; }>
 ```
 
 ## toErrorMessage
