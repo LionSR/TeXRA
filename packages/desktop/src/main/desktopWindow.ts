@@ -145,14 +145,14 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   // `surface`, `bindings` and `navigation` are declared below and read only
   // inside lazy callbacks; the order cannot flip, since the surface takes the
   // onboarding this call returns.
-  const { onboarding, refreshFunnelAfterLaunch } = yield* openWindowOnboarding({
+  const { onboarding, refreshFunnel } = yield* openWindowOnboarding({
     host,
     runtime,
     projects,
     settings: () => surface.settings(),
     activeRun: () => bindings.active(),
   });
-  yield* refreshFunnelAfterLaunch;
+  yield* refreshFunnel;
 
   const shellActions = createDesktopShellActions(
     { postToRenderer: host.post },
@@ -178,7 +178,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     resourcesPath: options.resourcesPath,
     draftRequests: options.draftRequests,
     onboarding,
-    refreshFunnelAfterLaunch,
   });
   const surface: ProjectSurface = yield* openProjectSurface({
     host,
@@ -240,7 +239,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
         }
         yield* surface.attach();
         postProjects();
-        if (switched) yield* refreshFunnelAfterLaunch;
+        if (switched) yield* refreshFunnel;
       }),
     );
   /** A document reload destroys its request correlations (an open prompt

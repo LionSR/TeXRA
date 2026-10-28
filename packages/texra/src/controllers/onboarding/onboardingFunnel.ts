@@ -21,6 +21,7 @@
 import { Effect, Schema, type Scope, Semaphore, Stream } from 'effect';
 
 import {
+  AppState,
   Settings,
   StateReadFailed,
   withLogChannel,
@@ -111,6 +112,22 @@ export const recordFirstCompletedRun = Effect.fn('recordFirstCompletedRun')(
     );
   },
 );
+
+/**
+ * Run `refresh` as subscribed and whenever `firstRunDone` may have been
+ * written, by this process or another sharing the store. The flag is written
+ * by {@link recordFirstCompletedRun} in whichever process held the run, not
+ * at a run's end, so a host follows the flag rather than its own launches; a
+ * setup chat that waits after delegating has done its first run too.
+ */
+export const followFirstRunDone = (
+  refresh: Effect.Effect<void>,
+): Effect.Effect<void, never, AppState> =>
+  Stream.unwrap(
+    Effect.map(AppState, (state) =>
+      state.changes([GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]),
+    ),
+  ).pipe(Stream.runForEach(() => refresh));
 
 interface OnboardingFunnelInputs {
   /** A usable credential exists (a subscription or any provider API key). */

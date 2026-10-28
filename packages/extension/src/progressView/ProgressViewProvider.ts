@@ -15,7 +15,6 @@ import {
 } from 'effect';
 
 import {
-  AppState,
   withProcessServices,
   SessionHostInteractions,
   type HostInteractions,
@@ -28,7 +27,6 @@ import {
   agentKeyOf,
   type FileLocation,
   type RunId,
-  GlobalStateKey,
 } from '@texra-ai/harness/schemas';
 import { AppSignals, appSignalStream } from '@texra-ai/harness/host';
 import { BundledViewContentProvider } from '@common/webview';
@@ -38,6 +36,7 @@ import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import {
+  followFirstRunDone,
   getFirstRunDone,
   OnboardingFunnelRefresher,
   setOnboardingDeclined,
@@ -578,27 +577,18 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       );
       yield* this.snapshot.refresh;
       yield* this.refreshOnboardingFunnel();
-      // The funnel then follows `firstRunDone` wherever it is written, not a
-      // run's end: a setup chat that parks after delegating has done its
-      // first run. Started after the refresh above, so that refresh owns the
-      // first transition and its setup-agent selection; the subscription's
-      // own first element still refreshes, for a write that landed between.
+      // Started after the refresh above, so that refresh owns the first
+      // transition and its setup-agent selection; the follower's own first
+      // refresh covers a write that landed between.
       yield* Effect.forkIn(
-        Stream.unwrap(
-          Effect.map(AppState, (appState) =>
-            appState.changes([GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]),
+        followFirstRunDone(
+          this.refreshOnboardingFunnel().pipe(
+            Effect.ignore({
+              log: 'Warn',
+              message: 'Refreshing the onboarding state',
+            }),
           ),
-        ).pipe(
-          Stream.runForEach(() =>
-            this.refreshOnboardingFunnel().pipe(
-              Effect.ignore({
-                log: 'Warn',
-                message: 'Refreshing the onboarding state',
-              }),
-            ),
-          ),
-          withLogChannel(CHANNEL),
-        ),
+        ).pipe(withLogChannel(CHANNEL)),
         this.scope,
       );
       yield* Effect.logDebug('ProgressViewProvider initialized').pipe(

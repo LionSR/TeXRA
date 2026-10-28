@@ -1,5 +1,5 @@
-// The window's onboarding surface: the funnel a settled launch recomputes and
-// the cards' actions.
+// The window's onboarding surface: the funnel, refreshed as the first-run
+// flag changes, and the cards' actions.
 
 import { Effect, Schema, Scope } from 'effect';
 
@@ -12,6 +12,7 @@ import {
 } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
+import { followFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { kickoffDesktopSetup } from '@texra/controllers/onboarding/setupLaunch';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { createDesktopOnboardingIpc } from './desktopOnboardingIpc.js';
@@ -47,9 +48,9 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
   }): Effect.fn.Return<
     {
       readonly onboarding: ReturnType<typeof createDesktopOnboardingIpc>;
-      /** Recompute the funnel on a fiber of the window's scope, so a launch
-       *  settles without waiting on it; it reports its own failures. */
-      readonly refreshFunnelAfterLaunch: Effect.Effect<void>;
+      /** Recompute the funnel on a fiber of the window's scope, so the
+       *  caller does not wait on it; it reports its own failures. */
+      readonly refreshFunnel: Effect.Effect<void>;
     },
     never,
     Scope.Scope | AppState | Secrets
@@ -92,7 +93,7 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
           return settings.signInSubscription('chatgpt');
         }),
     });
-    const refreshFunnelAfterLaunch: Effect.Effect<void> = Effect.suspend(() =>
+    const refreshFunnel: Effect.Effect<void> = Effect.suspend(() =>
       withProcessServices(runtime, onboarding.refreshOnboardingFunnel()).pipe(
         Effect.catch((error: StateWriteFailed | StateReadFailed) =>
           Effect.sync(() =>
@@ -111,9 +112,7 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
         Effect.asVoid,
       ),
     );
-    return {
-      onboarding,
-      refreshFunnelAfterLaunch,
-    };
+    yield* Effect.forkIn(followFirstRunDone(refreshFunnel), scope);
+    return { onboarding, refreshFunnel };
   },
 );
