@@ -50,7 +50,6 @@ import type {
   ResumeRefused,
   RunFailure,
   ToolsRefused,
-  TraceUnavailable,
 } from './errors.js';
 import type { HeldRun, RunDeletion, RunRecords } from './sessionReads.js';
 
@@ -197,12 +196,13 @@ export interface Run {
    * What the run does as it does it: streamed text, tool calls, stages,
    * usage. Pipe it through `responseText` for just the answer's text.
    * Ends when the run ends, and fails with {@link RunFailure} if the run
-   * failed. Read it once, from the moment `start` returns: events wait
-   * for you only briefly, and stopping early stops your reading, not the
-   * run. A reader that comes too late fails with {@link TraceUnavailable}
-   * instead of seeing nothing.
+   * failed. Read it as often as you like and whenever you like: each read
+   * is this activation's events read back from the session, from the
+   * activation's start, and stopping early stops your reading, not the
+   * run. A stream that ended before the read reached it arrives whole, as
+   * one chunk.
    */
-  readonly events: Stream.Stream<AgentEvent, RunFailure | TraceUnavailable>;
+  readonly events: Stream.Stream<AgentEvent, RunFailure>;
   /** Stop the run. */
   readonly interrupt: Effect.Effect<void>;
 }

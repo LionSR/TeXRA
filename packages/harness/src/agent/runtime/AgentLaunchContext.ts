@@ -264,11 +264,8 @@ const enterRun = Effect.fn('enterRun')(function* (
       message: `Run ${runId} already exists; resume it.`,
     });
   let held: AgentEvent[] | null = [];
-  const logger = new TraceEmitter(
-    (event) =>
-      held === null ? session.log.publish(runId, event) : held.push(event),
-    // The run's trace port: every caller reading its events, joiners too.
-    (event) => session.trace.tap(runId, event),
+  const logger = new TraceEmitter((event) =>
+    held === null ? session.log.publish(runId, event) : held.push(event),
   );
   yield* Effect.addFinalizer(() => Effect.sync(() => logger.close()));
   let carried = 0;

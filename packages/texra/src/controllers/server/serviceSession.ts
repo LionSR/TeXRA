@@ -15,6 +15,8 @@ import {
 import {
   Cause,
   Effect,
+  Exit,
+  Fiber,
   FiberHandle,
   Layer,
   Option,
@@ -33,7 +35,6 @@ import {
   ResumeRefused,
   RunFailure,
   ToolsRefused,
-  TraceUnavailable,
   type ITool,
   type Run,
   type Session,
@@ -46,6 +47,7 @@ import {
   agentErrorPresentation,
   attachErrorPresentationClaimed,
   describeFollowUpFailure,
+  replayTrace,
 } from '@texra-ai/harness/host';
 import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
@@ -58,6 +60,7 @@ import {
 } from './client';
 import { TaskRecordsFailed, type ProjectStateFailed } from './protocol';
 import type {
+  CommitOrdinal,
   TranscriptSubscription,
   SessionViewInput,
 } from '@texra-ai/harness/transcript';
@@ -365,15 +368,13 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       ),
     ),
   );
-  /** What a task the service runs ends with: asked of the service the
-   *  link holds, again of the next one if the link is lost meanwhile (a
-   *  retired service finishes its tasks first), and held until this
-   *  window's fold shows it too. A run that failed fails this at once, as
-   *  a run here does: with its error, which the service's terminal
-   *  presenter showed this window, so it is marked presented, or without
-   *  one (an end with no error recorded) as a plain failure. A service
-   *  that cannot answer fails it offline. */
-  const ended = (runId: RunId): Effect.Effect<RunEndResult, RunFailure> =>
+  const scope = yield* Effect.scope;
+  /** The service's answer to how a task it runs ended, with `at`, its
+   *  log's commit when it answered: asked of the service the link holds,
+   *  again of the next one if the link is lost meanwhile (a retired service
+   *  finishes its tasks first). A service that cannot answer fails it
+   *  offline. */
+  const answered = (runId: RunId) =>
     Effect.flatMap(connected, (client) =>
       client['task.ended']({ workspace, runId }),
     ).pipe(
@@ -391,32 +392,40 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
               Effect.flatMap((reason) => Effect.fail(runFailure(reason))),
             ),
       ),
-      Effect.flatMap(({ at, error, ...end }) => {
-        if (end.outcome === RUN_OUTCOME.FAILED) {
-          const cause = new Error(
-            error?.message ?? `The task failed (run ${runId}).`,
-          );
-          if (error !== undefined && agentErrorPresentation(error) !== null)
-            attachErrorPresentationClaimed(cause);
-          return Effect.fail(runFailure(cause.message, cause));
-        }
-        // The answer and the fold's `task.watch` stream arrive apart: a
-        // result that settled on the answer alone could find the window
-        // still showing the run live, or a resumed run with the outcome
-        // its previous activation left. Held until this window's fold is
-        // at or past `at`, the log's commit when the service answered,
-        // where it holds the run's end, or its removal. The fold-aware
-        // stream ends the wait with the fold, never parks on it.
-        return Effect.as(
-          Stream.runDrain(
-            graph.view.changes.pipe(
-              Stream.takeUntil((level) => level.cursor >= at),
-            ),
-          ),
-          { ...end, runId },
-        );
-      }),
     );
+  /** The run's result from the service's answer, held until this window's
+   *  fold shows it too. A run that failed fails this at once, as a run
+   *  here does: with its error, which the service's terminal presenter
+   *  showed this window, so it is marked presented, or without one (an
+   *  end with no error recorded) as a plain failure. */
+  const endOf = (
+    runId: RunId,
+    { at, error, ...end }: Effect.Success<ReturnType<typeof answered>>,
+  ): Effect.Effect<RunEndResult, RunFailure> => {
+    if (end.outcome === RUN_OUTCOME.FAILED) {
+      const cause = new Error(
+        error?.message ?? `The task failed (run ${runId}).`,
+      );
+      if (error !== undefined && agentErrorPresentation(error) !== null)
+        attachErrorPresentationClaimed(cause);
+      return Effect.fail(runFailure(cause.message, cause));
+    }
+    // The answer and the fold's `task.watch` stream arrive apart: a
+    // result that settled on the answer alone could find the window
+    // still showing the run live, or a resumed run with the outcome
+    // its previous activation left. Held until this window's fold is
+    // at or past `at`, the log's commit when the service answered,
+    // where it holds the run's end, or its removal. The fold-aware
+    // stream ends the wait with the fold, never parks on it.
+    return Effect.as(
+      Stream.runDrain(
+        graph.view.changes.pipe(
+          Stream.takeUntil((level) => level.cursor >= at),
+        ),
+      ),
+      { ...end, runId },
+    );
+  };
   const request: Session['request'] = (runtimeRequest) =>
     callService(
       link,
@@ -434,38 +443,132 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           ),
         ),
     );
+  // The watch names its runs to this window's own view too, so the view
+  // folds their transcripts while it runs; each service the link holds
+  // serves it from the cursor it last delivered.
+  const watch: Session['view']['watch'] = (set, from) =>
+    Stream.unwrap(
+      Effect.gen(function* () {
+        yield* Effect.acquireRelease(
+          Effect.suspend(() => {
+            const id = (watchIds += 1);
+            watches.set(id, set);
+            return Effect.as(resubscribe, id);
+          }),
+          (id) =>
+            Effect.suspend(() => {
+              watches.delete(id);
+              return resubscribe;
+            }),
+        );
+        const cursor = yield* Ref.make(from.cursor);
+        return SubscriptionRef.changes(link.client).pipe(
+          Stream.switchMap((client) =>
+            client === null
+              ? Stream.empty
+              : Stream.unwrap(
+                  Effect.map(Ref.get(cursor), (at) =>
+                    client['task.watch']({
+                      workspace,
+                      subscribe: {
+                        kind: 'subscribe',
+                        session: key,
+                        generation: 0,
+                        debug: from.debug,
+                        cursor: at,
+                        aggregates: [...set],
+                      },
+                    }),
+                  ),
+                ).pipe(
+                  Stream.tap((frame) => Ref.set(cursor, frame.cursor)),
+                  Stream.map(frameInputs),
+                  Stream.filter((inputs) => inputs.length > 0),
+                  // A lost service's stream fails, or is interrupted
+                  // when the link closes its connection: either ends
+                  // this service's part, and the next one takes over.
+                  Stream.catchCause((cause) =>
+                    Cause.hasInterruptsOnly(cause)
+                      ? Stream.empty
+                      : Stream.fromEffect(
+                          Effect.logWarning(
+                            `The TeXRA service stopped sending ${workspace}; the watch resumes when the service is back`,
+                          ).pipe(
+                            Effect.annotateLogs({
+                              data: Cause.squash(cause),
+                            }),
+                          ),
+                        ).pipe(Stream.drain),
+                  ),
+                ),
+          ),
+        );
+      }),
+    );
   /** The run the service admitted, as this window holds it: its end is the
-   *  service's answer (asked once), held until this window's fold shows it
-   *  too; its view this window's fold sliced to this activation; and its
-   *  trace stays in the service. */
-  const runOf = (runId: RunId, redirectedFrom?: RunId): Effect.Effect<Run> =>
-    Effect.map(Effect.cached(ended(runId)), (result) => ({
+   *  service's answer (asked once, at once, while the activation it ends is
+   *  this one), held until this window's fold shows it too; its view this
+   *  window's fold sliced to this activation; and its trace read back from
+   *  the service's rows of this activation through the watch. */
+  const runOf = (
+    {
       runId,
-      ...(redirectedFrom !== undefined && { redirectedFrom }),
-      result,
-      // A resumed run's levels can still show the outcome its previous
-      // activation ended with: the slice starts at a level where it is
-      // live, and ends with the outcome after that, or with the result.
-      view: graph.view.changes.pipe(
-        Stream.dropWhile(
-          (level) => level.runs.get(runId)?.durableOutcome !== null,
+      activation,
+    }: { readonly runId: RunId; readonly activation: CommitOrdinal },
+    redirectedFrom?: RunId,
+  ): Effect.Effect<Run> =>
+    Effect.gen(function* () {
+      const answer = Fiber.join(yield* Effect.forkIn(answered(runId), scope));
+      const result = yield* Effect.cached(
+        Effect.flatMap(answer, (end) => endOf(runId, end)),
+      );
+      // The service's commit when it answered, past every row the run
+      // wrote, failed or not. With no answer (no service will give one,
+      // and no row is coming through the watch), none: the replay ends at
+      // once with the result's failure.
+      let answeredAt: CommitOrdinal = -1;
+      return {
+        runId,
+        ...(redirectedFrom !== undefined && { redirectedFrom }),
+        result,
+        // From the first level at or past the activation, as a run here
+        // slices it (an earlier one can show the run absent, interrupted, or
+        // with its previous activation's outcome), to this activation's
+        // outcome, or the result.
+        view: graph.view.changes.pipe(
+          Stream.dropWhile(
+            (level) => level.cursor < activation || !level.runs.has(runId),
+          ),
+          Stream.takeUntil(
+            (level) => level.runs.get(runId)?.durableOutcome != null,
+          ),
+          Stream.haltWhen(Effect.exit(result)),
         ),
-        Stream.takeUntil(
-          (level) => level.runs.get(runId)?.durableOutcome != null,
-        ),
-        Stream.haltWhen(Effect.exit(result)),
-      ),
-      events: Stream.fail(
-        new TraceUnavailable({
+        // The service's rows, through the watch; the service's log is the
+        // store, settled once it answered.
+        events: replayTrace(
+          {
+            view: {
+              inputs: (set, cursor, debug) => watch(set, { cursor, debug }),
+            },
+            log: {
+              settled: Effect.exit(answer).pipe(
+                Effect.map((exit) => {
+                  if (Exit.isSuccess(exit)) answeredAt = exit.value.at;
+                }),
+              ),
+              now: () => answeredAt,
+            },
+          },
           runId,
-          reason: 'remote',
-          message: `Task ${runId} runs in the TeXRA service, which keeps its trace.`,
-        }),
-      ),
-      interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
-        Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
-      ),
-    }));
+          activation,
+          result,
+        ),
+        interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
+          Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
+        ),
+      };
+    });
   /** A start or resume naming a window's own tools is refused: the service
    *  runs its own, so a run continued with them would wait on a tool no
    *  one serves. */
@@ -483,68 +586,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     view: {
       current: graph.view.current,
       changes: graph.view.changes,
-      // The watch names its runs to this window's own view too, so the
-      // view folds their transcripts while it runs; each service the link
-      // holds serves it from the cursor it last delivered.
-      watch: (set, from) =>
-        Stream.unwrap(
-          Effect.gen(function* () {
-            yield* Effect.acquireRelease(
-              Effect.suspend(() => {
-                const id = (watchIds += 1);
-                watches.set(id, set);
-                return Effect.as(resubscribe, id);
-              }),
-              (id) =>
-                Effect.suspend(() => {
-                  watches.delete(id);
-                  return resubscribe;
-                }),
-            );
-            const cursor = yield* Ref.make(from.cursor);
-            return SubscriptionRef.changes(link.client).pipe(
-              Stream.switchMap((client) =>
-                client === null
-                  ? Stream.empty
-                  : Stream.unwrap(
-                      Effect.map(Ref.get(cursor), (at) =>
-                        client['task.watch']({
-                          workspace,
-                          subscribe: {
-                            kind: 'subscribe',
-                            session: key,
-                            generation: 0,
-                            debug: from.debug,
-                            cursor: at,
-                            aggregates: [...set],
-                          },
-                        }),
-                      ),
-                    ).pipe(
-                      Stream.tap((frame) => Ref.set(cursor, frame.cursor)),
-                      Stream.map(frameInputs),
-                      Stream.filter((inputs) => inputs.length > 0),
-                      // A lost service's stream fails, or is interrupted
-                      // when the link closes its connection: either ends
-                      // this service's part, and the next one takes over.
-                      Stream.catchCause((cause) =>
-                        Cause.hasInterruptsOnly(cause)
-                          ? Stream.empty
-                          : Stream.fromEffect(
-                              Effect.logWarning(
-                                `The TeXRA service stopped sending ${workspace}; the watch resumes when the service is back`,
-                              ).pipe(
-                                Effect.annotateLogs({
-                                  data: Cause.squash(cause),
-                                }),
-                              ),
-                            ).pipe(Stream.drain),
-                      ),
-                    ),
-              ),
-            );
-          }),
-        ),
+      watch,
     },
     request,
     start: (input) => {
@@ -594,7 +636,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                   message: describeFollowUpFailure('blocked'),
                 }),
               )
-            : runOf(resumed, resumed === runId ? undefined : runId),
+            : runOf(resumed, resumed.runId === runId ? undefined : runId),
         ),
       );
     },

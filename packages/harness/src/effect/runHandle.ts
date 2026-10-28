@@ -2,8 +2,8 @@
  * The {@link Run} handle of `@texra-ai/harness`: how a launch, fresh or
  * resumed, becomes the one value an embedder holds. Every decision about a
  * run's handle is stated here, once: which level is the run's first, when
- * its transcript interest changes, when its drain ends, what its trace
- * holds for a reader that has yet to attach, and which failure wins.
+ * its transcript interest changes, when its drain ends, and which failure
+ * wins.
  * `session.start` and `session.resume` (`sessionPrograms.ts`) differ only in
  * the launch they hand {@link handOver}.
  */
@@ -13,7 +13,6 @@ import {
   Effect,
   Exit,
   Fiber,
-  Queue,
   Stream,
   Cause,
 } from 'effect';
@@ -21,8 +20,7 @@ import {
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import { registryOf } from '@agent/runtime/runRegistry';
-import type { AgentEvent } from '@agent/trace';
-import { withLogChannel } from '@logger/effectLog';
+import { replayTrace } from '@controllers/session/runTrace';
 import type { ProcessServices } from '@platform/processRuntime';
 import {
   type CommitOrdinal,
@@ -32,7 +30,7 @@ import {
 } from '@shared/schemas';
 import { descendantRuns } from '@shared/session/sessionView';
 
-import { RunFailure, TraceUnavailable } from './errors.js';
+import { RunFailure } from './errors.js';
 import type { Run } from './sessions.js';
 
 /** A run that returned without ever publishing its stream: a resumed run
@@ -40,8 +38,6 @@ import type { Run } from './sessions.js';
  *  why), or a launcher whose contract broke. A caller waiting on admission
  *  must hear it. */
 const NEVER_ENTERED = 'The run ended without entering the session.';
-
-const CHANNEL = 'agentPackage';
 
 /**
  * A run's end as its handle reports it. A stop interrupts the run's fiber,
@@ -79,101 +75,6 @@ const reportedEnd = (
         ),
       );
 
-/**
- * How many trace events a run holds for a reader that has yet to attach.
- * The buffer exists only to bridge admission to the reader's first pull, so
- * a run that passes it with nobody reading has no reader: it says so and
- * detaches its trace, instead of retaining a long run's whole trace (every
- * `stream.chunk` included) until the run settles. A reader that did attach
- * is never dropped: past its first pull the buffer is the reader's, and
- * nothing here discards what it has yet to read.
- */
-const TRACE_HANDOVER_EVENTS = 512;
-
-/** A run's trace on its way to its one reader. */
-interface TraceHandover {
-  /** The launch's tap: every trace event, from the run's first. */
-  readonly offer: (event: AgentEvent) => void;
-  /** End the trace with the run's exit, dropping what nobody read. */
-  readonly settle: (
-    exit: Exit.Exit<RunEndResult, RunFailure>,
-  ) => Effect.Effect<void>;
-  /** The reader's stream: running it once is the contract, and ending it
-   *  detaches the trace while the run continues. */
-  readonly events: Stream.Stream<AgentEvent, RunFailure | TraceUnavailable>;
-}
-
-/**
- * The trace a run holds for a reader that has yet to attach. It holds at
- * most {@link TRACE_HANDOVER_EVENTS} before the first pull: a run past that
- * with nobody reading has no reader, so it detaches and says so at its end.
- * Past the first pull the buffer is the reader's, and nothing drops it.
- */
-const traceHandover = Effect.fn('runHandle.traceHandover')(function* (
-  runId: RunId,
-): Effect.fn.Return<TraceHandover> {
-  const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
-  let tapping = true;
-  let reading = false;
-  /** How the run settled before any reader came: a failed run's reader
-   *  hears its failure, which the queue holds; a succeeded one's nothing. */
-  let settledUnread: 'succeeded' | 'failed' | null = null;
-  let buffered = 0;
-  /** Stop taking the run's trace events: the reader's close does it while
-   *  the run continues, and the run's settlement does it for a reader that
-   *  never came. */
-  const release = (): void => {
-    tapping = false;
-  };
-  return {
-    offer: (event) => {
-      if (!tapping) return;
-      if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
-        release(); // `settle` logs it: no fiber here to log from.
-        return;
-      }
-      Queue.offerUnsafe(trace, event);
-    },
-    settle: (exit) =>
-      Effect.gen(function* () {
-        release();
-        if (!reading)
-          settledUnread = Exit.isSuccess(exit) ? 'succeeded' : 'failed';
-        if (!reading && buffered > TRACE_HANDOVER_EVENTS) {
-          yield* Effect.logWarning(
-            `Run ${runId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; its trace was detached. Iterate the run's events in the turn that starts it, or await only its result.`,
-          ).pipe(withLogChannel(CHANNEL));
-        }
-        // A run nobody read retains nothing: what it buffered goes with it.
-        if (!reading) yield* Effect.orDie(Queue.clear(trace));
-        if (Exit.isFailure(exit)) yield* Queue.failCause(trace, exit.cause);
-        else yield* Queue.end(trace);
-      }),
-    events: Stream.unwrap(
-      Effect.suspend(() => {
-        // A reader past the buffer, or after an unread settlement, has no
-        // trace left to read: it hears why rather than an empty stream.
-        // A failed run's reader hears its failure from the queue instead.
-        let lost: TraceUnavailable['reason'] | null = null;
-        if (settledUnread === 'succeeded') lost = 'ended';
-        if (buffered > TRACE_HANDOVER_EVENTS) lost = 'truncated';
-        if (settledUnread === 'failed') lost = null;
-        if (lost === null) {
-          reading = true;
-          return Effect.succeed(Stream.fromQueue(trace));
-        }
-        const message = `Run ${runId}'s trace is ${lost === 'ended' ? 'gone: the run settled with no reader attached' : 'detached: it passed the handover buffer before a reader attached'}.`;
-        return Effect.logWarning(message).pipe(
-          withLogChannel(CHANNEL),
-          Effect.andThen(
-            Effect.fail(new TraceUnavailable({ runId, reason: lost, message })),
-          ),
-        );
-      }),
-    ).pipe(Stream.ensuring(Effect.sync(release))),
-  };
-});
-
 /** What a launch reports to its handle: the moment the run exists in its
  *  session, and that it joined a resume already in flight. */
 interface LaunchHooks {
@@ -201,8 +102,7 @@ type Launch = (
  * admission it stops the launch, unless another caller joined it, when it
  * leaves and the run goes on for them. A caller that joined a resume already
  * in flight is an observer: its interruption ends only its own wait and its
- * events, never the run. Every caller reads the run's events from the run's
- * one trace port (`session.trace.listen`), from its own handoff on.
+ * events, never the run.
  */
 export function handOver(
   session: RuntimeSessionHandle,
@@ -211,8 +111,6 @@ export function handOver(
   launch: Launch,
 ): Effect.Effect<Run, RunFailure> {
   return Effect.gen(function* () {
-    const trace = yield* traceHandover(runId);
-    const unlisten = session.trace.listen(runId, trace.offer);
     const admitted = yield* Deferred.make<CommitOrdinal, RunFailure>();
     // This activation's end, read once as it exits: a resume writes another.
     const ended = yield* Deferred.make<RunEndResult, RunFailure>();
@@ -223,9 +121,7 @@ export function handOver(
     const settle = (
       exit: Exit.Exit<RunEndResult, RunFailure>,
     ): Effect.Effect<void> =>
-      Effect.sync(unlisten).pipe(
-        Effect.andThen(Effect.exit(reportedEnd(session, runId, exit))),
-        Effect.tap(trace.settle),
+      Effect.exit(reportedEnd(session, runId, exit)).pipe(
         Effect.flatMap((end) => Deferred.done(ended, end)),
         Effect.andThen(
           Effect.suspend(() => {
@@ -317,11 +213,13 @@ export function handOver(
           { startImmediately: true },
         );
         spawned.push(drain);
+        const result = Effect.tap(Deferred.await(ended), Fiber.join(drain));
         return {
           runId,
-          result: Effect.tap(Deferred.await(ended), Fiber.join(drain)),
+          result,
           view,
-          events: trace.events,
+          // Every reader replays this activation from the session's rows.
+          events: replayTrace(session, runId, activation, result),
           // A launch not yet admitted is stopped where it stands, and then
           // by id, in case it started a run meanwhile.
           interrupt: Effect.suspend(() => {
