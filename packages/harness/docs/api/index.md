@@ -51,7 +51,6 @@ type AgentEvent =
       | 'tool.start'
       | 'tool.end'
       | 'usage'
-      | 'conversation.progress'
       | 'run.fact'
       | 'context.state'
       | 'stream.start'
@@ -284,8 +283,6 @@ ToolResult values; unexpected/programmer failures should throw and let
 ```ts
 interface ITool<E = Error, R = never> {
   readonly definition: ToolDefinition;
-  /** Hosts this tool is statically excluded from; an omitted host supports it. */
-  readonly unavailableHosts?: readonly SettingHost[];
   /** The host capability (named by the plugin that serves it,
    *  `HostCapabilities`) the session's host must serve for this tool to be
    *  offered, read live each step: a window that attaches mid-run brings it. */
@@ -645,7 +642,9 @@ interface Run {
   readonly redirectedFrom?: RunId;
   /**
    * How the run ended. A failed run fails this with its own
-   * {@link RunFailure}. A finished run's result arrives once the session
+   * {@link RunFailure}; a stopped one (`interrupt`, a `run.stop` request)
+   * gets the end it stored, `cancelled`, unless the stop met a failure,
+   * which fails it. A finished run's result arrives once the session
    * view shows its stored outcome, so a view read afterwards includes it.
    */
   readonly result: Effect.Effect<RunEndResult, RunFailure>;
@@ -1004,9 +1003,8 @@ state stores, as the session opened over it holds them.
 interface WorkspaceRoots {
   /**
    * The product host this process is, named by its composition root. The
-   * catalog rows whose slot differs by host and the tool gate's
-   * `unavailableHosts` read it from here, so a read answers for the host that
-   * opened these roots rather than for a default.
+   * catalog rows whose slot differs by host read it from here, so a read
+   * answers for the host that opened these roots rather than for a default.
    */
   readonly host: SettingHost;
   /** Canonical physical workspace root, or undefined when no folder is open. */

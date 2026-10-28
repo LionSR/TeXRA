@@ -87,8 +87,8 @@ const invokeCommand = Effect.fn('InvokeCommandTool.execute')(function* (
 
 export const InvokeCommandTool = defineTool({
   name: 'invoke_command',
-  // Requires VS Code commands.
-  unavailableHosts: ['cli', 'desktop', 'sdk'],
+  // Offered where the host passes its commands (VS Code).
+  hostCapability: 'commands' satisfies keyof SetupPlatform['Service'],
   requiresApproval: true,
   description: `Invoke an allowlisted VS Code command. Use this to hand off to TeXRA's existing UX: the API-key quick-pick (texra.setApiKey), the settings-dashboard tab openers (texra.showDashboard / texra.showModels / texra.showAgents / texra.showMemory / texra.showTeamSettings / texra.showTools / texra.showGitSettings), the sample-project creator (texra.createSampleProject), the Overleaf clone wizard (texra.cloneOverleafProject), and the arXiv source downloader (texra.downloadArXivSource). Non-allowlisted commands are rejected. To install a VS Code extension (LaTeX Workshop, Lean 4), use \`install_vscode_extension\` instead: it enforces a stricter per-extension allowlist.`,
   schema: InvokeCommandInputSchema,

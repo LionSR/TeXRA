@@ -20,7 +20,7 @@ export { processLayer } from './effect/processLayer.js';
 export { replayTrace } from '@controllers/session/runTrace';
 // A project's view read cold from its store, for a multi-project listing.
 export { readSessionView } from '@controllers/session/readSessionView';
-export type { RunRejection } from '@agent/runtime/runClassification';
+export type { RunRejection } from '@agent/storage/resumability';
 export { ExportNodeSchema, type ExportNode } from '@agent/export/schemas';
 export {
   formatConversationMessage,
@@ -106,6 +106,8 @@ export {
   SessionHostInteractions,
   type HostInteractions,
 } from '@agent/runtime/HostInteractions';
+// One program per pending request a host follows, while the view lists it.
+export { followPendingRequests } from './effect/requestAnswerer.js';
 export { buildDiffHunks, type DiffHunks } from '@utils/text/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
 export { presentRunFailure } from '@agent/runtime/terminalResultToast';

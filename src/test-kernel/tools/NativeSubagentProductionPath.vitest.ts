@@ -588,7 +588,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(
           observedRequests.find(({ model }) => model === CHILD_MODEL)?.tools,
         ).toContain('grep');
-        const firstHandle = session.runs.get(runId)?.handle;
+        const firstControls = session.runs.get(runId)?.controls;
         const initialBindings = bindingMocks.bindModel.mock.calls.length;
         yield* waitForParentTurns(1);
         const budget = yield* registryOf(session.runs).childRunBudget(1);
@@ -599,7 +599,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
         yield* waitForParentTurns(2);
-        expect(session.runs.get(runId)?.handle).toBe(firstHandle);
+        expect(session.runs.get(runId)?.controls).toBe(firstControls);
         expect(bindingMocks.bindModel).toHaveBeenCalledTimes(initialBindings);
 
         // The next turn asks the model with the follow-up as its last message
@@ -671,11 +671,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         ).toEqual({
           started: true,
           delivered: true,
-          outcome: RUN_PHASE.WAITING,
           completion: expect.anything(),
         });
-        const recoveredHandle = session.runs.get(runId)?.handle;
-        expect(recoveredHandle).toBeDefined();
+        const recoveredControls = session.runs.get(runId)?.controls;
+        expect(recoveredControls).toBeDefined();
         childTurns.push({ text: 'Recovered result D.' });
         parentTurns.push({ text: 'Parent received recovered result D.' });
         yield* submitFollowUp(
@@ -692,7 +691,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           waitForPersistedResult(runId, 'Recovered result D.'),
         );
         yield* waitForParentTurns(4);
-        expect(session.runs.get(runId)?.handle).toBe(recoveredHandle);
+        expect(session.runs.get(runId)?.controls).toBe(recoveredControls);
         yield* session.runs.stop(runId, { reason: 'user' }).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
 
@@ -708,10 +707,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         ).toEqual({
           started: true,
           delivered: true,
-          outcome: RUN_PHASE.WAITING,
           completion: expect.anything(),
         });
-        expect(session.runs.get(runId)?.handle).toBeDefined();
+        expect(session.runs.get(runId)?.controls).toBeDefined();
         yield* session.view.changes.pipe(
           Stream.filter(
             (view) => view.runs.get(runId)?.status === RUN_PHASE.WAITING,
@@ -735,7 +733,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(failedRecovery).toEqual({
           started: true,
           delivered: false,
-          outcome: RUN_OUTCOME.FAILED,
           completion: expect.anything(),
         });
         // A resumed child's lifetime ends with its own result, as a root's.

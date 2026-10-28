@@ -178,7 +178,7 @@ const DiffHunkSchema = Schema.Struct({
  *  the diff between them, computed once where the request is built: its
  *  hunks and the 0-based line of the proposed text a diff view reveals
  *  first (null when nothing changed). */
-export const ToolEditContentSchema = Schema.Struct({
+const ToolEditContentSchema = Schema.Struct({
   originalContent: Schema.String,
   proposedContent: Schema.String,
   hunks: Schema.Array(DiffHunkSchema),

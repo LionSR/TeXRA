@@ -121,7 +121,7 @@ export const initializeElectronPlatform = Effect.fn(
         storageRoot: dataRoot,
         settings: TEXRA_SETTINGS,
         commandDirs: commandDirs,
-        plugins: texraPlugins({ editors }),
+        plugins: texraPlugins({ editors, inquiryPanel: true }),
         skills: { resourcesPath },
         // The one credential store every host shares (`~/.texra/secrets/`):
         // the background service reads the keys this window saves.

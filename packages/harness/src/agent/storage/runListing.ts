@@ -105,11 +105,9 @@ export const listRuns = Effect.fn('listRuns')(function* (
           ...(run.description === null ? {} : { description: run.description }),
           ...(run.model === null ? {} : { model: run.model }),
           resumable: resumeFrom.kind === 'checkpoint',
-          ...(resumeFrom.kind === 'unreadable' && {
+          ...((resumeFrom.kind === 'unreadable' ||
+            resumeFrom.kind === 'earlier_build') && {
             resumeBlocked: resumeFrom.cause,
-          }),
-          ...(resumeFrom.kind === 'earlierBuild' && {
-            resumeBlocked: resumeFrom.refusal.message,
           }),
           identity,
           record,

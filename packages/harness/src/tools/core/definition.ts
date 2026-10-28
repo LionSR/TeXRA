@@ -34,7 +34,6 @@ export type DefineToolOptions<T, R = never> = Required<
   Pick<ToolDefinition, 'scriptReturns' | 'card'> &
   Pick<
     ITool,
-    | 'unavailableHosts'
     | 'hostCapability'
     | 'launchesTasks'
     | 'lane'

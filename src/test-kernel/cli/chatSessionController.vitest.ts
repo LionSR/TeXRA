@@ -95,15 +95,11 @@ import {
   type RunOutcome,
 } from '@shared/schemas';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
-import { untrackRun } from '@test/support/sessionEnd';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import {
-  admitInterruptibleRun,
-  testRunHandle,
-} from '@test/support/runHandleFixtures';
+import { admitInterruptibleRun } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
   publishTestRunStart,
@@ -451,6 +447,7 @@ describe('createChatSessionController', () => {
     () =>
       Effect.gen(function* () {
         const childRun = 'c00001' as RunId;
+        let childLaunch: Fiber.Fiber<void> | undefined;
         const { session: runtimeSession, runs } = yield* installOwnerSession();
         const disposeAdapter = vi.fn();
         const presentationHost = {
@@ -471,31 +468,26 @@ describe('createChatSessionController', () => {
         // launch instead of naming one of its own.
         mocks.executeAgent.mockImplementationOnce(
           async (_config: unknown, runId: RunId) => {
-            const rootHandle = testRunHandle({
-              runId,
-              agent: 'root',
-            });
-            const childHandle = testRunHandle({
-              runId: childRun,
-              agent: 'child',
-            });
-            // A launch states both runs in the plane before it tracks them: the
-            // stop publishes `run.detach` on the child's own aggregate, and a run
-            // aggregate opens with its `run.start` and nothing else.
+            // A launch states both runs in the plane before it launches them:
+            // the stop publishes `run.detach` on the child's own aggregate, and
+            // a run aggregate opens with its `run.start` and nothing else.
             publishTestRunStart(runtimeSession, runId);
             publishTestRunStart(runtimeSession, childRun, { parent: runId });
-            runs.track(rootHandle);
-            runs.track(childHandle);
             // The root run's stop is its registry fiber's interruption: the
-            // stop lands there, untracks the root, and the run resolves
-            // cancelled through its own result.
+            // stop lands there, and the run resolves cancelled through its own
+            // result.
             admitInterruptibleRun(runs, runId, () => {
-              untrackRun(runs, runId);
               rootRunResult.resolve({
                 runId,
                 outcome: RUN_OUTCOME.CANCELLED,
               });
             });
+            childLaunch = admitInterruptibleRun(
+              runs,
+              childRun,
+              () => {},
+              runId,
+            );
             return rootRunResult.promise;
           },
         );
@@ -513,7 +505,7 @@ describe('createChatSessionController', () => {
         const rootRun = session.runId;
         if (!rootRun) throw new Error('startRootRun did not claim a run id');
         yield* Effect.promise(() =>
-          vi.waitFor(() => expect(runs.get(childRun)?.handle).toBeDefined()),
+          vi.waitFor(() => expect(runs.get(childRun)?.launched).toBe(true)),
         );
 
         // The launch's `run.start` rows are detached publishes: the stop
@@ -573,7 +565,7 @@ describe('createChatSessionController', () => {
         expect(yield* Fiber.join(approval)).toEqual({ action: 'approve' });
 
         // The host lives for the chat session, not for the runs it served.
-        untrackRun(runs, childRun);
+        if (childLaunch) yield* Fiber.interrupt(childLaunch);
         expect(disposeAdapter).not.toHaveBeenCalled();
 
         yield* Scope.close(chatScope, Exit.void);

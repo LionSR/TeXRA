@@ -11,12 +11,12 @@ import { Effect, type PlatformError, Stream, SubscriptionRef } from 'effect';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExportNode } from '@agent/export/schemas';
 import type { LiveRun } from '@agent/runtime/runs';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  deriveResumability,
   runRejection,
   type RunRejection,
-} from '@agent/runtime/runClassification';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { deriveResumability } from '@agent/storage/resumability';
+} from '@agent/storage/resumability';
 import { listRuns } from '@agent/storage/runListing';
 import { getRunRecords, type RunResult } from '@agent/storage/runRecords';
 import {

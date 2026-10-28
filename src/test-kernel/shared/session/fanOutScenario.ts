@@ -252,10 +252,6 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'run.position',
     payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
   });
-  log.emit(CHILD, T.childProgress, {
-    type: 'conversation.progress',
-    progress: { toolCallCount: 3 },
-  });
   log.emit(CHILD, T.childApproval, {
     type: 'request.opened',
     requestId: 'req-1',

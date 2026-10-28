@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { DateTime, Effect, type FileSystem, Option, Stream } from 'effect';
 
 // Local imports
-import { Runs } from '@agent/runtime/runRegistry';
 import {
   callerRun,
   recordToolFileRead,
@@ -91,12 +90,10 @@ function executeMemoryTool(
   input: MemoryToolInput,
 ): Effect.Effect<ToolResult, Error, ToolServices> {
   return Effect.gen(function* () {
-    const runs = yield* Runs;
-    const runId = (yield* callerRun)?.runId;
+    const caller = yield* callerRun;
     const invocation = {
-      runId,
-      agentName:
-        runId === undefined ? undefined : runs.get(runId)?.handle?.agentName,
+      runId: caller?.runId,
+      agentName: caller?.config.agent,
     } satisfies MemoryInvocation;
     return yield* run(input, invocation).pipe(onMemoryTreeLane);
   });

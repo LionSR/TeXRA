@@ -20,14 +20,20 @@
  *   returns, before its halt commits, is left unread;
  * - a run another live process holds is resumed here, or the host
  *   rearranges itself before the refusal;
- * - a run whose rows do not fold is reported as finished.
+ * - a run whose rows do not fold is reported as finished;
+ * - a resume whose input the resumed turn's end takes with it answers only
+ *   at a later rest, after the turn that input starts.
  */
 import '@test/support/sessionGraphTestSetup';
+
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
+import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withProcessServices } from '@platform/processRuntime';
@@ -43,6 +49,7 @@ import {
   validationHost,
 } from '@test/support/storeFaults';
 import { testRuntime } from '@test/support/testProcessRuntime';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 /** A resume on the test process's runtime. */
 const resume = (runId: RunId, options: ResumeRunOptions) =>
@@ -79,7 +86,7 @@ const offeredTools = (storage: string, runId: RunId) => {
 };
 
 /** What a resume that reached the run's next idle turn answers. */
-const DELIVERED = { started: true, delivered: true, outcome: 'waiting' };
+const DELIVERED = { started: true, delivered: true };
 
 describe(
   'resumeRun over a crashed store',
@@ -198,6 +205,44 @@ describe(
           expect(launched).toContain('bash');
           expect(resumed).toContain('read_file');
           expect(resumed).not.toContain('bash');
+        }),
+    );
+
+    it.live(
+      'a resume whose input the turn end takes with it answers at that commit',
+      () =>
+        Effect.gen(function* () {
+          const { session, runId, storage } = yield* parkedRunAfterCrash();
+          // The crash cut a turn short: its message taken, its answer not given.
+          yield* Effect.gen(function* () {
+            yield* session.log.hold(runId);
+            const parked = yield* session.runHistory.load(runId);
+            if (parked === null) throw new Error('The run has no history.');
+            const cell = yield* session.runHistory.open(runId);
+            yield* cell.append([
+              appendRow(runId, [
+                {
+                  role: 'user',
+                  content: [{ kind: 'text', text: 'answer me' }],
+                },
+              ]),
+              positionRow(runId, parked, 'turn.ready'),
+            ]);
+          }).pipe(Effect.scoped);
+          // Read at a turn's end, never mid-turn; the turn it starts holds
+          // its model call until released.
+          yield* session.followUps.send(
+            runId,
+            { from: { kind: 'user' }, text: 'GOLDEN-PARK then this' },
+            { hold: 'turn' },
+          );
+
+          expect(yield* resume(runId, { session })).toMatchObject(DELIVERED);
+          expect(answersOf(storage, runId)).toHaveLength(2);
+          writeFileSync(
+            join(testWorkspaceRoots().storage, 'golden-park.release'),
+            '',
+          );
         }),
     );
 

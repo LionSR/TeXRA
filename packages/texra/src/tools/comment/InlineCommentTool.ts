@@ -39,8 +39,8 @@ export interface InlineCommentThreadView {
 /**
  * Host-implemented provider for inline comment threads, injected by the
  * extension host and backed by the VS Code CommentController. Hosts without
- * one (CLI / desktop) never reach the tool: its `unavailableHosts` list drops
- * `inline_comment` from their agent lists.
+ * one (CLI / desktop) never offer the tool: the `core` plugin serves its
+ * host capability only beside a provider.
  *
  * Methods are synchronous because the underlying VS Code API is synchronous.
  */
@@ -58,6 +58,9 @@ export interface InlineCommentProvider {
   list(input: { absolutePath?: string }): InlineCommentThreadView[];
 }
 
+/** The host capability `core` serves beside a provider. */
+export type InlineCommentCapability = 'inline-comments';
+
 /**
  * The host's inline-comment provider, the `core` plugin's process layer on
  * the one host that has a Comments UI (`texraPlugins({ inlineComments })`).
@@ -71,10 +74,9 @@ export class InlineComments extends Context.Service<
 
 /**
  * Resolve the host's provider, failing when the host serves none. The failure
- * is intentional: `unavailableHosts` already keeps `inline_comment` out of the
- * CLI and desktop agent lists, so reaching the tool without a provider means the
- * VS Code host skipped it — a startup bug that must name itself rather than
- * report a plausible no-op back to the agent.
+ * is intentional: the tool is offered only where the host passed a provider,
+ * so reaching it without one is a startup bug that must name itself rather
+ * than report a plausible no-op back to the agent.
  */
 const requireProvider = Effect.gen(function* () {
   const provider = yield* Effect.serviceOption(InlineComments);
@@ -324,8 +326,8 @@ function inlineComment(
 
 export const InlineCommentTool = defineTool({
   name: 'inline_comment',
-  // Requires the VS Code Comments UI.
-  unavailableHosts: ['cli', 'desktop', 'sdk'],
+  // Offered where the host passes its Comments UI (`texraPlugins`).
+  hostCapability: 'inline-comments' satisfies InlineCommentCapability,
   description:
     'Leave inline comment threads in the editor via VS Code\'s native Comments UI (gutter bubbles + Comments panel) that the user can reply to and resolve. Commands: "add" opens a thread on a file range, "reply" appends to a thread, "resolve"/"unresolve" toggle a thread\'s state, "list" reads open threads including the user\'s replies. Use this for conversational, resolvable review notes; use the diagnostics tool\'s "add" command for one-off lint-style critique squiggles. Not available outside the VS Code extension host.',
   schema: InlineCommentInputSchema,

@@ -52,7 +52,6 @@ import {
 import { ContextBlobSchema, ToolsOfferedPayloadSchema } from './offeredTools';
 import { HookOutcomePayloadSchema } from './hookOutcome';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
-import { ConversationProgressSchema } from './runState';
 import { TranscriptEventSchema } from './traceEvent';
 
 /** Per-aggregate append order; `run.start` is seq 1 of its run. Dense from
@@ -250,7 +249,6 @@ const DisplayRowDraftSchema = Schema.Union([
    * terminal phase from it and from nothing else.
    */
   durable('run.end', RunEndRowSchema.fields),
-  durable('conversation.progress', { progress: ConversationProgressSchema }),
   durable('run.fact', { fact: RunFactSchema }),
   /**
    * A child driven by the child loop, which has no run history or rounds, parks
@@ -548,7 +546,7 @@ export function pendingKeyOf(
 
 /** The rows a run's trace (`AgentEvent`) is, besides its text chunks. */
 // prettier-ignore
-export const TRACE_ROW_TYPES = Object.freeze(['log', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'conversation.progress', 'run.fact', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplaySessionEvent['type'][]);
+export const TRACE_ROW_TYPES = Object.freeze(['log', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'run.fact', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplaySessionEvent['type'][]);
 
 export const DISPLAY_EVENT_TYPES: readonly string[] = Object.freeze(
   DisplaySessionEventDraftSchema.members.map(

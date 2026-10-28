@@ -18,8 +18,7 @@
  *   [`ApprovalPolicySchema`](#approvalpolicyschema), [`resolveBypass`](#resolvebypass).
  * - **Agent definitions & run outcomes**: [`AgentConfigSchema`](#agentconfigschema),
  *   [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
- *   [`RunEndResult`](#runendresult), [`RunIdSchema`](#runidschema),
- *   [`RunOutcomeSchema`](#runoutcomeschema).
+ *   [`RunEndResult`](#runendresult), [`RunIdSchema`](#runidschema).
  * - **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
  *   [`configTreeRows`](#configtreerows), [`GlobalStateKey`](#globalstatekey),
  *   [`WorkspaceStateKey`](#workspacestatekey), [`TraceDocumentSchema`](#tracedocumentschema).
@@ -202,15 +201,12 @@ export {
   Cancelled,
   formatHunkLines,
   Invalid,
-  NotOwner,
   OutcomeSchema,
   Rejected,
   RequestErrorSchema,
   RuntimeRequestSchema,
-  ToolEditContentSchema,
   type RequestError,
   type RuntimeRequest,
-  type StagedToolEdit,
   type ToolEditContent,
 } from '@shared/session/runtimeRequest';
 // A memory as a memory list shows it.
@@ -360,7 +356,6 @@ export {
   runIdentityDisplayName,
   runIdentityName,
   RunIdSchema,
-  RunOutcomeSchema,
   RunRecordFieldsSchema,
   runStorageFilePath,
   type SkillDisplayIssue,
@@ -377,7 +372,6 @@ export {
   type TokenUsageStats,
   TOOL_CALL_STATUS,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
-  ToolEditPermissionSchema,
   type UserQuestionAnswers,
   UserQuestionAnswersSchema,
   type UserQuestionPermission,
