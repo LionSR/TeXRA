@@ -10,7 +10,6 @@
  * filesystem-path semantics (containment, `.`/`..` resolution) should
  * import from '@utils/core/pathCore' instead.
  */
-import { customAlphabet, nanoid } from 'nanoid';
 import { basename as pathBasename, extname as pathExtname } from 'pathe';
 
 import type { RunId } from '@shared/schemas';
@@ -126,22 +125,10 @@ export function jitteredExponentialBackoffMs(
 // runId
 // ---------------------------------------------------------------------------
 
-/** Generate a 12-char lowercase-hex ID (48 bits of entropy). */
-const hexId12 = customAlphabet('0123456789abcdef', 12);
-
-/** Mint a run id: 12 lowercase hex chars (48 bits of entropy). One of the
- *  two minting sites (`deriveRunId` is the other), so the brand is
- *  applied here and nowhere downstream. */
+/** Mint a run id: 12 lowercase hex chars (48 bits of entropy), the first
+ *  digits of a random UUID, every one of which is random. One of the two
+ *  minting sites (`deriveRunId` is the other), so the brand is applied here
+ *  and nowhere downstream. Any other random id is `crypto.randomUUID()`. */
 export function generateRunId(): RunId {
-  return hexId12() as RunId;
-}
-
-/**
- * Generate a short unique ID for non-schema-constrained uses (temp
- * filenames, log entry IDs): nanoid's standard 21-char URL-safe alphabet.
- * A run id, which its schema constrains to lowercase hex, is
- * `generateRunId`'s.
- */
-export function generateShortId(): string {
-  return nanoid();
+  return crypto.randomUUID().replaceAll('-', '').slice(0, 12) as RunId;
 }

@@ -10,7 +10,7 @@ import { describe, expect, vi } from 'vitest';
 import { registryOf } from '@agent/runtime/runRegistry';
 
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
+import { JsonStore } from '@platform/defaults/jsonStore';
 import { APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
@@ -18,6 +18,7 @@ import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { nodeFileServices } from '@utils/files/fsDurability';
 import { generateRunId } from '@utils/core';
 
 describe('SessionHandle', () => {

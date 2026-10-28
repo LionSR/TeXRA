@@ -820,9 +820,10 @@ function formatHunkLines(hunks: ToolEditContent['hunks']): string[]
 
 ## generateRunId
 
-Mint a run id: 12 lowercase hex chars (48 bits of entropy). One of the
-two minting sites (`deriveRunId` is the other), so the brand is
-applied here and nowhere downstream.
+Mint a run id: 12 lowercase hex chars (48 bits of entropy), the first
+digits of a random UUID, every one of which is random. One of the two
+minting sites (`deriveRunId` is the other), so the brand is applied here
+and nowhere downstream. Any other random id is `crypto.randomUUID()`.
 
 ```ts
 function generateRunId(): RunId
@@ -870,7 +871,7 @@ function getProposalFileGroups(
 ## GlobalStateKey
 
 ```ts
-const GlobalStateKey: Readonly<{ readonly MEMORY_ENABLED: "texra.memory.enabled"; readonly SCRIPT_ONLY: "texra.codeMode.scriptOnly"; readonly ALLOW_ORCHESTRATOR_KILL: "texra.allowOrchestratorKill"; readonly DETACH_SUBAGENTS_ON_STOP: "texra.detachSubagentsOnStop"; readonly MODEL_SELECTION: "texra.modelSelection"; readonly HELPER_MODEL: "texra.helperModel"; readonly REASONING_LEVELS: "texra.reasoningLevels"; readonly PREFER_SHORT_MODEL_NAMES: "texra.preferShortModelNames"; readonly CUSTOM_AGENT_DIR: "texra.customAgentDir"; readonly ENDPOINT_OPENAI: "texra.endpoint.openai"; readonly ENDPOINT_ANTHROPIC: "texra.endpoint.anthropic"; readonly ENDPOINT_GOOGLE: "texra.endpoint.google"; readonly ENDPOINT_DEEPSEEK: "texra.endpoint.deepseek"; readonly ENDPOINT_XAI: "texra.endpoint.xai"; readonly ENDPOINT_MOONSHOT: "texra.endpoint.moonshot"; readonly ENDPOINT_DASHSCOPE: "texra.endpoint.dashscope"; readonly ENDPOINT_MINIMAX: "texra.endpoint.minimax"; readonly ENDPOINT_GLM: "texra.endpoint.glm"; readonly ENDPOINT_META: "texra.endpoint.meta"; readonly DASHSCOPE_USE_CHINA: "texra.dashscope.useChina"; readonly MINIMAX_USE_CHINA: "texra.minimax.useChina"; readonly GLM_USE_CHINA: "texra.glm.useChina"; readonly MOONSHOT_USE_CHINA: "texra.moonshot.useChina"; readonly GLM_CODING_PLAN: "texra.glm.codingPlan"; readonly KIMI_CODE_PREFER: "texra.kimiCode.prefer"; readonly WEBSOCKET_OPENAI: "texra.websocket.openai"; readonly DISABLED_TOOLS: "texra.tools.disabled"; readonly MCP_REVISION_KEY: "texra.mcp.revisionKey"; readonly INSTALLED_PLUGINS: "texra.plugins.installed"; readonly ONBOARDING_DECLINED: "texra.cli.onboardingDeclined"; readonly ONBOARDING_FIRST_RUN_DONE: "texra.onboarding.firstRunDone"; readonly ONBOARDING_DEFAULT_TEAM_ID: "texra.onboarding.defaultTeamId"; }>
+const GlobalStateKey: Readonly<{ readonly MEMORY_ENABLED: "texra.memory.enabled"; readonly SCRIPT_ONLY: "texra.codeMode.scriptOnly"; readonly ALLOW_ORCHESTRATOR_KILL: "texra.allowOrchestratorKill"; readonly DETACH_SUBAGENTS_ON_STOP: "texra.detachSubagentsOnStop"; readonly MODEL_SELECTION: "texra.modelSelection"; readonly HELPER_MODEL: "texra.helperModel"; readonly REASONING_LEVELS: "texra.reasoningLevels"; readonly PREFER_SHORT_MODEL_NAMES: "texra.preferShortModelNames"; readonly CUSTOM_AGENT_DIR: "texra.customAgentDir"; readonly GLM_CODING_PLAN: "texra.glm.codingPlan"; readonly KIMI_CODE_PREFER: "texra.kimiCode.prefer"; readonly WEBSOCKET_OPENAI: "texra.websocket.openai"; readonly DISABLED_TOOLS: "texra.tools.disabled"; readonly MCP_REVISION_KEY: "texra.mcp.revisionKey"; readonly INSTALLED_PLUGINS: "texra.plugins.installed"; readonly ONBOARDING_DECLINED: "texra.cli.onboardingDeclined"; readonly ONBOARDING_FIRST_RUN_DONE: "texra.onboarding.firstRunDone"; readonly ONBOARDING_DEFAULT_TEAM_ID: "texra.onboarding.defaultTeamId"; }>
 ```
 
 ## GOAL_MAX_COST_SETTING
@@ -1523,7 +1524,7 @@ The custom-endpoint setting key of a provider, if it offers one.
 ```ts
 function providerEndpointKey(
   provider: string,
-): GlobalStateKey | undefined
+): (typeof PROVIDER_ENDPOINT_STATE_ENTRIES)[number]['endpointKey'] | undefined
 ```
 
 ## providerRegionSetting
@@ -2763,14 +2764,7 @@ type WorkspaceFileLocation = typeof WorkspaceFileLocationSchema.Type;
 
 ## WorkspaceStateKey
 
-The harness's workspace and global state keys. An app's keys live beside
-its setting rows, and a plugin's beside the rows its `Plugin` value
-declares.
-
-The stores these keys address are the session's `roots.workspaceState`,
-taken as data from the session, tool call or host command that holds it,
-and the process's `AppState` service. Each host wires its own
-implementation at startup.
+The harness's workspace-scoped state keys (`roots.workspaceState`).
 
 ```ts
 const WorkspaceStateKey: Readonly<{ readonly WORKSPACE_AGENTS: "texra.workspaceAgents"; readonly CUSTOM_TEAMS: "texra.customTeams"; readonly HIDDEN_CUSTOM_AGENTS: "texra.hiddenCustomAgents"; readonly DISABLED_SKILLS: "texra.skills.disabled"; readonly DISABLED_SKILL_SOURCES: "texra.skills.disabledSources"; readonly GIT_MARK_COMMITS: "texra.git.markCommits"; readonly GIT_AUTHOR_NAME: "texra.git.authorName"; readonly GIT_AUTHOR_EMAIL: "texra.git.authorEmail"; readonly GIT_WORKTREE_SUPPORT: "texra.git.worktreeSupport"; readonly TOOL_PATH_PROTECTION_ENABLED: "texra.tools.restrictPathsToWorkingDirectory"; }>

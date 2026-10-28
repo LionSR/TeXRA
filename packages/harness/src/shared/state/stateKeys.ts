@@ -8,7 +8,9 @@
  * and the process's `AppState` service. Each host wires its own
  * implementation at startup.
  */
+import { Result, Schema } from 'effect';
 
+/** The harness's workspace-scoped state keys (`roots.workspaceState`). */
 export const WorkspaceStateKey = Object.freeze({
   // Agent visibility
   /** Workspace agents selection; the `custom` member carries a category-keyed record. */
@@ -56,24 +58,6 @@ export const GlobalStateKey = Object.freeze({
   // Agent settings (migrated from VS Code config)
   CUSTOM_AGENT_DIR: 'texra.customAgentDir',
 
-  // Endpoint settings
-  ENDPOINT_OPENAI: 'texra.endpoint.openai',
-  ENDPOINT_ANTHROPIC: 'texra.endpoint.anthropic',
-  ENDPOINT_GOOGLE: 'texra.endpoint.google',
-  ENDPOINT_DEEPSEEK: 'texra.endpoint.deepseek',
-  ENDPOINT_XAI: 'texra.endpoint.xai',
-  ENDPOINT_MOONSHOT: 'texra.endpoint.moonshot',
-  ENDPOINT_DASHSCOPE: 'texra.endpoint.dashscope',
-  ENDPOINT_MINIMAX: 'texra.endpoint.minimax',
-  ENDPOINT_GLM: 'texra.endpoint.glm',
-  ENDPOINT_META: 'texra.endpoint.meta',
-
-  // Region settings
-  DASHSCOPE_USE_CHINA: 'texra.dashscope.useChina',
-  MINIMAX_USE_CHINA: 'texra.minimax.useChina',
-  GLM_USE_CHINA: 'texra.glm.useChina',
-  MOONSHOT_USE_CHINA: 'texra.moonshot.useChina',
-
   // Coding plan settings
   GLM_CODING_PLAN: 'texra.glm.codingPlan',
   KIMI_CODE_PREFER: 'texra.kimiCode.prefer',
@@ -98,3 +82,37 @@ export const GlobalStateKey = Object.freeze({
 } as const);
 export type GlobalStateKey =
   (typeof GlobalStateKey)[keyof typeof GlobalStateKey];
+
+const DisabledToolIdsSchema = Schema.Array(Schema.String);
+
+/**
+ * The tool switch record ({@link GlobalStateKey.DISABLED_TOOLS}) as stored,
+ * checked: the plugin ids the user holds off, or `undefined` while nothing
+ * (neither the first-install seed nor the user) has written it. A present
+ * value that is not a list of ids is corruption and fails with the reason,
+ * rather than reading as "nothing off", which would switch every opt-in
+ * plugin on. The one decoder of the record; each reader turns the failure
+ * into its own error.
+ */
+export function decodeDisabledTools(stored: unknown): Result.Result<
+  ReadonlySet<string> | undefined,
+  {
+    readonly key: string;
+    readonly message: string;
+    readonly cause: Schema.SchemaError;
+  }
+> {
+  if (stored === undefined) return Result.succeed(undefined);
+  const key = GlobalStateKey.DISABLED_TOOLS;
+  return Result.mapBoth(
+    Schema.decodeUnknownResult(DisabledToolIdsSchema)(stored),
+    {
+      onSuccess: (ids): ReadonlySet<string> => new Set(ids),
+      onFailure: (cause) => ({
+        key,
+        message: `The tool switch record (${key}) is unreadable: ${cause.message}`,
+        cause,
+      }),
+    },
+  );
+}

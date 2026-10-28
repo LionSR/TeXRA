@@ -19,7 +19,7 @@ import { Cause, Effect, FileSystem, type PlatformError, Stream } from 'effect';
 
 import { SecretsFailed, type SecretsOperation } from '@texra-ai/llm';
 import type { PlatformSecrets } from '@platform/secrets';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
+import { nodeFileServices } from '@utils/files/fsDurability';
 import {
   absentReason,
   fileWatchRetrySchedule,

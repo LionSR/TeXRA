@@ -24,7 +24,6 @@ import {
   prepareToolEditApprovalPrompt,
   type ToolEditApprovalRequest,
 } from '@tools/approval/toolEditApproval';
-import { generateShortId } from '@utils/core';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 /**
@@ -250,7 +249,7 @@ export function bashApprovalRequest(request: {
   readonly runId?: RunId;
 }): BashPermission {
   return {
-    requestId: `bash-${generateShortId()}`,
+    requestId: `bash-${crypto.randomUUID()}`,
     command: request.command,
     ...(request.cwd ? { cwd: request.cwd } : {}),
     allowBypass: true,
@@ -266,7 +265,7 @@ export const toolEditApprovalRequest = Effect.fn('toolEditApprovalRequest')(
     const session = yield* sessionWithInteractions(undefined);
     const { permission, hunks, firstChangedLine } =
       prepareToolEditApprovalPrompt(session, {
-        requestId: `approval-${generateShortId()}`,
+        requestId: `approval-${crypto.randomUUID()}`,
         request,
         relativePath: workspaceRelativePath(
           session.roots.workspace,
