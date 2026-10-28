@@ -81,10 +81,9 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
     return yield* refused('Only a conversation can be forked.');
   }
   const aggregate = qualifyAggregateId('run', from);
-  const start = (yield* session.log.records(from)).find(
-    (row) => row.type === 'run.start',
-  );
-  if (start?.type !== 'run.start') {
+  const facts = yield* session.log.facts(from);
+  const start = facts?.start;
+  if (start == null) {
     return yield* refused(
       `The ${runNoun(session, from)} ${from} has no recorded start.`,
     );
@@ -131,7 +130,7 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
     ...launched
   } = config;
   const record = { ...launched, model: found.state.modelId ?? launched.model };
-  return { ...found, start, record };
+  return { ...found, start, title: facts?.title ?? null, record };
 });
 
 /**
@@ -187,14 +186,9 @@ export const forkRun = Effect.fn('forkRun')(function* (
   from: { readonly id: RunId; readonly uid: string },
   at: number | null,
 ): Effect.fn.Return<RunId, Rejected | Error> {
-  const { seq: cut, state, start, record } = yield* cutOf(session, from.id, at);
-  // The title the source shows: its newest user title over any later model
-  // title, as the run state reads it, with its authorship.
-  const titles = (yield* session.log.rows(qualifyAggregateId('run', from.id), [
-    'run.description',
-  ])).flatMap((row) => (row.type === 'run.description' ? [row] : []));
-  const title =
-    titles.findLast((row) => row.by === 'user') ?? titles.at(-1) ?? null;
+  // The title the source shows, with its authorship.
+  const cutAt = yield* cutOf(session, from.id, at);
+  const { seq: cut, state, start, title, record } = cutAt;
   const runId = generateRunId();
   const registration = yield* registrationRows(session, runId, record, {
     identity: start.identity,

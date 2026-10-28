@@ -79,13 +79,11 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
     };
   if (script.kind !== 'background')
     return { config: run.config, source: null, before: 0, boundAt: undefined };
-  const start = (yield* run.session.log.records(run.runId)).find(
-    (row) => row.type === 'run.start',
-  );
+  const start = (yield* run.session.log.facts(run.runId))?.start;
   const missing = new ToolError(
     `self() needs the conversation the script ${run.runId} launched from, and the call that launched it.`,
   );
-  const edge = start?.type === 'run.start' ? start.parent : null;
+  const edge = start?.parent;
   if (edge?.call == null) return yield* Effect.fail(missing);
   const { id: parent } = edge;
   const { card } = edge.call;

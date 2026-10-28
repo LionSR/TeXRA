@@ -47,6 +47,7 @@ import type {
   StagedToolEdits,
 } from '@shared/session/runtimeRequest';
 import type { RunHistory } from '@shared/session/runHistory';
+import type { RunRows } from '@shared/session/runRowsShape';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Append, UnfoldedDraft } from '@shared/session/sessionEvents';
@@ -120,10 +121,10 @@ export interface SessionLog {
   blobs(
     digests: readonly string[],
   ): Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
-  /** A run's record rows: the latest row of each record type. */
-  records(
-    runId: RunId,
-  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+  /** A run's facts, folded from its latest row of each record type (its
+   *  requests and pending input left out: `Inbox.read` reads those); null
+   *  while the store holds no open run under the id. */
+  facts(runId: RunId): Effect.Effect<RunRows | null, DatabaseReadFailed>;
   /** A run's display rows, its priced `usage` rows among them; empty when
    *  the run never existed or was removed. */
   display(

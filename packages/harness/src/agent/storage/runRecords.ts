@@ -2,7 +2,7 @@
  *  its terminal fact, its parent edge and the children its calls own, and
  *  the child loop's turn bookkeeping: database reads of committed rows. */
 
-import { Effect, Result, Schema, Stream } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runHistoryRows } from '@agent/runtime/storedTurn';
@@ -15,17 +15,15 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import { attemptOf } from '@shared/session/inFlight';
 import { unloadable } from '@shared/session/runHistory';
 import { applyRunRows, type RunState } from '@shared/session/runState';
-import { parentEdgeOf } from '@shared/session/runRelation';
+import type { RunRows } from '@shared/session/runRowsShape';
 import { runEndFromEvents } from '@shared/session/runFacts';
 import {
   qualifyAggregateId,
-  aggregateTarget,
   emptyRunEndOutput,
   isTaskConfig,
   sumRunUsageTotals,
   type RunUsageTotals,
   RunWorkspaceFilesSchema,
-  type AggregateId,
   type ResultMeta,
   type RunEnd,
   type RunOutcome,
@@ -99,7 +97,7 @@ const parentEdge = Effect.fn('parentEdge')(function* (
   session: SessionHandle,
   runId: RunId,
 ) {
-  return parentEdgeOf(yield* session.log.records(runId));
+  return (yield* session.log.facts(runId))?.parent ?? null;
 });
 
 /** The run one attempt of a parent's call launches (an `agent` child, a
@@ -163,8 +161,8 @@ export const lostResultId = (runId: RunId, since?: number): string =>
   `${runId}:result-lost:${since ?? ''}`;
 
 /** The unended children `runId`'s open calls own, from its history and
- *  their own rows. Unloadable, it names no calls: every child whose own
- *  `run.start` (the listing's row) puts it under a call is owned, loudly. */
+ *  their own rows. Unloadable, it names no calls: every child it launched
+ *  (the listing's `launchParentId`) is owned, loudly. */
 export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
   session: SessionHandle,
   runId: RunId,
@@ -181,49 +179,28 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
     );
   const named =
     history === false
-      ? (yield* Stream.runCollect(session.log.listing())).flatMap((row) => {
-          const child = aggregateTarget(row.aggregateId);
-          return row.type === 'run.start' &&
-            row.parent?.id === runId &&
-            child.kind === 'run'
-            ? [[null, child.id] as const]
-            : [];
-        })
+      ? [...(yield* session.view.read([])).runs.values()].flatMap((child) =>
+          child.launchParentId === runId ? [[null, child.id] as const] : [],
+        )
       : [...openCallChildren(runId, history)].flatMap(([callId, children]) =>
           children.map((child) => [callId, child] as const),
         );
   const open: { readonly runId: RunId; readonly callId: string }[] = [];
   for (const [callId, child] of named) {
     // Its edge and its end; a damaged child fails alone, loudly.
-    const read = yield* Effect.result(session.log.records(child));
+    const read = yield* Effect.result(session.log.facts(child));
     if (read._tag === 'Failure') {
       yield* Effect.logWarning(
         `Child run ${child} cannot be read; its parent ${runId} treats it as failed.`,
       ).pipe(Effect.annotateLogs({ data: read.failure }));
       continue;
     }
-    const edge = parentEdgeOf(read.success)?.call?.callId ?? null;
+    const edge = read.success?.parent?.call?.callId ?? null;
     if (edge !== null && (callId ?? edge) === edge)
-      if (runEndFromEvents(read.success, child) === null)
-        open.push({ runId: child, callId: edge });
+      if (read.success?.end === null) open.push({ runId: child, callId: edge });
   }
   return open;
 });
-
-/** The run's latest row of one type, or null: the one latest-row reader
- *  (the read keeps the newest of each type, strictly decoded). */
-function latestOfType<T extends SessionEvent['type']>(
-  rows: readonly SessionEvent[],
-  id: AggregateId,
-  type: T,
-): Extract<SessionEvent, { type: T }> | null {
-  return (
-    rows.findLast(
-      (row): row is Extract<SessionEvent, { type: T }> =>
-        row.aggregateId === id && row.type === type,
-    ) ?? null
-  );
-}
 
 /** `end` with its run's children's spend added to its own: a document
  *  task's revisions are its children's runs, which hold what it cost. */
@@ -259,6 +236,7 @@ export type RunResult =
 /** Native access to named run metadata, with no file-backed read arm. */
 export function getRunRecords(session: SessionHandle, runId: RunId) {
   const id = qualifyAggregateId('run', runId);
+  const facts = session.log.facts(runId);
   /**
    * The run's terminal result: the `run.end` row's outcome, error and
    * output, and the usage its run history folds from its priced response
@@ -266,7 +244,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
    * for a run without one; an unreadable one is logged and reads the same,
    * so it never also costs the run its terminal fact.
    */
-  const runEndOf = (rows: readonly SessionEvent[]) =>
+  const runEndOf = (held: RunRows, rows: readonly SessionEvent[]) =>
     Effect.gen(function* () {
       const end = runEndFromEvents(rows, runId);
       if (!end) return null;
@@ -281,9 +259,8 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
         ).pipe(Effect.annotateLogs({ runId, error: folded.failure.message }));
       }
       const own = Result.isSuccess(folded) ? folded.success?.usage : undefined;
-      const config = latestOfType(rows, id, 'run.config')?.config;
       const usage =
-        config && isTaskConfig(config)
+        held.config && isTaskConfig(held.config)
           ? (yield* withChildSpend(session, { runId, usage: own })).usage
           : own;
       const { outcome, error, output } = end;
@@ -294,17 +271,16 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
         output,
       } satisfies RunEnd;
     });
-  /** Every row of the run, in one read; none for a closed (tombstoned) run,
-   *  which the record reads report as absent too. */
-  const runRows = session.log
-    .rows(id)
-    .pipe(
-      Effect.map((rows) => (rows.at(-1)?.type === 'run.removed' ? [] : rows)),
-    );
+  /** The run's facts and every row of it, in one read; none for a run the
+   *  store does not hold open, which the record reads report as absent too. */
+  const whole = Effect.flatMap(facts, (held) =>
+    held === null
+      ? Effect.succeed(null)
+      : Effect.map(session.log.rows(id), (rows) => ({ held, rows })),
+  );
   const read = <A>(
-    select: (rows: readonly SessionEvent[]) => A,
-  ): Effect.Effect<A, DatabaseReadFailed> =>
-    session.log.records(runId).pipe(Effect.map(select));
+    select: (facts: RunRows | null) => A,
+  ): Effect.Effect<A, DatabaseReadFailed> => Effect.map(facts, select);
   /** The run's folded state, or null with no run history. A run whose rows
    *  this build cannot fold is a failed read of that run, never a refusal
    *  of the caller's own writes. */
@@ -320,14 +296,12 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
   );
   /** The latest `run.config` row; the database reads a closed run as absent. */
   const readRecord = (): Effect.Effect<RunRecord | null, DatabaseReadFailed> =>
-    read((rows) => latestOfType(rows, id, 'run.config')?.config ?? null);
+    read((held) => held?.config ?? null);
   return {
     /** The run has a `run.start` the database still lists: absent, or
      *  closed by its tombstone, reads false. */
     exists: (): Effect.Effect<boolean, DatabaseReadFailed> =>
-      read((rows) =>
-        rows.some((row) => row.aggregateId === id && row.type === 'run.start'),
-      ),
+      read((held) => held !== null),
     readRunRecord: readRecord,
     readConfig: (): Effect.Effect<AgentConfig | null, DatabaseReadFailed> =>
       readRecord().pipe(
@@ -336,7 +310,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
         ),
       ),
     readReport: (): Effect.Effect<string | null, DatabaseReadFailed> =>
-      read((rows) => latestOfType(rows, id, 'run.report')?.report ?? null),
+      read((held) => held?.report ?? null),
     /** The workspace files the run edited, folded from its settled calls
      *  (`RunState.edited`). A run with no run history edited nothing here. */
     readWorkspaceFiles: (): Effect.Effect<
@@ -353,11 +327,13 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     readModelFailed: (): Effect.Effect<boolean, DatabaseReadFailed> =>
       Effect.map(folded, (state) => state?.lastError != null),
     readResultMeta: (): Effect.Effect<ResultMeta | null, DatabaseReadFailed> =>
-      read((rows) => latestOfType(rows, id, 'run.result')?.result ?? null),
+      read((held) => held?.result ?? null),
     /** The run's terminal result ({@link runEndOf}), or null while the
      *  lifecycle it is in has not ended. */
     readRunEnd: (): Effect.Effect<RunEnd | null, DatabaseReadFailed> =>
-      runRows.pipe(Effect.flatMap(runEndOf)),
+      Effect.flatMap(whole, (run) =>
+        run === null ? Effect.succeed(null) : runEndOf(run.held, run.rows),
+      ),
     /** The run's result: its producer record joined to its terminal result,
      *  the output as delivered (the subagent's reply, which only its record
      *  holds, over the run's own output). A background
@@ -365,14 +341,16 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
      *  value is its result) needs none. Null otherwise with no record. */
     readResult: Effect.fn('runRecords.readResult')(
       function* (): Effect.fn.Return<RunResult | null, DatabaseReadFailed> {
-        const rows = yield* runRows;
-        const meta = latestOfType(rows, id, 'run.result')?.result ?? null;
-        if (meta?.producer === 'backgroundBash') return meta;
+        const run = yield* whole;
+        const meta = run?.held.result ?? null;
+        if (run === null || meta?.producer === 'backgroundBash') return meta;
         if (meta === null) {
-          const config = latestOfType(rows, id, 'run.config')?.config;
-          return config && isTaskConfig(config) ? yield* runEndOf(rows) : null;
+          const { config } = run.held;
+          return config && isTaskConfig(config)
+            ? yield* runEndOf(run.held, run.rows)
+            : null;
         }
-        const end = yield* runEndOf(rows);
+        const end = yield* runEndOf(run.held, run.rows);
         return {
           ...(end ?? {}),
           output: { ...(end?.output ?? emptyRunEndOutput()), ...meta.output },

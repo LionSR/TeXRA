@@ -24,6 +24,7 @@ import {
   type RunId,
   type SessionEvent,
 } from '@shared/schemas';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type { RunPosition, RunRows } from './runRowsShape';
 import type { RunView } from './sessionView';
@@ -137,12 +138,18 @@ export const freshRunRows = (): RunRows => ({
   ...freshRunPosition(),
   followUps: [],
   followUpIds: new Set(),
+  start: null,
   parent: null,
   activation: null,
   end: null,
   inputClosed: false,
   heldParks: [],
   report: null,
+  result: null,
+  config: null,
+  position: null,
+  title: null,
+  grants: null,
 });
 
 export type RunRowVerdict =
@@ -290,8 +297,12 @@ export const RUN_ROW_READS = {
 /** What one lifecycle or record row changes on `rows`. */
 function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
   switch (row.type) {
-    case 'run.start':
-      return { parent: row.parent };
+    case 'run.start': {
+      const grants = row.approvalPolicy ?? NO_APPROVAL_GRANTS;
+      return { start: row, parent: row.parent, grants };
+    }
+    case 'approval.policy':
+      return { grants: row.snapshot };
     case 'run.detach':
       return { parent: null };
     case 'run.activate':
@@ -303,6 +314,17 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
       return { inputClosed: true };
     case 'run.report':
       return { report: row.report };
+    case 'run.result':
+      return { result: row.result };
+    case 'run.config':
+      return { config: row.config };
+    case 'run.position':
+      return { position: row };
+    case 'run.description':
+      // A user's title stands until the user renames again.
+      return row.by === 'model' && rows.title?.by === 'user'
+        ? {}
+        : { title: row };
     case 'child.park': {
       const held = { park: row, text: rows.report ?? '' };
       return rows.end === null ? { heldParks: [...rows.heldParks, held] } : {};
@@ -324,10 +346,8 @@ export function runRowsFrom(rows: readonly SessionEvent[]): RunRows {
   let slice = freshRunRows();
   const copies: BatchCopies = new WeakSet();
   for (const row of rows) {
-    if (!isSharedRunRow(row)) {
-      slice = { ...slice, ...recordFacts(slice, row) };
-      continue;
-    }
+    slice = { ...slice, ...recordFacts(slice, row) };
+    if (!isSharedRunRow(row)) continue;
     const verdict = applyRunRow(slice, row, copies);
     if (verdict.kind === 'contradiction' || verdict.kind === 'unresolved') {
       throw new Error(

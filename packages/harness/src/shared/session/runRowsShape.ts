@@ -10,6 +10,7 @@ import type {
   RunOutcome,
   SessionEvent,
 } from '@shared/schemas';
+import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import type { QueuedFollowUp } from './runRows';
 
 type RequestState = {
@@ -53,7 +54,9 @@ export type RunRows = RunPosition & {
    * under an id already here, and it is queued once, never twice.
    */
   readonly followUpIds: ReadonlySet<string>;
-  /** Its parent edge: the `run.start`'s, until a `run.detach` severs it. */
+  /** Its `run.start`, and its parent edge: the start's, until a
+   *  `run.detach` severs it. */
+  readonly start: RowOf<'run.start'> | null;
   readonly parent: RowOf<'run.start'>['parent'];
   /** Its latest `run.activate`, and the `run.end` of the lifecycle that
    *  began (null until it ends): a resumed run never carries an old end. */
@@ -65,5 +68,14 @@ export type RunRows = RunPosition & {
   /** Its `child.park`s in a lifecycle not ended, each with the text of the
    *  latest `run.report` before it. */
   readonly heldParks: readonly { park: RowOf<'child.park'>; text: string }[];
+  /** Its latest `run.report`, `run.result`, `run.config` and `run.position`. */
   readonly report: string | null;
+  readonly result: RowOf<'run.result'>['result'] | null;
+  readonly config: RowOf<'run.config'>['config'] | null;
+  readonly position: RowOf<'run.position'> | null;
+  /** Its title: the latest user `run.description`, else the latest one. */
+  readonly title: RowOf<'run.description'> | null;
+  /** Its own grants: the latest `approval.policy`, else the snapshot its
+   *  `run.start` carried. */
+  readonly grants: ApprovalGrants | null;
 };

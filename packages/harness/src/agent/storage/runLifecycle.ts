@@ -226,15 +226,15 @@ export const endIn = Effect.fn('endIn')(function* (
 ) {
   const { runId, outcome, error } = input;
   const target = qualifyAggregateId('run', runId);
-  const rows = yield* session.log.records(runId);
+  const facts = yield* session.log.facts(runId);
   // A run never created has nothing to end: its launch reports the failure.
-  if (!rows.some((row) => row.type === 'run.start')) return { recorded: false };
+  if (facts === null) return { recorded: false };
   const lastTurn: Effect.Success<TransactionPart> = yield* input.lastTurn ??
     Effect.succeed({ rows: [] });
   // Ended in its current lifecycle, that end stands: a resumed run ends
   // again, or every `durableOutcome` reader keeps it RUNNING for want of
   // the row.
-  const ended = runEndFromEvents(rows, runId)?.outcome;
+  const ended = facts.end?.outcome;
   const persisted = ended ?? outcome;
   // No end now: the run already ended, or its end waits until the result
   // it holds is delivered.
@@ -242,11 +242,10 @@ export const endIn = Effect.fn('endIn')(function* (
   if (ended !== undefined && error !== undefined)
     yield* Effect.logWarning(`Run ${runId} had ended: ${error.message}`);
   // The loop's halt, never apart from its end, through the run's cell.
-  const halt = skipEnd
-    ? []
-    : rows.flatMap((row) =>
-        row.type === 'run.position' ? [haltedPositionRow(row, persisted)] : [],
-      );
+  const halt =
+    skipEnd || facts.position === null
+      ? []
+      : [haltedPositionRow(facts.position, persisted)];
   const closing: readonly RunInputDraft[] = skipEnd
     ? []
     : [
@@ -348,7 +347,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   // failed after); a failed read leaves the end to the backstop, loudly.
   const read =
     Exit.isFailure(status) && lastTurn !== undefined
-      ? yield* Effect.result(session.log.records(runId))
+      ? yield* Effect.result(session.log.rows(qualifyAggregateId('run', runId)))
       : undefined;
   if (read?._tag === 'Success' && Exit.isFailure(status)) {
     const cause = ensureError(Cause.squash(status.cause)).message;

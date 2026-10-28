@@ -49,6 +49,7 @@ import {
   type SessionEventsShape,
   type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
+import { runRowsFrom } from '@shared/session/runRows';
 
 import { makeRunTrace } from './runTrace';
 import { SessionViewService } from './SessionView';
@@ -330,8 +331,10 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       now: () => SubscriptionRef.getUnsafe(database.observedCommit),
       rows: (id, types) => database.readAggregate(id, 1, types),
       blobs: database.readBlobs,
-      records: (runId) =>
-        database.readRunRecords(qualifyAggregateId('run', runId)),
+      facts: (runId) =>
+        database
+          .readRunRecords(qualifyAggregateId('run', runId))
+          .pipe(Effect.map((rows) => (rows[0] ? runRowsFrom(rows) : null))),
       display: (runId) =>
         Effect.map(
           database.readDisplayAggregate(qualifyAggregateId('run', runId), 1),
@@ -343,13 +346,10 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       owns: (runId) =>
         Effect.map(
           database.aggregateState([qualifyAggregateId('run', runId)]),
-          (states) =>
-            states.some(
-              (state) =>
-                state.startCommit !== null &&
-                !state.closed &&
-                state.ownerId === ownerId,
-            ),
+          ([state]) =>
+            state?.startCommit != null &&
+            !state.closed &&
+            state.ownerId === ownerId,
         ),
       owner: (runId) => database.claimOwner(qualifyAggregateId('run', runId)),
       movedAside: database.movedAside,

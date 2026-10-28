@@ -31,8 +31,8 @@ describe('persisted parent edge', () => {
         expect(rows[0]).toMatchObject({
           parent: { id: 'aaa0ff', uid: expect.any(String) },
         });
-        const ownRows = yield* session.log.records('aaa010' as RunId);
-        expect(ownRows).toHaveLength(1);
+        const facts = yield* session.log.facts('aaa010' as RunId);
+        expect(facts?.parent?.id).toBe('aaa0ff');
         const view = yield* session.view.read([]);
         expect(view.runs.get('aaa010' as RunId)?.parentId).toBe('aaa0ff');
       }),

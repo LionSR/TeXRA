@@ -63,7 +63,7 @@ describe('run listing normalization', () => {
     Effect.gen(function* () {
       const id = 'eee556' as RunId;
       yield* writeRun(id, 'assistant');
-      vi.spyOn(session.log, 'records').mockReturnValue(
+      vi.spyOn(session.log, 'facts').mockReturnValue(
         Effect.fail(
           new DatabaseReadFailed({
             path: 'session.db',

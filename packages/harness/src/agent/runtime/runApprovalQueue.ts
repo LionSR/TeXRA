@@ -29,7 +29,6 @@ import {
   qualifyAggregateId,
   type PermissionPayload,
   type RunId,
-  type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
 import {
@@ -47,9 +46,9 @@ import {
   type RequestError,
   type RuntimeRequest,
 } from '@shared/session/runtimeRequest';
-import { parentEdgeOf } from '@shared/session/runRelation';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { Settings } from '@shared/config/settings';
+import type { RunRows } from '@shared/session/runRowsShape';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { SessionHandle } from './SessionHandle';
 
@@ -68,18 +67,6 @@ interface QueuedApproval<A, E, R> {
 
 /** The kinds whose prompts queue one at a time per run. */
 type QueuedKind = Extract<ApprovalBypassKind, 'bash' | 'toolEdit'>;
-
-/** A run's grants as its rows record them: the latest `approval.policy`,
- *  else the snapshot its `run.start` carried. */
-function recordedGrants(rows: readonly SessionEvent[]): ApprovalGrants {
-  const latest = rows.findLast(
-    (row) => row.type === 'approval.policy' || row.type === 'run.start',
-  );
-  if (latest?.type === 'approval.policy') return latest.snapshot;
-  return latest?.type === 'run.start'
-    ? (latest.approvalPolicy ?? NO_APPROVAL_GRANTS)
-    : NO_APPROVAL_GRANTS;
-}
 
 /**
  * A run's grants once it activates again, or null when they stand as
@@ -205,11 +192,10 @@ export function createSessionApprovals(
         const runs = new Map<RunId, { parentId: RunId | null }>();
         const policy = new Map<RunId, ApprovalGrants>();
         for (let id: RunId | null = runId; id !== null && !runs.has(id);) {
-          const rows: readonly SessionEvent[] =
-            yield* session().log.records(id);
-          const parentId: RunId | null = parentEdgeOf(rows)?.id ?? null;
+          const facts: RunRows | null = yield* session().log.facts(id);
+          const parentId: RunId | null = facts?.parent?.id ?? null;
           runs.set(id, { parentId });
-          policy.set(id, recordedGrants(rows));
+          policy.set(id, facts?.grants ?? NO_APPROVAL_GRANTS);
           id = parentId;
         }
         const next = afterActivation(
@@ -231,7 +217,8 @@ export function createSessionApprovals(
         return Effect.void;
       return session().log.transact((tx) =>
         Effect.gen(function* () {
-          const recorded = recordedGrants(yield* session().log.records(runId));
+          const recorded =
+            (yield* session().log.facts(runId))?.grants ?? NO_APPROVAL_GRANTS;
           const next = edit(recorded);
           const all: readonly UnfoldedDraft[] = sameGrants(recorded, next)
             ? rows
