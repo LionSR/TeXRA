@@ -298,6 +298,7 @@ export function initCliPlatform(
       try: () =>
         installCliProcessRuntime(context.storageRoot, {
           resourcesPath: context.resourcesPath,
+          skillSourceOptions: context.skillSourceOptions,
           minimumLogLevel: context.minimumLogLevel,
           workspace: context.cwd,
         }),
@@ -387,18 +388,11 @@ export function initCliPlatform(
             ),
           );
 
-          // Everything this process installs once beside its roots, in the
-          // order the shared bootstrap owns for all three hosts. Before the
-          // roots are published below, not after: its one fallible step (the
-          // first-install tool seed) must fail while they are still private,
-          // as the seed did when this body owned it.
-          yield* bootstrapHost({
-            roots,
-            skills: {
-              resourcesPath: context.resourcesPath,
-              skillSourceOptions: context.skillSourceOptions,
-            },
-          });
+          // The once-per-process write the shared bootstrap owns for all
+          // three hosts. Before the roots are published below, not after: its
+          // one fallible step (the first-install tool seed) must fail while
+          // they are still private, as the seed did when this body owned it.
+          yield* bootstrapHost({ roots });
 
           // The one-time telemetry notice: a single stderr line, then a state
           // flag. A quiet run neither prints it nor marks it shown.

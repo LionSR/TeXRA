@@ -1078,6 +1078,22 @@ of its own.
 type HostPresentation = Effect.Effect<void, Error> | void;
 ```
 
+## HostSkillOptions
+
+A process's skill sources (`ProcessLayerOptions.skills`,
+`Composition.skills`): its bundled resources tree, under which each of its
+tool plugins ships its bundled skills (`plugins/<id>/skills`), and its
+process-wide source options (the CLI's flags). All three hosts discover
+custom roots, project skills, user skills and the bundled ones in that
+precedence. A process given none discovers no skills at all.
+
+```ts
+interface HostSkillOptions {
+  readonly resourcesPath: string;
+  readonly skillSourceOptions?: SkillSourceOptions;
+}
+```
+
 ## InstalledPlugin
 
 ```ts
@@ -1622,8 +1638,8 @@ function processLayer(
 
 ## ProcessLayerOptions
 
-What a composition root composes its process from: the app's plugins and
-setting rows and the host's own ports. What every host builds the same
+What a composition root composes its process from: the app's plugins, its
+skill sources and the host's own ports; what every host builds the same
 way (the process identity, the global root's database) has a default.
 
 ```ts
@@ -1644,6 +1660,7 @@ interface ProcessLayerOptions {
    * its list, `harnessBuiltins` among it.
    */
   readonly plugins: readonly Plugin[];
+  readonly skills?: HostSkillOptions;
   readonly secrets: PlatformSecrets;
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */

@@ -55,6 +55,7 @@ import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import {
   holdProcessRoot,
   SessionOwner,
+  type HostSkillOptions,
   type ProcessServices,
 } from '@platform/processRuntime';
 import {
@@ -541,11 +542,9 @@ const closeSession = (root: string) =>
     return { settled, abandoned } satisfies SessionCloseReport;
   }).pipe(Effect.uninterruptible, withPerKeyLane(rootLanes, root));
 
-/**
- * What a composition root composes its process from: the app's plugins and
- * setting rows and the host's own ports. What every host builds the same
- * way (the process identity, the global root's database) has a default.
- */
+/** What a composition root composes its process from: the app's plugins, its
+ *  skill sources and the host's own ports; what every host builds the same
+ *  way (the process identity, the global root's database) has a default. */
 export interface ProcessLayerOptions {
   /** The process-start read the process identity is derived from, once per
    *  process: absent, this Node process's own (`nodeProcesses.selfIdentity`). */
@@ -563,6 +562,7 @@ export interface ProcessLayerOptions {
    * its list, `harnessBuiltins` among it.
    */
   readonly plugins: readonly Plugin[];
+  readonly skills?: HostSkillOptions;
   readonly secrets: PlatformSecrets;
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */

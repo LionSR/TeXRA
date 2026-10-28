@@ -116,6 +116,7 @@ export const initializeElectronPlatform = Effect.fn(
       processLayer({
         storageRoot: dataRoot,
         plugins: texraPlugins(),
+        skills: { resourcesPath },
         secrets,
         agentDirectories: agentDirectoriesLayer,
         // Desktop model traffic goes to the same anonymous usage log the extension
@@ -160,10 +161,7 @@ export const initializeElectronPlatform = Effect.fn(
       repoState: yield* (yield* StateStores).repo(storage, undefined),
       globalState: globalStateStore,
     });
-    yield* bootstrapHost({
-      roots: processRoots,
-      skills: { resourcesPath },
-    });
+    yield* bootstrapHost({ roots: processRoots });
     return {
       processRoots,
       globalConfigStore: configStores.global,

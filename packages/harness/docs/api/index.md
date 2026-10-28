@@ -153,14 +153,16 @@ class Cancelled extends Schema.TaggedError<Cancelled>()(
 
 ## Composition
 
-What an embedder composes the process from: its platform and its
-plugins (the harness's built-ins among them). The setting rows its
-plugins read travel with the platform's config (`ConfigProvider.catalog`).
+What an embedder composes the process from: its platform, its plugins
+(the harness's built-ins among them) and its skill sources, without
+which it discovers no skills. The setting rows its plugins read travel
+with the platform's config (`ConfigProvider.catalog`).
 
 ```ts
 interface Composition {
   readonly platform: AgentPlatform;
   readonly plugins: readonly Plugin[];
+  readonly skills?: HostSkillOptions;
 }
 ```
 

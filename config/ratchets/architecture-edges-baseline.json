@@ -33,7 +33,7 @@
     { "from": "platform", "to": "common", "kind": "value" },
     { "from": "platform", "to": "logger", "kind": "value" },
     { "from": "platform", "to": "shared", "kind": "value" },
-    { "from": "platform", "to": "skills", "kind": "value" },
+    { "from": "platform", "to": "skills", "kind": "type-only" },
     { "from": "platform", "to": "tools", "kind": "type-only" },
     { "from": "platform", "to": "utils", "kind": "value" },
     { "from": "replacement", "to": "shared", "kind": "type-only" },

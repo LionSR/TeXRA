@@ -36,6 +36,7 @@ import {
   type ProjectDatabases,
 } from '@shared/session/database';
 import type { UsageLog } from '@shared/usageLog';
+import type { SkillSourceOptions } from '@skills/skillSources';
 import type { ToolCatalog } from '@tools/liveTools';
 import type { ToolAvailability } from '@tools/toolAvailabilityService';
 import type { ToolRegistry } from '@tools/toolTable';
@@ -115,6 +116,19 @@ export type ProcessServices =
   | ToolCatalog
   | ToolAvailability
   | RouteRetries;
+
+/**
+ * A process's skill sources (`ProcessLayerOptions.skills`,
+ * `Composition.skills`): its bundled resources tree, under which each of its
+ * tool plugins ships its bundled skills (`plugins/<id>/skills`), and its
+ * process-wide source options (the CLI's flags). All three hosts discover
+ * custom roots, project skills, user skills and the bundled ones in that
+ * precedence. A process given none discovers no skills at all.
+ */
+export interface HostSkillOptions {
+  readonly resourcesPath: string;
+  readonly skillSourceOptions?: SkillSourceOptions;
+}
 
 /**
  * The services a step pinned from its plugins' layers (a plugin's
