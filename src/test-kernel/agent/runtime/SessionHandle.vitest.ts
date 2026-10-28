@@ -35,13 +35,15 @@ describe('SessionHandle', () => {
         const follow = true;
         const service = yield* JsonStore.open(file, { follow });
         const windowB = yield* JsonStore.open(file);
+        // The file holds the key as stored, under the catalog's namespace.
+        const STORED_POLICY_KEY = `${TEXRA_SETTINGS.namespace}.${APPROVAL_POLICY_CONFIG_KEY}`;
         const config = new JsonConfigProvider({
           workspace: yield* JsonStore.open(`${file}.workspace`, { follow }),
           global: yield* JsonStore.open(`${file}.global`, { follow }),
           local: service,
           catalog: TEXRA_SETTINGS,
         });
-        yield* windowB.set(APPROVAL_POLICY_CONFIG_KEY, 'yolo');
+        yield* windowB.set(STORED_POLICY_KEY, 'yolo');
         const roots = { ...testWorkspaceRoots(), config };
         const before = yield* createTestSession({
           roots: { ...roots, storage: `${roots.storage}/policy-before` },
@@ -51,7 +53,7 @@ describe('SessionHandle', () => {
         // same file) while window A still shows Auto-approve. A window has
         // no door to tell the service a policy, so A's reconnect changes
         // nothing: both sessions answer with the file's value.
-        yield* windowB.set(APPROVAL_POLICY_CONFIG_KEY, 'ask');
+        yield* windowB.set(STORED_POLICY_KEY, 'ask');
         expect(before.approvals.policy()).toBe('ask');
         const after = yield* createTestSession({
           roots: { ...roots, storage: `${roots.storage}/policy-after` },

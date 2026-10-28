@@ -18,6 +18,7 @@ import {
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
+import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 @customElement('teams-tab')
@@ -220,7 +221,12 @@ export class TeamsTab extends LitElement {
           title=${`Apply ${preset.name} team`}
         >
           <div class="preset-card-header">
-            ${waIcon(preset.icon, { className: 'preset-card-icon' })}
+            ${waIcon(
+              // cast: a team names an icon of this set; one it lacks draws
+              // nothing.
+              preset.icon as IconName,
+              { className: 'preset-card-icon' },
+            )}
             <span class="preset-card-name"
               ><bdi dir="auto">${preset.name}</bdi></span
             >

@@ -1,12 +1,8 @@
 import { Effect, SubscriptionRef } from 'effect';
-import { lifecycleParks } from '@agent/runtime/runLaunchGuard';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  aggregateTarget,
-  type SessionEvent,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_SUBSTATE, type RunId } from '@shared/schemas';
+import type { RunView } from '@shared/session/sessionView';
 
 const CHANNEL = 'LeftoverRunSweep';
 
@@ -24,33 +20,20 @@ function runningRuns(session: SessionHandle): Set<RunId> {
 /** Remove the nonresumable background-shell cohort captured before session open. */
 export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
   session: SessionHandle,
-  rows: readonly SessionEvent[],
+  cohort: Iterable<RunView>,
 ) {
-  const removed = new Set(
-    rows
-      .filter((row) => row.type === 'run.removed')
-      .map((row) => row.aggregateId),
-  );
   const running = runningRuns(session);
-  // Each run's rows once, so the per-run park check reads only its own.
-  const byRun = Map.groupBy(rows, (row) => row.aggregateId);
-  for (const row of rows) {
-    if (
-      row.type !== 'run.start' ||
-      row.identity.kind !== 'process' ||
-      removed.has(row.aggregateId)
-    )
-      continue;
-    const target = aggregateTarget(row.aggregateId);
-    if (target.kind !== 'run') continue;
-    const runId = target.id;
-    if (running.has(runId)) continue;
+  for (const { id: runId, identity, substate, createdAt } of cohort) {
     // A shell parked holding its result for its parent stays until that
     // result is delivered.
-    const parks = lifecycleParks(byRun.get(row.aggregateId) ?? [], runId);
-    if (parks.some((park) => park.heldFor !== undefined)) continue;
+    if (
+      identity.kind !== 'process' ||
+      substate === RUN_SUBSTATE.RESULT_WAITING ||
+      running.has(runId)
+    )
+      continue;
     yield* session.requests
-      .removeRun(runId, 'automatic', row.commit)
+      .removeRun(runId, 'automatic', createdAt)
       .pipe(
         Effect.catch((error) =>
           Effect.logWarning(

@@ -20,7 +20,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
  * the model or the settings is rendered by each step (`stepInstructions`).
  */
 const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
-Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`find . -name "*.tex"\`, \`cat README.md\`). Scope file searches to \`.\` or a subdirectory, or use the glob/grep tools.
+Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`cat README.md\`). Scope file searches to \`.\` or a subdirectory, or use the glob/grep tools.
 Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, file access, or a tool, do not use it. Report any resulting conflict instead.
 
 Prefer using tools over asking the user to take manual actions.
@@ -29,7 +29,6 @@ Do only what the task requires. Do not refactor, restructure, or "improve" mater
 When an approved plan or autonomous objective is active, work toward it end to end. Keep going and verify against real evidence rather than pausing to confirm each step or summarize progress. Stop only when it is verifiably done or you are genuinely blocked on something only the user can provide.
 In replies, lead with the outcome. Keep responses short by being selective about what to include, not by compressing the writing.
 Never mention tool names when speaking to the user.
-For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.
 </tool_use_instructions>`;
 
 /**

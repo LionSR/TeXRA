@@ -45,7 +45,7 @@ function catalogEntry(
   config: ConfigProvider,
   key: UpdatableKey,
 ): StateSettingEntry {
-  const entry = config.catalog.byKey(key);
+  const entry = config.catalog.byStoredKey(key);
   if (!entry) {
     throw new Error(`update_config allowlist key ${key} is not in the catalog`);
   }
@@ -79,9 +79,10 @@ Accepts any key starting with \`texra.\`. Returns the current resolved value (wo
     // The stored value as is, not Settings.get: the key may name no catalog
     // row, and a malformed value is shown rather than replaced by its
     // default, so the setup agent sees what the workspace holds.
-    const value = config.get(input.key);
+    const key = input.key.slice(`${config.catalog.namespace}.`.length);
+    const value = config.get(key);
     const json = JSON.stringify(value, null, 2) ?? 'undefined';
-    const description = config.catalog.byKey(input.key)?.description;
+    const description = config.catalog.byKey(key)?.description;
     return executed(
       `${input.key}:\n${json}${description ? `\n\n${description}` : ''}`,
       `Read ${input.key}`,
@@ -122,9 +123,9 @@ const updateConfig = Effect.fn('UpdateConfigTool.execute')(function* (
     ),
   );
 
-  const previous = roots.config.get(input.key);
+  const previous = roots.config.get(entry.key);
   const target = input.target === 'workspace' ? 'workspace' : 'global';
-  yield* Settings.set(roots, input.key, value, target);
+  yield* Settings.set(roots, entry.key, value, target);
 
   const before = JSON.stringify(previous);
   const after = JSON.stringify(value);

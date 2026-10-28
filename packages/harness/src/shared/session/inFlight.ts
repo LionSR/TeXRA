@@ -18,7 +18,7 @@ import type {
   ToolResultPayload,
 } from '@shared/schemas';
 import type { ModelOrigin, RemoteOperation } from '@texra-ai/llm';
-import type { RunPosition } from './runRows';
+import type { RunPosition } from './runRowsShape';
 import type { HistoryMessage, ModelMessagePayload } from './historyTurns';
 
 /** How an attempt ended, as its `failed` row records it. */

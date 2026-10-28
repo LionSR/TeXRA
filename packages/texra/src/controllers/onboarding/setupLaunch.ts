@@ -85,21 +85,25 @@ export const kickoffDesktopSetup = (options: {
   readonly project: {
     readonly session: Pick<Session, 'view'>;
     readonly roots: SettingsStores;
-    readonly present: Pick<SessionHostInteractions, 'emit'>;
   };
-  /** The project's launch path; none when no folder is open. */
-  readonly run: Pick<HostRunActions, 'runValidated'> | undefined;
-}): Effect.Effect<void, never, Secrets> =>
-  Effect.gen(function* () {
-    if (!options.run) {
-      return yield* Effect.fail(
-        new Error('Open a folder before running setup.'),
-      );
-    }
+  /** The project window's launch path, and where it presents a failure;
+   *  none before the window has bound the project. */
+  readonly run:
+    | (Pick<HostRunActions, 'runValidated'> & {
+        readonly present: Pick<SessionHostInteractions, 'emit'>;
+      })
+    | undefined;
+}): Effect.Effect<void, never, Secrets> => {
+  const { run } = options;
+  if (!run)
+    return Effect.logWarning(
+      'Setup did not start: the window has not bound its project yet.',
+    );
+  return Effect.gen(function* () {
     const outcome = yield* launchSetup({
       session: options.project.session,
       roots: options.project.roots,
-      start: options.run.runValidated,
+      start: run.runValidated,
     });
     if (outcome === 'no-model') {
       return yield* Effect.fail(
@@ -112,6 +116,7 @@ export const kickoffDesktopSetup = (options: {
     Effect.catch((error) =>
       error instanceof Cancelled
         ? Effect.void
-        : presentRunFailure(options.project.present, error),
+        : presentRunFailure(run.present, error),
     ),
   );
+};

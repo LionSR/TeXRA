@@ -16,13 +16,13 @@ import {
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 
+import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import {
   shouldUseSubscriptionDeviceCode,
   signInCliSubscription,
   type CliSubscriptionLoginOptions,
 } from './subscriptionLogin';
 import {
-  formatCliModelAccessRouteInline,
   type CliModelAccessSelection,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
@@ -207,7 +207,7 @@ const updateKeyedCliModelAccess = Effect.fn(
     ),
   );
   return {
-    message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${formatCliModelAccessRouteInline('api-key')}.`,
+    message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${OWN_API_KEYS.inline}.`,
   } satisfies CliModelAccessSelectionResult;
 });
 

@@ -18,12 +18,7 @@ import {
 } from '@agent/runtime/RunCall';
 import { getRunRecords } from '@agent/storage/runRecords';
 import {
-  issuedCalls,
-  ISSUING_ROW_TYPES,
-} from '@shared/session/turnRowHandlers';
-import {
   AgentConfigSchema,
-  qualifyAggregateId,
   ToolError,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -82,13 +77,11 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
     };
   if (script.kind !== 'background')
     return { config: run.config, source: null, before: 0, boundAt: undefined };
-  const start = (yield* run.session.log.records(run.runId)).find(
-    (row) => row.type === 'run.start',
-  );
+  const start = (yield* run.session.log.facts(run.runId))?.start;
   const missing = new ToolError(
     `self() needs the conversation the script ${run.runId} launched from, and the call that launched it.`,
   );
-  const edge = start?.type === 'run.start' ? start.parent : null;
+  const edge = start?.parent;
   if (edge?.call == null) return yield* Effect.fail(missing);
   const { id: parent } = edge;
   const { card } = edge.call;
@@ -98,13 +91,10 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   // one whose call opened the card the script's start names (a provider
   // may reuse a call id, never a card), or, for a call a script of the
   // conversation made, the response that issued that script.
-  const rows = yield* run.session.log.rows(
-    qualifyAggregateId('run', parent),
-    ISSUING_ROW_TYPES,
+  const conversation = yield* run.session.runHistory.load(parent);
+  const issued = Object.values(conversation?.calls ?? {}).find(
+    ({ logId }) => logId === card,
   );
-  const issued = issuedCalls(rows).find(
-    ({ call }) => call.logId === card,
-  )?.issuer;
   if (config === null || issued === undefined)
     return yield* Effect.fail(missing);
   return {

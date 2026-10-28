@@ -9,25 +9,20 @@
 
 import { Effect, Result, Schema } from 'effect';
 
-const AGENT_MODE_PRESET_ICON_NAMES = [
-  'bookmark',
-  'rocket',
-  'diagram-project',
-  'cube',
-  'hashtag',
-  'screwdriver-wrench',
-] as const;
-
 /** Schema for a single agent team: its members, by name. */
 export const AgentModePresetSchema = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   description: Schema.String,
-  icon: Schema.Literals(AGENT_MODE_PRESET_ICON_NAMES),
+  /** An icon name the hosts' icon set draws. */
+  icon: Schema.String,
   agents: Schema.Array(Schema.String),
 });
 
 export type AgentModePreset = typeof AgentModePresetSchema.Type;
+
+/** The workspace's saved teams (repository state), stored as written. */
+export const CUSTOM_TEAMS_KEY = 'customTeams';
 
 export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
   const parsedRecords = Schema.decodeUnknownResult(
@@ -37,7 +32,7 @@ export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
   )(raw);
   if (!Result.isSuccess(parsedRecords)) {
     console.warn(
-      `[agentPresets] Custom agent teams are not an array; ignoring them for ` +
+      `[agentTeams] Custom agent teams are not an array; ignoring them for ` +
         `this read: ${parsedRecords.failure.message}`,
     );
     return [];
@@ -52,7 +47,7 @@ export function parseAgentModePresets(raw: unknown): AgentModePreset[] {
     )(rawPreset);
     const name = Result.isSuccess(named) ? named.success.name : undefined;
     console.warn(
-      `[agentPresets] Ignoring malformed custom agent team ` +
+      `[agentTeams] Ignoring malformed custom agent team ` +
         `${name == null ? `at index ${index}` : `"${name}" (index ${index})`}: ` +
         result.failure.message,
     );
@@ -195,3 +190,34 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     ],
   },
 ];
+
+/**
+ * A workspace's team catalog (`AgentDirectoriesPort.teams`, the harness's
+ * `TeamPreset`s), in display order: the setup starter (tagged `setupOnly`),
+ * the built-in teams, then the workspace's saved ones. Built-in ids are
+ * reserved: a saved team with the same id is dropped so the built-in always
+ * wins.
+ */
+export const workspaceTeams = <E>(repoState: {
+  readonly get: (key: string) => Effect.Effect<unknown, E>;
+}) =>
+  Effect.map(repoState.get(CUSTOM_TEAMS_KEY), (customRaw) => {
+    const builtIns = [
+      {
+        ...STARTER_AGENT_MODE_PRESET,
+        source: 'built-in' as const,
+        setupOnly: true as const,
+      },
+      ...AGENT_MODE_PRESETS.map((preset) => ({
+        ...preset,
+        source: 'built-in' as const,
+      })),
+    ];
+    const builtInIds = new Set(builtIns.map((preset) => preset.id));
+    return [
+      ...builtIns,
+      ...parseAgentModePresets(customRaw)
+        .filter((preset) => !builtInIds.has(preset.id))
+        .map((preset) => ({ ...preset, source: 'custom' as const })),
+    ];
+  });

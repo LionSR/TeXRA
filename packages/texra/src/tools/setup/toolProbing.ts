@@ -2,7 +2,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { findCommand } from '@texra-ai/harness/node';
+import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
   IMAGE_LATEX_TOOLS,
   IMAGE_TOOL_LABEL,
@@ -35,9 +35,7 @@ export const locateTool = Effect.fn('locateTool')(function* (
   // probe kills the processes — several at once, since the core tools are
   // probed concurrently — instead of leaving them to run out their timeout.
   const knownInstalled = yield* checkToolInstalled(name, false);
-  // Fresh: a setup probe follows an install, so a recent miss is searched
-  // for again.
-  const found = yield* findCommand(name, { fresh: true });
+  const found = yield* findCommand(name);
   return {
     name,
     installed: knownInstalled || found !== null,

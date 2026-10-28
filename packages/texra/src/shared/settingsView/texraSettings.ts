@@ -41,19 +41,19 @@ import type { SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 
 /** TeXRA's state keys: LaTeX's, inline criticism and telemetry. */
 export const TexraStateKey = Object.freeze({
-  LATEX_FORMATTER: 'texra.latex.formatter',
+  LATEX_FORMATTER: 'latex.formatter',
 
   // Global
-  INLINE_CRITICISM_ENABLED: 'texra.inlineCriticism.enabled',
+  INLINE_CRITICISM_ENABLED: 'inlineCriticism.enabled',
   /** Random anonymous telemetry install ID (UUIDv4); deleting the key resets it. */
-  TELEMETRY_INSTALL_ID: 'texra.telemetry.installId',
+  TELEMETRY_INSTALL_ID: 'telemetry.installId',
   /** Set once the first-run telemetry notice has been shown on this host. */
-  TELEMETRY_NOTICE_SHOWN: 'texra.telemetry.noticeShown',
+  TELEMETRY_NOTICE_SHOWN: 'telemetry.noticeShown',
 } as const);
 export type TexraStateKey = (typeof TexraStateKey)[keyof typeof TexraStateKey];
 
-/** Canonical config key for the usage-telemetry opt-in. */
-export const TELEMETRY_ENABLED_KEY = 'texra.telemetry.enabled';
+/** Config key for the usage-telemetry opt-in. */
+export const TELEMETRY_ENABLED_KEY = 'telemetry.enabled';
 
 export const LATEXDIFF_TEMP_FILE_LOCATIONS = [
   'sameDirectory',
@@ -98,7 +98,7 @@ const CliRunDefaultsSchema = Schema.optional(
   Schema.Struct({ model: CliModelSchema }),
 );
 
-/** TeXRA's config-file-backed rows, keyed by their dotted path under `texra.`. */
+/** TeXRA's config-file-backed rows, keyed by their dotted path. */
 const TEXRA_CONFIG_ROWS: Record<
   string,
   Omit<StateSettingEntry, 'key' | 'slot'>
@@ -216,7 +216,7 @@ const TEXRA_CONFIG_ROWS: Record<
     description:
       'Where to create temporary files for LaTeX preview and diff operations during tool edit approval.',
   },
-  'telemetry.enabled': {
+  [TELEMETRY_ENABLED_KEY]: {
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
     ),
@@ -277,5 +277,7 @@ const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
 ];
 
 /** The whole catalog TeXRA's settings surfaces render: the harness's rows and TeXRA's. */
-export const TEXRA_SETTINGS: SettingsCatalog =
-  settingsCatalog(TEXRA_SETTING_ROWS);
+export const TEXRA_SETTINGS: SettingsCatalog = settingsCatalog({
+  namespace: 'texra',
+  rows: TEXRA_SETTING_ROWS,
+});

@@ -12,24 +12,8 @@ import {
   findBuildDirectories,
   removeBuildDirectories,
 } from '@housekeeping/clean';
-import { fileOpResultMessage } from '@housekeeping/runDirOps';
-
-import type { WorkflowFileOperationResult } from '@texra/controllers/session/hostRunActions';
 
 const CHANNEL = 'cleanCommands';
-
-/** Tell the user what the toolbar's Clean of a run's storage did. */
-export const presentClean = Effect.fn('cleanCommands.presentClean')(function* ({
-  result,
-  inputFile,
-}: WorkflowFileOperationResult): Effect.fn.Return<void> {
-  const { level, text } = fileOpResultMessage('clean', result, inputFile);
-  if (result.status === 'missingParams' || level === 'error') {
-    yield* Effect.forkDetach(showLoggedMessage(CHANNEL, text));
-  } else {
-    yield* Effect.forkDetach(showLoggedInfoMessage(CHANNEL, text));
-  }
-});
 
 const LISTED_BUILD_DIRECTORIES = 10;
 

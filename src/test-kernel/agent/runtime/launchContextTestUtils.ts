@@ -53,6 +53,7 @@ export function createTestLaunchContext({
       attachedMemoryMisses: [],
     },
     entry: {
+      parent: null,
       registration: null,
       opening: Effect.succeed([]),
       entered: () => Effect.void,

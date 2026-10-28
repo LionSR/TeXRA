@@ -100,7 +100,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // notice is known by `holdUntil: 'generation'`, no longer by its text: a
   // v1 notice would read as an ordinary message (no upcaster, as
   // `run.config`).
-  'followup.queued': { version: 2, upcast: [] },
+  // v3: attached media by blob address (`media`), no `mediaFiles` paths (no
+  // upcaster: a v2 row's paths would be read as no media).
+  'followup.queued': { version: 3, upcast: [] },
   'followup.consumed': V1,
   // v2: a task proposal carries its plugin's `options`, not `toolConfig`
   // (no upcaster, as `run.config`).
@@ -114,7 +116,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'run.position': V1,
   // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
   // holds both (no upcaster, as `run.config`).
-  log: { version: 2, upcast: [] },
+  // v3: a user message names its attached media by blob address (`media`),
+  // not by `mediaFiles` paths (no upcaster, as `followup.queued`).
+  log: { version: 3, upcast: [] },
   // v2: no `phase` kind and no `index`/`total` (no upcaster, as
   // `run.config`: an earlier build's workflow phase stage would fail its
   // run as damaged rather than read as that build's).

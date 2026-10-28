@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import * as ChildProcess from 'effect/process/ChildProcess';
 
-import { whichOnExtendedPath } from '@utils/system/platformPaths';
+import which from 'which';
 
 // cross-spawn's cmd.exe escaping: quote each argument (doubling the
 // backslashes that precede a quote or the closing quote), then caret-escape
@@ -27,7 +27,14 @@ export function toWindowsCommand(
   args: readonly string[],
   options: ChildProcess.CommandOptions,
 ): ChildProcess.StandardCommand {
-  const resolved = whichOnExtendedPath(argv0);
+  // On the PATH the child is handed (`Path` on Windows), extended already.
+  const resolved = which.sync(argv0, {
+    nothrow: true,
+    path: Object.entries(options.env ?? {}).find(
+      ([key]) => key.toLowerCase() === 'path',
+    )?.[1],
+    pathExt: process.env.PATHEXT,
+  });
   if (resolved === null) return ChildProcess.make(argv0, args, options);
   if (!/\.(cmd|bat)$/i.test(resolved)) {
     return ChildProcess.make(resolved, args, options);

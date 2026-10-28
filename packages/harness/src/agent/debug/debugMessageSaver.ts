@@ -20,14 +20,14 @@ interface SaveDebugParams {
   /**
    * The run's session roots, passed as data: the file lands under the
    * storage root, and the config provider is the session's own, so the
-   * `texra.debug.saveModelIO` guard below cannot throw before platform init.
+   * `debug.saveModelIO` guard below cannot throw before platform init.
    */
   readonly roots: WorkspaceRoots;
 }
 
 /**
  * Save debug objects (messages or responses) to a JSON file when
- * `texra.debug.saveModelIO` is enabled.
+ * `debug.saveModelIO` is enabled.
  *
  * Takes the process filesystem from context: the target is an absolute path
  * built from the run's own roots, and the write is a plain (non-atomic) one.
@@ -57,8 +57,7 @@ export function maybeSaveDebugObject({
     });
 
   return Effect.gen(function* () {
-    if (!(yield* Settings.get<boolean>(roots, 'texra.debug.saveModelIO')))
-      return;
+    if (!(yield* Settings.get<boolean>(roots, 'debug.saveModelIO'))) return;
     const fs = yield* FileSystem.FileSystem;
     yield* fs.makeDirectory(runDir, { recursive: true });
     yield* fs.writeFileString(filePath, JSON.stringify(object, null, 2));

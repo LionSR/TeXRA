@@ -11,7 +11,7 @@
  *
  * What a session is opened with is decided here: its store (memory, or the
  * root's SQLite store that every host keeps). Who answers its runs'
- * requests is the hosts attached to it (`requestAnswerer.ts`). A run's
+ * requests is the host attached to it (`requestAnswerer.ts`). A run's
  * handle is `runHandle.ts`'s; `start` and `resume` differ only in the
  * launch they hand it.
  */
@@ -51,7 +51,7 @@ import {
   ToolsRefused,
   type LaunchError,
 } from './errors.js';
-import { attachHost, type Approver } from './requestAnswerer.js';
+import { attachHost } from './requestAnswerer.js';
 import { handOver } from './runHandle.js';
 import { sessionReads } from './sessionReads.js';
 import type { Sessions } from './processLayer.js';
@@ -265,13 +265,6 @@ function resume(
   });
 }
 
-/** What the package keeps per session beside the owner's handle: its
- *  attached handlers (newest last) and the supplied run ids starting now. */
-interface SessionState {
-  readonly approvers: Approver[];
-  readonly starting: Set<RunId>;
-}
-
 /** The session as this package works on it: a pure function of the owner's
  *  handle, holding nothing the owner already holds. */
 function sessionOf(
@@ -279,7 +272,8 @@ function sessionOf(
   services: Context.Context<ProcessServices>,
   owner: Context.Service.Shape<typeof SessionOwner>,
   resumeJoined: Session['resume'],
-  { approvers, starting }: SessionState,
+  /** The supplied run ids starting now in this session. */
+  starting: Set<RunId>,
 ): LocalSession {
   return {
     roots: handle.roots,
@@ -287,7 +281,7 @@ function sessionOf(
     start: (input) => start(handle, services, owner, starting, input),
     resume: resumeJoined,
     request: (request) => handle.requests.request(request),
-    attach: (host) => attachHost(handle, host, approvers),
+    attach: (host) => attachHost(handle, host),
   };
 }
 
@@ -344,15 +338,12 @@ export function makeSessions(
             ),
           );
         });
-    // Each session's own state beside its handle (`SessionState`).
-    const states = new WeakMap<RuntimeSessionHandle, SessionState>();
+    // Each session's run ids starting now, beside its handle.
+    const states = new WeakMap<RuntimeSessionHandle, Set<RunId>>();
     const sessionFor = (handle: RuntimeSessionHandle): LocalSession => {
-      const state = states.get(handle) ?? {
-        approvers: [],
-        starting: new Set(),
-      };
-      states.set(handle, state);
-      return sessionOf(handle, services, owner, resumeJoined(handle), state);
+      const starting = states.get(handle) ?? new Set<RunId>();
+      states.set(handle, starting);
+      return sessionOf(handle, services, owner, resumeJoined(handle), starting);
     };
     return {
       // An open asking for the other store than the session's is the

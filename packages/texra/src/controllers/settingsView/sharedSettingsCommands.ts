@@ -67,12 +67,12 @@ import {
   type DerivedSettingsSnapshot,
   type SettingsViewInboundMessage,
   type SettingsViewOutboundMessage,
+  type SettingsViewSnapshot,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
-import type { SettingsViewSnapshot } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
@@ -240,8 +240,9 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   // ── Catalog-backed settings rows ──
 
-  // A `Record`, so a new snapshot variant fails this literal's type check.
-  const stateSnapshotPosters: Record<SettingsViewSnapshot, () => HostEffect> = {
+  // Checked as a `Record`, so a new snapshot variant fails this literal's
+  // type check; read by a row's snapshot id, which the catalog types `string`.
+  const stateSnapshotPosters: Partial<Record<string, () => HostEffect>> = {
     approval: () => postSnapshot('approval'),
     'git-author': () => postSnapshot('git-author'),
     latex: () => postSnapshot('latex'),
@@ -251,7 +252,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     profile: () => postProfile,
     skills: () => Effect.andThen(postSnapshot('skills'), postSkills),
     telemetry: () => postSnapshot('telemetry'),
-  };
+  } satisfies Record<SettingsViewSnapshot, () => HostEffect>;
   const updateStateSetting = (key: string, value: unknown) =>
     Effect.gen(function* () {
       const result = yield* applyStateSettingUpdate(key, value, {
@@ -270,7 +271,11 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
           `Open a workspace folder before changing the “${label}” setting.`,
         );
       }
-      yield* stateSnapshotPosters[result.entry.surfaces.settingsView]();
+      const snapshot = result.entry.surfaces.settingsView;
+      const post = stateSnapshotPosters[snapshot];
+      yield* post === undefined
+        ? Effect.logWarning(`"${key}" names no settings snapshot: ${snapshot}`)
+        : post();
       if (result.kind !== 'applied') return;
       if (result.entry.onWrite?.invalidatesModelOptions) {
         yield* refreshAfterCredentialChange();

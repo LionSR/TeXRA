@@ -23,8 +23,12 @@ import { emitAppSignal } from '@texra-ai/harness/host';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
+import { workspaceTeams } from '@texra/shared/agentTeams';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { texraPlugins } from '@texra/tools/registry';
+import { makeEditorHost } from '@texra/tools/editorHost';
+import { HostWindows } from '@texra/controllers/server/hostWindows';
 
 // Local file imports
 import { repairLaunchPath } from './pathFix.js';
@@ -104,14 +108,20 @@ export const initializeElectronPlatform = Effect.fn(
           channel: 'desktop',
           resourcesPath,
           state,
+          teams: workspaceTeams,
         }),
     ),
   );
+  // The editor registry the plugins' editor tools read, which this
+  // process's windows answer for.
+  const editors = makeEditorHost();
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       processLayer({
         storageRoot: dataRoot,
-        plugins: texraPlugins(),
+        settings: TEXRA_SETTINGS,
+        commandDirs: commandDirs,
+        plugins: texraPlugins({ editors }),
         skills: { resourcesPath },
         // The one credential store every host shares (`~/.texra/secrets/`):
         // the background service reads the keys this window saves.
@@ -130,7 +140,7 @@ export const initializeElectronPlatform = Effect.fn(
         // The rotated log file is the artefact attached to a bug report, so it
         // keeps debug entries; rotation already bounds its size.
         minimumLogLevel: 'Debug',
-      }),
+      }).pipe(Layer.merge(HostWindows.layer(editors))),
     ),
   );
 

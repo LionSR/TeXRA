@@ -73,7 +73,6 @@
     "esbuild": "^0.28.2",
     "glob": "catalog:",
     "ink": "^7.1.1",
-    "llm-zoo": "catalog:",
     "lru-cache": "^11.5.3",
     "markdown-it": "^15.0.3",
     "nanoid": "catalog:",

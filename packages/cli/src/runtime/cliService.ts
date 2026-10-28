@@ -45,7 +45,6 @@ import {
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
-import type { EditorHostShape } from '@texra/tools/editorHost';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
 import type {
   ServiceProject,
@@ -82,8 +81,6 @@ const CHANNEL = 'cliService';
 export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   context: Pick<CliContext, 'storageRoot'>,
   scope: Scope.Scope,
-  /** The editor registry this process's plugins read. */
-  editors: EditorHostShape,
   /** The process's sessions, which each project's session is also opened
    *  through. */
   sessions: Context.Service.Shape<typeof Sessions>,
@@ -229,7 +226,6 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     }).pipe(withPerKeyLane(lanes, root), Effect.provideContext(services));
   return {
     storageRoot,
-    editors,
     open,
     opened: Effect.sync(
       () =>

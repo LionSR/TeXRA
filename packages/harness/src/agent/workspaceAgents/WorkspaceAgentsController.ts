@@ -1,8 +1,13 @@
 import { Effect, Schema } from 'effect';
 
-import { planTeamRun, type TeamRunPlan } from '@common/teams/TeamPlan';
-import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
+import {
+  findTeamPreset,
+  planTeamRun,
+  type TeamPreset,
+  type TeamRunPlan,
+} from '@common/teams/TeamPlan';
 import type {
+  AgentDirectoriesPort,
   StateStore,
   StateWriteFailed,
   StateReadFailed,
@@ -46,6 +51,8 @@ export interface WorkspaceAgentsControllerDeps<
 > {
   readonly repoState: StateStore;
   readonly globalState: StateStore;
+  /** The app's team presets (`AgentDirectoriesPort.teams`). */
+  readonly teams: AgentDirectoriesPort['teams'];
   readonly getAgents: () => Entry[];
   /**
    * Resolve one stored identifier without collapsing exact source identity.
@@ -66,18 +73,12 @@ export class WorkspaceAgentsController<
   }
 
   /**
-   * Every selectable team preset: the shared catalog (`teamPresets`) over the
-   * host's custom presets. The one list agent pickers render and every
-   * preset lookup reads — a form composing its own preset list can drift from
-   * what {@link setTeam} accepts.
+   * Every selectable team preset, the app's for this workspace. The one list
+   * agent pickers render and every preset lookup reads — a form composing its
+   * own preset list can drift from what {@link setTeam} accepts.
    */
-  allPresets() {
-    return Effect.gen({ self: this }, function* () {
-      // The workspace's persisted custom presets, raw; `teamPresets` parses.
-      return teamPresets(
-        yield* this.deps.repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
-      );
-    });
+  allPresets(): Effect.Effect<readonly TeamPreset[], StateReadFailed> {
+    return this.deps.teams?.(this.deps.repoState) ?? Effect.succeed([]);
   }
 
   /** Resolve one stored identifier by the workspace agents' identity rule. */
@@ -392,17 +393,16 @@ export class WorkspaceAgentsController<
     );
   }
 
-  setDefaultTeam(
-    teamId: string,
-  ): Effect.Effect<void, StateWriteFailed | InvalidAgentTeamError> {
-    if (!teamPresets(undefined).some((preset) => preset.id === teamId)) {
-      return Effect.fail(
-        new InvalidAgentTeamError({
+  setDefaultTeam(teamId: string) {
+    return Effect.gen({ self: this }, function* () {
+      const presets = yield* this.allPresets();
+      if (!presets.some((p) => p.id === teamId && p.source === 'built-in')) {
+        return yield* new InvalidAgentTeamError({
           message: `Only a built-in team can be the user default: ${teamId}`,
-        }),
-      );
-    }
-    return this.deps.globalState.update(DEFAULT_TEAM, teamId);
+        });
+      }
+      yield* this.deps.globalState.update(DEFAULT_TEAM, teamId);
+    });
   }
 
   clearDefaultTeam(): Effect.Effect<void, StateWriteFailed> {

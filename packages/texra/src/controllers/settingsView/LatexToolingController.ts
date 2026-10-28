@@ -2,8 +2,8 @@ import { Cause, Effect } from 'effect';
 
 // Local imports - shared constants
 import { withLogChannel } from '@texra-ai/harness/host';
-import { findCommand } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type LatexSettingsStatus,

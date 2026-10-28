@@ -15,7 +15,7 @@ import {
   type ToolProbeServices,
 } from '@texra-ai/harness/plugins';
 import { Secrets, Settings, withLogChannel } from '@texra-ai/harness/host';
-import { findCommand } from '@texra-ai/harness/node';
+import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
   importCodexClass,
   findCodexBinaryPath,

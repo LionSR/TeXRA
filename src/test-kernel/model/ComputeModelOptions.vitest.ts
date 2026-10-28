@@ -1,12 +1,12 @@
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 import { Effect } from 'effect';
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
   apiKeySecretName,
   decideModelRoute,
   isUnservedModel,
+  MODEL_CONFIGS,
   OWN_KEY_ROUTE_FACTS,
 } from '@texra-ai/llm';
 import { readModelOptions } from '@model/computeModelOptions';
@@ -97,7 +97,7 @@ describe('model availability', () => {
     () =>
       Effect.gen(function* () {
         yield* installAccessPlatform({
-          config: { 'texra.chatgptCodex.preferSubscription': true },
+          config: { 'chatgptCodex.preferSubscription': true },
         });
 
         const [model] = modelOptionsFrom(yield* readHostModelOptions([GPT55]));

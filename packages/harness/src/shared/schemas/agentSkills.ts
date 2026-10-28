@@ -3,7 +3,7 @@ import { Schema } from 'effect';
 import { Sha256Schema } from './offeredTools';
 import { SkillNameSchema } from './skillName';
 
-export const AGENT_SKILLS_CONFIG_KEY = 'texra.skills.enabled';
+export const AGENT_SKILLS_CONFIG_KEY = 'skills.enabled';
 export const AGENT_SKILLS_ENABLED_DEFAULT = false;
 
 /** Whether agents receive the skills discovered from every source. */
@@ -26,7 +26,7 @@ const PluginTrustSchema = Schema.Struct({
 export type PluginTrust = typeof PluginTrustSchema.Type;
 
 /**
- * One installed plugin, persisted as a row of the `texra.plugins.installed`
+ * One installed plugin, persisted as a row of the `plugins.installed`
  * state: the one install record every host reads and writes (a CLI's
  * plugin command, a settings page). The plugin keeps its own manifest
  * (`.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`); this row is

@@ -5,7 +5,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { recipeBlockOf, type RunId } from '@shared/schemas';
 import { DatabaseRowEarlier } from '@shared/session/database';
 import { continuesFromRows } from '@shared/session/runActions';
-import { runEndFromEvents } from '@shared/session/runFacts';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'Resumability';
@@ -39,7 +38,7 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<ResumabilityDecision> {
-  const read = yield* session.log.records(runId).pipe(Effect.result);
+  const read = yield* session.log.facts(runId).pipe(Effect.result);
   // An earlier build's row: this build cannot open the run, and says so.
   const refusal =
     read._tag === 'Failure' ? earlierRefusal(read.failure) : undefined;
@@ -51,15 +50,13 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
     );
     return { kind: 'unreadable', cause };
   }
-  const records = read.success;
-  const start = records.findLast((row) => row.type === 'run.start');
-  const config = records.findLast((row) => row.type === 'run.config');
-  const standing = {
-    ended: runEndFromEvents(records, runId) !== null,
-    recipe: config?.type === 'run.config' ? recipeBlockOf(config.config) : null,
-  };
-  return start?.type === 'run.start' &&
-    continuesFromRows({ ...standing, identity: start.identity })
+  const facts = read.success;
+  return facts?.start != null &&
+    continuesFromRows({
+      ended: facts.end !== null,
+      recipe: facts.config === null ? null : recipeBlockOf(facts.config),
+      identity: facts.start.identity,
+    })
     ? { kind: 'checkpoint' }
     : { kind: 'none' };
 });

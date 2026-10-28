@@ -19,11 +19,9 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import {
-  canonicalConfigKey,
-  type SettingHost,
-} from '@shared/state/stateSettings';
+import { type SettingHost } from '@shared/state/stateSettings';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { workspaceTeams } from '@texra/shared/agentTeams';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import type { SecretsFailed } from '@texra-ai/llm';
 
@@ -164,7 +162,7 @@ export function fakeConfig(
 ): MemoryConfigProvider {
   const config = new MemoryConfigProvider(TEXRA_SETTINGS);
   for (const [key, value] of Object.entries(values)) {
-    const row = TEXRA_SETTINGS.byKey(canonicalConfigKey(key));
+    const row = TEXRA_SETTINGS.byKey(key);
     Effect.runSync(config.update(key, value, row?.configTarget ?? 'workspace'));
   }
   return config;
@@ -294,6 +292,7 @@ const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
   custom: () => Effect.sync(() => fakePath('workspace/.texra/agents')),
   customConfigured: () => Effect.succeed(false),
   builtIn: () => Effect.sync(() => fakePath('workspace/resources/agents')),
+  teams: workspaceTeams,
 };
 
 export function createFakePlatform(

@@ -59,7 +59,6 @@ export {
   type WorkspaceAgentsControllerDeps,
   type WorkspaceAgentsEntry,
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
-export * from '@common/teams/TeamPresets';
 export * from '@common/teams/TeamPlan';
 export type { AgentDelegationScope } from '@shared/schemas';
 export {
@@ -104,7 +103,6 @@ export {
   SessionHostInteractions,
   type HostInteractions,
 } from '@agent/runtime/HostInteractions';
-export type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 export { buildDiffHunks, type DiffHunks } from '@utils/text/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
 export { presentRunFailure } from '@agent/runtime/terminalResultToast';
@@ -142,6 +140,8 @@ export {
 export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 // Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
+// The canned model a package-validation build provides beneath the process.
+export { ValidationModel } from '@agent/runtime/modelAccess/routeDecision';
 export type { RouteCredential } from '@agent/runtime/modelAccess/credentials';
 // The models a host offers: each visible model's option, the enabled list and
 // its writer, run-model precedence, the reasoning policy, the helper model.
@@ -277,6 +277,7 @@ export {
   entryMessage,
   LOG_CHANNEL,
   setLogSink,
+  writeLogLine,
   type LogEntry,
   type LogSink,
 } from '@logger/logSink';

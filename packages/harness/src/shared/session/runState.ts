@@ -34,9 +34,7 @@ import {
   applyRunRow,
   type BatchCopies,
   freshRunPosition,
-  type FOLLOW_UP_TYPES,
   ownCopy,
-  type RunPosition,
   type SharedRunRow,
 } from './runRows';
 import {
@@ -46,6 +44,7 @@ import {
   type PendingResponse,
 } from './inFlight';
 import { outOfOrder, TURN_ROW_HANDLERS } from './turnRowHandlers';
+import type { RunPosition } from './runRowsShape';
 import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
 
 /** The rows `RunCell.append` commits: the run history rows, and the display
@@ -161,7 +160,7 @@ type EndType = 'run.end' | 'stage.end' | 'followup.closed'; // and what it close
  *  `ROW_HANDLERS`. A run's input is not among them: the inbox reads it. */
 export type RunStateRowType = Exclude<
   SharedRunRow['type'] | RunHistoryDraft['type'] | 'run.activate',
-  CardRowType | (typeof FOLLOW_UP_TYPES)[number]
+  CardRowType | 'followup.queued' | 'followup.consumed'
 >;
 /** The drafts the run state does not read (a run's input and the display
  *  rows above): any job may commit them without the run's cell. */

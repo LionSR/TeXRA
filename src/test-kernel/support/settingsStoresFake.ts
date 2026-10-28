@@ -4,11 +4,7 @@
 // per suite.
 
 import { Effect } from 'effect';
-import type {
-  ConfigProvider,
-  StateStore,
-  StateReadFailed,
-} from '@platform/interfaces';
+import type { StateStore, StateReadFailed } from '@platform/interfaces';
 
 import type { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import type { SettingsStores } from '@shared/config/settings';
@@ -40,20 +36,14 @@ export function makeFakeSettingsStores(
   };
 }
 
-const ABSENT = Symbol('absent');
-
 /**
- * Whether a key is present in a store. Works for both `ConfigProvider` and
- * `StateStore` (neither exposes `has`), so reset/delete assertions can
- * distinguish "deleted" from "wrote the literal default".
+ * Whether a key is present in a state store (it exposes no `has`), so
+ * reset/delete assertions can distinguish "deleted" from "wrote the literal
+ * default".
  */
 export function isStored(
-  store: ConfigProvider | StateStore,
+  store: StateStore,
   key: string,
 ): Effect.Effect<boolean, StateReadFailed> {
-  const read =
-    'inspect' in store
-      ? Effect.sync(() => store.get<unknown>(key, ABSENT))
-      : store.get(key);
-  return Effect.map(read, (value) => value !== ABSENT && value !== undefined);
+  return Effect.map(store.get(key), (value) => value !== undefined);
 }

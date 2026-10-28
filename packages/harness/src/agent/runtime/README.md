@@ -16,8 +16,7 @@ is the module map by concern. Run-loop rules are in
 - `run/`: the per-run services the loop takes from context. `AgentRun`,
   `invocation` (the one model-call retry loop), `modelCall`, `pricing`,
   `compaction`, `contextTokens`, `mediaInput`, `tools`, `turnText`,
-  `toolResultText`, `requestContext`, `backgroundTurn`, and `validationModel`
-  (the CI-only canned model).
+  `toolResultText`, `requestContext`, and `backgroundTurn`.
 - `modelAccess/`: the one path from settings to a bound llm `Model`
   (`ModelAccess`, `binding`, `credentials`, `routeDecision`, `failureInfo`).
 - `historyQuery/`: the model's read-only SQL over a session's display rows, in

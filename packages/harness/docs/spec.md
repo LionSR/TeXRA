@@ -58,11 +58,11 @@ its kind is its `type` column.
 - **Request**: A decision that may wait on a person: a `request.opened` row,
   closed by one `request.decided` row; an approval policy that answers at once
   commits both in one batch (`shared/schemas/sessionEvent.ts:371-384`,
-  `agent/runtime/requestPolicy.ts:333-345`).
+  `agent/runtime/requestPolicy.ts:333-343`).
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row (`controllers/session/storeSchema.ts:54-65`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
-  `RunState` the loop continues from (`shared/session/runState.ts:533-546`).
+  `RunState` the loop continues from (`shared/session/runState.ts:532-545`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
   (`agent/runtime/SessionEvents.ts:219-370`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
@@ -151,7 +151,7 @@ The publisher offers these doors:
   (`agent/runtime/SessionEvents.ts:311-319`).
 - `drain`: End the inbox and run what it holds within the close deadline of
   5,000 ms (`agent/runtime/SessionEvents.ts:252-290`,
-  `agent/runtime/SessionHandle.ts:405`).
+  `agent/runtime/SessionHandle.ts:402`).
 
 A job MUST NOT wait on its own publisher; doing so is a defect
 (`agent/runtime/SessionEvents.ts:197-202`, `:299`). A job MAY run again whole
@@ -243,7 +243,7 @@ The vocabulary is one Effect Schema union, `SessionEventDraftSchema`, built
 from three groups (`shared/schemas/sessionEvent.ts:439-443`). The groups below
 follow it. A "folded" kind is one `applyRunRows` reads
 (`shared/session/runState.ts:343-472`,
-`shared/session/turnRowHandlers.ts:161-255`, `:271-375`); every other kind on a
+`shared/session/turnRowHandlers.ts:174-268`, `:284-396`); every other kind on a
 run aggregate is ignored by name, and an unknown kind is refused
 (`shared/session/runState.ts:166-202`, `:496-499`).
 
@@ -304,7 +304,7 @@ The `model.message` arms:
 `run.report` holds the run's report text, `run.result` its result metadata, and
 `followup.closed` marks its input closed until the run's next `run.activate`
 reopens it (`shared/schemas/sessionEvent.ts:402-409`,
-`agent/followUp/Inbox.ts:45-49`, `:359-372`); taking the run's claim does not.
+`shared/session/runRows.ts:301-307`, `agent/followUp/Inbox.ts:339-344`); taking the run's claim does not.
 
 ### 3.3 Display rows (session-authored and run-authored)
 
@@ -374,7 +374,7 @@ points are normative:
   `agent/runtime/loop/toolGuard.ts:119-129`).
 - **W4**, `tool.result`: commits, with the call's card rows, before the delivery
   that lets the loop continue (`agent/runtime/loop/toolUseDispatch.ts:380-406`,
-  `:656-680`, `:1103-1107`).
+  `:656-680`, `:1100-1103`).
 - **W5**, `run.position`: commits at every loop-boundary wait and every halt; a
   request's wait keeps the position in force and writes `request.opened` instead
   (`agent/runtime/loop/toolUse.ts:245`, `:274-276`, `:443`, `:497-508`;
@@ -384,8 +384,8 @@ points are normative:
   (`agent/runtime/ModelInvoker.ts:610-670`, `:702-704`;
   `agent/runtime/run/invocation.ts:381-391`).
 - **W7**, `request.opened` / `request.decided`: the opening commits before any
-  wait; a decision commits once (`agent/runtime/requestPolicy.ts:267-282`,
-  `:340-352`).
+  wait; a decision commits once (`agent/runtime/requestPolicy.ts:267-285`,
+  `:333-345`).
 
 **W1.** The invoker MUST commit the attempt's rows, the blobs of its request
 context and the `attempt` row, before it streams or submits the request
@@ -427,7 +427,7 @@ call skipped by a replan, a duplicate, a call after the turn ended) commits its
 card's close, and its open for a fast tool
 (`agent/runtime/loop/toolUseDispatch.ts:709-714`). The delivering `append` MUST
 commit only once every call of the response has settled, as one tool group bound
-to the response (`agent/runtime/loop/toolUseDispatch.ts:1103-1107`). A delivery
+to the response (`agent/runtime/loop/toolUseDispatch.ts:1100-1103`). A delivery
 its settlements do not match is a defect
 (`agent/runtime/RunHistory.ts:258-260`).
 
@@ -465,8 +465,8 @@ requests, and the offered tools and contents
 ### 5.2 Grammar
 
 `applyRunRows(state, rows)` folds rows in order
-(`shared/session/runState.ts:533-546`). It MUST refuse a row whose commit is not
-above the last folded one (`shared/session/runState.ts:495-499`). Each folded
+(`shared/session/runState.ts:532-545`). It MUST refuse a row whose commit is not
+above the last folded one (`shared/session/runState.ts:494-498`). Each folded
 kind has one handler in a table keyed by row type: the state it requires (any
 state, an existing one, or an opened run) and its move
 (`shared/session/runState.ts:293-310`, `:343-472`). A handler that requires an
@@ -489,10 +489,10 @@ position MUST fail the load as `inconsistent`
 The fold maps a position to a loop phase: `turn.ready` and `waiting` to
 `waiting`, `turn.begin` to `model.ready`, `response.ready` to `model.submitted`,
 `results.ready` to `results.ready`, and `turn.end` to `halted`
-(`shared/runs/runStatus.ts:99-112`).
+(`shared/runs/runStatus.ts:92-105`).
 
 A `halted` position keeps the phase the loop stopped in, so a resume continues
-from there (`shared/runs/runStatus.ts:112`).
+from there (`shared/runs/runStatus.ts:105`).
 
 ### 5.4 The commit path
 
@@ -572,7 +572,7 @@ request id (`agent/runtime/ModelInvoker.ts:731-747`):
   so a crash does not refill it. A compaction summary or a helper call holds its
   invocation in memory (`agent/runtime/run/modelCall.ts:107-123`); a summary's
   `attempt` and `failed` rows are an audit the run fold skips
-  (`shared/session/turnRowHandlers.ts:276-286`, `:265-267`), so a resumed
+  (`shared/session/turnRowHandlers.ts:289-304`, `:278-280`), so a resumed
   summary starts a fresh budget.
 - Past the budget, a failure a person may retry answers `ask` under a fresh
   request id; where nobody can be asked, `stop`
@@ -739,25 +739,25 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 
 ### 8.3 Protocol
 
-- A request's id is part of its payload (`agent/runtime/requestPolicy.ts:317`).
+- A request's id is part of its payload (`agent/runtime/requestPolicy.ts:320`).
   A tool call's request id is derived from the response, call, attempt and
   ordinal, so a resumed attempt rejoins the request it left standing
   (`shared/session/inFlight.ts:309-312`).
 - The opening and any decision the approval policy gives at once MUST commit in
   one batch, so no surface lists it pending
-  (`agent/runtime/requestPolicy.ts:333-345`).
+  (`agent/runtime/requestPolicy.ts:333-343`).
 - A decision MUST commit only if its request is open and undecided; the first
   decision wins, and a later one writes nothing
-  (`agent/runtime/requestPolicy.ts:267-282`).
+  (`agent/runtime/requestPolicy.ts:267-285`).
 - The asker waits on the committed `request.decided` row, read from the tail
-  (`agent/runtime/requestPolicy.ts:284-310`). If the session closes first, the
+  (`agent/runtime/requestPolicy.ts:287-313`). If the session closes first, the
   asker goes on as cancelled with no row written, and the request stays open
-  (`agent/runtime/requestPolicy.ts:346-359`).
+  (`agent/runtime/requestPolicy.ts:344-357`).
 - An interrupted asker decides its request `cancel` through the same door,
   unless the session is closed. This is best effort: a write the session refuses
   (it is draining, or the claim is gone) is logged and leaves the request open,
   for the next resume to cancel as unbound
-  (`agent/runtime/requestPolicy.ts:362-387`).
+  (`agent/runtime/requestPolicy.ts:360-383`).
 - A request is a row, so it outlives its process. A resume cancels the unbound
   ones (section 7.2) and re-enters the bound ones under the same id
   (`shared/session/inFlight.ts:347-371`). An open `externalInquiry` is neither:
@@ -849,7 +849,7 @@ What survives at each commit point follows from sections 2 to 8:
 - `tool.result`: The settlement is reused; the call is not run again
   (`agent/runtime/loop/toolUseDispatch.ts:982-983`).
 - **delivery `append`**: The loop continues to the next step from
-  `results.ready` (`shared/runs/runStatus.ts:99-107`).
+  `results.ready` (`shared/runs/runStatus.ts:92-100`).
 - `request.opened`: The request stays pending under the same id, or is cancelled
   if unbound (section 7.2).
 - `run.end` with `halted`: The lifecycle is over. A recipe task stays finished,
@@ -863,7 +863,7 @@ place a cut between an effect and its result. One real kill covers that case: a
 process killed after its command's effect and before its result reports the
 command as outcome unknown and never reruns it automatically; the model may
 still issue a new command, which runs under I4
-(`src/test-kernel/controllers/session/goldenStore.vitest.ts:666`).
+(`src/test-kernel/controllers/session/goldenStore.vitest.ts:660`).
 
 ## 10. Conformance
 
@@ -905,7 +905,7 @@ These existing suites check the sections above.
 - **8 requests**: `src/test-kernel/support/crashConformance.ts:48-51`
 - **9 crash guarantees**:
   `src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts`,
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:636`
+  `src/test-kernel/controllers/session/goldenStore.vitest.ts:630`
 
 ## 11. Non-goals
 

@@ -184,7 +184,7 @@ const runGit = (
   Effect.gen(function* () {
     const handle = yield* ChildProcess.make('git', [...args], {
       cwd,
-      env: { ...makeMachineGitEnv(), ...env },
+      env: { ...(yield* makeMachineGitEnv), ...env },
       extendEnv: false,
       stdin:
         input === undefined

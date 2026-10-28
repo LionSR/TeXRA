@@ -206,7 +206,6 @@ function runStreamedTurn(
   thread: Thread,
   prompt: string,
   logger: AgentTrace,
-  signal?: AbortSignal,
 ): Effect.Effect<RunResult, Error> {
   return Effect.clockWith((clock) => {
     logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
@@ -285,10 +284,14 @@ function runStreamedTurn(
       return Effect.void;
     };
 
-    return Effect.tryPromise({
-      try: () => thread.runStreamed(prompt, { signal }),
-      catch: ensureError,
-    }).pipe(
+    // The SDK's process lives as long as its signal: a stop interrupts this
+    // turn, and the scope's close aborts it.
+    return Effect.flatMap(Effect.abortSignal, (signal) =>
+      Effect.tryPromise({
+        try: () => thread.runStreamed(prompt, { signal }),
+        catch: ensureError,
+      }),
+    ).pipe(
       Effect.flatMap(({ events }) =>
         Stream.runForEach(Stream.fromAsyncIterable(events, ensureError), (e) =>
           Effect.suspend(() => onEvent(e)),
@@ -304,6 +307,7 @@ function runStreamedTurn(
           finalizeTurnCard('failed');
         }),
       ),
+      Effect.scoped,
     );
   });
 }
@@ -347,8 +351,7 @@ function buildCodexLaunch(params: {
     initialPrompt,
     registry: params.registry,
     releaseFallbackClaim,
-    runProviderTurn: (prompt, signal) =>
-      runStreamedTurn(thread, prompt, logger, signal),
+    runProviderTurn: (prompt) => runStreamedTurn(thread, prompt, logger),
     resolveSessionIds: () => [fallbackThreadId, thread.id],
     getUsage: codexTurnUsage,
     formatDelivery: (turn, wallTimeMs, lastPrompt) =>

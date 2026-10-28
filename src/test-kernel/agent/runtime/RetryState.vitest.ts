@@ -24,11 +24,11 @@ import {
 } from 'effect';
 import { TestClock } from 'effect/testing';
 import { it } from '@effect/vitest';
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
   type Model,
+  MODEL_CONFIGS,
   ModelError,
   type ModelOrigin,
   RemoteOperationSchema,
@@ -416,7 +416,7 @@ describe('ModelInvoker retry', () => {
   it.effect('cancels the run when the user declines the retry', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
-        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+        installPlatform({ config: { 'model.retry.maxAttempts': 0 } }),
       );
       const session = yield* sessionWithInteractions(undefined);
       const requests = autoDecideRequests(session, () => ({
@@ -444,7 +444,7 @@ describe('ModelInvoker retry', () => {
       yield* Effect.promise(() =>
         installPlatform({
           config: {
-            'texra.model.retry.maxAttempts':
+            'model.retry.maxAttempts':
               MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
           },
         }),
@@ -476,7 +476,7 @@ describe('ModelInvoker retry', () => {
   it.effect('admits a manual retry through a durable approval', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
-        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+        installPlatform({ config: { 'model.retry.maxAttempts': 0 } }),
       );
       const session = yield* sessionWithInteractions(undefined);
       const pump = yield* pumpClock;
@@ -530,7 +530,7 @@ describe('ModelInvoker retry', () => {
     () =>
       Effect.gen(function* () {
         yield* Effect.promise(() =>
-          installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+          installPlatform({ config: { 'model.retry.maxAttempts': 0 } }),
         );
         const session = yield* sessionWithInteractions(undefined);
         const pump = yield* pumpClock;
@@ -569,7 +569,7 @@ describe('ModelInvoker retry', () => {
   it.effect('classifies a policy retry denial as failed, not cancelled', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
-        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+        installPlatform({ config: { 'model.retry.maxAttempts': 0 } }),
       );
       const session = yield* sessionWithInteractions(undefined);
       setTestApprovalPolicy('yolo');

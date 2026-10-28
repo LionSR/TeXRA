@@ -6,26 +6,30 @@
  * Failure policy: a file the model cannot take is skipped with a transcript
  * warning; a file that cannot be read or classified fails the read. The
  * caller decides what a failed read means for its message: the run loop
- * fails the opening message loudly (a task's revision included),
- * and a follow-up batch is restored to its queue with the failure
- * reported. Nothing drops an attachment silently.
+ * fails the opening message loudly (a task's revision included), and a
+ * follow-up's send is refused (`attachedMedia`: its media is read once, as
+ * it is sent, and stored by address). Nothing drops an attachment silently.
  */
 import { Cause, Effect, Exit, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import type { ConfigProvider } from '@platform/interfaces';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   fileLocationDisplayPath,
   type FileLocation,
   type MediaAttachmentKind,
+  type StoredMedia,
   type StoredMediaPart,
   type ToolFileAttachment,
   type ToolResultPayload,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
+import { Rejected } from '@shared/session/runtimeRequest';
 import { blobAddress } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
+import { getBasename } from '@utils/core';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { getBase64EncodedMedia, processPdf2Png } from '@utils/media/img';
@@ -49,6 +53,48 @@ interface MediaInputParts {
   /** What was inserted, for the transcript's attachment badges. */
   readonly kinds: readonly MediaAttachmentKind[];
 }
+
+/** A PDF as page images, for a model that takes images but no PDF. */
+const pdfPageParts = Effect.fn('mediaInput.pdfPages')(function* (
+  path: string,
+  display: string,
+  logger: AgentTrace,
+) {
+  const { pages, pageCount } = yield* processPdf2Png(path).pipe(
+    Effect.mapError(
+      (cause) =>
+        new Error(
+          `Failed to process PDF file as image: ${display}: ${cause.message}`,
+          { cause },
+        ),
+    ),
+  );
+  if (pages.length < pageCount) {
+    logger.warn(
+      `Attached only pages 1-${pages.length} of ${pageCount} from ${display}`,
+    );
+  }
+  return pages.map((base64): InputPart => ({
+    kind: 'image',
+    mimeType: 'image/png',
+    base64,
+  }));
+});
+
+/**
+ * A stored PDF's bytes as page images, for a model that takes images but
+ * no PDF: the image tool reads them from a temp file removed after.
+ */
+export const storedPdfPages = Effect.fn('mediaInput.storedPdfPages')(function* (
+  name: string,
+  base64: string,
+  logger: AgentTrace,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* fs.makeTempFileScoped({ suffix: '.pdf' });
+  yield* fs.writeFile(path, Buffer.from(base64, 'base64'));
+  return yield* pdfPageParts(path, name, logger);
+}, Effect.scoped);
 
 /**
  * Read one media file into input parts. A PDF is a native document when the
@@ -86,26 +132,8 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
         kinds: ['document'],
       };
     }
-    const { pages, pageCount } = yield* processPdf2Png(path).pipe(
-      Effect.mapError(
-        (cause) =>
-          new Error(
-            `Failed to process PDF file as image: ${display}: ${cause.message}`,
-            { cause },
-          ),
-      ),
-    );
-    if (pages.length < pageCount) {
-      logger.warn(
-        `Attached only pages 1-${pages.length} of ${pageCount} from ${display}`,
-      );
-    }
     return {
-      parts: pages.map((base64) => ({
-        kind: 'image',
-        mimeType: 'image/png',
-        base64,
-      })),
+      parts: yield* pdfPageParts(path, display, logger),
       kinds: ['document'],
     };
   }
@@ -158,6 +186,57 @@ export const mediaInputParts = Effect.fn('mediaInput')(function* (
     kinds: loaded.flatMap((file) => file.kinds),
   };
 });
+
+/**
+ * What a message attaches, as its row names it (none: nothing): a file is
+ * read here, once, where it enters (an image resized to the project's
+ * limit), its bytes stored under their address with the row; media the
+ * store holds already (a fork's) is linked. A file that is missing, empty
+ * or of no medium a model takes refuses the send.
+ */
+export const attachedMedia = Effect.fn('mediaInput.attached')(
+  function* (
+    entries: readonly (string | StoredMedia)[],
+    roots: Pick<WorkspaceRoots, 'workspace' | 'config'>,
+  ): Effect.fn.Return<
+    { readonly media?: StoredMedia[]; readonly blobs?: DraftBlob[] },
+    Error,
+    FileSystem.FileSystem | ChildProcessSpawner
+  > {
+    if (entries.length === 0) return {};
+    const read = yield* Effect.forEach(
+      entries,
+      Effect.fnUntraced(function* (entry) {
+        if (typeof entry !== 'string')
+          return { media: entry, blob: { digest: entry.digest } };
+        const path = pathToLocationIn(roots.workspace, entry).absolutePath;
+        const mimeType = getMimeType(path);
+        if (mimeType === null || !storedMediaPart(mimeType, '', ANY_MODEL))
+          return yield* Effect.fail(
+            new Error(`Unsupported media file: ${entry}`),
+          );
+        const base64 = yield* getBase64EncodedMedia(path, roots.config);
+        const digest = blobAddress(base64);
+        return {
+          media: { name: getBasename(path), mimeType, digest },
+          blob: { digest, text: base64 },
+        };
+      }),
+      { concurrency: 4 },
+    );
+    return {
+      media: read.map((entry) => entry.media),
+      blobs: read.map((entry) => entry.blob),
+    };
+  },
+  Effect.mapError((error) => new Rejected({ reason: error.message })),
+);
+/** A model taking every medium: what a stored attachment may be. */
+const ANY_MODEL: MediaCapabilities = {
+  supportsVision: true,
+  supportsNativePdf: true,
+  supportsNativeAudio: true,
+};
 
 /**
  * Bytes the store holds under `digest` (a captured attachment), as the

@@ -26,23 +26,22 @@ describe('setWorkspaceCliChatAgent', () => {
         yield* Effect.promise(() =>
           installPlatform({
             config: {
-              'texra.model': 'deepseek/deepseek-v4-flash',
-              'texra.chat': {
+              model: 'deepseek/deepseek-v4-flash',
+              chat: {
                 agent: 'chat',
                 model: 'deepseek/deepseek-v4-flash',
               },
             },
           }),
         );
-        const chatSection = () =>
-          Settings.get(testWorkspaceRoots(), 'texra.chat');
+        const chatSection = () => Settings.get(testWorkspaceRoots(), 'chat');
 
         yield* setWorkspaceCliChatAgent(testWorkspaceRoots(), 'builtIn:review');
         expect(yield* chatSection()).toEqual({
           agent: 'builtIn:review',
           model: 'deepseek/deepseek-v4-flash',
         });
-        expect(yield* Settings.get(testWorkspaceRoots(), 'texra.model')).toBe(
+        expect(yield* Settings.get(testWorkspaceRoots(), 'model')).toBe(
           'deepseek/deepseek-v4-flash',
         );
 

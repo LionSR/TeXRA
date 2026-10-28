@@ -2,8 +2,6 @@ import { Cause, Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
-import type { ToolEditContent } from '@shared/session/runtimeRequest';
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { HostPresentationFailed } from './runtimePresentationEvents';
 import type {
   AgentRuntimeEmitOptions,
@@ -54,42 +52,7 @@ export interface HostInteractions {
    * nothing.
    */
   approvalDenied?(denial: ApprovalPolicyDenial, runId: RunId): void;
-  /**
-   * Stage a tool edit's preview (its original and proposed content, which
-   * the durable request payload does not carry) for the request the fold
-   * lists under `request.permission.requestId`. The decision comes back as
-   * that request's `request.decide`; a host that stages nothing leaves the
-   * request answerable from its payload alone.
-   *
-   * The session's own {@link SessionHostInteractions.presentToolEdit} hands
-   * its caller the release for what this staged; a host implements the
-   * staging alone.
-   */
-  presentToolEdit?(request: ToolEditApprovalRequest): void;
-  /**
-   * Drop what {@link presentToolEdit} staged for one request, for the single
-   * case no `request.decided` ever reaches: a request whose `request.opened`
-   * never committed. Every host that stages implements both. An `Effect`:
-   * the cleanup (a diff view to close, temp files to delete) is a program the
-   * session composes into its own. Built when staged, run only then.
-   */
-  releaseToolEdit?(requestId: string): Effect.Effect<void>;
-  /**
-   * Approve a request {@link presentToolEdit} staged, with the content the
-   * user edited in the host's view. `false` when nothing is staged, which
-   * the caller then approves from the payload; `true` when the host took
-   * the decision (a failed read of the edit included, left pending).
-   */
-  approveToolEdit?(requestId: string): Effect.Effect<boolean>;
-  /** What {@link presentToolEdit} staged for a pending request, or null:
-   *  the answer to a `request.preview`. */
-  preview?(requestId: string): Effect.Effect<ToolEditContent | null>;
   dispose?(): void;
-}
-
-interface HostInteractionAttachment {
-  readonly interactions: HostInteractions;
-  disposed: boolean;
 }
 
 /** A queued or live presentation, bound to the host it presents on. */
@@ -132,20 +95,29 @@ function presentOn<K extends RuntimePresentationEvent>(
 
 /**
  * Stable per-session presentation owner. The `SessionHandle` exposes this
- * object once, while hosts may attach and detach presentation adapters; the
- * newest attachment presents, and notices raised while none is attached are
- * replayed to the next one.
+ * object once, while one host at a time attaches and detaches; the host the
+ * session was opened with answers while none is, and notices raised while
+ * none is are replayed to the next one.
  */
 export class SessionHostInteractions implements HostInteractions {
-  private readonly attachments: HostInteractionAttachment[] = [];
+  /** The attached host, while one is. */
+  private attached: HostInteractions | undefined;
+  private readonly opened: HostInteractions | undefined;
   private readonly pendingPresentationReplays: PresentationProgram[] = [];
   private disposed = false;
 
+  /** `opened`: the host the session was opened with, which answers while
+   *  no host is attached. */
+  constructor(opened?: HostInteractions) {
+    this.opened = opened;
+  }
+
   /**
-   * Attach a presentation host. The returned Effect yields the detach
+   * Attach the session's host. The returned Effect yields the detach
    * disposer once the notices queued while no host was attached have been
    * replayed to it, so an attach and its replay are one step rather than the
-   * attach and a microtask that followed it.
+   * attach and a microtask that followed it. A session has one host at a
+   * time: attaching a second while one is attached is a defect.
    */
   use(interactions: HostInteractions): Effect.Effect<() => void> {
     return Effect.suspend(() => {
@@ -153,19 +125,21 @@ export class SessionHostInteractions implements HostInteractions {
         interactions.dispose?.();
         return Effect.succeed(() => {});
       }
-      const attachment: HostInteractionAttachment = {
-        interactions,
-        disposed: false,
-      };
-      this.attachments.push(attachment);
+      if (this.attached !== undefined)
+        return Effect.die(
+          new Error(
+            'A host is already attached to this session; a session has one host at a time.',
+          ),
+        );
+      this.attached = interactions;
+      let detached = false;
       const detach = (): void => {
-        if (attachment.disposed) return;
-        attachment.disposed = true;
-        const index = this.attachments.indexOf(attachment);
-        if (index !== -1) this.attachments.splice(index, 1);
+        if (detached) return;
+        detached = true;
+        if (this.attached === interactions) this.attached = undefined;
         interactions.dispose?.();
       };
-      return this.replayPendingPresentations(attachment).pipe(
+      return this.replayPendingPresentations(interactions).pipe(
         Effect.as(detach),
       );
     });
@@ -197,9 +171,9 @@ export class SessionHostInteractions implements HostInteractions {
         ),
       );
     return Effect.suspend(() => {
-      const active = this.activeAttachment;
+      const active = this.attached ?? this.opened;
       if (active) {
-        return present(active.interactions).pipe(
+        return present(active).pipe(
           Effect.catch((failure) =>
             Effect.logWarning('Live presentation emit failed').pipe(
               Effect.annotateLogs({ data: failure.cause }),
@@ -216,86 +190,36 @@ export class SessionHostInteractions implements HostInteractions {
   }
 
   get approvalPromptsUnavailable(): boolean {
-    return (
-      this.activeAttachment?.interactions.approvalPromptsUnavailable === true
-    );
+    return (this.attached ?? this.opened)?.approvalPromptsUnavailable === true;
   }
 
   approvalDenied(denial: ApprovalPolicyDenial, runId: RunId): void {
-    this.activeAttachment?.interactions.approvalDenied?.(denial, runId);
+    (this.attached ?? this.opened)?.approvalDenied?.(denial, runId);
   }
 
   /**
-   * Stage a preview on the attached host and hand back the release bound
-   * to the attachment that staged (a release sent to whichever host is
-   * newest by then could miss the one holding the diff and temp files).
-   * `undefined`: nothing is staged. The caller runs the release and reports
-   * its failure, which never masks the outcome of the call that staged.
-   */
-  presentToolEdit(
-    request: ToolEditApprovalRequest,
-  ): Effect.Effect<Effect.Effect<void> | undefined> {
-    return Effect.suspend(() => {
-      const { requestId } = request.permission;
-      const active = this.activeAttachment;
-      if (!active?.interactions.presentToolEdit) {
-        return Effect.logInfo(
-          `No attached host stages tool-edit previews: request ${requestId} is answerable from its payload alone.`,
-        ).pipe(withLogChannel(CHANNEL), Effect.as(undefined));
-      }
-      active.interactions.presentToolEdit(request);
-      return Effect.succeed(active.interactions.releaseToolEdit?.(requestId));
-    });
-  }
-
-  /** Approve a staged tool edit with the content its host view holds. */
-  approveToolEdit(requestId: string): Effect.Effect<boolean> {
-    return (
-      this.activeAttachment?.interactions.approveToolEdit?.(requestId) ??
-      Effect.succeed(false)
-    );
-  }
-
-  /** The preview the attached host staged for `requestId`, else null. */
-  preview(requestId: string): Effect.Effect<ToolEditContent | null> {
-    return (
-      this.activeAttachment?.interactions.preview?.(requestId) ??
-      Effect.succeed(null)
-    );
-  }
-
-  /**
-   * Dispose every attachment, newest first. Each host's dispose is a scope
-   * finalizer, so every host is disposed even when an earlier one fails, and
-   * every failure is its own reason in the defect the close raises, which the
-   * session's teardown collects beside its other owners'.
+   * Dispose the attached host, then the one the session was opened with.
+   * Each host's dispose is a scope finalizer, so both are disposed even when
+   * the first fails, and every failure is its own reason in the defect the
+   * close raises, which the session's teardown collects beside its other
+   * owners'.
    */
   dispose(): Effect.Effect<void> {
     return Effect.suspend(() => {
       if (this.disposed) return Effect.void;
       this.disposed = true;
-      const pending = this.attachments.filter((attachment) => {
-        if (attachment.disposed) return false;
-        attachment.disposed = true;
-        return true;
-      });
-      this.attachments.length = 0;
+      const hosts = [this.opened, this.attached];
+      this.attached = undefined;
       this.pendingPresentationReplays.length = 0;
       return Effect.scoped(
         Effect.forEach(
-          pending,
-          (attachment) =>
-            Effect.addFinalizer(() =>
-              Effect.sync(() => attachment.interactions.dispose?.()),
-            ),
+          hosts,
+          (host) =>
+            Effect.addFinalizer(() => Effect.sync(() => host?.dispose?.())),
           { discard: true },
         ),
       );
     });
-  }
-
-  private get activeAttachment(): HostInteractionAttachment | undefined {
-    return this.attachments.at(-1);
   }
 
   private queuePresentationReplay(
@@ -315,17 +239,16 @@ export class SessionHostInteractions implements HostInteractions {
   }
 
   private replayPendingPresentations(
-    attachment: HostInteractionAttachment,
+    interactions: HostInteractions,
   ): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       while (
-        !attachment.disposed &&
-        this.activeAttachment === attachment &&
+        this.attached === interactions &&
         this.pendingPresentationReplays.length > 0
       ) {
         const replay = this.pendingPresentationReplays.shift();
         if (!replay) return;
-        yield* replay(attachment.interactions).pipe(
+        yield* replay(interactions).pipe(
           Effect.catch((failure) =>
             Effect.logWarning(
               'Failed to replay a session presentation notice',

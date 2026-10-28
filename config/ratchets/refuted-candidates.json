@@ -10,12 +10,12 @@
         {
           "file": "packages/harness/src/platform/interfaces.ts",
           "symbol": "ConfigProvider",
-          "signature": "export interface ConfigProvider { get<T>(key: string, defaultValue?: T): T; update<T>( key: string, value: T, target?: ConfigTarget, ): Effect.Effect<void, ConfigWriteFailed>; inspect<T = unknown>(key: string): ConfigInspection<T>; readonly catalog: SettingsCatalog; }"
+          "signature": "export interface ConfigProvider { get<T>(key: string): T; update<T>( key: string, value: T, target?: ConfigTarget, ): Effect.Effect<void, ConfigWriteFailed>; inspect<T = unknown>(key: string): ConfigInspection<T>; readonly catalog: SettingsCatalog; }"
         },
         {
           "file": "packages/harness/src/platform/defaults/jsonConfigProvider.ts",
           "symbol": "JsonConfigProvider",
-          "signature": "export class JsonConfigProvider implements ConfigProvider { private readonly workspaceStore: ConfigStore; private readonly globalStore: ConfigStore; private readonly localStore: ConfigStore; readonly catalog: SettingsCatalog; constructor({ workspace, global, local, catalog, }: JsonConfigProviderOptions) {…} get<T>(key: string, defaultValue?: T): T {…} update<T>( key: string, value: T, target: ConfigTarget = 'workspace', ): Effect.Effect<void, ConfigWriteFailed> {…} inspect<T = unknown>(key: string): ConfigInspection<T> {…} }"
+          "signature": "export class JsonConfigProvider implements ConfigProvider { private readonly workspaceStore: ConfigStore; private readonly globalStore: ConfigStore; private readonly localStore: ConfigStore; readonly catalog: SettingsCatalog; constructor({ workspace, global, local, catalog, }: JsonConfigProviderOptions) {…} private storedKey(key: string): string {…} get<T>(key: string): T {…} update<T>( key: string, value: T, target: ConfigTarget = 'workspace', ): Effect.Effect<void, ConfigWriteFailed> {…} inspect<T = unknown>(key: string): ConfigInspection<T> {…} }"
         }
       ]
     },

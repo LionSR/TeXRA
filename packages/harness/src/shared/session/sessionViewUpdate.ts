@@ -65,7 +65,6 @@ import {
   isSharedRunRow,
   pendingMessages,
   phaseMoveOf,
-  type RunRows,
   type SharedRunRow,
 } from './runRows';
 import { applyTranscriptEvent } from './transcriptUpdate';
@@ -84,6 +83,7 @@ import {
 
 import { runActions } from './runActions';
 import { emptySessionView, rollupOf } from './sessionView';
+import type { RunRows } from './runRowsShape';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;

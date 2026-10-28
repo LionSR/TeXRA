@@ -9,12 +9,11 @@
 // Node imports
 import * as path from 'node:path';
 
-import { Effect, Exit, type FileSystem, type PlatformError } from 'effect';
+import { Effect, type FileSystem, type PlatformError } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness/host';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
+import { Rejected } from '@texra-ai/harness';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import type {
   ExternalOpenFailed,
@@ -23,14 +22,12 @@ import type {
 } from '@texra/hosts/uiHosts';
 import type { ChatExportInputUnreadable } from '@texra/agent/export/loadChatExportInput';
 import type { TaskRecordsFailed } from '@texra/controllers/server/protocol';
-import { TranscriptExportFailed } from './transcriptExportFailure';
-import type { Rejected, WorkspaceRoots } from '@texra-ai/harness';
 import type { StorageFs, WorkspaceFs } from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import type { TranscriptExportFailed } from './transcriptExportFailure';
 import type {
   ChatExportController,
-  ChatExportRecords,
   ExportInputStatus,
   HtmlExportOutcome,
 } from './ChatExportController';
@@ -61,7 +58,7 @@ export const TRANSCRIPT_EXPORT_FORMAT_CHOICES = [
   readonly description: string;
 }>;
 
-interface TranscriptExportHostPorts {
+interface TranscriptExportPorts {
   /** Ask the host which format to write; a cancelled picker answers
    *  `undefined`. The member is a program: each host wraps its own picker's
    *  foreign edge exactly once and words a refusal into the port's one tag,
@@ -79,16 +76,8 @@ interface TranscriptExportHostPorts {
   ): Effect.Effect<void, ExternalOpenFailed>;
   showInfo: MessageHost['showInfoMessage'];
   showWarning: MessageHost['showWarningMessage'];
-  /** The error notice. A host may answer it by refusing the request instead:
-   *  the desktop's failure is the `Rejected` the surface presents with this
-   *  message, so the channel admits it beside `NotificationFailed`. */
-  showError(
-    message: string,
-  ): Effect.Effect<void, NotificationFailed | Rejected>;
-}
-
-/** What {@link windowTranscriptExport} adds to the host's verbs. */
-interface TranscriptExportOwnPorts {
+  /** The window's controller, loaded on the first export; a failed load is
+   *  not kept, so the next export retries. */
   readonly getController: Effect.Effect<
     ChatExportController,
     TranscriptExportFailed
@@ -106,9 +95,9 @@ const RUN_NOT_FOUND_MESSAGE = 'This run has no saved data to export.';
  * steps ({@link TranscriptExportFailed}), the run read
  * ({@link ChatExportInputUnreadable}, or {@link TaskRecordsFailed} from
  * the service that holds the run), the storage write
- * (`PlatformError`), the host's open verb ({@link ExternalOpenFailed}), and
- * the host's notices ({@link NotificationFailed}, or the {@link Rejected} a
- * host answers an error notice with).
+ * (`PlatformError`), the host's open verb ({@link ExternalOpenFailed}), the
+ * host's notices ({@link NotificationFailed}), and the {@link Rejected} that
+ * says why no transcript could be written.
  */
 type TranscriptExportFailure =
   | ChatExportInputUnreadable
@@ -148,58 +137,13 @@ function exportedFileMessage(storagePath: string): string {
   return `Transcript exported: ${path.basename(storagePath)}`;
 }
 
-type TranscriptExportPorts = TranscriptExportHostPorts &
-  TranscriptExportOwnPorts;
-
-/**
- * A window's transcript export over its roots and run records. The
- * controller is loaded on the first export, so its module graph -- the
- * formatters, the trace assembler, the LaTeX compiler -- stays out of host
- * startup; a successful load is kept for the window's life, and a failed one
- * expires at once so the next export retries. Running this only allocates
- * that memo. It answers the export of one run, given the host's verbs.
- */
-export const windowTranscriptExport = (source: {
-  readonly roots: WorkspaceRoots;
-  readonly records: ChatExportRecords;
-  /** The `.tex` export's document preamble, a host resource. */
-  readonly latexPreamble: string;
-  /** The host's resources directory, which holds the trace viewer. */
-  readonly resourcesPath: string;
-}) =>
-  Effect.map(
-    Effect.cachedWithTTL(
-      Effect.tryPromise({
-        try: async () => {
-          const { ChatExportController: Controller } =
-            await import('@texra/controllers/progressView/ChatExportController');
-          return new Controller(source);
-        },
-        catch: (cause) =>
-          new TranscriptExportFailed({
-            step: 'openController',
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      }),
-      (exit) => (Exit.isSuccess(exit) ? 'Infinity' : 0),
-    ),
-    (getController) => (runId: RunId, host: TranscriptExportHostPorts) =>
-      exportRunTranscript(runId, {
-        ...host,
-        getController,
-        templatePath: traceViewerTemplatePath(source.resourcesPath),
-      }),
-  );
-
 /**
  * Ask the host for a format, write the export, and open the result.
  *
- * A cancelled picker is a no-op. Missing run data is reported through
- * `showError` rather than thrown so a missing transcript is not an
- * unexpected failure.
+ * A cancelled picker is a no-op. Missing run data rejects the request with
+ * the reason, which the surface presents.
  */
-const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
+export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
   runId: RunId,
   ports: TranscriptExportPorts,
 ): Effect.fn.Return<
@@ -215,10 +159,10 @@ const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
     return;
   }
   const result = yield* controller.buildExportInput(runId);
-  if (result.status !== 'ok') {
-    yield* ports.showError(exportInputErrorMessage(result.status));
-    return;
-  }
+  if (result.status !== 'ok')
+    return yield* new Rejected({
+      reason: exportInputErrorMessage(result.status),
+    });
   if (format === 'md') {
     yield* exportMarkdown(controller, runId, result.exportInput, ports);
     return;
@@ -291,10 +235,10 @@ const exportHtml = Effect.fn('exportHtml')(function* (
   FileSystem.FileSystem | StorageFs
 > {
   const outcome = yield* controller.exportAsHtml(runId, ports.templatePath);
-  if (outcome.status !== 'ok') {
-    yield* ports.showError(htmlExportErrorMessage(outcome.status));
-    return;
-  }
+  if (outcome.status !== 'ok')
+    return yield* new Rejected({
+      reason: htmlExportErrorMessage(outcome.status),
+    });
   yield* ports.openPath(outcome.result.absolutePath, 'external');
   yield* ports.showInfo(exportedFileMessage(outcome.result.storagePath));
 });

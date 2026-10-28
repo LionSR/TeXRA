@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 
 // Local imports
 import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
-import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import {
   availableTeamMemberCount,
   teamAvailability,
@@ -13,12 +12,9 @@ import {
   type TeamAvailability,
   type TeamRunPlan,
 } from '@texra-ai/harness/host';
-import {
-  findTeamPreset,
-  launchableTeamPresets,
-  type TeamPreset,
-} from '@texra-ai/harness/host';
+import { findTeamPreset, type TeamPreset } from '@texra-ai/harness/host';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
+import { workspaceTeams } from '@texra/shared/agentTeams';
 import type { AgentEntry, StateStore } from '@texra-ai/harness/host';
 
 export type CliTeamRunPlan = TeamRunPlan<AgentEntry>;
@@ -50,10 +46,9 @@ const MULTI_AGENT_SHOW_HINT =
  * roots) rather than being read off the calling context.
  */
 export function readCliTeams(repoState: StateStore) {
-  return Effect.gen(function* () {
-    const customRaw = yield* repoState.get(WorkspaceStateKey.CUSTOM_TEAMS);
-    return launchableTeamPresets(customRaw);
-  });
+  return Effect.map(workspaceTeams(repoState), (teams: readonly TeamPreset[]) =>
+    teams.filter((team) => !team.setupOnly),
+  );
 }
 
 /** Resolve the current display name for a persisted team identity. */

@@ -38,7 +38,7 @@ const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
  *  configuration it was handed — a tool from its call
  *  (`Settings.get(call.env.roots, ZOTERO_PORT_KEY)`), the dashboard's
  *  availability group from its probe inputs. */
-export const ZOTERO_PORT_KEY = 'texra.bib.zoteroPort';
+export const ZOTERO_PORT_KEY = 'bib.zoteroPort';
 
 /**
  * The `execute` every Zotero tool wants: take the call, read the configured

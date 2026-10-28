@@ -33,7 +33,7 @@
  * from the latest record unrecorded.
  */
 import { Effect, Exit, Record, Schema, Scope, SynchronizedRef } from 'effect';
-import { ModelProvider } from 'llm-zoo';
+import { ModelProvider } from '@texra-ai/llm';
 import stableStringify from 'safe-stable-stringify';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';

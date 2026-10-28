@@ -16,8 +16,8 @@ import type { Effect } from 'effect';
 const PREFER_SUBSCRIPTION_KEYS: Readonly<
   Record<SubscriptionAuthProvider, string>
 > = {
-  chatgpt: 'texra.chatgptCodex.preferSubscription',
-  grok: 'texra.xaiGrok.preferSubscription',
+  chatgpt: 'chatgptCodex.preferSubscription',
+  grok: 'xaiGrok.preferSubscription',
 };
 
 /** Whether the user has switched on "prefer my subscription" for `provider`. */

@@ -26,11 +26,11 @@ import {
   SynchronizedRef,
 } from 'effect';
 import { it } from '@effect/vitest';
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { describe, expect } from 'vitest';
 import {
   type Model,
+  MODEL_CONFIGS,
   type ModelOrigin,
   type TurnResult,
   TurnResultSchema,

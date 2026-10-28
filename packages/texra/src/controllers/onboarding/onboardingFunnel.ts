@@ -38,9 +38,9 @@ import type { StateStore, StateWriteFailed } from '@texra-ai/harness/host';
 
 /** "Skip for now" on the State 0 picker. The key keeps the CLI's spelling,
  *  under which it was first stored. */
-const DECLINED_KEY = 'texra.cli.onboardingDeclined';
+const DECLINED_KEY = 'cli.onboardingDeclined';
 /** A real run completed, or the user skipped setup. */
-const FIRST_RUN_DONE_KEY = 'texra.onboarding.firstRunDone';
+const FIRST_RUN_DONE_KEY = 'onboarding.firstRunDone';
 
 /** An onboarding flag: off until something sets it. */
 const OnboardingFlagSchema = Schema.Boolean.pipe(

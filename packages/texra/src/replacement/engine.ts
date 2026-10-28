@@ -223,7 +223,7 @@ const REGEX_RULES: Record<RegexReplacementCategory, RegexRuleSet> = {
 };
 
 function shouldWrapCritiqueInAlign(config: ConfigProvider): boolean {
-  return Settings.getConfig(config, 'texra.latex.wrapCritiqueInAlign');
+  return Settings.getConfig(config, 'latex.wrapCritiqueInAlign');
 }
 
 /**
@@ -232,11 +232,11 @@ function shouldWrapCritiqueInAlign(config: ConfigProvider): boolean {
  */
 function getAllReplacements(config: ConfigProvider): NonRegexRuleSet {
   const enabled = new Set(
-    Settings.getConfig<string[]>(config, 'texra.latex.enabledReplacements'),
+    Settings.getConfig<string[]>(config, 'latex.enabledReplacements'),
   );
   const customReplacements = Settings.getConfig<Record<string, string>>(
     config,
-    'texra.latex.customReplacements',
+    'latex.customReplacements',
   );
 
   const patterns: Record<string, string> = Object.assign(
@@ -256,14 +256,11 @@ function getAllReplacements(config: ConfigProvider): NonRegexRuleSet {
  */
 function getAllReplacementsRegex(config: ConfigProvider): RegexRuleSet[] {
   const enabled = new Set(
-    Settings.getConfig<string[]>(
-      config,
-      'texra.latex.enabledReplacementsRegex',
-    ),
+    Settings.getConfig<string[]>(config, 'latex.enabledReplacementsRegex'),
   );
   const customReplacements = Settings.getConfig<
     Record<string, ReplacementValue>
-  >(config, 'texra.latex.customReplacementsRegex');
+  >(config, 'latex.customReplacementsRegex');
 
   const enabledRules = Object.entries(REGEX_RULES)
     .filter(([name]) => enabled.has(name))

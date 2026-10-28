@@ -24,8 +24,7 @@ import {
 } from '@shared/schemas';
 import { DatabaseRowEarlier, heldElsewhereBy } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
-import { lastActivationCommit } from '@shared/session/runFacts';
-import { FOLLOW_UP_TYPES, runRowsFrom } from '@shared/session/runRows';
+import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRows';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 import { createScriptRunStrategy } from './scriptRun';
@@ -75,8 +74,6 @@ export interface ResumeRunOptions extends Pick<
   readonly session: SessionHandle;
   /** This caller joined a resume already in flight: an observer. */
   readonly onJoined?: () => void;
-  /** Monotone per-attempt cancellation signal: once true it stays true. */
-  readonly isCancellationRequested?: () => boolean;
 }
 
 const CHANNEL = 'ResumeRun';
@@ -110,7 +107,7 @@ export const resumeRun = Effect.fn('resumeRun')(function* (
     `Run ${runId} belongs to an open call of run ${result.ownedBy}: resuming that run, which reattaches it`,
   ).pipe(withLogChannel(CHANNEL));
   return yield* resumeRun(result.ownedBy, options);
-}, Effect.uninterruptible);
+});
 
 /**
  * One resume job of `runId` itself, on the session's `Runs`: an owned child
@@ -122,33 +119,27 @@ export const resumeOwnRun = Effect.fn('resumeOwnRun')(function* (
   options: ResumeRunOptions,
 ): Effect.fn.Return<ResumeAttempt, Error, ProcessServices> {
   const session = options.session;
-  const cancelled = () => options.isCancellationRequested?.() === true;
-  if (cancelled()) return REFUSED;
-  // The owner's resume is uninterruptible; a joiner is an observer whose
-  // wait its own interruption ends, never the resume it joined.
+  // The resume runs on the session's fiber: its owner's interruption stops
+  // it, unless a caller joined it; a joiner's ends only its own wait.
   const { result, joined } = yield* session.followUps.resumes.once(
     runId,
-    resumeHere(runId, options).pipe(
-      Effect.provideService(Runs, session.runs),
-      Effect.uninterruptible,
-    ),
+    resumeHere(runId, options),
+    registryOf(session.runs).fork,
     options.onJoined,
   );
   if (!joined || 'ownedBy' in result) return result;
   // A joiner of a resume already in flight hears that resume's refusal or
   // failure as its own; once that resume has the run it gets its own
-  // cancellation and its own admission, under the run's claim as the
-  // resume's own is, a failure of which fails this joiner alone.
-  if (cancelled() || !('started' in result) || !options.onAdmitted)
-    return result;
+  // admission, under the run's claim as the resume's own is, a failure of
+  // which fails this joiner alone.
+  if (!('started' in result) || !options.onAdmitted) return result;
   const hook = options.onAdmitted;
   return yield* Effect.scoped(
     Effect.gen(function* () {
       const heldBy = yield* holdClaim(session, runId);
       if (heldBy !== null) return { failed: 'owned_elsewhere' } as const;
       // Joined at the activation the resume committed: the latest.
-      const id = qualifyAggregateId('run', runId);
-      const commit = lastActivationCommit(yield* session.log.rows(id), runId);
+      const commit = (yield* session.followUps.read(runId)).activation?.commit;
       if (commit === undefined)
         return yield* Effect.die(new Error(`Run ${runId} has no activation.`));
       yield* hook(runId, commit);
@@ -174,7 +165,6 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   options: ResumeRunOptions,
 ): Effect.fn.Return<ResumeAttempt, Error, AgentRunServices | Scope.Scope> {
   const session = options.session;
-  const cancelled = () => options.isCancellationRequested?.() === true;
   if (session.runs.get(runId)?.live === true) return REFUSED;
   const store = getRunRecords(session, runId);
   const [config, exists] = yield* Effect.all([
@@ -187,8 +177,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
     return REFUSED;
   }
   // Deleted, or its input closed, while those reads ran.
-  if (cancelled() || (yield* session.followUps.read(runId)).closed)
-    return REFUSED;
+  if ((yield* session.followUps.read(runId)).inputClosed) return REFUSED;
   // Every resume reads the run's state under its claim and holds it until
   // the launched run holds its own, so two processes never both launch it,
   // neither launches from a state read before the other ran, and a host is
@@ -206,7 +195,6 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   yield* deliverHeld(session, runId);
   // Nothing to continue from, or rows this build cannot open.
   const rejected = yield* runRejection(runId, session);
-  if (cancelled()) return REFUSED;
   if (rejected !== null) return { failed: rejected.kind };
   // An agent or plugin this process cannot run now leaves the run
   // interrupted with the reason, never failed, for the session's follower to
@@ -229,7 +217,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
 /** The follow-ups still queued on the run, folded from its durable rows. */
 const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
   Effect.flatMap(
-    session.log.rows(qualifyAggregateId('run', runId), FOLLOW_UP_TYPES),
+    session.log.rows(qualifyAggregateId('run', runId), RUN_ROW_READS.input),
     (rows) =>
       Effect.try({
         try: () => runRowsFrom(rows).followUps,
@@ -304,7 +292,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       // What every resumed run takes from the resume's caller.
       const launchOptions = {
         session: options.session,
-        isCancellationRequested: options.isCancellationRequested,
         onAdmitted: options.onAdmitted,
         onRun: options.onRun,
         stopAfterCycle: options.stopAfterCycle,

@@ -43,12 +43,7 @@ export const selectAutoOpenFinalOutput = Effect.fn('selectAutoOpenFinalOutput')(
       result.outcome !== RUN_OUTCOME.COMPLETED
     )
       return undefined;
-    if (
-      !(yield* Settings.get<boolean>(
-        stores,
-        'texra.agentOutputs.autoOpenFinal',
-      ))
-    ) {
+    if (!(yield* Settings.get<boolean>(stores, 'agentOutputs.autoOpenFinal'))) {
       return undefined;
     }
 

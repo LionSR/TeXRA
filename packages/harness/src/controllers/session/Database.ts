@@ -31,7 +31,6 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
@@ -40,10 +39,10 @@ import {
   edgesOf,
   isDisplaySessionEvent,
   RunIdSchema,
-  ownerIdentity,
   aggregateTarget,
   referencedAggregates,
   type AggregateId,
+  type OwnerId,
   type RunParent,
   type SessionEvent,
   type SessionEventDraft,
@@ -66,6 +65,7 @@ import { armsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
+import { proveRecorded } from './ownerLiveness';
 import { LISTED_TYPES, projectionUpkeep } from './projections';
 import {
   EVENT_COLUMNS,
@@ -195,8 +195,8 @@ export const databaseLayer = (
       const identity = yield* ProcessIdentity;
       const fs = yield* FileSystem.FileSystem;
       const spawner = yield* ChildProcessSpawner;
-      const liveness = (owner: string) =>
-        proveOwnerLiveness(ownerIdentity(owner)).pipe(
+      const liveness = (owner: OwnerId) =>
+        proveRecorded(identity.owners, owner).pipe(
           Effect.provideService(FileSystem.FileSystem, fs),
           Effect.provideService(ChildProcessSpawner, spawner),
         );

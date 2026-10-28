@@ -86,7 +86,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
     // Use provided bibPath, or fall back to configured default
     const effectiveBibPath =
       bibPath ||
-      (yield* Settings.get<string>(call.env.roots, 'texra.bib.defaultPath'));
+      (yield* Settings.get<string>(call.env.roots, 'bib.defaultPath'));
 
     if (effectiveBibPath) {
       const resolved = yield* resolveToolPath(call.env, effectiveBibPath);

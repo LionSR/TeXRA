@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ModelProvider } from 'llm-zoo';
 
-import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@texra-ai/llm';
-import type { ModelConfig } from 'llm-zoo';
+import {
+  decideModelRoute,
+  type ModelConfig,
+  ModelProvider,
+  OWN_KEY_ROUTE_FACTS,
+} from '@texra-ai/llm';
 
 const dual = {
   provider: ModelProvider.MOONSHOT,

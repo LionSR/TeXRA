@@ -9,8 +9,7 @@
  * `request.decided`) and the input it has not taken (`followup.queued`,
  * `followup.consumed`). `applyRunRow` handles each of them once, so a row
  * type cannot reach one reader and miss the other; each reader copies the
- * fields it returns into its own shape. `parentEdgeOf` beside it is the one
- * reading of a run's parent edge from its rows (`run.start`, `run.detach`).
+ * fields it returns into its own shape.
  *
  * Pure: no IO, no clock, no platform, no synthetic id. It returns a result
  * instead of throwing because the two readers treat a decision for an
@@ -20,17 +19,14 @@
  * opened the request was not read.
  */
 import {
-  type PositionAt,
-  type PermissionPayload,
-  type RequestDecision,
   RUN_PHASE,
-  type RunFamily,
-  type RunOutcome,
   type RunPhase,
   type RunId,
   type SessionEvent,
 } from '@shared/schemas';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import type { RunPosition, RunRowVerdict, RunRows } from './runRowsShape';
 import type { RunView } from './sessionView';
 
 /** The rows this module owns, and the only rows it accepts. A type listed
@@ -54,17 +50,10 @@ export const isSharedRunRow = <E extends Pick<SessionEvent, 'type'>>(
 ): row is Extract<E, SharedRunRow> =>
   Object.hasOwn(SHARED_RUN_ROW_TYPES, row.type);
 
-type RequestState = {
-  readonly payload: PermissionPayload;
-  /** The recorded decision: the `request.decided` row's, null while
-   *  the request is open. */
-  readonly decision: RequestDecision | null;
-};
-
 /** A follow-up queued for the run and not yet consumed, as its row holds it. */
 export type QueuedFollowUp = Pick<
   Extract<SessionEvent, { type: 'followup.queued' }>,
-  'followUpId' | 'content' | 'holdUntil' | 'control'
+  'followUpId' | 'content' | 'holdUntil' | 'control' | 'commit'
 >;
 
 /** A pending follow-up that is a message, not one of the run's own requests
@@ -89,37 +78,6 @@ export const pendingMessages = (
   run: RunLookup,
 ): QueuedFollowUp[] =>
   rows.filter((f) => isMessage(f) && !isStaleNotice(f, run));
-
-/**
- * What these rows say about one run's position: everything but its pending
- * input. `RunState` has every field of it, so the run state copies the
- * fields `applyRunRow` returns onto itself.
- */
-export type RunPosition = {
-  readonly family: RunFamily | null;
-  readonly at: PositionAt | null;
-  readonly outcome: RunOutcome | null;
-  readonly turn: number;
-  /** By request id, in the order the rows opened them. */
-  readonly requests: Readonly<Record<string, RequestState>>;
-};
-
-/**
- * What these rows say about one run: its position and the input it has not
- * taken. The session view keeps one per run and builds its request and
- * follow-up lists from it. The loop reads its pending input from the rows
- * (`Inbox.read`), so `RunState` carries only the position.
- */
-export type RunRows = RunPosition & {
-  /** Queued without consumed, in commit order. */
-  readonly followUps: readonly QueuedFollowUp[];
-  /**
-   * Every follow-up id a row named, queued or consumed: the unique key. A
-   * delivery its producer replays after a restart is a second row
-   * under an id already here, and it is queued once, never twice.
-   */
-  readonly followUpIds: ReadonlySet<string>;
-};
 
 /**
  * A record keyed by an id the state carries: call and request ids come from
@@ -180,34 +138,28 @@ export const freshRunRows = (): RunRows => ({
   ...freshRunPosition(),
   followUps: [],
   followUpIds: new Set(),
+  start: null,
+  parent: null,
+  activation: null,
+  end: null,
+  inputClosed: false,
+  heldParks: [],
+  report: null,
+  result: null,
+  config: null,
+  position: null,
+  title: null,
+  grants: null,
+  childTurn: { active: null, lastCompleted: null },
 });
-
-export type RunRowVerdict =
-  | { readonly kind: 'applied'; readonly rows: Partial<RunRows> }
-  /** The row changes nothing: an id already recorded, or a row that needs
-   *  a run this reader holds no rows for. */
-  | { readonly kind: 'unchanged' }
-  /** A decision naming a request this reader does not hold. */
-  | { readonly kind: 'unresolved'; readonly requestId: string }
-  /** The rows contradict each other under any reader. */
-  | { readonly kind: 'contradiction'; readonly detail: string };
 
 const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
   kind: 'applied',
   rows,
 });
 
-/** The shared rows that open and decide a run's requests. */
-export const REQUEST_TYPES = Object.freeze([
-  'request.opened',
-  'request.decided',
-] as const);
-
 /** The shared rows that change a run's pending input, not its position. */
-export const FOLLOW_UP_TYPES = [
-  'followup.queued',
-  'followup.consumed',
-] as const;
+const FOLLOW_UP_TYPES = ['followup.queued', 'followup.consumed'] as const;
 type FollowUpRow = Extract<
   SharedRunRow,
   { type: (typeof FOLLOW_UP_TYPES)[number] }
@@ -288,6 +240,7 @@ export function applyRunRow(
       const followUps = ownCopy(copies, rows.followUps, (f) => [...f]);
       followUps.push({
         followUpId: row.followUpId,
+        commit: row.commit,
         content: row.content,
         ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
         ...(row.control ? { control: row.control } : {}),
@@ -317,9 +270,75 @@ export function applyRunRow(
   }
 }
 
+/** The rows a reader of a run folds for its input (`Inbox.read`) and for
+ *  its parks, each with the lifecycle that bounds it. */
+export const RUN_ROW_READS = {
+  input: [
+    ...FOLLOW_UP_TYPES,
+    'run.start',
+    'run.detach',
+    'run.activate',
+    'run.end',
+    'followup.closed',
+    'run.removed',
+  ],
+  parks: ['child.park', 'run.report', 'run.activate', 'run.end'],
+  requests: ['request.opened', 'request.decided'],
+  turns: ['child.turn'],
+} as const;
+
+/** What one lifecycle or record row changes on `rows`. */
+function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
+  switch (row.type) {
+    case 'run.start': {
+      const grants = row.approvalPolicy ?? NO_APPROVAL_GRANTS;
+      return { start: row, parent: row.parent, grants };
+    }
+    case 'approval.policy':
+      return { grants: row.snapshot };
+    case 'run.detach':
+      return { parent: null };
+    case 'run.activate':
+      return { activation: row, end: null, inputClosed: false, heldParks: [] };
+    case 'run.end':
+      return { end: row, heldParks: [] };
+    case 'followup.closed':
+    case 'run.removed':
+      return { inputClosed: true };
+    case 'run.report':
+      return { report: row.report };
+    case 'run.result':
+      return { result: row.result };
+    case 'run.config':
+      return { config: row.config };
+    case 'run.position':
+      return { position: row };
+    case 'child.turn': {
+      // `accepted` opens a turn; `settled` closes it, maybe an earlier one.
+      const turn = { key: row.attemptId, index: row.turnIndex };
+      const { active, lastCompleted } = rows.childTurn;
+      const closes = active?.key === turn.key && active.index === turn.index;
+      return row.phase === 'settled'
+        ? { childTurn: { active: closes ? null : active, lastCompleted: turn } }
+        : { childTurn: { active: turn, lastCompleted } };
+    }
+    case 'run.description':
+      // A user's title stands until the user renames again.
+      return row.by === 'model' && rows.title?.by === 'user'
+        ? {}
+        : { title: row };
+    case 'child.park': {
+      const held = { park: row, text: rows.report ?? '' };
+      return rows.end === null ? { heldParks: [...rows.heldParks, held] } : {};
+    }
+    default:
+      return {};
+  }
+}
+
 /**
- * The `RunRows` of one run's whole committed aggregate, for a reader that
- * holds every row of the run and needs only what these rows say (is this
+ * The `RunRows` of one run's committed aggregate (or the types a reader
+ * needs), for a reader that needs only what these rows say (is this
  * request open, is this follow-up queued) without building a `RunState`.
  * A whole aggregate answers every decision it holds, so a contradiction or
  * an unknown request means corrupt history and throws, as `applyRunRows`
@@ -329,6 +348,7 @@ export function runRowsFrom(rows: readonly SessionEvent[]): RunRows {
   let slice = freshRunRows();
   const copies: BatchCopies = new WeakSet();
   for (const row of rows) {
+    slice = { ...slice, ...recordFacts(slice, row) };
     if (!isSharedRunRow(row)) continue;
     const verdict = applyRunRow(slice, row, copies);
     if (verdict.kind === 'contradiction' || verdict.kind === 'unresolved') {
@@ -344,23 +364,6 @@ export function runRowsFrom(rows: readonly SessionEvent[]): RunRows {
   }
   return slice;
 }
-
-/** A run's rows as a read returns them, or none once its tombstone
- *  (`run.removed`, written last) closed it. */
-export const unlessRemoved = <E extends Pick<SessionEvent, 'type'>>(
-  rows: readonly E[],
-): readonly E[] => (rows.at(-1)?.type === 'run.removed' ? [] : rows);
-
-/** The run's parent edge as its rows leave it: null for a root, and for a
- *  child a `run.detach` severed. */
-export const parentEdgeOf = (
-  rows: readonly SessionEvent[],
-): Extract<SessionEvent, { type: 'run.start' }>['parent'] => {
-  const edge = rows.findLast(
-    (row) => row.type === 'run.start' || row.type === 'run.detach',
-  );
-  return edge?.type === 'run.start' ? edge.parent : null;
-};
 
 /**
  * The phase a lifecycle row puts its run in, or null for a row that changes

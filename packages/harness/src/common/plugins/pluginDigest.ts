@@ -23,7 +23,7 @@ import stableStringify from 'safe-stable-stringify';
 import { sha256Hex } from '@utils/core/idHash';
 import { isPathWithin } from '@utils/core/pathCore';
 import { absentReason } from '@utils/files/fsEntryExists';
-import { whichOnExtendedPath } from '@utils/system/platformPaths';
+import { CommandDirs, whichOnExtendedPath } from '@utils/system/platformPaths';
 
 // Local imports - plugin reading
 import { envDigest, type McpServerConfig } from './mcpServers';
@@ -139,7 +139,7 @@ export const externalFiles = Effect.fn('pluginDigest.externalFiles')(
     const command =
       server.command.includes('/') || server.command.includes(path.sep)
         ? path.resolve(root, server.command)
-        : whichOnExtendedPath(server.command);
+        : whichOnExtendedPath(server.command, (yield* CommandDirs)());
     const candidates: (readonly [ExternalFile['role'], string])[] = [
       ...(command === null ? [] : [['command', command] as const]),
       ...server.args.map((arg) => ['file', path.resolve(root, arg)] as const),
