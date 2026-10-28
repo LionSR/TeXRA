@@ -23,9 +23,7 @@ import {
   listRunWorkspaceFiles,
   type RunWorkspaceFile,
 } from '@agent/storage/runWorkspaceFiles';
-import { withLogChannel } from '@logger/effectLog';
 import {
-  aggregateTarget,
   type RunEnd,
   type RunId,
   type TranscriptSubscription,
@@ -39,8 +37,6 @@ import {
 } from '@transcript/traceAssembler';
 
 import type { LocalSession } from './sessions.js';
-
-const CHANNEL = 'sessionReads';
 
 /**
  * One run's committed records ({@link LocalSession.records}), read from the
@@ -149,30 +145,14 @@ const deleteRuns =
   (handle: SessionHandle): LocalSession['deleteRuns'] =>
   (target) =>
     Effect.gen(function* () {
-      const rows = yield* Stream.runCollect(handle.log.listing());
-      const removed = new Set(
-        rows.flatMap((row) =>
-          row.type === 'run.removed' ? [row.aggregateId] : [],
-        ),
+      // The listing as the cold view folds it: each run it still holds, at
+      // the commit of its `run.start`.
+      const { runs } = yield* handle.view.read([]);
+      const listed = [...runs.values()].flatMap((run) =>
+        target === 'all' || run.id === target
+          ? [{ runId: run.id, commit: run.createdAt }]
+          : [],
       );
-      const starts = rows.filter(
-        (row) => row.type === 'run.start' && !removed.has(row.aggregateId),
-      );
-      const listed = starts.flatMap((row) => {
-        const run = aggregateTarget(row.aggregateId);
-        return run.kind === 'run' && (target === 'all' || run.id === target)
-          ? [{ runId: run.id, commit: row.commit }]
-          : [];
-      });
-      // A `run.start` opens a run aggregate: one on any other is a damaged
-      // listing, said rather than skipped.
-      const strays = starts.filter(
-        (row) => aggregateTarget(row.aggregateId).kind !== 'run',
-      );
-      if (strays.length > 0)
-        yield* Effect.logWarning(
-          `The run listing holds a run.start on a non-run aggregate: ${strays.map((row) => row.aggregateId).join(', ')}`,
-        ).pipe(withLogChannel(CHANNEL));
       const deleted: RunId[] = [];
       const active: RunId[] = [];
       const failed: { runId: RunId; error: RequestError }[] = [];

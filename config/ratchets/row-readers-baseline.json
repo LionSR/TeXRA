@@ -48,8 +48,7 @@
       "packages/harness/src/controllers/session/Database.ts",
       "packages/harness/src/controllers/session/deletionCleanup.ts",
       "packages/harness/src/controllers/session/runTrace.ts",
-      "packages/harness/src/controllers/session/sessionStore.ts",
-      "packages/harness/src/effect/sessionReads.ts"
+      "packages/harness/src/controllers/session/sessionStore.ts"
     ],
     "run.start": [
       "packages/harness/src/agent/runtime/AgentLaunchContext.ts",
@@ -59,7 +58,6 @@
       "packages/harness/src/controllers/session/Database.ts",
       "packages/harness/src/controllers/session/rowReader.ts",
       "packages/harness/src/controllers/session/sessionStore.ts",
-      "packages/harness/src/effect/sessionReads.ts",
       "packages/harness/src/transcript/traceAssembler.ts",
       "packages/texra/src/controllers/progressView/ChatExportController.ts",
       "packages/trace-viewer/src/traceFrames.ts"
