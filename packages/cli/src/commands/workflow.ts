@@ -300,7 +300,6 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
 
         const run = yield* executeCliToolUseConfig(config, runContext, {
           services,
-          stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
         if (!run.ok) return run.exitCode;
@@ -330,7 +329,8 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     runContext: CliContext,
     options: {
       readonly services: CliExecuteOptions['services'];
-      readonly recoveryInputIsDurable?: boolean;
+      /** False when invocation-owned temporary inputs will not survive exit. */
+      readonly recoveryInputIsDurable: boolean;
       readonly runId?: RunId;
     },
   ): Effect.fn.Return<number, Error, ProcessServices> {
@@ -344,7 +344,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const output = resumeWorkflowOutputFile(config);
     const outputDir = resumeWorkflowOutputDirectory(config);
     const recoveryProcessCwd = tryReadCliCwd();
-    const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
+    const { recoveryInputIsDurable } = options;
     // Not a run a model failure stopped (its folded `lastError`): read from
     // the rows, so no verdict held in memory can be missed by an interrupt.
     const canAdvertiseInterruptedRun: CheckpointRefinement = (runId) =>

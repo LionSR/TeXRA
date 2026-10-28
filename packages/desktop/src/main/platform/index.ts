@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { Context, Effect, Layer, ManagedRuntime, Scope } from 'effect';
+import { Effect, Layer, ManagedRuntime, Scope } from 'effect';
 
 import {
   AgentDirectories,
@@ -7,11 +7,7 @@ import {
   processLayer,
   AgentDirectoryService,
   type ProcessServices,
-  type PlatformSecrets,
-  type AgentDirectoriesPort,
-  type StateStore,
   type WorkspaceRoots,
-  Sessions,
   StateStores,
 } from '@texra-ai/harness';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
@@ -49,14 +45,6 @@ interface ElectronPlatformInitResult {
    * setting changed from one project is what the others read.
    */
   globalConfigStore: ConfigStore;
-  /**
-   * The process-wide services the composition root builds. Returned so the
-   * window and the IPC surfaces below it are *handed* their stores instead
-   * of each re-reading them: one owner, one place to substitute in a test.
-   */
-  globalState: StateStore;
-  secrets: PlatformSecrets;
-  agentDirectories: AgentDirectoriesPort;
   /**
    * Desktop's memory/history/executions data root (`~/.texra` in
    * production, see `resolveDesktopDataRoot()`). Threaded out so the project
@@ -156,7 +144,6 @@ export const initializeElectronPlatform = Effect.fn(
     ProcessServices
   > = Effect.gen(function* () {
     const globalStateStore = yield* AppState;
-    const agentDirectories = yield* AgentDirectories;
     const workspaceStateStore = yield* (yield* StateStores)
       .project(storage, undefined)
       .pipe(Scope.provide(processScope));
@@ -180,16 +167,10 @@ export const initializeElectronPlatform = Effect.fn(
     return {
       processRoots,
       globalConfigStore: configStores.global,
-      globalState: globalStateStore,
-      secrets,
-      agentDirectories,
       dataRoot,
       resourcesPath,
       mainDir,
     };
   });
-  // The process's sessions, read from the runtime that serves them, for the
-  // project registry to open each project's session through.
-  const sessions = Effect.map(runtime.contextEffect, Context.get(Sessions));
-  return { runtime, processScope, initialize, sessions };
+  return { runtime, processScope, initialize };
 });

@@ -17,12 +17,7 @@ import {
 } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
-import {
-  type ConfigProvider,
-  AgentCatalog,
-  SESSION_CLOSE_DEADLINE_MS,
-  Settings,
-} from '@texra-ai/harness';
+import { AgentCatalog, SESSION_CLOSE_DEADLINE_MS } from '@texra-ai/harness';
 import {
   type RuntimeRequest,
   qualifyAggregateId,
@@ -30,7 +25,6 @@ import {
   type AgentConfig,
   RUN_PHASE,
   isLiveRun,
-  APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
   isActivePhase,
   isTranscriptSettlementPhase,
@@ -40,6 +34,7 @@ import {
   CliUsageError,
   effectiveApprovalPolicy,
   launchApprovalNotice,
+  projectApprovalPolicy,
   type CliContext,
 } from '@cli/runtime/cliContext';
 import {
@@ -50,7 +45,7 @@ import {
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
-import { installCliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
+import type { CliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
@@ -140,12 +135,6 @@ interface ChatResult {
 /** A change of a run's approval grants (`policy.set`). */
 type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
 
-/** The project's persisted approval policy, as the session reads it. */
-const projectApprovalPolicy = (roots: {
-  readonly config: ConfigProvider;
-}): ApprovalPolicy =>
-  Settings.getConfig<ApprovalPolicy>(roots.config, APPROVAL_POLICY_CONFIG_KEY);
-
 export interface RunChatInit {
   /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */
   readonly agentOverride?: string;
@@ -167,16 +156,13 @@ const CHAT_STARTUP_MODEL_RECOVERY = {
   configureKeyAction: 'add a provider API key with `texra setup`',
 } satisfies CliNoAvailableModelsRecoveryOptions;
 
+/** `runtime` is the one the command entry installed and ran its program on;
+ *  platform signals hand off before Ink mounts. */
 export async function runChat(
+  runtime: CliProcessRuntime,
   context: CliContext,
   init: RunChatInit,
 ): Promise<ChatResult> {
-  // Platform signals hand off before Ink mounts; chat keeps the entry runtime.
-  const runtime = installCliProcessRuntime(context.storageRoot, {
-    resourcesPath: context.resourcesPath,
-    minimumLogLevel: context.minimumLogLevel,
-    workspace: context.cwd,
-  });
   const initialResume = init.initialResume;
   // The chat's hold on the background service, for its whole life.
   const chatScope = Scope.makeUnsafe();
@@ -217,7 +203,7 @@ export async function runChat(
       // each launch (`launchApproval`).
       const refused = launchApprovalNotice(
         context.requestedApprovalPolicy,
-        projectApprovalPolicy(runtimeSession.roots),
+        projectApprovalPolicy(runtimeSession.roots.config),
       );
       if (refused !== undefined) startupNotices.push(refused);
       // A store this process moved aside at open is said in the transcript,
@@ -301,7 +287,7 @@ export async function runChat(
         cwd: context.cwd,
         approvalPolicy: effectiveApprovalPolicy(
           context.requestedApprovalPolicy,
-          projectApprovalPolicy(runtimeSession.roots),
+          projectApprovalPolicy(runtimeSession.roots.config),
         ),
         teamName: yield* readCliTeamName(
           runtimeSession.roots.repoState,
@@ -318,6 +304,16 @@ export async function runChat(
         startupNotices.push(
           `Input history could not be read (${toErrorMessage(readFailure)}); ↑/↓ and Ctrl-R start from this session's entries.`,
         );
+      // DA1 sentinel discovery runs *before* Ink mounts so it owns the
+      // raw-mode toggle exclusively, interleaving with Ink's own raw-mode
+      // lifecycle (set when `useInput` mounts) caused capability discovery to
+      // flip raw mode off ~250ms in, breaking input. Capability-gated
+      // notifications fall back to BEL during this window (~250ms typical,
+      // hard 250ms cap on no DA1 reply).
+      const terminalCaps = yield* discoverTerminalCapabilities({
+        stdin: process.stdin,
+        stdout: process.stdout,
+      });
       return {
         startupNotices,
         services,
@@ -328,6 +324,7 @@ export async function runChat(
         defaults,
         firstRunSetupAgent,
         inputHistory,
+        terminalCaps,
       };
     }).pipe(
       // A chat that ends at startup lets go of the service there.
@@ -341,7 +338,7 @@ export async function runChat(
   if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
   const { services, runtimeSession, runSession, runsElsewhere, link } = startup;
   const { defaults } = startup;
-  const { inputHistory, startupNotices } = startup;
+  const { inputHistory, startupNotices, terminalCaps } = startup;
 
   // The policy this chat's launches ask for (`launchApproval`): its flag,
   // then each `/approval`.
@@ -349,12 +346,8 @@ export async function runChat(
   const getApprovalPolicy = (): ApprovalPolicy =>
     effectiveApprovalPolicy(
       chatPolicy,
-      projectApprovalPolicy(runtimeSession.roots),
+      projectApprovalPolicy(runtimeSession.roots.config),
     );
-  const currentSessionContext = (): CliContext => ({
-    ...context,
-    quietLogs: true,
-  });
   // `/approval` sets this chat's launch policy only, here or in the
   // service; the project's policy changes through `/config` or the settings
   // view. The chat's latest run takes the change on its own `approval.policy`
@@ -420,18 +413,6 @@ export async function runChat(
     resumeRun: chatController.resume,
   });
 
-  // DA1 sentinel discovery runs *before* Ink mounts so it owns the raw-mode
-  // toggle exclusively, interleaving with Ink's own raw-mode lifecycle (set
-  // when `useInput` mounts) caused capability discovery to flip raw mode off
-  // ~250ms in, breaking input. Capability-gated notifications fall back to
-  // BEL during this window (~250ms typical, hard 250ms cap on no DA1 reply).
-  const terminalCaps = await runtime.runPromise(
-    discoverTerminalCapabilities({
-      stdin: process.stdin,
-      stdout: process.stdout,
-    }),
-  );
-
   // From here on `chatScope` owns everything the session holds: what is
   // added below closes before the service hold above, last in first out,
   // and the exit drain awaits that close.
@@ -454,31 +435,31 @@ export async function runChat(
     },
   });
   for (const notice of startupNotices) appendLocalNotice(notice);
-  // Said when the login shell has answered, without holding the chat.
-  if (runsElsewhere)
-    runtime.runSync(
-      serviceKeysNotice().pipe(
-        Effect.tap((keys) =>
-          Effect.sync(() => keys !== null && appendLocalNotice(keys)),
-        ),
-        Effect.forkIn(chatScope),
-      ),
-    );
-  // The service went away (retired by a newer build, or it died) and the
-  // link reaches it again: the chat says so, rather than going quiet.
   if (link !== undefined)
     runtime.runSync(
-      Stream.runForEach(
-        SubscriptionRef.changes(link.client).pipe(Stream.drop(1)),
-        (client) =>
-          Effect.sync(() =>
-            appendLocalNotice(
-              client === null
-                ? 'The TeXRA service is offline; TeXRA is reconnecting. If another window runs a newer TeXRA, update this one.'
-                : 'Reconnected to the TeXRA service.',
-            ),
+      Effect.gen(function* () {
+        // Said when the login shell has answered, without holding the chat.
+        yield* serviceKeysNotice().pipe(
+          Effect.tap((keys) =>
+            Effect.sync(() => keys !== null && appendLocalNotice(keys)),
           ),
-      ).pipe(Effect.forkIn(chatScope)),
+          Effect.forkIn(chatScope),
+        );
+        // The service went away (retired by a newer build, or it died) and
+        // the link reaches it again: the chat says so, rather than going
+        // quiet.
+        yield* Stream.runForEach(
+          SubscriptionRef.changes(link.client).pipe(Stream.drop(1)),
+          (client) =>
+            Effect.sync(() =>
+              appendLocalNotice(
+                client === null
+                  ? 'The TeXRA service is offline; TeXRA is reconnecting. If another window runs a newer TeXRA, update this one.'
+                  : 'Reconnected to the TeXRA service.',
+              ),
+            ),
+        ).pipe(Effect.forkIn(chatScope));
+      }),
     );
   // Cosmetic, but "texra-local" or a bare shell prompt in every tab makes a
   // multi-session workflow hard to navigate: show project and attention state.
@@ -489,10 +470,12 @@ export async function runChat(
     title: installTerminalTitleUpdates(context.cwd),
   });
   onChatClose(announceForegroundApprovals());
-  runtime.runSync(Effect.forkIn(followCliCredentialChanges, chatScope));
-  // Keys another TeXRA window or the service saves reach this chat too.
   runtime.runSync(
-    Effect.forkIn(cliSecrets(context.storageRoot).watch(), chatScope),
+    Effect.gen(function* () {
+      yield* Effect.forkIn(followCliCredentialChanges, chatScope);
+      // Keys another TeXRA window or the service saves reach this chat too.
+      yield* Effect.forkIn(cliSecrets(context.storageRoot).watch(), chatScope);
+    }),
   );
   // The runs this terminal paints, watched on the session for as long as
   // the set holds: the watch keeps their transcripts in the view, and a
@@ -553,7 +536,7 @@ export async function runChat(
     runSession,
     served: runsElsewhere,
     records: runtimeSession.records,
-    getSessionContext: currentSessionContext,
+    sessionContext: { ...context, quietLogs: true },
     chatScope,
     shutdownScope: services.shutdownScope,
     cwd: context.cwd,
@@ -775,12 +758,11 @@ export async function runChat(
     await ink.waitUntilExit();
   } finally {
     // The exit policy reads the view (a resumable idle root) after it has
-    // released the store, so the bridge outlives the chat's scope, which the
-    // graceful drain closes. A signal exit leaves the store to process.exit;
-    // closing the scope again here keeps the order on every path: nothing
-    // subscribed to the view outlives it.
+    // released the store, so the bridge outlives the chat's scope. The
+    // teardown settles only on the graceful path, whose drain closes that
+    // scope first (a signal exit ends in process.exit and never returns
+    // here), so nothing subscribed to the view outlives the bridge.
     await exitController.gracefulTeardown();
-    await runtime.runPromise(Scope.close(chatScope, Exit.void));
     unbindSessionView();
   }
   return { exitCode: session.runExitCode };

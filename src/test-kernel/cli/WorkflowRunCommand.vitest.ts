@@ -276,34 +276,6 @@ describe('CLI run command, workflow agents', () => {
     fixtureSession = undefined;
   });
 
-  it.effect('copies the outputs into --output-dir', () =>
-    withTempDirEffect('texra-workflow-', (root) =>
-      Effect.gen(function* () {
-        const workspace = path.join(root, 'workspace ');
-        const generated = yield* Effect.promise(() =>
-          writeGeneratedOutput(workspace),
-        );
-        const outputSummary = runOutputSummary(
-          generated,
-          path.join(workspace, 'paper.tex'),
-        );
-        mockWorkflowRun(workflowRun('abc003', { outputs: [outputSummary] }));
-
-        const exitCode = yield* workflowProgram(
-          { outputDir: 'out' },
-          createRunCommandCliContext({ cwd: workspace }),
-        );
-
-        expect(exitCode).toBe(0);
-        expect(
-          yield* Effect.promise(() =>
-            fs.readFile(path.join(workspace, 'out', 'paper.tex'), 'utf8'),
-          ),
-        ).toBe('polished');
-      }),
-    ),
-  );
-
   it.effect(
     'keeps failed output in run storage and preserves the requested --output destination',
     () =>

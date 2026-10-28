@@ -11,7 +11,6 @@ import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
-import { createOutputState } from '@texra/agent/output/outputState';
 import { assignByContentSimilarity } from '@texra/agent/output/extraction/contentSimilarity';
 import { createExternalLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
@@ -44,7 +43,7 @@ function createXmlManager(
     } as unknown as AgentConfig,
     logger,
     new RunFileService(RUN_ID, testWorkspaceRoots()),
-    createOutputState(),
+    { rounds: new Map() },
     testWorkspaceRoots().config,
   );
 }
@@ -98,21 +97,6 @@ type RecoveryCase = [
 ];
 
 const RECOVERY_CASES: readonly RecoveryCase[] = [
-  [
-    'recovers documents from percent filename headers',
-    [
-      'Here is the output:',
-      '% main.tex',
-      '\\section{Recovered}',
-      '% sections/appendix.tex',
-      'Appendix text.',
-    ],
-    null,
-    {
-      'main.tex': '\\section{Recovered}\n',
-      'sections/appendix.tex': 'Appendix text.\n',
-    },
-  ],
   [
     'keeps percent filename comments inside a LaTeX document body',
     [

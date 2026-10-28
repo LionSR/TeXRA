@@ -4,14 +4,13 @@
  * that identity is made of.
  */
 // Third-party imports
-import { Schema } from 'effect';
+import { Predicate, Schema } from 'effect';
 import { JsonObjectSchema, type TurnRequest } from '@texra-ai/llm';
 
 // Local imports - agent runtime
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { convertToolSchema } from '@agent/core/tools/toolSchema';
 import type { OfferedTool, ToolDefinition } from '@shared/schemas';
-import { withoutSchemaDescriptions } from '@tools/schemaIdentity';
 import { sha256 } from '@utils/core/idHash';
 
 type ToolDefinitions = NonNullable<TurnRequest['tools']>;
@@ -69,6 +68,64 @@ export interface HeldPlugins {
   readonly warnings: readonly string[];
   readonly loaded: ReadonlyMap<string, string | undefined>;
   readonly entries: ReadonlyMap<string, ToolEntry>;
+}
+
+/** Keywords whose value is one schema, or an array of schemas. */
+const SUBSCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
+  'items',
+  'prefixItems',
+  'additionalProperties',
+  'additionalItems',
+  'unevaluatedProperties',
+  'unevaluatedItems',
+  'contains',
+  'contentSchema',
+  'propertyNames',
+  'not',
+  'if',
+  'then',
+  'else',
+  'anyOf',
+  'oneOf',
+  'allOf',
+]);
+
+/** Keywords whose value maps a name to a schema: keys are data, kept as is. */
+const SCHEMA_MAP_KEYWORDS: ReadonlySet<string> = new Set([
+  'properties',
+  '$defs',
+  'definitions',
+  'patternProperties',
+  'dependentSchemas',
+  'dependencies',
+]);
+
+/**
+ * A JSON Schema node with `description` dropped at every schema position:
+ * its identity apart from its wording, which a tool's digest covers. It
+ * walks keywords, not keys: a property named `description` stays, and
+ * `enum`/`const`/`default` values are data and are not entered.
+ */
+function withoutSchemaDescriptions(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(withoutSchemaDescriptions);
+  if (!Predicate.isObject(node)) return node;
+  const out: Record<string, unknown> = {};
+  for (const [keyword, value] of Object.entries(node)) {
+    if (keyword === 'description') continue;
+    if (SUBSCHEMA_KEYWORDS.has(keyword)) {
+      out[keyword] = withoutSchemaDescriptions(value);
+    } else if (SCHEMA_MAP_KEYWORDS.has(keyword) && Predicate.isObject(value)) {
+      out[keyword] = Object.fromEntries(
+        Object.entries(value).map(([name, schema]) => [
+          name,
+          withoutSchemaDescriptions(schema),
+        ]),
+      );
+    } else {
+      out[keyword] = value;
+    }
+  }
+  return out;
 }
 
 /**

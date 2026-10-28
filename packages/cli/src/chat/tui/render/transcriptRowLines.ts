@@ -107,10 +107,7 @@ export function transcriptRowBodyLines(
       case 'fileList':
         return fileListLines(row);
       case 'contextManagement':
-        return [
-          ...statItemLines(row.items),
-          ...(row.summary ? elidedTextLines(row.summary, elide) : []),
-        ];
+        return statItemLines(row.items);
       case 'progressStatus':
         return row.detail ? elidedTextLines(row.detail, elide) : [];
       case 'assistant':

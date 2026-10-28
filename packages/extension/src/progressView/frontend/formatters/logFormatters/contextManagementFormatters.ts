@@ -65,7 +65,6 @@ export function formatContextManagementTemplate(
       .logId=${row.id}
       .config=${config}
       .items=${items}
-      .summary=${row.summary?.full ?? ''}
     ></context-management>
   `;
 }

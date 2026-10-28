@@ -1,7 +1,9 @@
 import { Effect } from 'effect';
 
-import type { SettingsCatalog } from '@shared/state/stateSettings';
-import { canonicalConfigKey } from '@shared/config/configKeys';
+import {
+  canonicalConfigKey,
+  type SettingsCatalog,
+} from '@shared/state/stateSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {

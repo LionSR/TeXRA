@@ -9,10 +9,8 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
-import type {
-  ModelSelectionItem,
-  ProviderKeyStatus,
-} from '@texra/shared/settingsView/settingsViewMessages';
+import type { ModelSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
+import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
 import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
 import { commonViewStyles, designTokens } from '@ui/styles';
 

@@ -1,6 +1,5 @@
 /**
- * The three non-durable fold inputs of a session (PRD one-fold-three-renderers,
- * 7.2), each a level in a `SubscriptionRef`: a snapshot read beside a
+ * The three non-durable fold inputs of a session, each a level in a `SubscriptionRef`: a snapshot read beside a
  * separately armed delta stream loses whatever lands between the two, and a
  * `SubscriptionRef` replays its current value on subscribe.
  *
@@ -75,7 +74,7 @@ export class TextChunkSource extends Context.Service<
 export class TranscriptSubscriptions extends Context.Service<
   TranscriptSubscriptions,
   {
-    /** The union of every port's set: a fold input (PRD 7.2). */
+    /** The union of every port's set: a fold input. */
     readonly ref: SubscriptionRef.SubscriptionRef<
       readonly TranscriptSubscription[]
     >;

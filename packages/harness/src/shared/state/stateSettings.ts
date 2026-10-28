@@ -877,6 +877,14 @@ export interface SettingsCatalog {
 }
 
 /**
+ * The stored spelling of a config key. Hosts store settings as flat
+ * `texra.<key>` entries; callers may pass either spelling.
+ */
+export function canonicalConfigKey(key: string): string {
+  return key.startsWith('texra.') ? key : `texra.${key}`;
+}
+
+/**
  * The catalog of the harness's rows, then `appRows` (an app's own, its
  * plugins' included). A key declared twice is a defect and throws.
  */
@@ -923,7 +931,7 @@ export function settingsCatalog(
           .map((surface) => ({ entry, surface })),
       ),
     configDefault: (key) => {
-      const canonicalKey = key.startsWith('texra.') ? key : `texra.${key}`;
+      const canonicalKey = canonicalConfigKey(key);
       const entry = byKey.get(canonicalKey);
       if (entry?.slot !== 'config') return undefined;
       if (!defaults.has(canonicalKey)) {

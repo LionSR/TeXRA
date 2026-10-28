@@ -21,7 +21,8 @@ import {
 import { absentReason } from '@texra-ai/harness/node';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { loadChatExportInput, type ChatExportInput } from '@texra/agent/export';
+import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
+import type { ChatExportInput } from '@texra/agent/export/schemas';
 
 import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';

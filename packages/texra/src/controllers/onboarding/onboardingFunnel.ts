@@ -1,5 +1,5 @@
 /**
- * Host-neutral onboarding funnel (PRD: agent-native onboarding).
+ * Host-neutral onboarding funnel.
  *
  * The funnel state is derived, never a mode the user (or code) sets:
  *
@@ -133,7 +133,7 @@ interface OnboardingFunnelTransition {
   state: OnboardingFunnelState;
   /** Select the setup agent in the launcher (entering State 1). */
   selectSetupAgent: boolean;
-  /** Configuring a credential clears a previous skip (PRD edge case). */
+  /** Configuring a credential clears a previous skip. */
   clearDeclined: boolean;
 }
 

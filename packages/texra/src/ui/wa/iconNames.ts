@@ -96,7 +96,6 @@ export const ICON_NAMES = [
   'magnifying-glass-chart',
   'microphone',
   'minus',
-  'note-sticky',
   'pencil',
   'picture-in-picture',
   'play',

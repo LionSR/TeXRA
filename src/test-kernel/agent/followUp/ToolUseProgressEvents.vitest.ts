@@ -7,7 +7,7 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import type { InvokeRequest } from '@agent/runtime/ModelInvoker';
+import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { RUN_OUTCOME } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';

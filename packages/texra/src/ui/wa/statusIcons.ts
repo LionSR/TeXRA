@@ -6,7 +6,7 @@ import { css, html, type CSSResult, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports
-import type { ProviderKeyStatus } from '@texra/shared/settingsView/settingsViewMessages';
+import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
 import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 

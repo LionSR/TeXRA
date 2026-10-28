@@ -19,6 +19,7 @@ import { GlobalStorageFs } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { AgentSource } from '@shared/schemas';
+import type { ToolRegistry } from '@tools/toolTable';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import { entryExists } from '@utils/files/fsEntryExists';
 
@@ -69,8 +70,21 @@ export class AgentDirectoryService {
       this.resourcesRoot = options.resourcesPath;
   }
 
+  /**
+   * The bundled agent directory itself. It ships read-only with the host
+   * and every consumer registers it `writable: false`, so there is nothing
+   * to create.
+   */
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed> {
-    return this.packagedDir(BUNDLED_AGENTS_DIRECTORY);
+    return Effect.suspend(() => {
+      const basePath = path.join(
+        this.options.resourcesPath,
+        BUNDLED_AGENTS_DIRECTORY,
+      );
+      return Effect.logDebug(
+        `Using built-in ${BUNDLED_AGENTS_DIRECTORY} directory: ${basePath}`,
+      ).pipe(withLogChannel(this.options.channel), Effect.as(basePath));
+    });
   }
 
   custom(): Effect.Effect<
@@ -118,19 +132,6 @@ export class AgentDirectoryService {
           }),
       ),
     );
-  }
-
-  /**
-   * The packaged directory itself. It ships read-only with the host and every
-   * consumer registers it `writable: false`, so there is nothing to create.
-   */
-  private packagedDir(dirName: string): Effect.Effect<string> {
-    return Effect.suspend(() => {
-      const basePath = path.join(this.options.resourcesPath, dirName);
-      return Effect.logDebug(
-        `Using built-in ${dirName} directory: ${basePath}`,
-      ).pipe(withLogChannel(this.options.channel), Effect.as(basePath));
-    });
   }
 
   private ensureDefaultCustomDir(): Effect.Effect<
@@ -265,13 +266,15 @@ export function agentSourceRoots(
 ): Effect.Effect<
   readonly string[],
   AgentDirectoriesFailed | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AppState
+  GlobalStorageFs | FileSystem.FileSystem | AppState | ToolRegistry
 > {
   switch (source) {
     case 'custom':
       return Effect.map(directories.custom(), (dir) => [dir]);
     case 'builtIn':
-      return Effect.flatMap(directories.builtIn(), enabledBuiltInRoots);
+      return Effect.flatMap(directories.builtIn(), (core) =>
+        enabledBuiltInRoots(core, directories.resourcesRoot),
+      );
     case 'plugin':
     case 'inline':
       return Effect.succeed([]);

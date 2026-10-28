@@ -96,9 +96,11 @@ export function aggregateError(
 // backoff
 // ---------------------------------------------------------------------------
 
+const JITTER_FRACTION = 0.2;
+
 /**
  * Compute a jittered exponential backoff delay: `baseMs * 2^(failures-1)`,
- * capped at `maxMs`, then randomized by `+/-jitterFraction` and capped again
+ * capped at `maxMs`, then randomized by +/-20% and capped again
  * so jitter can never push the result past `maxMs`. Shared by every retry/
  * backoff loop in the codebase so the jitter formula only exists once.
  *
@@ -111,13 +113,12 @@ export function jitteredExponentialBackoffMs(
   failures: number,
   maxMs: number,
   unitRandom: number,
-  jitterFraction = 0.2,
 ): number {
   const exponential = Math.min(
     maxMs,
     Math.max(0, baseMs) * 2 ** Math.max(0, failures - 1),
   );
-  const jitter = 1 - jitterFraction + unitRandom * 2 * jitterFraction;
+  const jitter = 1 - JITTER_FRACTION + unitRandom * 2 * JITTER_FRACTION;
   return Math.min(maxMs, Math.round(exponential * jitter));
 }
 
@@ -137,10 +138,10 @@ export function generateRunId(): RunId {
 
 /**
  * Generate a short unique ID for non-schema-constrained uses (temp
- * filenames, log entry IDs). Defaults to nanoid's standard 21-char
- * URL-safe alphabet; pass `size` for a shorter ID. A run id, which its
- * schema constrains to lowercase hex, is `generateRunId`'s.
+ * filenames, log entry IDs): nanoid's standard 21-char URL-safe alphabet.
+ * A run id, which its schema constrains to lowercase hex, is
+ * `generateRunId`'s.
  */
-export function generateShortId(size?: number): string {
-  return nanoid(size);
+export function generateShortId(): string {
+  return nanoid();
 }

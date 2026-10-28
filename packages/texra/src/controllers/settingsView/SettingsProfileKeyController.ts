@@ -1,18 +1,16 @@
 import { Effect, Schema } from 'effect';
 
 import { apiKeySecretName, isApiProvider } from '@texra-ai/llm';
+import {
+  Secrets,
+  type StateReadFailed,
+  type SettingsStores,
+} from '@texra-ai/harness';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import type { PromptFailed, PromptHost } from '@texra/hosts/uiHosts';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';
-import type {
-  StateReadFailed,
-  PlatformSecrets,
-  SettingsStores,
-} from '@texra-ai/harness';
 
 interface SettingsProfileKeyControllerDeps {
-  /** The process secret store the host holds, where the keys are written. */
-  secrets: PlatformSecrets;
   prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>;
   /** The setting slots a provider's display name is read from. */
   stores: SettingsStores;
@@ -40,7 +38,7 @@ export class SettingsProfileKeyController {
 
   setProviderKey(
     provider: string,
-  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed> {
+  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed, Secrets> {
     return this.run(
       provider,
       'set',
@@ -59,13 +57,13 @@ export class SettingsProfileKeyController {
   commitProviderKey(
     provider: string,
     apiKey: string,
-  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed> {
+  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed, Secrets> {
     return this.run(provider, 'set', this.storeProviderKey(provider, apiKey));
   }
 
   removeProviderKey(
     provider: string,
-  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed> {
+  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed, Secrets> {
     return this.run(
       provider,
       'remove',
@@ -80,7 +78,7 @@ export class SettingsProfileKeyController {
         );
         if (!confirmed) return;
 
-        yield* this.deps.secrets.delete(yield* secretNameFor(provider));
+        yield* (yield* Secrets).delete(yield* secretNameFor(provider));
         yield* this.notify(`${displayName} API key has been removed`);
       }),
     );
@@ -89,13 +87,13 @@ export class SettingsProfileKeyController {
   private storeProviderKey(
     provider: string,
     apiKey: string,
-  ): Effect.Effect<void, Error> {
+  ): Effect.Effect<void, Error, Secrets> {
     return Effect.gen({ self: this }, function* () {
       const displayName = yield* getProviderDisplayName(
         this.deps.stores,
         provider,
       );
-      yield* storeCredential(this.deps.secrets, {
+      yield* storeCredential(yield* Secrets, {
         secretName: yield* secretNameFor(provider),
         value: apiKey,
         kind: 'provider',
@@ -109,8 +107,8 @@ export class SettingsProfileKeyController {
   private run(
     provider: string,
     verb: 'set' | 'remove',
-    action: Effect.Effect<void, Error | PromptFailed>,
-  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed> {
+    action: Effect.Effect<void, Error | PromptFailed, Secrets>,
+  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed, Secrets> {
     return Effect.gen({ self: this }, function* () {
       const label = yield* getProviderDisplayName(this.deps.stores, provider);
       yield* action.pipe(

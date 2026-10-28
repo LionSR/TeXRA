@@ -73,15 +73,24 @@ export const envDigest = (key: string, env: Readonly<Record<string, string>>) =>
 /**
  * A server name: the `<server>` in its tools' `mcp__<server>__<tool>` names,
  * so it takes their characters, stays short enough to leave room for a tool
- * name, and never contains the `__` separator.
+ * name, and never contains the `__` separator. A tool name is split at its
+ * first `__`, so a name ending in `_` would be read one character short
+ * (`mcp__foo___tool` as server `foo`); such a name is refused.
  */
 export const ServerNameSchema = Schema.String.check(
   Schema.isPattern(/^[A-Za-z0-9_-]{1,32}$/),
-).check(
-  Schema.makeFilter((name) => !name.includes('__'), {
-    message: 'must not contain "__"',
-  }),
-);
+)
+  .check(
+    Schema.makeFilter((name) => !name.includes('__'), {
+      message: 'must not contain "__"',
+    }),
+  )
+  .check(
+    Schema.makeFilter((name) => !name.endsWith('_'), {
+      message:
+        'must not end in "_": its tool names would split at the wrong "__"',
+    }),
+  );
 
 const McpServerEntrySchema = Schema.Struct({
   type: Schema.optional(Schema.Literal('stdio')),

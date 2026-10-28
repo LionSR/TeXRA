@@ -78,7 +78,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
         call.env.roots,
       );
       if (compiledPaths.length > 0) {
-        // Convert FileLocation[] to string[] for legacy attachment API
+        // The attachment builder takes absolute paths.
         const compiledPathStrings = compiledPaths.map(
           (loc) => loc.absolutePath,
         );

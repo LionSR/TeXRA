@@ -5,14 +5,16 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 
+import { Settings } from '@shared/config/settings';
 import {
+  DEBUG_MODE_KEY,
   TOOL_CALL_STATUS,
   ToolResultSchema,
   type RunId,
   type ToolUseLog,
 } from '@shared/schemas';
 import type { TranscriptView } from '@shared/session/sessionView';
-import { readRunTranscript } from './runTranscript';
+import { buildRunTranscript } from '@shared/session/transcriptUpdate';
 
 // ============================================================================
 // Conversation
@@ -114,7 +116,12 @@ export const readCompletedRunConversation = Effect.fn(
   runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<ExportNode[], Error> {
-  return (yield* readRunTranscript(session, runId)).rows.flatMap(
-    conversationNodesForRow,
+  // The transcript is built cold from the run's committed rows by the same
+  // reducer the session view runs, at the verbosity the session's config
+  // reads now; empty when the run never existed or was removed.
+  const transcript = buildRunTranscript(
+    yield* session.log.display(runId),
+    Settings.getConfig<boolean>(session.roots.config, DEBUG_MODE_KEY),
   );
+  return transcript.rows.flatMap(conversationNodesForRow);
 });

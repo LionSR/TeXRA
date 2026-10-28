@@ -43,7 +43,7 @@ const logLifecycleWarning = (message: string, data: unknown) =>
 export interface RunLifecycleOptions {
   /** The launching run: the parent edge on the live handle. */
   parentRunId?: RunId;
-  /** Fires once with the run's id, right after its handle is tracked (F-2),
+  /** Fires once with the run's id, right after its handle is tracked,
    *  forked detached: nothing it does may abort the run, and it is logged. */
   onRun?: (runId: RunId) => Effect.Effect<void, Error>;
   /** A child's last turn result, from the result its run ends with. */
@@ -437,7 +437,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
       runs.track(handle);
       // A claim moved out from under this run is not watched: the next
       // append refuses with `DatabaseNotOwner` and the run aborts dirty.
-      // Expose the live handle to the launcher (F-2). Guarded: neither a
+      // Expose the live handle to the launcher. Guarded: neither a
       // synchronous throw nor an async rejection from a consumer callback
       // may abort the run.
       if (options?.onRun) {

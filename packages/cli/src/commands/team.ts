@@ -217,7 +217,6 @@ const runTeam = Effect.fn('runTeam')(function* (
 
         const run = yield* executeCliToolUseConfig(config, runContext, {
           services,
-          stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
         if (!run.ok) return run.exitCode;

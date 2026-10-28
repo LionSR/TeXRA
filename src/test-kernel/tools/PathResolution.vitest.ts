@@ -7,7 +7,6 @@ import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
 import { ToolError } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { installedHost, installPlatform } from '@test/support/setupPlatform';
 import {
   assertNoParentTraversal,
@@ -46,46 +45,6 @@ describe('resolveToolPath path protection', () => {
         message: 'Path must stay within the working directory.',
       });
     }),
-  );
-
-  it.effect(
-    'allows absolute and parent-relative paths when protection is disabled',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installPlatform({
-            workspacePath,
-            workspaceState: {
-              [WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED]: false,
-            },
-          }),
-        );
-
-        const { roots } = installedHost();
-        const logicalOutsidePath = outsidePath.replaceAll('\\', '/');
-        expect(
-          yield* resolveToolPath(
-            { roots, workingDirectory: workspacePath },
-            outsidePath,
-          ),
-        ).toEqual({
-          relative: logicalOutsidePath,
-          absolute: outsidePath,
-          fsPath: outsidePath,
-          display: logicalOutsidePath,
-        });
-        expect(
-          yield* resolveToolPath(
-            { roots, workingDirectory: workspacePath },
-            '../outside/file.tex',
-          ),
-        ).toEqual({
-          relative: logicalOutsidePath,
-          absolute: outsidePath,
-          fsPath: outsidePath,
-          display: logicalOutsidePath,
-        });
-      }),
   );
 
   it.effect.skipIf(process.platform === 'win32')(

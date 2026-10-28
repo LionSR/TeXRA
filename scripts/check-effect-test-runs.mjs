@@ -71,18 +71,6 @@ const HOOK_CALLEE = /^(before|after)(Each|All)$|^onTest(Finished|Failed)$/;
 const DOUBLE_CALLEE =
   /^(?:vi\.)?(?:fn|spyOn|stubGlobal|waitFor|waitForOptions)$|^(?:mock|spy)[A-Z]\w*$|\.(?:mock|spyOn)[A-Z]\w*$/;
 
-function staticSpecifierText(node) {
-  return ts.isStringLiteral(node) ? node.text : null;
-}
-
-/**
- * The boundary enclosing a call at `node`, found by walking out to the
- * function-like node that contains it and reading the call it is an argument
- * of: the innermost enclosing test wins, so an Effect run inside a nested
- * helper that a test body calls directly is still a test-body run only when
- * the helper itself is inline in the body. A run inside a named helper is not
- * counted, which is the documented allowance.
- */
 /**
  * The name a call is made under, following a curried factory to its inner
  * callee: `it.each(cases)('name', body)` is a call of `it.each`, and reading
@@ -96,6 +84,14 @@ function calleeText(call) {
   return expression.getText();
 }
 
+/**
+ * The boundary enclosing a call at `node`, found by walking out to the
+ * function-like node that contains it and reading the call it is an argument
+ * of: the innermost enclosing test wins, so an Effect run inside a nested
+ * helper that a test body calls directly is still a test-body run only when
+ * the helper itself is inline in the body. A run inside a named helper is not
+ * counted, which is the documented allowance.
+ */
 function enclosingBoundary(node) {
   let current = node;
   while (current != null) {

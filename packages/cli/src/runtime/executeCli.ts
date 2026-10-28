@@ -19,8 +19,6 @@ import {
   generateRunId,
   type RunEndResult,
   isLiveRun,
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
@@ -37,7 +35,6 @@ import {
   SESSION_CLOSE_DEADLINE_MS,
   AgentError,
   isUserAbort,
-  Settings,
 } from '@texra-ai/harness';
 
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
@@ -63,6 +60,7 @@ import {
   CliUsageError,
   launchApproval,
   launchApprovalNotice,
+  projectApprovalPolicy,
   type CliContext,
 } from './cliContext';
 import type { DatabaseNotOwner } from '@texra-ai/harness/schemas';
@@ -116,72 +114,36 @@ export type CliConfigExecuteResult =
       readonly exitCode: CliExitCode;
     };
 
-/**
- * Build and validate a headless CLI run request, then run it. Command
- * handlers own command-specific config construction; this module owns the
- * common request lifecycle so document task, chat and team runs cannot
- * drift on validation or run ids.
- */
-export function executeCliConfig(
-  config: AgentConfigPayload,
-  runContext: CliContext,
-  options: CliExecuteOptions,
-): Effect.Effect<CliConfigExecuteResult, Error, ProcessServices> {
-  return Effect.gen(function* () {
-    const runId = options.runId ?? generateRunId();
-    const parsed = Schema.decodeUnknownResult(AgentConfigSchema)(config);
-    if (!Result.isSuccess(parsed)) {
-      writeTextStderr(`Invalid configuration: ${parsed.failure.message}`);
-      return { ok: false as const, exitCode: CliExitCode.Usage };
-    }
-
-    const plugins = yield* readCliPluginPins(
-      (yield* options.services.session).roots,
-    );
-    const request = { config: parsed.success, runId };
-    const run = yield* executeCliRequest(request, runContext, options);
-    if (!run.ok) {
-      return run;
-    }
-    return {
-      ok: true as const,
-      outcomePersisted: run.outcomePersisted,
-      result: { ...run.result, plugins },
-    };
-  }).pipe(
-    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
-  );
-}
-
+/** A tool-use run (`texra run` on an agent with no task, `texra team run`):
+ *  one model/tool cycle, with the session resume hint on an interrupt. */
 export function executeCliToolUseConfig(
   config: AgentConfigPayload,
   runContext: CliContext,
-  options: CliExecuteOptions & {
+  options: {
+    readonly services: CliExecuteOptions['services'];
     /** False when invocation-owned temporary inputs will not survive exit. */
-    readonly recoveryInputIsDurable?: boolean;
+    readonly recoveryInputIsDurable: boolean;
   },
 ) {
   return Effect.gen(function* () {
-    const { recoveryInputIsDurable = true, ...executeOptions } = options;
     const recoveryProcessCwd = tryReadCliCwd();
     const workingDirectory = config.workingDirectory || runContext.cwd;
     const run = yield* executeCliConfig(config, runContext, {
-      ...executeOptions,
-      onInterruptedRunFinalized:
-        recoveryInputIsDurable === true
-          ? (executeOptions.onInterruptedRunFinalized ??
-            ((runId) =>
-              writeInterruptedResumeHint(
-                formatInterruptedResumeHint(
-                  runContext,
-                  runId,
-                  'session',
-                  workingDirectory,
-                  recoveryProcessCwd,
-                ),
-                true,
-              )))
-          : undefined,
+      services: options.services,
+      stopAfterCycle: true,
+      onInterruptedRunFinalized: options.recoveryInputIsDurable
+        ? (runId) =>
+            writeInterruptedResumeHint(
+              formatInterruptedResumeHint(
+                runContext,
+                runId,
+                'session',
+                workingDirectory,
+                recoveryProcessCwd,
+              ),
+              true,
+            )
+        : undefined,
     });
     if (!run.ok) return run;
 
@@ -229,11 +191,11 @@ function launchOn(
 }
 
 /**
- * Shared headless-run skeleton for `run` and `team run`: stand up a
- * runtime host, run the request, always close the host, and resolve the
- * terminal outcome.
- * Centralizing this stops the runners from drifting apart on host
- * lifecycle and outcome handling, which is how their behavior diverged before.
+ * Validate a headless CLI run's configuration and run it: stand up a runtime
+ * host, run the request, always close the host, and resolve the terminal
+ * outcome. Command handlers own command-specific config construction; this
+ * owns the common request lifecycle, so document task, chat and team runs
+ * cannot drift on validation, run ids, host lifecycle or outcome handling.
  *
  * A classified run failure (AgentRunLifecycle already ran it through
  * `classifyAgentError` and wrote the terminal outcome before rethrowing an
@@ -246,34 +208,32 @@ function launchOn(
  * failures) is genuinely unexpected and is rethrown so the crash handler
  * still reports it.
  */
-export function executeCliRequest(
-  // The run id is decided before launch: a shutdown stops the launch through
-  // the session's registry under it (`runs.stop`), which the launch tracks
-  // (or attaches to a parked predecessor) before the first resume lineage
-  // read, so this kill has a target from that first await on.
-  request: CliRunRequest,
+export function executeCliConfig(
+  config: AgentConfigPayload,
   runContext: CliContext,
   options: CliExecuteOptions,
-): Effect.Effect<
-  | {
-      ok: true;
-      outcomePersisted: boolean;
-      result: RunEndResult;
-    }
-  | { ok: false; exitCode: CliExitCode },
-  Error,
-  ProcessServices
-> {
+): Effect.Effect<CliConfigExecuteResult, Error, ProcessServices> {
   return Effect.gen(function* () {
+    const parsed = Schema.decodeUnknownResult(AgentConfigSchema)(config);
+    if (!Result.isSuccess(parsed)) {
+      writeTextStderr(`Invalid configuration: ${parsed.failure.message}`);
+      return { ok: false as const, exitCode: CliExitCode.Usage };
+    }
+    // The run id is decided before launch: a shutdown stops the launch
+    // through the session's registry under it (`runs.stop`), which the
+    // launch tracks (or attaches to a parked predecessor) before the first
+    // resume lineage read, so this kill has a target from that first await on.
+    const request: CliRunRequest = {
+      config: parsed.success,
+      runId: options.runId ?? generateRunId(),
+    };
     const session = yield* options.services.session;
+    const plugins = yield* readCliPluginPins(session.roots);
     // The run follows the project's setting, read at each decision, with
     // what this invocation asked for riding its launch (`launchApproval`).
     const refused = launchApprovalNotice(
       runContext.requestedApprovalPolicy,
-      Settings.getConfig<ApprovalPolicy>(
-        session.roots.config,
-        APPROVAL_POLICY_CONFIG_KEY,
-      ),
+      projectApprovalPolicy(session.roots.config),
     );
     if (refused !== undefined) writeTextStderr(refused);
     const presentationHost = createCliRuntimeHost(runContext);
@@ -286,7 +246,7 @@ export function executeCliRequest(
     const renderWorkflowPlainProgress =
       runContext.outputFormat === 'text' && runContext.renderRunProgress;
     yield* presentationHost
-      .attachRunProgressRenderer(session, { runId: request.runId })
+      .attachRunProgressRenderer(session, request.runId)
       .pipe(Scope.provide(presentationScope));
     const host = yield* createHeadlessCliHostInteractions(session, runContext, {
       prompting: () => presentationHost.holdForPrompt?.(),
@@ -663,7 +623,7 @@ export function executeCliRequest(
       return {
         ok: true as const,
         outcomePersisted,
-        result: { ...runResult.result, outcome },
+        result: { ...runResult.result, outcome, plugins },
       };
     }).pipe(Effect.ensuring(detachPresentation));
   }).pipe(

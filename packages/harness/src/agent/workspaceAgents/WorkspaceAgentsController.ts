@@ -47,8 +47,6 @@ export interface WorkspaceAgentsControllerDeps<
   readonly repoState: StateStore;
   readonly globalState: StateStore;
   readonly getAgents: () => Entry[];
-  /** The workspace's persisted custom presets, raw; `teamPresets` parses. */
-  readonly getPresets?: () => Effect.Effect<unknown, StateReadFailed>;
   /**
    * Resolve one stored identifier without collapsing exact source identity.
    * The controller applies no fallback around this, so an implementation owns
@@ -75,8 +73,9 @@ export class WorkspaceAgentsController<
    */
   allPresets() {
     return Effect.gen({ self: this }, function* () {
+      // The workspace's persisted custom presets, raw; `teamPresets` parses.
       return teamPresets(
-        this.deps.getPresets ? yield* this.deps.getPresets() : undefined,
+        yield* this.deps.repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
       );
     });
   }

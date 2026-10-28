@@ -41,19 +41,8 @@ const SubagentFrontmatterSchema = Schema.Struct({
   ),
 });
 
-/** One plugin agent as its file defines it. */
-interface PluginAgent {
-  readonly name: string;
-  readonly description?: string;
-  /** The tools it names, as the harness's; `undefined` when it names none and
-   *  inherits them (`AgentRun`). */
-  readonly tools: readonly string[] | undefined;
-  readonly systemPrompt: string;
-  /** Tools the file names that the harness has no counterpart for. */
-  readonly dropped: readonly string[];
-}
-
-/** Read the subagent file `file` of plugin `plugin`. */
+/** Read the subagent file `file` of plugin `plugin`: its catalog entry,
+ *  and the tools it names that the harness has no counterpart for. */
 const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
   file: string,
   plugin: string,
@@ -101,16 +90,29 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
         `${file} names only tools this build does not have (${declared.join(', ')}).`,
       ),
     );
-  return {
+  // `undefined` when it names none and inherits them (`AgentRun`).
+  const tools =
+    declared === undefined || declared.length === 0
+      ? undefined
+      : [...new Set(mapped.filter((tool) => tool !== undefined))];
+  const entry: AgentEntry = {
     name: `${plugin}:${parsed.success.name ?? path.basename(file, '.md')}`,
+    source: 'plugin',
+    path: file,
     description: parsed.success.description,
-    tools:
-      declared === undefined || declared.length === 0
-        ? undefined
-        : [...new Set(mapped.filter((tool) => tool !== undefined))],
-    systemPrompt,
+    tools: tools === undefined ? undefined : [...tools],
+    // None named: `AgentRun` gives it what it inherits. The task arrives as
+    // the user message, as a Claude Code subagent's does.
+    persona: Schema.decodeUnknownSync(PersonaSchema)({
+      prompt: systemPrompt,
+      tools: tools ?? [],
+    }),
+    blocks: {},
+  };
+  return {
+    entry,
     dropped: (declared ?? []).filter((_, index) => mapped[index] === undefined),
-  } satisfies PluginAgent;
+  };
 });
 
 /**
@@ -135,24 +137,6 @@ export const requirePluginAgentLoads = (
         ),
       );
 };
-
-/** The catalog entry of a plugin agent read from `file`. */
-function pluginAgentEntry(agent: PluginAgent, file: string): AgentEntry {
-  return {
-    name: agent.name,
-    source: 'plugin',
-    path: file,
-    description: agent.description,
-    tools: agent.tools === undefined ? undefined : [...agent.tools],
-    // None named: `AgentRun` gives it what it inherits. The task arrives as
-    // the user message, as a Claude Code subagent's does.
-    persona: Schema.decodeUnknownSync(PersonaSchema)({
-      prompt: agent.systemPrompt,
-      tools: agent.tools ?? [],
-    }),
-    blocks: {},
-  };
-}
 
 /**
  * The catalog entries of the agents of the installed plugins that load now
@@ -190,12 +174,12 @@ export const scanPluginAgents = Effect.gen(function* () {
       issues.push({ path: file, message: read.failure.message });
       continue;
     }
-    const agent = read.success;
-    if (agent.dropped.length > 0)
+    const { entry, dropped } = read.success;
+    if (dropped.length > 0)
       yield* Effect.logWarning(
-        `Agent ${agent.name} names tools this build does not have, which it is not offered: ${agent.dropped.join(', ')}.`,
+        `Agent ${entry.name} names tools this build does not have, which it is not offered: ${dropped.join(', ')}.`,
       ).pipe(withLogChannel('agentRegistry'));
-    entries.push(pluginAgentEntry(agent, file));
+    entries.push(entry);
   }
   return { entries, issues };
 });
