@@ -374,13 +374,12 @@ export const TURN_ROW_HANDLERS: {
   },
 };
 
+const ISSUING = ['model.message', 'script.call'] as const;
 /** The rows {@link issuedCalls} reads. */
-export const ISSUING_ROW_TYPES = ['model.message', 'script.call'] as const;
+export const ISSUING_ROW_TYPES = Object.freeze(ISSUING);
 type Issuer = Pick<SessionEvent, 'commit' | 'seq'> & { responseId: string };
-type Issued = {
-  readonly call: { callId: string; toolName: string; logId: string };
-  readonly issuer: Issuer | undefined;
-};
+type Call = { callId: string; toolName: string; logId: string };
+type Issued = { readonly call: Call; readonly issuer: Issuer | undefined };
 
 /** Every call `rows` issue, in issue order, with the response that issued
  *  it: for a script's call, the latest response before it to issue its

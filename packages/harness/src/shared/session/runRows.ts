@@ -198,7 +198,10 @@ const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
 });
 
 /** The shared rows that open and decide a run's requests. */
-export const REQUEST_TYPES = ['request.opened', 'request.decided'] as const;
+export const REQUEST_TYPES = Object.freeze([
+  'request.opened',
+  'request.decided',
+] as const);
 
 /** The shared rows that change a run's pending input, not its position. */
 export const FOLLOW_UP_TYPES = [
