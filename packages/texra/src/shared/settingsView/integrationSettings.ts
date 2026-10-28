@@ -24,20 +24,20 @@ import {
 import { type PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 
 /** The `codex` plugin's repository-scoped keys. */
-export const CodexStateKey = {
+export const CodexStateKey = Object.freeze({
   MODEL: 'texra.codexModel',
   SANDBOX_MODE: 'texra.codexSandboxMode',
   REASONING_EFFORT: 'texra.codexReasoningEffort',
   APPROVAL_POLICY: 'texra.codexApprovalPolicy',
-} as const;
+} as const);
 export type CodexStateKey = (typeof CodexStateKey)[keyof typeof CodexStateKey];
 
 /** The `claude-agent` plugin's repository-scoped keys. */
-export const ClaudeAgentStateKey = {
+export const ClaudeAgentStateKey = Object.freeze({
   MODEL: 'texra.claudeAgentModel',
   PERMISSION_MODE: 'texra.claudeAgentPermissionMode',
   EFFORT: 'texra.claudeAgentEffort',
-} as const;
+} as const);
 export type ClaudeAgentStateKey =
   (typeof ClaudeAgentStateKey)[keyof typeof ClaudeAgentStateKey];
 

@@ -9,7 +9,7 @@
  * implementation at startup.
  */
 
-export const WorkspaceStateKey = {
+export const WorkspaceStateKey = Object.freeze({
   // Agent visibility
   /** Workspace agents selection; the `custom` member carries a category-keyed record. */
   WORKSPACE_AGENTS: 'texra.workspaceAgents',
@@ -31,11 +31,11 @@ export const WorkspaceStateKey = {
 
   // Tool path safety
   TOOL_PATH_PROTECTION_ENABLED: 'texra.tools.restrictPathsToWorkingDirectory',
-} as const;
+} as const);
 export type WorkspaceStateKey =
   (typeof WorkspaceStateKey)[keyof typeof WorkspaceStateKey];
 
-export const GlobalStateKey = {
+export const GlobalStateKey = Object.freeze({
   MEMORY_ENABLED: 'texra.memory.enabled',
   /** Code mode's "only" stage: every chat run gets `script`, and the model
    *  sees no other tool; the rest are callable from scripts alone. */
@@ -95,6 +95,6 @@ export const GlobalStateKey = {
   ONBOARDING_DECLINED: 'texra.cli.onboardingDeclined',
   ONBOARDING_FIRST_RUN_DONE: 'texra.onboarding.firstRunDone',
   ONBOARDING_DEFAULT_TEAM_ID: 'texra.onboarding.defaultTeamId',
-} as const;
+} as const);
 export type GlobalStateKey =
   (typeof GlobalStateKey)[keyof typeof GlobalStateKey];

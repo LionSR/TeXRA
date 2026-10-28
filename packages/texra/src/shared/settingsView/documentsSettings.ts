@@ -17,7 +17,7 @@ import {
 } from '@texra/shared/constants/latexConfig';
 
 /** The documents plugin's workspace-scoped keys. */
-export const DocumentsStateKey = {
+export const DocumentsStateKey = Object.freeze({
   WORKFLOW_AUTO_COMPILE: 'texra.workflow.autoCompileAfterOutput',
   WORKFLOW_AUTO_COMPILE_TIMEOUT_MS: 'texra.workflow.autoCompileTimeoutMs',
   WORKFLOW_AUTO_OPEN_PDF: 'texra.workflow.autoOpenPdf',
@@ -26,7 +26,7 @@ export const DocumentsStateKey = {
   LATEXDIFF_TIMEOUT_MS: 'texra.latexdiff.timeoutMs',
   LATEXDIFF_MATH_MARKUP: 'texra.latexdiff.mathMarkup',
   LATEXDIFF_CHANGES_ONLY: 'texra.latexdiff.changesOnly',
-} as const;
+} as const);
 export type DocumentsStateKey =
   (typeof DocumentsStateKey)[keyof typeof DocumentsStateKey];
 

@@ -40,7 +40,7 @@ import {
 import type { SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 
 /** TeXRA's state keys: LaTeX's, inline criticism and telemetry. */
-export const TexraStateKey = {
+export const TexraStateKey = Object.freeze({
   LATEX_FORMATTER: 'texra.latex.formatter',
 
   // Global
@@ -49,7 +49,7 @@ export const TexraStateKey = {
   TELEMETRY_INSTALL_ID: 'texra.telemetry.installId',
   /** Set once the first-run telemetry notice has been shown on this host. */
   TELEMETRY_NOTICE_SHOWN: 'texra.telemetry.noticeShown',
-} as const;
+} as const);
 export type TexraStateKey = (typeof TexraStateKey)[keyof typeof TexraStateKey];
 
 /** Canonical config key for the usage-telemetry opt-in. */
