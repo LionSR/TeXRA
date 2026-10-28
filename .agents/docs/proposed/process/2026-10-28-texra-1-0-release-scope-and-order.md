@@ -77,9 +77,10 @@ What this means for the open design work:
 - The run-lifecycle redesign (L1 to L5 of the tech-debt note), the host dedup
   (H1 to H4), and storage readers S3 to S6, including the SQL `runs` view
   rewrite (`packages/harness/src/agent/runtime/historyQuery/views.ts`).
-  #14242 (the `agent()` reuse scope reads the live parent link) is a bug fix
-  that changes no row: it lands when it is ready, on neither side of the
-  freeze.
+  #14242 (the `agent()` reuse scope reads the live parent link), #14003 and
+  #13994 are bug fixes that change no row; all three are already fixed on
+  `claude/top-tech-debts-survey-sgf9k8` (45c38e9, 961ad58) and land when that
+  work is split into PRs, on neither side of the freeze.
 - The `HistoryQuery` child-process protocol cleanup
   (`packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts`).
 - Lifting the script door out of `dispatchPendingResponse`, the typed
@@ -112,10 +113,10 @@ note), hand-built `Map<seq, Deferred>` ordering gates in
 **Codemode.** The design holds. Two things touch the freeze:
 
 - `script.call` v1 (`packages/harness/src/shared/schemas/runHistoryEvent.ts`)
-  stores `callId` and `stageId`. The schema's own check requires
-  `callId === \`${scriptCallId}/${seq}\``, and the dispatcher builds
-`stageId`as`script-${logId}` (`toolUseDispatch.ts`). Both restate a fact
-  the row already holds. Drop them or keep them, now.
+  stores `callId` and `stageId`. The schema's own check requires `callId`
+  to equal the script call id, a slash and `seq`, and the dispatcher builds
+  `stageId` from the script's `logId` (`toolUseDispatch.ts`). Both restate
+  a fact the row already holds. Drop them or keep them, now.
 - Live result delivery to the guest follows `Queue.offer` order
   (`packages/harness/src/agent/codeSandbox/codeSandbox.ts`, the `settled`
   queue), while replay follows commit order (`toolUseDispatch.ts`,
@@ -124,7 +125,10 @@ note), hand-built `Map<seq, Deferred>` ordering gates in
   script (`Promise.race`) could fail with `ScriptDiverged` on resume. This
   is a reading of the code, not a reproduced failure. No test covers replay,
   divergence or reuse. The fix is in the runtime and changes no row, but a
-  1.0 that promises resume must have it.
+  1.0 that promises resume must have it. The replay half has moved since
+  `8fcd0a3`: d3a64e6 on `claude/top-tech-debts-survey-sgf9k8` gives the
+  scheduler the replay list and deletes the door's own `Deferred` chain. The
+  live path still delivers from the `settled` queue, so R12 is still open.
 
 **Storage.** Effect 4's own `effect/sql`; every statement a constant string
 with `?` binds; the "nothing below the codec reads a payload field" rule holds
@@ -133,7 +137,14 @@ under test. Three freeze items:
 - **Media by workspace path** (`packages/harness/src/shared/schemas/followUp.ts`,
   `request.ts`, `fileFields.ts`; D4 of the tech-debt note, #13874). An
   upcaster cannot turn a path into a digest, and pasted files are deleted
-  after three days, so this cannot land after the freeze.
+  after three days, so this cannot land after the freeze. Done on
+  `claude/top-tech-debts-survey-sgf9k8` (8994563, not yet a PR):
+  `followup.queued` and `log` move to v3 with `media: { name, mimeType,
+digest }[]`, and the composer, fork-from-here and the request lose their
+  path fields. `run.config.mediaFiles` stays a path list on purpose
+  (43c10db): it is a launch input that templates, document tasks and "Run
+  again" read by path, and the opening message already holds the bytes by
+  digest.
 - **Upcaster numbering.** `upcast[i]` maps stored version `i+1` to `i+2`
   (`packages/harness/src/shared/schemas/rowVersions.ts`), and the freeze test
   demands `upcasts >= version - 1`
@@ -260,7 +271,7 @@ program (P2).
 | #   | Decision                                                                                          | Recommendation                                                                            |
 | --- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | R1  | 1.0 is the app with a frozen store; harness and llm stay 0.x                                      | Yes. Everything below assumes it.                                                         |
-| R2  | Media stored by blob digest (D4)                                                                  | Yes. The only change an upcaster cannot make later.                                       |
+| R2  | Media stored by blob digest (D4)                                                                  | Yes. Already written (8994563 on the tech-debt branch); needs its own PR.                 |
 | R3  | `wakeAt` on `run.position` now, or later                                                          | Later. It is an optional field, which the additive rule adds at any time.                 |
 | R4  | `script.call`'s `callId` and `stageId`                                                            | Drop both; derive at read.                                                                |
 | R5  | Goal stored as a `builtIn:goal` module import, not a template body                                | Yes.                                                                                      |
@@ -281,17 +292,47 @@ here changes stored bytes, the freeze mechanism, or copy; nothing else.
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------- | --------------------------------------------------------------------------------------------------------------------- |
 | P1  | Additive rows (R11): delete `upcast`, `readableFrom`, `pluginFactFloor`, the current-value version dispatch, the fingerprint half of `rowVersions.vitest.ts` and the `storage:freeze` script; add the kind-coverage assertion to `goldenStore.vitest.ts`; reword the storage sections of `packages/harness/AGENTS.md` and the storage design. Fallback if Q2 stands: `upcast` as a keyed record applied in a loop, count check deleted | none (mechanism)                                             | net −150 | `goldenStore.vitest.ts` names every kind in `ROW_KINDS`; no code reads a row's version except the newer-build refusal |
 | P2  | Goal rows (R5, R6): `builtIn:goal` module import in `run.config.script` (the `scriptModules` mechanism in `packages/harness/src/tools/plugins.ts` already exists); a grant records its grantor and its lifetime is derived                                                                                                                                                                                                             | `run.config`, `approval.policy` / `run.start.approvalPolicy` | ~80      | No prompt text in any row; `approvalBypassKind.ts` has neither `goal` nor `own: 'parent'`                             |
-| P3  | Media by digest (R2): `followup.queued` v3, `request.opened` v4, `run.config` v7; golden store regenerated                                                                                                                                                                                                                                                                                                                             | three kinds                                                  | ~100     | No `mediaFiles: string[]` path field in a stored schema; fork-from-here restores media by digest (#13874)             |
-| P4  | Codemode: drop `script.call`'s derived fields (R4); the door reads results from the committed rows on both paths (R12), deleting the `settled` queue, the `delivered` map and `handedBack`; one regression test, a `Promise.race` script resumed from its rows                                                                                                                                                                         | `script.call` v2                                             | net −60  | A script with `Promise.race` over two calls resumes identically from its rows; the door has one delivery function     |
+| P3  | Media by digest (R2): written as 8994563 and 43c10db on `claude/top-tech-debts-survey-sgf9k8`; to land as its own PR, separate from that branch's H1/H2 and llm refactors, with the golden store regenerated in it                                                                                                                                                                                                                     | `followup.queued` v3, `log` v3                               | written  | The PR is open and merged; no `mediaFiles` path field remains on a follow-up, user or request row (#13874)            |
+| P4  | Codemode: drop `script.call`'s derived fields (R4); the LIVE path reads results from the committed rows as the replay path already does after d3a64e6 (R12), deleting the `settled` queue in `codeSandbox.ts`; one regression test, a `Promise.race` script resumed from its rows                                                                                                                                                      | `script.call` v2                                             | net −40  | A script with `Promise.race` over two calls resumes identically from its rows; the door has one delivery function     |
 | P5  | Namespace as data (R9) and AppSignals into the app (R7)                                                                                                                                                                                                                                                                                                                                                                                | none                                                         | ~60      | `stateSettings.ts` has no literal `texra.` prefix; the deep-import baseline file is empty and deleted with its suite  |
 | P6  | Golden store independent of installed TeX tools (#14338)                                                                                                                                                                                                                                                                                                                                                                               | none (fixture)                                               | ~20      | The generator's `--twice` check passes on a machine with and without TeX                                              |
 | P7  | Copy and doc drift: the plugin-architecture note (`continuation`, Zod, `requires`, `scriptModules`); the `import` contradiction in `docs/guide/multi-agent-workflows.md`; goal copy in `packages/texra/src/tools/pluginCards.ts` and `packages/texra/src/ui/copy/delegationApproval.ts`; the stale "#14201 open" line in the 10-21 design                                                                                              | none                                                         | ~40      | Every statement about goal mode in UI and docs matches `goalScript.ts`                                                |
 
 Order: P1 first (it decides what "frozen" means for every PR after it), then
-P2 to P6 in any order, P7 last. P2 and P3 both change `run.config`, so they
-land in sequence and the golden store is regenerated once after both. Seven
-PRs, net about 100 lines added: the three mechanism deletions pay for the
+P2 to P6 in any order, P7 last. P3 is the one PR that already exists as
+commits; it only needs splitting out and can go first if P1 is slow. Seven
+PRs, net about 50 lines added: the three mechanism deletions pay for the
 shape changes.
+
+## Coordination record (2026-10-28)
+
+What else is in flight that touches this plan, as of `main` at `fa6fb1e`
+(#14344 merged):
+
+- **A second 1.0 PRD exists.** Draft PR #14352 (`docs/harness-1-release-prd`)
+  adds `.agents/docs/proposed/architecture/2026-10-28-harness-1-release-prd.md`
+  and claims the same index row. Its scope is harness-first (public SDK,
+  programmable calls, SQL, an external plugin package, fourteen acceptance
+  scenarios). It agrees with this note on storage ("execution changes do not
+  trigger storage migrations"; no per-family version framework) and disagrees
+  on R1. Only one note can own the topic; the owner picks, and the survivor
+  absorbs the other's useful parts (its integration order for the nine open
+  PRs, this note's pre-freeze set and mechanism deletions). Neither #14352
+  nor #14350 carries a session trailer; both are the owner's or a Codex
+  session's.
+- **The Q2 fallback is already written.** Draft PR #14350
+  (`codex/call-contract-cleanup`) indexes upcasters from the readable floor,
+  keeps the first and latest frozen versions in the release check, and adds
+  one codec test. Under R11 it is superseded; under Q2 it is P1.
+- **`claude/top-tech-debts-survey-sgf9k8`** (the tech-debt session, 23
+  commits past #14335, 93 files, no PR yet) bundles P3, the replay half of
+  P4, the fixes for #14242, #14003, #13994 and #13874, the H1/H2 approval
+  store and two llm consolidations. The ask sent to that session: land the
+  stored-byte commits as their own PR.
+- **Nothing else in flight changes a row.** #14340, #14342, #14343, #14346,
+  #14348, #14349, #14351 and `claude/run-events-replay` were read; none
+  touches a stored schema. #14342's completion change is already on `main`
+  through #14335, as #14352 also notes.
 
 ## Freeze and release
 
@@ -328,8 +369,10 @@ independent of the tag.
 
 ## Risks
 
-- **P2 and P3 share `run.config`.** Two version bumps in flight on one kind
-  conflict in `rowVersions.ts` and the golden store. Sequence them.
+- **The tech-debt branch mixes row changes with refactors.** If it lands as
+  one PR, the golden store and `rowVersions.ts` move inside a 93-file
+  diff and the freeze review loses its one-shape-at-a-time property. The
+  split is the mitigation.
 - **P1 reverses a ruling.** Q2 was taken on 2026-09-28 with upcasters in
   mind; the additive rule trades a codec stage for a reducer that reads two
   kinds during a breaking change. If the owner keeps Q2, the keyed-record
@@ -372,4 +415,10 @@ independent of the tag.
   the frozen directory present (52 passed); the suite after bumping
   `run.config` to v7 with one identity upcaster (1 failed, the message quoted
   above). The frozen directory and the bump were reverted afterwards.
+- Read on `origin/claude/top-tech-debts-survey-sgf9k8` at `8bd63f2`: the
+  commit list past `main`, `rowVersions.ts` (`followup.queued` and `log` at
+  v3), `followUp.ts` (`media: StoredMedia[]`), `storedTurn.ts`
+  (`StoredMediaSchema`), `request.ts` and `fileFields.ts` (paths kept), and
+  the messages of 8994563, 43c10db, d3a64e6, 7084636, 45c38e9 and 961ad58.
+  Read #14350's diff and #14352's note in full.
 - Not run: the golden generator, the sandbox, or any E2E.
