@@ -8,7 +8,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { hasExtension, withLogChannel } from '@texra-ai/harness';
+import { hasExtension, withLogChannel } from '@texra-ai/harness/host';
 import { pathExists } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 

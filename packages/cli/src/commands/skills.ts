@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
-import { Skills } from '@texra-ai/harness';
+import { Skills } from '@texra-ai/harness/host';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';

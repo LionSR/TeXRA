@@ -14,14 +14,9 @@ import { formatResultCount, pluralize } from '@texra-ai/harness/transcript';
 import { Clock, Effect, FileSystem, Schema } from 'effect';
 
 // Local imports
-import {
-  defineTool,
-  ToolContext,
-  type ToolContextShape,
-  WorkspaceFs,
-  type ToolResult,
-  pathToLocationIn,
-} from '@texra-ai/harness';
+import { defineTool, type ToolResult } from '@texra-ai/harness';
+import { ToolContext, type ToolContextShape } from '@texra-ai/harness/plugins';
+import { WorkspaceFs, pathToLocationIn } from '@texra-ai/harness/host';
 import {
   ChildRuns,
   requireRun,

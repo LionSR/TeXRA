@@ -13,7 +13,7 @@
 
 import { Effect, type Scope } from 'effect';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
 import type { Disposable } from '@texra/platform/disposable';

@@ -9,7 +9,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, Fiber, Result, Schema, Stream } from 'effect';
 
-import { Skills, hasExtension } from '@texra-ai/harness';
+import { Skills, hasExtension } from '@texra-ai/harness/host';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   ensureError,
@@ -36,13 +36,13 @@ import {
   latexEditorStatus,
   vscodeLatexSettingsHandlers,
 } from './handlers/latexSettingsHandlers';
+import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
   StorageFs,
   ProcessRuntime,
   ProcessServices,
   PlatformSecrets,
-  WorkspaceRoots,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 /** The webview shapes SettingsView dispatches for. */
 type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;

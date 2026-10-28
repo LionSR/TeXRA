@@ -13,7 +13,7 @@ import {
   type ProcessRuntime,
   withProcessServices,
   withSessionFs,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { ExternalOpenFailed, type MessageHost } from '@texra/hosts/uiHosts';

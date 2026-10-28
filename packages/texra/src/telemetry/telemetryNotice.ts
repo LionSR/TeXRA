@@ -1,6 +1,6 @@
 import { Effect, Result } from 'effect';
 
-import { AppState, type ConfigProvider } from '@texra-ai/harness';
+import { AppState, type ConfigProvider } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   TELEMETRY_ENABLED_KEY,

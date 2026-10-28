@@ -16,7 +16,7 @@
 import { Cause, Effect } from 'effect';
 
 import { providerDisplayName } from '@texra-ai/llm';
-import { withLogChannel, type HostInteractions } from '@texra-ai/harness';
+import { withLogChannel, type HostInteractions } from '@texra-ai/harness/host';
 import {
   toErrorMessage,
   type RetryPermission,
@@ -47,7 +47,7 @@ import {
   useHostCapability,
 } from './approvalQueue';
 import { appendLocalNotice } from './transcript';
-import type { ProcessRuntime, SettingsStores } from '@texra-ai/harness';
+import type { ProcessRuntime, SettingsStores } from '@texra-ai/harness/host';
 import type { ToolEditContent } from '@texra-ai/harness/schemas';
 
 /**

@@ -4,7 +4,7 @@ import { RunFileService } from '@texra-ai/harness/plugins';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
 // swap; safe here since these paths come from getSafeDocumentRelativePath /
 // path.relative on the workflow's own generated outputs, never user input.
-import { toPosixPath, isNotADirectoryError } from '@texra-ai/harness';
+import { toPosixPath, isNotADirectoryError } from '@texra-ai/harness/host';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 

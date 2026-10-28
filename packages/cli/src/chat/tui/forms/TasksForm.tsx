@@ -7,7 +7,7 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { Effect, Fiber, type Scope } from 'effect';
 import { useEffect, useRef, useState } from 'react';
 
-import { presentFollowUpResult } from '@texra-ai/harness';
+import { presentFollowUpResult } from '@texra-ai/harness/host';
 import {
   acceptsFollowUp,
   type RunId,
@@ -40,7 +40,7 @@ import {
 } from '../state/attachedTask';
 import { transcriptToLines } from '../state/transcriptLines';
 import { AsyncListForm } from './_shared/ListForm';
-import type { GlobalValues, ProcessRuntime } from '@texra-ai/harness';
+import type { GlobalValues, ProcessRuntime } from '@texra-ai/harness/host';
 import type { ToolEditContent } from '@texra-ai/harness/schemas';
 import type {
   ApprovalPayload,

@@ -3,14 +3,14 @@ import { Cause, Effect, Schema } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { withLogChannel, Settings } from '@texra-ai/harness';
+import { withLogChannel, Settings } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import type {
   StateStore,
   StateReadFailed,
   StateWriteFailed,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 const NEVER_REMIND = 'Never remind again';
 const CHANNEL = 'instruction';

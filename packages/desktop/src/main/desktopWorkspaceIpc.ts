@@ -16,14 +16,14 @@ import { normalizeFilePath, toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
 
+import { Rejected } from '@texra-ai/harness';
 import {
-  Rejected,
   isPathWithin,
   OFFICE_EXTENSIONS,
   pathToLocationIn,
   withPerKeyLane,
   type PerKeyLane,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   entryTypeIn,
   readDirectoryTypedTolerant,
@@ -49,7 +49,7 @@ import {
   AgentDocumentUnavailable,
   resolveAgentDocument,
 } from './desktopAgentDocuments.js';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 import type { DesktopPtyHost } from './desktopPtyHost.js';
 import type { DesktopBrowserViews } from './desktopBrowserViews.js';
 

@@ -5,7 +5,7 @@ import {
   Secrets,
   type StateReadFailed,
   type SettingsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import type { PromptFailed, PromptHost } from '@texra/hosts/uiHosts';
 import { getProviderDisplayName } from '@texra/model/providerPresentation';

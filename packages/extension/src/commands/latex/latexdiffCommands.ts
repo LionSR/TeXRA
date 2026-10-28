@@ -8,7 +8,7 @@ import {
   withSessionFs,
   pathToLocationIn,
   Settings,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import {
   prepareBuildDisplay,

@@ -13,7 +13,7 @@ import {
   type ReturnKeyInput,
 } from '@cli/tui/inputKeys';
 import { setTransientNotice } from '@cli/chat/tui/state/cliState';
-import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 
 interface AsyncResource<T, R = ProcessServices> {
   readonly data: T | undefined;

@@ -12,12 +12,12 @@ import {
 } from './logSinks';
 import { createRunProgressRenderer } from './runProgressRenderer';
 import { missingAgentMessage } from './agents';
+import type { LocalSession } from '@texra-ai/harness';
 import type {
   PresentationEventHandlers,
-  LocalSession,
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { LogLevel, RunId } from '@texra-ai/harness/schemas';
 import type { CliContext } from './cliContext';
 

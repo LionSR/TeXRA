@@ -10,7 +10,7 @@ import type { ModelOptionData } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { setupPlatform } from '@test/support/setupPlatform';
-import type { RunModelDecisionReason } from '@texra-ai/harness';
+import type { RunModelDecisionReason } from '@texra-ai/harness/host';
 
 const readModelOptionsMock = vi.hoisted(() => vi.fn());
 

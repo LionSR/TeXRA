@@ -29,7 +29,7 @@ import {
   hasExtension,
   withPerKeyLane,
   Settings,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
@@ -37,7 +37,8 @@ import { parseCriticismAnnotations } from '@latex/criticismParser';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
-import type { Session, SettingsStores } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';

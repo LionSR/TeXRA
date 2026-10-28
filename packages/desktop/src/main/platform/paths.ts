@@ -2,7 +2,7 @@ import { dirname, join } from 'node:path';
 
 import { Config, Effect, FileSystem, Option, Schema } from 'effect';
 
-import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness';
+import { BUNDLED_AGENTS_DIRECTORY } from '@texra-ai/harness/host';
 import { absentReason, pathExists } from '@texra-ai/harness/node';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 

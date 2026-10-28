@@ -1,16 +1,16 @@
 import { Effect } from 'effect';
 
+import { Cancelled } from '@texra-ai/harness';
 import {
-  Cancelled,
   type PlatformSecrets,
   presentRunFailure,
   type SessionHostInteractions,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { validateRunRequest } from '@texra/controllers/session/runRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 /** Instruction handed to the setup agent when launched. Shared by every host. */
 export const SETUP_INSTRUCTION =

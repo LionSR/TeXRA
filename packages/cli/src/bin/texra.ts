@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { setLogSink } from '@texra-ai/harness';
+import { setLogSink } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
 
 import { runCli } from '../commands/root';

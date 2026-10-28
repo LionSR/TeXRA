@@ -3,13 +3,13 @@ import {
   readModelOptions,
   type ModelOptionStores,
   type PlatformSecrets,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { Effect } from 'effect';
 
 import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { SETUP_MODEL_BY_PROVIDER } from '@texra/model/setupModelDefaults';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * The setup assistant's launch model: the first provider setup model the

@@ -14,7 +14,7 @@
  * reaches the run's history only through the tool result that used it.
  */
 import { randomUUID } from 'node:crypto';
-import { isPathWithin } from '@texra-ai/harness';
+import { isPathWithin } from '@texra-ai/harness/host';
 
 import {
   Clock,

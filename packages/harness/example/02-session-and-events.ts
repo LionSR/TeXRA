@@ -4,10 +4,10 @@
  * Composes `Sessions.layer({ platform, plugins: harnessBuiltins })`, opens a
  * session, checks an `InlinePersonaSchema` definition, handles an `AgentNotFound`
  * refusal on a missing agent, and runs an inline persona while streaming its
- * `run.events` (`stream.chunk`) and awaiting `run.result` (`RunEndResult`).
+ * `run.events` (through `responseText`) and awaiting `run.result` (`RunEndResult`).
  */
 import { Effect, Result, Schema, Stream } from 'effect';
-import { Sessions } from '@texra-ai/harness';
+import { responseText, Sessions } from '@texra-ai/harness';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 import { InlinePersonaSchema } from '@texra-ai/harness/schemas';
 
@@ -51,13 +51,11 @@ const program = Effect.gen(function* () {
     model: 'anthropic/claude-sonnet-5-5',
   });
 
+  // The answer's text only: the run's events also stream the model's
+  // thinking and tool output.
   const chunks: string[] = [];
-  yield* Stream.runForEach(run.events, (event) =>
-    Effect.sync(() => {
-      if (event.type === 'stream.chunk') {
-        chunks.push(event.text);
-      }
-    }),
+  yield* Stream.runForEach(run.events.pipe(responseText), (text) =>
+    Effect.sync(() => chunks.push(text)),
   );
 
   const end = yield* run.result;

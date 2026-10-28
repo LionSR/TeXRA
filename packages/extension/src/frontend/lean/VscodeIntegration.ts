@@ -13,7 +13,7 @@ import * as vscode from 'vscode';
 
 import { Cause, Effect, Fiber, Result, Schema } from 'effect';
 
-import { withLogChannel, isStrictlyWithin } from '@texra-ai/harness';
+import { withLogChannel, isStrictlyWithin } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { withCancellationToken } from '@frontend/hosts/VscodeUiHost';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
@@ -39,7 +39,7 @@ import {
   LeanFileCommandFailed,
   type LeanLanguageServicesShape,
 } from '@texra/tools/lean/leanLanguageServices';
-import type { StateStore } from '@texra-ai/harness';
+import type { StateStore } from '@texra-ai/harness/host';
 
 const CHANNEL = 'VscodeLeanIntegration';
 

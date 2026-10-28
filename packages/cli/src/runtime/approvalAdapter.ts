@@ -15,7 +15,7 @@ import {
   withLogChannel,
   type HostInteractions,
   type ToolEditApprovalRequest,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   type RequestDecision,
   approvalPolicyDenialMessage,

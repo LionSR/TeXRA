@@ -9,11 +9,13 @@ import path from 'node:path';
 
 import { Effect, Exit, Layer, type Scope } from 'effect';
 import {
-  AgentDirectories,
   Cancelled,
   Rejected,
   Unavailable,
   type HostRequestFailure,
+} from '@texra-ai/harness';
+import {
+  AgentDirectories,
   Secrets,
   withProcessServices,
   workspaceEnvironmentLayer,
@@ -23,7 +25,7 @@ import {
   type StorageFs,
   type WorkspaceFs,
   pathToLocationIn,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
 import { fileOpResultMessage } from '@housekeeping/runDirOps';
 import {

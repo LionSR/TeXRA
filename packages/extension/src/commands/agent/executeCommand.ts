@@ -3,7 +3,7 @@ import { Effect, Schema } from 'effect';
 
 // Local imports
 import { AgentConfigSchema, ensureError } from '@texra-ai/harness/schemas';
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 
 const CHANNEL = 'ExecuteCommand';

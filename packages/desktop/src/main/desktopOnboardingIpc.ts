@@ -1,10 +1,10 @@
 import { Effect } from 'effect';
+import { type RequestRefusal } from '@texra-ai/harness';
 import {
-  type RequestRefusal,
   StateStore,
   StateWriteFailed,
   StateReadFailed,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   OnboardingFunnelRefresher,
   setFirstRunDone,
@@ -15,7 +15,7 @@ import {
   type HostCallFailed,
 } from '@texra/controllers/session/hostCallFailure';
 import type { OnboardingFunnelState } from '@texra/shared/session/hostSnapshot';
-import type { ProcessServices } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 /** How a card action fails: the funnel's flag write, plus whatever the
  *  sign-in program failed with. */

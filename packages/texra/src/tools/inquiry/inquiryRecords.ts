@@ -9,7 +9,7 @@ import {
   type OpenInquiryTurn,
   type AnsweredInquiryTurn,
 } from '@texra-ai/harness/schemas';
-import { GlobalValues } from '@texra-ai/harness';
+import { GlobalValues } from '@texra-ai/harness/host';
 import { ToolError } from '@texra-ai/harness/plugins';
 import {
   INQUIRY_THREADS,

@@ -1,7 +1,7 @@
 import { Effect, Queue, Stream } from 'effect';
 import * as vscode from 'vscode';
 
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { DIFF_REGISTRATION_DELAY_MS } from '@texra/shared/constants/latexTiming';
 

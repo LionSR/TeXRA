@@ -10,7 +10,7 @@ import {
   readMcpConfig,
   type ConfigProvider,
   type SettingsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   JsonConfigProvider,
   nodeFileServices,

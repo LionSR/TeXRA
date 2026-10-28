@@ -1,4 +1,4 @@
-import { Settings } from '@texra-ai/harness';
+import { Settings } from '@texra-ai/harness/host';
 import { Effect } from 'effect';
 
 import { loadApiKeyStatusMap } from '@texra-ai/llm';
@@ -32,11 +32,8 @@ import {
 } from './ProviderApiKeyForm';
 import { SkillsSettingsForm } from './SkillsSettingsForm';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
-import type {
-  ProcessRuntime,
-  PlatformSecrets,
-  WorkspaceRoots,
-} from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { ProcessRuntime, PlatformSecrets } from '@texra-ai/harness/host';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;

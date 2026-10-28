@@ -50,6 +50,10 @@
       "types": "./dist/types/plugins.d.ts",
       "import": "./dist/plugins.js"
     },
+    "./host": {
+      "types": "./dist/types/host.d.ts",
+      "import": "./dist/host.js"
+    },
     "./node": {
       "types": "./dist/types/node.d.ts",
       "import": "./dist/node.js"

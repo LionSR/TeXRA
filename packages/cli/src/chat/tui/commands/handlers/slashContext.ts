@@ -5,14 +5,13 @@ import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
 import type { RunId, ApprovalPolicy } from '@texra-ai/harness/schemas';
+import type { LocalSession, Session } from '@texra-ai/harness';
 import type {
-  LocalSession,
   ProcessRuntime,
   ProcessServices,
-  Session,
   PlatformSecrets,
   SettingsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 
 /**

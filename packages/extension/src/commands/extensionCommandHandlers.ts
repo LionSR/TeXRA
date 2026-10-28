@@ -17,12 +17,12 @@ import {
   definedHandler,
   type CommandHandler,
 } from '@texra/shared/commands/registry';
+import type { Sessions } from '@texra-ai/harness';
 import type {
   StorageFs,
   WorkspaceFs,
   ProcessServices,
-  Sessions,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { Effect } from 'effect';
 
 /**

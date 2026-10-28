@@ -11,6 +11,7 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runHistory';
+import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
@@ -54,8 +55,10 @@ export type DefineToolOptions<T, R = never> = Required<
      * tool already has, it never sets it.
      */
     guard?: ToolGuard<T, NoInfer<R>>;
-    /** The run body. */
-    execute: (input: T) => Effect.Effect<ToolResult, Error, R>;
+    /** The run body. Succeed with the text the model reads back, or with a
+     *  whole `ToolResult` for a summary, attachments or facts; fail with
+     *  an `Error` and the model reads its message as the tool's error. */
+    execute: (input: T) => Effect.Effect<ToolResult | string, Error, R>;
   };
 
 /**
@@ -97,6 +100,9 @@ export function defineTool<T, R = never>(
       Effect.scoped(
         validate(rawInput).pipe(
           Effect.flatMap(execute),
+          Effect.map((result) =>
+            typeof result === 'string' ? executed(result) : result,
+          ),
           Effect.catchCause((cause) => {
             if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
             if (findStorageRefusal(cause)) return Effect.failCause(cause);

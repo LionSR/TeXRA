@@ -15,7 +15,7 @@ import type {
   DocumentMeta,
   ExportConfig,
 } from '@texra/agent/export/schemas';
-import type { ExportNode } from '@texra-ai/harness';
+import type { ExportNode } from '@texra-ai/harness/host';
 
 /** Compile-time guarantee: every node kind has a renderer. */
 export type NodeRenderers = {

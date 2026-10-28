@@ -19,7 +19,7 @@ import {
   type RunId,
   type ToolFact,
 } from '@texra-ai/harness/schemas';
-import type { ValueFamily } from '@texra-ai/harness';
+import type { ValueFamily } from '@texra-ai/harness/host';
 import type { SessionView } from '@texra-ai/harness/schemas';
 
 const InquiryThreadStatusSchema = Schema.Literals([

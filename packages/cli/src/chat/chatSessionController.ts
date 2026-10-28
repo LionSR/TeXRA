@@ -14,6 +14,7 @@ import {
   Stream,
 } from 'effect';
 
+import { type RunStopReason, type Session } from '@texra-ai/harness';
 import {
   describeFollowUpFailure,
   hasErrorPresentationClaimed,
@@ -23,10 +24,8 @@ import {
   type PlatformSecrets,
   type ProcessRuntime,
   type ProcessServices,
-  type RunStopReason,
-  type Session,
   withPerKeyLane,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   type RuntimeRequest,
   type RunView,
@@ -88,7 +87,7 @@ import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { SessionRequests } from './tui/state/approvalQueue';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { PastedImageEntry } from './tui/input/draftAttachments';
-import type { SettingsStores } from '@texra-ai/harness';
+import type { SettingsStores } from '@texra-ai/harness/host';
 
 // ---------------------------------------------------------------------------
 // Controller

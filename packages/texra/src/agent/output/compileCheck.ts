@@ -14,7 +14,7 @@ import {
   createRunStorageLocation,
   pathToLocationIn,
   Settings,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 
 import { Cause, Effect, FileSystem } from 'effect';
 
@@ -34,7 +34,8 @@ import {
   publishCompiledPdfArtifactBestEffort,
 } from './compiledPdfArtifacts';
 import type { AgentTrace } from '@texra-ai/harness/plugins';
-import type { WorkspaceFs, WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { WorkspaceFs } from '@texra-ai/harness/host';
 import type { OutputState } from './outputState';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 

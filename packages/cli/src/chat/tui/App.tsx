@@ -85,12 +85,12 @@ import {
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
 import type { EventEmitter } from 'node:events';
+import type { Session } from '@texra-ai/harness';
 import type {
   ProcessRuntime,
   PlatformSecrets,
-  Session,
   SettingsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 import type { InputHistory } from './history/inputHistory';
 import type { PastedImageEntry } from './input/draftAttachments';

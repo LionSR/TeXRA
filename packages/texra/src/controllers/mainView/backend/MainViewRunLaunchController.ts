@@ -1,13 +1,12 @@
 import { absurd, Effect, Result, Schema, SchemaIssue } from 'effect';
 
+import { Rejected, type StartInput } from '@texra-ai/harness';
 import {
   AgentCatalog,
-  Rejected,
   type StateReadFailed,
   type AgentDelegationScope,
-  type StartInput,
   type WorkspaceAgentsStores,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import {
   AGENT_SOURCE,
   agentKey,
@@ -19,7 +18,7 @@ import {
   formatUnknownTeamMessage,
   resolveTeamLaunch,
   TEAM_SELECTION_REQUIRED_MESSAGE,
-} from '@texra-ai/harness';
+} from '@texra-ai/harness/host';
 import { isPastedImage } from '@texra/utils/files/pastedImageName';
 import {
   validateRunRequest,

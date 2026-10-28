@@ -1,5 +1,5 @@
 // Third-party imports
-import { Secrets, withLogChannel } from '@texra-ai/harness';
+import { Secrets, withLogChannel } from '@texra-ai/harness/host';
 import { Cause, Effect, Schema } from 'effect';
 
 // Local imports
@@ -18,11 +18,8 @@ import {
 import { SETUP_INSTRUCTION } from '@texra/controllers/onboarding/setupLaunch';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
-import type {
-  ProcessServices,
-  Session,
-  WorkspaceRoots,
-} from '@texra-ai/harness';
+import type { Session, WorkspaceRoots } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 /** The setup assistant's log channel, for its launch and what follows it. */
 export const SETUP_ASSISTANT_CHANNEL = 'SetupAssistant';

@@ -3,7 +3,7 @@ import { Cause, Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports - utils
-import { withLogChannel } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import {

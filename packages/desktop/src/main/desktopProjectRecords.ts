@@ -1,7 +1,7 @@
 /** The desktop profile's ordered project selection, independent of project sessions. */
 import { Context, Effect, Result, Schema } from 'effect';
 
-import type { CurrentValues, ValueFamily } from '@texra-ai/harness';
+import type { CurrentValues, ValueFamily } from '@texra-ai/harness/host';
 
 /** How many closed projects File > Open Recent offers. */
 const RECENT_PROJECT_LIMIT = 10;

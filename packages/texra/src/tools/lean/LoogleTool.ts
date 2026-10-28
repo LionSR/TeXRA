@@ -9,7 +9,8 @@ import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
 import { Array as Arr, Cause, Effect, Schema } from 'effect';
 import { HttpClientResponse } from 'effect/http';
 
-import { defineTool, withLogChannel, ToolResult } from '@texra-ai/harness';
+import { defineTool, ToolResult } from '@texra-ai/harness';
+import { withLogChannel } from '@texra-ai/harness/host';
 import {
   errorResult,
   executed,
