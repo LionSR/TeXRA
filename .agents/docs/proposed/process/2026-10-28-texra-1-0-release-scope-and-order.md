@@ -346,12 +346,21 @@ What else is in flight that touches this plan, as of `main` at `ba42b90`
   when PRs open, D4 (8994563 with its golden regeneration and 43c10db) goes
   alone as the one shape PR, with the approval store, the llm refactors and
   the dispatcher changes in separate PRs that touch no `rowVersions.ts`.
-- **`claude/single-owner-refactor`** (the dual-systems session, local,
-  rebased on `fa6fb1e`): partial S1, S4 and S5, the onboarding refresh (§3
-  of the tech-debt note), one wording for a failed model call, with parallel
-  workers on H4, H5, V2 (#14321's onboarding-key move), M1 and M4. By its own
-  check, no commit changes a row schema, a version, the codec or current
-  values, and its workers are told to skip S2, D4 and D5. It deferred one
+- **The single-owner session's work is now five PRs** against `ba42b90`:
+  #14358 (one owner for seven session-row facts: S1 partial, S4 request
+  half, S5 call issuer; row-readers baseline −14), #14359 (six
+  infrastructure facts, the id minter and golden regeneration among them),
+  #14360 (hosts: the onboarding refresh, H4, H5 half, V2 with the same
+  stored strings), #14361 (UI) and #14362 (texra and llm, M4). By its own
+  check, no PR changes a row schema, a version, the codec, current values
+  or a stored key string, and its workers were told to skip S2, D4 and D5.
+  **Collision:** #14358 edits `runRows.ts`, `runFacts.ts`,
+  `runLaunchGuard.ts`, `runLifecycle.ts`, `approvalBypassKind.ts` and the
+  row-readers baseline, the same six files the tech-debt branch changes
+  against `main` (its own S1 partial and S4). Both sessions were told; the
+  recommended order is #14358 first, then the tech-debt session rebases its
+  S1 and S4 commits onto it when it splits its branch. The D4 shape commit
+  touches none of those files. It deferred one
   lead that would change stored bytes, the `ExhaustionReason` collapse (R13),
   to this plan's shape PR. Its later commit "one random-id minter" makes new
   trace, card and `logId` values 36-character UUIDs instead of 21-character
