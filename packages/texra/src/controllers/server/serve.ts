@@ -61,6 +61,7 @@ import {
   TexraRpcs,
   type ServiceRecord,
 } from './protocol';
+import type { HostWindows } from './hostWindows';
 
 /** A live service already answers on this storage root's socket. */
 export class ServiceAlreadyRunning extends Schema.TaggedError<ServiceAlreadyRunning>()(
@@ -117,7 +118,7 @@ export const serve = Effect.fn('server.serve')(function* (
 ): Effect.fn.Return<
   ServeExit,
   ServiceAlreadyRunning | ServiceListenFailed | ServiceUnavailable,
-  ProcessServices | Sessions | ServiceProjects | Scope.Scope
+  ProcessServices | Sessions | ServiceProjects | HostWindows | Scope.Scope
 > {
   if (process.platform === 'win32')
     return yield* Effect.fail(

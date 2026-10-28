@@ -186,7 +186,7 @@ const sessionHandleLayer = (key: SessionKey) =>
       // The runs' fork and the project's tools end with this scope.
       const fork = yield* FiberSet.makeRuntime<ProcessServices>();
       const tools = yield* (yield* ToolCatalogOwner).session;
-      const interactions = new SessionHostInteractions();
+      const interactions = new SessionHostInteractions(key.open.interactions);
       // Each run's `.env`, read as it launches.
       const env = workspaceEnvironmentLayer(key.open.roots.workspace);
       const runs = new RunRegistry({
@@ -244,10 +244,6 @@ const sessionHandleLayer = (key: SessionKey) =>
       );
       yield* Effect.addFinalizer(() => session.interactions.dispose());
       yield* Effect.addFinalizer(() => Effect.sync(() => runs.dispose()));
-      // An opener's presentation host attaches as its own step: `use`
-      // replays its queue, a program a constructor cannot run.
-      if (key.open.interactions)
-        yield* session.interactions.use(key.open.interactions);
       // The local half of a committed removal; its plugin rows go with it.
       yield* store
         .deliver((runId) => session.followUps.forget(runId))

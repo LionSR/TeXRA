@@ -1,8 +1,9 @@
 /**
- * A window's side of the service's host calls: what the window can do for
- * its project's tasks, offered to the service when it attaches and answered
- * call by call. Every host (the extension, the desktop app, the terminal
- * chat) attaches through this one function with the capabilities it has.
+ * A window's side of the host calls: what the window can do for its
+ * project's tasks, offered when it attaches and answered call by call, to
+ * the service or to its own process (`HostWindows.localLink`). Every host
+ * (the extension, the desktop app, the terminal chat of a service session)
+ * attaches through this one function with the capabilities it has.
  */
 import {
   Cause,
@@ -18,15 +19,32 @@ import {
 import { withLogChannel, type HostInteractions } from '@texra-ai/harness/host';
 import { toErrorMessage, toJsonValue } from '@texra-ai/harness/schemas';
 import type { EditorCapabilities } from '@texra/tools/editorHost';
-import {
-  WINDOW_OUTDATED,
-  type ServiceClient,
-  type ServiceLink,
-} from './client';
+import { WINDOW_OUTDATED, type ServiceLink } from './client';
 
-import type { HostAnswer, HostCall, HostCapability } from './hostCalls';
+import type {
+  HostAnswer,
+  HostCall,
+  HostCapability,
+  HostFrame,
+} from './hostCalls';
 
 const CHANNEL = 'WindowHost';
+
+/** The procedures a window attaches through, of the service's client or
+ *  of its own process's windows. */
+export interface WindowClient {
+  readonly 'host.attach': (input: {
+    readonly workspace: string;
+    readonly capabilities: readonly HostCapability[];
+  }) => Stream.Stream<HostFrame, Error>;
+  readonly 'host.answer': (input: {
+    readonly id: string;
+    readonly answer: HostAnswer;
+  }) => Effect.Effect<void, Error>;
+  readonly 'host.focus': (input: {
+    readonly attachment: string;
+  }) => Effect.Effect<void, Error>;
+}
 
 /** What a window does for its project's tasks; a capability it leaves out
  *  is one it does not offer. */
@@ -97,14 +115,17 @@ const unofferedError = (call: HostCall) =>
 const unoffered = (call: HostCall) => Effect.fail(unofferedError(call));
 
 /**
- * Attach `host` to the service as a window of `workspace`, for the scope's
- * life; returns once the service holds the attachment. `focused` emits when
+ * Attach `host` through `link` as a window of `workspace`, for the scope's
+ * life; returns once the service (or, for a link to this process, its own
+ * windows) holds the attachment. `focused` emits when
  * the window gains focus, so the project's calls come here first. When the
  * link loses the service, the window goes on with its own process's
  * capabilities, and attaches again to the service the link reaches next.
  */
-export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* (
-  link: ServiceLink,
+export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* <
+  Client extends WindowClient,
+>(
+  link: ServiceLink<Client>,
   workspace: string,
   host: WindowHost,
   focused: Stream.Stream<void> = Stream.empty,
@@ -158,7 +179,7 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* (
 /** One attachment to the service `client` reaches, until it ends; what it
  *  started ends with it. */
 function attachTo(
-  client: ServiceClient,
+  client: WindowClient,
   workspace: string,
   host: WindowHost,
   focused: Stream.Stream<void>,

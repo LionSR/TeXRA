@@ -49,7 +49,6 @@ import {
 import {
   PdfOpenFailed,
   type EditorCapabilities,
-  type EditorRegistry,
 } from '@texra/tools/editorHost';
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
@@ -60,6 +59,7 @@ import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
 import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import {
   attachWindowHost,
+  type WindowClient,
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
 import {
@@ -125,10 +125,14 @@ interface Port {
 }
 
 /** The window's session: the service's, or, when the service could not be
- *  reached, this process's own. */
+ *  reached, this process's own, whose windows attach through `link`. */
 export type WindowSession =
   | { readonly session: Session; readonly service: ServiceLink }
-  | { readonly session: LocalSession; readonly service?: undefined };
+  | {
+      readonly session: LocalSession;
+      readonly service?: undefined;
+      readonly link: ServiceLink<WindowClient>;
+    };
 
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.mainView';
@@ -188,7 +192,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly secrets: PlatformSecrets;
   private readonly runtime: ProcessRuntime;
   private readonly roots: WorkspaceRoots;
-  private readonly editors: EditorRegistry;
   private readonly paintSetupPill: (credentialUsable: boolean) => void;
   constructor(
     context: vscode.ExtensionContext,
@@ -201,8 +204,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     /** Where this window's runs run: the service's session, or this
      *  process's own with the handle that owns it. */
     windowSession: WindowSession,
-    /** The editor registry the extension's plugins read (`texraPlugins`). */
-    editors: EditorRegistry,
     /** The setup pill: painted from the same credential answer the funnel
      *  reads, so the pill and the "Connect a model" card agree. */
     paintSetupPill: (credentialUsable: boolean) => void,
@@ -216,7 +217,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.secrets = secrets;
     this.runtime = runtime;
     this.roots = roots;
-    this.editors = editors;
     this.paintSetupPill = paintSetupPill;
     this.contentProvider = new BundledViewContentProvider(
       context,
@@ -385,10 +385,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
     this.runValidated = hostRequests.runValidated;
 
-    // Attached for the window's life, before the first run of this window
-    // asks anything. Requests this host does not present (bash, plan,
-    // proposal, retry, question) stay pending in the fold until the view's
-    // request row decides them.
+    // Attached for the window's life. Requests stay pending in the fold
+    // until the view's request row decides them.
     // What this window does for a run, whether it runs here or in the
     // service: notices, and the editor's diagnostics, inline criticism and
     // PDF viewer, which the editor tools read through the registry.
@@ -421,35 +419,38 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           ),
         ),
     };
-    // A window that runs its tasks here attaches to its own session; a
-    // window of the service is its project's window there: the service's
-    // runs ask it for the same.
-    if (windowSession.service === undefined) {
-      this.runtime.runSync(
-        this.editors
-          .attach(roots.storage, editor)
-          .pipe(
-            Effect.andThen(windowSession.session.attach(presentation)),
-            Scope.provide(this.scope),
+    // The window is its project's window wherever its tasks run: here,
+    // through this process's own windows, or in the service, whose runs ask
+    // it for the same.
+    this.runtime.runFork(
+      AppSignals.use((signals) => {
+        const host: WindowHost = {
+          ...presentation,
+          ...editor,
+          // What a service task wrote, told here as a task here tells
+          // it: the file decorations follow it.
+          filesWritten: (absolutePaths) =>
+            signals.emit('workspaceFilesWritten', {
+              absolutePaths: [...absolutePaths],
+            }),
+        };
+        const { service } = windowSession;
+        if (service === undefined)
+          return this.attachWindow(windowSession.link, host);
+        // While the link holds no service, the banner says why (reaching
+        // it again, or refused by a newer TeXRA), so the view never sits
+        // frozen without saying so.
+        return this.attachWindow(service, host).pipe(
+          Effect.andThen(
+            Effect.forkScoped(
+              Stream.runForEach(linkOutage(service), (reason) =>
+                this.snapshot.setServiceOffline(reason),
+              ),
+            ),
           ),
-      );
-    }
-    const { service } = windowSession;
-    if (service !== undefined)
-      this.runtime.runFork(
-        AppSignals.use((signals) =>
-          this.attachToService(service, {
-            ...presentation,
-            ...editor,
-            // What a service task wrote, told here as a task here tells
-            // it: the file decorations follow it.
-            filesWritten: (absolutePaths) =>
-              signals.emit('workspaceFilesWritten', {
-                absolutePaths: [...absolutePaths],
-              }),
-          }),
-        ).pipe(Scope.provide(this.scope)),
-      );
+        );
+      }).pipe(Scope.provide(this.scope)),
+    );
 
     this.watchWorkspace();
   }
@@ -488,13 +489,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     };
   }
 
-  /** Offer the service this window's capabilities for its project's runs. */
-  private attachToService(
-    service: ServiceLink,
+  /** Offer this window's capabilities for its project's runs through
+   *  `link`. */
+  private attachWindow<Client extends WindowClient>(
+    link: ServiceLink<Client>,
     capabilities: WindowHost,
   ): Effect.Effect<void, never, Scope.Scope> {
-    const workspace = this.roots.workspace;
-    if (workspace === undefined) return Effect.void;
     const focused = Stream.callback<void>((queue) =>
       Effect.acquireRelease(
         Effect.sync(() =>
@@ -505,24 +505,14 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         (listener) => Effect.sync(() => listener.dispose()),
       ),
     );
-    return Effect.gen({ self: this }, function* () {
-      yield* attachWindowHost(
-        service,
-        workspace,
-        capabilities,
-        vscode.window.state.focused
-          ? Stream.concat(Stream.succeed(undefined), focused)
-          : focused,
-      );
-      // While the link holds no service, the banner says why (reaching it
-      // again, or refused by a newer TeXRA), so the view never sits frozen
-      // without saying so.
-      yield* Effect.forkScoped(
-        Stream.runForEach(linkOutage(service), (reason) =>
-          this.snapshot.setServiceOffline(reason),
-        ),
-      );
-    });
+    return attachWindowHost(
+      link,
+      this.roots.workspace ?? this.roots.storage,
+      capabilities,
+      vscode.window.state.focused
+        ? Stream.concat(Stream.succeed(undefined), focused)
+        : focused,
+    );
   }
 
   /** The completion chime (PRD 12.4), one per process and never a renderer

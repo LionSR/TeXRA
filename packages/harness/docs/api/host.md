@@ -2353,9 +2353,9 @@ function sessionFsLayer(
 ## SessionHostInteractions
 
 Stable per-session presentation owner. The `SessionHandle` exposes this
-object once, while hosts may attach and detach presentation adapters; the
-newest attachment presents, and notices raised while none is attached are
-replayed to the next one.
+object once, while one host at a time attaches and detaches; the host the
+session was opened with answers while none is, and notices raised while
+none is are replayed to the next one.
 
 ```ts
 class SessionHostInteractions implements HostInteractions

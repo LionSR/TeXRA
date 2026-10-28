@@ -426,7 +426,7 @@ interface LocalSession extends Session {
   readonly deleteRuns: (
     target: RunId | 'all',
   ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
-  /** Show a notice through the most recently attached host. With
+  /** Show a notice through the attached host. With
    *  `replayWhenAttached`, a notice raised while no host is attached waits
    *  for the next one. */
   readonly emit: SessionHostInteractions['emit'];
@@ -827,9 +827,9 @@ interface Session {
   readonly request: (
     request: RuntimeRequest,
   ) => Effect.Effect<Outcome, RequestError>;
-  /** Attach `host` until the caller's scope closes. The most recently
-   *  attached host shows notices, and its `approve` answers the runs'
-   *  approval requests. */
+  /** Attach `host` until the caller's scope closes: it shows notices, and
+   *  its `approve` answers the runs' approval requests. A session has one
+   *  host at a time; attaching a second while one is attached is a defect. */
   readonly attach: (
     host: SessionHost,
   ) => Effect.Effect<void, never, Scope.Scope>;

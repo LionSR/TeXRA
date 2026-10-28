@@ -21,7 +21,10 @@ import {
 } from '@texra-ai/harness/host';
 import { AppSignals } from '@texra-ai/harness/host';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
-import { attachWindowHost } from '@texra/controllers/server/windowHost';
+import {
+  attachWindowHost,
+  type WindowHost,
+} from '@texra/controllers/server/windowHost';
 
 import {
   DesktopToolEditApprovalHost,
@@ -160,32 +163,39 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
     yield* Effect.addFinalizer(() =>
       Effect.asVoid(Effect.forkDetach(Fiber.interrupt(previews))),
     );
-    // Attached for the window's life, before the first run of this window
-    // asks anything. Every request (bash, plan, proposal, retry, question,
+    // Attached for the window's life: the window is its project's window
+    // wherever its runs run, here through this process's own windows or in
+    // the service. Every request (bash, plan, proposal, retry, question,
     // tool edit) is listed by the fold and answered by a surface's
     // `request.decide`.
+    const signals = yield* withProcessServices(runtime, AppSignals);
+    const windowHost: WindowHost = {
+      emit: handlePresentationEvent,
+      // What a service task wrote, told here as a task here tells it:
+      // the file tree follows it.
+      filesWritten: (absolutePaths) =>
+        signals.emit('workspaceFilesWritten', {
+          absolutePaths: [...absolutePaths],
+        }),
+    };
+    const workspace = project.root ?? project.key;
     if (project.service === undefined)
-      yield* project.session.attach({ emit: handlePresentationEvent });
-    // A project of the service: the window presents its own failures, and
-    // serves the project's runs there with the same notices.
+      yield* attachWindowHost(
+        project.link,
+        workspace,
+        windowHost,
+        options.focused,
+      );
+    // A project of the service: the window also presents its own failures.
     else {
       yield* Effect.acquireRelease(
         project.present.use({ emit: handlePresentationEvent }),
         (detach) => Effect.sync(detach),
       );
-      const signals = yield* withProcessServices(runtime, AppSignals);
       yield* attachWindowHost(
         project.service,
-        project.root,
-        {
-          emit: handlePresentationEvent,
-          // What a service task wrote, told here as a task here tells it:
-          // the file tree follows it.
-          filesWritten: (absolutePaths) =>
-            signals.emit('workspaceFilesWritten', {
-              absolutePaths: [...absolutePaths],
-            }),
-        },
+        workspace,
+        windowHost,
         options.focused,
       );
     }
