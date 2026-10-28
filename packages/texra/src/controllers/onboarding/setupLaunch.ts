@@ -1,12 +1,12 @@
 import { Effect } from 'effect';
 
 import { Cancelled } from '@texra-ai/harness';
+import { agentName, isLiveRun } from '@texra-ai/harness/schemas';
 import {
   type PlatformSecrets,
   presentRunFailure,
   type SessionHostInteractions,
 } from '@texra-ai/harness/host';
-import { hasLiveSetupRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import {
   validateRunRequest,
   type ValidatedRunRequest,
@@ -37,9 +37,15 @@ export const launchSetup = <E>(options: {
   readonly start: (request: ValidatedRunRequest) => Effect.Effect<Run, E>;
 }) =>
   Effect.gen(function* () {
-    if (hasLiveSetupRun(options.session.view.current())) {
-      return 'already-running' as const;
-    }
+    // A second setup conversation, however it was started, would race the
+    // first one's installs and config writes.
+    const live = [...options.session.view.current().runs.values()].some(
+      (run) =>
+        isLiveRun(run) &&
+        run.identity.kind === 'agent' &&
+        agentName(run.identity.agent) === SETUP_AGENT_NAME,
+    );
+    if (live) return 'already-running' as const;
     // The launch model the credential predicate every host shares decides:
     // adapter-level checks, so a blank env key does not count and fail later
     // as "No model is available".

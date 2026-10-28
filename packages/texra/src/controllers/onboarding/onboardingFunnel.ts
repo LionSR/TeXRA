@@ -28,9 +28,7 @@ import {
 } from '@texra-ai/harness/host';
 import {
   agentName,
-  isLiveRun,
   RUN_PHASE,
-  type RunView,
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
@@ -69,35 +67,17 @@ export function setFirstRunDone(
   return state.update(FIRST_RUN_DONE_KEY, true);
 }
 
-/** The agent `run` runs, or undefined for a run that is not an agent's. */
-function agentOf(run: RunView): string | undefined {
-  return run.identity.kind === 'agent'
-    ? agentName(run.identity.agent)
-    : undefined;
-}
-
 /** Whether `view` holds a completed agent run other than the setup
  *  agent's own. Subagent runs count, so the demo the setup conversation
  *  delegates ends State 1. */
 function hasCompletedRun(view: SessionView): boolean {
   for (const run of view.runs.values()) {
-    const agent = agentOf(run);
     if (
       run.status === RUN_PHASE.COMPLETED &&
-      agent !== undefined &&
-      agent !== SETUP_AGENT_NAME
+      run.identity.kind === 'agent' &&
+      agentName(run.identity.agent) !== SETUP_AGENT_NAME
     )
       return true;
-  }
-  return false;
-}
-
-/** Whether `view` holds a setup conversation that has not ended, however
- *  it was started: a second one would race its installs and config
- *  writes. */
-export function hasLiveSetupRun(view: SessionView): boolean {
-  for (const run of view.runs.values()) {
-    if (isLiveRun(run) && agentOf(run) === SETUP_AGENT_NAME) return true;
   }
   return false;
 }
