@@ -83,7 +83,7 @@ describe('deriveResumability', () => {
       yield* fail(runId);
 
       expect(yield* deriveResumability(runId, session)).toEqual({
-        kind: 'none',
+        kind: 'finished',
       });
     }),
   );

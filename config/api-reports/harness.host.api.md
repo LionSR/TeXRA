@@ -143,7 +143,7 @@ Exports: 206
 - `RunModelDecision` — `interface RunModelDecision { readonly model: string; readonly reason: RunModelDecisionReason; readonly unavailable?: true; readonly fallbackFrom?: { readonly model: string; readonly reason: RunModelDecisionReason; readonly mode: RunModelFallbackMode; }; }`
 - `RunModelDecisionReason` — `type RunModelDecisionReason = keyof typeof RUN_MODEL_PRECEDENCE; ≡ "access-list-default" | "agent-config" | "builtin-default" | "command-config" | "credential" | "environment" | "explicit-override" | "history" | "parent-run" | "user-config" | "workspace-config"`
 - `RunModelFallbackMode` — `type RunModelFallbackMode = 'reject' | 'notice' | 'silent'; ≡ RunModelFallbackMode`
-- `RunRejection` — `type RunRejection = { readonly kind: 'owned_elsewhere'; readonly owner: OwnerId; } | { readonly kind: 'finished'; } | { readonly kind: 'earlier_build'; }; ≡ RunRejection`
+- `RunRejection` — `type RunRejection = { readonly kind: 'owned_elsewhere'; readonly owner: OwnerId; } | { readonly kind: 'finished'; } | { readonly kind: 'earlier_build'; readonly cause: string; }; ≡ RunRejection`
 - `RuntimePresentationEvent` — `type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads; ≡ keyof RuntimePresentationEventPayloads`
 - `RuntimePresentationEventPayloads` — `interface RuntimePresentationEventPayloads { requestOpenFile: RequestOpenFilePayload; requestShowInstruction: RequestShowInstructionPayload; showAgentConfigBanner: ShowAgentConfigBannerPayload; requestShowError: RequestShowErrorPayload; requestEnsureProgressView: RequestEnsureProgressViewPayload; }`
 - `RunWorkspaceFile` — `interface RunWorkspaceFile { readonly path: string; readonly size: number; readonly isDirectory: boolean; }`

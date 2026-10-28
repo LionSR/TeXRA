@@ -2228,13 +2228,17 @@ type RunModelFallbackMode = 'reject' | 'notice' | 'silent';
 
 ## RunRejection
 
-Why this process cannot resume a run (see the module note).
+Why this process cannot resume a run. Each kind is also a follow-up
+failure reason, so a sender's result names it as is.
 
 ```ts
 type RunRejection =
+  /** A live owner, or one not provably dead, holds its claim. */
   | { readonly kind: 'owned_elsewhere'; readonly owner: OwnerId }
+  /** Its rows hold no point to continue from. */
   | { readonly kind: 'finished' }
-  | { readonly kind: 'earlier_build' };
+  /** An earlier build wrote its rows. */
+  | { readonly kind: 'earlier_build'; readonly cause: string };
 ```
 
 ## RuntimePresentationEvent

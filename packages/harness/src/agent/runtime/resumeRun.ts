@@ -8,6 +8,7 @@ import { Clock, Effect, Exit, Fiber, Result, Scope, Stream } from 'effect';
  * same continuous delivery driver as newly launched children and
  * acknowledge each resumed turn separately.
  */
+import { runRejection } from '@agent/storage/resumability';
 import {
   getRunRecords,
   owningCall,
@@ -30,7 +31,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 import { createScriptRunStrategy } from './scriptRun';
 import { resumeBlocker } from './resumeBlocker';
-import { runRejection } from './runClassification';
 
 import { type RunEndResult } from './RunEndResult';
 import {
