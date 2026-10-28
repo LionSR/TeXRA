@@ -15,6 +15,7 @@ import type {
   PluginToolServices,
   RuntimeTool,
 } from '@agent/runtime/ToolServices';
+import { AppSignals, emitAppSignal } from '@platform/appSignals';
 import type { ConfigProvider } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -57,9 +58,11 @@ const secretsLayer = Secrets.layer({
   listStoredKeys: unreadSecret,
 } satisfies PlatformSecrets);
 
-/** The services a plugin's availability callbacks may read. */
+/** The services a plugin's availability callbacks may read, and the
+ *  process's signal hub the service follows key changes on. */
 const probeServices = Layer.mergeAll(
   secretsLayer,
+  AppSignals.layer,
   // The mocked plugins declare no Lean plugin, so nothing here reads the port.
   Layer.mock(LeanLanguageServices, { listServers: () => [] }),
   testHttpClientLayer,
@@ -126,9 +129,6 @@ describe('tool availability service', () => {
             },
           },
         ];
-        const { emitAppSignal } = yield* Effect.promise(
-          () => import('@eventBus/AppSignals'),
-        );
         const availability = yield* availabilityService(plugins);
         const roots = (workspace: string | undefined) => ({
           ...probeInputs,
@@ -151,8 +151,8 @@ describe('tool availability service', () => {
         yield* probedAll;
         probedRoots.length = 0;
 
-        emitAppSignal('credentialChanged', { key: 'unrelated.key' });
-        emitAppSignal('credentialChanged', { key: 'token.key' });
+        yield* emitAppSignal('credentialChanged', { key: 'unrelated.key' });
+        yield* emitAppSignal('credentialChanged', { key: 'token.key' });
 
         yield* probedAll;
         expect(probedRoots.toSorted()).toEqual(['/a', '/b', undefined]);

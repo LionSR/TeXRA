@@ -14,14 +14,13 @@
 import { Effect, type Scope } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness';
-import { emitAppSignal } from '@eventBus/AppSignals';
 import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
 import type { Disposable } from '@texra/platform/disposable';
+import type { AppSignals } from '@texra-ai/harness';
 import type { RunInbox } from '@texra-ai/harness/plugins';
 import type { RunId } from '@texra-ai/harness/schemas';
 
-import type { GitHubServices } from './githubClient';
-import type { PollEventListener } from './PollingSourceBase';
+import type { PollEventListener, PollServices } from './PollingSourceBase';
 
 export interface SubscriptionBinding<K extends string> {
   key: K;
@@ -32,7 +31,7 @@ interface PollingSourceLike<K extends string, Input> {
   subscribe(
     input: Input,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, GitHubServices>;
+  ): Effect.Effect<Disposable, never, PollServices>;
   updateSubscription?(input: Input, onEvent: PollEventListener): void;
   activeKeys(): readonly K[];
   has(key: K): boolean;
@@ -46,6 +45,8 @@ export interface RunSubscriptionRegistryOptions<K extends string, Input> {
   source: PollingSourceLike<K, Input>;
   /** Convert a subscribe-input value to the canonical string key. */
   keyOf: (input: Input) => K;
+  /** The process's signal hub, told whenever the bindings change. */
+  signals: AppSignals['Service'];
 }
 
 interface BoundSubscription {
@@ -119,7 +120,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     runId: RunId,
     input: Input,
     inbox: RunInbox,
-  ): Effect.Effect<boolean, never, GitHubServices> {
+  ): Effect.Effect<boolean, never, PollServices> {
     return Effect.suspend(() => {
       const key = this.opts.keyOf(input);
       const existing = this.perRun.get(runId, key);
@@ -259,7 +260,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
   }
 
   private emitBindingsChanged(): void {
-    emitAppSignal('githubSubscriptionsChanged', undefined);
+    this.opts.signals.emit('githubSubscriptionsChanged', undefined);
   }
 }
 

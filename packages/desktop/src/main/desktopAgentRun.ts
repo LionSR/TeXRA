@@ -19,7 +19,7 @@ import {
   type RuntimePresentationEventPayloads,
   type PresentationEventHandlers,
 } from '@texra-ai/harness';
-import { emitAppSignal } from '@eventBus/AppSignals';
+import { AppSignals } from '@texra-ai/harness';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
@@ -180,6 +180,7 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
         project.present.use({ emit: handlePresentationEvent }),
         (detach) => Effect.sync(detach),
       );
+      const signals = yield* withProcessServices(runtime, AppSignals);
       yield* attachWindowHost(
         project.service,
         project.root,
@@ -188,7 +189,7 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
           // What a service task wrote, told here as a task here tells it:
           // the file tree follows it.
           filesWritten: (absolutePaths) =>
-            emitAppSignal('workspaceFilesWritten', {
+            signals.emit('workspaceFilesWritten', {
               absolutePaths: [...absolutePaths],
             }),
           toolEdits: {

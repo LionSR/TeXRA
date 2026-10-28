@@ -8,7 +8,6 @@ import * as vscode from 'vscode';
 // Local imports
 import { withLogChannel } from '@texra-ai/harness';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
-import { emitAppSignal } from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
@@ -64,10 +63,6 @@ const acceptEditedFailure =
  * `FileSystem` the host entry's runtime carries.
  */
 const acceptPorts: CommitAcceptedFilePorts = {
-  emitWritten: (absolutePath) =>
-    emitAppSignal('workspaceFilesWritten', {
-      absolutePaths: [absolutePath],
-    }),
   showInfo: (message) =>
     Effect.forkDetach(showLoggedInfoMessage(CHANNEL, message)).pipe(
       Effect.asVoid,

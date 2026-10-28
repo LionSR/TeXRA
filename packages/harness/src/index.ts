@@ -220,6 +220,17 @@ export {
   type ToolMissingHandler,
 } from '@platform/interfaces';
 export { Secrets, type PlatformSecrets } from '@platform/secrets';
+// The process's app-lifecycle signal hub, which `ProcessServices` serves:
+// what hosts and the app publish and follow.
+export {
+  AppSignals,
+  appSignalStream,
+  emitAppSignal,
+  onAppSignal,
+  type AppSignal,
+  type AppSignalEvent,
+  type AppSignalPayloads,
+} from '@platform/appSignals';
 export type { WorkspaceRoots } from '@platform/workspaceRoots';
 
 // What a plugin's `availability` answers with, and reads.

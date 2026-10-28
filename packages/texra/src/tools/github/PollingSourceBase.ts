@@ -25,7 +25,7 @@ import {
 import { SESSION_CLOSE_DEADLINE_MS, withLogChannel } from '@texra-ai/harness';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { jitteredExponentialBackoffMs } from '@texra-ai/harness/plugins';
-import { emitAppSignal } from '@eventBus/AppSignals';
+import { emitAppSignal, type AppSignals } from '@texra-ai/harness';
 
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
@@ -83,6 +83,11 @@ export class PollHookRejected extends Schema.TaggedError<PollHookRejected>()(
     cause: Schema.Defect(),
   },
 ) {}
+
+/** What a source's subscriptions and poll rounds run on: the GitHub calls'
+ *  services and the process's signal hub, which hears a rejected token
+ *  (`githubTokenInvalid`). */
+export type PollServices = GitHubServices | AppSignals;
 
 interface PollingSourceConfig {
   /** Display name used as the log channel and in exception messages. */
@@ -204,7 +209,7 @@ export abstract class PollingSourceBase<
   protected afterTick(
     _entries: ReadonlyArray<readonly [K, S]>,
     _now: number,
-  ): Effect.Effect<void, PollHookRejected, GitHubServices> {
+  ): Effect.Effect<void, PollHookRejected, PollServices> {
     return Effect.void;
   }
 
@@ -266,7 +271,7 @@ export abstract class PollingSourceBase<
     key: K,
     initState: (now: number) => S,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, GitHubServices> {
+  ): Effect.Effect<Disposable, never, PollServices> {
     return Effect.uninterruptible(
       Effect.flatMap(Clock.currentTimeMillis, (now) => {
         const lifetime = this.lifetime;
@@ -468,7 +473,7 @@ export abstract class PollingSourceBase<
    */
   private ensurePolling(
     lifetime: PollingLifetime,
-  ): Effect.Effect<void, never, GitHubServices> {
+  ): Effect.Effect<void, never, PollServices> {
     return Effect.uninterruptible(
       Effect.gen({ self: this }, function* () {
         if (this.pollLoopStop) return;
@@ -645,7 +650,7 @@ export abstract class PollingSourceBase<
         err,
       );
       yield* this.emit(state, this.formatErrorEvent(state, err.message));
-      emitAppSignal('githubTokenInvalid', { message: err.message });
+      yield* emitAppSignal('githubTokenInvalid', { message: err.message });
       this.detach(key, state);
       return;
     }

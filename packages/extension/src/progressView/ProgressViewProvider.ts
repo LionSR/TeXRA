@@ -30,8 +30,8 @@ import {
   type RunId,
   GlobalStateKey,
 } from '@texra-ai/harness/schemas';
+import { AppSignals, appSignalStream } from '@texra-ai/harness';
 import { BundledViewContentProvider } from '@common/webview';
-import { appSignalStream, emitAppSignal } from '@eventBus/AppSignals';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
@@ -435,16 +435,18 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const { service } = windowSession;
     if (service !== undefined)
       this.runtime.runFork(
-        this.attachToService(service, {
-          ...presentation,
-          ...editor,
-          // What a service task wrote, told here as a task here tells
-          // it: the file decorations follow it.
-          filesWritten: (absolutePaths) =>
-            emitAppSignal('workspaceFilesWritten', {
-              absolutePaths: [...absolutePaths],
-            }),
-        }).pipe(Scope.provide(this.scope)),
+        AppSignals.use((signals) =>
+          this.attachToService(service, {
+            ...presentation,
+            ...editor,
+            // What a service task wrote, told here as a task here tells
+            // it: the file decorations follow it.
+            filesWritten: (absolutePaths) =>
+              signals.emit('workspaceFilesWritten', {
+                absolutePaths: [...absolutePaths],
+              }),
+          }),
+        ).pipe(Scope.provide(this.scope)),
       );
 
     this.watchWorkspace();

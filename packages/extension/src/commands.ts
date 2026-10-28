@@ -118,7 +118,7 @@ export function registerCommands(
       latexFixCompilation(roots, progressViewProvider.runValidated),
     getTeXCount: () => latexGetTeXCount(roots),
     compileTikzFigures: () => latexCompileTikzFigures(roots),
-    cloneOverleafProject: () => gitCloneOverleafProject(),
+    cloneOverleafProject: gitCloneOverleafProject,
     removeApiKey: () => apiRemoveApiKey(roots),
     showProgressView: (inPlace) =>
       progressViewProvider.showProgressView({ inPlace }),

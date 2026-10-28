@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Internal imports
+import { Secrets, type PlatformSecrets } from '@texra-ai/harness';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   cloneOverleafProject,
@@ -20,7 +21,6 @@ import {
 // Local imports - runtime
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
-import { cliSecrets } from '../runtime/cliSecrets';
 import { CliExitCode } from '../runtime/exitCodes';
 import { askCliQuestion, writeTextStderr } from '../runtime/logSinks';
 
@@ -36,9 +36,8 @@ function buildOverleafClonePorts(
   context: CliContext,
   remote: OverleafRemote,
   workspacePath: string,
+  secrets: PlatformSecrets,
 ): OverleafCloneWorkflowPorts {
-  // Clone installs no platform, so it opens the store over its root itself.
-  const secrets = cliSecrets(context.storageRoot);
   let canonicalWorkspacePath = workspacePath;
   return {
     // A credential store this host cannot reach fails the clone with its
@@ -167,9 +166,10 @@ export const cloneCommand = withUsageSections(
         description: 'Directory to create or clone into (defaults to --cwd)',
       },
     },
-    // `clone` runs without a platform, but its token ports are `FileSecrets`,
-    // whose reads and writes are Effect programs. The process runtime its
-    // entry installs for them serves a state store and a global-root handle
+    // `clone` runs without a platform, but its token ports are the
+    // credential store the process runtime serves (`Secrets`), whose reads
+    // and writes are Effect programs. The runtime its entry installs for
+    // them serves a state store and a global-root handle
     // that refuse: clone serves no application state and reads no record, and
     // opening either would create the global storage directory and its
     // database, which an env-token clone on a read-only storage root must
@@ -200,7 +200,12 @@ export const cloneCommand = withUsageSections(
         const outcome = yield* cloneOverleafProject(
           remote,
           workspacePath,
-          buildOverleafClonePorts(context, remote, workspacePath),
+          buildOverleafClonePorts(
+            context,
+            remote,
+            workspacePath,
+            yield* Secrets,
+          ),
         );
         switch (outcome.status) {
           case 'success':
