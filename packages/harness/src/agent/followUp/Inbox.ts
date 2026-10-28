@@ -8,26 +8,22 @@ import { Effect, Result, type Scope } from 'effect';
 
 import type { ClaimError, SessionLog } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  qualifyAggregateId,
-  type RunId,
-  type SessionEvent,
-} from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import {
   heldElsewhereBy,
   type DatabaseReadFailed,
 } from '@shared/session/database';
-import { parentEdgeOf, runRelation } from '@shared/session/runRelation';
+import { runRelation } from '@shared/session/runRelation';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RunInputDraft } from '@shared/session/runState';
 import { consumedRow, needsWake } from '@shared/session/runFacts';
 import {
-  FOLLOW_UP_TYPES,
+  RUN_ROW_READS,
   pendingMessages,
   runRowsFrom,
   type QueuedFollowUp,
-  type RunRows,
 } from '@shared/session/runRows';
+import type { RunRows } from '@shared/session/runRowsShape';
 import type { RunView } from '@shared/session/sessionView';
 import {
   afterCommit,
@@ -42,29 +38,14 @@ import { queuedRow, type FollowUpSenderInput } from './followUpMessages';
 
 const CHANNEL = 'Inbox';
 
-/** The rows a run's input is read from: its follow-ups, and the lifecycle
- *  rows, the latest of which closes it unless it is a `run.activate`. */
-const LIFECYCLE = ['run.activate', 'followup.closed', 'run.removed'] as const;
-const LIFECYCLE_TYPES: ReadonlySet<string> = new Set(LIFECYCLE);
-const INPUT_TYPES = [...FOLLOW_UP_TYPES, ...LIFECYCLE, 'run.end'] as const;
 const CLOSED = Object.freeze({
   kind: 'refused',
   reason: 'not_resumable',
 } as const);
-/** A run's input: what is queued, every follow-up id named, if closed, and
- *  the rows it was read from (`needsWake` reads them). */
-type InputRows = RunRows & {
-  readonly closed: boolean;
-  readonly rows: readonly SessionEvent[];
-};
-
 /** The session doors the inbox works through (the session layer wires them). */
 export interface InboxPort {
   /** The session's log: a send is one transaction under the run's claim. */
-  readonly log: Pick<
-    SessionLog,
-    'transact' | 'rows' | 'records' | 'hold' | 'settled'
-  >;
+  readonly log: Pick<SessionLog, 'transact' | 'rows' | 'hold' | 'settled'>;
   /** Enqueue a job on the session's publisher and return. */
   readonly detach: SessionEventsShape['detach'];
   /** The run as the session view holds it: its parent (`null` at top
@@ -218,7 +199,7 @@ export class Inbox {
       if (this.disposed || this.readers.has(runId)) return Effect.void;
       if (this.resumes.running.has(runId)) return this.resumes.settled(runId);
       const input = yield* this.read(runId);
-      if (input.closed || !needsWake(input.rows, runId, this.port.run))
+      if (input.inputClosed || !needsWake(input, this.port.run))
         return Effect.void;
       return yield* this.port.resume(runId);
     }).pipe(
@@ -304,8 +285,8 @@ export class Inbox {
     item: InboxItem,
     options: SendOptions,
   ): Effect.Effect<Admission, ClaimError, Scope.Scope> {
-    const closed = (input: InputRows) =>
-      this.disposed || (!this.readers.has(runId) && input.closed);
+    const closed = (input: RunRows) =>
+      this.disposed || (!this.readers.has(runId) && input.inputClosed);
     const only = (sent: Sent): Admission => ({ rows: [], sent });
     // The reader hears a committed row.
     const landed = (replay: boolean) =>
@@ -324,11 +305,9 @@ export class Inbox {
       yield* this.port.log.hold(runId);
       const input = yield* this.read(runId);
       if (closed(input)) return only(CLOSED);
-      if (options.fromParent === true) {
-        const edge = parentEdgeOf(yield* this.port.log.records(runId));
-        if (edge?.id !== (item.from.kind === 'run' ? item.from.runId : null))
-          return only({ kind: 'refused', reason: 'not_parent' });
-      }
+      const sender = item.from.kind === 'run' ? item.from.runId : null;
+      if (options.fromParent === true && input.parent?.id !== sender)
+        return only({ kind: 'refused', reason: 'not_parent' });
       // Stamped inside the job, from committed parentage.
       const row = queuedRow(item, options.hold, (sender) =>
         runRelation(sender, runId, this.parentOf),
@@ -357,19 +336,11 @@ export class Inbox {
     );
   }
 
-  /** The run's input as its committed rows say it (`InputRows`). */
-  read(runId: RunId): Effect.Effect<InputRows, DatabaseReadFailed> {
+  /** The run's input, lifecycle and parent as its committed rows say them. */
+  read(runId: RunId): Effect.Effect<RunRows, DatabaseReadFailed> {
     return Effect.suspend(() =>
-      this.port.log.rows(qualifyAggregateId('run', runId), INPUT_TYPES),
-    ).pipe(
-      Effect.map((rows) => {
-        const last = rows.findLast((row) =>
-          LIFECYCLE_TYPES.has(row.type),
-        )?.type;
-        const closed = last !== undefined && last !== 'run.activate';
-        return { ...runRowsFrom(rows), closed, rows };
-      }),
-    );
+      this.port.log.rows(qualifyAggregateId('run', runId), RUN_ROW_READS.input),
+    ).pipe(Effect.map(runRowsFrom));
   }
 
   private notify(closed: InboxClosed): void {
@@ -396,5 +367,5 @@ const warnWith =
     );
 
 /** Whether a message is queued: not a request, nor an ended child's notice. */
-const queued = (input: InputRows, run: InboxPort['run']): boolean =>
+const queued = (input: RunRows, run: InboxPort['run']): boolean =>
   pendingMessages(input.followUps, run).length > 0;

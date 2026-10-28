@@ -1,12 +1,8 @@
 import { Effect, SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  aggregateTarget,
-  type SessionEvent,
-  type RunId,
-} from '@shared/schemas';
-import { lastLifecycleRow } from '@shared/session/runFacts';
+import { RUN_SUBSTATE, type RunId } from '@shared/schemas';
+import type { RunView } from '@shared/session/sessionView';
 
 const CHANNEL = 'LeftoverRunSweep';
 
@@ -24,36 +20,20 @@ function runningRuns(session: SessionHandle): Set<RunId> {
 /** Remove the nonresumable background-shell cohort captured before session open. */
 export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
   session: SessionHandle,
-  rows: readonly SessionEvent[],
+  cohort: Iterable<RunView>,
 ) {
-  // A shell parked holding its result for its parent in its current
-  // lifecycle stays until that result is delivered.
-  const holds = (row: SessionEvent): boolean => {
-    if (row.type !== 'child.park' || row.heldFor === undefined) return false;
-    const target = aggregateTarget(row.aggregateId);
-    if (target.kind !== 'run') return false;
-    const since = lastLifecycleRow(rows, target.id);
-    return since?.type !== 'run.end' && row.commit > (since?.commit ?? 0);
-  };
-  const removed = new Set(
-    rows
-      .filter((row) => row.type === 'run.removed' || holds(row))
-      .map((row) => row.aggregateId),
-  );
   const running = runningRuns(session);
-  for (const row of rows) {
+  for (const { id: runId, identity, substate, createdAt } of cohort) {
+    // A shell parked holding its result for its parent stays until that
+    // result is delivered.
     if (
-      row.type !== 'run.start' ||
-      row.identity.kind !== 'process' ||
-      removed.has(row.aggregateId)
+      identity.kind !== 'process' ||
+      substate === RUN_SUBSTATE.RESULT_WAITING ||
+      running.has(runId)
     )
       continue;
-    const target = aggregateTarget(row.aggregateId);
-    if (target.kind !== 'run') continue;
-    const runId = target.id;
-    if (running.has(runId)) continue;
     yield* session.requests
-      .removeRun(runId, 'automatic', row.commit)
+      .removeRun(runId, 'automatic', createdAt)
       .pipe(
         Effect.catch((error) =>
           Effect.logWarning(

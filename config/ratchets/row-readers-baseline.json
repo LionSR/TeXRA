@@ -8,7 +8,6 @@
     ],
     "child.park": [
       "packages/harness/src/agent/runtime/runLaunchGuard.ts",
-      "packages/harness/src/controllers/session/sweepLeftoverRuns.ts",
       "packages/harness/src/tools/delegation/childRun.ts"
     ],
     "child.turn": ["packages/harness/src/agent/storage/runRecords.ts"],
@@ -17,11 +16,7 @@
       "packages/harness/src/agent/runtime/RunHistory.ts",
       "packages/harness/src/agent/runtime/storedTurn.ts"
     ],
-    "followup.closed": ["packages/harness/src/agent/followUp/Inbox.ts"],
-    "followup.queued": [
-      "packages/harness/src/agent/runtime/runLaunchGuard.ts",
-      "packages/harness/src/shared/session/runFacts.ts"
-    ],
+    "followup.queued": ["packages/harness/src/agent/runtime/runLaunchGuard.ts"],
     "model.message": [
       "packages/harness/src/agent/runtime/RunHistory.ts",
       "packages/harness/src/agent/runtime/storedTurn.ts",
@@ -46,12 +41,6 @@
       "packages/harness/src/agent/runtime/requestPolicy.ts",
       "packages/texra/src/tools/inquiry/ExternalInquiryTool.ts"
     ],
-    "run.activate": [
-      "packages/harness/src/agent/followUp/Inbox.ts",
-      "packages/harness/src/agent/runtime/runLaunchGuard.ts",
-      "packages/harness/src/agent/storage/runLifecycle.ts",
-      "packages/harness/src/shared/session/runFacts.ts"
-    ],
     "run.config": [
       "packages/harness/src/agent/runtime/run/AgentRun.ts",
       "packages/harness/src/agent/storage/resumability.ts",
@@ -59,21 +48,13 @@
       "packages/harness/src/agent/storage/runRecords.ts"
     ],
     "run.description": ["packages/harness/src/agent/runtime/forkRun.ts"],
-    "run.detach": ["packages/harness/src/shared/session/runRelation.ts"],
-    "run.end": [
-      "packages/harness/src/agent/followUp/Inbox.ts",
-      "packages/harness/src/agent/runtime/runLaunchGuard.ts",
-      "packages/harness/src/controllers/session/sessionLayer.ts",
-      "packages/harness/src/controllers/session/sweepLeftoverRuns.ts",
-      "packages/harness/src/shared/session/runFacts.ts"
-    ],
+    "run.end": ["packages/harness/src/controllers/session/sessionLayer.ts"],
     "run.position": [
       "packages/harness/src/agent/runtime/forkRun.ts",
       "packages/harness/src/agent/storage/runLifecycle.ts",
       "packages/trace-viewer/src/traceFrames.ts"
     ],
     "run.removed": [
-      "packages/harness/src/agent/followUp/Inbox.ts",
       "packages/harness/src/agent/runtime/SessionEvents.ts",
       "packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts",
       "packages/harness/src/agent/storage/runRecords.ts",
@@ -81,13 +62,9 @@
       "packages/harness/src/controllers/session/deletionCleanup.ts",
       "packages/harness/src/controllers/session/runTrace.ts",
       "packages/harness/src/controllers/session/sessionStore.ts",
-      "packages/harness/src/controllers/session/sweepLeftoverRuns.ts",
       "packages/harness/src/effect/sessionReads.ts"
     ],
-    "run.report": [
-      "packages/harness/src/agent/runtime/runLaunchGuard.ts",
-      "packages/harness/src/agent/storage/runRecords.ts"
-    ],
+    "run.report": ["packages/harness/src/agent/storage/runRecords.ts"],
     "run.result": ["packages/harness/src/agent/storage/runRecords.ts"],
     "run.start": [
       "packages/harness/src/agent/runtime/AgentLaunchContext.ts",
@@ -102,10 +79,8 @@
       "packages/harness/src/controllers/session/Database.ts",
       "packages/harness/src/controllers/session/rowReader.ts",
       "packages/harness/src/controllers/session/sessionStore.ts",
-      "packages/harness/src/controllers/session/sweepLeftoverRuns.ts",
       "packages/harness/src/effect/sessionReads.ts",
       "packages/harness/src/shared/approvalBypassKind.ts",
-      "packages/harness/src/shared/session/runRelation.ts",
       "packages/harness/src/tools/codemode/SelfTool.ts",
       "packages/harness/src/transcript/traceAssembler.ts",
       "packages/texra/src/controllers/progressView/ChatExportController.ts",

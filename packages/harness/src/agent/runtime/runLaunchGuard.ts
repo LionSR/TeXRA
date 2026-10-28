@@ -23,7 +23,7 @@ import {
   outcomeFromCause,
 } from '@shared/runs/runStatus';
 import { heldElsewhereBy } from '@shared/session/database';
-import { lastLifecycleRow } from '@shared/session/runFacts';
+import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRows';
 import type { Append } from '@shared/session/sessionEvents';
 import { aggregateError } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -166,21 +166,14 @@ export const deliverHeld = Effect.fn('runLaunchGuard.deliverHeld')(function* (
       );
 });
 
-/** The child's parks in its current lifecycle, each held one with the
- *  report its turn settled with just before it; none once it ended. */
-const heldParks = (rows: readonly SessionEvent[], child: RunId) => {
-  const since = lastLifecycleRow(rows, child);
-  if (since?.type === 'run.end') return [];
-  return rows.flatMap((park) => {
-    if (park.type !== 'child.park' || park.commit <= (since?.commit ?? 0))
-      return [];
-    const report = rows.findLast(
-      (row) => row.type === 'run.report' && row.commit < park.commit,
-    );
-    const text = report?.type === 'run.report' ? report.report : null;
-    return [{ park, text: text ?? '' }];
-  });
-};
+/** The child's parks in its current lifecycle (`RunRows.heldParks`), each
+ *  with the report its turn settled with just before it; none once it
+ *  ended. */
+const heldParks = (session: SessionHandle, child: RunId) =>
+  Effect.map(
+    session.log.rows(qualifyAggregateId('run', child), RUN_ROW_READS.parks),
+    (rows) => runRowsFrom(rows).heldParks,
+  );
 
 /** Every result a child holds for `parent` since its lifecycle began, and
  *  its end when the newest park held its last turn. */
@@ -190,13 +183,7 @@ const deliverOne = Effect.fn('runLaunchGuard.deliverOne')(function* (
   child: RunId,
   parent: RunId,
 ): Effect.fn.Return<void, Error, Scope.Scope> {
-  const rows = yield* session.log.rows(qualifyAggregateId('run', child), [
-    'child.park',
-    'run.end',
-    'run.activate',
-    'run.report',
-  ]);
-  const parks = heldParks(rows, child);
+  const parks = yield* heldParks(session, child);
   const held = parks.filter(({ park }) => park.heldFor !== undefined);
   if (held.length === 0) return;
   const ends = parks.at(-1)?.park.ends;
@@ -312,11 +299,8 @@ const clearHeld = (
     .transact((tx) =>
       Effect.gen(function* () {
         if (!(yield* session.log.owns(child))) return;
-        const rows = yield* session.log.rows(qualifyAggregateId('run', child), [
-          'child.park',
-        ]);
-        const park = rows.at(-1);
-        if (park?.type !== 'child.park' || park.heldFor !== followUpId) return;
+        const park = (yield* heldParks(session, child)).at(-1)?.park;
+        if (park === undefined || park.heldFor !== followUpId) return;
         yield* tx.append([
           {
             type: 'child.park',

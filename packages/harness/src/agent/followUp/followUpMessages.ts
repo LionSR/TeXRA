@@ -70,7 +70,7 @@ export function queuedRow(
   item: InboxItem,
   hold: QueuedFollowUp['holdUntil'],
   relationOf: (sender: RunId) => RunRelation,
-): WithBlobs<QueuedFollowUp> {
+): WithBlobs<Omit<QueuedFollowUp, 'commit'>> {
   const { from, deliveryId, media, blobs, control, ...content } = item;
   return {
     followUpId: deliveryId ?? randomUUID(),

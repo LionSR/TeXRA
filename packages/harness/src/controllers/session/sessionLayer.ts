@@ -179,7 +179,7 @@ const sessionHandleLayer = (key: SessionKey) =>
       const collectDeletions = yield* deletionCollector(database, key.storage);
       const view = yield* makeSessionViewAccess(key.storage, store.closed);
       // Capture the startup cohort before callers can publish new launches.
-      const initialListing = yield* database.readListing();
+      const cohort = (yield* view.read([])).runs.values();
       // The publisher drains inside the one close deadline, after the runs'
       // fibers (registered before their fork) published their last rows.
       yield* Effect.addFinalizer(() => store.close);
@@ -278,7 +278,7 @@ const sessionHandleLayer = (key: SessionKey) =>
         ),
         Effect.forkIn(consumerScope),
       );
-      yield* sweepLeftoverRuns(session, initialListing).pipe(Effect.forkScoped);
+      yield* sweepLeftoverRuns(session, cohort).pipe(Effect.forkScoped);
       if (key.open.interruptedTasks !== undefined)
         yield* followInterruptedTasks(
           session,

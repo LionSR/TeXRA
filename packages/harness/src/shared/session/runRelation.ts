@@ -6,6 +6,8 @@
  */
 import type { RunId, RunRelation, SessionEvent } from '@shared/schemas';
 
+import { isSharedRunRow, runRowsFrom } from './runRows';
+
 type ParentOf = (runId: RunId) => RunId | null | undefined;
 
 /** `runId`'s ancestors, nearest first. Parentage is a tree by construction;
@@ -19,16 +21,12 @@ function ancestry(runId: RunId, parentOf: ParentOf): RunId[] {
   return line;
 }
 
-/** The run's parent edge as its rows leave it: null for a root, and for a
- *  child a `run.detach` severed. */
+/** The run's parent edge as its rows leave it (`RunRows.parent`): null for
+ *  a root, and for a child a `run.detach` severed. */
 export const parentEdgeOf = (
   rows: readonly SessionEvent[],
-): Extract<SessionEvent, { type: 'run.start' }>['parent'] => {
-  const edge = rows.findLast(
-    (row) => row.type === 'run.start' || row.type === 'run.detach',
-  );
-  return edge?.type === 'run.start' ? edge.parent : null;
-};
+): Extract<SessionEvent, { type: 'run.start' }>['parent'] =>
+  runRowsFrom(rows.filter((row) => !isSharedRunRow(row))).parent;
 
 /** What run `a` is to run `b`. */
 export function runRelation(

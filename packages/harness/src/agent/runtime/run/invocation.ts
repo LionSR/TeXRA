@@ -35,7 +35,7 @@ import {
   type NextAttempt,
   type RetryCredentials,
 } from '@shared/session/inFlight';
-import type { RunPosition } from '@shared/session/runRows';
+import type { RunPosition } from '@shared/session/runRowsShape';
 
 import type { ModelRetryGate } from '../ModelRetryGate';
 

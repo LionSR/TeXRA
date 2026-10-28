@@ -24,8 +24,7 @@ import {
 } from '@shared/schemas';
 import { DatabaseRowEarlier, heldElsewhereBy } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
-import { lastActivationCommit } from '@shared/session/runFacts';
-import { FOLLOW_UP_TYPES, runRowsFrom } from '@shared/session/runRows';
+import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRows';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 import { createScriptRunStrategy } from './scriptRun';
@@ -140,8 +139,7 @@ export const resumeOwnRun = Effect.fn('resumeOwnRun')(function* (
       const heldBy = yield* holdClaim(session, runId);
       if (heldBy !== null) return { failed: 'owned_elsewhere' } as const;
       // Joined at the activation the resume committed: the latest.
-      const id = qualifyAggregateId('run', runId);
-      const commit = lastActivationCommit(yield* session.log.rows(id), runId);
+      const commit = (yield* session.followUps.read(runId)).activation?.commit;
       if (commit === undefined)
         return yield* Effect.die(new Error(`Run ${runId} has no activation.`));
       yield* hook(runId, commit);
@@ -179,7 +177,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
     return REFUSED;
   }
   // Deleted, or its input closed, while those reads ran.
-  if ((yield* session.followUps.read(runId)).closed) return REFUSED;
+  if ((yield* session.followUps.read(runId)).inputClosed) return REFUSED;
   // Every resume reads the run's state under its claim and holds it until
   // the launched run holds its own, so two processes never both launch it,
   // neither launches from a state read before the other ran, and a host is
@@ -219,7 +217,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
 /** The follow-ups still queued on the run, folded from its durable rows. */
 const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
   Effect.flatMap(
-    session.log.rows(qualifyAggregateId('run', runId), FOLLOW_UP_TYPES),
+    session.log.rows(qualifyAggregateId('run', runId), RUN_ROW_READS.input),
     (rows) =>
       Effect.try({
         try: () => runRowsFrom(rows).followUps,

@@ -31,7 +31,7 @@ import {
 } from '@shared/schemas';
 import type { Append } from '@shared/session/sessionEvents';
 import { unloadable } from '@shared/session/runHistory';
-import { runEndFromEvents } from '@shared/session/runFacts';
+import { lastLifecycleRow, runEndFromEvents } from '@shared/session/runFacts';
 import type { RunHistoryDraft, RunInputDraft } from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -360,7 +360,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     // The parent's notice rides this end's append (both commit or neither),
     // one per lifecycle (its `run.activate`) so a later loss is no replay;
     // a parent that refuses it is the end's note, on the card.
-    const since = read.success.findLast((r) => r.type === 'run.activate');
+    const since = lastLifecycleRow(read.success, runId);
     const deliveryId = lostResultId(runId, since?.commit);
     const text = `The result of run ${runId} was lost: ${cause}`;
     const notice = Effect.gen(function* () {

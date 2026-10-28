@@ -1551,7 +1551,7 @@ A follow-up queued for the run and not yet consumed, as its row holds it.
 ```ts
 type QueuedFollowUp = Pick<
   Extract<SessionEvent, { type: 'followup.queued' }>,
-  'followUpId' | 'content' | 'holdUntil' | 'control'
+  'followUpId' | 'content' | 'holdUntil' | 'control' | 'commit'
 >;
 ```
 
