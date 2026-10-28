@@ -249,10 +249,19 @@ const UpdateCustomAgentDirMessageSchema = Schema.Struct({
 // Agent team data schema
 // ============================================================
 
+/** One team card: a team from the workspace's team catalog and where it came
+ *  from. Only a custom team can be deleted. */
+const SettingsTeamPresetSchema = AgentModePresetSchema.mapFields(
+  Struct.assign({ source: Schema.Literals(['built-in', 'custom']) }),
+);
+export type SettingsTeamPreset = typeof SettingsTeamPresetSchema.Type;
+
 /** Outbound: backend → frontend agent teams (built-in + custom) */
 const UpdateAgentModePresetsMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS),
-  customPresets: Schema.Array(AgentModePresetSchema),
+  /** Every launchable team in catalog order: the built-in teams, then the
+   *  workspace's custom teams. */
+  presets: Schema.Array(SettingsTeamPresetSchema),
   /**
    * Agent names that can lead a team (carry delegation tools), computed from
    * the agent registry so preset cards badge orchestrators by capability

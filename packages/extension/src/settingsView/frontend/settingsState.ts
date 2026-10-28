@@ -35,7 +35,6 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
-  type AgentModePreset,
   type SkillDisplayIssue,
   type SkillDisplayItem,
   type AgentScanIssue,
@@ -54,6 +53,7 @@ import {
   type AgentSelectionItem,
   type ModelSelectionItem,
   type PRSubscriptionEntry,
+  type SettingsTeamPreset,
   type SettingsViewOutboundMessage,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
@@ -191,7 +191,7 @@ export const customAgentScanIssues = trackedSignal<readonly AgentScanIssue[]>(
 // ---------------------------------------------------------------------------
 // Agent teams state
 // ---------------------------------------------------------------------------
-export const customPresets = trackedSignal<readonly AgentModePreset[]>(
+export const teamPresets = trackedSignal<readonly SettingsTeamPreset[]>(
   () => [],
 );
 export const orchestratorAgents = trackedSignal<readonly string[]>(() => []);

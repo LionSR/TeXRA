@@ -22,7 +22,6 @@ import {
   customAgentDir,
   customAgentDirIsDefault,
   customAgentScanIssues,
-  customPresets,
   githubTokenStatus,
   gitSettingsLoaded,
   helperModel,
@@ -42,6 +41,7 @@ import {
   subscriptionAuth,
   subscriptionUsage,
   pluginsPage,
+  teamPresets,
 } from './settingsState';
 
 export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
@@ -127,7 +127,7 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
 
   // Agent teams.
   [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS]: (data) => {
-    customPresets.set(data.customPresets);
+    teamPresets.set(data.presets);
     orchestratorAgents.set(data.orchestratorAgents);
     activePresetId.set(data.activePresetId);
   },

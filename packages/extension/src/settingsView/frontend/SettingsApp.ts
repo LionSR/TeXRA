@@ -56,7 +56,6 @@ import {
   customAgentDir,
   customAgentDirIsDefault,
   customAgentScanIssues,
-  customPresets,
   detachSubagentsOnStop,
   disabledSkillSources,
   settingsSnapshotRevisions,
@@ -93,6 +92,7 @@ import {
   subscriptionAuth,
   subscriptionUsage,
   telemetryEnabled,
+  teamPresets,
   pluginsPage,
   toolPathProtectionEnabled,
   agentSelectionItems,
@@ -338,7 +338,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             <teams-tab
               slot="teams"
               .activePresetId=${activePresetId.get()}
-              .customPresets=${customPresets.get()}
+              .presets=${teamPresets.get()}
               .orchestratorAgents=${orchestratorAgents.get()}
             ></teams-tab>
             <skills-tab
