@@ -15,8 +15,8 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import { attemptOf } from '@shared/session/inFlight';
 import { unloadable } from '@shared/session/runHistory';
 import { applyRunRows, type RunState } from '@shared/session/runState';
-import { parentEdgeOf } from '@shared/session/runRelation';
 import { runEndFromEvents } from '@shared/session/runFacts';
+import { parentEdgeOf, unlessRemoved } from '@shared/session/runRows';
 import {
   qualifyAggregateId,
   aggregateTarget,
@@ -296,11 +296,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     });
   /** Every row of the run, in one read; none for a closed (tombstoned) run,
    *  which the record reads report as absent too. */
-  const runRows = session.log
-    .rows(id)
-    .pipe(
-      Effect.map((rows) => (rows.at(-1)?.type === 'run.removed' ? [] : rows)),
-    );
+  const runRows = session.log.rows(id).pipe(Effect.map(unlessRemoved));
   const read = <A>(
     select: (rows: readonly SessionEvent[]) => A,
   ): Effect.Effect<A, DatabaseReadFailed> =>

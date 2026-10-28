@@ -41,6 +41,7 @@ import {
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
+import { unlessRemoved } from '@shared/session/runRows';
 import {
   ProcessIdentity,
   afterCommit,
@@ -333,10 +334,9 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       records: (runId) =>
         database.readRunRecords(qualifyAggregateId('run', runId)),
       display: (runId) =>
-        Effect.map(
-          database.readDisplayAggregate(qualifyAggregateId('run', runId), 1),
-          (rows) => (rows.at(-1)?.type === 'run.removed' ? [] : rows),
-        ),
+        database
+          .readDisplayAggregate(qualifyAggregateId('run', runId), 1)
+          .pipe(Effect.map(unlessRemoved)),
       tail: events.all,
       listing: events.listing,
       hold: yield* claimHolds(database),

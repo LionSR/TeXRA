@@ -9,7 +9,8 @@
  * `request.decided`) and the input it has not taken (`followup.queued`,
  * `followup.consumed`). `applyRunRow` handles each of them once, so a row
  * type cannot reach one reader and miss the other; each reader copies the
- * fields it returns into its own shape.
+ * fields it returns into its own shape. `parentEdgeOf` beside it is the one
+ * reading of a run's parent edge from its rows (`run.start`, `run.detach`).
  *
  * Pure: no IO, no clock, no platform, no synthetic id. It returns a result
  * instead of throwing because the two readers treat a decision for an
@@ -196,6 +197,12 @@ const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
   rows,
 });
 
+/** The shared rows that open and decide a run's requests. */
+export const REQUEST_TYPES = Object.freeze([
+  'request.opened',
+  'request.decided',
+] as const);
+
 /** The shared rows that change a run's pending input, not its position. */
 export const FOLLOW_UP_TYPES = [
   'followup.queued',
@@ -337,6 +344,23 @@ export function runRowsFrom(rows: readonly SessionEvent[]): RunRows {
   }
   return slice;
 }
+
+/** A run's rows as a read returns them, or none once its tombstone
+ *  (`run.removed`, written last) closed it. */
+export const unlessRemoved = <E extends Pick<SessionEvent, 'type'>>(
+  rows: readonly E[],
+): readonly E[] => (rows.at(-1)?.type === 'run.removed' ? [] : rows);
+
+/** The run's parent edge as its rows leave it: null for a root, and for a
+ *  child a `run.detach` severed. */
+export const parentEdgeOf = (
+  rows: readonly SessionEvent[],
+): Extract<SessionEvent, { type: 'run.start' }>['parent'] => {
+  const edge = rows.findLast(
+    (row) => row.type === 'run.start' || row.type === 'run.detach',
+  );
+  return edge?.type === 'run.start' ? edge.parent : null;
+};
 
 /**
  * The phase a lifecycle row puts its run in, or null for a row that changes

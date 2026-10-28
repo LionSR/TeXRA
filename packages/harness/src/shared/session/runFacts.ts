@@ -244,8 +244,8 @@ export function needsWake(
 ): boolean {
   // A resumed run that crashed carries no end, so no earlier Stop of it
   // holds a message back.
-  const end = lastLifecycleRow(rows, runId);
-  const stopped = end?.type === 'run.end' && end.outcome === 'cancelled';
+  const end = runEndFromEvents(rows, runId);
+  const stopped = end?.outcome === 'cancelled';
   const committed = new Map(
     rows.flatMap((row) =>
       row.type === 'followup.queued' ? [[row.followUpId, row.commit]] : [],
@@ -257,7 +257,7 @@ export function needsWake(
       if (from.kind === 'user')
         return !stopped || (committed.get(followUpId) ?? 0) > end.commit;
       if (from.kind === 'run' && from.relation === 'child') return !stopped;
-      return end?.type !== 'run.end';
+      return end === null;
     },
   );
 }
