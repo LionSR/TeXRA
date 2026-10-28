@@ -22,14 +22,12 @@ import {
 } from '@texra-ai/harness/schemas';
 import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
 import { commonViewStyles, designTokens } from '@ui/styles';
-import {
-  renderSettingsNumberRow,
-  renderSettingsSectionHeading,
-} from '@ui/wa/settingsSection';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { readSelectValue } from '@ui/wa/selectTemplates';
 
 import {
   postStateSetting,
+  renderStateSettingNumberRow,
   renderStateSettingSelectRow,
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
@@ -123,16 +121,13 @@ export class ApprovalTab extends LitElement {
               key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
               checked: this.toolPathProtectionEnabled,
             })}
-            ${renderSettingsNumberRow({
-              label: 'Goal spend cap (USD)',
-              description: GOAL_MAX_COST_SETTING.description,
+            ${renderStateSettingNumberRow({
+              key: GOAL_MAX_COST_SETTING.configKey,
               value: this.goalMaxCostUsd,
               min: GOAL_MAX_COST_SETTING.min,
               max: GOAL_MAX_COST_SETTING.max,
               step: 0.5,
               ackGeneration: this.ackGeneration,
-              onChange: (value) =>
-                postStateSetting(GOAL_MAX_COST_SETTING.configKey, value),
             })}
             ${renderStateSettingSelectRow({
               key: RESUME_ON_OPEN_SETTING.configKey,
