@@ -63,7 +63,6 @@ function createStubSettingsBindings(): DesktopSettingsIpcOptions['bindings'] {
     refreshCredentialStatus: Effect.void,
     revealRun: () => Effect.succeed('revealed'),
     runLabel: () => undefined,
-    stateSettingApplied: noOpEffect,
     runInTerminal: noOpEffect,
     latexEditorStatus: () => ({
       outDir: true,

@@ -190,7 +190,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           }),
         runLabel: (runId) =>
           projects.active().session.view.current().runs.get(runId)?.label,
-        stateSettingApplied: () => Effect.void,
         runInTerminal: (_name, command) =>
           Effect.sync(() => {
             if (bindings.get(project.key) !== documentBinding) return;
