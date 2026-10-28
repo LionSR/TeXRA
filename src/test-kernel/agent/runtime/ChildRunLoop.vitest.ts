@@ -10,7 +10,7 @@ import '@test/support/sessionGraphTestSetup';
 // since delivery/interrupt/terminal choreography all live in the loop.
 
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber } from 'effect';
+import { Deferred, Effect, Exit, Fiber, SubscriptionRef } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 
@@ -33,7 +33,7 @@ import {
 } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { qualifyAggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
-import { closeTestDefaultSession, untrackRun } from '@test/support/sessionEnd';
+import { closeTestDefaultSession } from '@test/support/sessionEnd';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { sessionStoreFaults } from '@test/support/storeFaults';
 import {
@@ -46,6 +46,7 @@ import {
   queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { createChildRun } from '@tools/delegation/childRun';
+import { shouldSkipWait } from '@tools/executions/waitCoordination';
 import { generateRunId } from '@utils/core';
 
 // A persistent store under a temp root, so a case can fail its writes
@@ -54,7 +55,6 @@ const tempDirs = useTempDirs();
 setupPlatform(() => createTempDirPlatform('texra-child-loop-', tempDirs));
 
 let session: SessionHandle;
-const trackedRunIds = new Set<RunId>();
 
 const PARENT_RUN_ID = 'ffff01' as RunId;
 
@@ -145,16 +145,9 @@ function createFakeStrategy(): FakeStrategyHandle {
   };
 }
 
-/** A process child's port for `runId`, untracked after the test. */
+/** A process child's port for `runId`. */
 const childRunPort = (runId: RunId) =>
-  Effect.sync(() => {
-    trackedRunIds.add(runId);
-    return createChildRun(session, runId, {
-      kind: 'agent',
-      agent: 'fake-cli',
-      tool: 'codex',
-    });
-  });
+  Effect.sync(() => createChildRun(session, runId));
 
 /**
  * Start a process child's loop with the fixture defaults (a port of its own
@@ -223,10 +216,6 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  for (const runId of trackedRunIds) {
-    untrackRun(session.runs, runId);
-  }
-  trackedRunIds.clear();
   await Effect.runPromise(closeTestDefaultSession);
 });
 
@@ -317,24 +306,27 @@ describe('childRunLoop E2E fixtures', () => {
         // Regression: parent continuation submission can await the ENTIRE resumed
         // turn (`resumeOnSession` → … → `resumeToolUseFromResumeData`).
         // Before #8093, the loop awaited split enqueue/wake work inline in the
-        // turn loop, and only finalized this child (untracking its run
-        // handle) afterward in the outer `finally` — so a resumed parent that
+        // turn loop, and only finalized this child afterward in the outer
+        // `finally` — so a resumed parent that
         // immediately calls `executions` with action=wait on this same run
         // could find it still RUNNING and block on itself for the whole wait
         // budget. Prove the fixed ordering: by the moment the wake step is even
-        // reached, this run is already untracked (terminal in the registry)
-        // — a resumed parent's wait would resolve immediately instead of racing
-        // its own wake.
+        // reached, this run is already terminal — a resumed parent's wait
+        // would resolve immediately instead of racing its own wake.
         const runId = loopRunId();
 
         const wakeReached = yield* Deferred.make<void>();
         const releaseWake = yield* Deferred.make<void>();
-        let handleAtWakeTime: unknown;
+        let skippedAtWakeTime = false;
         mocks.startFollowUpWake.mockImplementation(() =>
           Effect.gen(function* () {
             // Snapshot registry state the instant the wake step is reached. The
             // same moment a resumed parent's own turn would begin running.
-            handleAtWakeTime = session.runs.get(runId)?.handle;
+            skippedAtWakeTime = shouldSkipWait(
+              session,
+              SubscriptionRef.getUnsafe(session.view.ref),
+              runId,
+            );
             yield* Deferred.succeed(wakeReached, undefined);
             yield* Deferred.await(releaseWake);
             return Effect.void;
@@ -349,8 +341,7 @@ describe('childRunLoop E2E fixtures', () => {
         });
 
         yield* Deferred.await(wakeReached);
-        expect(handleAtWakeTime).toBeUndefined();
-        expect(session.runs.get(runId)?.handle).toBeUndefined();
+        expect(skippedAtWakeTime).toBe(true);
 
         yield* Deferred.succeed(releaseWake, undefined);
         yield* Fiber.join(loop);

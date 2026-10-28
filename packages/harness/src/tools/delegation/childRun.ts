@@ -9,8 +9,6 @@ import {
   type TransactionPart,
 } from '@agent/runtime/childTurnResult';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import { RunHandle } from '@agent/runtime/RunHandle';
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { persistedParentRunId } from '@agent/storage/runRecords';
 import {
@@ -22,7 +20,7 @@ import {
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { escapeText } from '@shared/utils/xmlEscape';
-import type { RunId, RunIdentity } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -36,21 +34,18 @@ export function childRunDescription(raw: string): string {
 }
 
 /**
- * A child run's trace and handle for a background child task. Every launch
- * site calls this inside `startDetachedChildRunLoop`, whose launch guard
- * owns a failed launch's compensation; the loop tracks the handle.
+ * A child run's trace for a background child task. Every launch site calls
+ * this inside `startDetachedChildRunLoop`, whose launch guard owns a failed
+ * launch's compensation.
  */
 export function createChildRun(
   session: SessionHandle,
   runId: RunId,
-  /** What owns this run — the launch site declares the truth once. */
-  identity: RunIdentity,
 ): ChildRunPort {
   // The run's canonical event publication, from its first event: the trace
   // is built with the session as its sink, and closed with the run.
   return {
     logger: new TraceEmitter((event) => session.log.publish(runId, event)),
-    handle: new RunHandle({ runId, identity }),
   };
 }
 
@@ -59,17 +54,17 @@ export function createChildRun(
  * ending it: one transaction commits its last turn's result, the notice as
  * its report, the `child.park` `paused` row with the resume id, and the
  * notice queued for the parent, waking nobody. A child its rows show
- * detached ends cancelled instead (false). A paused child's handle is
- * untracked and its trace closed whatever the writes did.
+ * detached ends cancelled instead (false). A paused child's trace is closed
+ * whatever the writes did.
  */
 export const pauseChildRun = (
   session: SessionHandle,
-  { logger, handle }: ChildRunPort,
+  runId: RunId,
+  { logger }: ChildRunPort,
   { text: notice, resumeId }: ChildRunPause,
   lastTurn: TransactionPart | undefined,
   stage: Pick<StageHandle, 'end'> | undefined,
-): Effect.Effect<boolean, Error, Runs> => {
-  const { runId } = handle;
+): Effect.Effect<boolean, Error> => {
   let paused = true;
   return Effect.gen(function* () {
     const text = formatDelivery({
@@ -127,10 +122,8 @@ export const pauseChildRun = (
     return true;
   }).pipe(
     Effect.ensuring(
-      Effect.gen(function* () {
-        if (!paused) return;
-        registryOf(yield* Runs).untrackIfCurrent(handle);
-        logger.close();
+      Effect.sync(() => {
+        if (paused) logger.close();
       }),
     ),
   );

@@ -800,7 +800,7 @@ The guarantees, numbered as in the package README:
 - **I5**: An owned child that ended cleanly answers its call; it is not launched
   again without a person's retry; no child is left without a terminal row,
   except one deliberately paused with a `child.park` `paused` row so it can be
-  called again (`tools/delegation/childRun.ts:163-172`). Asserted by
+  called again (`tools/delegation/childRun.ts:156-165`). Asserted by
   `src/test-kernel/support/crashConformance.ts:38-39`, `:867`.
 - **I6**: A child's result is delivered to its parent at most once and is not
   lost while the parent was held elsewhere; a result whose child was detached,

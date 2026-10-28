@@ -34,10 +34,10 @@ is the module map by concern. Run-loop rules are in
   `resumeRun` (the cross-host resume entry, root or recovered child);
   `forkRun` (a new root seeded from another run's view); `resumeBlocker` (a
   missing or untrusted agent).
-- **Registry and live handles**: `runRegistry` (one entry per run: fiber,
-  handle, child activation, serial lane; the single in-process liveness
-  authority, with admission, lookup and stop); `runs` (the session's `Runs`
-  as hosts and tools see them); `RunHandle`; `detachSubagentsOnStop`.
+- **Registry**: `runRegistry` (one entry per run: fiber, loop controls,
+  activation, serial lane; the single in-process liveness authority, with
+  admission, lookup and stop); `runs` (the session's `Runs` as hosts and
+  tools see them, and a loop's `RunControls`); `detachSubagentsOnStop`.
 - **Session events**: `SessionHandle` (one composition record per session);
   `SessionEvents` (one publisher, the reads, and trace-to-fact translation);
   `runtimePresentationEvents`; `terminalResultToast`; `HostInteractions` /

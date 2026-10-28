@@ -11,7 +11,7 @@ import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { setLogSink } from '@logger/logSink';
 import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
-import { untrackRun } from '@test/support/sessionEnd';
+import { startAwaited } from '@test/support/runHandleFixtures';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
@@ -93,25 +93,25 @@ describe('runWithLifecycle', () => {
       Effect.gen(function* () {
         // The window a stop could once fall into: the run has returned, its live
         // interrupt context is detached, and its own finalize is parked at the
-        // persist await with the handle still tracked. Only the WAITING branch
-        // parks a handle, so there is no suspension for the stop to find and
-        // nothing the exit has to remember to clear.
+        // persist await. The terminal is masked, so the stop its launch takes
+        // lands after the end the run reported.
         const { runId, ctx } = lifecycleFixture();
         const parked = yield* parkTerminal(ctx);
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => untrackRun(testDefaultSession().runs, runId)),
-        );
 
         const running = yield* Effect.forkChild(
-          runLifecycle(
-            ctx,
-            () =>
-              Effect.succeed({
-                outcome: RUN_OUTCOME.COMPLETED,
-                runId,
-                output: { response: '', files: [] },
-              } satisfies RunEndResult),
-            { parentRunId: PARENT_RUN_ID },
+          startAwaited(
+            ctx.session.runs,
+            runId,
+            runLifecycle(
+              ctx,
+              () =>
+                Effect.succeed({
+                  outcome: RUN_OUTCOME.COMPLETED,
+                  runId,
+                  output: { response: '', files: [] },
+                } satisfies RunEndResult),
+              { parentRunId: PARENT_RUN_ID },
+            ),
           ),
         );
         // The run reached its own terminal and parked before its persist,
@@ -119,11 +119,11 @@ describe('runWithLifecycle', () => {
         yield* Deferred.await(parked.started);
 
         const stop = testDefaultSession().runs.stop(runId, { reason: 'user' });
-        expect(stop.accepted()).toBe(false);
+        expect(stop.accepted()).toBe(true);
         yield* stop.settlement;
 
         yield* Deferred.succeed(parked.release, undefined);
-        yield* Fiber.join(running);
+        yield* Fiber.await(running);
         expect(yield* runEnds(ctx.session, runId)).toMatchObject([
           { outcome: RUN_OUTCOME.COMPLETED },
         ]);

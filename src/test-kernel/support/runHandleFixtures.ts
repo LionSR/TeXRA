@@ -1,7 +1,6 @@
 import { Effect, Fiber, SubscriptionRef } from 'effect';
 
 // Local imports
-import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
 import {
   registryOf,
   RunRegistry,
@@ -12,32 +11,13 @@ import {
 import type { RunsShape } from '@agent/runtime/runs';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { emptySessionView } from '@shared/session/sessionView';
-import type { RunId, RunIdentity } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { testRuntime } from './testProcessRuntime';
 
 /** A registry's launch door over the harness's process runtime, standing in
  *  for the session context the session layer forks runs from. */
 export const testRunFork: RunRegistryInit['fork'] = (effect) =>
   testRuntime().runFork(effect);
-
-/**
- * A live run handle for tests.
- *
- * The run struct is assembled here and typed as the canonical
- * {@link RunFacts}, so a schema change breaks every fixture in one place.
- */
-export function testRunHandle(input: {
-  runId: RunId;
-  agent: string;
-  /** Defaults to a native agent identity for `agent`. */
-  identity?: RunIdentity;
-}): RunHandle {
-  const run: RunFacts = {
-    runId: input.runId,
-    identity: input.identity ?? { kind: 'agent', agent: input.agent },
-  };
-  return new RunHandle(run);
-}
 
 /** A registry over an empty fold: no run has a view, which is what a
  *  fixture that never publishes a phase-moving row would see. */

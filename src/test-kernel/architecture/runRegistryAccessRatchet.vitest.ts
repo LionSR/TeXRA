@@ -20,7 +20,7 @@ import {
  * its lifecycle and child loops, the session layer that builds and closes
  * the runs, and the delegation helpers that are no tool. Failure mode
  * guarded: a host or a tool imports the registry and drives a run past the
- * one surface (tracks a handle, interrupts a fiber, skips a stop's child
+ * one surface (attaches controls, interrupts a fiber, skips a stop's child
  * policy). The list names files, and only shrinks.
  */
 const REGISTRY_IMPORTERS: Readonly<Record<string, string>> = {
@@ -29,10 +29,9 @@ const REGISTRY_IMPORTERS: Readonly<Record<string, string>> = {
   // A deletion is an inactive-run step on the registry's lane.
   'packages/harness/src/controllers/session/SessionRequests.ts':
     'session layer',
-  // The run loop: its birth.
+  // The run loop: its birth, and its controls for its life.
   'packages/harness/src/agent/runtime/loop/runProgram.ts': 'run loop',
-  // The lifecycle tracks and untracks a run's handle.
-  'packages/harness/src/agent/runtime/AgentRunLifecycle.ts': 'run lifecycle',
+  'packages/harness/src/agent/runtime/loop/toolUse.ts': 'run loop',
   // A root launch and a resume start their runs at the door.
   'packages/harness/src/agent/runtime/rootLaunch.ts': 'run lifecycle',
   'packages/harness/src/agent/runtime/resumeRun.ts': 'run lifecycle',
@@ -44,8 +43,7 @@ const REGISTRY_IMPORTERS: Readonly<Record<string, string>> = {
   'packages/harness/src/agent/followUp/ToolUseFollowUp.ts': 'follow-ups',
   // The SDK's run handle interrupts the fiber it handed over.
   'packages/harness/src/effect/runHandle.ts': 'SDK run handle',
-  // Delegation helpers, no tool: a child's handle, an in-band child's stop.
-  'packages/harness/src/tools/delegation/childRun.ts': 'delegation helper',
+  // A delegation helper, no tool: an in-band child's stop.
   'packages/harness/src/tools/delegation/inBandSubagentRun.ts':
     'delegation helper',
 };

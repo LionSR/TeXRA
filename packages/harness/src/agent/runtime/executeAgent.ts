@@ -39,7 +39,6 @@ import type { RegisterRunOptions } from '../storage/runLifecycle';
 import type { ChildRunTurns } from './childRunLoop';
 import type { RunEndResult } from './RunEndResult';
 import type { SessionHandle } from './SessionHandle';
-import type { RunHandle } from './RunHandle';
 
 const CHANNEL = 'executeAgent';
 
@@ -117,7 +116,6 @@ function runLayerFor(
  */
 function launchRun(
   ctx: AgentLaunchContext,
-  handle: RunHandle,
   shared: SubagentRunOptions,
   variant: LaunchVariant,
 ): Effect.Effect<RunEndResult, Error, AgentRunServices> {
@@ -128,7 +126,6 @@ function launchRun(
   return runToolUse({
     turns: shared.turns,
     resume: variant.kind === 'resume',
-    attachment: handle,
   }).pipe(
     Effect.flatMap(withChildrenSpend),
     Effect.provide(
@@ -174,7 +171,7 @@ interface SubagentRunOptions {
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool[];
   /**
-   * The launching run, for a delegated child: the parent edge on the handle,
+   * The launching run, for a delegated child: the parent edge,
    * the subagent prompt. A fresh launch takes it from the caller; a resume ignores it and
    * reads the persisted `run.start`.
    */
@@ -183,7 +180,7 @@ interface SubagentRunOptions {
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Session owning this run's coordination state. */
   readonly session: SessionHandle;
-  /** Fires once with the run's id right after its handle is tracked. */
+  /** Fires once with the run's id as the run starts. */
   onRun?: (runId: RunId) => Effect.Effect<void, Error>;
 }
 
@@ -252,7 +249,7 @@ export function executeAgent(
     // skips a `finally` after a failed `yield*`, ending the run early.
     return yield* runWithLifecycle(
       ctx,
-      (handle) =>
+      () =>
         Effect.gen(function* () {
           // The run directory is created by the first write into it.
           yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
@@ -277,9 +274,9 @@ export function executeAgent(
               { replayWhenAttached: true },
             );
           }
-          return yield* launchRun(ctx, handle, options, { kind: 'fresh' });
+          return yield* launchRun(ctx, options, { kind: 'fresh' });
         }).pipe(settleDescriptionOnExit(sessionDescription, opened)),
-      // The edge the lifecycle's handle is born with: the caller's own
+      // The edge the run is born with: the caller's own
       // parent for a fresh child.
       {
         parentRunId: options.parentRunId,
@@ -352,8 +349,8 @@ export function resumeToolUseFromResumeData(
     });
     return yield* runWithLifecycle(
       ctx,
-      (handle) =>
-        launchRun(ctx, handle, options, {
+      () =>
+        launchRun(ctx, options, {
           kind: 'resume',
           onIdle: options.onIdle,
         }),

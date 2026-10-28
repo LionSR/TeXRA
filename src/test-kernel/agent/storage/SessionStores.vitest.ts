@@ -5,11 +5,9 @@ import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
 import { Effect, SubscriptionRef } from 'effect';
 import { describe, expect } from 'vitest';
-import { registryOf } from '@agent/runtime/runRegistry';
 
 // Local imports
 import { qualifyAggregateId, type RunId } from '@shared/schemas';
-import { testRunHandle } from '@test/support/runHandleFixtures';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
@@ -29,12 +27,6 @@ describe('committed run removal', () => {
             const child = 'bb0002' as RunId;
             publishTestRunStart(session, parent);
             publishTestRunStart(session, child, { parent });
-            yield* session.log.settled;
-            const handle = testRunHandle({
-              runId: child,
-              agent: 'chat',
-            });
-            registryOf(session.runs).track(handle);
             yield* session.log.settled;
             publishTestRows(session, [
               {
@@ -75,7 +67,7 @@ describe('committed run removal', () => {
             expect(
               SubscriptionRef.getUnsafe(session.view.ref).requests,
             ).toEqual([]);
-            expect(session.view.run(handle.runId)?.parentId).not.toBe(parent);
+            expect(session.view.run(child)?.parentId).not.toBe(parent);
             expect(session.log.now()).toBe(before + 1);
           }),
         closeSessionOf,

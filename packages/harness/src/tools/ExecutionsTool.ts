@@ -412,13 +412,13 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   }
 
   // A report the caller already received as a follow-up is elided; a wait
-  // answers one still queued and shows it here. Only a live handle proves
-  // the child-run loop delivered it (a background bash run included).
+  // answers one still queued and shows it here. Only a launch in flight here
+  // proves the child-run loop delivered it (a background bash run included).
   const suppressReport =
     options.suppressAutoDeliveredSubagentReport === true &&
     run.identity.kind === 'agent' &&
     run.parentId === context.runId &&
-    (yield* Runs).get(runId)?.handle !== undefined;
+    (yield* Runs).get(runId)?.launched === true;
 
   lines.push(
     ...buildSummaryTailLines(
@@ -444,7 +444,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   }
 
   const runs = yield* Runs;
-  if (!runs.get(runId)?.handle) {
+  if (runs.get(runId)?.launched !== true) {
     return yield* Effect.fail(
       new ToolError(`Run ${runId} not found or already completed.`),
     );

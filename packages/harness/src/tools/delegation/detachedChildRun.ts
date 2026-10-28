@@ -69,7 +69,7 @@ export type DetachedChildRunInput<
         ) => Effect.Effect<ProcessChildStrategy<TTurn, R>, Error, R | Runs>;
       }
     | {
-        /** Native strategies let `executeAgent` own one handle for the native lifetime. */
+        /** A native child has no port: `executeAgent` owns its run for its lifetime. */
         readonly createChildRun?: undefined;
         /** The caller joins the loop's fiber and owns its failure, and the
          *  child takes no budget slot; for any other caller a late failure
@@ -210,9 +210,7 @@ export const launchProcessChild = <TTurn>(
         // uninterruptible, so a cancel arriving once the record committed
         // leaves the run CANCELLED with no loop behind it.
         createChildRun: () =>
-          restore(Effect.void).pipe(
-            Effect.as(createChildRun(session, runId, launch.identity)),
-          ),
+          restore(Effect.void).pipe(Effect.as(createChildRun(session, runId))),
         buildLaunch: (childRun) =>
           launch.buildLaunch({ logger: childRun.logger, runId }),
       }).pipe(Effect.orDie);
