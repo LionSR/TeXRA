@@ -234,6 +234,7 @@ export class RunRegistry implements RunsShape {
       handle,
       controls,
       live,
+      parent: this.attachedParent(runId),
       readsMessages,
       stopReason: entry.activation?.stopReason,
       drained,

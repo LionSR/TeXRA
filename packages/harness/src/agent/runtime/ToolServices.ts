@@ -106,10 +106,7 @@ export const childRuns = (
         Effect.provideService(Runs, runs),
       ),
     inbox: (id) => Effect.succeed(runInbox(session, id)),
-    parent: (id) =>
-      Effect.succeed(
-        session.runs.get(id) && (session.view.run(id)?.parentId ?? null),
-      ),
+    parent: (id) => Effect.succeed(session.runs.get(id)?.parent),
     records: (id) => ({
       exists: getRunRecords(session, id).exists(),
       end: getRunRecords(session, id).readRunEnd(),

@@ -254,9 +254,12 @@ export function createTuiHostInteractions(
                 }),
               ),
             );
+    // The request's program ends when the view drops it, and its switch
+    // record goes with it.
     return staged.pipe(
       Effect.andThen(Effect.never),
       Effect.ensuring(dropPresentation(requestId)),
+      Effect.ensuring(Effect.sync(() => switched.delete(requestId))),
     );
   };
   const follower = stores.runtime.runFork(
