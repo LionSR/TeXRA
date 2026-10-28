@@ -59,12 +59,14 @@ const reportedEnd = (
     ? exit
     : session.log.facts(runId).pipe(
         Effect.map((facts) => facts?.end ?? null),
-        Effect.catch((error) =>
-          Effect.logWarning(`Run ${runId}'s stored end could not be read`).pipe(
-            Effect.annotateLogs({ data: error }),
-            withLogChannel(CHANNEL),
-            Effect.as(null),
-          ),
+        // An end that cannot be read fails the result with why, rather
+        // than passing the stop on as if none were stored.
+        Effect.mapError(
+          (error) =>
+            new RunFailure({
+              cause: error,
+              message: `Run ${runId} stopped; its stored end could not be read: ${error.message}`,
+            }),
         ),
         Effect.flatMap((end) =>
           end === null || end.outcome === RUN_OUTCOME.FAILED
