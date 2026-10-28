@@ -271,11 +271,18 @@ export class HistoryQuery {
   private readonly lane = Semaphore.makeUnsafe(1);
   private store: Store | undefined;
 
+  private readonly session: () => HistorySession;
+  private readonly scope: Scope.Scope;
+  private readonly spawner: ChildProcessSpawner['Service'];
   private constructor(
-    private readonly session: () => HistorySession,
-    private readonly scope: Scope.Scope,
-    private readonly spawner: ChildProcessSpawner['Service'],
-  ) {}
+    session: () => HistorySession,
+    scope: Scope.Scope,
+    spawner: ChildProcessSpawner['Service'],
+  ) {
+    this.session = session;
+    this.scope = scope;
+    this.spawner = spawner;
+  }
 
   /** Run one read over the session's history as of this call. */
   query(

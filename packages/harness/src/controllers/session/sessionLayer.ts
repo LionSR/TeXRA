@@ -135,7 +135,10 @@ const logFailure =
  * and nothing store-bound is injected past that.
  */
 class SessionKey implements Equal.Equal {
-  constructor(readonly open: SessionHandleInit) {}
+  readonly open: SessionHandleInit;
+  constructor(open: SessionHandleInit) {
+    this.open = open;
+  }
 
   get storage(): string {
     return this.open.roots.storage;

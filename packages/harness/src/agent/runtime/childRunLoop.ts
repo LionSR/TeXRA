@@ -292,10 +292,11 @@ class ChildLoop<TTurn, R> {
   failure: { readonly cause: unknown } | undefined;
   end: ChildEnd = { kind: 'open' };
 
-  constructor(
-    readonly params: ChildRunLoopParams<TTurn, R>,
-    readonly runs: RunRegistry,
-  ) {
+  readonly params: ChildRunLoopParams<TTurn, R>;
+  readonly runs: RunRegistry;
+  constructor(params: ChildRunLoopParams<TTurn, R>, runs: RunRegistry) {
+    this.params = params;
+    this.runs = runs;
     this.trace = params.childRun?.logger;
   }
 

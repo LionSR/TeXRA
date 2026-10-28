@@ -26,7 +26,10 @@ import type { Session } from '@texra-ai/harness';
  * the total without any bookkeeping here.
  */
 export class StatusBarUsageTracker {
-  constructor(private readonly session: Pick<Session, 'view'>) {}
+  private readonly session: Pick<Session, 'view'>;
+  constructor(session: Pick<Session, 'view'>) {
+    this.session = session;
+  }
 
   public get activity(): SessionTitleState {
     return sessionActivity(this.session.view.current());

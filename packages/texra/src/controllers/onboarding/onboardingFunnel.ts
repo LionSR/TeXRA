@@ -213,7 +213,10 @@ export class OnboardingFunnelRefresher {
   private rerunRequested = false;
   private current: OnboardingFunnelState | undefined;
 
-  constructor(private readonly host: OnboardingFunnelHost) {}
+  private readonly host: OnboardingFunnelHost;
+  constructor(host: OnboardingFunnelHost) {
+    this.host = host;
+  }
 
   /** The state this refresher last derived, `undefined` before the first
    *  refresh. Session-scoped by design. */

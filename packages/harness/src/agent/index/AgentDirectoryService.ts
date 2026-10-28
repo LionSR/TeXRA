@@ -63,7 +63,9 @@ export interface AgentDirectoryServiceOptions {
 export class AgentDirectoryService {
   readonly resourcesRoot?: string;
 
-  constructor(private readonly options: AgentDirectoryServiceOptions) {
+  private readonly options: AgentDirectoryServiceOptions;
+  constructor(options: AgentDirectoryServiceOptions) {
+    this.options = options;
     if (options.resourcesPath !== '')
       this.resourcesRoot = options.resourcesPath;
   }

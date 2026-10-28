@@ -70,9 +70,12 @@ export const runStopFacts = computed((): ChatTuiRunStopFacts => {
  * from the session view and the session's tool-use flows.
  */
 export class TuiSession {
+  private readonly runsElsewhere: boolean;
+
   /** A new session starts with no claim. `runsElsewhere`: its runs run in
    *  the background service, so leaving the chat never ends one. */
-  constructor(private readonly runsElsewhere = false) {
+  constructor(runsElsewhere = false) {
+    this.runsElsewhere = runsElsewhere;
     rootRunClaim.set(NO_CLAIM);
   }
 
