@@ -13,10 +13,10 @@ import {
   type SettingsStores,
 } from '@texra-ai/harness/host';
 import {
-  type ModelOptionData,
   type UsageRoute,
   isModelOptionAvailable,
 } from '@texra-ai/harness/schemas';
+import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 
 // Local file imports

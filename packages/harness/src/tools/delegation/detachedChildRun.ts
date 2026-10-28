@@ -2,17 +2,15 @@
  * Shared detached-child launch choreography for delegation launch sites.
  *
  * Every detached child run (an `agent` subagent, awaited in band or not, a
- * background script, a background shell, an agent CLI) starts with the
- * same lifecycle: hold the owned-run launch guard
- * from child-stream creation through child-run-loop handoff, and attach a
- * completion error trace so a late loop failure is diagnosed. Callers keep
- * their own run-id derivation, approval wiring, and result shaping; this
- * module owns the guard-and-trace skeleton so its invariant (a throw inside
- * the guard releases the claim; a late loop failure is surfaced) lives in one
- * place.
+ * background script, a background shell, an agent CLI) starts its loop
+ * here, and a late loop failure nobody awaits is logged. A process child
+ * (a background shell, an agent CLI) is registered before its loop exists,
+ * so its trace and strategy are built under the launch guard, which ends
+ * the run when that hand-off fails. A native child needs no guard: its run
+ * opens on its loop's fiber, whose end is the loop's.
  */
 // Third-party imports
-import { Cause, Effect, Exit, Fiber } from 'effect';
+import { Cause, Effect, Fiber } from 'effect';
 
 // Local imports
 import type { AgentRunServices, Runs } from '@agent/runtime/runRegistry';
@@ -21,7 +19,6 @@ import {
   startChildRunLoop,
   type ChildRunLoopParams,
   type ChildRunPort,
-  type NativeChildStrategy,
   type ProcessChildStrategy,
   type StartedChildRunLoop,
 } from '@agent/runtime/childRunLoop';
@@ -41,57 +38,25 @@ import {
   resumedChildRunId,
 } from './childRun';
 
-/**
- * Everything the choreography forwards to the child run loop verbatim: the
- * loop owns these field contracts, and the two members the guard supplies
- * itself (`strategy` from `buildLaunch`, `childRun` from
- * `createChildRun`) are the only ones a launch site does not pass through;
- * a native launch also says whether its caller awaits it.
- */
-type DetachedChildRunInputBase = Omit<
-  ChildRunLoopParams<never>,
-  'strategy' | 'childRun'
->;
-
-export type DetachedChildRunInput<
-  TTurn,
-  R = never,
-> = DetachedChildRunInputBase &
-  (
-    | {
-        /** Create the stream inside the launch guard, before any stream-dependent setup. */
-        readonly createChildRun: () => Effect.Effect<ChildRunPort>;
-        /** Build attempt-scoped setup around the stream retained by the launch
-         * guard. It runs in the choreography's own context, so it may read the
-         * session's `Runs` (the agent-CLI strategies resolve their registry there). */
-        readonly buildLaunch: (
-          childRun: ChildRunPort,
-        ) => Effect.Effect<ProcessChildStrategy<TTurn, R>, Error, R | Runs>;
-      }
-    | {
-        /** A native child has no port: `executeAgent` owns its run for its lifetime. */
-        readonly createChildRun?: undefined;
-        /** The caller joins the loop's fiber and owns its failure, and the
-         *  child takes no budget slot; for any other caller a late failure
-         *  is logged here. */
-        readonly awaited?: true;
-        /**
-         * Build the strategy (and any attempt-scoped setup) inside the owned-run
-         * launch guard so a throw releases the run's claim.
-         */
-        readonly buildLaunch: () => Effect.Effect<
-          NativeChildStrategy<TTurn, R>,
-          Error,
-          R | Runs
-        >;
-      }
-  );
+/** A native child's loop parameters, or a process child's with the setup
+ *  the launch guard runs: its trace, then its strategy around it. */
+type DetachedChildRunInput<TTurn, R> =
+  | Extract<ChildRunLoopParams<TTurn, R>, { readonly childRun?: undefined }>
+  | (Omit<ChildRunLoopParams<never>, 'strategy' | 'childRun'> & {
+      /** Create the stream inside the launch guard, before any stream-dependent setup. */
+      readonly createChildRun: () => Effect.Effect<ChildRunPort>;
+      /** Build attempt-scoped setup around the stream retained by the launch
+       * guard. It runs in the choreography's own context, so it may read the
+       * session's `Runs` (the agent-CLI strategies resolve their registry there). */
+      readonly buildLaunch: (
+        childRun: ChildRunPort,
+      ) => Effect.Effect<ProcessChildStrategy<TTurn, R>, Error, R | Runs>;
+    });
 
 /**
- * Run the shared detached-child launch choreography: hold the owned-run
- * launch guard while creating any child stream and handing it to the run
- * loop, then attach the completion error trace. Returns the launched loop
- * so in-band callers can await it.
+ * Start a detached child's loop, uninterruptibly. A caller that awaits it
+ * (`awaited`) joins its fiber and owns its failure; nobody reads any other
+ * loop's, so its late failure is logged ({@link logLateFailure}).
  */
 export function startDetachedChildRunLoop<
   TTurn,
@@ -99,64 +64,60 @@ export function startDetachedChildRunLoop<
 >(
   input: DetachedChildRunInput<TTurn, R>,
 ): Effect.Effect<StartedChildRunLoop<TTurn>, Error, R | Runs> {
+  if (!('createChildRun' in input)) {
+    const started = startChildRunLoop(input);
+    return Effect.uninterruptible(
+      input.awaited === true
+        ? started
+        : Effect.tap(started, (loop) =>
+            logLateFailure(input.agentName, loop.fiber),
+          ),
+    );
+  }
+  const { createChildRun, buildLaunch, ...loopParams } = input;
   return runWithLaunchGuard(
     input.session,
     input.runId,
     Effect.gen(function* () {
-      let childRun: ChildRunPort | undefined;
-      const setup = yield* Effect.exit(
-        Effect.gen(function* () {
-          if (input.createChildRun === undefined) {
-            const { buildLaunch, ...loopParams } = input;
-            const strategy = yield* buildLaunch();
-            return yield* startChildRunLoop({ ...loopParams, strategy });
-          }
-          const { createChildRun, buildLaunch, ...loopParams } = input;
-          childRun = yield* createChildRun();
-          const strategy = yield* buildLaunch(childRun);
-          return yield* startChildRunLoop({
-            ...loopParams,
-            childRun,
-            strategy,
-          });
-        }),
+      const port = yield* createChildRun();
+      const loop = yield* buildLaunch(port).pipe(
+        Effect.flatMap((strategy) =>
+          startChildRunLoop({ ...loopParams, childRun: port, strategy }),
+        ),
+        // A setup that failed before the loop: the guard ends the run.
+        Effect.onError(() => Effect.sync(() => port.logger.close())),
       );
-      // A setup that failed before the loop: the launch guard ends the run.
-      if (Exit.isFailure(setup)) {
-        childRun?.logger.close();
-        return yield* Effect.failCause(setup.cause);
-      }
-      const started = setup.value;
-      // A caller that awaits the loop owns its failure; nobody reads a
-      // detached loop's, so a late failure is logged here: always on the
-      // loop's log channel (the child's trace may already be closed by its
-      // finalize), and on that trace too.
-      const awaited =
-        input.createChildRun === undefined && input.awaited === true;
-      if (!awaited) {
-        const message = `Child '${input.agentName}' run loop failed after launch`;
-        yield* Effect.forkDetach(
-          Fiber.join(started.fiber).pipe(
-            Effect.catchCause((cause) => {
-              const error = Cause.squash(cause);
-              return Effect.sync(() =>
-                childRun?.logger.error(message, { data: error }),
-              ).pipe(
-                Effect.andThen(
-                  Effect.logError(message).pipe(
-                    Effect.annotateLogs({ data: error }),
-                    withLogChannel('childRunLoop'),
-                  ),
-                ),
-              );
-            }),
-          ),
-        );
-      }
-      return started;
+      yield* logLateFailure(input.agentName, loop.fiber, port.logger);
+      return loop;
     }),
   ).pipe(Effect.uninterruptible);
 }
+
+/** Log, detached, how a loop nobody awaits failed: on the loop's log
+ *  channel always (the child's trace may be closed by its end by then),
+ *  and on the child's trace when it has one. */
+const logLateFailure = (
+  agentName: string,
+  fiber: Fiber.Fiber<unknown, Error>,
+  trace?: AgentTrace,
+) => {
+  const message = `Child '${agentName}' run loop failed after launch`;
+  return Effect.forkDetach(
+    Fiber.join(fiber).pipe(
+      Effect.catchCause((cause) => {
+        const error = Cause.squash(cause);
+        return Effect.sync(() => trace?.error(message, { data: error })).pipe(
+          Effect.andThen(
+            Effect.logError(message).pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel('childRunLoop'),
+            ),
+          ),
+        );
+      }),
+    ),
+  );
+};
 
 /**
  * A child run an external process drives, launched from a plugin's tool:

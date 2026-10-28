@@ -12,7 +12,6 @@
 import { Effect, Result, Schema, Struct } from 'effect';
 
 import {
-  AgentOptionDataSchema,
   type FileLocation,
   type SessionEvent,
   type ToolFact,
@@ -31,6 +30,7 @@ import {
   type ReadonlyRoundIndexed,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
+import { AgentOptionDataSchema } from '@texra/shared/pickerOptions';
 import type { AggregateId } from '@texra-ai/harness/host';
 import type { RunView, AgentConfig } from '@texra-ai/harness/schemas';
 import type { AgentBlock } from '@texra-ai/harness/plugins';
