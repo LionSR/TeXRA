@@ -14,9 +14,9 @@ export const InquirySessionLinksSchema = Schema.Array(
   Schema.Trim.check(Schema.isMinLength(1)),
 );
 
-// Keep the 12-hex suffix aligned with hexId12(), the identifier-minting owner
-// used by the inquiry record service. The explicit bound rejects truncated or
-// extended identifiers at storage and tool-input boundaries.
+// The inquiry record service mints the 12-hex suffix. The explicit bound
+// rejects truncated or extended identifiers at storage and tool-input
+// boundaries.
 export const InquiryThreadIdSchema = Schema.String.check(
   Schema.isPattern(/^ei_[0-9a-f]{12}$/i),
 ).pipe(
