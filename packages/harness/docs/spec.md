@@ -520,10 +520,10 @@ row of its batch (`agent/runtime/RunHistory.ts:72-83`).
 The loop holds no copy of the conversation. It reads every branch off the fold,
 so the live path and the resume path are the same steps
 (`agent/runtime/loop/toolUse.ts:408-421`, `:423-477`). A resume enters the same
-program, `runToolUse`, with `resume: true`
-(`agent/runtime/executeAgent.ts:83-86`), reached from `resumeRun` through
-`resumeToolUseFromResumeData` (`agent/runtime/resumeRun.ts:311-315`,
-`agent/runtime/executeAgent.ts:292-294`).
+program, `runToolUse`, with `resume: true`, through the same run program as a
+fresh launch, `executeAgent` without a registration
+(`agent/runtime/executeAgent.ts:127-130`), reached from `resumeRun`
+(`agent/runtime/resumeRun.ts:310`).
 
 A resume MUST be refused when the rows hold no opened run
 (`agent/runtime/loop/runProgram.ts:81-87`). A fresh launch MUST be refused when

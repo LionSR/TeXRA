@@ -9,12 +9,15 @@ import { Effect, Layer, Schema } from 'effect';
 import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { stepFor } from '@agent/runtime/loop/step';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import { AgentRun, agentRunLayer } from '@agent/runtime/run/AgentRun';
+import {
+  AgentRun,
+  agentRunLayer,
+  type RunLaunch,
+} from '@agent/runtime/run/AgentRun';
 import { validationModelLayer } from '@cli/runtime/validationModel';
 import { AppSignals } from '@platform/appSignals';
 import { AppState } from '@platform/interfaces';
@@ -51,14 +54,13 @@ function tool(name: string): ITool {
 /** A launch whose model binds without a credential (the validation model). */
 function validationLaunch(
   init: Parameters<typeof createTestLaunchContext>[0],
-  config: AgentLaunchContext['config'],
-): AgentLaunchContext {
+  config: RunLaunch['config'],
+): RunLaunch {
   return {
     ...createTestLaunchContext(init),
     config: { ...config, instruction: 'Do the thing.' },
     // Headless: the turn ends the run instead of parking for input.
     toolPolicy: { stopAfterCycle: true },
-    modelConfig: buildTestModelConfig(),
   };
 }
 
@@ -75,16 +77,18 @@ function observingInvokerLayer(seen: InvokeRequest[]) {
 }
 
 /** The run's layer over a launch, with the given run-scoped tools. */
-function runLayer(
-  ctx: AgentLaunchContext,
-  tools: ITool[],
-  seen: InvokeRequest[] = [],
-) {
+function runLayer(ctx: RunLaunch, tools: ITool[], seen: InvokeRequest[] = []) {
   return Layer.mergeAll(
     observingInvokerLayer(seen),
     nativeToolTestLayer(),
   ).pipe(
-    Layer.provideMerge(agentRunLayer(ctx, { tools, callbacks: {} })),
+    Layer.provideMerge(
+      agentRunLayer(ctx, {
+        modelConfig: buildTestModelConfig(),
+        tools,
+        callbacks: {},
+      }),
+    ),
     Layer.provideMerge(Layer.succeed(RunHistory, ctx.session.runHistory)),
     Layer.provideMerge(testHttpClientLayer),
     // No key is read: every launch here binds the validation model.

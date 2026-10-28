@@ -197,7 +197,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const trusted = isTrustedScript(run.config);
     const off = trusted
       ? Effect.succeed(new Set<string>())
-      : readDisabledTools(run.stores.globalState);
+      : readDisabledTools(roots.globalState);
     const pinned = yield* run.session.tools
       .pin(off, { installed: true, held: run.toolInputs.held })
       .pipe(Scope.provide(scope));
@@ -326,8 +326,8 @@ const openStep = Effect.fn('Step.open')(function* (
   const model = yield* SynchronizedRef.get(run.model);
   const delegation = yield* readDelegationTargets(
     step.tools,
-    run.toolInputs.stores,
-    run.delegationAgentScope ?? undefined,
+    roots,
+    run.config.delegationAgentScope ?? undefined,
   );
   const context = {
     ...stepInstructions(step.contributing, listed, {

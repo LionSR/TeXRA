@@ -266,7 +266,7 @@ function scriptedInvoker(
 }
 
 /**
- * The run service a fixture stands on: the launch stores a real run carries,
+ * The run service a fixture stands on: the session a real run carries,
  * no step opened, no callbacks. `over` names what the case under test reads.
  */
 export function testAgentRun(
@@ -282,7 +282,6 @@ export function testAgentRun(
     }),
     persona: Schema.decodeUnknownSync(PersonaSchema)({}),
     parentStage: logger.openStage('Run: chat'),
-    stores: installedHost().roots,
     toolPolicy: {},
     opening: {
       inputs: {},

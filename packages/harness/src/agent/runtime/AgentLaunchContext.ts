@@ -1,6 +1,6 @@
 import { Cause, Effect, Exit, FileSystem, Schema, Scope } from 'effect';
 
-import { type ModelConfig, ModelProvider, selectModel } from '@texra-ai/llm';
+import { ModelProvider, selectModel } from '@texra-ai/llm';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { agentEntryOf } from '@agent/index/agentYamlScanner';
 import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
@@ -31,6 +31,7 @@ import {
   isTaskConfig,
   RUN_OUTCOME,
   type RunId,
+  USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -39,41 +40,13 @@ import { ToolRegistry } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { declaredToolNames } from './agentToolResolution';
-import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
+import type { AgentRunShape, RunLaunch } from './run/AgentRun';
 import type { SessionHandle } from './SessionHandle';
 import type { SessionHostInteractions } from './HostInteractions';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
-
-/**
- * The launch facts carried by {@link AgentRunShape}. The run narrows the
- * persona to its resolved tool list; every other fact reaches it unchanged.
- */
-type LaunchResolvedRunFacts = Pick<
-  AgentRunShape,
-  | 'runId'
-  | 'session'
-  | 'workingDirectory'
-  | 'delegationAgentScope'
-  | 'config'
-  | 'persona'
-  | 'logger'
-  | 'parentStage'
-  | 'toolPolicy'
-  | 'stores'
-  | 'opening'
-  | 'entry'
->;
-
-export interface AgentLaunchContext extends LaunchResolvedRunFacts {
-  /** The launch model's registry config, which `AgentRun` binds (or a
-   *  resumed run's snapshot's); a mid-run switch rebinds there. */
-  readonly modelConfig: ModelConfig;
-  /** Description from the exact registry entry selected for this launch. */
-  readonly resolvedAgentDescription?: string;
-}
 
 interface AgentLaunchInput {
   definition: PreparedAgentDefinition;
@@ -87,8 +60,6 @@ interface AgentLaunchInput {
   onAdmitted?: AgentRunShape['entry']['entered'];
   /** Session owning this run's coordination state. */
   session: SessionHandle;
-  /** Immutable per-run tool policy carried on the launch context for cycle flows. */
-  toolPolicy?: ToolPolicy;
 }
 
 /**
@@ -158,6 +129,8 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     config: AgentConfig;
     session: SessionHandle;
     suppressErrorNotification?: boolean;
+    /** The launch ends the run after one cycle (an awaited child). */
+    stopAfterCycle?: boolean;
   }) {
     const fullConfig = input.config;
     const interactions = input.session.interactions;
@@ -213,7 +186,12 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       ...fullConfig,
       agentSource: agentEntry.source,
     };
-    return { config, persona, agentEntry, modelConfig };
+    // Whether the run takes follow-ups, decided once: a run whose launch
+    // ends it after one cycle, or whose script is its only turn, does not,
+    // and registers as such.
+    const stopAfterCycle =
+      input.stopAfterCycle === true || config.script != null;
+    return { config, persona, agentEntry, modelConfig, stopAfterCycle };
   },
   // No run exists yet, so no `result` event will present this failure: the
   // generic toast is its one surface. Once assembly begins, the terminal
@@ -250,19 +228,23 @@ export type PreparedAgentDefinition = Effect.Success<
  * the run's stage commit with the opening), the rest is published once that
  * settled. One that never enters drops it. A run that exists is refused.
  */
-const enterRun = Effect.fn('enterRun')(function* (
-  input: AgentLaunchInput,
-  config: AgentConfig,
-) {
+const enterRun = Effect.fn('enterRun')(function* (input: AgentLaunchInput) {
   const { session, runId } = input;
-  const registration =
+  const { config, stopAfterCycle } = input.definition;
+  const registered =
     input.registration === undefined
       ? null
-      : yield* registrationRows(session, runId, config, input.registration);
-  if (registration !== null && registration[0]?.type !== 'run.start')
+      : yield* registrationRows(session, runId, config, {
+          ...input.registration,
+          userFollowUpSupport: stopAfterCycle
+            ? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED
+            : USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+        });
+  if (registered !== null && !registered.born)
     return yield* new AgentError({
       message: `Run ${runId} already exists; resume it.`,
     });
+  const registration = registered?.rows ?? null;
   let held: AgentEvent[] | null = [];
   const logger = new TraceEmitter((event) =>
     held === null ? session.log.publish(runId, event) : held.push(event),
@@ -297,11 +279,11 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
   function* (
     input: AgentLaunchInput,
   ): Effect.fn.Return<
-    AgentLaunchContext,
+    RunLaunch,
     Error,
     AppState | FileSystem.FileSystem | Scope.Scope
   > {
-    const { config, persona, agentEntry, modelConfig } = input.definition;
+    const { config, persona, modelConfig, stopAfterCycle } = input.definition;
     // The run's working directory is decided here, once: absolute or absent.
     // Every tool call of the run carries it as `ToolContext.env.workingDirectory`
     // and trusts it rather than re-validating.
@@ -314,7 +296,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     // policy and a root launch gets the process default exactly once.
     const { session, runId } = input;
     const resumed = input.registration === undefined;
-    const { logger: agentLogger, entry } = yield* enterRun(input, config);
+    const { logger: agentLogger, entry } = yield* enterRun(input);
 
     // Log the initial instruction as a user message so the run's tab
     // displays it inline with the stream log (no separate panel).
@@ -361,25 +343,13 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
             },
           );
 
-    const context: AgentLaunchContext = {
+    return {
       runId,
       session,
       workingDirectory,
-      delegationAgentScope: config.delegationAgentScope,
       config,
-      resolvedAgentDescription: agentEntry.description,
       persona,
-      modelConfig,
-      // Frozen so nothing mutates it mid-run. A script's run ends when its
-      // script settles, launched or resumed: it has no later turn for
-      // anything to wait for.
-      toolPolicy: Object.freeze({
-        ...input.toolPolicy,
-        ...(config.script != null && { stopAfterCycle: true }),
-      }),
-      // The session's own setting slots, so routing and the provider
-      // switches answer for this run's workspace.
-      stores: session.roots,
+      toolPolicy: { stopAfterCycle },
       logger: agentLogger,
       parentStage,
       opening,
@@ -390,10 +360,5 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           : undefined,
       },
     };
-    // Frozen at the run's one real construction site: a run's identity, its
-    // owning session, and the rest of what the launch resolved must not change
-    // under the loop that reads them, and `readonly` alone stops only the
-    // callers that kept their types.
-    return Object.freeze(context);
   },
 );

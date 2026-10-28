@@ -26,10 +26,7 @@ import { FetchHttpClient, HttpClient } from 'effect/http';
 
 import { Inbox } from '@agent/followUp/Inbox';
 import { startFollowUpWake } from '@agent/followUp/ToolUseFollowUp';
-import {
-  executeAgent,
-  resumeToolUseFromResumeData,
-} from '@agent/runtime/executeAgent';
+import { executeAgent } from '@agent/runtime/executeAgent';
 import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
 import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
@@ -197,7 +194,6 @@ const sessionHandleLayer = (key: SessionKey) =>
         programs: {
           root: rootRun,
           executeAgent,
-          resumeTurn: resumeToolUseFromResumeData,
           resume: resumeRun,
         },
         wake: (id) => void fork(session.followUps.wake(id)),

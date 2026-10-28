@@ -8,11 +8,8 @@ import { Effect } from 'effect';
 
 import { type RunEndResult } from '@agent/runtime/RunEndResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type {
-  ExecuteAgentOptions,
-  ResumeToolUseFromResumeDataOptions,
-  ResumeTurnIdentity,
-} from '@agent/runtime/executeAgent';
+import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RegisterRunOptions } from '@agent/storage/runLifecycle';
 import {
   registryOf,
@@ -20,7 +17,10 @@ import {
   Runs,
 } from '@agent/runtime/runRegistry';
 import type { NativeChildStrategy } from '@agent/runtime/childRunLoop';
-import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
+import {
+  prepareAgentDefinition,
+  type PreparedAgentDefinition,
+} from '@agent/runtime/AgentLaunchContext';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { emptyRunEndOutput, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -32,11 +32,10 @@ import { formatSubagentDelivery, formatSubagentError } from './subagentResults';
  * native subagent callers — durable in-band (`InBandSubagentRunBaseOptions`)
  * and detached (`NativeSubagentStrategyParams`) — so a new launch option has a
  * single home and can't drift between the two interfaces or the executeInBand
- * field mapping.
+ * field mapping. The child's parent is not one: a fresh child's is its
+ * registration's, a resumed one's its rows'.
  */
 export interface ChildRunLaunchOptions {
-  /** The launching run: the child's parent edge. */
-  readonly parentRunId: RunId;
   readonly session: SessionHandle;
   /** The history a fresh child is born on: a fork's (`forkSeed`). */
   readonly seed?: RegisterRunOptions['seed'];
@@ -61,9 +60,16 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
       }
     | {
         readonly definition?: never;
-        readonly resume: {
-          readonly identity: ResumeTurnIdentity;
-          readonly options: ResumeToolUseFromResumeDataOptions;
+        /** A persisted child, resumed under its stored config with the
+         *  parent its rows hold (`parent`), read as its run starts, under
+         *  the claim its loop holds. */
+        readonly resume: Pick<
+          ExecuteAgentOptions,
+          'onRun' | 'onAdmitted' | 'tools'
+        > & {
+          readonly config: AgentConfig;
+          readonly parent: Effect.Effect<RunId | undefined, Error>;
+          readonly stopAfterCycle?: boolean;
         };
       }
   );
@@ -73,7 +79,7 @@ export function createNativeSubagentStrategy(
 ): NativeChildStrategy<RunEndResult, AgentRunServices> {
   const config = params.definition
     ? params.definition.config
-    : params.resume.identity.agentConfig;
+    : params.resume.config;
   // A child's provider/runtime failure rides its turn's `error`
   // (`runWithLifecycle` returns a terminal failed result rather than
   // rejecting); a thrown call reaches `formatError` as its `err`.
@@ -106,11 +112,9 @@ export function createNativeSubagentStrategy(
       runNative(
         Effect.gen(function* () {
           const { programs } = registryOf(yield* Runs);
-          const executeOptions: Omit<ExecuteAgentOptions, 'registration'> = {
-            ...params.resume?.options,
+          const options = {
             session: params.session,
             onProgress: notify,
-            ...(params.inBand === true && { stopAfterCycle: true }),
             turns: {
               turnPermit: turns.turnPermit,
               finishTurn: (turn: RunEndResult) =>
@@ -125,22 +129,24 @@ export function createNativeSubagentStrategy(
                 }),
             },
           };
-          if (params.resume)
-            return yield* programs.resumeTurn(
-              params.resume.identity,
-              executeOptions,
-            );
-          const turn = yield* programs.executeAgent(
-            params.definition,
-            params.runId,
-            {
-              ...executeOptions,
-              registration: { ...params.registration, seed: params.seed },
-              // The live handle owns this edge, including a later detach.
-              parentRunId: params.parentRunId,
-            },
-          );
-          return turn;
+          if (params.resume) {
+            const { config, parent, stopAfterCycle, ...launch } = params.resume;
+            const definition = yield* prepareAgentDefinition({
+              config,
+              session: params.session,
+              suppressErrorNotification: true,
+              stopAfterCycle,
+            });
+            return yield* programs.executeAgent(definition, params.runId, {
+              ...launch,
+              ...options,
+              parentRunId: yield* parent,
+            });
+          }
+          return yield* programs.executeAgent(params.definition, params.runId, {
+            ...options,
+            registration: { ...params.registration, seed: params.seed },
+          });
         }),
       ),
 

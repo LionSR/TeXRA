@@ -7,7 +7,7 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { type RunEndResult } from '@agent/runtime/RunEndResult';
-import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
+import type { RunLaunch } from '@agent/runtime/run/AgentRun';
 import { setLogSink } from '@logger/logSink';
 import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
@@ -36,7 +36,7 @@ let lifecycleFixtureCounter = 0;
 
 function lifecycleFixture(agent = 'test-agent'): {
   runId: RunId;
-  ctx: AgentLaunchContext;
+  ctx: RunLaunch;
 } {
   const runId =
     `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
@@ -56,7 +56,7 @@ const PARENT_RUN_ID = 'aa0001' as RunId;
  * until `release`, so the end's transaction queues behind it. `started`
  * resolves once that job holds the publisher.
  */
-const parkTerminal = (ctx: AgentLaunchContext) =>
+const parkTerminal = (ctx: RunLaunch) =>
   Effect.gen(function* () {
     const started = yield* Deferred.make<void>();
     const release = yield* Deferred.make<void>();
@@ -103,14 +103,13 @@ describe('runWithLifecycle', () => {
             ctx.session.runs,
             runId,
             runLifecycle(
-              ctx,
+              { ...ctx, entry: { ...ctx.entry, parent: PARENT_RUN_ID } },
               () =>
                 Effect.succeed({
                   outcome: RUN_OUTCOME.COMPLETED,
                   runId,
                   output: { response: '', files: [] },
                 } satisfies RunEndResult),
-              { parentRunId: PARENT_RUN_ID },
             ),
           ),
         );

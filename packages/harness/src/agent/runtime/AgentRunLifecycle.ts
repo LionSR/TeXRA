@@ -28,7 +28,7 @@ import type { AgentRunServices } from './runRegistry';
 import type { ChildRunTurns } from './childRunLoop';
 import type { TransactionPart } from './childTurnResult';
 import type { SessionHandle } from './SessionHandle';
-import type { AgentLaunchContext } from './AgentLaunchContext';
+import type { RunLaunch } from './run/AgentRun';
 
 const CHANNEL = 'agentRunLifecycle';
 
@@ -40,8 +40,6 @@ const logLifecycleWarning = (message: string, data: unknown) =>
   );
 
 export interface RunLifecycleOptions {
-  /** The parent this activation runs under: its launch's, or its rows'. */
-  parentRunId?: RunId;
   /** Fires once with the run's id as the run starts, forked detached:
    *  nothing it does may abort the run, and it is logged. */
   onRun?: (runId: RunId) => Effect.Effect<void, Error>;
@@ -209,14 +207,14 @@ function withResolvedOutcome(
  * agent run (registration, status accounting, error surfacing, cleanup).
  */
 export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
-  ctx: AgentLaunchContext,
+  ctx: RunLaunch,
   runner: () => Effect.Effect<RunEndResult, Error, R>,
   options?: RunLifecycleOptions,
 ): Effect.fn.Return<RunEndResult, Error, R | AgentRunServices> {
   const { runId, session } = ctx;
   const agentIdentifier = ctx.config.agent;
-  // Read once: a child detached mid-run ends as a child.
-  const parentRunId = options?.parentRunId ?? null;
+  // Read once as the run entered: a child detached mid-run ends as a child.
+  const parentRunId = ctx.entry.parent;
   const finish = options?.finishLastTurn;
   // The terminal finalizer; outcome and error facts vary per exit, and a
   // child's last turn (`lastResult`) is finished under the resolved outcome.

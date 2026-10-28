@@ -18,6 +18,7 @@ import '@test/support/sessionGraphTestSetup';
 
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import { Runs } from '@agent/runtime/runRegistry';
 import { withProcessServices } from '@platform/processRuntime';
 import { AgentConfigSchema } from '@shared/schemas';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
@@ -79,13 +80,13 @@ describe(
               Effect.flatMap((definition) =>
                 executeAgent(definition, runId, {
                   session,
-                  parentRunId,
                   registration: {
                     identity: { kind: 'agent', agent: 'assistant' },
                     parentRunId,
                   },
                 }),
               ),
+              Effect.provideService(Runs, session.runs),
             ),
           );
           expect(ended).toMatchObject({
