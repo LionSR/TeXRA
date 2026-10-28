@@ -70,7 +70,7 @@ export const TASK_ACTIONS = {
   forkedFrom: (title: string) => `Forked from ${title}`,
   /** The source's header menu item for each of its forks. */
   openFork: (title: string) => `Open fork: ${title}`,
-  /** The header menu's title item (the TUI's `/rename`). */
+  /** The header and run-row menus' title item (the TUI's `/rename`). */
   rename: 'Rename…',
   /** The header menu's folder item. */
   openFolder: 'Open task folder',
