@@ -1201,10 +1201,10 @@ type MessageType = typeof MessageTypeSchema.Type;
 
 ## MODEL_AVAILABILITY_STATUS
 
-What a kind means: the label a surface shows for it, whether a run can use
-the model, and whether the block is a missing key. Declared once here, next
-to the kind, so the answer is carried on the wire as the kind alone and
-every host reads the same table instead of four pre-fanned fields.
+What a kind means: whether a run can use the model, and whether the block is
+a missing key (a surface's words for each kind are the app's). Declared once
+here, next to the kind, so the answer is carried on the wire as the kind
+alone and every host reads the same table instead of pre-fanned fields.
 
 Written with `as const satisfies` so each `available` literal survives for
 `computeModelOptions`'s derivation of the unavailable kinds, while a missing
@@ -1213,7 +1213,7 @@ read at: the table crosses into every host that decides whether a model can
 run, and `readonly` is compile-time only.
 
 ```ts
-const MODEL_AVAILABILITY_STATUS: { readonly 'provider-key': { readonly label: "API key set"; readonly available: true; readonly requiresKey: false; }; readonly 'missing-key': { readonly label: "Missing API key"; readonly available: false; readonly requiresKey: true; }; readonly 'key-unreadable': { readonly label: "API key unreadable"; readonly available: false; readonly requiresKey: false; }; readonly 'subscription-access': { readonly label: "ChatGPT subscription"; readonly available: true; readonly requiresKey: false; }; readonly 'xai-subscription-access': { readonly label: "Grok subscription"; readonly available: true; readonly requiresKey: false; }; readonly retired: { readonly label: "Retired"; readonly available: false; readonly requiresKey: false; }; readonly unserved: { readonly label: "Unavailable"; readonly available: false; readonly requiresKey: false; }; readonly 'unknown-model': { readonly label: "Unknown model"; readonly available: false; readonly requiresKey: false; }; }
+const MODEL_AVAILABILITY_STATUS: { readonly 'provider-key': { readonly available: true; readonly requiresKey: false; }; readonly 'missing-key': { readonly available: false; readonly requiresKey: true; }; readonly 'key-unreadable': { readonly available: false; readonly requiresKey: false; }; readonly 'subscription-access': { readonly available: true; readonly requiresKey: false; }; readonly 'xai-subscription-access': { readonly available: true; readonly requiresKey: false; }; readonly retired: { readonly available: false; readonly requiresKey: false; }; readonly unserved: { readonly available: false; readonly requiresKey: false; }; readonly 'unknown-model': { readonly available: false; readonly requiresKey: false; }; }
 ```
 
 ## MODEL_COMPACTION_THRESHOLD_SETTING
@@ -1242,7 +1242,7 @@ const MODEL_RETRY_MAX_ATTEMPTS_SETTING: Readonly<{ readonly configKey: "model.re
 Resolved per-model access. Computed once by `readModelOptions` and
 shared verbatim across hosts (CLI picker, extension Models tab) so
 availability and routing are never re-derived at render time: the kind is
-the whole verdict, and {@link MODEL_AVAILABILITY_STATUS} words it.
+the whole verdict, and {@link MODEL_AVAILABILITY_STATUS} reads it.
 
 ```ts
 const ModelAvailabilityFieldsSchema: Struct<{ readonly availability: optional<Literals<readonly ["provider-key", "missing-key", "key-unreadable", "retired", "unserved", "subscription-access", "xai-subscription-access", "unknown-model"]>>; readonly routeLabel: optional<String>; }>

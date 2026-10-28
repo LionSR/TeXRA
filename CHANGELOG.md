@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: script stages and model availability carry keys, not words.**
+  `ScriptCallView.detail` is `error` (with its text), `notRun`,
+  `interrupted` or `request` (with the request's payload), and its
+  `summary` is only the answer; `ScriptStageView.summary` gives way to the
+  counts `agents` and `needsYou`. `MODEL_AVAILABILITY_STATUS` entries lose
+  their `label`. A host words them itself.
 - **SDK: teams are the app's.** The built-in team presets
   (`AGENT_MODE_PRESETS`, `STARTER_AGENT_MODE_PRESET`), `AgentModePresetSchema`
   and `parseAgentModePresets` leave `@texra-ai/harness/schemas`, and

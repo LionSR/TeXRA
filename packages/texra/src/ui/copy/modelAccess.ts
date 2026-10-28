@@ -10,7 +10,20 @@
 import { formatCostUsd } from '@texra-ai/harness/transcript';
 import { absurd } from 'effect';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
+import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 import type { TokenUsageStats, UsageRoute } from '@texra-ai/harness/schemas';
+
+/** The words for each `ModelOptionData.availability` kind. */
+export const MODEL_AVAILABILITY_LABEL = {
+  'provider-key': 'API key set',
+  'missing-key': 'Missing API key',
+  'key-unreadable': 'API key unreadable',
+  'subscription-access': CHATGPT_AUTH.subscriptionLabel,
+  'xai-subscription-access': GROK_AUTH.subscriptionLabel,
+  retired: 'Retired',
+  unserved: 'Unavailable',
+  'unknown-model': 'Unknown model',
+} as const;
 
 /** Model calls paid for by your own provider accounts. */
 export const OWN_API_KEYS = {

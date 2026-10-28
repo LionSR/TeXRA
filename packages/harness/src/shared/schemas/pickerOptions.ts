@@ -6,7 +6,6 @@
 import { Effect, Schema, Struct } from 'effect';
 
 import { AgentSourceSchema } from '@shared/schemas/agent';
-import { SUBSCRIPTION_AUTH_NAMES } from '@shared/model/subscriptionAuth';
 
 // ============================================================
 // Option Data Schemas
@@ -46,10 +45,10 @@ const ModelAvailabilityKindSchema = Schema.Literals([
 export type ModelAvailabilityKind = typeof ModelAvailabilityKindSchema.Type;
 
 /**
- * What a kind means: the label a surface shows for it, whether a run can use
- * the model, and whether the block is a missing key. Declared once here, next
- * to the kind, so the answer is carried on the wire as the kind alone and
- * every host reads the same table instead of four pre-fanned fields.
+ * What a kind means: whether a run can use the model, and whether the block is
+ * a missing key (a surface's words for each kind are the app's). Declared once
+ * here, next to the kind, so the answer is carried on the wire as the kind
+ * alone and every host reads the same table instead of pre-fanned fields.
  *
  * Written with `as const satisfies` so each `available` literal survives for
  * `computeModelOptions`'s derivation of the unavailable kinds, while a missing
@@ -58,41 +57,17 @@ export type ModelAvailabilityKind = typeof ModelAvailabilityKindSchema.Type;
  * run, and `readonly` is compile-time only.
  */
 export const MODEL_AVAILABILITY_STATUS = {
-  'provider-key': { label: 'API key set', available: true, requiresKey: false },
-  'missing-key': {
-    label: 'Missing API key',
-    available: false,
-    requiresKey: true,
-  },
-  'key-unreadable': {
-    label: 'API key unreadable',
-    available: false,
-    requiresKey: false,
-  },
-  'subscription-access': {
-    label: SUBSCRIPTION_AUTH_NAMES.chatgpt.subscriptionLabel,
-    available: true,
-    requiresKey: false,
-  },
-  'xai-subscription-access': {
-    label: SUBSCRIPTION_AUTH_NAMES.grok.subscriptionLabel,
-    available: true,
-    requiresKey: false,
-  },
-  retired: { label: 'Retired', available: false, requiresKey: false },
-  unserved: { label: 'Unavailable', available: false, requiresKey: false },
-  'unknown-model': {
-    label: 'Unknown model',
-    available: false,
-    requiresKey: false,
-  },
+  'provider-key': { available: true, requiresKey: false },
+  'missing-key': { available: false, requiresKey: true },
+  'key-unreadable': { available: false, requiresKey: false },
+  'subscription-access': { available: true, requiresKey: false },
+  'xai-subscription-access': { available: true, requiresKey: false },
+  retired: { available: false, requiresKey: false },
+  unserved: { available: false, requiresKey: false },
+  'unknown-model': { available: false, requiresKey: false },
 } as const satisfies Record<
   ModelAvailabilityKind,
-  {
-    readonly label: string;
-    readonly available: boolean;
-    readonly requiresKey: boolean;
-  }
+  { readonly available: boolean; readonly requiresKey: boolean }
 >;
 for (const status of Object.values(MODEL_AVAILABILITY_STATUS))
   Object.freeze(status);
@@ -102,7 +77,7 @@ Object.freeze(MODEL_AVAILABILITY_STATUS);
  * Resolved per-model access. Computed once by `readModelOptions` and
  * shared verbatim across hosts (CLI picker, extension Models tab) so
  * availability and routing are never re-derived at render time: the kind is
- * the whole verdict, and {@link MODEL_AVAILABILITY_STATUS} words it.
+ * the whole verdict, and {@link MODEL_AVAILABILITY_STATUS} reads it.
  */
 export const ModelAvailabilityFieldsSchema = Schema.Struct({
   availability: Schema.optional(ModelAvailabilityKindSchema),

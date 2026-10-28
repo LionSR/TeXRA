@@ -564,7 +564,14 @@ interface ScriptCallView {
   readonly phase: string | null;
   /** `drafter · gpt-5 · retried · a.md · 1m 12s · $0.31` */
   readonly facts: readonly string[];
-  readonly detail?: { readonly kind: 'error' | 'note'; readonly text: string };
+  /** What the row says first: its error, a note, or a run's request. */
+  readonly detail?:
+    | { readonly kind: 'error'; readonly text: string }
+    | { readonly kind: 'notRun' | 'interrupted' }
+    | {
+        readonly kind: 'request';
+        readonly payload: ReadonlyDeep<PermissionPayload>;
+      };
   /** The child run an `agent` call launched: the row opens it. */
   readonly childRunId?: RunId;
   /** The run under the call waiting on the user: Review opens it. */
@@ -575,9 +582,8 @@ interface ScriptCallView {
    *  the rule the composer it opens reads): opening it is talking to it
    *  (a host's talk-to-agent action). Any other agent opens read-only. */
   readonly talkable: boolean;
-  /** The row's one line: its `detail`, else a finished agent's answer, else
-   *  what its child last said, each cut to its first line. Never the
-   *  delivery envelope or the instruction's later paragraphs. */
+  /** A finished agent's answer, else what its child last said, cut to its
+   *  first line: never the delivery envelope or later paragraphs. */
   readonly summary?: string;
 }
 ```
@@ -616,8 +622,9 @@ interface ScriptStageView {
   /** Every call, in issue order. */
   readonly calls: readonly ScriptCallView[];
   readonly phases: readonly ScriptPhaseView[];
-  /** `3 agents · 1 needs you · $0.840`: what the collapsed card says. */
-  readonly summary: string;
+  /** How many of `calls` run a child, and how many wait on this window. */
+  readonly agents: number;
+  readonly needsYou: number;
   /** What every child its calls launched has cost so far, their own
    *  agents included (`treeUsage`), discarded attempts included. */
   readonly costUsd: number;
