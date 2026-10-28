@@ -139,9 +139,9 @@ under test. Three freeze items:
   upcaster cannot turn a path into a digest, and pasted files are deleted
   after three days, so this cannot land after the freeze. Done on
   `claude/top-tech-debts-survey-sgf9k8` (8994563, not yet a PR):
-  `followup.queued` and `log` move to v3 with `media: { name, mimeType,
-digest }[]`, and the composer, fork-from-here and the request lose their
-  path fields. `run.config.mediaFiles` stays a path list on purpose
+  `followup.queued` and `log` move to v3 with a `media` list of name, MIME
+  type and digest (`StoredMediaSchema`), and the composer, fork-from-here
+  and the request lose their path fields. `run.config.mediaFiles` stays a path list on purpose
   (43c10db): it is a launch input that templates, document tasks and "Run
   again" read by path, and the opening message already holds the bytes by
   digest.
