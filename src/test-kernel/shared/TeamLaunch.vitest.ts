@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  resolveTeamLaunch,
-  type TeamCatalogAgent,
-  type TeamPreset,
-} from '@common/teams/TeamPlan';
+import type { TeamCatalogAgent, TeamPreset } from '@common/teams/TeamPlan';
 import { agentMatchesIdentifier } from '@shared/schemas';
+import { resolveTeamLaunch } from '@texra/shared/teamLaunch';
 
 const delegateTools = ['agent'];
 
