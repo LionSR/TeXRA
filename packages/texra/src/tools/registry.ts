@@ -112,6 +112,11 @@ const texWriteFilter: WriteFilter = (path, content, config) => {
   );
 };
 
+/** The host capabilities (`ITool.hostCapability`) a plugin serves on
+ *  every session of this host. */
+const serves = (...capabilities: readonly string[]) =>
+  Layer.succeed(HostCapabilities)({ of: () => new Set(capabilities) });
+
 const latexExtract: Plugin = {
   id: 'latex-extract',
   tools: {
@@ -169,7 +174,7 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
         : TEX_INSTRUCTIONS;
     },
     // The editor's PDF viewer; the host's Comments UI, for the one host
-    // that has one (elsewhere the tool fails naming the missing wiring).
+    // that has one, where `inline_comment` is offered.
     processLayer: {
       layer:
         provider === undefined
@@ -177,16 +182,23 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
           : Layer.mergeAll(
               Layer.succeed(EditorHost)(editors),
               Layer.succeed(InlineComments)(provider),
+              serves('inline-comments'),
             ),
     },
   });
 
 /** The onboarding agent's narrow set, one concern per tool, over the host's
- *  setup capabilities. */
+ *  setup capabilities: a tool that needs a member the host left out is not
+ *  offered. */
 const setup = (platform: SetupPlatformShape) =>
   definePlugin<SetupPlatform>({
     id: 'setup',
-    processLayer: { layer: Layer.succeed(SetupPlatform)(platform) },
+    processLayer: {
+      layer: Layer.mergeAll(
+        Layer.succeed(SetupPlatform)(platform),
+        serves(...Object.keys(platform)),
+      ),
+    },
     tools: {
       probe_environment: ProbeEnvironmentTool,
       unset_api_key: UnsetApiKeyTool,
@@ -249,6 +261,9 @@ export const texraPlugins = (
     /** The composition's editor registry its hosts attach to
      *  (`makeEditorHost`); none attached when absent. */
     readonly editors?: EditorRegistry;
+    /** The host shows external inquiries (VS Code, desktop): the `inquiry`
+     *  tool is offered only there. */
+    readonly inquiryPanel?: true;
   } = {},
 ): readonly Plugin[] => {
   const editors = host.editors ?? makeEditorHost();
@@ -265,7 +280,12 @@ export const texraPlugins = (
     lean4({ setup: host.setup ?? {}, services: host.lean }),
     multiAgent,
     githubActivity,
-    externalInquiry,
+    host.inquiryPanel
+      ? {
+          ...externalInquiry,
+          processLayer: { layer: serves('inquiry-panel') },
+        }
+      : externalInquiry,
     codex,
     claudeAgent,
     core(editors, host.inlineComments),

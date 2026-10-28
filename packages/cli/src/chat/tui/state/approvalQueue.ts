@@ -52,8 +52,8 @@ interface TuiApprovalAdornments {
 
 /**
  * The kinds this surface presents: the wire vocabulary without the external
- * inquiry. The CLI does not offer the async inquiry flow (the inquiry tool
- * declares `unavailableHosts: ['cli']`), and an inquiry another host opened
+ * inquiry. The CLI does not offer the async inquiry flow (it shows no
+ * inquiry panel, `texraPlugins`), and an inquiry another host opened
  * in a shared session is answered from its thread rather than from a modal
  * here, so {@link attentionRequests} leaves that kind out of this queue.
  */

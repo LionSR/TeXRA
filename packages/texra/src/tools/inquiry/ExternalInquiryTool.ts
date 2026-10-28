@@ -410,8 +410,8 @@ function executeList(
 
 export const ExternalInquiryTool = defineTool({
   name: 'inquiry',
-  // Requires the long-lived graphical inquiry panel.
-  unavailableHosts: ['cli', 'sdk'],
+  // Offered where the host shows the inquiry panel (`texraPlugins`).
+  hostCapability: 'inquiry-panel',
   requiresApproval: 'inBody',
   description: TOOL_DESCRIPTION,
   schema: InquiryInputSchema,

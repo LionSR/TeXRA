@@ -2402,7 +2402,7 @@ function setModelEnabled(input: {
 
 ## SettingHost
 
-The product hosts, spelled once: for settings and `unavailableHosts`.
+The product hosts, spelled once, for settings.
 `sdk` is the agent package embedded in someone else's process.
 
 ```ts
