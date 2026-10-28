@@ -6,7 +6,8 @@
  *    `PendingRequest` and approves the tool call.
  * 3. Starts an `interactive: true` run, waits for its first cycle to reach
  *    `waiting`, sends a follow-up via `session.request({ kind: 'followUp.send' })`,
- *    and stops the interactive run cleanly via `session.request({ kind: 'run.stop' })`.
+ *    and stops the interactive run cleanly via `session.request({ kind: 'run.stop' })`,
+ *    after which its `result` is the `cancelled` end it stored.
  */
 import { Effect, Schema, Stream } from 'effect';
 import { defineTool, Sessions } from '@texra-ai/harness';
@@ -122,8 +123,15 @@ const program = Effect.gen(function* () {
     reason: 'user',
   });
   const finalStatus = session.view.current().runs.get(run.runId)?.status;
+  // A stopped run has ended: its result is its `cancelled` end.
+  const { outcome } = yield* run.result;
+  if (outcome !== 'cancelled') {
+    throw new Error(
+      `Expected the stopped run to end cancelled, got ${outcome}`,
+    );
+  }
   console.log(
-    `[04] stopped: status=${finalStatus} approvals=${approvedRequests.length}`,
+    `[04] stopped: outcome=${outcome} status=${finalStatus} approvals=${approvedRequests.length}`,
   );
 }).pipe(
   Effect.scoped,
