@@ -39,7 +39,6 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentConfigSchema,
   InlinePersonaSchema,
-  RunIdSchema,
   type RunId,
 } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
@@ -167,7 +166,7 @@ function start(
         Effect.sync(() => starting.delete(runId)),
       );
     }
-    return yield* handOver(session, services, runId, (hooks) =>
+    return yield* handOver<never>(session, services, runId, (hooks) =>
       session.runs
         .launch({
           request: { config, runId },
@@ -194,15 +193,6 @@ function start(
 /** What a resume fails with before its run is handed over. */
 type ResumeError = ResumeRefused | ToolsRefused | RunFailure;
 
-/** The run an open call of `parent` owns resumes with that parent: what
- *  the run's own resume job answers, under its claim. */
-class OwnedByParent extends Schema.TaggedError<OwnedByParent>()(
-  'OwnedByParent',
-  {
-    parent: RunIdSchema,
-  },
-) {}
-
 /**
  * Continue a persisted run of `session` through the one resume path every
  * host takes (`resumeRun`), with the caller's custom tools. A child an open
@@ -226,42 +216,31 @@ function resume(
       tools ?? [],
       !session.interactions.approvalPromptsUnavailable,
     );
-    return yield* handOver(session, services, runId, (hooks) =>
-      resumeOwnRun(runId, {
-        ...hooks,
-        session,
-        stopAfterCycle: interactive !== true,
-        tools,
-      }).pipe(
-        Effect.mapError(runFailure),
-        Effect.flatMap((resumed) => {
-          if ('ownedBy' in resumed)
-            return Effect.fail(
-              runFailure(new OwnedByParent({ parent: resumed.ownedBy })),
-            );
-          if ('failed' in resumed)
-            return Effect.fail(
-              runFailure(
-                refused(
-                  resumed.failed,
-                  describeFollowUpFailure(resumed.failed),
-                ),
-              ),
-            );
-          return resumed.completion.pipe(Effect.mapError(runFailure));
-        }),
-      ),
+    const handed = yield* handOver(session, services, runId, (hooks) =>
+      Effect.gen(function* () {
+        const resumed = yield* resumeOwnRun(runId, {
+          ...hooks,
+          session,
+          stopAfterCycle: interactive !== true,
+          tools,
+        }).pipe(Effect.mapError(runFailure));
+        if ('ownedBy' in resumed) return resumed;
+        if ('failed' in resumed)
+          return yield* Effect.fail(
+            runFailure(
+              refused(resumed.failed, describeFollowUpFailure(resumed.failed)),
+            ),
+          );
+        return yield* resumed.completion.pipe(Effect.mapError(runFailure));
+      }),
     ).pipe(
-      Effect.catch((failure): Effect.Effect<Run, ResumeError> => {
+      Effect.mapError((failure) => {
         const { cause } = failure;
-        if (cause instanceof OwnedByParent)
-          return Effect.map(follow(cause.parent), (run) => ({
-            ...run,
-            redirectedFrom: runId,
-          }));
-        return Effect.fail(cause instanceof ResumeRefused ? cause : failure);
+        return cause instanceof ResumeRefused ? cause : failure;
       }),
     );
+    if (!('ownedBy' in handed)) return handed;
+    return { ...(yield* follow(handed.ownedBy)), redirectedFrom: runId };
   });
 }
 

@@ -13,6 +13,7 @@ import {
   Effect,
   Exit,
   Fiber,
+  Option,
   Queue,
   Stream,
   Cause,
@@ -59,7 +60,7 @@ interface TraceHandover {
   readonly offer: (event: AgentEvent) => void;
   /** End the trace with the run's exit, dropping what nobody read. */
   readonly settle: (
-    exit: Exit.Exit<RunEndResult, RunFailure>,
+    exit: Exit.Exit<unknown, RunFailure>,
   ) => Effect.Effect<void>;
   /** The reader's stream: running it once is the contract, and ending it
    *  detaches the trace while the run continues. */
@@ -154,37 +155,35 @@ interface LaunchHooks {
 
 /** One launch of `runId`, fresh or resumed, wired to the hooks its handle
  *  hands it; it ends with the run's result. */
-type Launch = (
+type Launch<A> = (
   hooks: LaunchHooks,
-) => Effect.Effect<RunEndResult, RunFailure, ProcessServices>;
+) => Effect.Effect<RunEndResult | A, RunFailure, ProcessServices>;
 
 /**
  * Launch `runId` on `session` and hand back its {@link Run} once it exists
  * there; a launch that fails first fails this with its own error.
  *
- * The handoff is all-or-nothing for the caller that launched: this either
- * returns a `Run`, or it ends every fiber it started, and abandoned before
- * admission it stops the launch, unless another caller joined it, when it
- * leaves and the run goes on for them. A caller that joined a resume already
- * in flight is an observer: its interruption ends only its own wait and its
- * events, never the run. Every caller reads the run's events from the run's
- * one trace port (`session.trace.listen`), from its own handoff on.
+ * A parent-owned resume returns its owner after releasing its trace. An
+ * interrupted handoff ends its observer fibers; before admission it also
+ * stops a launch it owns, unless another caller joined. A caller that joined
+ * a resume already in flight only abandons its own wait and events. Every
+ * caller reads the run's one trace port (`session.trace.listen`) from its
+ * own handoff on.
  */
-export function handOver(
+export function handOver<A extends { readonly ownedBy: RunId } = never>(
   session: RuntimeSessionHandle,
   services: Context.Context<ProcessServices>,
   runId: RunId,
-  launch: Launch,
-): Effect.Effect<Run, RunFailure> {
+  launch: Launch<A>,
+): Effect.Effect<Run | A, RunFailure> {
   return Effect.gen(function* () {
     const trace = yield* traceHandover(runId);
     const unlisten = session.trace.listen(runId, trace.offer);
-    const admitted = yield* Deferred.make<CommitOrdinal, RunFailure>();
-    // Settling a run that was admitted changes nothing here; one that never
-    // was fails its admission with its own failure, its result's error, or
-    // the launcher's broken contract.
+    const admitted = yield* Deferred.make<CommitOrdinal | A, RunFailure>();
+    // Close the trace before answering a redirect or an unadmitted failure.
+    // An admission already committed keeps its original answer.
     const settle = (
-      exit: Exit.Exit<RunEndResult, RunFailure>,
+      exit: Exit.Exit<RunEndResult | A, RunFailure>,
     ): Effect.Effect<void> =>
       Effect.sync(unlisten).pipe(
         Effect.andThen(trace.settle(exit)),
@@ -192,6 +191,8 @@ export function handOver(
           Effect.suspend(() => {
             if (Exit.isFailure(exit))
               return Deferred.failCause(admitted, exit.cause);
+            if ('ownedBy' in exit.value)
+              return Deferred.succeed(admitted, exit.value);
             const message = exit.value.error?.message ?? NEVER_ENTERED;
             const failure = new RunFailure({
               cause: new Error(message),
@@ -202,14 +203,8 @@ export function handOver(
         ),
       );
     let joined = false;
-    // The launch and the drain are the run's, and until the caller holds
-    // the `Run` that names them they are nobody's: whatever ends this
-    // handoff short of that ends them too. So the handoff is
-    // uninterruptible but for the admission wait, where the launch's own
-    // abort signal is what an interruption reaches, and the exit handler
-    // outside the mask covers the rest, the boundary included: an interrupt
-    // that lands while the tail runs is raised the moment the mask lifts,
-    // with a `Run` built that reaches no one.
+    // Only admission is interruptible. The exit handler outside the mask
+    // also covers an interrupt at return, before the caller gets the Run.
     let cancelled = false;
     const interruptLaunch = (): boolean => {
       cancelled = true;
@@ -228,32 +223,26 @@ export function handOver(
             },
           }).pipe(
             Effect.onExit(settle),
-            // The embedder owns this runtime. Provide the process's existing
-            // context: tool I/O shares its scoped clients, `settle` its logger.
+            // Use the embedder's scoped clients and logger.
             Effect.provideContext(services),
           ),
           { startImmediately: true },
         );
         spawned.push(runFiber);
         const activation = yield* restore(Deferred.await(admitted));
+        // Redirects arrive after trace cleanup and open no view subscription.
+        if (typeof activation !== 'number') return activation;
         const view = session.view.changes.pipe(
-          // The level replays on subscribe, and the fold lands the
-          // activation's row asynchronously, so a replayed level can predate
-          // it: the run absent, or a resumed run with the outcome of the
-          // activation before.
+          // A replay can precede this activation, including its old outcome.
           Stream.dropWhile(
             (level) => level.cursor < activation || !level.runs.has(runId),
           ),
-          // The view is the end condition: the first level holding this
-          // activation's durable outcome is the last element.
+          // End at this activation's first durable outcome.
           Stream.takeUntil(
             (level) => level.runs.get(runId)?.durableOutcome != null,
           ),
         );
-        // The transcript tier folds only for subscribed aggregates, on a
-        // port of this run's own: its stream now, its descendants as the
-        // view gains them, cleared when the drain ends so a long-lived
-        // session does not keep every run's rows resident.
+        // Fold this run and its descendants only while its port is subscribed.
         const port = `sdk/${runId}`;
         let subscribed = '';
         const interest = (ids: readonly RunId[]): Effect.Effect<void> =>
@@ -270,10 +259,8 @@ export function handOver(
             );
           });
         yield* interest([runId]);
-        // The package owns this drain: the descendants join the
-        // subscription as the view gains them, and the run's `result` waits
-        // for its final fold even when nobody reads `view`, and fails if
-        // the fold dies first.
+        // Result waits for the final fold even without a view reader, and
+        // fails when the fold dies. The drain releases transcript interest.
         const drain = yield* Effect.forkDetach(
           Stream.runDrain(
             view.pipe(
@@ -288,7 +275,13 @@ export function handOver(
         return {
           runId,
           result: Fiber.join(runFiber).pipe(
-            Effect.flatMap((value) => Effect.as(Fiber.join(drain), value)),
+            Effect.flatMap((value) =>
+              'ownedBy' in value
+                ? Effect.die(
+                    new Error(`Run ${runId} redirected after admission.`),
+                  )
+                : Effect.as(Fiber.join(drain), value),
+            ),
           ),
           view,
           events: trace.events,
@@ -303,15 +296,22 @@ export function handOver(
       Effect.onExit((exit) =>
         Exit.isSuccess(exit)
           ? Effect.void
-          : Effect.suspend(() => {
-              // Only a launcher's abandoned handoff stops the launch by id
-              // (one the launch failed has settled it), and only while no
-              // other caller joined it; a joiner ends only its own wait.
+          : Effect.gen(function* () {
+              // A joiner abandons only its observation; failures already settled.
               if (!Cause.hasInterrupts(exit.cause) || joined)
-                return Fiber.interruptAll(spawned);
-              if (session.followUps.resumes.joined(runId)) return Effect.void;
+                return yield* Fiber.interruptAll(spawned);
+              // Redirects never acquired the run, even at the return boundary.
+              const answer = yield* Deferred.poll(admitted);
+              if (Option.isSome(answer)) {
+                const redirected = yield* Effect.match(answer.value, {
+                  onFailure: () => false,
+                  onSuccess: (value) => typeof value !== 'number',
+                });
+                if (redirected) return yield* Fiber.interruptAll(spawned);
+              }
+              if (session.followUps.resumes.joined(runId)) return;
               interruptLaunch();
-              return Fiber.interruptAll(spawned);
+              return yield* Fiber.interruptAll(spawned);
             }),
       ),
     );

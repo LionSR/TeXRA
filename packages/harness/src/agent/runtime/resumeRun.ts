@@ -1,4 +1,4 @@
-import { Clock, Effect, Exit, Fiber, Latch, Result, Scope } from 'effect';
+import { Clock, Effect, Fiber, Latch, Result, type Scope } from 'effect';
 
 /**
  * The one resume entry point. Every host continues a persisted run through
@@ -194,9 +194,7 @@ const resumeHere = Effect.fn('resumeHere')(function* (
   // neither launches from a state read before the other ran, and a host is
   // refused before it rearranges itself. A claim this process holds, or one
   // whose owner is provably dead, is taken over.
-  const claim = yield* Scope.make();
-  yield* Effect.addFinalizer(() => Scope.close(claim, Exit.void));
-  const heldBy = yield* holdClaim(session, runId).pipe(Scope.provide(claim));
+  const heldBy = yield* holdClaim(session, runId);
   if (heldBy !== null) return { failed: 'owned_elsewhere' };
   // Whether an open call owns it, read under its claim in this resume's
   // job, so the answer and the activation below are one decision.
