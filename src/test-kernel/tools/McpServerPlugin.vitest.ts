@@ -136,7 +136,6 @@ describe('MCP server plugins', () => {
             injectTools: false,
             stores: installedHost().roots,
             workspaceRoot: undefined,
-            host: 'cli',
           }).pipe(Scope.provide(pin), Effect.provideContext(services));
         const pin = yield* Scope.make();
         const resolved = yield* open(pin);

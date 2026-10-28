@@ -179,8 +179,8 @@ type RunState = 'live' | 'idle';
 
 function fakeSession(state: RunState): SessionHandle {
   if (state === 'idle')
-    vi.spyOn(resumability, 'deriveResumability').mockReturnValue(
-      Effect.succeed({ kind: 'checkpoint' }),
+    vi.spyOn(resumability, 'runRejection').mockReturnValue(
+      Effect.succeed(null),
     );
   // The port's resume is the session's own wake, as the session layer wires it.
   recorded = recordedFollowUps({

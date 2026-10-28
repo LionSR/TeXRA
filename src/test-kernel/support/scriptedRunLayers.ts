@@ -22,7 +22,6 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import { registryOf } from '@agent/runtime/runRegistry';
 import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { RunCell } from '@shared/session/runHistory';
 import {
@@ -35,8 +34,6 @@ import {
 } from '@shared/schemas';
 import { testRunTools } from '@test/support/nativeToolTestLayer';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import { testRunHandle } from '@test/support/runHandleFixtures';
-import { untrackRun } from '@test/support/sessionEnd';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { installedHost } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
@@ -330,7 +327,6 @@ export interface ScriptedRunInit {
   readonly mediaFiles?: readonly string[];
   /** Absent means the launch had no transcript row to write. */
   readonly initialUserMessage?: string | undefined;
-  readonly onIdle?: () => void;
 }
 
 export function agentRunTestLayer(init: ScriptedRunInit) {
@@ -341,14 +337,6 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
       const logger = init.logger ?? new TraceEmitter();
       const scope: Scope.Scope = yield* Effect.scope;
       const tools = init.tools ?? {};
-      const handle = testRunHandle({
-        runId: init.runId,
-        agent: 'chat',
-      });
-      registryOf(init.session.runs).track(handle);
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => untrackRun(init.session.runs, handle.runId)),
-      );
       return testAgentRun(
         { runId: init.runId, session: init.session, logger, model, scope },
         {
@@ -364,7 +352,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
           ...testRunTools(installedHost().roots, tools),
           finalToolName: init.finalToolName ?? null,
-          callbacks: init.onIdle ? { onIdle: init.onIdle } : {},
+          callbacks: {},
           entry: {
             parent: init.parentRunId ?? null,
             registration: null,

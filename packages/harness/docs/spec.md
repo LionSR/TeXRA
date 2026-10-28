@@ -62,7 +62,7 @@ its kind is its `type` column.
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row (`controllers/session/storeSchema.ts:54-65`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
-  `RunState` the loop continues from (`shared/session/runState.ts:532-545`).
+  `RunState` the loop continues from (`shared/session/runState.ts:531-544`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
   (`agent/runtime/SessionEvents.ts:219-370`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
@@ -242,10 +242,10 @@ cannot be opened or resumed (`shared/session/runHistory.ts:140-146`,
 The vocabulary is one Effect Schema union, `SessionEventDraftSchema`, built
 from three groups (`shared/schemas/sessionEvent.ts:439-443`). The groups below
 follow it. A "folded" kind is one `applyRunRows` reads
-(`shared/session/runState.ts:343-472`,
+(`shared/session/runState.ts:342-471`,
 `shared/session/turnRowHandlers.ts:174-268`, `:284-396`); every other kind on a
 run aggregate is ignored by name, and an unknown kind is refused
-(`shared/session/runState.ts:166-202`, `:496-499`).
+(`shared/session/runState.ts:166-201`, `:495-498`).
 
 ### 3.1 Run history rows (private to the runtime)
 
@@ -277,7 +277,7 @@ never sent to a renderer (`shared/schemas/sessionEvent.ts:410-438`).
 - `context.blob` (folded: yes): Model-facing content stored by sha256 address
   (`shared/schemas/sessionEvent.ts:423`).
 - `hook.outcome` (folded: yes): A hook point's recorded outcome; a recorded
-  point never runs again (`shared/session/runState.ts:464-471`).
+  point never runs again (`shared/session/runState.ts:463-470`).
 - `child.turn` (folded: no): A child loop's turn identity and fate, `accepted`
   or `settled` (`shared/schemas/sessionEvent.ts:433-437`).
 
@@ -323,7 +323,6 @@ line numbers are in that file). Kinds marked "folded" are also read by
 - `run.detach` (folded: no): A stop severed the parent edge (`:312-314`).
 - `run.end` (folded: no): The terminal fact: outcome, classified error, output
   (`:315-322`).
-- `conversation.progress` (folded: no): Conversation progress (`:323`).
 - `run.fact` (folded: no): One family of run facts, latest per key (`:324`).
 - `child.park` (folded: no): A child loop's park: `parked`, `resumed`, `paused`
   (`:325-341`).
@@ -350,7 +349,7 @@ stores none), `context.state`, `stream.start`, `stream.end`, and
 asks for its final tool may record another,
 `agent/runtime/loop/toolUse.ts:301-313`). `response.finalized` is read by the
 fold, which marks that response's answer final
-(`shared/session/runState.ts:387-390`).
+(`shared/session/runState.ts:386-389`).
 
 Streamed text (`stream.chunk`) is transient. It is not an arm of the vocabulary
 and never a row (`agent/runtime/loop/toolUseDispatch.ts:497-514`).
@@ -465,20 +464,20 @@ requests, and the offered tools and contents
 ### 5.2 Grammar
 
 `applyRunRows(state, rows)` folds rows in order
-(`shared/session/runState.ts:532-545`). It MUST refuse a row whose commit is not
-above the last folded one (`shared/session/runState.ts:494-498`). Each folded
+(`shared/session/runState.ts:531-544`). It MUST refuse a row whose commit is not
+above the last folded one (`shared/session/runState.ts:493-497`). Each folded
 kind has one handler in a table keyed by row type: the state it requires (any
 state, an existing one, or an opened run) and its move
-(`shared/session/runState.ts:293-310`, `:343-472`). A handler that requires an
+(`shared/session/runState.ts:292-309`, `:342-471`). A handler that requires an
 opened run refuses a row before the opening `run.position`
-(`shared/session/runState.ts:506-510`). Every other row kind is listed by name
+(`shared/session/runState.ts:505-509`). Every other row kind is listed by name
 as one the fold skips, so a kind in neither list is refused as `unknown-run-row`
 and a new kind does not compile until it is placed
-(`shared/session/runState.ts:166-202`, `:496-499`). A refusal is a typed
+(`shared/session/runState.ts:166-201`, `:495-498`). A refusal is a typed
 `RunHistoryInconsistent` with a reason: `out-of-order`, `orphan-settlement`,
 `unknown-run-row`, `mismatched-delivery` or `unreadable-turn`
 (`shared/session/runState.ts:75-86`). The fold never defaults a row it cannot
-apply (`shared/session/runState.ts:525-534`).
+apply (`shared/session/runState.ts:524-533`).
 
 A run is opened by its first `run.position`. Run history rows without an opening
 position MUST fail the load as `inconsistent`
@@ -522,9 +521,9 @@ The loop holds no copy of the conversation. It reads every branch off the fold,
 so the live path and the resume path are the same steps
 (`agent/runtime/loop/toolUse.ts:408-421`, `:423-477`). A resume enters the same
 program, `runToolUse`, with `resume: true`
-(`agent/runtime/executeAgent.ts:128-137`), reached from `resumeRun` through
-`resumeToolUseFromResumeData` (`agent/runtime/resumeRun.ts:315-319`,
-`agent/runtime/executeAgent.ts:352-355`).
+(`agent/runtime/executeAgent.ts:83-86`), reached from `resumeRun` through
+`resumeToolUseFromResumeData` (`agent/runtime/resumeRun.ts:311-315`,
+`agent/runtime/executeAgent.ts:292-294`).
 
 A resume MUST be refused when the rows hold no opened run
 (`agent/runtime/loop/runProgram.ts:81-87`). A fresh launch MUST be refused when
@@ -678,7 +677,7 @@ folds the stored rows, and commits the activation rows with a `request.decided`
 (`agent/runtime/RunHistory.ts:336-366`). A request is unbound unless it is the
 turn's open retry ask, the request a pending call's resumed attempt re-enters,
 the request a pending `script` call's guest calls share (attempt 0), or an
-`externalInquiry` (`shared/session/runState.ts:243-264`).
+`externalInquiry` (`shared/session/runState.ts:242-263`).
 
 ### 7.3 What a second process may and may not do
 
@@ -766,7 +765,7 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   run, which retires it with no decision row
   (`controllers/session/SessionRequests.ts:147-158`). Delivering the answer (or
   the drop) as a follow-up is a separate, best-effort step
-  (`shared/session/runState.ts:243-264`).
+  (`shared/session/runState.ts:242-263`).
 
 ## 9. Crash guarantees
 
@@ -800,7 +799,7 @@ The guarantees, numbered as in the package README:
 - **I5**: An owned child that ended cleanly answers its call; it is not launched
   again without a person's retry; no child is left without a terminal row,
   except one deliberately paused with a `child.park` `paused` row so it can be
-  called again (`tools/delegation/childRun.ts:163-172`). Asserted by
+  called again (`tools/delegation/childRun.ts:156-165`). Asserted by
   `src/test-kernel/support/crashConformance.ts:38-39`, `:867`.
 - **I6**: A child's result is delivered to its parent at most once and is not
   lost while the parent was held elsewhere; a result whose child was detached,

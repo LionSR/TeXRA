@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Deferred, Effect, Fiber, Layer, Schema } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
@@ -10,14 +10,12 @@ import { sessionFsLayer } from '@platform/rootedFs';
 import {
   type CommitOrdinal,
   isTaskConfig,
-  RunIdSchema,
   type RunId,
   type RequestEnsureProgressViewPayload,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 
-import { canResume } from '../storage/resumability';
 import { persistedParentRunId, withChildSpend } from '../storage/runRecords';
 import {
   buildAgentLaunchContext,
@@ -39,33 +37,8 @@ import type { RegisterRunOptions } from '../storage/runLifecycle';
 import type { ChildRunTurns } from './childRunLoop';
 import type { RunEndResult } from './RunEndResult';
 import type { SessionHandle } from './SessionHandle';
-import type { RunHandle } from './RunHandle';
 
 const CHANNEL = 'executeAgent';
-
-/** A claimed run no longer has the persisted state to resume. */
-export class ResumeSessionUnavailableError extends Schema.TaggedError<ResumeSessionUnavailableError>()(
-  'ResumeSessionUnavailableError',
-  {
-    runId: RunIdSchema,
-  },
-) {
-  override get message(): string {
-    return 'This session can no longer be resumed. Start a new run instead.';
-  }
-}
-
-/**
- * The wiring the two entry points genuinely do not share. Everything outside
- * this union is assembled once in {@link launchRun}, so a field added for
- * one entry point cannot go missing on the other.
- */
-type LaunchVariant =
-  | { readonly kind: 'fresh' }
-  | {
-      readonly kind: 'resume';
-      readonly onIdle?: () => void;
-    };
 
 /**
  * The per-run layer both families run under: the run's `AgentRun`, the
@@ -75,30 +48,13 @@ type LaunchVariant =
  * from the fiber's ambient roots). The follow-up lease is not here: a
  * conversation claims its own inside the loop (`claimFollowUps`).
  */
-function runLayerFor(
-  ctx: AgentLaunchContext,
-  shared: SubagentRunOptions,
-  onIdle: (() => void) | undefined,
-) {
+function runLayerFor(ctx: AgentLaunchContext, shared: SubagentRunOptions) {
   const runSession = ctx.session;
   return modelInvokerLayer().pipe(
     Layer.provideMerge(
       agentRunLayer(ctx, {
         tools: shared.tools,
-        callbacks: {
-          onProgress: (update) => {
-            // A UI-only signal, suppressed in the transcript fold: the session
-            // view updater sets the run's `conversationProgress` from it.
-            if (update.kind === 'overview') {
-              ctx.logger.emit({
-                type: 'conversation.progress',
-                progress: { toolCallCount: update.toolCallCount },
-              });
-            }
-            shared.onProgress?.(update);
-          },
-          ...(onIdle ? { onIdle } : {}),
-        },
+        callbacks: { onProgress: shared.onProgress },
       }),
     ),
     Layer.provideMerge(Layer.succeed(RunHistory)(runSession.runHistory)),
@@ -117,27 +73,16 @@ function runLayerFor(
  */
 function launchRun(
   ctx: AgentLaunchContext,
-  handle: RunHandle,
   shared: SubagentRunOptions,
-  variant: LaunchVariant,
+  resume: boolean,
 ): Effect.Effect<RunEndResult, Error, AgentRunServices> {
   const task = isTaskConfig(ctx.config);
   /** A task's result, with its children's spend. */
   const withChildrenSpend = (ended: RunEndResult) =>
     task ? withChildSpend(ctx.session, ended) : Effect.succeed(ended);
-  return runToolUse({
-    turns: shared.turns,
-    resume: variant.kind === 'resume',
-    attachment: handle,
-  }).pipe(
+  return runToolUse({ turns: shared.turns, resume }).pipe(
     Effect.flatMap(withChildrenSpend),
-    Effect.provide(
-      runLayerFor(
-        ctx,
-        shared,
-        variant.kind === 'resume' ? variant.onIdle : undefined,
-      ),
-    ),
+    Effect.provide(runLayerFor(ctx, shared)),
   );
 }
 
@@ -174,7 +119,7 @@ interface SubagentRunOptions {
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool[];
   /**
-   * The launching run, for a delegated child: the parent edge on the handle,
+   * The launching run, for a delegated child: the parent edge,
    * the subagent prompt. A fresh launch takes it from the caller; a resume ignores it and
    * reads the persisted `run.start`.
    */
@@ -183,7 +128,7 @@ interface SubagentRunOptions {
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Session owning this run's coordination state. */
   readonly session: SessionHandle;
-  /** Fires once with the run's id right after its handle is tracked. */
+  /** Fires once with the run's id as the run starts. */
   onRun?: (runId: RunId) => Effect.Effect<void, Error>;
 }
 
@@ -252,7 +197,7 @@ export function executeAgent(
     // skips a `finally` after a failed `yield*`, ending the run early.
     return yield* runWithLifecycle(
       ctx,
-      (handle) =>
+      () =>
         Effect.gen(function* () {
           // The run directory is created by the first write into it.
           yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
@@ -277,9 +222,9 @@ export function executeAgent(
               { replayWhenAttached: true },
             );
           }
-          return yield* launchRun(ctx, handle, options, { kind: 'fresh' });
+          return yield* launchRun(ctx, options, false);
         }).pipe(settleDescriptionOnExit(sessionDescription, opened)),
-      // The edge the lifecycle's handle is born with: the caller's own
+      // The edge the run is born with: the caller's own
       // parent for a fresh child.
       {
         parentRunId: options.parentRunId,
@@ -309,13 +254,10 @@ export interface ResumeTurnIdentity {
 }
 
 /** What a fresh launch takes, but its registration. */
-export interface ResumeToolUseFromResumeDataOptions extends Omit<
+export type ResumeToolUseFromResumeDataOptions = Omit<
   ExecuteAgentOptions,
   'registration'
-> {
-  /** A resumed cycle is idle after its child delivery, while its run stays live. */
-  readonly onIdle?: () => void;
-}
+>;
 
 /**
  * Resume one run (a conversation, or a task's recipe) from its
@@ -331,10 +273,6 @@ export function resumeToolUseFromResumeData(
 ): Effect.Effect<RunEndResult, Error, ProcessServices> {
   const { session: runSession, stopAfterCycle } = options;
   const resumed = Effect.gen(function* () {
-    if (!(yield* canResume(identity.runId, runSession)))
-      return yield* new ResumeSessionUnavailableError({
-        runId: identity.runId,
-      });
     const parentRunId = yield* persistedParentRunId(runSession, identity.runId);
     const definition = yield* prepareAgentDefinition({
       config: identity.agentConfig,
@@ -352,11 +290,7 @@ export function resumeToolUseFromResumeData(
     });
     return yield* runWithLifecycle(
       ctx,
-      (handle) =>
-        launchRun(ctx, handle, options, {
-          kind: 'resume',
-          onIdle: options.onIdle,
-        }),
+      () => launchRun(ctx, options, true),
       // Resume reads the parent edge from the persisted `run.start`.
       {
         parentRunId,

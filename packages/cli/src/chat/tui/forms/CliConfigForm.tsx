@@ -3,6 +3,8 @@ import { Effect } from 'effect';
 
 import { loadApiKeyStatusMap } from '@texra-ai/llm';
 import {
+  APPROVAL_POLICY_CONFIG_KEY,
+  ensureError,
   toErrorMessage,
   type SurfacedSettingEntry,
 } from '@texra-ai/harness/schemas';
@@ -47,9 +49,9 @@ export interface CliConfigFormProps {
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
   /**
-   * Applies the approval-policy side effect when that row is written here — the
-   * chat TUI's live-session hook, identical to the one `/approval` drives.
-   * Omitted by `texra config edit`, whose process holds no session to update.
+   * Repaints the live session's approval policy after that row is written
+   * here, the same hook `/approval` drives. Omitted by `texra config edit`,
+   * whose process holds no session.
    */
   readonly onApprovalPolicyChanged?: (policy: ApprovalPolicy) => void;
 }
@@ -100,13 +102,12 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   });
 
   // The one CLI write path for a `/config` row: the same
-  // `applyStateSettingUpdate` the extension and desktop settings views call, so
-  // a row that carries a live side effect (approval policy) cannot be persisted
-  // from here while the running session keeps enforcing the old value. The
-  // catalog row still owns the write consequences:
+  // `applyStateSettingUpdate` the extension and desktop settings views call.
+  // After the write this form applies its consequences: the catalog row's
   // `onWrite.invalidatesModelOptions` marks the rows whose change re-routes
-  // models, so this form keeps no key list of its own. `null` is the shared
-  // reset convention (delete the key so the schema default reappears).
+  // models, and an approval-policy write repaints the live session's policy
+  // line (enforcement reads the config itself). `null` is the shared reset
+  // convention (delete the key so the schema default reappears).
   const applyUpdate = (
     entry: SurfacedSettingEntry,
     value: unknown,
@@ -115,7 +116,6 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       const result = yield* applyStateSettingUpdate(entry.key, value, {
         host: 'cli',
         stores: roots,
-        onApprovalPolicyChanged: props.onApprovalPolicyChanged,
       });
       const label = entry.title ?? entry.key;
       switch (result.kind) {
@@ -143,6 +143,22 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
       settings.reload();
       if (entry.onWrite?.invalidatesModelOptions) {
         bumpCodexPreferenceVersion();
+      }
+      if (entry.key === APPROVAL_POLICY_CONFIG_KEY) {
+        // The value is written: a failed repaint is reported, never rolled back.
+        yield* Settings.get<ApprovalPolicy>(roots, entry.key).pipe(
+          Effect.flatMap((policy) =>
+            Effect.try({
+              try: () => props.onApprovalPolicyChanged?.(policy),
+              catch: ensureError,
+            }),
+          ),
+          Effect.tapError((error) => Effect.sync(() => props.onError?.(error))),
+          Effect.ignore({
+            log: 'Warn',
+            message: 'Approval policy written; session repaint failed',
+          }),
+        );
       }
     });
 

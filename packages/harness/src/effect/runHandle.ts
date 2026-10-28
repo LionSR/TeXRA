@@ -27,6 +27,7 @@ import type { ProcessServices } from '@platform/processRuntime';
 import {
   type CommitOrdinal,
   qualifyAggregateId,
+  RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
 import { descendantRuns } from '@shared/session/sessionView';
@@ -39,6 +40,42 @@ import type { Run } from './sessions.js';
  *  why), or a launcher whose contract broke. A caller waiting on admission
  *  must hear it. */
 const NEVER_ENTERED = 'The run ended without entering the session.';
+
+/**
+ * A run's end as its handle reports it. A stop interrupts the run's fiber,
+ * which re-raises the interruption once the run's end commits: that stored
+ * end is how the run ended, and the interruption, passed on, would interrupt
+ * whoever reads it. With none stored, or a failed one, the interruption
+ * stays: a joiner that left a run still going, an end that did not save.
+ */
+const reportedEnd = (
+  session: RuntimeSessionHandle,
+  runId: RunId,
+  exit: Exit.Exit<RunEndResult, RunFailure>,
+): Effect.Effect<RunEndResult, RunFailure> =>
+  Exit.isSuccess(exit) || !Cause.hasInterruptsOnly(exit.cause)
+    ? exit
+    : session.log.facts(runId).pipe(
+        Effect.map((facts) => facts?.end ?? null),
+        // An end that cannot be read fails the result with why, rather
+        // than passing the stop on as if none were stored.
+        Effect.mapError(
+          (error) =>
+            new RunFailure({
+              cause: error,
+              message: `Run ${runId} stopped; its stored end could not be read: ${error.message}`,
+            }),
+        ),
+        Effect.flatMap((end) =>
+          end === null || end.outcome === RUN_OUTCOME.FAILED
+            ? exit
+            : Effect.succeed({
+                runId,
+                outcome: end.outcome,
+                output: end.output,
+              }),
+        ),
+      );
 
 /**
  * How many trace events a run holds for a first reader that has yet to
@@ -175,6 +212,9 @@ export function handOver(
     const trace = yield* traceHandover(session, runId);
     const unlisten = session.trace.listen(runId, trace.offer);
     const admitted = yield* Deferred.make<CommitOrdinal, RunFailure>();
+    // This activation's end, read once as it exits: a resume writes another.
+    const ended = yield* Deferred.make<RunEndResult, RunFailure>();
+    let joined = false;
     // Settling a run that was admitted changes nothing here; one that never
     // was fails its admission with its own failure, its result's error, or
     // the launcher's broken contract.
@@ -182,7 +222,9 @@ export function handOver(
       exit: Exit.Exit<RunEndResult, RunFailure>,
     ): Effect.Effect<void> =>
       Effect.sync(unlisten).pipe(
-        Effect.andThen(trace.settle(exit)),
+        Effect.andThen(Effect.exit(reportedEnd(session, runId, exit))),
+        Effect.tap(trace.settle),
+        Effect.flatMap((end) => Deferred.done(ended, end)),
         Effect.andThen(
           Effect.suspend(() => {
             if (Exit.isFailure(exit))
@@ -196,7 +238,6 @@ export function handOver(
           }),
         ),
       );
-    let joined = false;
     // The launch and the drain are the run's, and until the caller holds the
     // `Run` that names them they are nobody's: whatever ends this handoff short
     // of that ends them too. So the handoff is uninterruptible but for the
@@ -275,9 +316,7 @@ export function handOver(
           { startImmediately: true },
         );
         spawned.push(drain);
-        const result = Fiber.join(runFiber).pipe(
-          Effect.flatMap((value) => Effect.as(Fiber.join(drain), value)),
-        );
+        const result = Effect.tap(Deferred.await(ended), Fiber.join(drain));
         return {
           runId,
           result,

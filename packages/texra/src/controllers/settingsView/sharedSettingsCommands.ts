@@ -29,7 +29,7 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   SUBSCRIPTION_AUTH_PROVIDERS,
 } from '@texra-ai/harness/schemas';
-import { appSignalStream } from '@texra-ai/harness/host';
+import { appSignalStream, emitAppSignal } from '@texra-ai/harness/host';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
@@ -285,8 +285,8 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       }
       if (key === APPROVAL_POLICY_CONFIG_KEY) {
         yield* bindings.refreshCatalogs();
+        yield* emitAppSignal('approvalPolicyChanged', undefined);
       }
-      yield* bindings.stateSettingApplied(key);
     });
 
   // One read-modify-write at a time per list: two switches handled at once

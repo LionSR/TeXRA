@@ -35,12 +35,13 @@ const V1 = { version: 1, upcast: [] } as const satisfies RowKind;
 
 /**
  * The row kinds this build deleted from `ROW_KINDS`. A store that holds one
- * is not a newer build's: its rows fail the reads of their own run
- * (`DatabaseRowCorrupt`) and the rest of the store opens. A kind moves here
+ * is not a newer build's: its run reads as an earlier build's
+ * (`DatabaseRowEarlier`) and the rest of the store opens. A kind moves here
  * from `ROW_KINDS` in the change that deletes it; every kind ever stored is
  * listed in `config/storage/row-kinds-ever.json`, which never shrinks.
  */
 export const RETIRED_ROW_KINDS: ReadonlySet<string> = new Set<string>([
+  'conversation.progress',
   'inquiryThreadUpdated',
   'model.compaction',
   'model.retry',
@@ -90,7 +91,6 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v2: a recipe's value is `structured`, with no `documents` (no upcaster,
   // as `run.config`).
   'run.end': { version: 2, upcast: [] },
-  'conversation.progress': V1,
   'run.fact': V1,
   'child.park': V1,
   'run.removed': V1,

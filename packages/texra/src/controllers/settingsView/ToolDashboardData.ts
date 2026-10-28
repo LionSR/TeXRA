@@ -17,7 +17,6 @@ import {
   ToolAvailability,
   ToolCatalog,
   type ExternalToolCheckResult,
-  type SettingHost,
 } from '@texra-ai/harness/host';
 import { ToolRegistry } from '@texra-ai/harness/plugins';
 import type {
@@ -80,24 +79,16 @@ function settingRows(card: PluginCard): Pick<ToolDashboardItem, 'settings'> {
 // ============================================================
 
 /**
- * The cards on `host`'s dashboard, each with its plugin, in card order. A
- * card whose plugin this process does not list, or whose plugin's every
- * tool declares itself unavailable on the asking host, is not shown there and cannot be
- * installed, authed or toggled from it: host exclusion removes those tools
- * from the resolved agent list, so they can never be called there.
+ * The cards on this process's dashboard, each with its plugin, in card
+ * order. A card whose plugin this process does not list is not shown and
+ * cannot be installed, authed or toggled from it.
  */
 export function visibleToolPlugins(
   plugins: ReadonlyMap<string, Plugin>,
-  host: SettingHost,
 ): readonly { readonly card: PluginCard; readonly plugin: Plugin }[] {
   return TEXRA_PLUGIN_CARDS.flatMap((card) => {
     const plugin = plugins.get(card.id);
-    if (plugin === undefined) return [];
-    const tools = Object.values(plugin.tools ?? {});
-    return tools.length === 0 ||
-      tools.some((tool) => tool.unavailableHosts?.includes(host) !== true)
-      ? [{ card, plugin }]
-      : [];
+    return plugin === undefined ? [] : [{ card, plugin }];
   });
 }
 
@@ -106,8 +97,8 @@ export function visibleToolPlugins(
  *
  * Built-in plugins come first, then the probed plugins, each in card order.
  *
- * @param probeInputs - the asking host (see {@link visibleToolPlugins}), its
- *   workspace folder and configuration,
+ * @param probeInputs - the asking host, its workspace folder and
+ *   configuration,
  *   carried as data for the probes that need them (the GitHub group asks
  *   whether the folder is a git repository, the Zotero group reads its port).
  *   Ignored when `cachedResults` skips the probes.
@@ -120,10 +111,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     probeInputs: ToolProbeInputs,
     cachedResults?: readonly ExternalToolCheckResult[],
   ) {
-    const visible = visibleToolPlugins(
-      (yield* ToolRegistry).entries,
-      probeInputs.host,
-    );
+    const visible = visibleToolPlugins((yield* ToolRegistry).entries);
     const builtinItems: ToolDashboardItem[] = visible
       .filter(({ plugin }) => plugin.availability === undefined)
       .map(({ card, plugin }) => ({

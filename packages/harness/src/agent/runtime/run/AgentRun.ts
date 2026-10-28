@@ -80,8 +80,6 @@ export interface ToolPolicy {
 interface RunCallbacks {
   /** Fires on meaningful progress: plan changes, tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
-  /** An idle turn boundary, after child delivery. */
-  readonly onIdle?: () => void;
 }
 
 /** The tool a script's run makes its one call to. */
@@ -239,7 +237,6 @@ export const agentRunLayer = (
       for (const warning of held.warnings) logger.warn(warning);
       const toolInputs: AgentRunShape['toolInputs'] = {
         tools,
-        host: session.roots.host,
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]
           : (input.tools ?? []),

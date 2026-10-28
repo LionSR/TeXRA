@@ -2,24 +2,29 @@ import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import { recipeBlockOf, type RunId } from '@shared/schemas';
-import { DatabaseRowEarlier } from '@shared/session/database';
+import { recipeBlockOf, type OwnerId, type RunId } from '@shared/schemas';
+import { claimStanding, DatabaseRowEarlier } from '@shared/session/database';
 import { continuesFromRows } from '@shared/session/runActions';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'Resumability';
 
-/**
- * Where a run continues from, read from its durable facts: its rows (its
- * loop opened it), nowhere, or unknown because the facts could not be read.
- * A run its loop drives is born with its opening, so none is registered and
- * never opened.
- */
-export type ResumabilityDecision =
+/** Why this process cannot resume a run. Each kind is also a follow-up
+ *  failure reason, so a sender's result names it as is. */
+export type RunRejection =
+  /** A live owner, or one not provably dead, holds its claim. */
+  | { readonly kind: 'owned_elsewhere'; readonly owner: OwnerId }
+  /** Its rows hold no point to continue from. */
+  | { readonly kind: 'finished' }
+  /** An earlier build wrote its rows. */
+  | { readonly kind: 'earlier_build'; readonly cause: string };
+
+/** Where a run continues from: a point its loop opened, none, rows an
+ *  earlier build wrote, or unknown because they could not be read. */
+type ResumabilityDecision =
   | { readonly kind: 'checkpoint' }
-  | { readonly kind: 'none' }
   | { readonly kind: 'unreadable'; readonly cause: string }
-  | { readonly kind: 'earlierBuild'; readonly refusal: DatabaseRowEarlier };
+  | Exclude<RunRejection, { readonly kind: 'owned_elsewhere' }>;
 
 /** The earlier-build refusal a failed read carries, if any. */
 const earlierRefusal = (error: unknown): DatabaseRowEarlier | undefined =>
@@ -42,7 +47,8 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   // An earlier build's row: this build cannot open the run, and says so.
   const refusal =
     read._tag === 'Failure' ? earlierRefusal(read.failure) : undefined;
-  if (refusal !== undefined) return { kind: 'earlierBuild', refusal };
+  if (refusal !== undefined)
+    return { kind: 'earlier_build', cause: refusal.message };
   if (read._tag === 'Failure') {
     const cause = `run state could not be read (${toErrorMessage(read.failure)})`;
     yield* Effect.logWarning(`Run ${runId}: ${cause}`).pipe(
@@ -58,29 +64,28 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
       identity: facts.start.identity,
     })
     ? { kind: 'checkpoint' }
-    : { kind: 'none' };
+    : { kind: 'finished' };
 });
 
 /**
- * Whether a resume of `runId` has rows to continue from. Fails when they
- * cannot be read (an earlier build's with its refusal), so "nothing to
- * resume" stays apart from "resume failed".
+ * Why a resume of `runId` here is rejected, read from disk without changing
+ * anything, or null when it may go ahead: nobody alive holds the claim, or
+ * this process does with no loop behind it, which the resume takes over.
+ * The one decider for a run with no loop here: a message's admission, the
+ * resume under the run's claim, a recovered child and a host's run record
+ * all ask it. The rejection is not stored. A fact that cannot be read fails.
  */
-export const canResume = Effect.fn('canResume')(function* (
+export const runRejection = Effect.fn('runRejection')(function* (
   runId: RunId,
   session: SessionHandle,
-): Effect.fn.Return<boolean, Error> {
+): Effect.fn.Return<RunRejection | null, Error> {
+  const standing = claimStanding(yield* session.log.owner(runId));
+  if (standing.kind === 'held')
+    return { kind: 'owned_elsewhere', owner: standing.owner };
   const decision = yield* deriveResumability(runId, session);
   if (decision.kind === 'unreadable')
     return yield* Effect.fail(
-      new Error(
-        `Failed to read the resume state of run ${runId}: ${decision.cause}`,
-      ),
+      new Error(`Could not read the state of run ${runId}: ${decision.cause}`),
     );
-  if (decision.kind === 'earlierBuild') return yield* decision.refusal;
-  if (decision.kind === 'none')
-    yield* Effect.logWarning(`Run ${runId} is not resumable`).pipe(
-      withLogChannel(CHANNEL),
-    );
-  return decision.kind === 'checkpoint';
+  return decision.kind === 'checkpoint' ? null : decision;
 });

@@ -17,7 +17,7 @@
   "packages/harness/src/utils/text/stringUtils.ts": 29,
   "packages/texra/src/agent/output/outputState.ts": 24,
   "packages/texra/src/common/files/fileTypeUtils.ts": 6,
-  "packages/texra/src/controllers/settingsView/settingsHostBindings.ts": 46,
+  "packages/texra/src/controllers/settingsView/settingsHostBindings.ts": 44,
   "packages/texra/src/shared/constants/workflowOutput.ts": 6,
   "packages/texra/src/shared/contextGauge.ts": 5,
   "packages/texra/src/shared/latexFileTypes.ts": 4,

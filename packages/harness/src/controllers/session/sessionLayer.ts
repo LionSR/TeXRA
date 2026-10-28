@@ -504,11 +504,7 @@ const closeSession = (root: string) =>
     // now rather than waited out; the rest drain, none admitted meanwhile.
     const drained = yield* Effect.gen(function* () {
       const undriven = yield* runs.stopAll();
-      for (const runId of undriven) {
-        yield* settleRun(session, runId);
-        const handle = runs.get(runId)?.handle;
-        if (handle) runs.untrackIfCurrent(handle);
-      }
+      for (const runId of undriven) yield* settleRun(session, runId);
       yield* runs.awaitDrained();
     }).pipe(
       Effect.interruptible,

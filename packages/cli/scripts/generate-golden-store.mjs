@@ -933,13 +933,6 @@ async function generate(root) {
     await waited(1);
     writeFileSync(path.join(root, 'bash.release'), '');
     await waited(2);
-    // Each wait's progress row commits from the trace after the wait does:
-    // seen first, the second cannot race the resume's `followup.closed`.
-    await until(
-      'the service task progress after turn 2',
-      () => rowsOf(task, `e.type = 'conversation.progress'`) >= 2,
-      service,
-    );
     const [shell] = query(
       cli.store(),
       `SELECT s.logical_id AS id FROM event e

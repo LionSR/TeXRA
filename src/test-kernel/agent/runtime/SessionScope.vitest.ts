@@ -1,17 +1,14 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
-import { registryOf } from '@agent/runtime/runRegistry';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { generateRunId } from '@utils/core';
 
 describe('sendFollowUp host-path session routing', () => {
   it.effect(
@@ -25,15 +22,6 @@ describe('sendFollowUp host-path session routing', () => {
           processSession.followUps
             .closeInput(parentRun)
             .pipe(Effect.andThen(closeSessionOf(processSession))),
-        );
-
-        // A child run is tracked in the explicit process session, as desktop
-        // composition does instead of using the module default.
-        registryOf(processSession.runs).track(
-          testRunHandle({
-            runId: generateRunId(),
-            agent: 'orchestrator',
-          }),
         );
 
         // A host-path caller (outside any run ALS, like the desktop IPC handler)

@@ -172,18 +172,10 @@ export const definePlugin: <ROut = never>(
   plugin: PluginDefinition<ROut>,
 ) => Plugin = erase;
 
-const builtins = new WeakSet<object>();
-/** The tools of the harness's own plugins. Only `defineBuiltinPlugin`, which
- *  no public entry exports, adds to it: no app plugin passes for one. */
-export const builtinTools: Pick<WeakSet<object>, 'has'> = builtins;
-
 /** A built-in's value: its tools may read `ToolServices`. */
-export const defineBuiltinPlugin = <ROut = never>(
+export const defineBuiltinPlugin: <ROut = never>(
   plugin: PluginDefinition<ROut, ToolServices>,
-): Plugin => {
-  for (const tool of Object.values(plugin.tools ?? {})) builtins.add(tool);
-  return erase(plugin);
-};
+) => Plugin = erase;
 
 /** {@link decodeDisabledTools}, failing as the state read it is. */
 export function storedDisabledTools(

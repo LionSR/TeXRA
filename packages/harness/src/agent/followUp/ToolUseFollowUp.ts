@@ -1,7 +1,7 @@
 import { Cause, Deferred, Effect, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
-import { runRejection } from '@agent/runtime/runClassification';
+import { runRejection } from '@agent/storage/resumability';
 import type { ResumeAttempt, ResumeRunResult } from '@agent/runtime/resumeRun';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';

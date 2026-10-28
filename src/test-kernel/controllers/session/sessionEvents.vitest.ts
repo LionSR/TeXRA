@@ -1008,10 +1008,20 @@ describe('the session event table and its one publisher', () => {
     },
   );
 
-  it.effect(
-    "lists a run with an earlier build's row as that build's, not as damaged",
-    () => {
-      // `model.message` v1 has no upcaster to this build's version.
+  // `model.message` v1 has no upcaster to this build's version, and a
+  // retired kind has no reader at all.
+  it.effect.each([
+    [
+      'model.message',
+      `UPDATE event SET version = 1 WHERE type = 'model.message'`,
+    ],
+    [
+      'conversation.progress',
+      `UPDATE event SET type = 'conversation.progress' WHERE type = 'model.message'`,
+    ],
+  ])(
+    "lists a run with an earlier build's %s row as that build's, not as damaged",
+    ([type, rewrite]) => {
       const storage = workspace();
       return Effect.gen(function* () {
         yield* Database.pipe(
@@ -1034,19 +1044,16 @@ describe('the session event table and its one publisher', () => {
           Effect.provide(substrate(storage)),
         );
         const raw = reader(storage);
-        raw.exec(`UPDATE event SET version = 1 WHERE type = 'model.message'`);
+        raw.exec(rewrite);
         raw.close();
         const read = yield* Effect.flip(
           Effect.flatMap(Database, (db) =>
             db.readAggregate(runStart.aggregateId, 0),
           ).pipe(Effect.provide(substrate(storage))),
         );
-        expect(read.cause).toMatchObject({
-          _tag: 'DatabaseRowEarlier',
-          type: 'model.message',
-        });
+        expect(read.cause).toMatchObject({ _tag: 'DatabaseRowEarlier', type });
         // A record read (history, resume, follow-up) refuses it the same way,
-        // though the records never select its `model.message` row.
+        // though the records never select that row.
         const records = yield* Effect.flip(
           Effect.flatMap(Database, (db) =>
             db.readRunRecords(runStart.aggregateId),

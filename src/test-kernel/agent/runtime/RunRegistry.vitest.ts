@@ -4,7 +4,6 @@ import { Cause, Deferred, Effect, Exit, Fiber, SubscriptionRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { RunHandle } from '@agent/runtime/RunHandle';
 import { RunRegistry, RunLive } from '@agent/runtime/runRegistry';
 import type {
   SessionHandle,
@@ -25,9 +24,7 @@ import {
   admitInterruptibleRun,
   testRunFork,
   testRunPrograms,
-  testRunHandle,
 } from '@test/support/runHandleFixtures';
-import { untrackRun } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
@@ -35,11 +32,6 @@ import { generateRunId } from '@utils/core';
 // Local file imports
 
 setupPlatform({ workspacePath: '/workspace' });
-
-/** Builds a `RunHandle` for a toolUse test-subagent, the shape most tests need. */
-function createHandle(runId: RunId): RunHandle {
-  return testRunHandle({ runId, agent: 'test-subagent' });
-}
 
 /**
  * Wires a registry over the default session. The registry holds no phase of
@@ -114,45 +106,31 @@ function createRegistry(): {
   return { setPhase, registry };
 }
 
-/** Tracks a handle whose run a stop reaches the way production stops a run:
- * a live generation fiber on the run registry, interrupted by run id. */
-function trackInterruptibleHandle(
-  registry: RunRegistry,
-  runId: RunId,
-  parent: RunId | null,
-  interrupt: () => void,
-): void {
-  registry.track(createHandle(runId));
-  admitInterruptibleRun(registry, runId, interrupt, parent);
-}
-
 describe('runRegistry', () => {
   it.effect(
-    'keeps shutdown draining after terminal untrack until run cleanup releases its lane',
+    "keeps shutdown draining after the run's terminal until run cleanup releases its lane",
     () =>
       Effect.gen(function* () {
         const { registry } = createRegistry();
         yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
         const runId = generateRunId();
-        const untracked = yield* Deferred.make<void>();
+        const ended = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
         const drained = yield* Deferred.make<void>();
         const generation = yield* Effect.forkChild(
           startAwaited(
             registry,
             runId,
-            Effect.sync(() => registry.track(createHandle(runId))).pipe(
+            Effect.void.pipe(
               Effect.ensuring(
-                Effect.gen(function* () {
-                  untrackRun(registry, runId);
-                  yield* Deferred.succeed(untracked, undefined);
-                  yield* Deferred.await(release);
-                }),
+                Deferred.succeed(ended, undefined).pipe(
+                  Effect.andThen(Deferred.await(release)),
+                ),
               ),
             ),
           ),
         );
-        yield* Deferred.await(untracked);
+        yield* Deferred.await(ended);
         yield* registry.stopAll();
         expect(registry.get(runId)?.live === true).toBe(true);
         const drain = yield* Effect.forkChild(
@@ -186,7 +164,6 @@ describe('runRegistry', () => {
         // The parent's generation unwinds from its stop until `ended`, as a
         // terminal writing its `run.end` does.
         const ended = yield* Deferred.make<void>();
-        registry.track(createHandle(rootRunId));
         const root = yield* Effect.forkChild(
           startAwaited(
             registry,
@@ -195,12 +172,7 @@ describe('runRegistry', () => {
           ),
           { startImmediately: true },
         );
-        trackInterruptibleHandle(
-          registry,
-          childRunId,
-          rootRunId,
-          childInterrupt,
-        );
+        admitInterruptibleRun(registry, childRunId, childInterrupt, rootRunId);
         setPhase(rootRunId, RUN_PHASE.RUNNING);
         /** The refusal a child launched under the root meets, if any. */
         const refusal = (childRunId: RunId) =>
@@ -266,12 +238,6 @@ it.effect(
       yield* Deferred.succeed(finish, undefined);
       yield* Fiber.join(generation);
       yield* Effect.yieldNow;
-
-      // A parked turn may have no running generation, but its handle retains ownership.
-      const parked = createHandle(runId);
-      registry.track(parked);
-      expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
-      untrackRun(registry, runId);
 
       const admitted = yield* Deferred.make<void>();
       const collected = yield* Deferred.make<void>();

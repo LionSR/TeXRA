@@ -10,11 +10,7 @@ import * as vscode from 'vscode';
 import { Effect, Fiber, Result, Schema } from 'effect';
 
 import { Skills, hasExtension } from '@texra-ai/harness/host';
-import {
-  APPROVAL_POLICY_CONFIG_KEY,
-  ensureError,
-} from '@texra-ai/harness/schemas';
-import { emitAppSignal } from '@texra-ai/harness/host';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
@@ -154,12 +150,6 @@ export class SettingsViewMessageHandler {
           ),
         revealRun: (runId) => progressView.revealRun(runId),
         runLabel: (runId) => progressView.runLabel(runId),
-        // The status-bar tooltip paints the approval policy outside this
-        // view's round-trip, so it follows the policy on its own signal.
-        stateSettingApplied: (key) => {
-          if (key !== APPROVAL_POLICY_CONFIG_KEY) return Effect.void;
-          return emitAppSignal('approvalPolicyChanged', undefined);
-        },
         runInTerminal: (name, command) =>
           Effect.sync(() => {
             const terminal = vscode.window.createTerminal({ name });

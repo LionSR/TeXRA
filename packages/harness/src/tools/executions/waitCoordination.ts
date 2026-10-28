@@ -12,35 +12,34 @@ import type { SessionView } from '@shared/session/sessionView';
  * Single-pass check: should the wait endpoint skip blocking on this run?
  *
  * Returns true when:
- * - The handle is gone (run already untracked / completed), OR
+ * - No launch of it is in flight here (`LiveRun.launched`), OR
  * - The run left the canonical in-flight phases, OR
  * - The run is a subagent in WAITING (job done, result already delivered
  *   by the child-run loop's per-turn delivery — see childRunLoop.ts).
  *
- * One handle lookup per call; the status is read from `view`, the snapshot
- * the caller judges every run against.
+ * One registry lookup per call; the status is read from `view`, the
+ * snapshot the caller judges every run against.
  */
 export function shouldSkipWait(
   session: SessionHandle,
   view: SessionView,
   runId: RunId,
 ): boolean {
-  const live = session.runs.get(runId);
-  const handle = live?.handle;
-  if (!handle) return true;
+  if (session.runs.get(runId)?.launched !== true) return true;
 
-  // A tracked run whose activation has not folded yet is running: the
-  // handle exists because its process is live.
-  const viewed = view.runs.get(runId)?.status;
+  // A launched run whose start has not folded yet is running.
+  const run = view.runs.get(runId);
   const status =
-    viewed === undefined || viewed === 'ready' ? RUN_PHASE.RUNNING : viewed;
+    run === undefined || run.status === 'ready'
+      ? RUN_PHASE.RUNNING
+      : run.status;
   if (!isInFlightPhase(status)) return true;
 
   // A subagent in WAITING = job delivered by the child-run loop, don't block.
   // A top-level run in WAITING = human input needed, keep blocking.
   return (
     status === RUN_PHASE.WAITING &&
-    handle.identity.kind === 'agent' &&
-    view.runs.get(runId)?.parentId != null
+    run?.identity.kind === 'agent' &&
+    run.parentId != null
   );
 }

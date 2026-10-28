@@ -46,6 +46,7 @@ import { ArxivSearchTool } from './arxiv/ArxivSearchTool';
 import {
   InlineComments,
   InlineCommentTool,
+  type InlineCommentCapability,
   type InlineCommentProvider,
 } from './comment/InlineCommentTool';
 import { DiagnosticsTool } from './DiagnosticsTool';
@@ -99,6 +100,7 @@ import { ReadConfigTool, UpdateConfigTool } from './setup/ConfigTools';
 import { SendToTerminalTool } from './setup/SendToTerminalTool';
 import { ApplyTeamTool } from './setup/ApplyTeamTool';
 import { SetupPlatform, type SetupPlatformShape } from './setup/platform';
+import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
 import type { WriteFilter } from '@texra-ai/harness/plugins';
 import type { Plugin } from '@texra-ai/harness';
 
@@ -111,6 +113,11 @@ const texWriteFilter: WriteFilter = (path, content, config) => {
     Effect.as(replaced.text),
   );
 };
+
+/** The host capabilities (`ITool.hostCapability`) a plugin serves, read
+ *  each time a step asks. */
+const serves = (capabilities: () => readonly string[]) =>
+  Layer.succeed(HostCapabilities)({ of: () => new Set(capabilities()) });
 
 const latexExtract: Plugin = {
   id: 'latex-extract',
@@ -169,7 +176,7 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
         : TEX_INSTRUCTIONS;
     },
     // The editor's PDF viewer; the host's Comments UI, for the one host
-    // that has one (elsewhere the tool fails naming the missing wiring).
+    // that has one, where `inline_comment` is offered.
     processLayer: {
       layer:
         provider === undefined
@@ -177,16 +184,29 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
           : Layer.mergeAll(
               Layer.succeed(EditorHost)(editors),
               Layer.succeed(InlineComments)(provider),
+              serves(() => [
+                'inline-comments' satisfies InlineCommentCapability,
+              ]),
             ),
     },
   });
 
 /** The onboarding agent's narrow set, one concern per tool, over the host's
- *  setup capabilities. */
+ *  setup capabilities: a tool that needs a member the host left undefined
+ *  is not offered. The members are read when asked, not here. */
 const setup = (platform: SetupPlatformShape) =>
   definePlugin<SetupPlatform>({
     id: 'setup',
-    processLayer: { layer: Layer.succeed(SetupPlatform)(platform) },
+    processLayer: {
+      layer: Layer.mergeAll(
+        Layer.succeed(SetupPlatform)(platform),
+        serves(() =>
+          Object.entries(platform).flatMap(([member, value]) =>
+            value === undefined ? [] : [member],
+          ),
+        ),
+      ),
+    },
     tools: {
       probe_environment: ProbeEnvironmentTool,
       unset_api_key: UnsetApiKeyTool,
@@ -249,6 +269,9 @@ export const texraPlugins = (
     /** The composition's editor registry its hosts attach to
      *  (`makeEditorHost`); none attached when absent. */
     readonly editors?: EditorRegistry;
+    /** The host shows external inquiries (VS Code, desktop): the `inquiry`
+     *  tool is offered only there. */
+    readonly inquiryPanel?: true;
   } = {},
 ): readonly Plugin[] => {
   const editors = host.editors ?? makeEditorHost();
@@ -265,7 +288,16 @@ export const texraPlugins = (
     lean4({ setup: host.setup ?? {}, services: host.lean }),
     multiAgent,
     githubActivity,
-    externalInquiry,
+    host.inquiryPanel
+      ? {
+          ...externalInquiry,
+          processLayer: {
+            layer: serves(() => [
+              'inquiry-panel' satisfies InquiryPanelCapability,
+            ]),
+          },
+        }
+      : externalInquiry,
     codex,
     claudeAgent,
     core(editors, host.inlineComments),

@@ -134,9 +134,9 @@ describe('child run progress events', () => {
             buildLaunch: (context) => {
               childRunId = context.runId;
               // Before the loop reserves its stop target, no stop can find
-              // the handle: a stop never reaches a run it cannot interrupt.
+              // the run: a stop never reaches a run it cannot interrupt.
               visibleBeforeLoop =
-                session.runs.get(context.runId)?.handle !== undefined;
+                session.runs.get(context.runId)?.launched === true;
               throw setupError;
             },
           }).pipe(
