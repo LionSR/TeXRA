@@ -22,10 +22,9 @@ import {
   toRetryErrorInfo,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { RunHandle } from './RunHandle';
-import { registryOf, type AgentRunServices, Runs } from './runRegistry';
 import { receiveTerminalFailure } from './terminalResultToast';
 import { buildTerminalRunEndResult, type RunEndResult } from './RunEndResult';
+import type { AgentRunServices } from './runRegistry';
 import type { ChildRunTurns } from './childRunLoop';
 import type { TransactionPart } from './childTurnResult';
 import type { SessionHandle } from './SessionHandle';
@@ -43,21 +42,20 @@ const logLifecycleWarning = (message: string, data: unknown) =>
 export interface RunLifecycleOptions {
   /** The parent this activation runs under: its launch's, or its rows'. */
   parentRunId?: RunId;
-  /** Fires once with the run's id, right after its handle is tracked,
-   *  forked detached: nothing it does may abort the run, and it is logged. */
+  /** Fires once with the run's id as the run starts, forked detached:
+   *  nothing it does may abort the run, and it is logged. */
   onRun?: (runId: RunId) => Effect.Effect<void, Error>;
   /** A child's last turn result, from the result its run ends with. */
   finishLastTurn?: ChildRunTurns<RunEndResult>['finishLastTurn'];
 }
 
 interface EndActivationParams {
-  /** Owns the registry tracking the handle (untracked after the `run.end`
-   *  row) and the publisher every row of the run goes through in order. */
+  /** Owns the publisher every row of the run goes through in order. */
   readonly session: SessionHandle;
   readonly runId: RunId;
-  /** The live handle of the run this end untracks; none for an end no
-   *  driver here writes, which retires the run's open owned children. */
-  readonly handle?: RunHandle;
+  /** An end no driver here writes, which retires the run's open owned
+   *  children. */
+  readonly ownerless?: boolean;
   /**
    * The exiting run's own report. The `run.end` row is the run's terminal
    * fact; the run phase only supplies stop precedence, so this report stands
@@ -83,8 +81,8 @@ interface EndActivationParams {
 
 interface EndActivationResult {
   readonly event: ResultEvent;
-  /** The `run.end` row write's failure: the terminal still ran and
-   *  untracked the handle, and the event reports FAILED with its reason. */
+  /** The `run.end` row write's failure: the terminal still ran, and the
+   *  event reports FAILED with its reason. */
   readonly persistFailure?: Error;
   /** False for a run that never opened: no row was written, so its
    *  failure is its launch's to present. */
@@ -93,19 +91,16 @@ interface EndActivationResult {
 
 /**
  * The one end of a run's activation, in this order: the transcript stage
- * end, the `run.end` row (through `finalizeRun`, its one writer), then
- * registry untrack. The publisher commits in order, so every row the run
- * published lands before its end, and a refusal of one of them is the end's
- * own write failure. Its callers: the lifecycle's masked terminal, a child
+ * end, then the `run.end` row (through `finalizeRun`, its one writer). The
+ * publisher commits in order, so every row the run published lands before its
+ * end, and a refusal of one of them is the end's own write failure. Its callers: the lifecycle's masked terminal, a child
  * loop's exit, and an end no driver writes (a failed hand-off).
  */
 export const endActivation = Effect.fn('endActivation')(
   function* (
     params: EndActivationParams,
-  ): Effect.fn.Return<EndActivationResult, Error, Runs> {
-    const { session, handle, runId } = params;
-    const runs = registryOf(yield* Runs);
-    const agentIdentifier = handle?.agentName ?? runId;
+  ): Effect.fn.Return<EndActivationResult, Error> {
+    const { session, runId } = params;
     // Stop precedence, read once: a stop that reached the run before its exit
     // outranks the flow's report, on the stage here as on the row below.
     const stopped = params.stopped === true;
@@ -120,7 +115,7 @@ export const endActivation = Effect.fn('endActivation')(
       }).pipe(
         Effect.catch((stageErr) =>
           logLifecycleWarning('Failed to end parent stage', {
-            agentIdentifier,
+            runId,
             error: stageErr,
           }),
         ),
@@ -136,8 +131,7 @@ export const endActivation = Effect.fn('endActivation')(
     const error =
       lost ?? (outcome === params.outcome ? params.error : undefined);
     const output = params.output ?? emptyRunEndOutput();
-    // Write the terminal row BEFORE untrack, so the registry's terminal event
-    // never precedes it; `finalizeRun` adds the usage totals from history.
+    // `finalizeRun` adds the usage totals from history.
     const event: ResultEvent = {
       type: 'run.end',
       outcome,
@@ -152,28 +146,13 @@ export const endActivation = Effect.fn('endActivation')(
       error,
       output,
       lastTurn,
-      ownerless: handle === undefined,
+      ownerless: params.ownerless,
     }).pipe(Effect.result);
-    // Guard the cleanup: a defect in the registry edit must not escape past
-    // a saved result. Only this handle's registration goes; a run that
-    // started again is its successor's.
-    yield* Effect.try({
-      try: () => handle && runs.untrackIfCurrent(handle),
-      catch: ensureError,
-    }).pipe(
-      Effect.catch((cleanupErr) =>
-        logLifecycleWarning('Post-terminal cleanup threw', {
-          agentIdentifier,
-          error: cleanupErr,
-        }),
-      ),
-    );
     if (Result.isSuccess(finalization))
       return { event, recorded: finalization.success.recorded };
     // A run whose `run.end` did not commit failed, whatever it reported.
     const unsaved = finalization.failure;
     yield* logLifecycleWarning('Failed to finalize durable run state', {
-      agentIdentifier,
       runId,
       error: unsaved,
     });
@@ -221,9 +200,9 @@ function withResolvedOutcome(
 }
 
 /**
- * Wraps a flow runner with full agent run lifecycle management: run
- * registry tracking, run-status transitions, error classification, user
- * notifications, and resource disposal.
+ * Wraps a flow runner with full agent run lifecycle management: run-status
+ * transitions, error classification, user notifications, and resource
+ * disposal.
  *
  * Separating this from `executeAgent` keeps the orchestrator focused on flow
  * routing while this module owns the invariants that must hold across every
@@ -231,24 +210,13 @@ function withResolvedOutcome(
  */
 export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
   ctx: AgentLaunchContext,
-  runner: (handle: RunHandle) => Effect.Effect<RunEndResult, Error, R>,
+  runner: () => Effect.Effect<RunEndResult, Error, R>,
   options?: RunLifecycleOptions,
 ): Effect.fn.Return<RunEndResult, Error, R | AgentRunServices> {
   const { runId, session } = ctx;
-  const runs = registryOf(yield* Runs);
   const agentIdentifier = ctx.config.agent;
-  const script = ctx.config.script ?? null;
   // Read once: a child detached mid-run ends as a child.
   const parentRunId = options?.parentRunId ?? null;
-  const handle = new RunHandle({
-    runId,
-    // The identity its launch registered: a background script's run is
-    // the parent's agent making one call; a recipe's is its agent's.
-    identity:
-      script?.kind === 'background'
-        ? { kind: 'script', title: script.title }
-        : { kind: 'agent', agent: agentIdentifier },
-  });
   const finish = options?.finishLastTurn;
   // The terminal finalizer; outcome and error facts vary per exit, and a
   // child's last turn (`lastResult`) is finished under the resolved outcome.
@@ -261,7 +229,6 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     endActivation({
       session,
       runId,
-      handle,
       stage: ctx.parentStage,
       ...arm,
       ...(lastResult && finish
@@ -277,8 +244,8 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     carried: RunEndResult | undefined,
     stopped = false,
   ) {
-    // A throw in this fallible prologue must not strand the tracked handle
-    // without its terminal: it falls back to an unexpected failure.
+    // A throw in this fallible prologue must not strand the run without its
+    // terminal: it falls back to an unexpected failure.
     const prologue = yield* Effect.exit(
       Effect.gen(function* () {
         const kind = classifyAgentError(err);
@@ -368,7 +335,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
   // directly, and its finalizers run before the resources below are
   // disposed. A fresh run is born with its opening, a resume activates
   // with its cell: both inside the flow, so this terminal ends either.
-  const run = Effect.suspend(() => runner(handle));
+  const run = Effect.suspend(runner);
   /**
    * The run's one terminal writer: every way the flow exits — a result, a
    * reported failure, an escaped exception, a stop — reaches this verdict
@@ -379,7 +346,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
    */
   const terminal = (
     exit: Exit.Exit<RunEndResult, Error>,
-  ): Effect.Effect<RunEndResult, Error, Runs> => {
+  ): Effect.Effect<RunEndResult, Error> => {
     if (Exit.isSuccess(exit)) {
       const result = exit.value;
       if (result.error) {
@@ -424,17 +391,16 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
       error: err,
     }).pipe(Effect.andThen(finalizeFailedRun(err, undefined, true)));
   };
-  // The handle is tracked only inside the region whose exit is the
-  // terminal above, so no stop lands between the two: a tracked handle is
-  // always finalized. The host's stop is this run fiber's interruption
-  // (`RunRegistry.interrupt`); the requests this run left open close with
-  // the fibers waiting on them (`SessionRequests.ask`).
+  // The run starts only inside the region whose exit is the terminal above,
+  // so no stop lands between the two: a started run is always finalized.
+  // The host's stop is this run fiber's interruption (`RunRegistry.interrupt`);
+  // the requests this run left open close with the fibers waiting on them
+  // (`SessionRequests.ask`).
   const resolved = yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      runs.track(handle);
       // A claim moved out from under this run is not watched: the next
       // append refuses with `DatabaseNotOwner` and the run aborts dirty.
-      // Expose the live handle to the launcher. Guarded: neither a
+      // Expose the run to the launcher. Guarded: neither a
       // synchronous throw nor an async rejection from a consumer callback
       // may abort the run.
       if (options?.onRun) {
@@ -442,7 +408,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
         // Start observation at the same time as invocation. The callback
         // may run as long as the run does, so its observer must not hold
         // up the flow.
-        yield* Effect.suspend(() => onRun(handle.runId)).pipe(
+        yield* Effect.suspend(() => onRun(runId)).pipe(
           Effect.catchCause((cause) =>
             logLifecycleWarning('onRun callback failed', {
               agentIdentifier,

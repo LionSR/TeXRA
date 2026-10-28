@@ -15,7 +15,6 @@ import { APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 import { closeSessionOf } from '@test/support/sessionEnd';
-import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { nodeFileServices } from '@utils/files/fsDurability';
@@ -68,16 +67,17 @@ describe('SessionHandle', () => {
     Effect.gen(function* () {
       const session = yield* createTestSession();
       let attempted = false;
-      // The handle's owners unwind after the session's runs: a launch reaching
-      // the registry from inside that unwind is already refused.
+      // The handle's owners unwind after the session's runs: run work
+      // reaching the registry from inside that unwind is already refused.
       vi.spyOn(session.interactions, 'dispose').mockImplementation(() =>
-        Effect.sync(() => {
+        Effect.gen(function* () {
           attempted = true;
-          expect(() =>
-            registryOf(session.runs).track(
-              testRunHandle({ runId: generateRunId(), agent: 'orchestrator' }),
-            ),
-          ).toThrow('Cannot register run work after session disposal.');
+          const refused = yield* registryOf(session.runs)
+            .withInactiveRunStep(generateRunId(), Effect.void)
+            .pipe(Effect.flip, Effect.orDie);
+          expect(refused.message).toBe(
+            'Cannot register run work after session disposal.',
+          );
         }),
       );
       yield* closeSessionOf(session);

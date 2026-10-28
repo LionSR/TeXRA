@@ -5,7 +5,7 @@ import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
 
 // Third-party imports
-import { Deferred, Effect, Fiber, Schedule } from 'effect';
+import { Deferred, Effect, Fiber, Schedule, SubscriptionRef } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
@@ -28,6 +28,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
+import { shouldSkipWait } from '@tools/executions/waitCoordination';
 import * as execUtils from '@utils/system/execUtils';
 
 /**
@@ -184,7 +185,7 @@ describe('BashTool', () => {
         );
 
         const parentRunId = publishTestRunStart(testDefaultSession());
-        let handleAtResumeTime: unknown;
+        let skippedAtResumeTime: boolean | undefined;
         let runId = '' as RunId;
         const wakeReached = Deferred.makeUnsafe<void>();
         // The resume a wake starts is the run's one resume in flight.
@@ -192,8 +193,13 @@ describe('BashTool', () => {
         const resumeOnce = followUps.resumes.once.bind(followUps.resumes);
         vi.spyOn(followUps.resumes, 'once').mockImplementation(
           (resumed, resume, fork) => {
+            const session = testDefaultSession();
+            skippedAtResumeTime ??= shouldSkipWait(
+              session,
+              SubscriptionRef.getUnsafe(session.view.ref),
+              runId,
+            );
             Deferred.doneUnsafe(wakeReached, Effect.void);
-            handleAtResumeTime ??= testDefaultSession().runs.get(runId)?.handle;
             return resumeOnce(resumed, resume, fork);
           },
         );
@@ -209,11 +215,10 @@ describe('BashTool', () => {
         runId = launched;
 
         yield* Deferred.await(wakeReached);
-        // The wake step was reached — this run must already be untracked
-        // (finalized), never still RUNNING, so a resumed parent that waits on
-        // it right now resolves immediately instead of racing its own wake.
-        assert.equal(handleAtResumeTime, undefined);
-        assert.equal(testDefaultSession().runs.get(runId)?.handle, undefined);
+        // The wake step was reached — this run must already be finalized,
+        // never still RUNNING, so a resumed parent that waits on it right now
+        // resolves immediately instead of racing its own wake.
+        assert.equal(skippedAtResumeTime, true);
       }),
   );
 

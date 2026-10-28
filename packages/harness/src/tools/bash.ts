@@ -494,14 +494,7 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
         parentRunId,
         agentName: 'bash',
         createChildRun: () =>
-          restore(Effect.void).pipe(
-            Effect.as(
-              createChildRun(session, runId, {
-                kind: 'process',
-                tool: 'bash',
-              }),
-            ),
-          ),
+          restore(Effect.void).pipe(Effect.as(createChildRun(session, runId))),
         buildLaunch: (childRun) =>
           Effect.sync(() =>
             createBackgroundBashStrategy({

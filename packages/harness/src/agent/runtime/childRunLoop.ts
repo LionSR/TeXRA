@@ -14,7 +14,6 @@ import {
 
 import type { AgentTrace, StageHandle, TraceEmitter } from '@agent/trace';
 import { endActivation } from '@agent/runtime/AgentRunLifecycle';
-import type { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import {
@@ -71,11 +70,10 @@ export interface ChildRunPause {
   readonly resumeId?: string;
 }
 
-/** A process child's trace and handle (agent CLI, background bash), whose
- *  end is its loop's; a native run owns its handle and has no port. */
+/** A process child's trace (agent CLI, background bash), whose end is its
+ *  loop's; a native run's trace is its own, and it has no port. */
 export interface ChildRunPort {
   readonly logger: TraceEmitter;
-  readonly handle: RunHandle;
 }
 
 /**
@@ -721,12 +719,12 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
       ? turnResultPart(session, end.result, loop.trace)
       : undefined;
   // A `run.end` that never wrote fails the loop: its terminal fact is gone.
-  const endRun = (handle: RunHandle | undefined) =>
+  const endRun = (ownerless: boolean) =>
     Effect.flatMap(
       endActivation({
         session,
         runId,
-        handle,
+        ownerless,
         outcome,
         ...(outcome === RUN_OUTCOME.FAILED &&
           failure?.cause != null && {
@@ -756,15 +754,15 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
         : undefined;
     if (
       pause &&
-      (yield* pauseChildRun(session, port, pause, lastTurn, loop.stage))
+      (yield* pauseChildRun(session, runId, port, pause, lastTurn, loop.stage))
     )
       return;
-    return yield* endRun(port.handle).pipe(
+    return yield* endRun(false).pipe(
       Effect.ensuring(Effect.sync(() => port.logger.close())),
     );
   }
   if (outcome !== RUN_OUTCOME.COMPLETED) {
-    if (yield* session.log.owns(runId)) yield* endRun(undefined);
+    if (yield* session.log.owns(runId)) yield* endRun(true);
   } else if (lastTurn !== undefined) yield* commitPart(session, lastTurn);
   yield* sendStopNotice(loop, params.strategy);
 });
@@ -826,7 +824,7 @@ const endChildLoop = <TTurn, R>(
   );
 
 /** The launched run, all on its fiber: its setup (the budget its turns
- *  take, its handle, its stage), the child's claim for its whole life, a
+ *  take, its stage), the child's claim for its whole life, a
  *  process child's reader, its turns, and its terminal on every exit. */
 const runChildLoop = <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
@@ -838,7 +836,6 @@ const runChildLoop = <TTurn, R>(
       loop.budget = yield* loop.runs.childRunBudget(
         yield* resolveChildRunConcurrencyBudget(session.roots),
       );
-    if (params.childRun) loop.runs.track(params.childRun.handle);
     loop.stage = loop.trace?.openStage(params.strategy.stageLabel);
     // A run that exists is held for the loop's life (a resume's hold goes
     // when it hands over); a fresh native one claims itself at birth.

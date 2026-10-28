@@ -2,7 +2,7 @@ import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 
 import { describe, expect } from 'vitest';
-import { registryOf } from '@agent/runtime/runRegistry';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 
 import {
   RUN_OUTCOME,
@@ -12,7 +12,7 @@ import {
 } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
-import { testRunHandle } from '@test/support/runHandleFixtures';
+import { startAwaited } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
   publishTestRunStart,
@@ -59,8 +59,21 @@ describe('session isolation', () => {
             },
           ]);
           yield* session.log.settled;
-          registryOf(session.runs).track(
-            testRunHandle({ runId, agent: 'assistant' }),
+          // A live run whose stop ends it, as its lifecycle's terminal does.
+          yield* Effect.forkDetach(
+            startAwaited(
+              session.runs,
+              runId,
+              Effect.never.pipe(
+                Effect.onInterrupt(() =>
+                  finalizeRun(session, {
+                    runId,
+                    outcome: RUN_OUTCOME.CANCELLED,
+                  }).pipe(Effect.orDie),
+                ),
+              ),
+            ),
+            { startImmediately: true },
           );
         }
         // Each session claims runs in its own root: paper B never holds

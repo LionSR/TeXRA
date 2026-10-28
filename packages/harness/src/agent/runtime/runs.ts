@@ -8,7 +8,6 @@ import type { SessionOwner } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import type { Effect, Scope } from 'effect';
-import type { RunControls, RunHandle } from './RunHandle';
 import type { RunEndResult } from './RunEndResult';
 import type { RootLaunchOptions, RootLaunchRequest } from './rootLaunch';
 import type { resumeRun } from './resumeRun';
@@ -19,15 +18,36 @@ export interface RootLaunch {
   readonly options: RootLaunchOptions;
 }
 
+/**
+ * What a host can ask of a running tool-use loop: the members something
+ * reads, and nothing else. The loop attaches them to its run's entry while it
+ * can act on them; a stop is the run fiber's interruption, not a control.
+ */
+export interface RunControls {
+  /** The loop ends after its current turn (`stopAfterCycle`), or the one a
+   *  Stop hook's block opens: it reads no input, so nothing may queue a
+   *  message on it. A resume of the same run
+   *  may not be one-shot, which is why this is the live loop's, not the
+   *  launch's `followUpSupport`. */
+  readonly oneShot: boolean;
+  /** Queue a `/compact` on the run's input; settles once its row commits. */
+  requestImmediateCompaction(): Effect.Effect<void, Error>;
+  modelSwitchDisabledReason(
+    model: string,
+  ): Effect.Effect<string | undefined, Error>;
+  switchModel(model: string): Effect.Effect<void, Error>;
+}
+
 /** What this process holds for one run, read when asked. */
 export interface LiveRun {
   readonly runId: RunId;
-  /** Its tracked handle (its identity). */
-  readonly handle: RunHandle | undefined;
   /** Its running loop's controls, while one runs here. */
   readonly controls: RunControls | undefined;
   /** A generation of it is live here: its fiber, a hold, or a launch. */
   readonly live: boolean;
+  /** A launch of it is in flight here, from the call that launched it (before
+   *  its fiber claims the lane) until the fiber exits: what a stop reaches. */
+  readonly launched: boolean;
   /** Its attached parent: the view's edge, or for a child whose `run.start`
    *  the view has not folded yet, the parent its activation launched under;
    *  null for a root. */

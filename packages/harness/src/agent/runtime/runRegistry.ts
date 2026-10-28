@@ -2,7 +2,7 @@
  * The session's runs: one owner for everything this process holds for a
  * run and everything a stop does with it.
  *
- * One entry per run records the fiber running it, the tracked handle, the
+ * One entry per run records the fiber running it, its loop's controls, the
  * activation its launch opened and the run's serial lane; the entry exists
  * exactly while one of those does, which makes it the single in-process
  * answer to "is a generation of this run live here" (`LiveRun.live`).
@@ -36,12 +36,12 @@ import {
 } from '@shared/schemas';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import type { RunHandle } from './RunHandle';
 import type { rootRun } from './rootLaunch';
 import type { SessionHandle } from './SessionHandle';
 import type {
   LiveRun,
   RootLaunch,
+  RunControls,
   RunsShape,
   RunStop,
   RunStopOptions,
@@ -49,7 +49,7 @@ import type {
 import type { executeAgent, resumeToolUseFromResumeData } from './executeAgent';
 import type { resumeRun } from './resumeRun';
 
-/** A generation, a hold or a retained owner already has the run here: the one
+/** A generation, a hold or a launch already has the run here: the one
  *  refusal for that fact. Hosts word it from `message`; a resume reads the tag
  *  to report the run unresumable, not failed. */
 export class RunLive extends Schema.TaggedError<RunLive>()('RunLive', {
@@ -103,7 +103,8 @@ interface RunEntry {
    *  owner — written by that fiber's first step, erased by its own exit. */
   fiber?: AnyFiber;
   hold?: AnyFiber;
-  handle?: RunHandle;
+  /** The running loop's controls, attached for its life ({@link attachControls}). */
+  controls?: RunControls;
   /** The launch in flight ({@link RunRegistry.start}), from the call until
    *  its fiber exits: a run's whole life here, setup and end included. */
   activation?: {
@@ -179,7 +180,7 @@ export class RunRegistry implements RunsShape {
 
   /** Drop an entry that records nothing: the run is not here any more. */
   private prune(runId: RunId, entry: RunEntry): void {
-    if (entry.fiber ?? entry.handle ?? entry.activation ?? entry.lane) return;
+    if (entry.fiber ?? entry.controls ?? entry.activation ?? entry.lane) return;
     if (entry.hold !== undefined || entry.launches > 0) return;
     if (this.entries.get(runId) === entry) {
       this.entries.delete(runId);
@@ -209,7 +210,7 @@ export class RunRegistry implements RunsShape {
   // --------------------------------------------------------------- queries
 
   /** One run this process holds, or every one: a launch still resolving
-   *  (a fiber, no handle yet) included, which is what `awaitDrained`
+   *  (no loop yet) included, which is what `awaitDrained`
    *  waits on and a close stops and, past its budget, settles. */
   // cast: the overloads RunsShape names, answered by one body.
   readonly get = ((runId?: RunId) =>
@@ -220,10 +221,9 @@ export class RunRegistry implements RunsShape {
   private liveRun(runId: RunId): LiveRun | undefined {
     const entry = this.entries.get(runId);
     if (entry === undefined) return undefined;
-    const { handle } = entry;
+    const { controls } = entry;
     const live = this.isLive(runId);
     const drained = this.awaitDrained(runId);
-    const controls = handle?.controls;
     const readsMessages =
       controls !== undefined
         ? !controls.oneShot
@@ -231,9 +231,9 @@ export class RunRegistry implements RunsShape {
           USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
     return {
       runId,
-      handle,
       controls,
       live,
+      launched: this.isLaunched(runId),
       parent: this.attachedParent(runId),
       readsMessages,
       stopReason: entry.activation?.stopReason,
@@ -254,10 +254,9 @@ export class RunRegistry implements RunsShape {
     );
   }
 
-  /** A handle or a launch this session still retains for `runId`. */
-  private isRetained(runId: RunId): boolean {
-    const entry = this.entries.get(runId);
-    return entry?.handle !== undefined || entry?.activation !== undefined;
+  /** A launch of `runId` is in flight here (`LiveRun.launched`). */
+  private isLaunched(runId: RunId): boolean {
+    return this.entries.get(runId)?.activation !== undefined;
   }
 
   /** Whether any fiber holds or waits on `runId`'s lane, step or generation. */
@@ -265,11 +264,11 @@ export class RunRegistry implements RunsShape {
     return (this.entries.get(runId)?.lane?.fibers ?? 0) > 0;
   }
 
-  /** The children one parent's detach or stop covers: each retained run
-   *  (handle or launch) whose edge names it, once. */
+  /** The children one parent's detach or stop covers: each launched run
+   *  whose edge names it, once. */
   private childRunIds(parentRunId: RunId): readonly RunId[] {
     return [...this.entries.keys()].filter(
-      (id) => this.isRetained(id) && this.attachedParent(id) === parentRunId,
+      (id) => this.isLaunched(id) && this.attachedParent(id) === parentRunId,
     );
   }
 
@@ -301,12 +300,6 @@ export class RunRegistry implements RunsShape {
     return new RunAdmissionClosed({ message });
   }
 
-  /** {@link closedRefusal} for the synchronous admissions, which throw it. */
-  private assertActive(): void {
-    const refused = this.closedRefusal();
-    if (refused) throw refused;
-  }
-
   /**
    * Refuse a child admitted under a parent whose stop has begun or folded
    * (the view's `cancelled`). A child held here already answers by its
@@ -314,13 +307,13 @@ export class RunRegistry implements RunsShape {
    * root, and is not refused while the stop runs: it is one being severed.
    */
   private assertAdmitsChild(launchParent: RunId, childRunId: RunId): void {
-    const parentRunId = this.isRetained(childRunId)
+    const parentRunId = this.isLaunched(childRunId)
       ? this.attachedParent(childRunId)
       : launchParent;
     if (parentRunId === null) return;
     const stopping =
       this.entries.get(parentRunId)?.activation?.stopReason !== undefined;
-    if (stopping && this.isRetained(childRunId)) return;
+    if (stopping && this.isLaunched(childRunId)) return;
     if (stopping || this.stopFolded(parentRunId))
       throw new Error(
         `Cannot launch child run ${childRunId} under run ${parentRunId}: that run was stopped.`,
@@ -396,8 +389,8 @@ export class RunRegistry implements RunsShape {
    *  the lane until that fiber settles, finalizers included. The claim is
    *  conditional: {@link isLive} reads the entry in the same synchronous step
    *  as the tail swap, so this is the one admission. `inactiveStep` marks an
-   *  inactive-run step rather than a generation: it also refuses on retained
-   *  owners and lane holders, and stays out of {@link isLive}. A step waiting
+   *  inactive-run step rather than a generation: it also refuses on launches and
+   *  lane holders, and stays out of {@link isLive}. A step waiting
    *  for its predecessor is refusable where it stands ({@link waiting}) and
    *  hands the lane on when interrupted. */
   private admit<A, E, R>(
@@ -417,7 +410,7 @@ export class RunRegistry implements RunsShape {
       const refuseClaim = (): RunLive | undefined => {
         const held =
           inactiveStep &&
-          (this.isRetained(runId) || this.isLaneOccupied(runId));
+          (this.isLaunched(runId) || this.isLaneOccupied(runId));
         if (this.isLive(runId) || held) return new RunLive({ runId });
         if (inactiveStep) return undefined;
         counted = this.entryFor(runId);
@@ -489,7 +482,7 @@ export class RunRegistry implements RunsShape {
               Effect.withFiber((self) => {
                 if (
                   this.isLive(runId) ||
-                  this.isRetained(runId) ||
+                  this.isLaunched(runId) ||
                   this.isLaneOccupied(runId)
                 )
                   return Deferred.fail(ready, new RunLive({ runId }));
@@ -532,21 +525,24 @@ export class RunRegistry implements RunsShape {
     });
   }
 
-  /** Register a run handle, a child's refused under a stopped parent. */
-  track(handle: RunHandle): void {
-    this.assertActive();
-    const parent = this.entries.get(handle.runId)?.activation?.unbornParent;
-    if (parent) this.assertAdmitsChild(parent, handle.runId);
-    this.entryFor(handle.runId).handle = handle;
-  }
-
-  /** Remove `handle` only if it is still the current registration. */
-  untrackIfCurrent(handle: RunHandle): boolean {
-    const entry = this.entries.get(handle.runId);
-    if (entry?.handle !== handle) return false;
-    entry.handle = undefined;
-    this.prune(handle.runId, entry);
-    return true;
+  /** Attach a running loop's controls to its run for the caller's scope
+   *  (`LiveRun.controls`); a later loop's attachment is left in place. */
+  attachControls(
+    runId: RunId,
+    controls: RunControls,
+  ): Effect.Effect<void, never, Scope.Scope> {
+    return Effect.acquireRelease(
+      Effect.sync(() => {
+        this.entryFor(runId).controls = controls;
+      }),
+      () =>
+        Effect.sync(() => {
+          const entry = this.entries.get(runId);
+          if (entry?.controls !== controls) return;
+          entry.controls = undefined;
+          this.prune(runId, entry);
+        }),
+    );
   }
 
   // ------------------------------------------------------------------ stop
@@ -554,12 +550,15 @@ export class RunRegistry implements RunsShape {
   /** Stop the run's launch here by run id: synchronous, answered at once
    *  from every host surface. The stop is recorded on its activation (a
    *  program not yet running is interrupted as it starts) and its fiber
-   *  interrupted; a stop's reason is {@link markStopped}'s. */
+   *  interrupted; a stop's reason is {@link markStopped}'s. The answer is read
+   *  before the interrupt, which can unwind the run and clear its entry. */
   interrupt(runId: RunId): boolean {
     const entry = this.entries.get(runId);
+    const reached =
+      entry?.activation !== undefined || entry?.fiber !== undefined;
     if (entry?.activation) entry.activation.stopped = true;
     entry?.fiber?.interruptUnsafe();
-    return entry?.activation !== undefined || entry?.fiber !== undefined;
+    return reached;
   }
 
   /**
@@ -580,8 +579,8 @@ export class RunRegistry implements RunsShape {
     if (entry !== undefined) this.markStopped(runId, options.reason);
 
     const detach = options.detachActiveChildren === true;
-    // Something here to stop: a handle, a child driver, or a launch's fiber.
-    const local = this.isRetained(runId) || entry?.fiber !== undefined;
+    // Something here to stop: a launch, or its fiber.
+    const local = this.isLaunched(runId) || entry?.fiber !== undefined;
     let reached = false;
     const stopHere = (): boolean => {
       // Shared by the child sweep and the root cascade: each run once.
@@ -683,7 +682,7 @@ export class RunRegistry implements RunsShape {
   }
 
   /** Stop `runId` here, its children first when `cascadeChildren`: each run
-   *  once. A child run is its loop, not only the turn its handle runs, so
+   *  once. A child run is its loop, not only the turn its lifecycle runs, so
    *  its interrupted turn is not delivered to the parent as a completed one. */
   private terminate(
     runId: RunId,

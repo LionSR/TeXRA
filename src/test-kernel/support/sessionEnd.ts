@@ -1,20 +1,18 @@
 /**
  * How a test opens and ends sessions through the installed runtime's
- * `SessionOwner`, as a composition root does through its own: a session, a
- * run's handle registration, or the file's default session, which this
+ * `SessionOwner`, as a composition root does through its own: a session, or
+ * the file's default session, which this
  * module holds as a host's root holds the one it opened. Side-effect free,
  * unlike the default-session setup, so any suite can import it.
  */
 
 import { Effect } from 'effect';
 
-import { registryOf } from '@agent/runtime/runRegistry';
-import type { RunsShape } from '@agent/runtime/runs';
 import type {
   SessionHandle,
   SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
-import type { RunId, SessionCloseReport } from '@shared/schemas';
+import type { SessionCloseReport } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 
 import { testSessionOwner } from './testProcessRuntime';
@@ -22,13 +20,6 @@ import { testSessionOwner } from './testProcessRuntime';
 /** The file's default session, while one is open: the session over the
  *  process roots, as a host's root holds the one it opened. */
 let defaultSession: SessionHandle | undefined;
-
-/** End a tracked run's handle registration the way its lifecycle does at
- *  its terminal, for a test that stands in for that lifecycle. */
-export function untrackRun(runs: RunsShape, runId: RunId): void {
-  const handle = runs.get(runId)?.handle;
-  if (handle) registryOf(runs).untrackIfCurrent(handle);
-}
 
 /** Open the session of `init`'s root through the installed owner. */
 export const openTestSession = (

@@ -62,8 +62,8 @@ import { dispatchPendingResponse } from './toolUseDispatch';
 import { openingHooks, stopHooks } from './hooks';
 import { stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
-import type { Runs } from '../runRegistry';
-import type { RunControls, RunHandle } from '../RunHandle';
+import { registryOf, Runs } from '../runRegistry';
+import type { RunControls } from '../runs';
 import type { ChildRunBoundary } from '../childRunLoop';
 import type { RunEndResult } from '../RunEndResult';
 
@@ -76,9 +76,6 @@ export interface ToolUseStart {
   readonly resume: boolean;
   /** A native child's turn permit, and the turn result its boundary commits. */
   readonly turns?: ChildRunBoundary<RunEndResult>;
-  /** The run's handle, holding the loop's controls while it can act on
-   *  them. */
-  readonly attachment?: Pick<RunHandle, 'attachControls' | 'detachControls'>;
 }
 
 /** A user message the loop appends itself. */
@@ -169,20 +166,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     stepFor(run, state, kind, isChild(), openingSystem);
 
   // ------------------------------------------------------------ host port
-  let live = false;
   const controls: RunControls = {
     oneShot: run.toolPolicy.stopAfterCycle === true,
     ...modelSwitchPort(run, access),
-  };
-  const attach = (): void => {
-    if (live) return;
-    live = true;
-    start.attachment?.attachControls(controls);
-  };
-  const detach = (): void => {
-    if (!live) return;
-    live = false;
-    start.attachment?.detachControls(controls);
   };
 
   // -------------------------------------------------------------- opening
@@ -555,36 +541,29 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       : {}),
   });
 
-  // Attach inside the outer use so its release detaches even after a partial
-  // attach failure. The inner bracket settles the cell before detachment;
-  // `cell.append` protects each run history commit from interruption.
-  return yield* Effect.acquireUseRelease(
-    Effect.void,
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.sync(attach);
-        return yield* Effect.acquireUseRelease(enter, loopBody, (cell, exit) =>
-          // However the run ends, a stop's interruption included, a
-          // finished summary lands before the halt (its usage is the
-          // run's); one still running stops with the run.
-          Effect.andThen(
-            compaction
-              .settle(cell, 'the run stopped')
-              .pipe(
-                Effect.catch((error) =>
-                  Effect.sync(() =>
-                    logger.warn(
-                      'A finished background compaction could not be recorded as the run stopped',
-                      { data: error },
-                    ),
-                  ),
-                ),
+  // The controls detach as the run's scope closes, after the bracket below
+  // settles the cell; `cell.append` protects each run history commit from
+  // interruption.
+  yield* registryOf(yield* Runs).attachControls(runId, controls);
+  return yield* Effect.acquireUseRelease(enter, loopBody, (cell, exit) =>
+    // However the run ends, a stop's interruption included, a finished
+    // summary lands before the halt (its usage is the run's); one still
+    // running stops with the run.
+    Effect.andThen(
+      compaction
+        .settle(cell, 'the run stopped')
+        .pipe(
+          Effect.catch((error) =>
+            Effect.sync(() =>
+              logger.warn(
+                'A finished background compaction could not be recorded as the run stopped',
+                { data: error },
               ),
-            settleRun(cell, followUps)(exit),
+            ),
           ),
-        );
-      }),
-    () => Effect.sync(detach),
+        ),
+      settleRun(cell, followUps)(exit),
+    ),
   ).pipe(
     Effect.map((loop) => result(loop.outcome, loop.state)),
     Effect.catchCause(stoppedBy(logger, `Tool-use run ${runId}`)),
