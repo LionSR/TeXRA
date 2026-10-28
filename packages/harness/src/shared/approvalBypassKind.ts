@@ -184,6 +184,18 @@ export function grantsKept<Id>(
   return { ...inheritedGrants(seeded, runId), goal: own.goal };
 }
 
+/** A run's grants as its rows record them: the latest `approval.policy`,
+ *  else the snapshot its `run.start` carried. */
+export function recordedGrants(rows: readonly SessionEvent[]): ApprovalGrants {
+  const latest = rows.findLast(
+    (row) => row.type === 'approval.policy' || row.type === 'run.start',
+  );
+  if (latest?.type === 'approval.policy') return latest.snapshot;
+  return latest?.type === 'run.start'
+    ? (latest.approvalPolicy ?? NO_APPROVAL_GRANTS)
+    : NO_APPROVAL_GRANTS;
+}
+
 /** {@link grantsKept} from a child's own rows, its `run.start` and newest
  *  `approval.policy`; `undefined` for a child with no start (unborn). */
 export function grantsKeptFromRows(
@@ -194,14 +206,11 @@ export function grantsKeptFromRows(
 ): ApprovalGrants | undefined {
   const start = rows.find((row) => row.type === 'run.start');
   if (start?.type !== 'run.start') return undefined;
-  const own = rows.findLast((row) => row.type === 'approval.policy');
   return grantsKept(
     source,
     runId,
     start.parent?.id ?? parentId,
-    own?.type === 'approval.policy'
-      ? own.snapshot
-      : (start.approvalPolicy ?? NO_APPROVAL_GRANTS),
+    recordedGrants(rows),
   );
 }
 

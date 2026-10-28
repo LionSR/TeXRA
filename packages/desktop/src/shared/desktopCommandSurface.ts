@@ -1,4 +1,3 @@
-import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import {
   toElectronAccelerator,
@@ -15,8 +14,10 @@ import {
   type CommandHandler,
 } from '@texra/shared/commands/registry';
 import type { IconName } from '@ui/wa/iconNames';
+import { texraGuideUrl } from '@ui/copy/guide';
 import {
   DESKTOP_SHELL_COMMANDS,
+  type DesktopOpenSettingsMessageSchema,
   type DesktopWorkbenchKind,
 } from './desktopShellMessages.js';
 
@@ -30,7 +31,7 @@ export const DESKTOP_LOCAL_COMMANDS = {
   OPEN_DESKTOP_DOCS: 'texra.desktop.openDesktopDocs',
 } as const;
 
-export const DESKTOP_DOCS_URL = 'https://texra.ai/guide/desktop';
+export const DESKTOP_DOCS_URL = texraGuideUrl('desktop');
 
 type DesktopLocalCommandId =
   (typeof DESKTOP_LOCAL_COMMANDS)[keyof typeof DESKTOP_LOCAL_COMMANDS];
@@ -133,11 +134,6 @@ export interface DesktopCommandActions {
   toggleSidePanel(): void;
 }
 
-interface DesktopSettingsTabMessage {
-  command: typeof SETTINGS_VIEW_COMMANDS.SET_TAB;
-  tab: SettingsTarget;
-}
-
 export function getDesktopCommandMenuEntries(
   platform: DesktopPlatform,
 ): DesktopCommandMenuEntry[] {
@@ -224,24 +220,17 @@ export function dispatchDesktopCommand(
   );
 }
 
-export function buildDesktopSettingsTabMessage(
-  tab: SettingsTarget,
-): DesktopSettingsTabMessage {
-  return { command: SETTINGS_VIEW_COMMANDS.SET_TAB, tab };
-}
-
 /**
- * Opens the Settings dialog before selecting an optional settings tab.
- * Main-process navigation has two consumers, so this helper keeps their
- * message ordering identical.
+ * Opens the Settings dialog, on `tab` when one is named. The renderer's
+ * dialog selects the tab, as it does for its own openings.
  */
 export function postDesktopSettingsView(
   postToRenderer: (message: unknown) => void,
   tab?: SettingsTarget,
 ): void {
-  postToRenderer({
+  const message: typeof DesktopOpenSettingsMessageSchema.Type = {
     command: DESKTOP_SHELL_COMMANDS.OPEN_SETTINGS,
-  });
-  if (tab == null) return;
-  postToRenderer(buildDesktopSettingsTabMessage(tab));
+    ...(tab && { tab }),
+  };
+  postToRenderer(message);
 }

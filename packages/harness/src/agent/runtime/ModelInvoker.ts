@@ -68,7 +68,6 @@ import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 import type { CellError, RunCell } from '@shared/session/runHistory';
-import { generateShortId } from '@utils/core';
 
 import { policyDecidedRows } from './requestPolicy';
 import { AgentRun } from './run/AgentRun';
@@ -707,7 +706,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             return info;
           }),
           asker: {
-            requestId: () => `retry-${generateShortId()}`,
+            requestId: () => `retry-${randomUUID()}`,
             await: Effect.fn('ModelInvoker.await')(function* (requestId) {
               logger.debug('Waiting for manual retry');
               // The answer is the `request.decided` row the decide
@@ -739,7 +738,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                     provider: bound.config.provider,
                     userRetryable: true,
                   },
-                  { kind: 'ask', requestId: `retry-${generateShortId()}` },
+                  { kind: 'ask', requestId: `retry-${randomUUID()}` },
                   bound,
                 ),
               );

@@ -19,6 +19,7 @@ import {
 import {
   APPROVAL_BYPASS_KINDS,
   NO_APPROVAL_GRANTS,
+  recordedGrants,
   resolveBypass,
   runPolicy,
   type ApprovalBypassKind,
@@ -47,7 +48,7 @@ import {
   type RequestError,
   type RuntimeRequest,
 } from '@shared/session/runtimeRequest';
-import { parentEdgeOf } from '@shared/session/runRelation';
+import { parentEdgeOf } from '@shared/session/runRows';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { Settings } from '@shared/config/settings';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -68,18 +69,6 @@ interface QueuedApproval<A, E, R> {
 
 /** The kinds whose prompts queue one at a time per run. */
 type QueuedKind = Extract<ApprovalBypassKind, 'bash' | 'toolEdit'>;
-
-/** A run's grants as its rows record them: the latest `approval.policy`,
- *  else the snapshot its `run.start` carried. */
-function recordedGrants(rows: readonly SessionEvent[]): ApprovalGrants {
-  const latest = rows.findLast(
-    (row) => row.type === 'approval.policy' || row.type === 'run.start',
-  );
-  if (latest?.type === 'approval.policy') return latest.snapshot;
-  return latest?.type === 'run.start'
-    ? (latest.approvalPolicy ?? NO_APPROVAL_GRANTS)
-    : NO_APPROVAL_GRANTS;
-}
 
 /**
  * A run's grants once it activates again, or null when they stand as

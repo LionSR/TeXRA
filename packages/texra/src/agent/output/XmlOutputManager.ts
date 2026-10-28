@@ -435,7 +435,7 @@ export class XmlOutputManager {
       const replaced = replacementEngine.applyFor(
         originalContent,
         'xml-content',
-        (key) => this.config.get(key),
+        this.config,
       );
       yield* logReplacementDiagnostics(replaced.diagnostics);
       let content = replaced.text;

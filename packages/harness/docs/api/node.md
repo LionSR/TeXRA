@@ -410,10 +410,9 @@ function makeMachineGitEnv(): NodeJS.ProcessEnv
 
 ## nodeFileServices
 
-The filesystem services a `JsonStore` reads and writes over, as a layer a
-caller can provide itself. This store provides them for its own write
-({@link JsonStore.set}) and for `update`'s runner, so no consumer of a
-requirement-free port carries `FileSystem | Path` in its type.
+Node's file services: `FileSystem` (with the one-call native `realPath`)
+and `Path`. The process platform, the JSON and credential stores and the
+hosts' own reads all provide this one layer.
 
 ```ts
 const nodeFileServices: Layer.Layer<FileSystem.FileSystem | Path.Path>

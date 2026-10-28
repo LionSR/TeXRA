@@ -49,8 +49,9 @@ describe('personal style contextual replacements', () => {
       '$\\mathrm{Tr}$ and $\\mathrm{tr}$',
     ].join('\n');
 
-    const result = replacementEngine.applyAll(input, (key) =>
-      testWorkspaceRoots().config.get(key),
+    const result = replacementEngine.applyAll(
+      input,
+      testWorkspaceRoots().config,
     ).text;
 
     const expected = [

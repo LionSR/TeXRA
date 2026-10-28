@@ -5,7 +5,7 @@
 import { Effect, Result, absurd, Array as Arr } from 'effect';
 import { LRUCache } from 'lru-cache';
 
-import { withLogChannel } from '@texra-ai/harness/host';
+import { Settings, withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type {
   NonRegexReplacementCategory,
@@ -54,6 +54,7 @@ import {
   PERSONAL_STYLE_CONTEXTUAL_REPLACEMENTS,
   FENCED_LATEX_BLOCK_REPLACEMENTS,
 } from './rulesRegex';
+import type { ConfigProvider } from '@texra-ai/harness/host';
 
 const CHANNEL = 'ReplacementEngine';
 
@@ -79,21 +80,14 @@ export function logReplacementDiagnostics(
   ).pipe(withLogChannel(CHANNEL));
 }
 
-/**
- * How a policy reads its replacement settings by key: a reader over the
- * configuration of the workspace whose text is being rewritten, which every
- * caller holds as data.
- */
-export type ReplacementConfigRead = <T>(path: string) => T;
-
 function applyNonRegexPolicy(
   text: string,
-  read: ReplacementConfigRead,
+  config: ConfigProvider,
 ): ReplacementResult {
-  const processed = applyReplacements(text, getAllReplacements(read));
+  const processed = applyReplacements(text, getAllReplacements(config));
   const trimmed = processed.text.trim();
   return {
-    text: shouldWrapCritiqueInAlign(read)
+    text: shouldWrapCritiqueInAlign(config)
       ? wrapCritiqueInAlign(trimmed)
       : trimmed,
     diagnostics: processed.diagnostics,
@@ -102,17 +96,17 @@ function applyNonRegexPolicy(
 
 function applyAllPolicy(
   text: string,
-  read: ReplacementConfigRead,
+  config: ConfigProvider,
 ): ReplacementResult {
-  const replacements = getAllReplacements(read);
-  const wrapCritique = shouldWrapCritiqueInAlign(read);
+  const replacements = getAllReplacements(config);
+  const wrapCritique = shouldWrapCritiqueInAlign(config);
 
   const nonRegex = applyReplacements(text, replacements, {
     cleanupPasses: false,
   });
   let result = nonRegex.text.trim();
   if (wrapCritique) result = wrapCritiqueInAlign(result);
-  const regex = applyReplacements(result, getAllReplacementsRegex(read), {
+  const regex = applyReplacements(result, getAllReplacementsRegex(config), {
     cleanupPasses: false,
   });
   const final = applyReplacements(regex.text.trim(), replacements);
@@ -138,8 +132,8 @@ const replacementEngine = {
    * replacements run before and after regex replacements to fix artifacts they
    * may introduce. Config values are read once and reused across all passes, and
    * whole-document cleanup runs once at the end instead of after each pass.
-   * `read` reads the rules from the configuration of the workspace whose text
-   * this is.
+   * `config` is the configuration of the workspace whose text this is; the
+   * rules are its catalog settings, read through `Settings`.
    */
   applyAll: applyAllPolicy,
 
@@ -148,12 +142,12 @@ const replacementEngine = {
    * exact ordered profile they need instead of composing lower-level rules at
    * the call site. Both special-purpose profiles have production consumers:
    * `xml-content` backs XML output normalization and `tex-write` backs
-   * `.tex` file writes. `read` is as for {@link applyAll}.
+   * `.tex` file writes. `config` is as for {@link applyAll}.
    */
   applyFor(
     text: string,
     purpose: 'xml-content' | 'tex-write',
-    read: ReplacementConfigRead,
+    config: ConfigProvider,
   ): ReplacementResult {
     switch (purpose) {
       case 'xml-content': {
@@ -162,7 +156,7 @@ const replacementEngine = {
         // The fenced-block pass is deliberate and unconditional here: it is
         // part of this purpose's contract, independent of the
         // `enabledReplacementsRegex` config that gates applyAll's regex pass.
-        const nonRegex = applyNonRegexPolicy(text, read);
+        const nonRegex = applyNonRegexPolicy(text, config);
         const fenced = applyReplacements(
           nonRegex.text,
           FENCED_LATEX_BLOCK_REPLACEMENTS,
@@ -175,7 +169,7 @@ const replacementEngine = {
       case 'tex-write': {
         // Writing a .tex file runs the full pipeline and then restores the
         // LaTeX built-in section sign from the KaTeX-only destination.
-        const all = applyAllPolicy(text, read);
+        const all = applyAllPolicy(text, config);
         return { ...all, text: restoreLatexSectionSign(all.text) };
       }
       default:
@@ -228,17 +222,20 @@ const REGEX_RULES: Record<RegexReplacementCategory, RegexRuleSet> = {
   max_style_regex: MAX_REGEX_REPLACEMENTS,
 };
 
-function shouldWrapCritiqueInAlign(read: ReplacementConfigRead): boolean {
-  return read('texra.latex.wrapCritiqueInAlign');
+function shouldWrapCritiqueInAlign(config: ConfigProvider): boolean {
+  return Settings.getConfig(config, 'texra.latex.wrapCritiqueInAlign');
 }
 
 /**
  * Combine every enabled non-regex category into a single category. Custom
  * replacements from user settings take precedence over predefined rules.
  */
-function getAllReplacements(read: ReplacementConfigRead): NonRegexRuleSet {
-  const enabled = new Set(read<string[]>('texra.latex.enabledReplacements'));
-  const customReplacements = read<Record<string, string>>(
+function getAllReplacements(config: ConfigProvider): NonRegexRuleSet {
+  const enabled = new Set(
+    Settings.getConfig<string[]>(config, 'texra.latex.enabledReplacements'),
+  );
+  const customReplacements = Settings.getConfig<Record<string, string>>(
+    config,
     'texra.latex.customReplacements',
   );
 
@@ -257,13 +254,16 @@ function getAllReplacements(read: ReplacementConfigRead): NonRegexRuleSet {
  * Return every enabled regex category in application order, appending a custom
  * category built from user settings whenever custom regex replacements exist.
  */
-function getAllReplacementsRegex(read: ReplacementConfigRead): RegexRuleSet[] {
+function getAllReplacementsRegex(config: ConfigProvider): RegexRuleSet[] {
   const enabled = new Set(
-    read<string[]>('texra.latex.enabledReplacementsRegex'),
+    Settings.getConfig<string[]>(
+      config,
+      'texra.latex.enabledReplacementsRegex',
+    ),
   );
-  const customReplacements = read<Record<string, ReplacementValue>>(
-    'texra.latex.customReplacementsRegex',
-  );
+  const customReplacements = Settings.getConfig<
+    Record<string, ReplacementValue>
+  >(config, 'texra.latex.customReplacementsRegex');
 
   const enabledRules = Object.entries(REGEX_RULES)
     .filter(([name]) => enabled.has(name))

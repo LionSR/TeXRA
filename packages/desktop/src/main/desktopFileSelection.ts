@@ -4,10 +4,8 @@ import { Effect, FileSystem, type Path, type PlatformError } from 'effect';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 
 import type { FileOptions } from '@texra/shared/session/hostSnapshot';
-import {
-  getFileListConfig,
-  type ListableFileType,
-} from '@texra/common/files/fileListingRules';
+import type { ListableFileType } from '@texra/common/files/fileListingRules';
+import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 
 interface DesktopFileSelectionDialogOptions {
@@ -67,7 +65,6 @@ export function createDesktopFileSelection(
     fileOptions: () => workspaceFileOptions(workspacePath),
     pickFiles(fileType) {
       if (!workspacePath) return Effect.succeed(null);
-      const listConfig = getFileListConfig(fileType);
       return options
         .showOpenFileDialog({
           title: DIALOG_TITLE_BY_FILE_TYPE[fileType],
@@ -76,11 +73,7 @@ export function createDesktopFileSelection(
           filters: [
             {
               name: 'Supported files',
-              // Electron's dialog filter extensions must not include the
-              // leading dot (unlike getFileListConfig's `.tex`-style entries).
-              extensions: listConfig.include.map((ext) =>
-                ext.replace(/^\./, ''),
-              ),
+              extensions: getFilterExtensions(fileType),
             },
           ],
         })

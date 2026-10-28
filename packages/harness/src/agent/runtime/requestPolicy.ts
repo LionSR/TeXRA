@@ -25,6 +25,7 @@ import {
 } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { runStateAppend } from '@shared/session/runHistory';
+import { REQUEST_TYPES, runRowsFrom } from '@shared/session/runRows';
 
 import {
   resolveBypass,
@@ -237,12 +238,6 @@ export const hostCapabilitiesOf = (
 
 const CHANNEL = 'requestPolicy';
 
-/** The rows one request's state is read off. */
-const REQUEST_TYPES: readonly SessionEvent['type'][] = [
-  'request.opened',
-  'request.decided',
-];
-
 /** What a session's asks are built over. */
 export interface RequestAsksInit {
   /** The session the requests are asked on, resolved when first used. */
@@ -267,7 +262,8 @@ export function requestAsks({
    *  open: the body of one publisher transaction, whether a surface or an
    *  interrupted {@link ask} decides it. It reads the run's
    *  request rows alone, through the type index, so a decision costs the
-   *  same however long the run's history grows. */
+   *  same however long the run's history grows, and asks `runRowsFrom`
+   *  whether the request is open, as the run state does. */
   const decisionRow = (
     runId: RunId,
     requestId: string,
@@ -277,11 +273,8 @@ export function requestAsks({
     Effect.gen(function* () {
       const aggregateId = qualifyAggregateId('run', runId);
       const rows = yield* session().log.rows(aggregateId, REQUEST_TYPES);
-      const mine = rows.filter(
-        (row) => 'requestId' in row && row.requestId === requestId,
-      );
-      if (!mine.some((row) => row.type === 'request.opened')) return false;
-      if (mine.some((row) => row.type === 'request.decided')) return false;
+      if (runRowsFrom(rows).requests[requestId]?.decision !== null)
+        return false;
       yield* runStateAppend(append)([
         { type: 'request.decided', aggregateId, requestId, decision },
       ]);

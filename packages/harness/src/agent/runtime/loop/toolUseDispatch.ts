@@ -85,7 +85,7 @@ import type { RunCell } from '@shared/session/runHistory';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import { checkOwnFacts, factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
-import { generateShortId, getBasename } from '@utils/core';
+import { getBasename } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { AgentRun } from '../run/AgentRun';
@@ -835,7 +835,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
             toolName: op.name,
             input,
             replay: answer !== undefined ? 'safe' : (tool?.replay ?? 'unsafe'),
-            logId: generateShortId(),
+            logId: crypto.randomUUID(),
             stageId,
             phase: op.phase,
           };

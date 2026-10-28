@@ -57,20 +57,12 @@ export class SettingsAgentCatalogController {
     });
   }
 
-  getCustomPresets() {
-    return Effect.gen({ self: this }, function* () {
-      return parseAgentModePresets(
-        yield* this.deps.repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
-      );
-    });
-  }
-
   getCustomPreset(presetId: string) {
     return Effect.gen({ self: this }, function* () {
       return (
-        (yield* this.getCustomPresets()).find(
-          (preset) => preset.id === presetId,
-        ) ?? null
+        parseAgentModePresets(
+          yield* this.deps.repoState.get(WorkspaceStateKey.CUSTOM_TEAMS),
+        ).find((preset) => preset.id === presetId) ?? null
       );
     });
   }

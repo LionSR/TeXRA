@@ -58,11 +58,6 @@ export interface DesktopAgentRunOptions {
   /** The process runtime this window was handed; the run and its approval
    *  wiring settle on it. */
   runtime: ProcessRuntime;
-  /** Runs when a run this window launched ends: after `AgentRunLifecycle`
-   *  writes `firstRunDone` on a successful run, so the host can recompute
-   *  the onboarding funnel from the updated flag. Do not hook the run.end
-   *  row: it commits inside finalizeTerminal, before the flag write. */
-  onRunCompleted?: Effect.Effect<void>;
 }
 
 /** The window's side of its run actions (`HostRunActionPorts`). */
@@ -203,19 +198,7 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
     }
 
     return {
-      launched: (run) =>
-        Effect.sync(() => options.onLaunched?.(run.runId)).pipe(
-          Effect.andThen(
-            Effect.forkIn(
-              run.result.pipe(
-                Effect.ignore,
-                Effect.ensuring(options.onRunCompleted ?? Effect.void),
-              ),
-              scope,
-            ),
-          ),
-          Effect.asVoid,
-        ),
+      launched: (run) => Effect.sync(() => options.onLaunched?.(run.runId)),
       scope,
       openFinalOutput: (config, result) =>
         withProcessServices(

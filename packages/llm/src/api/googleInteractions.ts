@@ -9,7 +9,6 @@ import {
   BackgroundSubmissionSchema,
   completedTurn,
   decodeModelConfiguration,
-  ResolvedTurnSchema,
   TurnResultSchema,
   type GoogleInteractionsConfiguration,
   type Model,
@@ -17,7 +16,7 @@ import {
   type TurnResult,
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
-import { decodeTurnRequest } from './turnInput.js';
+import { decodeTurnRequest, resolveTurn } from './turnInput.js';
 import {
   COMPLETED_STATUSES,
   IN_FLIGHT_STATUSES,
@@ -584,8 +583,8 @@ export function googleInteractionsModel(
   const prepareTurn: Model['prepareTurn'] = Effect.fn('llm.google.prepareTurn')(
     function* (request) {
       const authored = yield* decodeTurnRequest(
-        request,
         'The canonical Google input is invalid.',
+        request,
       );
       if (
         authored.continuation !== undefined &&
@@ -607,7 +606,7 @@ export function googleInteractionsModel(
             'Google background execution requires an enabled route and store:true.',
         });
       }
-      const turn = Schema.decodeUnknownSync(ResolvedTurnSchema)({
+      const turn = yield* resolveTurn('Google controls are incomplete.', {
         ...origin,
         mode,
         system: authored.system,

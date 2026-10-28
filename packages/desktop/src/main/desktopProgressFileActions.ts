@@ -1,18 +1,16 @@
 import path from 'node:path';
 
-import { Effect, FileSystem, type PlatformError, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { type Session } from '@texra-ai/harness';
 import {
   type ProcessRuntime,
-  type ProcessServices,
   withProcessServices,
   pathToLocationIn,
   Settings,
 } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
-import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import {
   latexdiffAllFailedMessage,
@@ -62,9 +60,8 @@ type DesktopProgressFileActionUi = Pick<
 
 /**
  * Bridge-owned capabilities the file actions reach back into: the project's
- * session and runtime, and enumerating workspace input/context files (label
- * search). Kept as a narrow interface so the actions stay decoupled from the
- * full progress bridge.
+ * session and runtime. Kept as a narrow interface so the actions stay
+ * decoupled from the full progress bridge.
  */
 interface DesktopProgressFileActionHost {
   /** The project's session, here or in the service. */
@@ -73,11 +70,6 @@ interface DesktopProgressFileActionHost {
    *  the file reads and writes below take their services from it. Nothing
    *  settles here: every member of this class is a program its caller runs. */
   readonly runtime: ProcessRuntime;
-  listWorkspaceCandidateFiles(): Effect.Effect<
-    readonly string[],
-    PlatformError.PlatformError,
-    ProcessServices
-  >;
 }
 
 export class DesktopProgressFileActions {
@@ -197,24 +189,6 @@ export class DesktopProgressFileActions {
 
       yield* this.openDiffOutput(result.diffPath);
     }).pipe((program) => withProcessServices(this.host.runtime, program));
-  }
-
-  findAndOpenLabel(label: string): Effect.Effect<boolean, Error> {
-    return withProcessServices(
-      this.host.runtime,
-      Effect.gen({ self: this }, function* () {
-        const candidates = new Set(
-          yield* this.host.listWorkspaceCandidateFiles(),
-        );
-        const fs = yield* FileSystem.FileSystem;
-        return yield* openFirstLabelMatch(
-          label,
-          candidates,
-          (file) => fs.readFileString(file),
-          (file) => this.ui.openPath(file),
-        );
-      }),
-    );
   }
 
   /** Open a generated diff file via the desktop LaTeX build display. */

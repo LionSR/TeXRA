@@ -21,7 +21,6 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
-import { type LocalSession } from '@texra-ai/harness';
 import {
   StorageFs,
   type AssembleTraceResult,
@@ -36,10 +35,9 @@ import type { ChatExportInput } from '@texra/agent/export/schemas';
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
 import { formatChatAsLatex } from '@texra/agent/export/chatExport/latexSpec';
 import { generateExportFilename } from '@texra/agent/export/chatExport/filenames';
-import {
-  loadChatExportInput,
-  type ChatExportInputUnreadable,
-  type ChatExportLoadResult,
+import type {
+  ChatExportInputUnreadable,
+  ChatExportLoadResult,
 } from '@texra/agent/export/loadChatExportInput';
 import type { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
@@ -94,7 +92,7 @@ function bundleFailure(
 }
 
 /** The run records an export reads: from this process's session
- *  ({@link localExportRecords}), or from the service that holds the run. */
+ *  (`windowRecords`), or from the service that holds the run. */
 export interface ChatExportRecords {
   /** The run's setup and assembled export input (`loadChatExportInput`). */
   readonly input: (
@@ -106,14 +104,6 @@ export interface ChatExportRecords {
   /** The run's static trace, for the HTML export. */
   readonly trace: (runId: RunId) => Effect.Effect<AssembleTraceResult, Error>;
 }
-
-/** The export records of a window whose process holds its session. */
-export const localExportRecords = (
-  session: LocalSession,
-): ChatExportRecords => ({
-  input: (runId) => loadChatExportInput(runId, session),
-  trace: (runId) => session.records(runId).readTrace(),
-});
 
 interface ChatExportControllerDeps {
   /**
@@ -136,7 +126,7 @@ export class ChatExportController {
    *
    * Returns a discriminated status so the caller can show the right error
    * message for each missing piece without coupling to storage details.
-   * Thin wrapper around the shared {@link loadChatExportInput} loader, which
+   * Thin wrapper around the shared `loadChatExportInput` loader, which
    * also backs the CLI's `readCliHistoryExportInput`: so both hosts read,
    * validate, and assemble export input identically (including treating a
    * stored-but-empty conversation array as absent, not present).

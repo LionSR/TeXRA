@@ -369,7 +369,7 @@ export class RunTab extends LitElement {
                       ? 'Agent actions'
                       : 'Task actions',
                 })}
-                ${run.actions.includes('rename') ? html`<wa-dropdown-item value="rename">${waIcon('pencil', { slot: 'icon' })}Rename…</wa-dropdown-item>` : nothing}
+                ${run.actions.includes('rename') ? html`<wa-dropdown-item value="rename">${waIcon('pencil', { slot: 'icon' })}${TASK_ACTIONS.rename}</wa-dropdown-item>` : nothing}
                 ${this.removable ? html`<wa-dropdown-item class="tab-remove" value="delete" variant="danger">${waIcon('trash', { slot: 'icon' })}${deleteLabel}</wa-dropdown-item>` : nothing}
               </wa-dropdown>`
             : nothing

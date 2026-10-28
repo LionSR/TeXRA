@@ -27,6 +27,10 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
+import {
+  issuedCalls,
+  ISSUING_ROW_TYPES,
+} from '@shared/session/turnRowHandlers';
 import { launchBackgroundScript } from '@tools/codemode/backgroundScript';
 import { defineTool } from '@tools/core/definition';
 import { errorResult, executed } from '@tools/core/result';
@@ -97,24 +101,15 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   // detached, a goal is still found by the call that launched it.
   const { session, runId } = call.run;
   const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
-    'model.message',
-    'script.call',
+    ...ISSUING_ROW_TYPES,
     'tool.result',
   ]);
-  // A plan call, by the response its result names: a script's call, that of
-  // the latest response to issue its `script` call before it.
-  const plans = new Set<string>();
-  const issuer = new Map<string, string>();
-  for (const row of rows)
-    if (row.type === 'model.message' && row.payload.kind === 'response')
-      for (const { callId, toolName } of row.payload.calls) {
-        issuer.set(callId, row.payload.responseId);
-        if (toolName === PLAN) plans.add(`${row.payload.responseId}/${callId}`);
-      }
-    else if (row.type === 'script.call' && row.payload.toolName === PLAN)
-      plans.add(
-        `${issuer.get(row.payload.scriptCallId)}/${row.payload.callId}`,
-      );
+  // A plan call, by the response its result names.
+  const plans = new Set(
+    issuedCalls(rows).flatMap(({ call, issuer }) =>
+      call.toolName === PLAN ? [`${issuer?.responseId}/${call.callId}`] : [],
+    ),
+  );
   const { runs } = SubscriptionRef.getUnsafe(session.view.ref);
   // A goal that ended still holds the conversation while work it started
   // (a round's background agent) runs on.

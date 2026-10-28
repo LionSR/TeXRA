@@ -216,7 +216,8 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     // revised sibling wins over the original source fallback.
     const documentDir = path.dirname(latexFile);
 
-    const tikzInputDirectory = roots.config.get<string>(
+    const tikzInputDirectory = yield* Settings.get<string>(
+      roots,
       'texra.latex.tikzInputDirectory',
     );
     const includeWorkspace = yield* Settings.get<boolean>(

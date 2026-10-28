@@ -2539,7 +2539,7 @@ installed plugins' as they load now, and the bundled ones the host
 installed. Every read answers with the discovery issues beside the skills.
 
 ```ts
-const Skills: Readonly<{ readonly interopDirs: readonly [".agents", ".claude", ".codex", ".gemini"]; readonly display: (roots: SkillRoots) => Effect<{ skills: { readonly name: string; readonly description: string; readonly scope: "custom" | "user" | "bundled" | "project" | "interop"; readonly label: string; readonly path: string; readonly sourcePath: string; readonly enabled: boolean; }[]; issues: { readonly message: string; readonly path?: string | undefined; }[]; }, StateReadFailed, FileSystem>; readonly enabled: (roots: SkillRoots, options?: SkillSourceOptions | undefined) => Effect<{ skills: EnabledSkill[]; issues: SkillLoadIssue[]; }, StateReadFailed, FileSystem>; }>
+const Skills: Readonly<{ readonly interopDirs: readonly [".agents", ".claude", ".codex", ".gemini"]; readonly display: (roots: SkillRoots) => Effect<{ skills: { readonly name: string; readonly description: string; readonly scope: "custom" | "user" | "bundled" | "project" | "interop"; readonly label: string; readonly path: string; readonly sourcePath: string; readonly enabled: boolean; }[]; issues: { readonly message: string; readonly path?: string | undefined; }[]; }, Error, FileSystem>; readonly enabled: (roots: SkillRoots, options?: SkillSourceOptions | undefined) => Effect<{ skills: EnabledSkill[]; issues: SkillLoadIssue[]; }, Error, FileSystem>; }>
 ```
 
 ## SkillSourceOptions

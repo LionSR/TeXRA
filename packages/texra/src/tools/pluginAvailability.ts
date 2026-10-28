@@ -14,7 +14,7 @@ import {
   type ToolAvailabilityChecks,
   type ToolProbeServices,
 } from '@texra-ai/harness/plugins';
-import { Secrets, withLogChannel } from '@texra-ai/harness/host';
+import { Secrets, Settings, withLogChannel } from '@texra-ai/harness/host';
 import { findCommand } from '@texra-ai/harness/node';
 import {
   importCodexClass,
@@ -57,7 +57,8 @@ export const WOLFRAM_AVAILABILITY: ToolAvailabilityChecks = {
 };
 
 export const ZOTERO_AVAILABILITY: ToolAvailabilityChecks = {
-  probe: ({ config }) => Effect.succeed(config.get<number>(ZOTERO_PORT_KEY)),
+  probe: ({ config }) =>
+    Effect.sync(() => Settings.getConfig<number>(config, ZOTERO_PORT_KEY)),
   check: (probeResult) => probeZoteroBbt(zoteroProbePort(probeResult)),
   detailCheck: Effect.fn('pluginAvailability.zoteroDetail')(function* (
     probeResult?: unknown,

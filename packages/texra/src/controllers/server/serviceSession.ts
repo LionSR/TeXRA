@@ -36,6 +36,7 @@ import {
   RunFailure,
   ToolsRefused,
   type ITool,
+  type LocalSession,
   type Run,
   type Session,
   type WorkspaceRoots,
@@ -48,7 +49,11 @@ import {
   attachErrorPresentationClaimed,
   describeFollowUpFailure,
   replayTrace,
+  type SessionHostInteractions,
 } from '@texra-ai/harness/host';
+import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
+import type { ChatExportRecords } from '@texra/controllers/progressView/ChatExportController';
+import type { RunActionRecordPorts } from '@texra/controllers/session/hostRunActions';
 import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
 
@@ -107,7 +112,7 @@ const callService = <A, E>(
  * exports read. The window opens no records of its own in service mode. A
  * service that is offline, or did not answer, fails the read `offline`.
  */
-export const serviceRecords = (link: ServiceLink, workspace: string) => {
+const serviceRecords = (link: ServiceLink, workspace: string) => {
   const ask = <A>(
     runId: RunId,
     use: (
@@ -140,6 +145,49 @@ export const serviceRecords = (link: ServiceLink, workspace: string) => {
       ask(runId, (client) => client['task.exportInput']({ workspace, runId })),
     exportTrace: (runId: RunId) =>
       ask(runId, (client) => client['task.exportTrace']({ workspace, runId })),
+  };
+};
+
+/**
+ * What a window's run actions and transcript export read, from the one place
+ * its runs are held: its own session, or the service. In service mode a
+ * failure before a run opens is presented on `present`, the window's own
+ * presentation host.
+ */
+export const windowRecords = (
+  window:
+    | { readonly session: LocalSession; readonly service?: undefined }
+    | {
+        readonly service: ServiceLink;
+        readonly roots: WorkspaceRoots;
+        readonly present: Pick<SessionHostInteractions, 'emit'>;
+      },
+): {
+  readonly records: RunActionRecordPorts;
+  readonly exportRecords: ChatExportRecords;
+} => {
+  if (window.service === undefined) {
+    const { session } = window;
+    return {
+      records: {
+        roots: session.roots,
+        readConfig: (runId) => session.records(runId).readConfig(),
+        present: session,
+      },
+      exportRecords: {
+        input: (runId) => loadChatExportInput(runId, session),
+        trace: (runId) => session.records(runId).readTrace(),
+      },
+    };
+  }
+  const remote = serviceRecords(window.service, window.roots.workspace ?? '');
+  return {
+    records: {
+      roots: window.roots,
+      readConfig: remote.readConfig,
+      present: window.present,
+    },
+    exportRecords: { input: remote.exportInput, trace: remote.exportTrace },
   };
 };
 

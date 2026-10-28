@@ -53,23 +53,14 @@ export function mountProgressWebview(app: ProgressApp): () => void {
     app.surface = session.surface$.get();
     app.host = session.host$.get();
   };
-  // Seen only while the window has focus: a run finishing behind another app
-  // is news when the user comes back.
-  const markShownRunSeen = () => {
-    if (document.hasFocus())
-      sessions.act(sessionKey, { kind: 'seen', view: session.view$.get() });
-  };
-  const unsubscribe = sessions.onChange(() => {
-    assign();
-    markShownRunSeen();
-  });
-  window.addEventListener('focus', markShownRunSeen);
+  const unsubscribe = sessions.onChange(assign);
+  const stopFollowingSeen = sessions.followSeen(() => sessionKey);
   assign();
 
   const dispose = (): void => {
     window.removeEventListener('pagehide', dispose);
-    window.removeEventListener('focus', markShownRunSeen);
     window.removeEventListener('message', receive);
+    stopFollowingSeen();
     unsubscribe();
     sessions.dispose();
   };

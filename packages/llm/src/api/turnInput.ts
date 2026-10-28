@@ -3,22 +3,41 @@ import { Effect, Schema } from 'effect';
 
 // Local imports - canonical model contract
 import {
+  ResolvedTurnSchema,
   TurnRequestSchema,
   type AnthropicMessagesConfiguration,
+  type ResolvedTurn,
   type TurnRequest,
 } from '../turn.js';
 import { ModelError } from '../errors.js';
 
+/** A decode whose failure is an `invalid-request` naming the adapter's message. */
+const decodeOrInvalid =
+  <T>(schema: Schema.Codec<T, unknown>) =>
+  (message: string, value: unknown): Effect.Effect<T, ModelError> =>
+    Schema.decodeUnknownEffect(schema)(value).pipe(
+      Effect.mapError(
+        (cause) => new ModelError({ kind: 'invalid-request', message, cause }),
+      ),
+    );
+
 /** Revalidates authored input; each adapter names its own invalid-request message. */
-export const decodeTurnRequest = (
-  request: TurnRequest,
+export const decodeTurnRequest: (
   message: string,
-): Effect.Effect<TurnRequest, ModelError> =>
-  Schema.decodeUnknownEffect(TurnRequestSchema)(request).pipe(
-    Effect.mapError(
-      (cause) => new ModelError({ kind: 'invalid-request', message, cause }),
-    ),
-  );
+  request: TurnRequest,
+) => Effect.Effect<TurnRequest, ModelError> =
+  decodeOrInvalid(TurnRequestSchema);
+
+/**
+ * The one decode of a prepared turn, for every protocol: a turn the binding's
+ * controls cannot complete is an `invalid-request` failure naming `message`,
+ * never a defect.
+ */
+export const resolveTurn: (
+  message: string,
+  turn: unknown,
+) => Effect.Effect<ResolvedTurn, ModelError> =
+  decodeOrInvalid(ResolvedTurnSchema);
 
 /**
  * An Anthropic request's output limit and the thinking that fits below it: a

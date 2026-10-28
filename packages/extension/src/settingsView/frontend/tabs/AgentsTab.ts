@@ -38,10 +38,9 @@ import {
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 import { renderSettingsBanner } from '@ui/wa/settingsBanner';
-import { renderSettingsNumberRow } from '@ui/wa/settingsSection';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
-  postStateSetting,
+  renderStateSettingNumberRow,
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
 
@@ -256,9 +255,8 @@ export class AgentsTab extends LitElement {
   private renderAdvanced(): TemplateResult {
     return html`
       <div class="settings-section">
-        ${renderSettingsNumberRow({
-          label: 'Compaction threshold',
-          description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
+        ${renderStateSettingNumberRow({
+          key: MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
           value: this.compactionThresholdPercent,
           min: MODEL_COMPACTION_THRESHOLD_SETTING.min,
           max: MODEL_COMPACTION_THRESHOLD_SETTING.max,
@@ -267,23 +265,15 @@ export class AgentsTab extends LitElement {
           // Clearing the field commits 0, which is the documented way to
           // disable compaction — not a no-op edit to be reverted.
           revertOnEmpty: false,
-          onChange: (value) =>
-            postStateSetting(
-              MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
-              value,
-            ),
         })}
-        ${renderSettingsNumberRow({
-          label: 'Automatic retries',
-          description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
+        ${renderStateSettingNumberRow({
+          key: MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
           value: this.modelRetryMaxAttempts,
           min: MODEL_RETRY_MAX_ATTEMPTS_SETTING.min,
           max: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
           step: 1,
           ackGeneration: this.ackGeneration,
           revertOnEmpty: false,
-          onChange: (value) =>
-            postStateSetting(MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey, value),
         })}
         ${renderStateSettingToggleRow({
           key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
@@ -297,16 +287,13 @@ export class AgentsTab extends LitElement {
           key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
           checked: this.worktreeSupport,
         })}
-        ${renderSettingsNumberRow({
-          label: 'Agents at once',
-          description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
+        ${renderStateSettingNumberRow({
+          key: CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
           value: this.childRunConcurrencyBudget,
           min: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min,
           max: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
           step: 1,
           ackGeneration: this.ackGeneration,
-          onChange: (value) =>
-            postStateSetting(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, value),
         })}
       </div>
     `;
