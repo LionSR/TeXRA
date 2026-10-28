@@ -105,10 +105,11 @@ export class FileDropController implements ReactiveController {
   private dragDepth = 0;
   private active = false;
 
-  constructor(
-    private readonly host: ReactiveControllerHost,
-    private readonly onDrop: (paths: string[]) => void,
-  ) {
+  private readonly host: ReactiveControllerHost;
+  private readonly onDrop: (paths: string[]) => void;
+  constructor(host: ReactiveControllerHost, onDrop: (paths: string[]) => void) {
+    this.host = host;
+    this.onDrop = onDrop;
     host.addController(this);
   }
 

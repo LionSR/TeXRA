@@ -72,9 +72,10 @@ export class ProgressWorkflowFileActionsController {
     string
   >();
 
-  constructor(
-    private readonly deps: ProgressWorkflowFileActionsControllerDeps,
-  ) {}
+  private readonly deps: ProgressWorkflowFileActionsControllerDeps;
+  constructor(deps: ProgressWorkflowFileActionsControllerDeps) {
+    this.deps = deps;
+  }
 
   /** Apply an output-file request from either GUI host. */
   handle(

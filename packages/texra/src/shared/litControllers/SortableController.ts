@@ -35,12 +35,20 @@ type SortableReorderCallback = (result: SortableReorderResult) => void;
 export class SortableController implements ReactiveController {
   private sortable: Sortable | null = null;
 
+  private readonly host: ReactiveControllerHost;
+  private readonly getElement: () => HTMLElement | undefined;
+  private readonly getItems: () => readonly string[];
+  private readonly onReorder: SortableReorderCallback;
   constructor(
-    private readonly host: ReactiveControllerHost,
-    private readonly getElement: () => HTMLElement | undefined,
-    private readonly getItems: () => readonly string[],
-    private readonly onReorder: SortableReorderCallback,
+    host: ReactiveControllerHost,
+    getElement: () => HTMLElement | undefined,
+    getItems: () => readonly string[],
+    onReorder: SortableReorderCallback,
   ) {
+    this.host = host;
+    this.getElement = getElement;
+    this.getItems = getItems;
+    this.onReorder = onReorder;
     this.host.addController(this);
   }
 

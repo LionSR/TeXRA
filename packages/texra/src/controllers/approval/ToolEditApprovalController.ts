@@ -184,7 +184,10 @@ export class ToolEditApprovalController {
   private readonly releasing = new Map<string, Deferred.Deferred<void>>();
   private disposed = false;
 
-  constructor(private readonly options: ToolEditApprovalControllerOptions) {}
+  private readonly options: ToolEditApprovalControllerOptions;
+  constructor(options: ToolEditApprovalControllerOptions) {
+    this.options = options;
+  }
 
   /** Release a staged preview when its request is decided, by any surface. */
   handleSessionEvent(

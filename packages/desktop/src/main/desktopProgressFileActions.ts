@@ -81,10 +81,15 @@ interface DesktopProgressFileActionHost {
 }
 
 export class DesktopProgressFileActions {
+  private readonly ui: DesktopProgressFileActionUi;
+  private readonly host: DesktopProgressFileActionHost;
   constructor(
-    private readonly ui: DesktopProgressFileActionUi,
-    private readonly host: DesktopProgressFileActionHost,
-  ) {}
+    ui: DesktopProgressFileActionUi,
+    host: DesktopProgressFileActionHost,
+  ) {
+    this.ui = ui;
+    this.host = host;
+  }
 
   compareFiles(
     baseFile: string,

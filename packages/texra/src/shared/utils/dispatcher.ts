@@ -39,11 +39,12 @@ export function isUnsupported(value: unknown): value is Unsupported {
  * error log.
  */
 export class UnsupportedCommandError extends Error {
-  constructor(
-    readonly command: string,
-    readonly reason: string,
-  ) {
+  readonly command: string;
+  readonly reason: string;
+  constructor(command: string, reason: string) {
     super(`Command "${command}" is unsupported on this host: ${reason}`);
+    this.command = command;
+    this.reason = reason;
     this.name = 'UnsupportedCommandError';
   }
 }
