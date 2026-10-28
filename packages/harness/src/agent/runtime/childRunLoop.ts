@@ -17,6 +17,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import {
   registryOf,
+  type ChildRunActivation,
   type RunRegistry,
   type AgentRunServices,
   Runs,
@@ -41,7 +42,6 @@ import {
   type TransactionPart,
   type TurnResultRow,
 } from '@agent/runtime/childTurnResult';
-import { isUserAbort } from '@common/errors/errorPredicates';
 import {
   RUN_OUTCOME,
   qualifyAggregateId,
@@ -60,7 +60,7 @@ import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
-import { aggregateError, onAbort } from '@utils/core';
+import { aggregateError } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 /** A stopped child's pause: the notice its parent reads, and the id a
@@ -184,16 +184,18 @@ export interface ProcessChildStrategy<
   TTurn,
   R = never,
 > extends ChildStrategyBase<TTurn, R> {
-  launch(signal: AbortSignal): Effect.Effect<TTurn, Error, R>;
+  /** A stop interrupts the turn's fiber: a foreign call takes its signal
+   *  from that interruption (`Effect.abortSignal`, `Effect.tryPromise`). */
+  launch(): Effect.Effect<TTurn, Error, R>;
   /** The next turn, from the queued follow-ups. Absent: the first turn is
    *  the only one (a background shell). */
   runTurn?(
     followUps: readonly FollowUpContent[],
-    signal: AbortSignal,
   ): Effect.Effect<TTurn, Error, R>;
-  /** Deliver a finished turn even when the loop was interrupted: only a
-   *  killed OS process, whose exit code and output are a complete result. */
-  readonly deliverAfterInterrupt?: boolean;
+  /** The turn a stop cut short, rebuilt from what the child buffered, and
+   *  delivered: only a killed OS process, whose exit code and output are a
+   *  complete result. */
+  interruptedTurn?(): TTurn;
   /** A stop pauses this child rather than cancelling it: what it had done
    *  and how the parent's model continues it; undefined cancels it. */
   pauseNotice?(): ChildRunPause | undefined;
@@ -264,14 +266,12 @@ type ChildEnd =
 
 /**
  * One child loop's state, passed through the functions below: its setup,
- * its turn, and `end`, its last turn's result. Its stop is the registry
- * activation; a process child hears it through `signal` and finalizes after
- * it, a native child's run fiber is interrupted.
+ * its turn, and `end`, its last turn's result. A stop is its run fiber's
+ * interruption, its reason recorded on the registry activation first, so a
+ * stop that lands before the fiber runs is still read.
  */
 class ChildLoop<TTurn, R> {
-  private readonly controller = new AbortController();
-  /** The stop was a user's, read as it lands: its reason goes with the run. */
-  userStopped = false;
+  readonly activation: ChildRunActivation;
   readonly trace: AgentTrace | undefined;
   readonly attemptId = randomUUID();
   /** What the launch acquired (its ownership, activation and stage),
@@ -297,6 +297,7 @@ class ChildLoop<TTurn, R> {
     readonly runs: RunRegistry,
   ) {
     this.trace = params.childRun?.logger;
+    this.activation = { runId: params.runId, launchParent: params.parentRunId };
   }
 
   /** The process strategy of a process child. */
@@ -305,21 +306,14 @@ class ChildLoop<TTurn, R> {
     return params.childRun === undefined ? undefined : params.strategy;
   }
 
-  interrupt(): void {
-    const { runId, childRun } = this.params;
-    this.userStopped ||= this.runs.get(runId)?.stopReason === 'user';
-    this.controller.abort();
-    if (childRun === undefined) this.runs.interrupt(runId);
+  /** A stop reached this child, here or before its fiber ran. */
+  get stopped(): boolean {
+    return this.activation.stopped !== undefined;
   }
 
-  isInterrupted(): boolean {
-    return this.controller.signal.aborted;
-  }
-
-  /** The one signal every turn of this child runs under: no turn starts
-   *  after an interrupt, so a per-turn one would mirror it. */
-  get signal(): AbortSignal {
-    return this.controller.signal;
+  /** The child stops itself: a lost claim, or its turn reported stopped. */
+  stop(): void {
+    this.activation.stopped ??= { reason: undefined };
   }
 
   /** Release provider-owned registry entries, once. */
@@ -374,8 +368,8 @@ function attemptTurn<TTurn, R, RTurn>(
       }),
     );
     if (Exit.isSuccess(attempt)) return attempt.value;
+    if (Cause.hasInterrupts(attempt.cause)) return undefined;
     const caught = Cause.squash(attempt.cause);
-    if (loop.isInterrupted() || isUserAbort(caught)) return undefined;
     yield* loop.log('error', toErrorMessage(caught));
     return { turn: null, err: caught, turnIsError: false };
   });
@@ -462,9 +456,9 @@ const deliveryTarget = <TTurn, R>(
     params.strategy.deliveryMode === 'persistOnly'
   )
     return null;
-  if (loop.isInterrupted()) {
+  if (loop.stopped) {
     loop.releaseOwnership();
-    return loop.process?.deliverAfterInterrupt === true ? target : null;
+    return loop.process?.interruptedTurn === undefined ? null : target;
   }
   if (isError) loop.releaseOwnership();
   return target;
@@ -553,7 +547,7 @@ function nativeTurns<TTurn, R>(
   const { session } = loop.params;
   return {
     turnPermit: Effect.fn('childRunLoop.turnPermit')(function* (turn) {
-      if (loop.isInterrupted()) return yield* Effect.interrupt;
+      if (loop.stopped) return yield* Effect.interrupt;
       yield* beginTurn(loop, false);
       return yield* loop.budget ? loop.budget.withPermit(turn) : turn;
     }),
@@ -608,12 +602,12 @@ const finishInterimTurn = Effect.fn('childRunLoop.finishInterimTurn')(
   ): Effect.fn.Return<void, Error, R> {
     const { session, runId } = loop.params;
     const { result } = yield* buildTurnResult(loop, turned);
-    const wait = loop.isInterrupted() ? undefined : waitingRow(runId, 'parked');
+    const wait = loop.stopped ? undefined : waitingRow(runId, 'parked');
     yield* commitPart(
       session,
       turnResultPart(session, result, loop.trace, wait),
     );
-    if (wait && turned.turn !== null && !loop.isInterrupted())
+    if (wait && turned.turn !== null && !loop.stopped)
       loop.process?.onTurnSuccess?.(turned.turn);
     yield* wakeParent(session, result.delivery, loop.trace);
   },
@@ -630,7 +624,7 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
 ): Effect.fn.Return<TTurn | undefined, Error, R> {
   const { session, runId } = loop.params;
   // A stop that landed during the setup: the run never launches.
-  if (loop.isInterrupted()) return undefined;
+  if (loop.stopped) return undefined;
   const turns = nativeTurns(loop, strategy, yield* Effect.context<R>());
   loop.turnStart = yield* Clock.currentTimeMillis;
   const turned = yield* attemptTurn(
@@ -642,7 +636,7 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   if (turned === undefined) return undefined;
   const { turn, err } = turned;
   if (turn !== null && strategy.isTurnInterrupted?.(turn)) {
-    loop.interrupt();
+    loop.stop();
     return turn;
   }
   noteFailure(loop, turned);
@@ -665,7 +659,7 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
 
 /**
  * A process child: each turn's result commits here before the loop waits on
- * `input` for its next batch (raced against the loop's stop).
+ * `input` for its next batch; a stop interrupts the turn or the wait.
  */
 const driveProcess = Effect.fn('childRunLoop.driveProcess')(function* <
   TTurn,
@@ -675,10 +669,10 @@ const driveProcess = Effect.fn('childRunLoop.driveProcess')(function* <
   strategy: ProcessChildStrategy<TTurn, R>,
   input: RunInput,
 ): Effect.fn.Return<TTurn | undefined, Error, R> {
-  let next = () => strategy.launch(loop.signal);
+  let next = () => strategy.launch();
   let result: TTurn | undefined;
   let resumed = false;
-  while (!loop.isInterrupted()) {
+  while (!loop.stopped) {
     yield* beginTurn(loop, resumed);
     const turned = yield* attemptTurn(loop, Effect.suspend(next));
     if (turned === undefined) break;
@@ -691,17 +685,8 @@ const driveProcess = Effect.fn('childRunLoop.driveProcess')(function* <
       break;
     }
     yield* finishInterimTurn(loop, turned);
-    const batch = loop.isInterrupted()
-      ? null
-      : yield* Effect.raceFirst(
-          input.next('idle'),
-          Effect.callback<null>((resume) =>
-            Effect.sync(
-              onAbort(loop.signal, () => resume(Effect.succeed(null))),
-            ),
-          ),
-        ).pipe(Effect.interruptible);
-    if (!batch || loop.isInterrupted()) break;
+    const batch = loop.stopped ? null : yield* input.next('idle');
+    if (!batch || loop.stopped) break;
     // The batch ends the wait: the turn it starts is the current one.
     loop.consumed = batch.kind === 'synthetic' ? [] : batch.followUps;
     resumed = true;
@@ -709,7 +694,7 @@ const driveProcess = Effect.fn('childRunLoop.driveProcess')(function* <
       batch.kind === 'synthetic'
         ? [{ text: batch.text, from: { kind: 'user' } }]
         : loop.consumed.map((followUp) => followUp.content);
-    next = () => runTurn(prompts, loop.signal);
+    next = () => runTurn(prompts);
   }
   return result;
 });
@@ -741,7 +726,7 @@ const endNative = Effect.fn('childRunLoop.endNative')(function* <TTurn, R>(
   if (
     strategy.stopNotice === undefined ||
     strategy.deliveryMode === 'persistOnly' ||
-    !loop.userStopped
+    loop.activation.stopped?.reason !== 'user'
   )
     return;
   // A notice that cannot be read still says the child stopped: the stop
@@ -763,14 +748,23 @@ const endNative = Effect.fn('childRunLoop.endNative')(function* <TTurn, R>(
 
 /** The child's terminal row, its process port's finalize or a native run's
  *  end, carrying the last turn's result unless its run's end took it. */
-const writeEnd = <TTurn, R>(
+const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   stopped: boolean,
-): Effect.Effect<void, Error, R | Runs> => {
-  const { params, end } = loop;
+): Effect.fn.Return<void, Error, R | Runs> {
+  const { params } = loop;
   // Re-read: a stop landing after the body's exit is still the run's
   // terminal verdict.
-  const stoppedAtExit = stopped || loop.isInterrupted();
+  const stoppedAtExit = stopped || loop.stopped;
+  // A turn the stop cut short, rebuilt from what its strategy buffered, is
+  // the last turn: never a success. One that cannot be built fails the run.
+  const cutShort = loop.process?.interruptedTurn;
+  if (stoppedAtExit && cutShort && loop.end.kind === 'open') {
+    const turned = { turn: cutShort(), err: null, turnIsError: true };
+    const rebuilt = yield* recordLastTurn(loop, turned, false);
+    if (rebuilt.kind === 'error') loop.failure ??= { cause: rebuilt.error };
+  }
+  const { end } = loop;
   const outcome = deriveRunOutcome({
     failed: loop.failure !== undefined,
     cancelled: stoppedAtExit,
@@ -780,8 +774,14 @@ const writeEnd = <TTurn, R>(
       ? turnResultPart(params.session, end.result, loop.trace)
       : undefined;
   if (params.childRun === undefined)
-    return endNative(loop, params.strategy, outcome, stoppedAtExit, lastTurn);
-  return params.childRun.finalize({
+    return yield* endNative(
+      loop,
+      params.strategy,
+      outcome,
+      stoppedAtExit,
+      lastTurn,
+    );
+  return yield* params.childRun.finalize({
     lastTurn,
     outcome,
     error: loop.failure?.cause,
@@ -789,7 +789,7 @@ const writeEnd = <TTurn, R>(
     stage: loop.stage,
     pauseNotice: params.strategy.pauseNotice,
   });
-};
+});
 
 /**
  * The loop's terminal (exit protocol): a stop lands before or after it, so
@@ -804,7 +804,7 @@ const endChildLoop = <TTurn, R>(
   Effect.uninterruptible(
     Effect.gen(function* () {
       const stopped =
-        loop.isInterrupted() ||
+        loop.stopped ||
         (Exit.isFailure(body) && Cause.hasInterrupts(body.cause));
       if (Exit.isFailure(body) && !Cause.hasInterruptsOnly(body.cause)) {
         const error = Cause.squash(body.cause);
@@ -815,7 +815,7 @@ const endChildLoop = <TTurn, R>(
           error instanceof DatabaseNotOwner ||
           (error instanceof RunHistoryRefused && error.reason === 'not-owner')
         )
-          loop.interrupt();
+          loop.stop();
       }
       // Debug-only driver diagnostic (#9531): how the loop ended.
       yield* loop.log('debug', 'childRunLoop loop.terminated', {
@@ -823,8 +823,8 @@ const endChildLoop = <TTurn, R>(
         stopped,
         failed: loop.failure !== undefined,
       });
-      const { end } = loop;
       const terminal = yield* Effect.exit(writeEnd(loop, stopped));
+      const { end } = loop;
       // Provider ids stay reserved until the terminal (or pause) row is
       // written, so a call naming one finds this run, not a gap.
       const owned = yield* Effect.exit(
@@ -926,11 +926,7 @@ const launchChildLoop = Effect.fn('childRunLoop.launchChildLoop')(function* <
     Effect.sync(() => loop.releaseOwnership()),
   );
   // Every child loop reserves its stop target for its whole life.
-  const releaseActivation = loop.runs.reserveChildActivation({
-    runId,
-    launchParent: params.parentRunId,
-    interrupt: () => loop.interrupt(),
-  });
+  const releaseActivation = loop.runs.reserveChildActivation(loop.activation);
   yield* Scope.addFinalizer(setup, Effect.sync(releaseActivation));
   // Read after the reservation, so no stop lands while there is no target.
   if (params.childRun === undefined && params.awaited !== true)

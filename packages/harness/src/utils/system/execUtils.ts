@@ -7,7 +7,6 @@ import { quote as shellQuote } from 'shell-quote';
 import { withLogChannel } from '@logger/effectLog';
 import type { ExecResult } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settings';
-import { onAbort } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { inheritedEnv } from '@utils/system/envFlags';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
@@ -116,21 +115,10 @@ export interface ExecuteCommandBaseOptions {
   readonly buffer?: boolean;
   /** Maximum decoded characters retained per output stream before the command is stopped. */
   readonly maxBuffer?: number;
-  /**
-   * A caller-owned cancellation channel, for the one case fiber interruption
-   * cannot express: a command whose **result still has to be delivered** after
-   * it is stopped (the background bash child run, whose strategy sets
-   * `deliverAfterInterrupt`). Aborting it terminates the subprocess and any
-   * shell children, and the call still resolves with exit code 130.
-   *
-   * Every other caller stops the command by interrupting the fiber: teardown
-   * is identical and the abandoned result is exactly what interruption means.
-   */
-  readonly signal?: AbortSignal;
   /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
   readonly quiet?: boolean;
   /**
-   * Terminate the whole process tree on abort or timeout instead of only the
+   * Terminate the whole process tree on interruption or timeout instead of only the
    * tracked process. Array form only: the shell form already signals its whole
    * group. Opt in for tools that hand the work to a delegate (ImageMagick and
    * GraphicsMagick rasterize PDF pages through Ghostscript) so the delegate is
@@ -157,11 +145,10 @@ type Outcome =
   // A stdout or stderr read failed before the child ended.
   | { readonly _tag: 'ReadFailed'; readonly description: string }
   | { readonly _tag: 'TimedOut' }
-  | { readonly _tag: 'Aborted' }
   | { readonly _tag: 'LimitExceeded'; readonly stream: 'stdout' | 'stderr' }
   | { readonly _tag: 'SpawnFailed'; readonly error: PlatformError };
 
-/** Output kept so far; partial text survives a deadline or an abort. */
+/** Output kept so far; partial text survives a deadline. */
 interface Captured {
   stdout: string;
   stderr: string;
@@ -188,7 +175,7 @@ function buildCommand(
   if (Array.isArray(command)) {
     const [argv0, ...args] = command;
     // A process group only when asked: without one, a descendant that
-    // inherited stdio is left alone by an abort or timeout.
+    // inherited stdio is left alone by an interruption or timeout.
     const detached = options.killProcessTree === true && !IS_WINDOWS;
     return IS_WINDOWS
       ? toWindowsCommand(argv0, args, { ...common, detached })
@@ -288,12 +275,6 @@ function resultFromOutcome(
         1,
         { timedOut: true },
       );
-    case 'Aborted':
-      return resultFromProcessOutput(
-        stdout,
-        stderr || 'Command aborted by user',
-        130,
-      );
     case 'LimitExceeded':
       return resultFromProcessOutput(
         stdout,
@@ -316,7 +297,7 @@ function resultFromOutcome(
   }
 }
 
-/** Wait for the command to end, or its deadline, abort or output limit. */
+/** Wait for the command to end, or its deadline or output limit. */
 const awaitOutcome = Effect.fnUntraced(function* (
   handle: ChildProcessHandle,
   captured: Captured,
@@ -356,23 +337,14 @@ const awaitOutcome = Effect.fnUntraced(function* (
     ),
   );
   const timeout = options.timeout ?? 0;
-  const bounded =
-    timeout > 0
-      ? settled.pipe(
-          Effect.timeoutOrElse({
-            duration: Duration.millis(timeout),
-            orElse: () => Effect.succeed<Outcome>({ _tag: 'TimedOut' }),
-          }),
-        )
-      : settled;
-  const { signal } = options;
-  if (signal === undefined) return yield* bounded;
-  const aborted = Effect.callback<Outcome>((resume) =>
-    Effect.sync(
-      onAbort(signal, () => resume(Effect.succeed({ _tag: 'Aborted' }))),
-    ),
-  );
-  return yield* Effect.raceFirst(bounded, aborted);
+  return yield* timeout > 0
+    ? settled.pipe(
+        Effect.timeoutOrElse({
+          duration: Duration.millis(timeout),
+          orElse: () => Effect.succeed<Outcome>({ _tag: 'TimedOut' }),
+        }),
+      )
+    : settled;
 });
 
 /** Spawn the command in the caller's scope and read how it ended. */
@@ -400,11 +372,11 @@ const runSpawned = Effect.fnUntraced(function* (
  * process's `ChildProcessSpawner`.
  *
  * Never fails: a spawn failure or missing cwd (127), a non-zero exit, a
- * timeout (`timedOut`), an abort (130) and a max-buffer trip (2,
+ * timeout (`timedOut`) and a max-buffer trip (2,
  * `outputLimitExceeded`) are all reported in the {@link ExecResult}.
  *
  * The process lives exactly as long as this call's scope. A deadline, an
- * abort, an output-limit trip or an interrupted fiber closes that scope, and
+ * output-limit trip or an interrupted fiber closes that scope, and
  * that is the whole teardown: SIGTERM to the process (its group when it has
  * one), SIGKILL after five seconds, and a join on its exit. A command that
  * ends by itself gets the same release, so jobs its shell backgrounded end
@@ -417,9 +389,6 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
   command: string | string[],
   options: ExecuteCommandBaseOptions,
 ): Effect.fn.Return<ExecResult, never, ChildProcessSpawner> {
-  if (options.signal?.aborted) {
-    return resultFromProcessOutput('', 'Command aborted by user', 130);
-  }
   const channel = options.channel ?? CHANNEL;
   const logError = (message: string) =>
     options.quiet

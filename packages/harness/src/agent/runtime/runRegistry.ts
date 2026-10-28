@@ -69,16 +69,18 @@ class RunAdmissionClosed extends Schema.TaggedError<RunAdmissionClosed>()(
 ) {}
 
 /**
- * A child loop's stop target and lineage for the loop's whole life: from the
+ * A child loop's stop record and lineage for the loop's whole life: from the
  * synchronous launch until its final result has reached the parent, including
- * preparation before the engine tracks its handle and terminal delivery after
- * it, so a stop always finds a live target across the inter-turn gap.
+ * preparation before its run fiber exists and terminal delivery after it, so
+ * a stop always finds the loop across the inter-turn gap.
  */
 export interface ChildRunActivation {
   readonly runId: RunId;
   /** The run that launched this child; its edge is {@link RunRegistry.parentOf}. */
   readonly launchParent: RunId | null;
-  readonly interrupt: () => void;
+  /** A stop's record, set before the run fiber is interrupted (a `user`
+   *  reason outlives a later one): a loop not yet running never launches. */
+  stopped?: { readonly reason: RunStopReason | undefined };
 }
 
 /**
@@ -564,8 +566,8 @@ export class RunRegistry implements RunsShape {
   // ------------------------------------------------------------------ stop
 
   /** The run's fiber, interrupted by run id: synchronous, answered at once
-   *  from every host surface. The fiber-only primitive a child loop's own
-   *  interrupt composes; others stop via {@link interruptActive}, {@link stop}. */
+   *  from every host surface; a child loop is stopped through
+   *  {@link interruptActive} or {@link stop}. */
   interrupt(runId: RunId): boolean {
     const fiber = this.entries.get(runId)?.fiber;
     if (fiber === undefined) return false;
@@ -574,12 +576,14 @@ export class RunRegistry implements RunsShape {
   }
 
   /** Stop whatever of the run is live here, by run id: a reserved child-loop
-   *  activation (its interrupt aborts the foreign turn's signal and, for a
-   *  native child, the run's fiber with it), else the run's fiber itself. */
-  interruptActive(runId: RunId): boolean {
+   *  activation (its stop recorded, its run fiber interrupted once it has
+   *  one), else the run's fiber itself. */
+  interruptActive(runId: RunId, reason?: RunStopReason): boolean {
     const activation = this.entries.get(runId)?.activation;
     if (activation === undefined) return this.interrupt(runId);
-    activation.interrupt();
+    const kept = activation.stopped?.reason;
+    activation.stopped = { reason: kept === 'user' ? kept : (reason ?? kept) };
+    this.interrupt(runId);
     return true;
   }
 
@@ -613,7 +617,7 @@ export class RunRegistry implements RunsShape {
       const root = this.entries.get(runId)?.handle;
       reached = root
         ? this.terminate(root, visited, !detach, reason)
-        : this.interruptActive(runId);
+        : this.interruptActive(runId, reason);
       return reached;
     };
 
@@ -721,7 +725,7 @@ export class RunRegistry implements RunsShape {
       if (visited.has(key)) continue;
       visited.add(key);
       this.markStopped(activation.runId, reason);
-      activation.interrupt();
+      this.interruptActive(activation.runId, reason);
     }
     for (const { handle } of this.entries.values())
       if (handle && this.parentOf(handle.runId) === parentRunId)
@@ -741,17 +745,13 @@ export class RunRegistry implements RunsShape {
     this.markStopped(handle.runId, reason);
     // A child run is its loop, not only the turn this handle runs: stopping
     // it ends the loop too, so the interrupted turn is not delivered to the
-    // parent as a completed one. A child loop's activation carries the stop
-    // into its turns and spends the fiber target; the fiber exists from the
-    // instant the run is admitted, so a launch has no pre-fiber window a stop
-    // could miss.
+    // parent as a completed one: its activation records the stop.
     const activation = this.entries.get(handle.runId)?.activation;
     if (activation === undefined) return this.interrupt(handle.runId);
     const key = `activation:${activation.runId}`;
     if (visited.has(key)) return false;
     visited.add(key);
-    activation.interrupt();
-    return true;
+    return this.interruptActive(handle.runId, reason);
   }
 
   // ---------------------------------------------------------------- detach

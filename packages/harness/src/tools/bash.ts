@@ -279,22 +279,14 @@ function createBackgroundBashStrategy(params: {
 
   return {
     stageLabel: 'Background command',
-    // A background shell's result survives its own kill.
-    deliverAfterInterrupt: true,
-
-    launch: (signal) =>
+    launch: () =>
       executeCommand(command, {
         cwd: params.cwd,
         settings: params.settings,
         timeout: params.timeoutMs,
         buffer: false,
-        // The child run's own stop signal, not the fiber's: this strategy
-        // sets `deliverAfterInterrupt`, so a stopped background command must
-        // still come back with a result. The string command form gets shell
-        // teardown — abort/timeout signal the whole process group so
-        // backgrounded jobs and piped children are torn down rather than
-        // left running.
-        signal,
+        // A stop interrupts this call: its release signals the shell's whole
+        // process group, so no backgrounded job or piped child is left.
         onStdout: (chunk) => {
           stdout.append(chunk);
           logChunk(chunk, 'info');
@@ -304,6 +296,14 @@ function createBackgroundBashStrategy(params: {
           logChunk(chunk, 'warn');
         },
       }),
+
+    interruptedTurn: () => ({
+      success: false,
+      stdout: '',
+      stderr: 'Command aborted by user',
+      timedOut: false,
+      exitCode: 130,
+    }),
 
     // `executeCommand` never fails on a non-zero exit — it answers with the
     // exit code, so the failure is an application-level one.

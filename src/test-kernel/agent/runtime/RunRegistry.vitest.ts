@@ -219,7 +219,6 @@ describe('runRegistry', () => {
           registry.reserveChildActivation({
             runId: postFoldChildRunId,
             launchParent: rootRunId,
-            interrupt: vi.fn(),
           }),
         ).toThrow(/that run was stopped/);
         expect(registry.get(postFoldChildRunId)?.handle).toBeUndefined();

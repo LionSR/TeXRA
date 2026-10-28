@@ -59,25 +59,6 @@ export function getFileStem(filePath: string | undefined | null): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Register an abort handler, firing it immediately if `signal` is already
- * aborted (an `addEventListener` after the fact never fires on its own).
- * Returns a disposer that detaches the listener; safe to call even after the
- * handler already fired. No-ops when `signal` is undefined.
- */
-export function onAbort(
-  signal: AbortSignal | undefined,
-  fn: () => void,
-): () => void {
-  if (!signal) return () => {};
-  if (signal.aborted) {
-    fn();
-    return () => {};
-  }
-  signal.addEventListener('abort', fn, { once: true });
-  return () => signal.removeEventListener('abort', fn);
-}
-
-/**
  * Reduce a NON-EMPTY failure list to the value to throw: the lone failure
  * unwrapped when there is exactly one, or an {@link AggregateError} carrying
  * `message` when there are several. Use as `throw aggregateError(...)` where a

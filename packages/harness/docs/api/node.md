@@ -139,11 +139,11 @@ Execute an external command in `cwd` with the workspace env, over the
 process's `ChildProcessSpawner`.
 
 Never fails: a spawn failure or missing cwd (127), a non-zero exit, a
-timeout (`timedOut`), an abort (130) and a max-buffer trip (2,
+timeout (`timedOut`) and a max-buffer trip (2,
 `outputLimitExceeded`) are all reported in the {@link ExecResult}.
 
 The process lives exactly as long as this call's scope. A deadline, an
-abort, an output-limit trip or an interrupted fiber closes that scope, and
+output-limit trip or an interrupted fiber closes that scope, and
 that is the whole teardown: SIGTERM to the process (its group when it has
 one), SIGKILL after five seconds, and a join on its exit. A command that
 ends by itself gets the same release, so jobs its shell backgrounded end
@@ -194,21 +194,10 @@ interface ExecuteCommandBaseOptions {
   readonly buffer?: boolean;
   /** Maximum decoded characters retained per output stream before the command is stopped. */
   readonly maxBuffer?: number;
-  /**
-   * A caller-owned cancellation channel, for the one case fiber interruption
-   * cannot express: a command whose **result still has to be delivered** after
-   * it is stopped (the background bash child run, whose strategy sets
-   * `deliverAfterInterrupt`). Aborting it terminates the subprocess and any
-   * shell children, and the call still resolves with exit code 130.
-   *
-   * Every other caller stops the command by interrupting the fiber: teardown
-   * is identical and the abandoned result is exactly what interruption means.
-   */
-  readonly signal?: AbortSignal;
   /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
   readonly quiet?: boolean;
   /**
-   * Terminate the whole process tree on abort or timeout instead of only the
+   * Terminate the whole process tree on interruption or timeout instead of only the
    * tracked process. Array form only: the shell form already signals its whole
    * group. Opt in for tools that hand the work to a delegate (ImageMagick and
    * GraphicsMagick rasterize PDF pages through Ghostscript) so the delegate is

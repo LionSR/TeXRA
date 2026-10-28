@@ -371,12 +371,10 @@ interface AgentCliLoopParams<TTurn> {
   releaseFallbackClaim: (() => void) | undefined;
   /** Provider-specific single-turn run, given the joined follow-up prompt. The
    * implementer wraps its own foreign edge (the provider SDK's streamed turn)
-   * once, so the loop composes the turn instead of lifting it. `signal` is the
-   * child run's interrupt controller, which each provider hands to its SDK. */
-  runProviderTurn: (
-    prompt: string,
-    signal: AbortSignal,
-  ) => Effect.Effect<TTurn, Error>;
+   * once, so the loop composes the turn instead of lifting it. A stop
+   * interrupts the turn: each provider hands its SDK a signal that
+   * interruption aborts (`Effect.abortSignal`). */
+  runProviderTurn: (prompt: string) => Effect.Effect<TTurn, Error>;
   /**
    * Session/thread ids to register as active after a successful turn. Falsy
    * entries (not-yet-known ids) are skipped.
@@ -454,11 +452,8 @@ export function buildAgentCliLaunch<TTurn>(
     // Every turn the provider returns, an error turn included, reports its
     // spend: the child has no run history, so its `usage` rows are its one
     // record of spend, one per turn, which is what each provider reports.
-    const providerTurn = (
-      prompt: string,
-      signal: AbortSignal,
-    ): Effect.Effect<TTurn, Error> =>
-      runProviderTurn(prompt, signal).pipe(
+    const providerTurn = (prompt: string): Effect.Effect<TTurn, Error> =>
+      runProviderTurn(prompt).pipe(
         Effect.tap((turn) =>
           Effect.sync(() => {
             const usage = getUsage(turn);
@@ -472,16 +467,15 @@ export function buildAgentCliLaunch<TTurn>(
       );
     const runTurn = (
       followUps: readonly FollowUpContent[],
-      signal: AbortSignal,
     ): Effect.Effect<TTurn, Error> =>
       Effect.suspend(() => {
         lastPrompt = followUps.map((f) => f.text).join('\n\n');
-        return providerTurn(lastPrompt, signal);
+        return providerTurn(lastPrompt);
       });
 
     return {
       stageLabel,
-      launch: (signal) => providerTurn(initialPrompt, signal),
+      launch: () => providerTurn(initialPrompt),
       runTurn,
       isTurnError,
       turnErrorMessage,

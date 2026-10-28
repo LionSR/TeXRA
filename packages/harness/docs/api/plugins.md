@@ -1148,16 +1148,18 @@ interface ProcessChildStrategy<
   TTurn,
   R = never,
 > extends ChildStrategyBase<TTurn, R> {
-  launch(signal: AbortSignal): Effect.Effect<TTurn, Error, R>;
+  /** A stop interrupts the turn's fiber: a foreign call takes its signal
+   *  from that interruption (`Effect.abortSignal`, `Effect.tryPromise`). */
+  launch(): Effect.Effect<TTurn, Error, R>;
   /** The next turn, from the queued follow-ups. Absent: the first turn is
    *  the only one (a background shell). */
   runTurn?(
     followUps: readonly FollowUpContent[],
-    signal: AbortSignal,
   ): Effect.Effect<TTurn, Error, R>;
-  /** Deliver a finished turn even when the loop was interrupted: only a
-   *  killed OS process, whose exit code and output are a complete result. */
-  readonly deliverAfterInterrupt?: boolean;
+  /** The turn a stop cut short, rebuilt from what the child buffered, and
+   *  delivered: only a killed OS process, whose exit code and output are a
+   *  complete result. */
+  interruptedTurn?(): TTurn;
   /** A stop pauses this child rather than cancelling it: what it had done
    *  and how the parent's model continues it; undefined cancels it. */
   pauseNotice?(): ChildRunPause | undefined;
