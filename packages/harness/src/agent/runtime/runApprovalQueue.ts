@@ -305,10 +305,10 @@ const COVERED_KINDS: Record<
  * committed rows in the session's publisher, so a request a surface decided
  * meanwhile is left with that surface's answer. The request the surface
  * decides itself (its own decision may carry more than a plain approval) is
- * left to it, a tool edit staged on a host is approved by that host with the
- * user's edits, and so is a bash command that is another tool's call, which
- * offers no bypass. A request whose opening is still committing is not
- * listed yet and stays pending for the user.
+ * left to it, and so is a bash command that is another tool's call, which
+ * offers no bypass; a tool edit's approval applies the edit the user made in
+ * a host's view (`request.edit`). A request whose opening is still
+ * committing is not listed yet and stays pending for the user.
  */
 function approvePendingUnderBypass(
   session: SessionHandle,
@@ -323,20 +323,8 @@ function approvePendingUnderBypass(
         kinds.includes(payload.kind) &&
         !(payload.kind === 'bash' && !payload.data.allowBypass),
     ),
-    ({ requestId, payload }) =>
-      // A tool edit a host staged a diff view for is approved with the
-      // content the user edited there; the host answers `false` for one it
-      // staged nothing for, which the payload decides.
-      (payload.kind === 'toolEdit'
-        ? session.interactions.approveToolEdit(requestId)
-        : Effect.succeed(false)
-      ).pipe(
-        Effect.flatMap((hostDecided) =>
-          hostDecided
-            ? Effect.void
-            : session.requests.decide(runId, requestId, { action: 'approve' }),
-        ),
-      ),
+    ({ requestId }) =>
+      session.requests.decide(runId, requestId, { action: 'approve' }),
     { discard: true },
   ).pipe(
     Effect.mapError(

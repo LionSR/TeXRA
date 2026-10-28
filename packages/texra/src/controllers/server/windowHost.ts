@@ -6,37 +6,27 @@
  */
 import {
   Cause,
-  Context,
   Deferred,
   Effect,
   FiberHandle,
-  FileSystem,
-  Path,
   Ref,
   type Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { withLogChannel, type HostInteractions } from '@texra-ai/harness/host';
 import { toErrorMessage, toJsonValue } from '@texra-ai/harness/schemas';
-import type { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { EditorCapabilities } from '@texra/tools/editorHost';
 import {
   WINDOW_OUTDATED,
   type ServiceClient,
   type ServiceLink,
 } from './client';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 
 import type { HostAnswer, HostCall, HostCapability } from './hostCalls';
 
 const CHANNEL = 'WindowHost';
-
-type PreviewServices = Effect.Services<
-  ReturnType<ToolEditApprovalController['dispose']>
->;
 
 /** What a window does for its project's tasks; a capability it leaves out
  *  is one it does not offer. */
@@ -48,15 +38,6 @@ export interface WindowHost
    *  as the service's announcer heard them: the host tells its own
    *  listeners (a file tree, decorations), as a task here would. */
   readonly filesWritten?: (absolutePaths: readonly string[]) => void;
-  /** The tool-edit preview a window stages beside the request, which the
-   *  window releases when the request settles, and whose edited content an
-   *  approve-all reads: its controller, the window's roots the staged files
-   *  resolve against, and the services its previews take. */
-  readonly toolEdits?: {
-    readonly controller: ToolEditApprovalController;
-    readonly roots: WorkspaceRoots;
-    readonly services: Context.Context<PreviewServices>;
-  };
 }
 
 function capabilitiesOf(host: WindowHost): HostCapability[] {
@@ -64,7 +45,6 @@ function capabilitiesOf(host: WindowHost): HostCapability[] {
     ...(host.readDiagnostics ? (['readDiagnostics'] as const) : []),
     ...(host.addCriticism ? (['addCriticism'] as const) : []),
     ...(host.openPdf ? (['openPdf'] as const) : []),
-    ...(host.toolEdits ? (['toolEdits'] as const) : []),
     ...(host.emit || host.approvalDenied || host.filesWritten
       ? (['notices'] as const)
       : []),
@@ -90,18 +70,6 @@ function perform(
           })
           .pipe(Effect.as(null)) ?? unoffered(call)
       );
-    case 'presentToolEdit':
-      return previews(host, call, ({ controller, roots }) =>
-        controller.present({ ...call.request, roots }).pipe(Effect.as(null)),
-      );
-    case 'releaseToolEdit':
-      return previews(host, call, ({ controller }) =>
-        controller.release(call.requestId).pipe(Effect.as(null)),
-      );
-    case 'approveToolEdit':
-      return previews(host, call, ({ controller }) =>
-        controller.approveStaged(call.requestId),
-      );
     case 'notice':
       return Effect.suspend(() => {
         const presented = host.emit?.(
@@ -122,28 +90,6 @@ function perform(
         return null;
       });
   }
-}
-
-/** A tool-edit call on the window's preview controller, under the services
- *  its previews take: exactly those, picked from what the window handed
- *  over, never the rest of the window's context in place of the call's. */
-function previews(
-  host: WindowHost,
-  call: HostCall,
-  program: (
-    toolEdits: NonNullable<WindowHost['toolEdits']>,
-  ) => Effect.Effect<unknown, Error, PreviewServices>,
-): Effect.Effect<unknown, Error> {
-  const { toolEdits } = host;
-  if (toolEdits === undefined) return unoffered(call);
-  return Effect.provide(
-    program(toolEdits),
-    Context.pick(
-      FileSystem.FileSystem,
-      Path.Path,
-      ChildProcessSpawner,
-    )(toolEdits.services),
-  );
 }
 
 const unofferedError = (call: HostCall) =>

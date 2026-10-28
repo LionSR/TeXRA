@@ -1291,10 +1291,11 @@ interface RequestDecisionHook {
 ## requestToolEditApproval
 
 Ask the person for an edit: policy first (allow, deny), else a
-`request.opened` on the run with the preview staged on the attached host,
-serialized behind the run's other prompts, answered by a surface's
-`request.decide`. An approve carries the file as the user left it in the
-host's diff view, or nothing when the host staged no preview.
+`request.opened` on the run with its content held in the session's
+tool-edit store, serialized behind the run's other prompts, answered by a
+surface's `request.decide`. An approve applies the file as the user left
+it: the decision's content, else the edit a surface recorded, else the
+proposal.
 
 ```ts
 const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApprovalResult, Error, ToolContext>
@@ -1805,13 +1806,18 @@ type ToolEditApprovalResult =
 
 ## ToolEditProposal
 
-What a tool proposes; {@link requestToolEditApproval} derives the rest.
+What a tool proposes; {@link requestToolEditApproval} derives the rest:
+the diff a host shows (hunks, the first changed line), computed once, and
+the permission every surface lists.
 
 ```ts
-type ToolEditProposal = Omit<
-  ToolEditApprovalRequest,
-  'permission' | 'roots' | 'hunks' | 'firstChangedLine'
->;
+interface ToolEditProposal {
+  readonly path: string;
+  readonly originalContent: string;
+  readonly proposedContent: string;
+  readonly sourceTool: string;
+  readonly runId?: RunId | null;
+}
 ```
 
 ## ToolEnv

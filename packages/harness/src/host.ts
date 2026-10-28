@@ -104,7 +104,6 @@ export {
   SessionHostInteractions,
   type HostInteractions,
 } from '@agent/runtime/HostInteractions';
-export type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 export { buildDiffHunks, type DiffHunks } from '@utils/text/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
 export { presentRunFailure } from '@agent/runtime/terminalResultToast';

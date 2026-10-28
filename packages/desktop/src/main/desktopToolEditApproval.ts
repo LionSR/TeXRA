@@ -3,11 +3,11 @@
  *
  * Each request gets its own temp directory; the renderer opens the staged
  * copies through the window's diff and file viewers, and the user's edits are
- * read back from the proposed copy on disk.
+ * read back from the proposed copy on disk, each time it is saved.
  */
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Stream } from 'effect';
 
 // Local imports - types
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -15,14 +15,13 @@ import { NotificationFailed, type DiffSource } from '@texra/hosts/uiHosts';
 import type {
   ToolEditApprovalHost,
   ToolEditPreview,
-  ToolEditPreviewContext,
+  ToolEditPreviewRequest,
 } from '@texra/controllers/approval/ToolEditApprovalController';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 
 import type { HostRequestFailure } from '@texra-ai/harness';
-import type { ToolEditApprovalRequest } from '@texra-ai/harness/host';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopSpawn } from './desktopWindows.js';
@@ -54,6 +53,8 @@ interface DesktopToolEditApprovalHostOptions {
   ui: DesktopToolEditApprovalUi;
   /** Runs the error report on a fiber of the window's scope. */
   spawn: DesktopSpawn;
+  /** Whether the window is focused and shows this project. */
+  focused(): boolean;
 }
 
 export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
@@ -63,9 +64,12 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
     return this.options.ui.openBuildDisplay;
   }
 
+  focused(): boolean {
+    return this.options.focused();
+  }
+
   stagePreview(
-    request: ToolEditApprovalRequest,
-    context: ToolEditPreviewContext,
+    request: ToolEditPreviewRequest,
   ): Effect.Effect<ToolEditPreview, HostRequestFailure, FileSystem.FileSystem> {
     const { ui } = this.options;
     return FileSystem.FileSystem.use((fs) =>
@@ -81,7 +85,7 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
         }).pipe(
           Effect.map(
             ({ originalPath, proposedPath }) =>
-              new DesktopToolEditPreview(ui, context, {
+              new DesktopToolEditPreview(ui, request, {
                 tempDir,
                 originalPath,
                 proposedPath,
@@ -133,7 +137,7 @@ interface DesktopStagedFiles {
 class DesktopToolEditPreview implements ToolEditPreview {
   constructor(
     private readonly ui: DesktopToolEditApprovalUi,
-    private readonly context: ToolEditPreviewContext,
+    private readonly request: ToolEditPreviewRequest,
     private readonly staged: DesktopStagedFiles,
   ) {}
 
@@ -145,24 +149,13 @@ class DesktopToolEditPreview implements ToolEditPreview {
     return this.staged.proposedPath;
   }
 
-  /**
-   * The prompt carries the request on its own, but the diff beside it is
-   * part of the presentation the controller tracks: settling before it is
-   * open would let a release settle, and the temp directory below go, while
-   * the Review tab was still reading the staged files. A failure here
-   * reaches the `present` call the host runs, which reports it.
-   */
-  present(): Effect.Effect<void, HostRequestFailure> {
-    return this.showDiff();
-  }
-
   showDiff(): Effect.Effect<void, HostRequestFailure> {
     return this.ui
       .openDiff(
         { filePath: this.staged.originalPath },
         { filePath: this.staged.proposedPath },
-        `Tool edit: ${this.context.relativePath}`,
-        this.context.requestId,
+        `Tool edit: ${this.request.relativePath}`,
+        this.request.requestId,
       )
       .pipe(
         Effect.mapError((cause) => hostFailure('approval.openDiff', cause)),
@@ -171,6 +164,28 @@ class DesktopToolEditPreview implements ToolEditPreview {
 
   openProposed(): Effect.Effect<void, HostRequestFailure> {
     return this.ui.openPath(this.staged.proposedPath);
+  }
+
+  /** The proposed copy each time it changes on disk: the user saved it. */
+  get edits(): Stream.Stream<string, never, FileSystem.FileSystem> {
+    return Stream.unwrap(
+      FileSystem.FileSystem.use((fs) =>
+        Effect.succeed(
+          fs.watch(this.staged.proposedPath).pipe(
+            Stream.mapEffect(() => fs.readFileString(this.staged.proposedPath)),
+            Stream.changes,
+          ),
+        ),
+      ),
+    ).pipe(
+      Stream.catch((error) =>
+        Stream.fromEffect(
+          Effect.logWarning(
+            `Edits to ${this.staged.proposedPath} stopped reaching the session: ${toErrorMessage(error)}`,
+          ),
+        ).pipe(Stream.drain),
+      ),
+    );
   }
 
   readProposedContent(): Effect.Effect<
@@ -192,7 +207,7 @@ class DesktopToolEditPreview implements ToolEditPreview {
    */
   dispose(): Effect.Effect<void, HostRequestFailure, FileSystem.FileSystem> {
     return this.ui
-      .closeDiff(this.context.requestId)
+      .closeDiff(this.request.requestId)
       .pipe(
         Effect.andThen(
           FileSystem.FileSystem.use((fs) =>

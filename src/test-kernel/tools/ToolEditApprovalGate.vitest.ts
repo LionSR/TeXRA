@@ -7,7 +7,14 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber, FileSystem } from 'effect';
+import {
+  Effect,
+  Fiber,
+  FileSystem,
+  HashMap,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { describe, beforeEach, afterEach, vi } from 'vitest';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
@@ -27,10 +34,7 @@ import { fakePath } from '@test/support/FakePlatform';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { EditFileTool } from '@tools/EditTool';
 import { writeFileTool } from '@tools/WriteTool';
-import {
-  requestToolEditApproval,
-  type ToolEditApprovalRequest,
-} from '@tools/approval/toolEditApproval';
+import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { generateRunId } from '@utils/core';
 
 // Local file imports
@@ -52,9 +56,9 @@ let decisions: ReturnType<typeof autoDecideRequests> | undefined;
 let detachHostInteractions = (): void => {};
 let policyDenials = 0;
 let readFiles = new Set<string>();
-// The previews the host staged; tests override the decision when they need to
-// reject or adjust, and assert on this list otherwise.
-let approvalRequests: ToolEditApprovalRequest[] = [];
+// The requests whose edits the session staged; tests override the decision
+// when they need to reject or adjust, and assert on this list otherwise.
+let approvalRequests: string[] = [];
 
 async function installPlatform(
   config: Record<string, unknown> = {},
@@ -68,16 +72,28 @@ async function installPlatform(
     files,
   });
   detachHostInteractions();
-  detachHostInteractions = Effect.runSync(
+  const detach = Effect.runSync(
     testDefaultSession().interactions.use({
       approvalDenied: () => {
         policyDenials += 1;
       },
-      presentToolEdit: (request) => {
-        approvalRequests.push(request);
-      },
     }),
   );
+  const staged = Effect.runFork(
+    Stream.runForEach(
+      SubscriptionRef.changes(testDefaultSession().view.toolEdits),
+      (held) =>
+        Effect.sync(() => {
+          for (const requestId of HashMap.keys(held))
+            if (!approvalRequests.includes(requestId))
+              approvalRequests.push(requestId);
+        }),
+    ),
+  );
+  detachHostInteractions = () => {
+    detach();
+    staged.interruptUnsafe();
+  };
 }
 
 // The write side of both views the edit flow reaches: an absolute path writes
@@ -270,7 +286,7 @@ describe('Tool edit approval gating', () => {
       );
       decideRequest(
         testDefaultSession(),
-        { runId, requestId: approvalRequests[0]!.permission.requestId },
+        { runId, requestId: approvalRequests[0]! },
         { action: 'approve', content: 'first.txt' },
       );
 

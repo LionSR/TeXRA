@@ -2,7 +2,6 @@ import { Cause, Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
-import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { HostPresentationFailed } from './runtimePresentationEvents';
 import type {
   AgentRuntimeEmitOptions,
@@ -53,33 +52,6 @@ export interface HostInteractions {
    * nothing.
    */
   approvalDenied?(denial: ApprovalPolicyDenial, runId: RunId): void;
-  /**
-   * Stage a tool edit's preview (its original and proposed content, which
-   * the durable request payload does not carry) for the request the fold
-   * lists under `request.permission.requestId`. The decision comes back as
-   * that request's `request.decide`; a host that stages nothing leaves the
-   * request answerable from its payload alone.
-   *
-   * The session's own {@link SessionHostInteractions.presentToolEdit} hands
-   * its caller the release for what this staged; a host implements the
-   * staging alone.
-   */
-  presentToolEdit?(request: ToolEditApprovalRequest): void;
-  /**
-   * Drop what {@link presentToolEdit} staged for one request, for the single
-   * case no `request.decided` ever reaches: a request whose `request.opened`
-   * never committed. Every host that stages implements both. An `Effect`:
-   * the cleanup (a diff view to close, temp files to delete) is a program the
-   * session composes into its own. Built when staged, run only then.
-   */
-  releaseToolEdit?(requestId: string): Effect.Effect<void>;
-  /**
-   * Approve a request {@link presentToolEdit} staged, with the content the
-   * user edited in the host's view. `false` when nothing is staged, which
-   * the caller then approves from the payload; `true` when the host took
-   * the decision (a failed read of the edit included, left pending).
-   */
-  approveToolEdit?(requestId: string): Effect.Effect<boolean>;
   dispose?(): void;
 }
 
@@ -219,37 +191,6 @@ export class SessionHostInteractions implements HostInteractions {
 
   approvalDenied(denial: ApprovalPolicyDenial, runId: RunId): void {
     this.activeAttachment?.interactions.approvalDenied?.(denial, runId);
-  }
-
-  /**
-   * Stage a preview on the attached host and hand back the release bound
-   * to the attachment that staged (a release sent to whichever host is
-   * newest by then could miss the one holding the diff and temp files).
-   * `undefined`: nothing is staged. The caller runs the release and reports
-   * its failure, which never masks the outcome of the call that staged.
-   */
-  presentToolEdit(
-    request: ToolEditApprovalRequest,
-  ): Effect.Effect<Effect.Effect<void> | undefined> {
-    return Effect.suspend(() => {
-      const { requestId } = request.permission;
-      const active = this.activeAttachment;
-      if (!active?.interactions.presentToolEdit) {
-        return Effect.logInfo(
-          `No attached host stages tool-edit previews: request ${requestId} is answerable from its payload alone.`,
-        ).pipe(withLogChannel(CHANNEL), Effect.as(undefined));
-      }
-      active.interactions.presentToolEdit(request);
-      return Effect.succeed(active.interactions.releaseToolEdit?.(requestId));
-    });
-  }
-
-  /** Approve a staged tool edit with the content its host view holds. */
-  approveToolEdit(requestId: string): Effect.Effect<boolean> {
-    return (
-      this.activeAttachment?.interactions.approveToolEdit?.(requestId) ??
-      Effect.succeed(false)
-    );
   }
 
   /**

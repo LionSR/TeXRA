@@ -6,7 +6,6 @@ import {
   Fiber,
   type FileSystem,
   type Path,
-  Stream,
   SubscriptionRef,
 } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
@@ -56,7 +55,7 @@ describe('desktop tool edit approval', () => {
   });
 
   it.live(
-    'applies user edits made in the proposed preview file',
+    'applies the edit a closed window made when another window approves',
     () =>
       Effect.scoped(
         Effect.gen(function* () {
@@ -81,55 +80,51 @@ describe('desktop tool edit approval', () => {
             });
           const session = yield* createTestSession();
           yield* Effect.addFinalizer(() => closeSessionOf(session));
-          const opened: string[] = [];
-          const host = new desktopModule.DesktopToolEditApprovalHost({
-            spawn: (program) => {
-              testRuntime().runFork(program);
-            },
-            ui: {
-              openPath: (filePath) =>
-                Effect.sync(() => {
-                  opened.push(filePath);
-                }),
-              openBuildDisplay: () => Effect.void,
-              openDiff: () => Effect.void,
-              showErrorMessage: () => Effect.void,
-              closeDiff: () => Effect.void,
-            },
+          const roots = createFakeWorkspaceRoots({
+            workspacePath: '/workspace',
           });
-          // The previews the host actually staged. `stagePreview` hands back
-          // a program, so the spy's recorded results are descriptions; what
-          // each program produces is collected as it produces it instead.
-          const staged: ToolEditPreview[] = [];
-          const stageOnHost = host.stagePreview.bind(host);
-          const stagePreview = vi
-            .spyOn(host, 'stagePreview')
-            .mockImplementation((request, context) =>
-              stageOnHost(request, context).pipe(
-                Effect.tap((preview) =>
-                  Effect.sync(() => staged.push(preview)),
+          /** One desktop window following the session's tool edits. */
+          const openWindow = (focused: boolean) =>
+            Effect.gen(function* () {
+              const opened: string[] = [];
+              // The previews the host staged, as each program produces one.
+              const staged: ToolEditPreview[] = [];
+              const host = new desktopModule.DesktopToolEditApprovalHost({
+                spawn: (program) => {
+                  testRuntime().runFork(program);
+                },
+                focused: () => focused,
+                ui: {
+                  openPath: (filePath) =>
+                    Effect.sync(() => {
+                      opened.push(filePath);
+                    }),
+                  openBuildDisplay: () => Effect.void,
+                  openDiff: () => Effect.void,
+                  showErrorMessage: () => Effect.void,
+                  closeDiff: () => Effect.void,
+                },
+              });
+              const stageOnHost = host.stagePreview.bind(host);
+              vi.spyOn(host, 'stagePreview').mockImplementation((request) =>
+                stageOnHost(request).pipe(
+                  Effect.tap((preview) =>
+                    Effect.sync(() => staged.push(preview)),
+                  ),
                 ),
-              ),
-            );
-          const controller = new controllerModule.ToolEditApprovalController({
-            host,
-            session: testSessionOf(session),
-          });
-          yield* Effect.addFinalizer(() =>
-            onRuntime(controller.dispose()).pipe(Effect.orDie),
-          );
-          yield* Effect.forkScoped(
-            Stream.runForEach(session.log.tail(session.log.now()), (event) =>
-              onRuntime(controller.handleSessionEvent(event)),
-            ),
-          );
-          // The attached host stages the preview the durable payload cannot carry.
-          const detach = yield* session.interactions.use({
-            presentToolEdit: (request) => {
-              testRuntime().runFork(controller.present(request));
-            },
-          });
-          yield* Effect.addFinalizer(() => Effect.sync(detach));
+              );
+              const controller =
+                new controllerModule.ToolEditApprovalController({
+                  host,
+                  session: testSessionOf(session),
+                  roots,
+                });
+              const window = testRuntime().runFork(controller.follow);
+              yield* Effect.addFinalizer(() => Fiber.interrupt(window));
+              return { controller, opened, staged, window };
+            });
+          const closing = yield* openWindow(true);
+          const approving = yield* openWindow(false);
 
           // A request row is only ever appended to a run the history knows.
           const runId = 'a40000' as RunId;
@@ -145,48 +140,57 @@ describe('desktop tool edit approval', () => {
             }).pipe(
               Effect.provide(
                 nativeToolTestLayer({
-                  roots: createFakeWorkspaceRoots({
-                    workspacePath: '/workspace',
-                  }),
+                  roots,
                   workingDirectory: '/workspace',
                   run: { runId, session, toolPolicy: {} },
                 }),
               ),
             ),
           );
-          // Staged on the host and listed by the fold, where a surface's
-          // decision finds it.
+          // Listed by the fold and staged in both windows.
           yield* Effect.tryPromise(() =>
             vi.waitFor(() => {
-              expect(staged).toHaveLength(1);
-              expect(
-                SubscriptionRef.getUnsafe(session.view.ref).requests,
-              ).toHaveLength(1);
+              expect(closing.staged).toHaveLength(1);
+              expect(approving.staged).toHaveLength(1);
             }, 10_000),
           );
-          const { requestId } = stagePreview.mock.calls[0]![0].permission;
+          const { requestId } = SubscriptionRef.getUnsafe(session.view.ref)
+            .requests[0]!;
 
+          // The user edits the proposed copy in the first window, which then
+          // closes with the request still pending (#14009).
           yield* onRuntime(
-            controller.handleAction({ requestId, action: 'previewProposed' }),
+            closing.controller.handleAction({
+              requestId,
+              action: 'previewProposed',
+            }),
           );
           yield* Effect.tryPromise(() =>
-            vi.waitFor(() => expect(opened).toHaveLength(1)),
+            vi.waitFor(() => expect(closing.opened).toHaveLength(1)),
           );
+          const edited = 'beta\nwith user edits\nand more\n';
           yield* Effect.tryPromise(() =>
-            writeFile(opened[0], 'beta\nwith user edits\nand more\n', 'utf8'),
+            writeFile(closing.opened[0]!, edited, 'utf8'),
           );
-          yield* onRuntime(
-            controller.handleAction({ requestId, action: 'approve' }),
-          );
+          yield* Fiber.interrupt(closing.window);
+          expect(
+            yield* Effect.promise(() => pathExists(closing.opened[0]!)),
+          ).toBe(false);
 
+          // The other window's Approve applies that edit.
+          yield* onRuntime(
+            approving.controller.handleAction({ requestId, action: 'approve' }),
+          );
           expect(yield* Fiber.join(result)).toMatchObject({
             action: 'apply',
-            appliedContent: 'beta\nwith user edits\nand more\n',
+            appliedContent: edited,
             lineChanges: { added: 3, removed: 1 },
           });
           yield* Effect.tryPromise(() =>
             vi.waitFor(async () => {
-              await expect(pathExists(opened[0])).resolves.toBe(false);
+              await expect(
+                pathExists(approving.staged[0]!.proposedPath),
+              ).resolves.toBe(false);
             }),
           );
         }),

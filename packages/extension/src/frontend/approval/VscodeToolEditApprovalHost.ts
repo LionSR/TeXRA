@@ -3,11 +3,12 @@
  *
  * Owns everything the approval flow needs from the editor: the temp files the
  * diff editor reads, the diff tabs themselves, and reading back what the
- * user typed into the proposed side. The diff tab is evidence only: closing
- * it leaves the request pending on its card, where Open diff reopens it.
+ * user typed into the proposed side, which reaches the session as the user
+ * types. The diff tab is evidence only: closing it leaves the request
+ * pending on its card, where Open diff reopens it.
  */
 
-import { Effect, FileSystem, Scope } from 'effect';
+import { Effect, FileSystem, Queue, Scope, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 import { pluralize } from '@texra-ai/harness/transcript';
@@ -24,18 +25,18 @@ import {
 import type {
   ToolEditApprovalHost,
   ToolEditPreview,
-  ToolEditPreviewContext,
+  ToolEditPreviewRequest,
 } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import type { ApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import type { HostRequestFailure, WorkspaceRoots } from '@texra-ai/harness';
-import type {
-  ProcessRuntime,
-  ToolEditApprovalRequest,
-} from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 
 const CHANNEL = 'ToolEditApproval';
+
+/** How long typing pauses before the edit reaches the session. */
+const EDIT_DEBOUNCE = '300 millis';
 
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost = new VscodeDiffViewHost();
@@ -53,9 +54,12 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     private readonly scope: Scope.Scope,
   ) {}
 
+  focused(): boolean {
+    return vscode.window.state.focused;
+  }
+
   stagePreview(
-    request: ToolEditApprovalRequest,
-    context: ToolEditPreviewContext,
+    request: ToolEditPreviewRequest,
   ): Effect.Effect<ToolEditPreview, HostRequestFailure, FileSystem.FileSystem> {
     return FileSystem.FileSystem.use((fs) =>
       fs.makeDirectory(this.storageDirectory, { recursive: true }),
@@ -71,12 +75,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
       ),
       Effect.map(
         (staged) =>
-          new VscodeToolEditPreview(
-            this.diffViewHost,
-            request,
-            context,
-            staged,
-          ),
+          new VscodeToolEditPreview(this.diffViewHost, request, staged),
       ),
     );
   }
@@ -93,8 +92,7 @@ class VscodeToolEditPreview implements ToolEditPreview {
 
   constructor(
     private readonly diffViewHost: VscodeDiffViewHost,
-    private readonly request: ToolEditApprovalRequest,
-    private readonly context: ToolEditPreviewContext,
+    private readonly request: ToolEditPreviewRequest,
     private readonly staged: ApprovalTempFiles,
   ) {
     this.diffSession = {
@@ -112,20 +110,24 @@ class VscodeToolEditPreview implements ToolEditPreview {
     return this.staged.proposedPath;
   }
 
-  present(): Effect.Effect<void, HostRequestFailure> {
+  showDiff(): Effect.Effect<void, HostRequestFailure> {
     return this.openDiff().pipe(Effect.andThen(this.revealFirstChange()));
   }
 
-  showDiff(): Effect.Effect<void, HostRequestFailure> {
-    return this.openDiff().pipe(
-      Effect.andThen(
-        Effect.suspend(() =>
-          this.context.isSettled()
-            ? this.diffViewHost.closeDiff(this.diffSession)
-            : this.revealFirstChange(),
+  /** The proposed side's text after each pause in the user's typing. */
+  get edits(): Stream.Stream<string> {
+    const proposed = vscode.Uri.file(this.staged.proposedPath).toString();
+    return Stream.callback<string>((queue) =>
+      Effect.acquireRelease(
+        Effect.sync(() =>
+          vscode.workspace.onDidChangeTextDocument(({ document }) => {
+            if (document.uri.toString() === proposed)
+              Queue.offerUnsafe(queue, document.getText());
+          }),
         ),
+        (listener) => Effect.sync(() => listener.dispose()),
       ),
-    );
+    ).pipe(Stream.debounce(EDIT_DEBOUNCE));
   }
 
   openProposed(): Effect.Effect<void, HostRequestFailure> {
@@ -170,14 +172,13 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   private title(): string {
-    const { addedLines: added, removedLines: removed } =
-      this.request.permission;
+    const { addedLines: added, removedLines: removed } = this.request;
     const changeParts: string[] = [];
     if (added > 0) changeParts.push(`+${added}`);
     if (removed > 0) changeParts.push(`-${removed}`);
     const changeSuffix = changeParts.length
       ? ` · ${changeParts.join(' / ')} ${pluralize(added + removed, 'line')}`
       : '';
-    return `Tool edit (${this.request.sourceTool}): ${this.context.relativePath}${changeSuffix}`;
+    return `Tool edit (${this.request.sourceTool}): ${this.request.relativePath}${changeSuffix}`;
   }
 }

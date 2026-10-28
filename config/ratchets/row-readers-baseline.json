@@ -39,8 +39,7 @@
     ],
     "request.decided": [
       "packages/harness/src/agent/runtime/requestPolicy.ts",
-      "packages/harness/src/transcript/traceAssembler.ts",
-      "packages/texra/src/controllers/approval/ToolEditApprovalController.ts"
+      "packages/harness/src/transcript/traceAssembler.ts"
     ],
     "request.opened": [
       "packages/harness/src/agent/runtime/loop/toolGuard.ts",

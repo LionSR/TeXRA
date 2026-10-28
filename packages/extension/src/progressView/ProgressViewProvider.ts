@@ -71,7 +71,6 @@ import {
   type HostRunActions,
   type RunActionRecordPorts,
 } from '@texra/controllers/session/hostRunActions';
-import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   createHostSnapshotSource,
@@ -320,10 +319,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
     const storageRoot = context.storageUri ?? context.globalStorageUri;
     // The tool-edit preview: staged copies of the original and proposed
-    // content the diff editor shows. The request itself is the session's
-    // (`request.opened` folds into the view) and this host's decision goes
-    // back as that request's `request.decide`; the staged preview is
-    // discarded when `request.decided` folds, whichever way it went.
+    // content the diff editor shows, for each tool edit the session where
+    // the runs run lists, until the view drops it or the window goes.
     this.toolEditApprovals = new ToolEditApprovalController({
       host: new VscodeToolEditApprovalHost(
         path.join(storageRoot.fsPath, 'tool-edit-previews'),
@@ -331,11 +328,12 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         roots,
         this.scope,
       ),
-      // A decision goes where the run runs.
       session: runSession,
+      roots,
     });
     this.runtime.runSync(
       Effect.gen({ self: this }, function* () {
+        yield* Effect.forkIn(this.toolEditApprovals.follow, this.scope);
         yield* Effect.forkIn(this.attention.follow(runSession), this.scope);
         yield* Effect.forkIn(this.chimeOnDocuments(), this.scope);
       }),
@@ -413,19 +411,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     };
     // A window that runs its tasks here attaches to its own session; a
     // window of the service is its project's window there: the service's
-    // runs ask it for the same and stage their tool edits here.
+    // runs ask it for the same.
     if (windowSession.service === undefined) {
       this.runtime.runSync(
         this.editors
           .attach(roots.storage, editor)
           .pipe(
-            Effect.andThen(
-              attachSessionHost(
-                windowSession.session,
-                this.toolEditApprovals,
-                presentation,
-              ),
-            ),
+            Effect.andThen(windowSession.session.attach(presentation)),
             Scope.provide(this.scope),
           ),
       );
@@ -485,7 +477,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   /** Offer the service this window's capabilities for its project's runs. */
   private attachToService(
     service: ServiceLink,
-    capabilities: Omit<WindowHost, 'toolEdits'>,
+    capabilities: WindowHost,
   ): Effect.Effect<void, never, Scope.Scope> {
     const workspace = this.roots.workspace;
     if (workspace === undefined) return Effect.void;
@@ -503,17 +495,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       yield* attachWindowHost(
         service,
         workspace,
-        {
-          ...capabilities,
-          toolEdits: {
-            controller: this.toolEditApprovals,
-            roots: this.roots,
-            services: yield* withProcessServices(
-              this.runtime,
-              Effect.context(),
-            ),
-          },
-        },
+        capabilities,
         vscode.window.state.focused
           ? Stream.concat(Stream.succeed(undefined), focused)
           : focused,
@@ -964,8 +946,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  /** Awaits the preview files' removal and the recorder's stop: runtime
-   *  disposal (and its exit-time child kill) would cut a forked one short. */
+  /** Awaits the preview files' removal (the scope's close) and the
+   *  recorder's stop: runtime disposal (and its exit-time child kill) would
+   *  cut a forked one short. */
   private dispose(): Effect.Effect<void, never, ProcessServices> {
     return Effect.gen({ self: this }, function* () {
       this.closeSidebarPort();
@@ -974,7 +957,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       this.editor = undefined;
       yield* Scope.close(this.scope, Exit.void);
       yield* this.draftRequests.shutdown;
-      yield* this.toolEditApprovals.dispose();
     });
   }
 }

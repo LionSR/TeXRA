@@ -1032,33 +1032,6 @@ interface HostInteractions {
    * nothing.
    */
   approvalDenied?(denial: ApprovalPolicyDenial, runId: RunId): void;
-  /**
-   * Stage a tool edit's preview (its original and proposed content, which
-   * the durable request payload does not carry) for the request the fold
-   * lists under `request.permission.requestId`. The decision comes back as
-   * that request's `request.decide`; a host that stages nothing leaves the
-   * request answerable from its payload alone.
-   *
-   * The session's own {@link SessionHostInteractions.presentToolEdit} hands
-   * its caller the release for what this staged; a host implements the
-   * staging alone.
-   */
-  presentToolEdit?(request: ToolEditApprovalRequest): void;
-  /**
-   * Drop what {@link presentToolEdit} staged for one request, for the single
-   * case no `request.decided` ever reaches: a request whose `request.opened`
-   * never committed. Every host that stages implements both. An `Effect`:
-   * the cleanup (a diff view to close, temp files to delete) is a program the
-   * session composes into its own. Built when staged, run only then.
-   */
-  releaseToolEdit?(requestId: string): Effect.Effect<void>;
-  /**
-   * Approve a request {@link presentToolEdit} staged, with the content the
-   * user edited in the host's view. `false` when nothing is staged, which
-   * the caller then approves from the payload; `true` when the host took
-   * the decision (a failed read of the edit included, left pending).
-   */
-  approveToolEdit?(requestId: string): Effect.Effect<boolean>;
   dispose?(): void;
 }
 ```
@@ -2626,40 +2599,6 @@ interface ToolCatalogShape {
   /** The plugin ids switched off in the global state store now; none while
    *  no switch was written. */
   readonly disabled: Effect.Effect<ReadonlySet<string>, StateReadFailed>;
-}
-```
-
-## ToolEditApprovalRequest
-
-Tool-edit approval request / result shapes.
-
-The request reaches a host through `SessionHandle.interactions.presentToolEdit`
-(the preview the durable payload cannot carry); the decision comes back as
-the request's `request.decide`. Its content carries the diff a host shows
-(hunks, the first changed line), computed here once; the line counts are
-the permission's.
-
-```ts
-interface ToolEditApprovalRequest extends ToolEditContent {
-  readonly path: string;
-  readonly sourceTool: string;
-  readonly runId?: RunId | null;
-  /**
-   * The session's workspace roots, as data: a host's preview of this request
-   * writes its temp files under the workspace and reads the diff's settings
-   * from these slots, and that preview program runs on the host's own runner
-   * rather than inside the tool call that raised the request, so the roots
-   * have to travel with the request instead of being read from an ambient
-   * workspace scope. {@link requestToolEditApproval} — the one producer of a
-   * request — fills them from the run's session.
-   */
-  readonly roots: WorkspaceRoots;
-  /**
-   * What the UI shows for this request, prepared once at the tool boundary
-   * (`prepareToolEditApprovalPrompt`): the payload of the `request.opened`
-   * fact the session publishes, and what every host surface renders.
-   */
-  readonly permission: ToolEditPermission;
 }
 ```
 

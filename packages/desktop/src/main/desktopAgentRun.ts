@@ -8,7 +8,7 @@
 // here: a surface answers an approval with `runtime.request`, and the
 // session settles the pending request itself.
 
-import { Effect, Scope, type Stream } from 'effect';
+import { Effect, Fiber, Scope, type Stream } from 'effect';
 
 import { type Run } from '@texra-ai/harness';
 import {
@@ -21,7 +21,6 @@ import {
 } from '@texra-ai/harness/host';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
-import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
 
 import {
@@ -50,6 +49,8 @@ export interface DesktopAgentRunOptions {
   /** Emits when this window gains focus (and once at once when it has it),
    *  so the service sends the project's host calls here first. */
   focused: Stream.Stream<void>;
+  /** Whether the window is focused and shows this project now. */
+  isFocused(): boolean;
   /** A launch could not find its agent: the New-task state's
    *  agent-config banner (`HostSnapshot.banners`). */
   showAgentConfigBanner(data: { agentName: string }): Effect.Effect<void>;
@@ -134,10 +135,8 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
     }
 
     // The tool-edit preview: staged copies of the original and proposed
-    // content the review pane diffs. The request itself is the session's
-    // (`request.opened` folds into the view), and a surface's `request.decide`
-    // settles it there; the staged preview is discarded when the request
-    // resolves, whichever way.
+    // content the review pane diffs, for each tool edit the project's
+    // session lists, here or in the service.
     const scope = yield* Scope.Scope;
     const spawn = desktopSpawner(runtime, scope);
     const toolEditApprovals = new ToolEditApprovalController({
@@ -147,34 +146,28 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
           showErrorMessage: host.showErrorMessage,
         },
         spawn,
+        focused: options.isFocused,
       }),
-      // A decision goes where the run runs.
       session: project.session,
+      roots: project.roots,
     });
-    // Dispose joins any tool-edit LaTeX build still displaying, which has no
-    // cancellation signal, so the window's release must not wait on it: it
-    // runs detached, as a window close never waits on a compile.
+    // Its close waits for a tool-edit LaTeX build still displaying, which
+    // has no cancellation signal, so the window's release does not wait on
+    // it: a window close never waits on a compile.
+    const previews = yield* Effect.forkDetach(
+      withProcessServices(runtime, toolEditApprovals.follow),
+    );
     yield* Effect.addFinalizer(() =>
-      Effect.asVoid(
-        Effect.forkDetach(
-          withProcessServices(runtime, toolEditApprovals.dispose()),
-        ),
-      ),
+      Effect.asVoid(Effect.forkDetach(Fiber.interrupt(previews))),
     );
     // Attached for the window's life, before the first run of this window
-    // asks anything. This host presents only the tool-edit preview; every
-    // other request (bash, plan, proposal, retry, question) is listed by the
-    // fold and answered by a surface's `request.decide`.
+    // asks anything. Every request (bash, plan, proposal, retry, question,
+    // tool edit) is listed by the fold and answered by a surface's
+    // `request.decide`.
     if (project.service === undefined)
-      yield* withProcessServices(
-        runtime,
-        attachSessionHost(project.session, toolEditApprovals, {
-          emit: handlePresentationEvent,
-        }).pipe(Scope.provide(scope)),
-      );
+      yield* project.session.attach({ emit: handlePresentationEvent });
     // A project of the service: the window presents its own failures, and
-    // serves the project's runs there with the same notices and tool-edit
-    // previews.
+    // serves the project's runs there with the same notices.
     else {
       yield* Effect.acquireRelease(
         project.present.use({ emit: handlePresentationEvent }),
@@ -191,11 +184,6 @@ export const createDesktopAgentRun = Effect.fn('desktop.createAgentRun')(
             emitAppSignal('workspaceFilesWritten', {
               absolutePaths: [...absolutePaths],
             }),
-          toolEdits: {
-            controller: toolEditApprovals,
-            roots: project.roots,
-            services: yield* withProcessServices(runtime, Effect.context()),
-          },
         },
         options.focused,
       );

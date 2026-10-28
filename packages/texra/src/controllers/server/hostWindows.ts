@@ -2,7 +2,7 @@
  * The windows attached to the service, and the one presentation surface the
  * service gives each project's session: a run that asks for a host
  * capability (a file's diagnostics, an inline criticism, a PDF to open, a
- * tool edit's preview, a notice) is answered by a window of that project.
+ * notice) is answered by a window of that project.
  *
  * A call goes only to a window of the session's project: among those that
  * offer the capability, the one focused last. A call that waits for its
@@ -34,7 +34,6 @@ import {
   type EditorCapabilities,
   type EditorHostShape,
 } from '@texra/tools/editorHost';
-import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
 
 import {
   CALL_CAPABILITY,
@@ -64,7 +63,6 @@ const ANSWER_WITHIN = {
   readDiagnostics: '2 minutes',
   addCriticism: '10 seconds',
   openPdf: '30 seconds',
-  approveToolEdit: '30 seconds',
 } satisfies Partial<Record<HostCall['kind'], Duration.Input>>;
 type AnsweredCall = Extract<HostCall, { kind: keyof typeof ANSWER_WITHIN }>;
 
@@ -94,20 +92,6 @@ const answerFailure = (
     reason: 'failed',
     message: answer.message,
   });
-
-type PresentedToolEdit = Extract<
-  HostCall,
-  { kind: 'presentToolEdit' }
->['request'];
-
-/** A staged tool edit, and the window that staged it: a window of the
- *  project that attaches while none holds it stages it there. `seen` marks
- *  one whose request the session has listed. */
-interface Staged {
-  readonly request: PresentedToolEdit;
-  window: Window | undefined;
-  seen: boolean;
-}
 
 /** The project folder a session holds, or its store for a session with
  *  no folder. */
@@ -145,7 +129,6 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
   const windows = new Set<Window>();
   /** Every unanswered call's window, by call id. */
   const calls = new Map<string, Window>();
-  const staged = new PrunedNestedMap<string, string, Staged>();
 
   /** The window a call of `key`'s project goes to. */
   const target = (key: string, capability: HostCapability) => {
@@ -172,15 +155,15 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
           call,
         }).pipe(Effect.asVoid);
 
-  /** Send a call to `window` (by default the one `key`'s project routes it
-   *  to) and wait for its answer, decoded by `schema`. */
+  /** Send a call to the window `key`'s project routes it to and wait for
+   *  its answer, decoded by `schema`. */
   const ask = <A>(
     key: string,
     call: AnsweredCall,
     schema: Schema.Codec<A, unknown>,
-    window = target(key, CALL_CAPABILITY[call.kind]),
   ): Effect.Effect<A, WindowCallFailed> =>
     Effect.gen(function* () {
+      const window = target(key, CALL_CAPABILITY[call.kind]);
       const within = ANSWER_WITHIN[call.kind];
       const answered = Deferred.makeUnsafe<unknown, WindowCallFailed>();
       // Registered in the same step that checks the window is attached, so
@@ -244,15 +227,9 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         );
       }
       window.pending.clear();
-      // The edits this window staged go to the project's window focused
-      // last that offers them, so its Approve reads an edit it shows; with
-      // none left, they wait for the next to attach.
-      const next = target(window.key, 'toolEdits');
-      for (const entry of staged.group(window.key).values())
-        if (entry.window === window) stage(entry, next);
       if (![...windows].some((other) => other.key === window.key))
         yield* Effect.logWarning(
-          `No TeXRA window of ${window.project} is attached: its tasks run without diagnostics, inline criticism, PDF opening or editable tool-edit previews until one attaches.`,
+          `No TeXRA window of ${window.project} is attached: its tasks run without diagnostics, inline criticism or PDF opening until one attaches.`,
         );
     });
 
@@ -278,56 +255,6 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             call: { kind: 'approvalDenied', denial, runId },
           });
       },
-      // The window that stages a preview is the one asked to release or
-      // approve it.
-      presentToolEdit: (request) => {
-        const { requestId } = request.permission;
-        const entry: Staged = {
-          request: {
-            path: request.path,
-            originalContent: request.originalContent,
-            proposedContent: request.proposedContent,
-            hunks: request.hunks,
-            firstChangedLine: request.firstChangedLine,
-            sourceTool: request.sourceTool,
-            runId: request.runId ?? null,
-            permission: request.permission,
-          },
-          window: undefined,
-          seen: false,
-        };
-        staged.set(key, requestId, entry);
-        stage(entry, target(key, 'toolEdits'));
-      },
-      releaseToolEdit: (requestId) =>
-        Effect.suspend(() => {
-          const entry = staged.delete(key, requestId);
-          return tell(liveWindow(entry), {
-            kind: 'releaseToolEdit',
-            requestId,
-          });
-        }),
-      approveToolEdit: (requestId) =>
-        Effect.suspend(() => {
-          const window = liveWindow(staged.get(key, requestId));
-          if (window === undefined) return Effect.succeed(false);
-          // The window that staged it holds the user's edit, whichever
-          // window is focused now.
-          return ask(
-            key,
-            { kind: 'approveToolEdit', requestId },
-            CallResultSchemas.approveToolEdit,
-            window,
-          ).pipe(
-            // An edit the window holds that cannot be read stays pending,
-            // never approved as the model proposed it.
-            Effect.catch((failure) =>
-              Effect.logWarning(
-                `The window's edit of ${requestId} was not read (${failure.message}); the request stays pending`,
-              ).pipe(Effect.as(true)),
-            ),
-          );
-        }),
     };
   };
   /** What `session`'s project's windows offer its runs' editor tools,
@@ -380,22 +307,6 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
         );
     },
   });
-  /** Stage `entry` in `window`, which then holds it. */
-  const stage = (entry: Staged, window: Window | undefined) => {
-    entry.window = window;
-    if (window !== undefined)
-      Queue.offerUnsafe(window.frames, {
-        kind: 'call',
-        id: randomUUID(),
-        call: { kind: 'presentToolEdit', request: entry.request },
-      });
-  };
-  /** The window that staged `entry`, while it is attached. */
-  const liveWindow = (entry: Staged | undefined) =>
-    entry?.window !== undefined && windows.has(entry.window)
-      ? entry.window
-      : undefined;
-
   return {
     attach: (session, capabilities) =>
       Stream.unwrap(
@@ -410,12 +321,6 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
             pending: new Map(),
           };
           windows.add(window);
-          // The project's tool edits no attached window holds (staged while
-          // none was, or by one that went) are staged here, so this
-          // window's Approve reads the edit it shows.
-          if (window.capabilities.has('toolEdits'))
-            for (const entry of staged.group(window.key).values())
-              if (liveWindow(entry) === undefined) stage(entry, window);
           return Stream.concat(
             Stream.succeed<HostFrame>({
               kind: 'attached',
@@ -446,28 +351,6 @@ export const makeHostWindows = Effect.sync((): HostWindows => {
       ),
     adopt: Effect.fn('hostWindows.adopt')(function* (session, editors) {
       const key = session.roots.storage;
-      // A staged preview whose request the session listed and no longer
-      // lists has settled: it is dropped, and its window releases its
-      // view. One not listed yet is kept: staging precedes the row.
-      yield* Effect.forkScoped(
-        Stream.runForEach(session.view.changes, (view) =>
-          Effect.gen(function* () {
-            const held = staged.group(key);
-            if (held.size === 0) return;
-            const pending = new Set(view.requests.map((r) => r.requestId));
-            for (const [requestId, entry] of [...held]) {
-              if (pending.has(requestId)) entry.seen = true;
-              else if (entry.seen) {
-                staged.delete(key, requestId);
-                yield* tell(liveWindow(entry), {
-                  kind: 'releaseToolEdit',
-                  requestId,
-                });
-              }
-            }
-          }),
-        ),
-      );
       yield* session.attach(interactionsOf(session));
       yield* editors.attach(key, editorOf(key));
     }),

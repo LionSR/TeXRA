@@ -330,6 +330,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         toolEditPreview: hosts.toolEditPreview,
         project,
         focused,
+        isFocused: () => shown() && host.window.isFocused(),
         showAgentConfigBanner: ({ agentName }) =>
           withProcessServices(
             runtime,
