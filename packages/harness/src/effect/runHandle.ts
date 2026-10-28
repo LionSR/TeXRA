@@ -30,7 +30,6 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
-import { runEndFromEvents } from '@shared/session/runFacts';
 import { descendantRuns } from '@shared/session/sessionView';
 
 import { RunFailure, TraceUnavailable } from './errors.js';
@@ -58,8 +57,8 @@ const reportedEnd = (
 ): Effect.Effect<RunEndResult, RunFailure> =>
   Exit.isSuccess(exit) || !Cause.hasInterruptsOnly(exit.cause)
     ? exit
-    : session.log.records(runId).pipe(
-        Effect.map((rows) => runEndFromEvents(rows, runId)),
+    : session.log.facts(runId).pipe(
+        Effect.map((facts) => facts?.end ?? null),
         Effect.catch((error) =>
           Effect.logWarning(`Run ${runId}'s stored end could not be read`).pipe(
             Effect.annotateLogs({ data: error }),
