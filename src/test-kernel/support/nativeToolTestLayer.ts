@@ -28,7 +28,6 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { testCallPluginServices } from '@test/support/testPluginServices';
-import { generateShortId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
 /** The run a test call is made under: what every fixture names, plus whatever
@@ -80,7 +79,7 @@ export function nativeToolTestLayer(
 ) {
   const roots = options.roots ?? testWorkspaceRoots();
   const { run, readFiles, origin, workingDirectory, stepRoots } = options;
-  const callId = options.callId ?? `call-${generateShortId()}`;
+  const callId = options.callId ?? `call-${crypto.randomUUID()}`;
   // A fixture is the slice of the run its case reads; the run answers for
   // its own config and trace with the inert pair.
   const toolRun: RunCallShape['run'] | undefined = run && {
@@ -147,7 +146,7 @@ export function nativeToolTestLayer(
         // A run's requests open unbound on its session: a test call has no
         // loop to bind them to.
         requests: {
-          nextId: (prefix: string) => `${prefix}-${generateShortId()}`,
+          nextId: (prefix: string) => `${prefix}-${crypto.randomUUID()}`,
           open: (payload: PermissionPayload) =>
             toolRun.session.requests.ask(toolRun.runId, payload),
           post: (requestId: string, payload: PermissionPayload) =>

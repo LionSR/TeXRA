@@ -12,6 +12,7 @@ import {
   ownerIdentity,
   type RunId,
 } from '@texra-ai/harness/schemas';
+import { forkRun } from '@texra/controllers/session/runActionPolicy';
 import { approvalPolicyLabel } from '@ui/copy/approvalPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
 
@@ -127,18 +128,12 @@ export function runResumeCommand(
         );
         return CliExitCode.Usage;
       }
-      const forked = yield* Effect.result(
-        session.request({ kind: 'run.fork', runId: id }),
-      );
+      const forked = yield* Effect.result(forkRun(session, id, null));
       if (Result.isFailure(forked)) {
         writeTextStderr(requestErrorText(forked.failure));
         return CliExitCode.Usage;
       }
-      if (forked.success.kind !== 'forked')
-        return yield* Effect.die(
-          new Error(`run.fork answered ${forked.success.kind}`),
-        );
-      const forkId = forked.success.runId;
+      const forkId = forked.success;
       const forkConfig = yield* session.records(forkId).readConfig();
       if (!forkConfig) {
         writeTextStderr(`Task ${forkId} was forked without a configuration.`);

@@ -56,7 +56,6 @@ import {
   customAgentDir,
   customAgentDirIsDefault,
   customAgentScanIssues,
-  customPresets,
   detachSubagentsOnStop,
   disabledSkillSources,
   settingsSnapshotRevisions,
@@ -87,12 +86,14 @@ import {
   resetSettingsState,
   selectedPanel,
   selectedSections,
+  selectSettingsPage,
   settingSignal,
   skillLoadIssues,
   skillsList,
   subscriptionAuth,
   subscriptionUsage,
   telemetryEnabled,
+  teamPresets,
   pluginsPage,
   toolPathProtectionEnabled,
   agentSelectionItems,
@@ -154,13 +155,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     entry: SettingsNavEntry,
     section?: SettingsSectionName,
   ): void {
-    selectedPanel.set(entry.panel);
-    if (section) {
-      selectedSections.set({
-        ...selectedSections.get(),
-        [entry.panel]: section,
-      });
-    }
+    selectSettingsPage(entry.panel, section);
     requestAnimationFrame(() => {
       const panel =
         this.shadowRoot?.querySelector<HTMLElement>('.settings-panel');
@@ -338,7 +333,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             <teams-tab
               slot="teams"
               .activePresetId=${activePresetId.get()}
-              .customPresets=${customPresets.get()}
+              .presets=${teamPresets.get()}
               .orchestratorAgents=${orchestratorAgents.get()}
             ></teams-tab>
             <skills-tab

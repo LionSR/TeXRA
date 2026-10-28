@@ -1031,17 +1031,6 @@ function tokens(make) {
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
 const ISO = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g;
-/** Keys whose value is a random 21-character id, alone or behind a prefix
- *  such as `plan-`. */
-const NANO_KEYS = new Set([
-  'id',
-  'logId',
-  'stageId',
-  'attemptId',
-  'requestId',
-  'operationId',
-]);
-const NANO = /^(?:[a-z]+-)?([A-Za-z0-9_-]{21})$/;
 /** Numbers that measure wall time. */
 const TIMING_KEYS = new Set([
   'wallTimeMs',
@@ -1080,7 +1069,6 @@ function normalize(file, root) {
   const uuids = tokens(
     (n) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`,
   );
-  const nanos = tokens((n) => `golden${n.toString().padStart(15, '0')}`);
   const times = tokens((n) => new Date(BASE_AT + n * 1000).toISOString());
   const ids = tokens(
     (n, id) => `a${n.toString(16).padStart(id.length - 1, '0')}`,
@@ -1091,19 +1079,16 @@ function normalize(file, root) {
     value: inflate(row.data, stored),
   }));
   // The random ids a row names, so every occurrence maps alike.
-  const collect = (value, key) => {
+  const collect = (value) => {
     if (typeof value === 'string') {
       for (const match of value.match(UUID) ?? []) uuids.get(match);
       for (const match of value.match(ISO) ?? []) times.get(match);
-      if (NANO_KEYS.has(key) && NANO.test(value))
-        nanos.get(NANO.exec(value)[1]);
       return;
     }
     if (value === null || typeof value !== 'object') return;
-    for (const [k, v] of Object.entries(value))
-      collect(v, Array.isArray(value) ? key : k);
+    for (const v of Object.values(value)) collect(v);
   };
-  for (const row of rows) collect(row.value, '');
+  for (const row of rows) collect(row.value);
 
   // An `agent` or `self` call's child run is named by the call
   // (`agentChildRunId`: its run, response, call and attempt), so a resume
@@ -1191,7 +1176,6 @@ function normalize(file, root) {
       to,
     ]),
     ...uuids.seen,
-    ...nanos.seen,
     ...times.seen,
     // The project's storage folder, named by a hash of its temporary path.
     [

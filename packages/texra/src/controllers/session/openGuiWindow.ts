@@ -65,12 +65,13 @@ import {
   launchFormOf,
   prepareSurfaceLaunch,
 } from '@texra/controllers/mainView/backend/MainViewRunLaunchController';
-import type { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
 import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
+import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
 import { serviceRecords } from '@texra/controllers/server/serviceSession';
+import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import {
   attachWindowHost,
   type WindowClient,
@@ -193,8 +194,9 @@ export interface SharedHostRequestBindings {
   /** Ask for a provider API key: a prompt on one host, the Models tab on the
    *  other. The caller re-reads the secret store after this returns. */
   readonly setApiKey: HostVerb<void>;
-  /** Open a page of the guide in the browser, at its `GUIDE_URLS` entry. */
-  openGuide(page: 'apiKeys' | 'customAgents'): HostVerb<void>;
+  /** Open the guide's `page` in the browser, at its section `anchor` when
+   *  one is named (`texraGuideUrl`). */
+  openGuide(page: string, anchor?: string): HostVerb<void>;
   readonly openCustomAgentDirectory: HostVerb<void>;
   readonly recheckDependencies: HostVerb<void>;
   openInstallGuide(tool: string): HostVerb<void>;
@@ -237,14 +239,14 @@ interface GuiWindowHost extends Pick<
     'showInfo'
   >;
   /** The transcript export's format picker and opener, the LaTeX export's
-   *  preamble, and where the standalone trace viewer's template is: both
-   *  are the host's bundled resources. */
+   *  preamble, and the host's resources directory, which holds the
+   *  standalone trace viewer's template. */
   readonly export: Pick<
     Parameters<typeof exportRunTranscript>[1],
     'pickFormat' | 'openPath'
   > & {
     readonly latexPreamble: string;
-    readonly traceViewerTemplate: string;
+    readonly resourcesPath: string;
   };
 }
 
@@ -304,10 +306,6 @@ function fileOpResultMessage(
   }
 }
 
-type ExportRecords = ConstructorParameters<
-  typeof ChatExportController
->[0]['records'];
-
 /**
  * Open a window of `ports.runs` for the caller's scope. The bridge has a
  * scope of its own, closed off the window's release: it drains the requests
@@ -363,14 +361,14 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         yield* Effect.forkScoped(
           attachWindowHost(runs.link, workspace, host.window, ports.focused),
         );
+        const local = runs.session;
         return {
-          present: runs.session,
-          readConfig: (runId: RunId) =>
-            runs.session.records(runId).readConfig(),
-          exportRecords: async (): Promise<ExportRecords> =>
-            (
-              await import('@texra/controllers/progressView/ChatExportController')
-            ).localExportRecords(runs.session),
+          present: local,
+          readConfig: (runId: RunId) => local.records(runId).readConfig(),
+          exportRecords: {
+            input: (runId: RunId) => loadChatExportInput(runId, local),
+            trace: (runId: RunId) => local.records(runId).readTrace(),
+          },
         };
       })
     : Effect.gen(function* () {
@@ -394,11 +392,10 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         return {
           present: windowPresent,
           readConfig: remote.readConfig,
-          exportRecords: (): Promise<ExportRecords> =>
-            Promise.resolve({
-              input: remote.exportInput,
-              trace: remote.exportTrace,
-            }),
+          exportRecords: {
+            input: remote.exportInput,
+            trace: remote.exportTrace,
+          },
         };
       });
 
@@ -445,7 +442,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           await import('@texra/controllers/progressView/ChatExportController');
         return new ChatExportController({
           roots,
-          records: await exportRecords(),
+          records: exportRecords,
           latexPreamble: host.export.latexPreamble,
         });
       },
@@ -479,7 +476,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           showInfo: host.showInfoMessage,
           showWarning: host.showWarningMessage,
           getController: exportController,
-          getTraceViewerTemplate: () => host.export.traceViewerTemplate,
+          templatePath: traceViewerTemplatePath(host.export.resourcesPath),
         }),
     });
   /** One program per request, over this session's rooted filesystems and
@@ -736,7 +733,7 @@ function answerShared(
       case 'apiKeyBanner':
         yield* request.action === 'set'
           ? host.setApiKey
-          : host.openGuide('apiKeys');
+          : host.openGuide('installation', 'setting-up-api-keys');
         return done;
       case 'agentConfigBanner':
         switch (request.action) {
@@ -751,7 +748,7 @@ function answerShared(
               : host.openSettings('agents/library');
             return done;
           case 'docs':
-            yield* host.openGuide('customAgents');
+            yield* host.openGuide('custom-agents');
             return done;
         }
         return done;

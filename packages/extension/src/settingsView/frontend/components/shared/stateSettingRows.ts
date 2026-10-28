@@ -18,7 +18,11 @@ import { postMessage } from '@texra/shared/hostBridge';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { StateSettingValue } from '@texra/shared/settingsView/settingsViewMessages';
 import { readSelectValue } from '@ui/wa/selectTemplates';
-import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
+import {
+  renderSettingsNumberRow,
+  renderSettingsToggleRow,
+  type SettingsNumberRowOptions,
+} from '@ui/wa/settingsSection';
 
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/select/select.js';
@@ -88,6 +92,40 @@ export function renderStateSettingToggleRow(
         options.key,
         Boolean((event.target as WaSwitch | null)?.checked),
       ),
+  });
+}
+
+/** A number row's own options; its label, help text and write are the
+ *  catalog row's. */
+type StateSettingNumberRowOptions = Omit<
+  SettingsNumberRowOptions,
+  'label' | 'description' | 'onChange'
+> & {
+  /** Canonical catalog key this field writes and takes its copy from. */
+  readonly key: string;
+};
+
+/**
+ * The number counterpart of {@link renderStateSettingToggleRow}: the label
+ * and help text are the catalog row's, and a committed value posts the write.
+ * Bounds, step and unit stay the caller's, read from the setting's own
+ * constants.
+ */
+export function renderStateSettingNumberRow(
+  options: StateSettingNumberRowOptions,
+): TemplateResult {
+  const { key, ...row } = options;
+  const entry = TEXRA_SETTINGS.settingsViewByKey(key);
+  if (!entry?.title) {
+    throw new Error(
+      `Settings-view catalog row "${key}" is missing or has no title`,
+    );
+  }
+  return renderSettingsNumberRow({
+    ...row,
+    label: entry.title,
+    description: entry.description,
+    onChange: (value) => postStateSetting(key, value),
   });
 }
 

@@ -13,7 +13,6 @@ import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { DispatchFacts } from '@shared/schemas';
 import type { HistoryMessage } from '@shared/session/historyTurns';
-import { generateShortId } from '@utils/core';
 
 /** One local call of a pending response. */
 export interface LocalCall {
@@ -91,7 +90,7 @@ export function dispatchFactsFor(
       replay: registry?.get(call.name)?.replay ?? 'unsafe',
       duplicateOf:
         primaryIndex === undefined ? null : parsed[primaryIndex].callId,
-      logId: generateShortId(),
+      logId: crypto.randomUUID(),
     };
   });
 }

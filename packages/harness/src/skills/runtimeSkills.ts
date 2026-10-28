@@ -14,7 +14,11 @@ import {
   type SkillDisplayIssue,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  decodeDisabledTools,
+  GlobalStateKey,
+  WorkspaceStateKey,
+} from '@shared/state/stateKeys';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
@@ -137,22 +141,31 @@ function isSkillDisabled(
  * the roots its prompt is being built for, so the answer is that project's
  * rather than the calling context's.
  */
+function readSkillSwitches(stores: SettingsStores) {
+  return Effect.all({
+    names: Settings.get<string[]>(stores, WorkspaceStateKey.DISABLED_SKILLS),
+    scopes: Settings.get<ActiveSkillSourceScope[]>(
+      stores,
+      WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+    ),
+  });
+}
+
+/**
+ * {@link readSkillSwitches}, with the tool plugins switched off, read as the
+ * tool catalog reads them: an unreadable record fails the listing rather
+ * than showing every plugin's skills.
+ */
 function readDisabledSkills(stores: SettingsStores) {
   return Effect.gen(function* () {
-    return {
-      names: yield* Settings.get<string[]>(
-        stores,
-        WorkspaceStateKey.DISABLED_SKILLS,
-      ),
-      scopes: yield* Settings.get<ActiveSkillSourceScope[]>(
-        stores,
-        WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-      ),
-      plugins: yield* Settings.get<string[]>(
-        stores,
-        GlobalStateKey.DISABLED_TOOLS,
-      ),
-    };
+    const stored = yield* stores.globalState.get(GlobalStateKey.DISABLED_TOOLS);
+    const plugins = yield* Effect.fromResult(
+      Result.mapBoth(decodeDisabledTools(stored), {
+        onSuccess: (ids) => [...(ids ?? [])],
+        onFailure: ({ message, cause }) => new Error(message, { cause }),
+      }),
+    );
+    return { ...(yield* readSkillSwitches(stores)), plugins };
   });
 }
 
@@ -356,7 +369,7 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
   }) {
     // The enabled set the hosts list, with every tool plugin's skills
     // whatever its switch: the step lists those of the plugins it pinned.
-    const disabled = yield* readDisabledSkills(run.roots);
+    const disabled = yield* readSkillSwitches(run.roots);
     const result = yield* loadEnabledRuntimeSkills(run.roots, run.plugins, {
       ...disabled,
       plugins: [],

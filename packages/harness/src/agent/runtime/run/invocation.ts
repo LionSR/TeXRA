@@ -16,10 +16,8 @@ import { ModelError } from '@texra-ai/llm';
 
 import type { AgentTrace } from '@agent/trace';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import {
-  offersRetry,
-  type CallFailure,
-} from '@agent/runtime/modelAccess/failureInfo';
+import { type CallFailure } from '@agent/runtime/modelAccess/failureInfo';
+import { offersRetry } from '@common/errors/sdkError/providerErrorFormat';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import {
   type FailedNext,

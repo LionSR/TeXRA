@@ -5,9 +5,7 @@
 // with an outcome or a request error; an arm the desktop does not perform is
 // `Rejected` with its reason, never dropped.
 
-import path from 'node:path';
-
-import { Effect, Scope } from 'effect';
+import { Effect } from 'effect';
 import { Cancelled, Rejected, type Run } from '@texra-ai/harness';
 import {
   AgentDirectories,
@@ -42,9 +40,9 @@ import type {
   SharedHostRequestBindings,
 } from '@texra/controllers/session/openGuiWindow';
 import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
-import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
+import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
-import { GUIDE_URLS } from '@ui/copy/onboarding';
+import { texraGuideUrl } from '@ui/copy/guide';
 
 import {
   DESKTOP_DOCS_URL,
@@ -82,11 +80,6 @@ interface DesktopHostRequestsOptions {
   /** The process runtime this window was handed; every request arm below runs
    *  on it. */
   runtime: ProcessRuntime;
-  /** Runs when a run this window launched ends: after `AgentRunLifecycle`
-   *  writes `firstRunDone` on a successful run, so the host can recompute
-   *  the onboarding funnel from the updated flag. Do not hook the run.end
-   *  row: it commits inside finalizeTerminal, before the flag write. */
-  onRunCompleted?: Effect.Effect<void>;
 }
 
 const CHANNEL = 'DesktopHostRequests';
@@ -96,7 +89,6 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
   function* (options: DesktopHostRequestsOptions) {
     const { project, host, runtime, bridge, snapshot } = options;
     const { roots } = project;
-    const scope = yield* Scope.Scope;
     const signals = yield* AppSignals;
     // A shared controller's notice IS the refusal the request answers with.
     const rejectRequestEffect = (
@@ -132,23 +124,6 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       requestOpenFile: (data) => host.openPath(data.location.absolutePath),
     };
 
-    /** The label scan's candidates, as the program that lists them: the
-     *  file-actions port takes the window's services from the runtime it
-     *  holds, so nothing settles here. */
-    const listWorkspaceCandidateFiles = () =>
-      Effect.suspend(() => {
-        const workspacePath = project.root;
-        if (!workspacePath) return Effect.succeed([]);
-        return listWorkspaceFilesOfType(
-          ['input', 'context'],
-          workspacePath,
-        ).pipe(
-          Effect.map((files) =>
-            files.flat().map((file) => path.resolve(workspacePath, file)),
-          ),
-        );
-      });
-
     const fileActions = new DesktopProgressFileActions(
       {
         ...host,
@@ -156,7 +131,7 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         // the request answers with, exactly as the rejecting promise did.
         showErrorMessage: rejectRequestEffect,
       },
-      { session: project.session, runtime, listWorkspaceCandidateFiles },
+      { session: project.session, runtime },
     );
 
     /**
@@ -213,13 +188,9 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
     const bindings: SharedHostRequestBindings = {
       openPath: (file, line) => host.openPath(file, line),
       openLabel: (label) =>
-        fileActions
-          .findAndOpenLabel(label)
-          .pipe(
-            Effect.mapError((cause) =>
-              hostFailure('fileActions.findAndOpenLabel', cause),
-            ),
-          ),
+        findLabelInWorkspace(roots.workspace, label, (absolutePath) =>
+          host.openPath(absolutePath),
+        ).pipe(Effect.mapError((cause) => hostFailure('openLabel', cause))),
       // The window's project is its one workspace: any launch runs as asked.
       admitLaunch: () => Effect.void,
       runWorkflowDiff: (request) =>
@@ -241,7 +212,8 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       setApiKey: Effect.sync(() =>
         postDesktopSettingsView(options.postToRenderer, 'models/keys'),
       ),
-      openGuide: (page) => options.openExternalUrl(GUIDE_URLS[page]),
+      openGuide: (page, anchor) =>
+        options.openExternalUrl(texraGuideUrl(page, anchor)),
       openCustomAgentDirectory: Effect.gen(function* () {
         const directory = yield* AgentDirectories.use((directories) =>
           directories.custom(),
@@ -327,24 +299,12 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       showInfoMessage: host.showInfoMessage,
       showWarningMessage: host.showWarningMessage,
       runs: {
-        // Select the run, retire the missing-agent warning its agent
-        // resolved, and refresh the funnel when it ends.
+        // Select the run and retire the missing-agent warning its agent
+        // resolved.
         launched: (run: Run) =>
           Effect.sync(() =>
             bridge.surfaceAction({ kind: 'select', runId: run.runId }),
-          ).pipe(
-            Effect.andThen(snapshot.clearAgentConfigBanner),
-            Effect.andThen(
-              Effect.forkIn(
-                run.result.pipe(
-                  Effect.ignore,
-                  Effect.ensuring(options.onRunCompleted ?? Effect.void),
-                ),
-                scope,
-              ),
-            ),
-            Effect.asVoid,
-          ),
+          ).pipe(Effect.andThen(snapshot.clearAgentConfigBanner)),
         // Desktop has no editor integration to preview through, so the
         // output goes to the preview-with-fallback host directly.
         openFinalOutput: (config: AgentConfig, result: RunEndResult) =>
@@ -413,11 +373,7 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
             ),
           ),
         latexPreamble,
-        traceViewerTemplate: path.join(
-          options.resourcesPath,
-          'traceViewer',
-          'index.html',
-        ),
+        resourcesPath: options.resourcesPath,
       },
     };
   },

@@ -520,9 +520,6 @@ importers:
       mime-types:
         specifier: 'catalog:'
         version: 3.0.2
-      nanoid:
-        specifier: 'catalog:'
-        version: 6.0.2
       nunjucks:
         specifier: 'catalog:'
         version: 3.2.4(chokidar@3.6.0)

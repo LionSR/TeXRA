@@ -78,7 +78,7 @@ const SetTabMessageSchema = Schema.Struct({
  * catalog rows (`profile`, `models`); those arms still declare their own shape
  * below or in their own module.
  */
-const DERIVED_SETTINGS_SNAPSHOTS = [
+export const DERIVED_SETTINGS_SNAPSHOTS = Object.freeze([
   'agents',
   'approval',
   'git-author',
@@ -86,7 +86,7 @@ const DERIVED_SETTINGS_SNAPSHOTS = [
   'telemetry',
   'latex',
   'memory',
-] as const satisfies readonly SettingsViewSnapshot[];
+] as const satisfies readonly SettingsViewSnapshot[]);
 
 /** A snapshot whose whole payload is derived from the settings catalog. */
 export type DerivedSettingsSnapshot =
@@ -248,10 +248,19 @@ const UpdateCustomAgentDirMessageSchema = Schema.Struct({
 // Agent team data schema
 // ============================================================
 
+/** One team card: a team from the workspace's team catalog and where it came
+ *  from. Only a custom team can be deleted. */
+const SettingsTeamPresetSchema = AgentModePresetSchema.mapFields(
+  Struct.assign({ source: Schema.Literals(['built-in', 'custom']) }),
+);
+export type SettingsTeamPreset = typeof SettingsTeamPresetSchema.Type;
+
 /** Outbound: backend → frontend agent teams (built-in + custom) */
 const UpdateAgentModePresetsMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS),
-  customPresets: Schema.Array(AgentModePresetSchema),
+  /** Every launchable team in catalog order: the built-in teams, then the
+   *  workspace's custom teams. */
+  presets: Schema.Array(SettingsTeamPresetSchema),
   /**
    * Agent names that can lead a team (carry delegation tools), computed from
    * the agent registry so preset cards badge orchestrators by capability

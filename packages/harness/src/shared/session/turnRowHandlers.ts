@@ -275,6 +275,10 @@ const applyMessage = <K extends MessageKind>(
   copies: BatchCopies,
 ): RowOutcome => MESSAGE_HANDLERS[kind](state, p, copies);
 
+/** Whether `p` is one of a summary's attempts, which the loop ignores. */
+const isSummaryAttempt = (p: ModelMessagePayload): boolean =>
+  (p.kind === 'attempt' || p.kind === 'failed') && p.purpose === 'summary';
+
 /** The handlers for the turn's rows: each needs an opened run, except a
  *  new turn's input and a summary's attempts. */
 export const TURN_ROW_HANDLERS: {
@@ -390,10 +394,3 @@ export const TURN_ROW_HANDLERS: {
     },
   },
 };
-
-/** Whether `p` is one of a summary's attempts, which the loop ignores. */
-function isSummaryAttempt(p: ModelMessagePayload): boolean {
-  return (
-    (p.kind === 'attempt' || p.kind === 'failed') && p.purpose === 'summary'
-  );
-}

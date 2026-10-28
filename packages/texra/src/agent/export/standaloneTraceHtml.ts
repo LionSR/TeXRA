@@ -7,7 +7,15 @@
  * comment). `main.ts`'s `loadTrace()` reads this global if present, before
  * falling back to fetching `trace.json`.
  */
+import * as path from 'node:path';
+
 import type { TraceDocument } from '@texra-ai/harness/schemas';
+
+/** The trace viewer's single-file bundle under a host's resources
+ *  directory: the template every host's HTML export embeds into. */
+export function traceViewerTemplatePath(resourcesPath: string): string {
+  return path.join(resourcesPath, 'traceViewer', 'index.html');
+}
 
 const MODULE_SCRIPT_MARKER = '<script type="module"';
 

@@ -16,7 +16,11 @@ import {
 } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
-import { withLogChannel, getSdkErrorMessage } from '@texra-ai/harness/host';
+import {
+  withLogChannel,
+  getSdkErrorMessage,
+  Settings,
+} from '@texra-ai/harness/host';
 import {
   inheritedEnv,
   withExtendedPath,
@@ -94,7 +98,10 @@ const resolveSoxCommand = Effect.fnUntraced(function* (
   AudioRecorderError,
   FileSystem.FileSystem | ChildProcessSpawner
 > {
-  const configuredPath = roots.config.get<string>('texra.audio.soxPath');
+  const configuredPath = Settings.getConfig<string>(
+    roots.config,
+    'texra.audio.soxPath',
+  );
   if (configuredPath) {
     // The path is validated before being probed, so a non-absolute
     // `soxPath` fails "Path must be absolute: ..." and the recording

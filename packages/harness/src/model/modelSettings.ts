@@ -224,7 +224,7 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
           preferKimiCode: Effect.succeed(preferKimiCode),
           glmCodingPlan: flag(GlobalStateKey.GLM_CODING_PLAN),
           glmEndpoint: Effect.map(
-            Settings.get<string>(stores, GlobalStateKey.ENDPOINT_GLM),
+            Settings.get<string>(stores, 'texra.endpoint.glm'),
             Boolean,
           ),
           chatgptSubscription: subscriptionOn(stores, 'chatgpt'),

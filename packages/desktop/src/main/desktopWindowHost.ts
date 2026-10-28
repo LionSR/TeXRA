@@ -17,6 +17,7 @@ import {
   ExternalOpenFailed,
   type NotificationFailed,
 } from '@texra/hosts/uiHosts';
+import { texraGuideUrl } from '@ui/copy/guide';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import { createDesktopDialogs } from './desktopDialogs.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
@@ -56,8 +57,7 @@ export function createDesktopWindowHost(options: {
   };
 
   const dialogs = createDesktopDialogs(window, {
-    openGuide: (docsPage) =>
-      openExternalInBackground(`https://texra.ai/guide/${docsPage}`),
+    openGuide: (docsPage) => openExternalInBackground(texraGuideUrl(docsPage)),
     dispatchInstructionAction: (action) => dispatchInstructionAction(action),
   });
   const { showErrorMessage, showInfoMessage, showWarningMessage } = dialogs;
@@ -176,10 +176,10 @@ export function createDesktopWindowHost(options: {
         postDesktopSettingsView(post, 'models/keys');
         return;
       case INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE:
-        openExternalInBackground('https://texra.ai/guide/configuration.html');
+        openExternalInBackground(texraGuideUrl('configuration'));
         return;
       case INSTRUCTION_ACTION.OPEN_MODELS_DOC:
-        openExternalInBackground('https://texra.ai/guide/models.html');
+        openExternalInBackground(texraGuideUrl('models'));
         return;
     }
   };

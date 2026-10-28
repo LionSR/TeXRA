@@ -262,7 +262,8 @@ export function requestAsks({
    *  open: the body of one publisher transaction, whether a surface or an
    *  interrupted {@link ask} decides it. It reads the run's
    *  request rows alone, through the type index, so a decision costs the
-   *  same however long the run's history grows. */
+   *  same however long the run's history grows, and asks `runRowsFrom`
+   *  whether the request is open, as the run state does. */
   const decisionRow = (
     runId: RunId,
     requestId: string,
@@ -275,8 +276,8 @@ export function requestAsks({
         aggregateId,
         RUN_ROW_READS.requests,
       );
-      const request = runRowsFrom(rows).requests[requestId];
-      if (request === undefined || request.decision !== null) return false;
+      if (runRowsFrom(rows).requests[requestId]?.decision !== null)
+        return false;
       yield* runStateAppend(append)([
         { type: 'request.decided', aggregateId, requestId, decision },
       ]);

@@ -655,9 +655,9 @@ export const createHostRunActions = Effect.fn(
     },
     fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
       const forked = yield* forkRun(session, runId, at);
-      // The fork waits for its host: continuing it parks it on the
-      // user's next message. A refusal is told by the resume itself, and
-      // the fork keeps its Resume.
+      // The fork waits for its host: continuing it waits on the user's
+      // next message. A refusal is told by the resume itself, and the fork
+      // keeps its Resume.
       yield* resumeRun(session, forked).pipe(Effect.ignore({ log: 'Warn' }));
       return forked;
     }),

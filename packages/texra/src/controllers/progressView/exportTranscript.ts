@@ -82,7 +82,8 @@ interface TranscriptExportPorts {
     ChatExportController,
     TranscriptExportFailed
   >;
-  getTraceViewerTemplate(): string;
+  /** The trace viewer's single-file bundle the HTML export embeds into. */
+  readonly templatePath: string;
 }
 
 const CHANNEL = 'ExportTranscript';
@@ -233,10 +234,7 @@ const exportHtml = Effect.fn('exportHtml')(function* (
   | TranscriptExportFailed,
   FileSystem.FileSystem | StorageFs
 > {
-  const outcome = yield* controller.exportAsHtml(
-    runId,
-    ports.getTraceViewerTemplate(),
-  );
+  const outcome = yield* controller.exportAsHtml(runId, ports.templatePath);
   if (outcome.status !== 'ok')
     return yield* new Rejected({
       reason: htmlExportErrorMessage(outcome.status),

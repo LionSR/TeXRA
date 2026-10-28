@@ -20,7 +20,6 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { generateShortId } from '@utils/core';
 
 /**
  * Loosely-typed recording of host emissions. The recording host flattens the
@@ -243,7 +242,7 @@ export function bashApprovalRequest(request: {
   readonly runId?: RunId;
 }): BashPermission {
   return {
-    requestId: `bash-${generateShortId()}`,
+    requestId: `bash-${crypto.randomUUID()}`,
     command: request.command,
     ...(request.cwd ? { cwd: request.cwd } : {}),
     allowBypass: true,

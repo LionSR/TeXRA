@@ -9,8 +9,7 @@ import * as vscode from 'vscode';
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/host';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
-import { openFirstLabelMatch } from '@latex/labelSearch';
-import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
+import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 const CHANNEL = 'openFileCommands';
@@ -58,40 +57,9 @@ export function openFile(file: string, line?: number) {
 /**
  * Locate a `\label{…}` across the input and context files and reveal it.
  * Returns whether a match was opened; the "not found" message belongs to the
- * caller (`ProgressWorkflowFileActionsController.openLabel`), which owns it
- * for every host.
+ * shared request body, which owns it for every host.
  */
-export const openLabel = Effect.fn('openFileCommands.openLabel')(function* (
-  roots: WorkspaceRoots,
-  label: string,
-) {
-  const [inputs, contexts] = yield* listWorkspaceFilesOfType(
-    ['input', 'context'],
-    roots.workspace,
+export const openLabel = (roots: WorkspaceRoots, label: string) =>
+  findLabelInWorkspace(roots.workspace, label, (absolutePath, index) =>
+    openInEditor(absolutePath, (doc) => doc.positionAt(index)),
   );
-  // The candidates are workspace-relative listings, read through the
-  // session's workspace view.
-  const workspaceFs = yield* WorkspaceFs;
-
-  return yield* openFirstLabelMatch(
-    label,
-    new Set([...inputs, ...contexts]),
-    (file) =>
-      workspaceFs.readFileString(file).pipe(
-        Effect.map((text: string) => text.replaceAll('\r\n', '\n')),
-        Effect.tapError((error) =>
-          Effect.logDebug(`Could not read file ${file}: ${error.message}`).pipe(
-            withLogChannel(CHANNEL),
-          ),
-        ),
-      ),
-    (file, index) =>
-      workspaceFs
-        .resolve(file)
-        .pipe(
-          Effect.flatMap((absolutePath) =>
-            openInEditor(absolutePath, (doc) => doc.positionAt(index)),
-          ),
-        ),
-  );
-});

@@ -26,7 +26,8 @@ export function getIncludedExtensions(category: ExtensionCategory): string[] {
 }
 
 /**
- * Retrieve included extensions without the leading dot (for VS Code file filters).
+ * Retrieve included extensions without the leading dot, the form both the
+ * VS Code and the Electron file dialogs filter by.
  */
 export function getFilterExtensions(category: ExtensionCategory): string[] {
   return getIncludedExtensions(category).map((ext) => ext.replace(/^\./, ''));

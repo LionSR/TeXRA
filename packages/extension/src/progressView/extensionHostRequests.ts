@@ -108,7 +108,7 @@ import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import type { WindowHost } from '@texra/controllers/server/windowHost';
 import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
 import { getToolDocsPage } from '@texra/utils/system/toolChecks';
-import { GUIDE_URLS } from '@ui/copy/onboarding';
+import { texraGuideUrl } from '@ui/copy/guide';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 
 const CHANNEL = 'ExtensionHostRequests';
@@ -428,10 +428,12 @@ export const createExtensionHostRequests = Effect.fn(
     setApiKey: runHandler('setApiKey', setApiKey(roots)).pipe(
       Effect.andThen(refreshOnboardingFunnel),
     ),
-    openGuide: (page) =>
+    openGuide: (page, anchor) =>
       Effect.asVoid(
         fromHost('env.openExternal', () =>
-          vscode.env.openExternal(vscode.Uri.parse(GUIDE_URLS[page])),
+          vscode.env.openExternal(
+            vscode.Uri.parse(texraGuideUrl(page, anchor)),
+          ),
         ),
       ),
     openCustomAgentDirectory: Effect.gen(function* () {
@@ -604,12 +606,7 @@ export const createExtensionHostRequests = Effect.fn(
       ),
       openPath: openExportPath,
       latexPreamble,
-      traceViewerTemplate: path.join(
-        options.extensionPath,
-        'resources',
-        'traceViewer',
-        'index.html',
-      ),
+      resourcesPath: path.join(options.extensionPath, 'resources'),
     },
   };
 });

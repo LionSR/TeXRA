@@ -262,7 +262,7 @@ export const DocumentExtractTool = defineTool({
     // the workspace this run belongs to.
     const replaced = replacementEngine.applyAll(
       end?.output.response ?? '',
-      (key) => docs.deps.roots.config.get(key),
+      docs.deps.roots.config,
     );
     yield* logReplacementDiagnostics(replaced.diagnostics);
     const reply = replaced.text;

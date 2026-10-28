@@ -46,6 +46,7 @@ import {
   LAUNCH_FILE_LISTS,
 } from '@ui/copy/fileSelectConfigs';
 import { designTokens } from '@ui/styles';
+import { texraGuideUrl } from '@ui/copy/guide';
 import {
   renderIconActionButton,
   renderIconActionButtonParts,
@@ -217,7 +218,7 @@ export class ProgressApp extends LitElement {
           ${
             error._tag === 'Rejected' && error.docsPage
               ? html`<a
-                  href=${`https://texra.ai/guide/${error.docsPage}`}
+                  href=${texraGuideUrl(error.docsPage)}
                   target="_blank"
                   rel="noopener noreferrer"
                   >Read the file management guide</a

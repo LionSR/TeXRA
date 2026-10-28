@@ -43,7 +43,6 @@
   "packages/texra/src/controllers/session/webviewSessionLayer.ts": 1,
   "packages/texra/src/controllers/settingsView/LatexToolingController.ts": 1,
   "packages/texra/src/controllers/settingsView/SettingsAgentCatalogController.ts": 1,
-  "packages/texra/src/latex/latexdiff/diffFileProcessor.ts": 1,
   "packages/texra/src/shared/highlighting/hljs.ts": 1,
   "packages/texra/src/shared/plugins/documentOutputs.ts": 1,
   "packages/texra/src/tools/agentCliShared.ts": 1,

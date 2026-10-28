@@ -54,7 +54,7 @@ import {
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { agentTool } from '@tools/delegation/AgentTool';
 import { executeSubagentInBand } from '@tools/delegation/inBandSubagentRun';
-import { generateRunId, generateShortId } from '@utils/core';
+import { generateRunId } from '@utils/core';
 
 /** The parent's model, which its children inherit: the validation model
  *  answers it, and the host's OpenAI key makes it available. It is not the
@@ -87,7 +87,7 @@ const delegateReview = (parent: Parent, prompt = 'Check the proof.') =>
       Effect.provide(
         nativeToolTestLayer({
           // The child's run id derives from the call's id.
-          callId: `call-${generateShortId()}`,
+          callId: `call-${crypto.randomUUID()}`,
           run: {
             runId: parent.runId,
             session: parent.session,
