@@ -327,7 +327,6 @@ export interface ScriptedRunInit {
   readonly mediaFiles?: readonly string[];
   /** Absent means the launch had no transcript row to write. */
   readonly initialUserMessage?: string | undefined;
-  readonly onIdle?: () => void;
 }
 
 export function agentRunTestLayer(init: ScriptedRunInit) {
@@ -353,7 +352,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
           ...testRunTools(installedHost().roots, tools),
           finalToolName: init.finalToolName ?? null,
-          callbacks: init.onIdle ? { onIdle: init.onIdle } : {},
+          callbacks: {},
           entry: {
             parent: init.parentRunId ?? null,
             registration: null,

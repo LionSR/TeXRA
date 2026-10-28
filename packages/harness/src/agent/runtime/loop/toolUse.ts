@@ -436,8 +436,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             const step = yield* openStep(state, 'park');
             if (step.rows.length > 0) state = yield* cell.append(step.rows);
           }
-          // Every wait is idle, a failed turn's too: a resume acks the first.
-          run.callbacks.onIdle?.();
           if (run.toolPolicy.stopAfterCycle) {
             return finish(
               state,
@@ -470,8 +468,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // barrier lets the open streams `waiting` closes count every one.
         yield* session.log.settled;
         // The turn boundary, in one batch: Stop hooks, the steps (`waiting`
-        // closes open streams), a child's turn result with its parent's
-        // delivery, and a Stop hook's block or input already queued.
+        // closes open streams and is the rest a resume's receipt reads), a
+        // child's turn result with its parent's delivery, and a Stop hook's
+        // block or input already queued.
         const { rows: hooks, block } = yield* stopHooks(run, turn, response);
         const goesOn =
           !run.toolPolicy.stopAfterCycle && turn.outcome === 'completed';
@@ -495,8 +494,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 rows: [...hooks, ...ending, ...(pin?.rows ?? [])],
                 alongside: childTurn?.alongside,
               })).state;
-        // A turn's end is idle even when it took its next input with it.
-        if (next !== null) run.callbacks.onIdle?.();
         if (turn.outcome === 'completed') {
           const cost = state.usage.totalCost;
           run.callbacks.onProgress?.({
