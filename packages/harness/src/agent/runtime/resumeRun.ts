@@ -24,6 +24,7 @@ import {
 } from '@shared/schemas';
 import { DatabaseRowEarlier, heldElsewhereBy } from '@shared/session/database';
 import { RunHistoryRefused } from '@shared/session/runHistory';
+import { lastActivationCommit } from '@shared/session/runFacts';
 import { FOLLOW_UP_TYPES, runRowsFrom } from '@shared/session/runRows';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
@@ -147,10 +148,10 @@ export const resumeOwnRun = Effect.fn('resumeOwnRun')(function* (
       if (heldBy !== null) return { failed: 'owned_elsewhere' } as const;
       // Joined at the activation the resume committed: the latest.
       const id = qualifyAggregateId('run', runId);
-      const activation = (yield* session.log.rows(id, ['run.activate'])).at(-1);
-      if (activation === undefined)
+      const commit = lastActivationCommit(yield* session.log.rows(id), runId);
+      if (commit === undefined)
         return yield* Effect.die(new Error(`Run ${runId} has no activation.`));
-      yield* hook(runId, activation.commit);
+      yield* hook(runId, commit);
       return result;
     }),
   );

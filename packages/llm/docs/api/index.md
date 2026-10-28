@@ -2,6 +2,32 @@
 
 <!-- Generated from `packages/llm/src/index.ts` by `npm run docgen`; do not edit. -->
 
+Browser-safe entry of `@texra-ai/llm`: the turn contract, model and provider
+catalogs, route decisions, reasoning selection, turn cost, and `ModelError`.
+
+> **Guide:** Read [Model Layer (`@texra-ai/llm`)](/api/model-layer) for how
+> catalog selection, route resolution, `prepareTurn` / `streamTurn`, and
+> `ModelError` work together.
+
+### Key exports by role
+
+- **Turn contract**: [`Model`](#model) (`prepareTurn`, `streamTurn`),
+  [`TurnRequest`](#turnrequest) ([`TurnRequestSchema`](#turnrequestschema)),
+  [`ResolvedTurn`](#resolvedturn), [`TurnEvent`](#turnevent),
+  [`TurnResult`](#turnresult), and [`completedTurn`](#completedturn).
+- **Model & provider catalogs**: [`selectModel`](#selectmodel),
+  [`MODEL_PROVIDER_PLUGINS`](#model_provider_plugins),
+  [`decideModelRoute`](#decidemodelroute),
+  [`resolveRouteEndpoint`](#resolverouteendpoint),
+  [`RouteFacts`](#routefacts) ([`OWN_KEY_ROUTE_FACTS`](#own_key_route_facts)),
+  [`chooseReasoning`](#choosereasoning), and [`turnCost`](#turncost).
+- **Structured failures & credentials**: [`ModelError`](#modelerror),
+  [`ModelErrorFields`](#modelerrorfields), and
+  [`CredentialStore`](#credentialstore).
+
+Binding a model to its wire protocol (`bindModel`) and running subscription
+OAuth flows live in [`@texra-ai/llm/node`](./node).
+
 ## acceptedEfforts
 
 The effort values a route may send for a model: the levels it accepts
@@ -284,17 +310,6 @@ function decideModelRoute(
   config: ModelConfig,
   facts: RouteDecisionFacts,
 ): ModelRoute
-```
-
-## defaultReasoningLevel
-
-The level a run uses for this model when nothing names one: `none` when it
-does not think by default, `undefined` when it thinks without levels.
-
-```ts
-function defaultReasoningLevel(
-  config: Pick<ModelConfig, 'label' | 'reasoning' | 'modes'>,
-): ReasoningEffort | undefined
 ```
 
 ## EndpointProviderId
@@ -653,14 +668,6 @@ type PreparedHistoryEntry =
     };
 ```
 
-## PreparedHistorySchema
-
-The history a turn sends, under the prepared-history rules.
-
-```ts
-const PreparedHistorySchema: $Array<Union<readonly [Struct<{ readonly role: Literal<"user">; readonly content: $Array<Union<readonly [Struct<{ readonly kind: Literal<"text">; readonly text: String; }>, Struct<{ readonly mimeType: String; readonly base64: String; readonly kind: Literal<"image">; readonly detail: optional<Literals<readonly ["low", "medium", "high", "ultra-high"]>>; }>, Struct<{ readonly mimeType: String; readonly base64: String; readonly kind: Literals<readonly ["audio", "video", "document"]>; }>]>>; }>, Struct<{ readonly role: Literal<"assistant">; readonly origin: NullOr<Struct<{ readonly requestedModel: String; readonly deployment: Struct<{ readonly endpoint: String; readonly credentialScope: String; }>; readonly protocol: Literals<readonly ["google-interactions", "openai-responses", "anthropic-messages"]>; readonly codecVersion: Literal<1>; }>>; readonly content: $Array<Union<readonly [Struct<{ readonly kind: Literal<"message">; readonly content: $Array<Union<readonly [Struct<{ readonly kind: Literal<"text">; readonly text: String; }>, Struct<{ readonly kind: Literal<"refusal">; readonly text: String; }>]>>; readonly evidence: optional<Struct<{ readonly kind: Literal<"openai-responses-message">; readonly itemId: String; readonly status: Literals<readonly ["completed", "incomplete"]>; readonly phase: optional<NullOr<Literals<readonly ["commentary", "final_answer"]>>>; }>>; }>, Struct<{ readonly kind: Literal<"reasoning">; readonly summary: $Array<Struct<{ readonly kind: Literal<"text">; readonly text: String; }>>; readonly content: optional<$Array<Struct<{ readonly kind: Literal<"text">; readonly text: String; }>>>; readonly evidence: NullOr<Union<readonly [Struct<{ readonly kind: Literal<"google-interactions-thought-signature">; readonly signature: String; }>, Struct<{ readonly kind: Literal<"openai-responses-reasoning">; readonly itemId: String; readonly encryptedContent: optional<NullOr<String>>; readonly status: optional<Literals<readonly ["completed", "incomplete"]>>; }>, Struct<{ readonly kind: Literal<"anthropic-thinking-signature">; readonly signature: String; }>, Struct<{ readonly kind: Literal<"anthropic-redacted-thinking">; readonly data: String; }>]>>; }>, Struct<{ readonly kind: Literal<"local-call">; readonly providerCallId: String; readonly name: String; readonly argumentsText: String; readonly evidence: optional<Struct<{ readonly kind: Literal<"openai-responses-function-call">; readonly itemId: optional<String>; readonly status: optional<Literal<"completed">>; }>>; }>]>>; }>, Struct<{ readonly role: Literal<"tool">; readonly results: $Array<Struct<{ readonly callOrdinal: Int; readonly status: Literals<readonly ["success", "error"]>; readonly content: $Array<Union<readonly [Struct<{ readonly kind: Literal<"text">; readonly text: String; }>, Struct<{ readonly mimeType: String; readonly base64: String; readonly kind: Literal<"image">; readonly detail: optional<Literals<readonly ["low", "medium", "high", "ultra-high"]>>; }>, Struct<{ readonly mimeType: String; readonly base64: String; readonly kind: Literals<readonly ["audio", "video", "document"]>; }>]>>; }>>; }>, Struct<{ readonly role: Literal<"system">; readonly text: String; }>]>>
-```
-
 ## providerDisplayName
 
 A provider's own name, the one people know it by, falling back to the id
@@ -939,14 +946,6 @@ The model and reasoning request a stored model string names, or `undefined` when
 function selectModel(id: string): SelectedModel | undefined
 ```
 
-## systemUpdateText
-
-A mid-conversation system message as the user text any protocol takes.
-
-```ts
-const systemUpdateText: (text: string) => string
-```
-
 ## turnCost
 
 The cost of one turn, never negative. A plan route (ChatGPT/Codex, Grok,
@@ -1043,21 +1042,4 @@ function wireEffort(
   config: ModelConfig,
   reasoning: ReasoningChoice,
 ): ReasoningEffort | null
-```
-
-## zeroCostAccessOverrides
-
-The config fields of a route billed by subscription, not per token, over
-the context window the caller resolved for that route. A covered route
-bills no tier either: a long-prompt or fast-tier rate left on the config
-would price a request the subscription paid for.
-
-```ts
-function zeroCostAccessOverrides(contextWindow: number): {
-  readonly inputPrice: 0;
-  readonly outputPrice: 0;
-  readonly contextWindow: number;
-  readonly longContextPricing: undefined;
-  readonly tiers: undefined;
-}
 ```

@@ -55,7 +55,7 @@ small because internal interfaces change often (`AGENTS.md` "Testing
 discipline"). Flag a missing test only when the pull request fixes a
 reproduced defect and ships without its regression test. One
 repository convention is worth enforcing on changed TypeScript lines: the
-modern-TypeScript patterns in `AGENTS.md` ("ES2023+ Patterns") — `node:`
+modern-TypeScript patterns in `AGENTS.md` ("Code style") — `node:`
 prefixed builtin imports, `.toSorted()` over spread-then-sort, `for...of`
 (with `.entries()`) over index loops, `.findLast()`/`.toReversed()` over
 backwards loops. Flag only regressions newly introduced by this pull request,

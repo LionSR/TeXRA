@@ -338,7 +338,8 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     turn: null,
     followUpSupport: event.userFollowUpSupport,
     context: null,
-    parentId: event.parent === null ? null : event.parent.id,
+    parentId: event.parent?.id ?? null,
+    launchParentId: event.parent?.id ?? null,
     forkedFrom:
       event.provenance?.kind === 'fork'
         ? { id: event.provenance.from.id, at: event.provenance.at }
@@ -766,8 +767,7 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
     case 'child.park':
       run = movePhase(u, run, event.phase !== 'resumed', event.at);
       return { ...run, substate: parkSubstate(event) };
-    case 'run.detach':
-      // The parent edge is cut; a run never gets a new parent.
+    case 'run.detach': // the attached parent goes; the launch parent stays
       return run.parentId === null ? run : { ...run, parentId: null };
     case 'run.description':
       // A user's title stands until the user renames again: the next AI

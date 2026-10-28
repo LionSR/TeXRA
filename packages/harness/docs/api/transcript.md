@@ -2,6 +2,45 @@
 
 <!-- Generated from `packages/harness/src/transcriptEntry.ts` by `npm run docgen`; do not edit. -->
 
+Browser-safe transcript row projections and cross-process view
+synchronization for UI renderers (CLI TUI, VS Code webviews, desktop
+renderer, and static trace viewer).
+
+> **Guide:** Read [Views, Transcripts & Renderers](/api/views-and-transcripts)
+> for how `SessionView`, `RemoteSessionView`, and `TranscriptRow` fit
+> together, with end-to-end rendering examples.
+
+### Key exports by role
+
+- **Cross-process view synchronization**: [`RemoteSessionView`](#remotesessionview)
+  and [`SessionInputs`](#sessioninputs) keep a renderer's `SessionView` in
+  sync across an IPC or message transport using ordered event batches
+  ([`CommitOrdinalSchema`](#commitordinalschema),
+  [`EventInputSchema`](#eventinputschema)), live stream chunks
+  ([`TextChunkSchema`](#textchunkschema)), runtime liveness updates
+  ([`LocalRuntimeStateSchema`](#localruntimestateschema)), existence checks
+  ([`ExistenceReconciliationSchema`](#existencereconciliationschema)), and
+  transcript subscriptions
+  ([`TranscriptSubscriptionSchema`](#transcriptsubscriptionschema)).
+- **Transcript row union**: [`TranscriptRow`](#transcriptrow) (with shared
+  fields on [`TranscriptRowBase`](#transcriptrowbase)) discriminates on
+  `kind` across [`UserRow`](#userrow),
+  [`StreamingTextRow`](#streamingtextrow), [`ToolRow`](#toolrow),
+  [`CompactionActivityRow`](#compactionactivityrow),
+  [`ContextManagementRow`](#contextmanagementrow),
+  [`WebSearchRow`](#websearchrow), [`ErrorRow`](#errorrow),
+  [`FileListRow`](#filelistrow), [`LogRow`](#logrow), and
+  [`ProgressStatusRow`](#progressstatusrow).
+- **Structured tool cards**: [`ToolRowModel`](#toolrowmodel) and
+  [`ToolSection`](#toolsection) (`ToolStatusSection`, `ToolBadgesSection`,
+  `ToolDiffSection`, `ToolCodeSection`, `ToolTextSection`, `ToolFileSection`,
+  `ToolFileListSection`, `ToolFileGroupsSection`) structure tool inputs and
+  outputs without custom per-tool UI parsing.
+- **Text budgets & headlines**: [`rowHeadline`](#rowheadline),
+  [`transcriptText`](#transcripttext), [`elideText`](#elidetext), and
+  [`TextBudget`](#textbudget) format and truncate row text for terminal and
+  compact UIs.
+
 ## BASH_TOOL_DEFAULT_TIMEOUT_MS
 
 Default `bash` tool timeout (ms) when the model omits `timeout`.
@@ -120,7 +159,6 @@ interface ContextManagementRow extends TranscriptRowBase {
   /** `Compacted`, `Cleared tool uses`, … */
   readonly label: string;
   readonly items: readonly StatItem[];
-  readonly summary?: TranscriptText;
 }
 ```
 

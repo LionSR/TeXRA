@@ -275,7 +275,7 @@ export const fakeHostAgentDirectories: AgentDirectoriesPort = {
 
 /** The process services a fake host provides to a program, and the
  *  installed runtime's session owner, which a root launch asks. */
-export type FakeProcessServices = ProcessServices | SessionOwner;
+type FakeProcessServices = ProcessServices | SessionOwner;
 
 type FakeProcessServicesLayer = Layer.Layer<FakeProcessServices>;
 

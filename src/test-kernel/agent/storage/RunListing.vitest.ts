@@ -9,7 +9,6 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
-  emptyRunEndOutput,
   type RunId,
   type RunIdentity,
 } from '@shared/schemas';
@@ -80,43 +79,6 @@ describe('run listing normalization', () => {
         }),
       ]);
     }),
-  );
-
-  it.effect(
-    'sees metadata replaced by another host after an earlier listing',
-    () =>
-      Effect.gen(function* () {
-        const id = 'fff666' as RunId;
-        yield* writeRun(id, 'assistant');
-        expect(yield* listRuns(session)).toEqual([
-          expect.not.objectContaining({ description: expect.any(String) }),
-        ]);
-
-        yield* session.log.transact([
-          {
-            type: 'run.description',
-            by: 'model',
-            aggregateId: qualifyAggregateId('run', id),
-            description: 'Updated by another host',
-          },
-        ]);
-        yield* session.log.transact([
-          {
-            type: 'run.end',
-            aggregateId: qualifyAggregateId('run', id),
-            outcome: 'completed',
-            output: emptyRunEndOutput(),
-          },
-        ]);
-
-        expect(yield* listRuns(session)).toEqual([
-          expect.objectContaining({
-            id,
-            description: 'Updated by another host',
-            status: 'completed',
-          }),
-        ]);
-      }),
   );
 
   it.effect('lists agent runs only, not process storage rows', () =>

@@ -1,12 +1,12 @@
 # TeXRA Review Checklist
 
-Targeted greps + concrete fixes. Pair with the design rules in `CLAUDE.md` ("Separation of concerns: VS Code coupling", "Schemas (Effect Schema)", "Design guardrails") and their full patterns in `AGENTS.md` (Effect Schema Patterns, Flattening abstraction layers, Discouraged factory patterns, UI anti-patterns) — don't restate those; consult them when the diff lands in their territory.
+Targeted greps + concrete fixes. Pair with the design rules in `AGENTS.md` ("Separation of concerns: VS Code coupling", "Effect Schema Patterns", "Design guardrails", including its Flattening abstraction layers, Discouraged factory patterns and UI anti-patterns rules) — don't restate those; consult them when the diff lands in their territory.
 
 For a diff under `packages/cli/`, also load the **texra-cli** skill: the TUI has rendering invariants (Static scrollback ownership, live-region scope, resize repaint, headless parity) that no generic pass will catch.
 
 ## 1. Platform decoupling (highest-signal)
 
-The full zone list lives in `CLAUDE.md` → "Separation of concerns: VS Code coupling". Run these greps on the diff:
+The full zone list lives in `AGENTS.md` → "Separation of concerns: VS Code coupling". Run these greps on the diff:
 
 - **`grep -nE "from ['\"]vscode['\"]"`** in every directory of `VSCODE_FREE_ZONE_DIRS` (`eslint.config.mjs`). Any hit is a finding.
 - **New `from '@agent/*'` imports in `packages/harness/src/shared/`** → finding. `packages/harness/src/shared/` is for wire contracts and UI-shared message types; host-neutral orchestration belongs under `packages/harness/src/controllers/`.
@@ -19,7 +19,7 @@ The full zone list lives in `CLAUDE.md` → "Separation of concerns: VS Code cou
 
 ## 2. Effect Schema correctness
 
-Design rules in `AGENTS.md` → "Effect Schema Patterns" (including "Schemas as the single source of truth"; compat rules in "Compatibility and format retirement"; summary in `CLAUDE.md` → "Schemas (Effect Schema)"). Greps for the diff:
+Design rules in `AGENTS.md` → "Effect Schema Patterns" (compat rules in "Compatibility and format retirement"). Greps for the diff:
 
 - **Tool input schemas using `Schema.optional(S)`** instead of `Schema.optional(Schema.NullOr(S))` (breaks DeepSeek/Kimi/etc. structured output). At use sites, check for `=== undefined` (should be `== null`).
 - **A second schema library**: any `zod` import, `z.`, or `Data.TaggedError` (errors are `Schema.TaggedError`).
@@ -34,14 +34,14 @@ Design rules in `AGENTS.md` → "Effect Schema Patterns" (including "Schemas as 
 - **A second copy of the conversation** held by a loop, a service, or a test helper instead of the `RunState` that `RunCell.append` returns → the live and resume paths must stay one function (`packages/harness/AGENTS.md` "Run loop architecture").
 - **A side effect before its row**: a model request before its `attempt` row, a tool dispatched before its `response` row commits, a tool body that starts before its `tool.intent` (or an intent committed before the guard and approval, which turns a crash there into a false "did it run?"), a wait without a `run.position`, a fact the loop branches on held only in memory instead of on the row that records it.
 - **Lifecycle leak**: agent init/finalize logic appearing inside the loops. `executeAgent` / `AgentRunLifecycle` own lifecycle; the loops execute and fail typed.
-- **Retry outside `ModelInvoker`** (a `p-retry` around a model call, a provider SDK retry re-enabled, a hand-rolled prompt loop) → the two owners live in the invoker only.
+- **A retry outside the one retry loop** (a `p-retry` around a model call, a provider SDK retry re-enabled, a hand-rolled prompt loop) → every model call retries in `runInvocation` (`packages/harness/src/agent/runtime/run/invocation.ts`).
 - **Plain `console.log` or untagged `logger.info` in agent flows** → use `AgentTrace` (`@agent/trace`) for grouped, tool-use-aware channels; log elsewhere with `Effect.log*` on a channel named by `withLogChannel` (`@logger/effectLog`).
 - **Log payloads built by string interpolation** (file lists, missing outputs, latexdiff results, usage stats) → pass via the structured `data` argument so the progress view can render them.
 - **Commands invoking flow factories directly** → must launch via `session.runs.launch({ request, options })` (`packages/harness/src/agent/runtime/runRegistry.ts`) so the run gets a `runId`, is registered in storage, and session filters and resume actions stay coherent. `executeAgent` is correct only when the caller already owns the `runId` (subagent dispatch, resume paths); a resume goes through `resumeToolUseFromResumeData`.
 
 ## 4. Configuration, storage, files
 
-- **Inline config strings** sprinkled across modules → use the typed accessors over the stores the caller already holds: the `ConfigProvider`'s own `config.get(path)` for a raw path, `Settings.get(stores, key)`/`Settings.set(stores, key, value)` (`packages/harness/src/shared/config/settings.ts`, public from `@texra-ai/harness`) for a setting modeled in the settings catalog, or the provider itself when you need `update`/`inspect` (there is no `platform().config`). `Settings` defaults to the `vscode` host slot and read global scope only for `configTarget: 'global'` rows — see `packages/harness/AGENTS.md` "Configuration, storage, and workspace files" before swapping one accessor for the other on an existing call site, and prefer `applyStateSettingUpdate` (`packages/texra/src/shared/settingsView/handlers/stateSettingWrite.ts`) over a bare `Settings.set` for any write a settings UI can reach. Verify a catalog key exists against its owner's rows (`packages/harness/src/shared/state/stateSettings.ts` for the harness, `packages/texra/src/shared/settingsView/texraSettings.ts` for TeXRA, a plugin's `settings`), not `package.json`'s `contributes.configuration` — the extension manifest intentionally contributes no configuration block (see CLAUDE.md's "Layout" section and `scripts/sync-package-contributes.mjs`).
+- **Inline config strings** sprinkled across modules → use the typed accessors over the stores the caller already holds: the `ConfigProvider`'s own `config.get(path)` for a raw path, `Settings.get(stores, key)`/`Settings.set(stores, key, value)` (`packages/harness/src/shared/config/settings.ts`, public from `@texra-ai/harness`) for a setting modeled in the settings catalog, or the provider itself when you need `update`/`inspect` (there is no `platform().config`). `Settings` reads a `configTarget: 'global'` row from global scope only; see `packages/harness/AGENTS.md` "Configuration, storage, and workspace files" before swapping one accessor for the other on an existing call site, and prefer `applyStateSettingUpdate` (`packages/texra/src/shared/settingsView/handlers/stateSettingWrite.ts`) over a bare `Settings.set` for any write a settings UI can reach. Verify a catalog key exists against its owner's rows (`packages/harness/src/shared/state/stateSettings.ts` for the harness, `packages/texra/src/shared/settingsView/texraSettings.ts` for TeXRA, a plugin's `settings`), not `package.json`'s `contributes.configuration` — the extension manifest intentionally contributes no configuration block (see `AGENTS.md` "Layout" and `scripts/sync-package-contributes.mjs`).
 - **Manual workspace path joining** → `workspaceAbsolutePath` / `workspaceRelativePath` / `locateInWorkspace` in `@utils/files/workspaceFS`, each a pure function of the root the caller passes.
 - **Pasted-image paths** generated/resolved manually → `pastedImageUtils`.
 
@@ -50,7 +50,7 @@ Design rules in `AGENTS.md` → "Effect Schema Patterns" (including "Schemas as 
 `AGENTS.md` → "UI anti-patterns" already lists the anti-patterns. Greps for the diff:
 
 - **`Date.now()` or synthetic IDs inside render functions** → move ID/timestamp creation to the producer.
-- **Lit components mutating shared state** → dispatch typed request events (see `packages/extension/src/AGENTS.md` "Webview Consistency Patterns").
+- **Lit components mutating shared state** → dispatch typed request events (see `packages/extension/src/AGENTS.md` "Webviews").
 - **Direct DOM manipulation alongside Lit components** → extend the existing component instead.
 - **Webview providers/handlers not composing `BundledViewContentProvider` for HTML generation** (`packages/extension/src/common/webview/`), or a new view inventing message-dispatch machinery instead of following `settingsView`'s owned-dispatch pattern (`SettingsViewMessageHandler`) or `progressView`'s typed host requests.
 - **String literals for webview commands** → constants in `packages/texra/src/shared/ipc.ts` (`SETTINGS_VIEW_COMMANDS`).
@@ -61,7 +61,7 @@ Design rules in `AGENTS.md` → "Effect Schema Patterns" (including "Schemas as 
 
 - **Ad-hoc `vscode.window.showErrorMessage`** → `showLoggedErrorMessage` / `showLoggedMessageWithDocs` from `packages/extension/src/frontend/ui/errorHandlingUtils.ts`.
 - **Swallowed errors** (`catch {}` / `catch (_) {}`) without a comment explaining why.
-- **`instanceof Error`** narrowing where the standard helpers above apply.
+- **Hand-rolled `instanceof Error` narrowing** → `toErrorMessage` / `ensureError` (`@utils/errors/errorMessage`).
 
 ## 7. Bash, exec, and security
 
@@ -89,7 +89,7 @@ Design rules in `AGENTS.md` → "Effect Schema Patterns" (including "Schemas as 
 
 - **Shared mutable state held across `await`** → race risk; capture locals before `await`.
 - **Webview disposes that don't unregister listeners / FS watchers** → leak.
-- **Long-running model handlers / tool calls without `signal.aborted` checks** between awaits.
+- **An `AbortSignal` threaded through Effect code** → cancellation is fiber interruption; a promise-based subprocess takes the signal `Effect.tryPromise` hands its thunk.
 
 ## 11. Compatibility and exhaustiveness
 
@@ -98,7 +98,7 @@ Design rules in `AGENTS.md` → "Effect Schema Patterns" (including "Schemas as 
 
 ## 12. Modern TypeScript (ES2023)
 
-Full pattern list with examples in `AGENTS.md` → "ES2023+ Patterns". Greps for the diff:
+Full pattern list in `AGENTS.md` → "Code style". Greps for the diff:
 
 - **Bare Node builtin imports** — `grep -nE "from '(assert|buffer|child_process|crypto|events|fs|fs/promises|module|os|path|url|util)'"` → use the `node:` prefix (`from 'node:path'`). The whole repo is unified on it.
 - **`[...arr].sort(` / `.slice().sort(`** on a true array → `.toSorted()`. Keep the spread when copying out of a `Set` or `Map.entries()`.
@@ -112,11 +112,11 @@ Full pattern list with examples in `AGENTS.md` → "ES2023+ Patterns". Greps for
 
 ## 13. Abstraction-cost guardrails (2026-07 calibration)
 
-Standing rules from the 2026-07 tech-debt re-calibration, which found that a run of "reduction" PRs quietly re-accumulated abstraction cost: 22 PRs pitched as reductions netted **+5,046 production LoC**, with 18 of 22 net-positive — the "Refactor-LOC lesson" at scale. Evidence base: `2026-07-03-tech-debt-audit.md`. Apply these whenever a PR adds a port/facade/projector/strategy/template-method, or is titled `refactor:` / `simplify:` / `consolidate` / `dedupe` / `extract`:
+A 2026-07 audit found 22 PRs pitched as reductions netted +5,046 production LoC. Apply these whenever a PR adds a port/facade/projector/strategy/template-method, or is titled `refactor:` / `simplify:` / `consolidate` / `dedupe` / `extract`:
 
 - **Build implies delete in the same PR.** A new port/facade/projector/strategy/template-method merges only if it deletes the path it replaces in that same PR. Deferral is allowed only with a ledger row **and** a concrete removal-trigger issue that is a merge-blocker for the next stage.
 - **No leapfrogging a migration.** A staged migration may not merge stage N+1 scaffolding while stage N's deletion issue is still open.
-- **Net-positive-LOC "reductions" need a reason.** Reject a PR titled `refactor:`/`simplify:`/`consolidate`/`dedupe`/`extract` that grows LoC unless it (a) deletes an old path, (b) collapses to a genuine ≥2-caller helper, or (c) trades LoC for a `CLAUDE.md`-mandated type-safety win (e.g. a discriminated union with `assertNever`). The PR body must state the actual `git diff --stat origin/main` net LoC and justify any positive number.
+- **Net-positive-LOC "reductions" need a reason.** Reject a PR titled `refactor:`/`simplify:`/`consolidate`/`dedupe`/`extract` that grows LoC unless it (a) deletes an old path, (b) collapses to a genuine ≥2-caller helper, or (c) trades LoC for a type-safety win the repo rules require (e.g. a discriminated union with `assertNever`). The PR body must state the actual `git diff --stat origin/main` net LoC and justify any positive number.
 - **No trivial-identity or single-caller extractions.** Grep the caller count before approving any new shared helper — one caller is not DRY. Extends `AGENTS.md` → "Discouraged factory patterns".
 - **Don't reward activity.** A program/migration that opens more follow-up issues than it retires pauses further building until its tail closes.
 
@@ -133,7 +133,7 @@ These rules (R1, R5-R8) are owned here; the 2026-07-07 note they came from is re
 
 ## 15. Error-handling and fallback discipline (2026-07 audit)
 
-Standing rules from the 2026-07 error-handling audit: 880 catch sites read across six scopes, ~87% legitimate; the 115 masking sites concentrate in silent decoding defaults on persisted data, per-call-site "best-effort" re-derivation, and defaulted reads feeding destructive rewrites. On persisted data this section **overrides** §2's `Schema.catch(default)` idiom. End-state companion: "Catch budget" in [`.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md`](../../../../.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md). Apply whenever a diff adds `catch`, `.catch(`, a `catchDecoding`, a `resolve*`/`derive*`/`infer*`/`ensure*`/`fallback*` function, or a `??`/`||`/try-else chain over data sources.
+Standing rules from the 2026-07 error-handling audit: 880 catch sites read across six scopes, ~87% legitimate; the 115 masking sites concentrate in silent decoding defaults on persisted data, per-call-site "best-effort" re-derivation, and defaulted reads feeding destructive rewrites. On persisted data this section **overrides** §2's `catchDecoding` idiom. End-state companion: "Catch budget" in [`.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md`](../../../../.agents/docs/implemented/architecture/2026-06-10-error-pipeline-and-ownership.md). Apply whenever a diff adds `catch`, `.catch(`, a `catchDecoding`, a `resolve*`/`derive*`/`infer*`/`ensure*`/`fallback*` function, or a `??`/`||`/try-else chain over data sources.
 
 **Taxonomy.** Every new catch/fallback/resolver must classify, stated in the PR or self-evident at the site. Legitimate: **L1** boundary guard (host command/entry handler, run-lifecycle/listener fan-out, process exit); **L2** cleanup (`finally`, dispose-on-error, saga compensation); **L3** documented best-effort side write (comment required, never run-critical); **L4** provider/IO boundary with a single classifier (`normalizeProviderError`, `classifyAgentError`); **L5** decide-once precedence owner (`decideRunModel`, `deriveResumability`). Masking (flag): **M1** catch-and-continue in core logic; **M2** silent swallow; **M3** silent decoding default on persisted/parsed data; **M4** fallback chain with no decided owner; **M5** re-derive resolver; **M6** defensive wrapper around code that cannot throw.
 
@@ -147,9 +147,9 @@ Standing rules from the 2026-07 error-handling audit: 880 catch sites read acros
 - **Fire-and-forget writes get exactly one logging rejection owner.** A chain-keep-alive `.catch(() => {})` on a write queue is legal only paired with one shared observer that logs the rejection.
 - **Cleaner-solutions menu** (the fix names which it uses): decode-at-entry (a schema at the boundary, canonical thereafter); decide-once-carry-as-data; result types (`{ok}|{error}`) in core with one throw boundary; define-errors-out-of-existence (make the invalid state unrepresentable); loud read (warn + surface the cause); single classifier boundary; delete-the-guard (let it crash to an existing L1/L4 boundary).
 
-## 16. Code quality rules (2026-07 simplification campaign)
+## 16. Code quality rules
 
-Concrete rules earned from the 2026-07 whole-repo simplification campaign. Full rationale and evidence lives in `AGENTS.md` → "Code quality rules"; don't restate it in review comments, just check for it.
+The rules live in `AGENTS.md` → "Design guardrails" and "Effect"; check for them, don't restate them in review comments.
 
 - **New exports need a consumer in the same PR.** `rg "exportedSymbol" packages/` for any newly exported symbol; zero outside hits is a finding. Search every package, not just the defining one — a harness export consumed only from another package through an alias (e.g. `@shared`, `@utils`, `@agent`) is still live. Sharpens §8's "dead exports" grep from a cleanup pass into a pre-merge gate.
 - **No undocumented convenience barrels.** A new or modified index/barrel re-export file is a finding unless it documents a real external public surface, its consumers, and its door policy (precedent: the trace events SDK contract).
@@ -158,7 +158,7 @@ Concrete rules earned from the 2026-07 whole-repo simplification campaign. Full 
 - **Local fakes need justification.** A local fake for a platform port that already has a shared fake in `src/test-kernel/support/` needs a one-line comment naming the capability gap.
 - **Registrations need a consumer.** Global registration (component, command, provider) needs an external surface that actually references it; internal-only usage imports locally.
 - **No new bare module-level mutable singletons in tested code.** Flag module-level `let`/mutable object state that tests would need to reset between runs; it needs an injectable, resettable handle instead.
-- **Async serialization goes through Effect.** A new `chain = chain.then(...)` promise-chain, a `Map` of chained promises, or new `p-queue` use for one-at-a-time execution is a finding; use Effect concurrency primitives or `withPerKeyLane` (`packages/harness/src/utils/core/perKeyQueue.ts`) per `AGENTS.md` → "Code quality rules".
+- **Async serialization goes through Effect.** A new `chain = chain.then(...)` promise-chain, a `Map` of chained promises, or new `p-queue` use for one-at-a-time execution is a finding; use Effect concurrency primitives or `withPerKeyLane` (`packages/harness/src/utils/core/perKeyQueue.ts`).
 
 ## Final pass
 

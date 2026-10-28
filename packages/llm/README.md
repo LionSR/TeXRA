@@ -25,11 +25,14 @@ npm install @texra-ai/llm effect
 dependencies. A binding loads only its own protocol's SDK, on demand.
 OpenAI's runtime is bundled, so `openai` is not installed.
 
+A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) that an
+Anthropic API key can spend once you link a Console organization to the plan.
+
 ## Example
 
 Pick a catalog model, decide its route, bind it, and run one turn. Here the
 key is read from the environment. The runnable version of this program,
-[`packages/harness/example/llm.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/llm.ts),
+[`packages/harness/example/01-llm-turn.ts`](https://github.com/LionSR/TeXRA/blob/main/packages/harness/example/01-llm-turn.ts),
 passes a `fetch` that answers 401, so it needs no key.
 
 ```ts

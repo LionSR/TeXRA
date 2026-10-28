@@ -1,4 +1,29 @@
-export { AgentConfigSchema } from '@shared/schemas';
+/**
+ * Browser-safe Effect Schemas, derived types, and pure read helpers for
+ * `@texra-ai/harness`.
+ *
+ * > **Guide:** Read [Views, Transcripts & Renderers](/api/views-and-transcripts)
+ * > and [Durable Protocol & Recovery](/api/durable-protocol) for how views,
+ * > runtime requests, and approval policies work.
+ *
+ * - **Session & run views**: [`SessionView`](#sessionview), [`RunView`](#runview),
+ *   [`TranscriptView`](#transcriptview), [`PendingRequest`](#pendingrequest),
+ *   and pure queries ([`acceptsFollowUp`](#acceptsfollowup),
+ *   [`attentionOf`](#attentionof), [`sessionActivity`](#sessionactivity),
+ *   [`isLiveRun`](#isliverun), [`isWorkingRun`](#isworkingrun),
+ *   [`descendantRuns`](#descendantruns), [`runActionRefusal`](#runactionrefusal)).
+ * - **Commands & approvals**: [`RuntimeRequestSchema`](#runtimerequestschema)
+ *   ([`RuntimeRequest`](#runtimerequest)), [`RequestDecision`](#requestdecision),
+ *   [`OutcomeSchema`](#outcomeschema), [`RequestErrorSchema`](#requesterrorschema),
+ *   [`ApprovalPolicySchema`](#approvalpolicyschema), [`resolveBypass`](#resolvebypass).
+ * - **Agent definitions & run outcomes**: [`AgentConfigSchema`](#agentconfigschema),
+ *   [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
+ *   [`RunEndResult`](#runendresult), [`RunIdSchema`](#runidschema),
+ *   [`RunOutcomeSchema`](#runoutcomeschema).
+ * - **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
+ *   [`configTreeRows`](#configtreerows), [`GlobalStateKey`](#globalstatekey),
+ *   [`WorkspaceStateKey`](#workspacestatekey), [`TraceDocumentSchema`](#tracedocumentschema).
+ */
 export type {
   AgentConfig,
   AgentConfigPayload,
@@ -7,64 +32,12 @@ export type {
 // and its JSON with the fields its category hides dropped.
 export type { RunRecord } from '@agent/core/definition/RunRecord';
 export { serializeFilteredConfig } from '@tools/executions/configView';
-export { InlinePersonaSchema } from '@shared/schemas';
-export type { InlinePersona, Persona } from '@shared/schemas';
-// The payloads `RuntimePresentationEventPayloads` (root) names, one per
-// notice a session's runs ask a host to present.
-export type {
-  FileLocation,
-  InstructionAction,
-  RequestEnsureProgressViewPayload,
-  RequestOpenFilePayload,
-  RequestShowErrorPayload,
-  RequestShowInstructionPayload,
-  ShowAgentConfigBannerPayload,
-} from '@shared/schemas';
 // `RunEndResult` comes from its own module so declaration emit does not pull
 // the provider SDK types in (the leak check in `scripts/validate-artifacts.mjs`).
 export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
-export {
-  AgentSourceSchema,
-  RunIdSchema,
-  isRunId,
-  RUN_OUTCOME,
-  RunOutcomeSchema,
-} from '@shared/schemas';
 // A fresh run id, for a caller that names a run before a session launches it.
 export { generateRunId } from '@utils/core';
-export type {
-  AgentConfigInput,
-  AgentSource,
-  RunId,
-  RunOutcome,
-} from '@shared/schemas';
-// Who an agent is: its source, the key a catalog names it by, and whether
-// it ships with an installed package; and the actions an instruction offers.
-export {
-  AGENT_SOURCE,
-  agentKey,
-  INSTRUCTION_ACTION,
-  isPackagedAgentSource,
-} from '@shared/schemas';
-// A session's events as a renderer reads them: the listing each belongs to,
-// the aggregates it names, and a run's display name.
-export {
-  listingTypeOf,
-  qualifyAggregateId,
-  referencedAggregates,
-  runIdentityDisplayName,
-} from '@shared/schemas';
-export type { DisplaySessionEvent } from '@shared/schemas';
-// The card a plugin's tool states for its own call (an external agent's
-// patch, thread or turn), in the section kinds every renderer paints.
-export { ToolCardSchema } from '@shared/schemas';
-export type { ToolCard } from '@shared/schemas';
-// The route a request's usage is billed through: a subscription plan, or
-// the user's API key.
-export type { UsageRoute } from '@shared/schemas';
-// Why a model option can or cannot run, as a picker shows it.
-export type { ModelAvailabilityKind } from '@shared/schemas';
 // The subscriptions a model call can route through, and each one's switch
 // and sign-in names.
 export {
@@ -122,7 +95,9 @@ export type {
 // owners, run facts, tool definitions and results, log and transcript
 // payloads, follow-ups and requests.
 export type {
+  AgentConfigInput,
   AgentProposal,
+  AgentSource,
   AggregateKind,
   AttachedMemoryMiss,
   CompactionActivityData,
@@ -130,12 +105,17 @@ export type {
   ContextManagementData,
   DeclinableUsageRoute,
   DispatchFacts,
+  DisplaySessionEvent,
   ErrorLogData,
   ExhaustionReason,
+  ExternalFileLocation,
   FileListEntry,
+  FileLocation,
   FollowUpContent,
   FollowUpSender,
   HookEvent,
+  InlinePersona,
+  InstructionAction,
   JsonValue,
   LoadedMediaMetadata,
   LocalRuntimeState,
@@ -143,24 +123,41 @@ export type {
   LogLevel,
   MediaAttachmentKind,
   MessageType,
+  ModelAvailabilityKind,
   ModelBackend,
   NormalizedToolUse,
-  OfferedTool,
   OwnerId,
   OwnerLiveness,
   PermissionPayload,
+  Persona,
   ProposalFileGroup,
+  RequestEnsureProgressViewPayload,
+  RequestOpenFilePayload,
+  RequestShowErrorPayload,
+  RequestShowInstructionPayload,
   ResultMeta,
   ResumeRefusal,
+  RunAction,
+  RunId,
   RunIdentity,
+  RunLifecycleStatus,
+  RunOutcome,
+  RunPhase,
+  RunStorageFileLocation,
   ScriptDeliverySummary,
   SessionEvent,
   SessionEventDraft,
+  ShowAgentConfigBannerPayload,
+  TaskGroup,
+  TaskGroupStatus,
   ToolCallStatus,
+  ToolCard,
   ToolDefinition,
   ToolEditPermission,
   ToolFact,
   ToolUseLog,
+  UsageRoute,
+  WorkspaceFileLocation,
 } from '@shared/schemas';
 // Where a run's lifecycle status stands: in flight (running, or waiting for
 // its next input), active, ended, or settled enough for its transcript.
@@ -168,17 +165,6 @@ export {
   RUN_STATUS_KEYS,
   type RunStatusKey,
 } from '@shared/runs/runStatusDisplay';
-export type {
-  ExternalFileLocation,
-  RunAction,
-  RunLifecycleStatus,
-  RunPhase,
-  RunStorageFileLocation,
-  TaskGroup,
-  TaskGroupStatus,
-  UserFollowUpSupport,
-  WorkspaceFileLocation,
-} from '@shared/schemas';
 export {
   isActivePhase,
   isInFlightPhase,
@@ -215,7 +201,6 @@ export {
 export {
   Cancelled,
   formatHunkLines,
-  Internal,
   Invalid,
   NotOwner,
   OutcomeSchema,
@@ -223,7 +208,6 @@ export {
   RequestErrorSchema,
   RuntimeRequestSchema,
   ToolEditContentSchema,
-  Unavailable,
   type RequestError,
   type RuntimeRequest,
   type ToolEditContent,
@@ -242,7 +226,6 @@ export {
   formatError,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
-export { safeParseJson } from '@common/parsing/safeParseJson';
 // An exported run (`assembleTrace`), as a static viewer parses it back.
 export {
   readTraceFacts,
@@ -293,10 +276,16 @@ export {
 // Escaping for an XML or HTML attribute value and for element text.
 export { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
-// Agents (names, keys, scan issues, team presets) and picker rows.
+// Agents, request payloads, inquiry turns, harness setting keys, skills, and run outputs.
 export {
+  type ActiveSkillSourceScope,
+  ActiveSkillSourceScopeSchema,
   AGENT_MODE_PRESETS,
+  AGENT_SKILLS_CONFIG_KEY,
+  AGENT_SOURCE,
+  AgentConfigSchema,
   agentFileName,
+  agentKey,
   agentKeyOf,
   agentMatchesIdentifier,
   type AgentModePreset,
@@ -304,51 +293,92 @@ export {
   agentName,
   type AgentOptionData,
   AgentOptionDataSchema,
+  type AgentProposalPermission,
   type AgentScanIssue,
   AgentScanIssueSchema,
-  DEFAULT_WORKFLOW_AGENT,
-  isModelOptionAvailable,
-  MODEL_AVAILABILITY_STATUS,
-  ModelAvailabilityFieldsSchema,
-  type ModelOptionData,
-  ModelOptionDataSchema,
-  parseAgentModePresets,
-  STARTER_AGENT_MODE_PRESET,
-  type TeamOptionData,
-  TeamOptionDataSchema,
-  type WorkspaceAgentsSelection,
-} from '@shared/schemas';
-// Request payloads, inquiry turns, harness setting keys, and skills.
-export {
-  type ActiveSkillSourceScope,
-  ActiveSkillSourceScopeSchema,
-  AGENT_SKILLS_CONFIG_KEY,
-  type AgentProposalPermission,
+  AgentSourceSchema,
   type AnsweredInquiryTurn,
   BASH_APPROVAL_CONFIG_KEY,
   type BashPermission,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
+  type ContextStateData,
   CredentialSwitchSchema,
+  DEFAULT_WORKFLOW_AGENT,
+  type DiffStats,
+  DiffStatsSchema,
+  emptyRunEndOutput,
   type ExternalInquiryPermission,
   ExternalInquiryTurnRecordSchema,
+  fileLocationAddressPath,
+  fileLocationDisplayPath,
+  FileLocationSchema,
+  fileLocationShortDisplayPath,
+  getProposalFileGroups,
   GOAL_MAX_COST_SETTING,
+  InlinePersonaSchema,
   type InquiryThreadId,
   InquiryThreadIdSchema,
   InstalledPluginSchema,
+  INSTRUCTION_ACTION,
+  isEmptyUsage,
+  isLoopDriven,
+  isModelOptionAvailable,
+  isPackagedAgentSource,
+  isRunId,
+  isTaskConfig,
+  JsonValueSchema,
+  LineCountSchema,
+  listingTypeOf,
+  type McpToolOutput,
+  MESSAGE_TYPES,
+  MODEL_AVAILABILITY_STATUS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  ModelAvailabilityFieldsSchema,
+  type ModelOptionData,
+  ModelOptionDataSchema,
+  NullableFileFieldsSchema,
   type OpenInquiryTurn,
+  ownerIdentity,
+  parseAgentModePresets,
+  type Plan,
   type PlanApprovalPermission,
+  planSummaryLine,
+  type ProgressPermissionKind,
+  type ProposalFileFields,
+  qualifyAggregateId,
+  recipeBlockOf,
+  referencedAggregates,
   type RequestDecision,
+  requestParksItsCaller,
   RESUME_ON_OPEN_SETTING,
   type RetryPermission,
+  RUN_LIFECYCLE_READY,
+  RUN_OUTCOME,
+  RUN_PHASE,
+  RUN_SUBSTATE,
+  type RunEndOutput,
+  RunEndSchema,
+  runIdentityDisplayName,
+  runIdentityName,
+  RunIdSchema,
+  RunOutcomeSchema,
+  RunRecordFieldsSchema,
+  runStorageFilePath,
   type SkillDisplayIssue,
   SkillDisplayIssueSchema,
   type SkillDisplayItem,
   SkillDisplayItemSchema,
   SkillNameSchema,
+  STARTER_AGENT_MODE_PRESET,
+  sumUsageStats,
+  type TeamOptionData,
+  TeamOptionDataSchema,
+  toJsonValue,
+  type TokenUsageStats,
+  TOOL_CALL_STATUS,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
   ToolEditPermissionSchema,
   type UserQuestionAnswers,
@@ -356,44 +386,6 @@ export {
   type UserQuestionPermission,
   type UserQuestionPrompt,
   UserQuestionPromptSchema,
-} from '@shared/schemas';
-// Runs and what they produce: phases, records, plans, files and usage.
-export {
-  type ContextStateData,
-  type DiffStats,
-  DiffStatsSchema,
-  emptyRunEndOutput,
-  fileLocationAddressPath,
-  fileLocationDisplayPath,
-  FileLocationSchema,
-  fileLocationShortDisplayPath,
-  getProposalFileGroups,
-  isEmptyUsage,
-  isLoopDriven,
-  isTaskConfig,
-  JsonValueSchema,
-  LineCountSchema,
-  type McpToolOutput,
-  MESSAGE_TYPES,
-  NullableFileFieldsSchema,
-  ownerIdentity,
-  type Plan,
-  planSummaryLine,
-  type ProgressPermissionKind,
-  type ProposalFileFields,
-  recipeBlockOf,
-  requestParksItsCaller,
-  RUN_LIFECYCLE_READY,
-  RUN_PHASE,
-  RUN_SUBSTATE,
-  type RunEndOutput,
-  RunEndSchema,
-  runIdentityName,
-  RunRecordFieldsSchema,
-  runStorageFilePath,
-  sumUsageStats,
-  toJsonValue,
-  type TokenUsageStats,
-  TOOL_CALL_STATUS,
+  type WorkspaceAgentsSelection,
   type WorktreeInfo,
 } from '@shared/schemas';

@@ -631,7 +631,7 @@ const localRules = {
 export default tseslint.config(
   // Global ignores specified in the old config
   {
-    ignores: ['dist/', '**/*.d.{ts,mts}'],
+    ignores: ['dist/', '**/*.d.{ts,mts}', 'packages/harness/example/**'],
   },
 
   // Apply ESLint recommended rules globally

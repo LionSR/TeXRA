@@ -1,120 +1,71 @@
 # LaTeX tooling
 
-Host-neutral LaTeX domain logic: compiling, parsing, diffing, and fetching
-documents. No file here imports `vscode`; host wiring (commands, UI prompts)
-stays in the extension/desktop/CLI layers and reaches this code through typed
-ports (see `overleafClone.ts`) rather than the other way around.
+Host-neutral LaTeX logic: compiling, parsing, diffing and fetching documents.
+Nothing here imports `vscode`; host workflows reach it through typed ports, as
+`overleafClone.ts` does, so the decision logic stays host-agnostic and
+testable.
 
-## The subsystem is Effect-native
+## Effect-native
 
-The subprocess-and-filesystem lane — `texcount.ts`, `latexdiff.ts` and
-`latexdiff/`, the three extractors, `overleafClone.ts`, `arxivProcessor.ts`
-and `LatexMediaManager.ts` — returns `Effect` programs, not Promises. Two
-consequences worth knowing before you touch a file here:
+The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
+`latexdiff/`, the extractors, `overleafClone.ts`, `arxivProcessor.ts`,
+`LatexMediaManager.ts`) returns `Effect` programs:
 
-- **Nothing in this directory runs a fiber.** A caller runs the program at
-  its own boundary: a tool's `execute()`, a VS Code command, a desktop
-  request handler, or a CLI command. ESLint's
-  `no-restricted-syntax` rule on `Effect.run*` fails a run added here.
-- **Cancellation is interruption, not a threaded `AbortSignal`.** `texcount`
-  and the latexdiff executors spawn their subprocess inside
-  `Effect.tryPromise`, whose thunk receives the signal that aborts when the
-  running fiber is interrupted. Do not add a `signal` parameter to a function
-  here so a caller can pass one down.
+- **Nothing here runs a fiber.** The caller runs the program at its boundary
+  (a tool's `execute()`, a VS Code command, a desktop handler, a CLI command).
+  A new function converts together with its callers up to such a boundary; a
+  Promise → Effect → Promise sandwich is rejected.
+- **Cancellation is interruption.** Subprocesses spawn inside
+  `Effect.tryPromise`, whose thunk gets a signal that aborts when the fiber is
+  interrupted. Do not add a `signal` parameter.
+- **Diagnostics are `Effect.log*`** under a channel named once with
+  `withLogChannel`; tests assert on the sink's entries
+  (`@test/support/logSinkCapture`). `Debug` entries below the host's
+  `MinimumLogLevel` are dropped (the CLI shows them with `--verbose`).
+  `LatexMediaManager`'s `LatexTrace` is the run's product trace, not logging.
 
-- **Diagnostics are `Effect.log*`.** A program names its
-  channel once with `withLogChannel` from `@logger/effectLog` and every entry
-  below it inherits that channel, so no helper takes a channel parameter just
-  to log. Every producer ends at the same host sink, so a test asserts on the
-  entries the sink received (`@test/support/logSinkCapture`) rather than on a
-  logger-namespace spy. One consequence to know: the Effect logger drops
-  `Debug` entries below the host's `MinimumLogLevel` (the CLI shows them
-  only with `--verbose`). `LatexMediaManager`'s
-  injected `LatexTrace` is not this — that is the run's product trace and
-  stays as it is (migration PRD, R9).
+## Files
 
-A new function in this directory converts together with its callers up to one
-of those boundaries, or it waits — a Promise → Effect → Promise sandwich is
-rejected in review (migration PRD, execution rule 1).
-
-The files have distinct roles:
-
-- **Compilation** — `texTools.ts` builds the kpathsea search path and runs
-  `compileLatex2Pdf`; `latexToolchain.ts` lists the core CLI tools TeXRA
-  depends on, checked against `@texra/shared/constants/latexToolchain`'s SSOT by a
-  type-level membership check — it catches a renamed/removed shared tool, not
-  a new one added there that this list doesn't yet cover; `latexLogging.ts`
-  defines the shared log channel that `texcount.ts` and the `formatter/`
-  backends log under. `latexdiff.ts`'s `LaTeXdiffService` instead takes a
-  caller-supplied channel (agent runs use their stream id; desktop and the
-  tool-approval preview use their own) — only the extension's own latexdiff
-  command group reuses this shared channel.
-- **Content extraction** — `extractFigure.ts` pulls figure paths out of LaTeX
-  source; `extractBibliography.ts` extracts bibliography-file references and
-  citation keys from the source (`extractBibliographyContext`) and separately
-  loads the actual entries from those referenced `.bib` files
-  (`loadBibliographyEntries`) — the two stages have different inputs, don't
-  conflate them. `extractFileDependencies.ts` resolves
-  `\input`/`\include`/`\bibliography`/`\addbibresource` targets, plus a
-  `\usepackage` whose `.sty` sits beside the file, so
-  `LatexMediaManager` can mirror them into run storage.
-  `latexParsingUtils.ts` holds comment-stripping (shared by all three
-  extractors above) and the bibliography-directive matching that
-  `extractBibliography.ts` and `extractFileDependencies.ts` specifically share
-  — add new shared parsing there rather than duplicating it in an extractor.
-  `labelSearch.ts` scans files for a
-  `\label{}` definition. `criticismParser.ts` parses `\criticize{}` review
-  annotations (the counterpart that strips them lives in
-  `replacement/advanced.ts`, both built on the same shared brace-balanced
-  macro scanner).
-- **Output processing** — `texraResponseTextProcessing.ts` is the LaTeX-owned
-  policy for cleaning up and joining a model's continued LaTeX output; the
-  agent runtime only supplies the connector strategy. `texcount.ts` shells out
-  to `texcount` for word/character counts. `latexdiff.ts` defines
-  `LaTeXdiffService`, which executes a single diff (invokes the command,
-  writes and post-processes the output) in its direct/VC/per-round/
-  between-round forms; the `latexdiff/` subdirectory below adds full-run
-  discovery and operation planning around it, not the execution itself.
-- **Media and file management** — `LatexMediaManager.ts` compiles PDFs and
-  mirrors figure dependencies into run storage, and returns the media it
-  produced to the caller (the manager itself holds only a logger and the
-  run's file service, no state);
-  `TikzPictureManager.ts` extracts and renders standalone TikZ pictures;
-  `acceptedFileTarget.ts` resolves where an
-  accepted/edited file should land and commits the replacement.
-- **Remote sources** — `arxivIdentifier.ts` normalizes an arXiv ID out of a
-  URL or bare string; `arxivProcessor.ts` downloads and unpacks arXiv source
-  archives. `overleafProject.ts` is the pure, host-neutral parsing and
-  credential/URL derivation for an Overleaf git remote; `overleafClone.ts` is
-  the workflow built on top of it (precondition checks, clone execution,
-  auth-failure handling — it clears the bad token and reports the failure,
-  it does not retry the clone itself) — new Overleaf logic that doesn't need
-  I/O belongs in `overleafProject.ts`, not `overleafClone.ts`.
+- **Compilation**: `texTools.ts` (kpathsea search path, `compileLatex2Pdf`);
+  `latexToolchain.ts` (the CLI tools TeXRA needs, type-checked against
+  `@texra/shared/constants/latexToolchain`, which catches a removed tool but
+  not a missing new one); `latexLogging.ts` (the shared channel for
+  `texcount.ts`, `formatter/` and the extension's latexdiff commands; other
+  `LaTeXdiffService` callers pass their own).
+- **Extraction**: `extractFigure.ts` (figure paths); `extractBibliography.ts`
+  (bibliography references and citation keys from source, then entries from
+  the `.bib` files: two stages with different inputs);
+  `extractFileDependencies.ts` (`\input`, `\include`, bibliography targets and
+  local `.sty` files, for `LatexMediaManager` to mirror);
+  `latexParsingUtils.ts` (comment stripping and bibliography-directive
+  matching shared by the extractors; put new shared parsing here);
+  `labelSearch.ts` (`\label{}` lookup); `criticismParser.ts` (`\criticize{}`
+  annotations; `replacement/advanced.ts` strips them with the same macro
+  scanner).
+- **Output**: `texraResponseTextProcessing.ts` (cleaning and joining a model's
+  continued LaTeX output); `texcount.ts` (word counts); `latexdiff.ts`
+  (`LaTeXdiffService`: one diff in its direct, VC, per-round or between-round
+  form).
+- **Media and files**: `LatexMediaManager.ts` (compiles PDFs and mirrors
+  figure dependencies into run storage; stateless); `TikzPictureManager.ts`
+  (standalone TikZ rendering); `acceptedFileTarget.ts` (where an accepted file
+  lands, and the write).
+- **Remote sources**: `arxivIdentifier.ts` and `arxivProcessor.ts` (arXiv IDs
+  and source archives); `overleafProject.ts` (pure parsing and URL and
+  credential derivation for an Overleaf remote; I/O-free Overleaf logic goes
+  here) and `overleafClone.ts` (the clone workflow; on an auth failure it
+  clears the token and reports, without retrying).
 
 ## Subdirectories
 
-- **`formatter/`** — the local-formatter backends `latexindentpt.ts` (runs
-  `latexindent`) and `texfmt.ts` (runs `tex-fmt`) wrap, `texFormatter.ts`
-  resolves which one a workspace setting selects and runs it, and
-  `indentDirectory.ts` applies it across a whole directory.
-- **`latexdiff/`** — full-run discovery and operation planning around
-  `LaTeXdiffService`. `diffOperations.ts` (`runLatexdiffForRun`) is the
-  host-neutral entry point the VS Code command and the desktop stream-toolbar
-  action call (the CLI's latexdiff workflow instead goes through the agent's
-  own `LatexDiffManager`, which uses `LaTeXdiffService` directly). Hosts
-  pass the run's `rounds` (`runOutputFiles(view, runId)`) to
-  `runLatexdiffForRun`, which builds and dispatches the diff operations through `LaTeXdiffService.runDiff` and
-  `diffCommandExecutor.ts`, naming
-  output files with `diffFileNameManager.ts` (the math markup mode is the
-  `texra.latexdiff.mathMarkup` catalog row). `diffFileProcessor.ts` is the post-processor
-  `LaTeXdiffService` itself calls after generating a direct or VC diff, to
-  restore flattened bibliography directives and sanitize latexdiff's
-  `\DIFadd`/`\DIFdel` markup. `types.ts` holds the types those
-  pieces share, and
-  `latexdiffCopy.ts` the user-facing outcome strings both host commands print
-  so they can't disagree on wording.
-
-New parsing helpers that more than one extractor needs belong in
-`latexParsingUtils.ts`; new host-facing workflows should take their side
-effects through a ports interface the way `overleafClone.ts` does, so the
-decision logic stays unit-testable and host-agnostic.
+- **`formatter/`**: `latexindentpt.ts` (`latexindent`) and `texfmt.ts`
+  (`tex-fmt`) backends, `texFormatter.ts` (picks one from the workspace
+  setting), `indentDirectory.ts` (a whole directory).
+- **`latexdiff/`**: whole-run diffing around `LaTeXdiffService`.
+  `diffOperations.ts` (`runLatexdiffForRun`) is the entry the VS Code command
+  and the desktop toolbar call with the run's rounds (`runOutputFiles`); the
+  CLI goes through the agent's `LatexDiffManager` instead.
+  `diffCommandExecutor.ts` runs the operations, `diffFileNameManager.ts` names
+  outputs, `diffFileProcessor.ts` post-processes a direct or VC diff (restores
+  bibliography directives, sanitizes `\DIFadd`/`\DIFdel`), `latexdiffCopy.ts`
+  holds the outcome strings both hosts print, and `types.ts` the shared types.

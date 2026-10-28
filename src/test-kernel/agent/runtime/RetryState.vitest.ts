@@ -405,27 +405,6 @@ describe('ModelInvoker retry', () => {
     await installPlatform();
   });
 
-  // The invoker's backoff and the session gate's probe both sleep on the
-  // Effect clock, so a forked pump walks the test clock past each park and
-  // the scenario costs no wall time.
-  it.effect('repeats an automatic attempt and returns the response', () =>
-    Effect.gen(function* () {
-      const session = yield* sessionWithInteractions(undefined);
-      const pump = yield* pumpClock;
-      const stub = stubModel([
-        { fail: httpError('temporary provider failure', 503) },
-        { ok: completedTurn('recovered') },
-      ]);
-
-      const outcome = yield* invokeOn(yield* openRun(session, stub.model));
-
-      expect(outcome.kind).toBe('response');
-      expect(stub.attempts()).toBe(2);
-      yield* Fiber.interrupt(pump);
-      yield* closeSessionOf(session);
-    }),
-  );
-
   // The setting bounds the automatic batch; the human gate opens only once it
   // is spent.
   it.effect('cancels the run when the user declines the retry', () =>

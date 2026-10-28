@@ -223,8 +223,9 @@ Verify on a throwaway tag before the first real preview of a train:
 
 ## Changelog content rules
 
-Focus on user-visible changes. Full rules in AGENTS.md "Changelog Guidelines";
-the ones most often gotten wrong:
+Cover user-visible features and fixes in plain language, grouped into
+Features, Bug Fixes, and (rarely) Breaking Changes. The rules most often
+gotten wrong:
 
 - Describe the net difference from the previous released version, not the
   sequence of commits made during development.

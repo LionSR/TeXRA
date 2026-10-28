@@ -5,7 +5,7 @@ import { Deferred, Effect, PubSub, Stream } from 'effect';
  * credentials, workspace-file writes). Not for run/session progress
  * events — those extend `AgentEvent` (`agent/trace/`) or the `SessionEvent`
  * schema (`shared/schemas/sessionEvent.ts`), per the event-channel rule in
- * CLAUDE.md.
+ * the harness AGENTS.md.
  *
  * Delivery and error order, which this module owns and no caller may vary:
  *

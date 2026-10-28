@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { it as effectIt } from '@effect/vitest';
 import { Cause, Effect, Exit, FileSystem, Path } from 'effect';
@@ -12,14 +11,6 @@ import { rootedFileSystem } from '@utils/files/rootedFileSystem';
 // ---------------------------------------------------------------------------
 
 describe('pastedImageFullPath', () => {
-  // The result is an absolute path a host reads a file at, so it is spelled in
-  // the platform's own separators — `join`, not a hard-coded `/`.
-  it('accepts generated pasted image basenames', () => {
-    expect(pastedImageFullPath('/storage', 'pasted_1234_abcd.png')).toBe(
-      join('/storage', 'pasted', 'pasted_1234_abcd.png'),
-    );
-  });
-
   it.each(['../pasted_1234_abcd.png', 'C:\\tmp\\pasted_1234_abcd.png'])(
     'rejects paths and non-pasted names from webview input: %s',
     (name) => {

@@ -242,33 +242,17 @@ export const fingerprint = Effect.fn('agent.fingerprint')(function* (
  * The runs whose completed calls a call may reuse: the run that issued
  * the `script` call, and the background script runs it launched. A call of
  * a background script's run reaches its parent and its siblings this way.
- * Both are read from each script's `run.start`, which a detach leaves as
- * it was, so a script the person kept running stays in the scope.
+ * Both follow each script's launch parent, which a detach leaves as it
+ * was, so a script the person kept running stays in the scope.
  */
 const reuseScope = Effect.fn('agent.reuseScope')(function* (call: RunToolCall) {
   const { session, runId } = call.run;
   const view = yield* session.view.read([]);
-  const launchParentOf = (id: RunId) =>
-    Effect.map(session.log.records(id), (rows) => {
-      const start = rows.find((row) => row.type === 'run.start');
-      return start?.type === 'run.start' ? (start.parent?.id ?? null) : null;
-    });
+  const self = view.runs.get(runId);
   const root =
-    view.runs.get(runId)?.identity.kind === 'script'
-      ? ((yield* launchParentOf(runId)) ?? runId)
-      : runId;
-  // A run never gets a new parent, so only a detached script, top level
-  // in the view, needs its `run.start` read to say whether `root` launched it.
-  const scripts = yield* Effect.filter(
-    [...view.runs.values()].filter(
-      (run) =>
-        run.identity.kind === 'script' &&
-        (run.parentId === root || run.parentId === null),
-    ),
-    (run) =>
-      run.parentId === root
-        ? Effect.succeed(true)
-        : Effect.map(launchParentOf(run.id), (parent) => parent === root),
+    self?.identity.kind === 'script' ? (self.launchParentId ?? runId) : runId;
+  const scripts = [...view.runs.values()].filter(
+    (run) => run.identity.kind === 'script' && run.launchParentId === root,
   );
   return [root, ...scripts.map((run) => run.id)];
 });

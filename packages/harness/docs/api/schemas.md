@@ -2,6 +2,31 @@
 
 <!-- Generated from `packages/harness/src/schemas.ts` by `npm run docgen`; do not edit. -->
 
+Browser-safe Effect Schemas, derived types, and pure read helpers for
+`@texra-ai/harness`.
+
+> **Guide:** Read [Views, Transcripts & Renderers](/api/views-and-transcripts)
+> and [Durable Protocol & Recovery](/api/durable-protocol) for how views,
+> runtime requests, and approval policies work.
+
+- **Session & run views**: [`SessionView`](#sessionview), [`RunView`](#runview),
+  [`TranscriptView`](#transcriptview), [`PendingRequest`](#pendingrequest),
+  and pure queries ([`acceptsFollowUp`](#acceptsfollowup),
+  [`attentionOf`](#attentionof), [`sessionActivity`](#sessionactivity),
+  [`isLiveRun`](#isliverun), [`isWorkingRun`](#isworkingrun),
+  [`descendantRuns`](#descendantruns), [`runActionRefusal`](#runactionrefusal)).
+- **Commands & approvals**: [`RuntimeRequestSchema`](#runtimerequestschema)
+  ([`RuntimeRequest`](#runtimerequest)), [`RequestDecision`](#requestdecision),
+  [`OutcomeSchema`](#outcomeschema), [`RequestErrorSchema`](#requesterrorschema),
+  [`ApprovalPolicySchema`](#approvalpolicyschema), [`resolveBypass`](#resolvebypass).
+- **Agent definitions & run outcomes**: [`AgentConfigSchema`](#agentconfigschema),
+  [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
+  [`RunEndResult`](#runendresult), [`RunIdSchema`](#runidschema),
+  [`RunOutcomeSchema`](#runoutcomeschema).
+- **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
+  [`configTreeRows`](#configtreerows), [`GlobalStateKey`](#globalstatekey),
+  [`WorkspaceStateKey`](#workspacestatekey), [`TraceDocumentSchema`](#tracedocumentschema).
+
 ## acceptsFollowUp
 
 Whether a run takes a follow-up at all, the one rule every host reads (it
@@ -1014,17 +1039,6 @@ type InstructionAction =
   (typeof INSTRUCTION_ACTION)[keyof typeof INSTRUCTION_ACTION];
 ```
 
-## Internal
-
-A handler died. The cause is in the host log under `ref` (the request
-id); the surface hears that the request failed, never the text.
-
-```ts
-class Internal extends Schema.TaggedError<Internal>()('Internal', {
-  ref: Schema.String,
-})
-```
-
 ## Invalid
 
 The request could not be parsed: a bridge's answer, never the runtime's.
@@ -1406,12 +1420,6 @@ Used by AgentConfig where `editedFile` may be null.
 
 ```ts
 const NullableFileFieldsSchema: Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; }>
-```
-
-## OfferedTool
-
-```ts
-type OfferedTool = typeof OfferedToolSchema.Type;
 ```
 
 ## OpenInquiryTurn
@@ -2148,21 +2156,6 @@ type RunView = ReadonlyDeep<
 >;
 ```
 
-## safeParseJson
-
-Parse JSON text without throwing.
-
-Returns a `Result.Success<unknown>` with the parsed value typed as
-`unknown` (the honest type for untrusted text), or a `Result.Failure<Error>`
-carrying the `SyntaxError` raised by `JSON.parse`. Use this instead of a
-bare `JSON.parse(...)` wrapped in try/catch. Branch with
-`Result.isSuccess` / `Result.isFailure`, or chain with `Result.map` /
-`Result.flatMap` / `Result.getOrElse`.
-
-```ts
-function safeParseJson(text: string): Result.Result<unknown, Error>
-```
-
 ## ScriptDeliverySummary
 
 ```ts
@@ -2653,17 +2646,6 @@ A card a tool states itself (`ToolCardSchema`).
 type ToolCard = typeof ToolCardSchema.Type;
 ```
 
-## ToolCardSchema
-
-A card a tool states itself instead of one the fold derives from its tool
-name: what a plugin reporting an external agent's work (a patch, a thread,
-a turn) shows. Plain data in the generic section kinds every renderer
-already paints, so the fold stays plugin-agnostic.
-
-```ts
-const ToolCardSchema: Struct<{ readonly title: String; readonly sections: $Array<Union<readonly [Struct<{ readonly kind: Literal<"text">; readonly label: String; readonly text: String; }>, Struct<{ readonly kind: Literal<"status">; readonly label: String; readonly status: String; }>, Struct<{ readonly kind: Literal<"identifier">; readonly label: String; readonly value: String; }>, Struct<{ readonly kind: Literal<"badges">; readonly label: String; readonly badges: $Array<String>; }>, Struct<{ readonly kind: Literal<"fileList">; readonly label: String; readonly files: $Array<Struct<{ readonly path: String; readonly note: optional<String>; }>>; }>]>>; }>
-```
-
 ## ToolDefinition
 
 Tool definition type - derived from schema
@@ -2785,30 +2767,12 @@ split surrogates and no torn emoji.
 function truncateWithEllipsis(text: string, maxLen: number): string
 ```
 
-## Unavailable
-
-The stream, request, or run the request names is gone or not in a state
-that can take it.
-
-```ts
-class Unavailable extends Schema.TaggedError<Unavailable>()(
-  'Unavailable',
-  { runId: RunIdSchema, reason: Schema.String },
-)
-```
-
 ## UsageRoute
 
 The route a request's usage is billed through.
 
 ```ts
 type UsageRoute = typeof UsageRouteSchema.Type;
-```
-
-## UserFollowUpSupport
-
-```ts
-type UserFollowUpSupport = typeof UserFollowUpSupportSchema.Type;
 ```
 
 ## UserQuestionAnswers

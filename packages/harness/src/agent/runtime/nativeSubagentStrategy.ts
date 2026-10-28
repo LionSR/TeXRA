@@ -34,8 +34,6 @@ export interface ChildRunLaunchOptions {
   /** The launching run: the child's parent edge. */
   readonly parentRunId: RunId;
   readonly session: SessionHandle;
-  /** The child's admission (`ExecuteAgentOptions.onAdmitted`). */
-  readonly onAdmitted?: ExecuteAgentOptions['onAdmitted'];
   /** The history a fresh child is born on: a fork's (`forkSeed`). */
   readonly seed?: RegisterRunOptions['seed'];
 }
@@ -107,7 +105,6 @@ export function createNativeSubagentStrategy(
           const executeOptions: Omit<ExecuteAgentOptions, 'registration'> = {
             ...params.resume?.options,
             session: params.session,
-            onAdmitted: params.onAdmitted,
             onProgress: notify,
             ...(params.inBand === true && { stopAfterCycle: true }),
             turns: {

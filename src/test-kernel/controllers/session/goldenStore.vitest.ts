@@ -259,7 +259,7 @@ describe('the golden 1.0 store', () => {
                 : [],
             ),
           ),
-        ]).toEqual(['openai/gpt-5.6-sol', 'google/gemini-3.8-flash']);
+        ]).toEqual(['openai/gpt-5.6-sol', 'google/gemini-3.8-flash@medium']);
         // Each request is a queued control, consumed in the batch that applies
         // it: the switch's `run.config` (no edit), then the compaction's edit,
         // right after its consumption.
@@ -465,7 +465,7 @@ describe('the golden 1.0 store', () => {
         openAttempt: false,
       });
       expect((yield* runHistory.load(CHAT))?.modelId).toBe(
-        'google/gemini-3.8-flash',
+        'google/gemini-3.8-flash@medium',
       );
     }).pipe(
       Effect.provide(graph(storage)),
