@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
+import { withSessionFs } from '@texra-ai/harness';
 import { MemoryStore } from '@texra-ai/harness/plugins';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -9,7 +10,6 @@ import {
   formatCliMemoryList,
   formatCliMemoryPreview,
   loadCliMemoryDetail,
-  runCliMemory,
 } from '../runtime/memory';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -25,7 +25,7 @@ function runMemoryList(context: CliContext) {
     // Pass the full list to `formatCliMemoryList`; it owns truncation (the
     // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
     // consumers should see every memory, not a capped slice.
-    const items = yield* runCliMemory(services.roots, MemoryStore.list);
+    const items = yield* withSessionFs(services.roots, MemoryStore.list);
 
     emitCliResult(context, {
       json: items,
@@ -39,7 +39,7 @@ function runMemoryList(context: CliContext) {
 function runMemoryShow(context: CliContext, inputPath: string) {
   return Effect.gen(function* () {
     const services = yield* initCliPlatform(context);
-    const record = yield* runCliMemory(
+    const record = yield* withSessionFs(
       services.roots,
       loadCliMemoryDetail(inputPath),
     );
