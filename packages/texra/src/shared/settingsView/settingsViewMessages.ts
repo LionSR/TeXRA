@@ -79,7 +79,7 @@ const SetTabMessageSchema = Schema.Struct({
  * catalog rows (`profile`, `models`); those arms still declare their own shape
  * below or in their own module.
  */
-export const DERIVED_SETTINGS_SNAPSHOTS = [
+export const DERIVED_SETTINGS_SNAPSHOTS = Object.freeze([
   'agents',
   'approval',
   'git-author',
@@ -87,7 +87,7 @@ export const DERIVED_SETTINGS_SNAPSHOTS = [
   'telemetry',
   'latex',
   'memory',
-] as const satisfies readonly SettingsViewSnapshot[];
+] as const satisfies readonly SettingsViewSnapshot[]);
 
 /** A snapshot whose whole payload is derived from the settings catalog. */
 export type DerivedSettingsSnapshot =
