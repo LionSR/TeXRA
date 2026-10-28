@@ -55,6 +55,9 @@ const TRACE_HANDOVER_EVENTS = 512;
 interface TraceHandover {
   /** The launch's tap: every trace event, from the run's first. */
   readonly offer: (event: AgentEvent) => void;
+  /** The launch joined a resume already in flight: its tap started partway
+   *  through the activation, so every reader replays. */
+  readonly joined: () => void;
   /** End the trace with the run's exit, dropping what nobody read. */
   readonly settle: (
     exit: Exit.Exit<RunEndResult, RunFailure>,
@@ -98,6 +101,10 @@ const traceHandover = Effect.fn('runHandle.traceHandover')(function* (
         return;
       }
       Queue.offerUnsafe(trace, event);
+    },
+    joined: () => {
+      release();
+      whole = false;
     },
     settle: (exit) =>
       Effect.gen(function* () {
@@ -216,6 +223,7 @@ export function handOver(
               Deferred.done(admitted, Exit.succeed(commit)),
             onJoined: () => {
               joined = true;
+              trace.joined();
             },
           }).pipe(
             Effect.onExit(settle),
