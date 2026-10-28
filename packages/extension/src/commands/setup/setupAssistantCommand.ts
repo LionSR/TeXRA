@@ -1,5 +1,5 @@
 // Third-party imports
-import { Secrets, withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { Cause, Effect } from 'effect';
 
 // Local imports
@@ -43,7 +43,6 @@ export function launchSetupAssistant(
     const outcome = yield* launchSetup({
       session: runSession,
       roots,
-      secrets: yield* Secrets,
       start: (request) =>
         runSession
           .start({ config: request.config, interactive: true })

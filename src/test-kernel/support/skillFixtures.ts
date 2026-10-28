@@ -2,7 +2,9 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { installSkillContributions } from '@skills/runtimeSkills';
+import { Layer } from 'effect';
+
+import { HostSkillSources } from '@skills/runtimeSkills';
 
 /**
  * Writes a SKILL.md package under `root` and returns the SKILL.md path; its
@@ -27,18 +29,18 @@ export async function writeSkill(
 }
 
 /**
- * Installs one contribution per fixture root, each in its own tier, as the
- * runtime skill sources; `[]` installs none. The label is the tier id, which
- * is the scope for the tiers fixtures use.
+ * The process's skill sources as one contribution per fixture root, each in
+ * its own tier. The label is the tier id, which is the scope for the tiers
+ * fixtures use.
  */
-export function installTestSkillRoots(
+export function testSkillRoots(
   roots: readonly {
     readonly tier: 'custom' | 'project' | 'user' | 'bundled';
     readonly path: string;
     readonly required?: true;
   }[],
-): void {
-  installSkillContributions({
+): Layer.Layer<never> {
+  return Layer.succeed(HostSkillSources)({
     resourcesPath: '',
     options: {},
     contributions: roots.map((root, index) => ({

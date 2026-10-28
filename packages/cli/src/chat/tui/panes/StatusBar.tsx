@@ -2,7 +2,7 @@ import { Box, Text, useStderr, useWindowSize } from 'ink';
 import { Cause, Effect, Exit, type Fiber } from 'effect';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { readModelOptions, type PlatformSecrets } from '@texra-ai/harness/host';
+import { readModelOptions } from '@texra-ai/harness/host';
 import {
   isActivePhase,
   isEmptyUsage,
@@ -48,14 +48,13 @@ const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;
 interface StatusBarProps {
   /** True when the focused stream has a composer for slash commands and text. */
   readonly chatInputAvailable: boolean;
-  /**
-   * The secret store the subscription quota and route probes read, with the
-   * runtime that settles the route program, threaded from the chat surface
-   * that opened it — this component owns no runtime of its own.
-   */
-  readonly secrets: PlatformSecrets;
   /** The three setting slots the subscription route probe reads. */
   readonly stores: SettingsStores;
+  /**
+   * The runtime that settles the quota and route programs (their credentials
+   * come from its `Secrets`), threaded from the chat surface that opened it —
+   * this component owns no runtime of its own.
+   */
   readonly runtime: ProcessRuntime;
   readonly childListFocused?: boolean;
   readonly childListSelectionKillable?: boolean;
@@ -131,12 +130,8 @@ function usePolledRead<K extends string, A, E>(
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const subscriptionUsage = useMemo(
-    () =>
-      new SubscriptionUsageService({
-        secrets: props.secrets,
-        stores: props.stores,
-      }),
-    [props.secrets, props.stores],
+    () => new SubscriptionUsageService({ stores: props.stores }),
+    [props.stores],
   );
   const { write: writeStderr } = useStderr();
   const activeRunId = useSignal(selectedRunIdSignal);
@@ -186,9 +181,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     props.runtime,
     routeReadKey,
     () =>
-      readModelOptions({ ...props.stores, secrets: props.secrets }, [
-        accessModel,
-      ]).pipe(Effect.map(([option]) => option?.usageRoute)),
+      readModelOptions(props.stores, [accessModel]).pipe(
+        Effect.map(([option]) => option?.usageRoute),
+      ),
     CODEX_SUBSCRIPTION_REFRESH_MS,
   );
   // Only a read of the current key settles here, so a probe that a newer key

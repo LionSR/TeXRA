@@ -20,8 +20,8 @@ import { CHAT_API_MODE_MODEL_RECOVERY } from '../commands/handlers/slashContext'
 interface ModelListFormProps {
   readonly currentModel: string;
   /**
-   * The secret store and global state the availability computation reads,
-   * with the runtime its read runs on. Ink components run no Effect
+   * The setting slots the availability computation reads, with the runtime
+   * its read runs on (which serves `Secrets`). Ink components run no Effect
    * themselves, so both arrive as one prop from the surface that opened the
    * form.
    */

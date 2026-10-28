@@ -26,7 +26,6 @@ import {
   type StateStore,
   type StateReadFailed,
   type StateWriteFailed,
-  Secrets,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
@@ -240,12 +239,7 @@ export function createExtensionHostRequests(
           openFinalOutputIfAvailable(roots, config)(result),
         ),
       loadModelOptions: () =>
-        withProcessServices(
-          runtime,
-          Effect.flatMap(Secrets, (secrets) =>
-            loadModelOptions({ ...roots, secrets }),
-          ),
-        ),
+        withProcessServices(runtime, loadModelOptions(roots)),
       // The set-key prompt either runs or faults, so its failure is the one
       // failure, as `ApiKeyPromptFailed`.
       promptForApiKey: (provider) =>

@@ -1,9 +1,4 @@
-import {
-  StateReadFailed,
-  readModelOptions,
-  type ModelOptionStores,
-  type PlatformSecrets,
-} from '@texra-ai/harness/host';
+import { StateReadFailed, readModelOptions } from '@texra-ai/harness/host';
 import { Effect } from 'effect';
 
 import { isModelOptionAvailable } from '@texra-ai/harness/schemas';
@@ -16,9 +11,9 @@ import type { SettingsStores } from '@texra-ai/harness/host';
  * picker reports available, preferring one a subscription pays for.
  */
 export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
-  function* (stores: SettingsStores, secrets: PlatformSecrets) {
+  function* (stores: SettingsStores) {
     const models = Object.values(SETUP_MODEL_BY_PROVIDER);
-    const options = yield* readModelOptions({ ...stores, secrets }, models);
+    const options = yield* readModelOptions(stores, models);
     const byModel = new Map(options.map((option) => [option.model, option]));
     const rows = new Map(
       modelOptionsFrom(options).map((row) => [row.value, row]),
@@ -54,14 +49,9 @@ export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
  * credential", and each caller decides what an unknown answer means for its
  * surface.
  */
-export const hasUsableSetupCredential = (
-  stores: SettingsStores,
-  secrets: PlatformSecrets,
-) =>
-  resolveSetupLaunchModel(stores, secrets).pipe(
-    Effect.map((model) => model !== null),
-  );
+export const hasUsableSetupCredential = (stores: SettingsStores) =>
+  resolveSetupLaunchModel(stores).pipe(Effect.map((model) => model !== null));
 
 /** The picker's model options as the follow-up controls list them, read live. */
-export const loadModelOptions = (stores: ModelOptionStores) =>
+export const loadModelOptions = (stores: SettingsStores) =>
   readModelOptions(stores).pipe(Effect.map(modelOptionsFrom));

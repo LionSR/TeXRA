@@ -38,7 +38,7 @@ import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { untrackRun } from '@test/support/sessionEnd';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { hostStores } from '@test/support/setupPlatform';
+import { installedHost } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -285,7 +285,7 @@ export function testAgentRun(
     }),
     persona: Schema.decodeUnknownSync(PersonaSchema)({}),
     parentStage: logger.openStage('Run: chat'),
-    stores: hostStores(),
+    stores: installedHost().roots,
     toolPolicy: {},
     opening: {
       inputs: {},
@@ -300,7 +300,7 @@ export function testAgentRun(
       initialUserMessage: 'Do the thing.',
     },
     fileService: new RunFileService(runId, session.roots),
-    ...testRunTools(hostStores()),
+    ...testRunTools(installedHost().roots),
     finalToolName: null,
     swapModel: (next) =>
       SynchronizedRef.updateAndGetEffect(model, (current) =>
@@ -362,7 +362,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
             tools: Object.keys(tools).map((name) => ({ name })),
           }),
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
-          ...testRunTools(hostStores(), tools),
+          ...testRunTools(installedHost().roots, tools),
           finalToolName: init.finalToolName ?? null,
           callbacks: init.onIdle ? { onIdle: init.onIdle } : {},
           ...('initialUserMessage' in init

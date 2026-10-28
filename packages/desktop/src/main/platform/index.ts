@@ -112,6 +112,7 @@ export const initializeElectronPlatform = Effect.fn(
       processLayer({
         storageRoot: dataRoot,
         plugins: texraPlugins(),
+        skills: { resourcesPath },
         // The one credential store every host shares (`~/.texra/secrets/`):
         // the background service reads the keys this window saves.
         secrets: Secrets.announcing(
@@ -165,10 +166,7 @@ export const initializeElectronPlatform = Effect.fn(
       repoState: yield* (yield* StateStores).repo(storage, undefined),
       globalState: globalStateStore,
     });
-    yield* bootstrapHost({
-      roots: processRoots,
-      skills: { resourcesPath },
-    });
+    yield* bootstrapHost({ roots: processRoots });
     return {
       processRoots,
       globalConfigStore: configStores.global,

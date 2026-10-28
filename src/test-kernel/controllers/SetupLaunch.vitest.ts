@@ -3,6 +3,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { apiKeySecretName, SecretsFailed } from '@texra-ai/llm';
+import { Secrets } from '@platform/secrets';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { withEnv } from '@test/support/testEnv';
@@ -32,9 +33,8 @@ describe('resolveSetupLaunchModel', () => {
     () =>
       Effect.gen(function* () {
         const error = yield* Effect.flip(
-          resolveSetupLaunchModel(
-            makeFakeSettingsStores().stores,
-            new UnreadableAnthropicKey(),
+          resolveSetupLaunchModel(makeFakeSettingsStores().stores).pipe(
+            Effect.provide(Secrets.layer(new UnreadableAnthropicKey())),
           ),
         );
 

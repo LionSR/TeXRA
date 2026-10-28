@@ -17,6 +17,7 @@ import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { AgentRun, agentRunLayer } from '@agent/runtime/run/AgentRun';
 import { AppSignals } from '@platform/appSignals';
 import { AppState } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
 import { AgentConfigSchema } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -27,7 +28,10 @@ import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import {
+  createFakeWorkspaceRoots,
+  FakeSecrets,
+} from '@test/support/FakePlatform';
 import { texraPlugins } from '@texra/tools/registry';
 import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
@@ -82,6 +86,8 @@ function runLayer(
     Layer.provideMerge(agentRunLayer(ctx, { tools, callbacks: {} })),
     Layer.provideMerge(Layer.succeed(RunHistory, ctx.session.runHistory)),
     Layer.provideMerge(testHttpClientLayer),
+    // No key is read: every launch here binds the validation model.
+    Layer.provideMerge(Secrets.layer(new FakeSecrets())),
     Layer.provideMerge(
       pluginCatalogLayer(
         texraPlugins(),

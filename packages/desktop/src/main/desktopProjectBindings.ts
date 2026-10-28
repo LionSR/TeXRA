@@ -54,7 +54,6 @@ import { createDesktopPtyHost } from './desktopPtyHost.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { desktopSpawner, type DesktopSpawn } from './desktopWindows.js';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
-import type { PlatformSecrets } from '@texra-ai/harness/host';
 import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type {
   DesktopProject,
@@ -103,7 +102,6 @@ interface ProjectBindingsOptions {
   readonly host: DesktopWindowHost;
   readonly runtime: ProcessRuntime;
   readonly projects: DesktopProjectRegistry;
-  readonly secrets: PlatformSecrets;
   readonly resourcesPath: string;
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;
@@ -252,7 +250,6 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         project: project.display,
         root: project.root,
         stores: project.roots,
-        secrets: options.secrets,
         fileOptions: () =>
           files.fileOptions().pipe(
             Effect.mapError(

@@ -11,14 +11,20 @@ import {
 import { Effect } from 'effect';
 import { codexBackendModelId, routeConfig } from '@texra-ai/llm';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
-import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import { Secrets } from '@platform/secrets';
+import {
+  fakeHostSecrets,
+  installedHost,
+  installPlatform,
+} from '@test/support/setupPlatform';
 
 /** The input window the Codex backend grants the fixture model. */
 const CODEX_INPUT_LIMIT = 272_000;
 
 /** The config a model runs with on the ChatGPT subscription. */
 const chatgptConfig = (config: ModelConfig) =>
-  readModelSettings(hostStores()).pipe(
+  readModelSettings(installedHost().roots).pipe(
+    Effect.provideService(Secrets, fakeHostSecrets),
     Effect.map((settings) => routeFactsFor(settings, [])),
     Effect.map((facts) =>
       routeConfig(

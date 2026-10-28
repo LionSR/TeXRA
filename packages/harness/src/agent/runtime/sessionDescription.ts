@@ -13,7 +13,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { helperCall } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
-import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { Secrets } from '@platform/secrets';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
@@ -95,9 +95,8 @@ const DESCRIPTION_DEADLINE = '20 seconds';
  * On success, commits the run's `run.description` row, which the meta fold
  * and every renderer read.
  *
- * `stores` are the process secret store and global state the run already
- * holds (the `Secrets` / `AppState` services), which the helper model is
- * resolved against.
+ * The helper model is resolved against the session's settings slots
+ * (`session.roots`) and the process `Secrets` read from context.
  */
 export const generateSessionDescription = Effect.fn(
   'generateSessionDescription',
@@ -106,17 +105,16 @@ export const generateSessionDescription = Effect.fn(
   config: AgentConfig,
   agentDescription: string | undefined,
   session: SessionHandle,
-  stores: ModelOptionStores,
 ): Effect.fn.Return<
   void,
   never,
-  HttpClient.HttpClient | UsageLog | RouteRetries
+  HttpClient.HttpClient | UsageLog | RouteRetries | Secrets
 > {
   const instruction = getDisplayedInstruction(config);
   if (!instruction) return;
   yield* Effect.gen(function* () {
     const text = yield* helperCall(
-      stores,
+      session.roots,
       {
         userPrompt: buildUserPrompt(
           config.agent,

@@ -18,6 +18,8 @@ import { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { SessionCloseReport } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
+import { HostSkillSources } from '@skills/runtimeSkills';
+import { hostSkillContributions } from '@skills/skillSources';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { toolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -70,6 +72,7 @@ export class Sessions extends Context.Service<
   static layer({
     platform,
     plugins,
+    skills,
   }: Composition): Layer.Layer<Sessions, PluginsRefused> {
     // The list is checked before anything is composed, so a refusal names
     // the plugin rather than failing the first session open, and leaves the
@@ -93,6 +96,7 @@ export class Sessions extends Context.Service<
           sessionsLayer({
             storageRoot: platform.roots.storageRoot,
             plugins,
+            skills,
             secrets: Secrets.layer(platform.secrets),
             appState: AppState.layer(platform.roots.globalState),
             agentDirectories: AgentDirectories.layer(platform.agentDirectories),
@@ -140,5 +144,20 @@ function sessionsLayer(
         yield* Effect.scope,
       );
     }),
-  ).pipe(Layer.provideMerge(ownerProcessLayer(options)));
+  ).pipe(
+    Layer.provideMerge(ownerProcessLayer(options)),
+    // Beneath every session the process builds, so its runs' steps list
+    // what the hosts' settings pages list.
+    Layer.provideMerge(
+      options.skills === undefined
+        ? Layer.empty
+        : Layer.succeed(HostSkillSources)({
+            resourcesPath: options.skills.resourcesPath,
+            options: options.skills.skillSourceOptions ?? {},
+            contributions: hostSkillContributions(
+              options.plugins.map(({ id }) => id),
+            ),
+          }),
+    ),
+  );
 }

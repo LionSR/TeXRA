@@ -103,10 +103,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
       context.runtimeSession,
       activeRunId,
     );
-    const [option] = yield* readModelOptions(
-      { ...context.stores, secrets: context.secrets },
-      [model],
-    );
+    const [option] = yield* readModelOptions(context.stores, [model]);
     appendLocalNotice(
       formatCliSessionStatus({
         agent: meta.agent,

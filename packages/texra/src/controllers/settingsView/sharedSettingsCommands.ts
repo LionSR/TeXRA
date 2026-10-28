@@ -73,7 +73,7 @@ import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import type { SettingsViewSnapshot } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { PlatformSecrets, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 type SettingsArms = SettingsViewInboundHandlerRegistry<
@@ -92,7 +92,6 @@ const SUBSCRIPTION_USAGE_PROVIDERS_BY_ID: Readonly<
 interface SettingsViewBodyPorts {
   readonly host: 'vscode' | 'desktop';
   readonly roots: WorkspaceRoots;
-  readonly secrets: PlatformSecrets;
   /** The packaged resources root; the agent templates live under it. */
   readonly resourcesPath: string;
   readonly bindings: SettingsHostBindings;
@@ -114,16 +113,16 @@ interface SettingsViewBodyPorts {
 
 /** Build the settings body over one host's bindings. */
 export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
-  const { bindings, secrets, roots } = ports;
+  const { bindings, roots } = ports;
 
   const present = settingsPresentation(bindings);
   const { notice, report, reported } = present;
 
   // ── Controllers ──
 
-  const usage = new SubscriptionUsageService({ secrets, stores: roots });
+  const usage = new SubscriptionUsageService({ stores: roots });
   const memoryPage = settingsMemoryCommands({ bindings, present });
-  const gitPage = settingsGitCommands({ bindings, present, secrets });
+  const gitPage = settingsGitCommands({ bindings, present });
   const toolsPage = settingsToolCommands({ roots, bindings });
   const pluginsPage = settingsPluginCommands({
     roots,
@@ -144,10 +143,8 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   // ── Posts ──
 
-  const postProfile = bindings.post(buildProfileMessage(roots, secrets));
-  const postModelSelection = bindings.post(
-    buildModelSelectionMessage(roots, secrets),
-  );
+  const postProfile = bindings.post(buildProfileMessage(roots));
+  const postModelSelection = bindings.post(buildModelSelectionMessage(roots));
   const postSnapshot = (snapshot: DerivedSettingsSnapshot) =>
     bindings.post(buildSettingsSnapshotMessage(snapshot, roots));
   const postSkills = bindings.post(
@@ -165,13 +162,10 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     );
   const postAuthStatus = (providerId: SubscriptionProviderId) =>
     bindings.post(
-      Effect.map(
-        subscriptionAuthStatus(providerId, roots, secrets),
-        (status) => ({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS,
-          status,
-        }),
-      ),
+      Effect.map(subscriptionAuthStatus(providerId, roots), (status) => ({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS,
+        status,
+      })),
     );
   // ── Refresh tails ──
 
@@ -226,7 +220,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       providerId,
       ports.accountCopy.signOutFailed(provider.displayName),
       Effect.andThen(
-        provider.signOut(secrets),
+        provider.signOut(),
         notice(ports.accountCopy.signedOut(provider.displayName)),
       ),
     );

@@ -16,8 +16,8 @@ import {
   type RuntimeTool,
 } from '@agent/runtime/ToolServices';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import { sessionFsLayer } from '@platform/rootedFs';
+import type { SettingsStores } from '@shared/config/settings';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
@@ -49,7 +49,7 @@ export const noStep = () => SynchronizedRef.makeUnsafe<OpenStep | null>(null);
 /** A run fixture's step fields: no step opened yet, and every step offers
  *  exactly `tools`, as the run's own tools over an empty catalog. */
 export const testRunTools = (
-  stores: ModelOptionStores,
+  stores: SettingsStores,
   tools: Readonly<Record<string, RuntimeTool>> = {},
 ): Pick<AgentRunShape, 'toolInputs' | 'steps'> => ({
   toolInputs: {

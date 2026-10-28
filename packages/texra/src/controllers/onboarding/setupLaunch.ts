@@ -3,8 +3,8 @@ import { Effect } from 'effect';
 import { Cancelled } from '@texra-ai/harness';
 import { agentName, isLiveRun } from '@texra-ai/harness/schemas';
 import {
-  type PlatformSecrets,
   presentRunFailure,
+  type Secrets,
   type SessionHostInteractions,
 } from '@texra-ai/harness/host';
 import {
@@ -32,7 +32,6 @@ const SETUP_INSTRUCTION =
 export const launchSetup = <E>(options: {
   readonly session: Pick<Session, 'view'>;
   readonly roots: SettingsStores;
-  readonly secrets: PlatformSecrets;
   /** This host's launch path for the setup request. */
   readonly start: (request: ValidatedRunRequest) => Effect.Effect<Run, E>;
 }) =>
@@ -49,10 +48,7 @@ export const launchSetup = <E>(options: {
     // The launch model the credential predicate every host shares decides:
     // adapter-level checks, so a blank env key does not count and fail later
     // as "No model is available".
-    const model = yield* resolveSetupLaunchModel(
-      options.roots,
-      options.secrets,
-    );
+    const model = yield* resolveSetupLaunchModel(options.roots);
     if (model === null) return 'no-model' as const;
     const validation = validateRunRequest({
       config: {
@@ -93,8 +89,7 @@ export const kickoffDesktopSetup = (options: {
   };
   /** The project's launch path; none when no folder is open. */
   readonly run: Pick<HostRunActions, 'runValidated'> | undefined;
-  readonly secrets: PlatformSecrets;
-}): Effect.Effect<void> =>
+}): Effect.Effect<void, never, Secrets> =>
   Effect.gen(function* () {
     if (!options.run) {
       return yield* Effect.fail(
@@ -104,7 +99,6 @@ export const kickoffDesktopSetup = (options: {
     const outcome = yield* launchSetup({
       session: options.project.session,
       roots: options.project.roots,
-      secrets: options.secrets,
       start: options.run.runValidated,
     });
     if (outcome === 'no-model') {
