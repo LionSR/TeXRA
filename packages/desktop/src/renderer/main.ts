@@ -288,15 +288,7 @@ const projectRail = createProjectRail({
   sessions: projectSessions,
   workbenches: projectWorkbenches,
 });
-// Seen only while the window has focus: a run finishing behind another app is
-// news when the user comes back.
-const markShownRunSeen = () => {
-  const view = projectSessions.get(shell.active)?.view$.get();
-  if (view && document.hasFocus())
-    projectSessions.act(shell.active, { kind: 'seen', view });
-};
-projectSessions.onChange(markShownRunSeen);
-window.addEventListener('focus', markShownRunSeen);
+projectSessions.followSeen(() => shell.active);
 const selectProject = projectRail.selectProject;
 
 function currentWorkbench() {
