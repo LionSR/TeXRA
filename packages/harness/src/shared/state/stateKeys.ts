@@ -49,7 +49,7 @@ export const GlobalStateKey = Object.freeze({
   // Model selection settings
   /** `{ enabledExtras, disabledDefaults }`: the user's delta over `DEFAULT_MODELS`. */
   MODEL_SELECTION: 'texra.modelSelection',
-  HELPER_MODEL: 'polishModel',
+  HELPER_MODEL: 'texra.helperModel',
   REASONING_LEVELS: 'texra.reasoningLevels',
   PREFER_SHORT_MODEL_NAMES: 'texra.preferShortModelNames',
 

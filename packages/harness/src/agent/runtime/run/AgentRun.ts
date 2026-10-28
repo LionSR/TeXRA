@@ -26,7 +26,7 @@ import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { Persona, SessionEventDraft } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
-import type { RunHistoryDraft } from '@shared/session/runState';
+import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import {
   AGENT_SOURCE,
@@ -48,14 +48,15 @@ import type { SessionHandle } from '../SessionHandle';
  * its opening batch (null: a resume, whose cell activates the run), on the
  * history a fork is born with when it has a `seed`, with
  * the trace held until then (`opening`), and `entered` runs once that
- * batch commits. `initialUserMessage`: a fresh
+ * batch commits, with the state it left: its `commit` is the activation's
+ * (a resume's, its `run.activate` batch). `initialUserMessage`: a fresh
  * run's instruction, logged once its opening inserted the launch's media.
  */
 interface LaunchEntry {
   readonly registration: readonly SessionEventDraft[] | null;
   readonly seed?: readonly RunHistoryDraft[] | null;
   readonly opening: Alongside;
-  readonly entered: Effect.Effect<void>;
+  readonly entered: (state: RunState) => Effect.Effect<void>;
   readonly initialUserMessage: string | undefined;
 }
 

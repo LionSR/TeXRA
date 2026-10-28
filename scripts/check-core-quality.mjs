@@ -10,9 +10,12 @@
 // baseline with a site, fails. A count that fell is stale headroom and fails
 // too, because a later PR could regrow into it unnoticed; `--update` lowers
 // counts and drops zeroed files but never raises one or adds a file. The one
-// exception is file-size, whose value is a line count: a shorter file passes,
-// and `--update` lowers its cap. A rule with an empty baseline holds the core
-// at zero.
+// exception is file-size, whose value is a cap on a file's line count: a
+// shorter file passes, and `--update` lowers a cap only to the file's length
+// rounded up to a multiple of FILE_SIZE_STEP, and only when that is below the
+// cap, so an edit that trims a few lines leaves file-size.json as it was.
+// A rule listed in ZERO_RULES
+// (ratchet-zero-rules.mjs) has no baseline file: any site fails.
 // shallow-modules budgets interface elements while a module is shallow, so
 // reducing its public surface lowers the row and deepening it removes it.
 //
@@ -44,6 +47,7 @@ import { parseArgs } from 'node:util';
 import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { GENERATED_DIRS, apiReports } from './core-quality-api-report.mjs';
 import { MEASURED_ONLY, RULES, measure } from './core-quality-measure.mjs';
+import { ZERO_RULES } from './ratchet-zero-rules.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -51,8 +55,12 @@ const rootDir = path.resolve(
 );
 const baselineDir = path.join(rootDir, 'config', 'ratchets', 'core-quality');
 const SITES_SHOWN = 8;
+/** The line step file-size caps are lowered in. */
+const FILE_SIZE_STEP = 25;
 
 const baselinePath = (rule) => path.join(baselineDir, `${rule}.json`);
+const heldAtZero = (rule) =>
+  Object.hasOwn(ZERO_RULES, `config/ratchets/core-quality/${rule}.json`);
 
 /** The rule's baseline with each `from=to` path prefix re-keyed. */
 function readBaseline(rule, moves) {
@@ -119,7 +127,13 @@ function lowered(rule, baseline, actual) {
       widened.push(
         `${rule}: ${file} has ${entry.value}, above its baseline ${allowed}; --update never widens a baseline. ${RULES[rule]}`,
       );
-    next[file] = entry.value;
+    next[file] =
+      rule === 'file-size'
+        ? Math.min(
+            allowed,
+            Math.ceil(entry.value / FILE_SIZE_STEP) * FILE_SIZE_STEP,
+          )
+        : entry.value;
   }
   return { next, widened };
 }
@@ -294,6 +308,10 @@ const main = async () => {
   const writes = [];
   for (const [rule, actual] of byRule) {
     if (MEASURED_ONLY.has(rule)) continue;
+    if (heldAtZero(rule)) {
+      problems.push(...checkRule(rule, {}, actual));
+      continue;
+    }
     const baseline = readBaseline(rule, moves);
     if (values.update) {
       // A rule without a baseline file is new: its first baseline is today's count.

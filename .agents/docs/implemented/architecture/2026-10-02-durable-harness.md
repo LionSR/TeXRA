@@ -32,7 +32,8 @@ An awaited child belongs to the call that awaits it.
 
 - Its id derives from the parent run, the response, the call id and the intent
   attempt (`agentChildRunId`, `tools/delegation/agentChild.ts`), and
-  `run.start.parent.callId` records the call (null for a detached child).
+  `run.start.parent.call` records the call and its card (null for a detached
+  child).
 - On resume, the parent's open `agent` call reattaches: it reads back a child's
   settled turn, resumes a child cut short under its own id, and launches nothing
   new.
@@ -168,7 +169,7 @@ the same rule as npm publication.
 | D1  | Effect class replacing `replay`        | Keep `replay` + `parallelSafe`                                                                                                                                                                         |
 | D2  | View edits                             | One kind, `context.edit`, replacing `model.compaction`; `range` replaces `keepPrefix`, and `base` is the stale check. Reset, handoff (removed 2026-10-22), fork, and a later undo need no further kind |
 | D3  | `run.start.provenance`                 | A tagged union, `{ kind: 'fork', from: { id, uid }, at: seq } \| null`. Not `origin`: the row envelope's `origin` is the writing process. Resume is not a provenance; it is the same run               |
-| D4  | Ownership of an awaited child          | `run.start.parent.callId`, nullable, so the session view routes Resume without reading another aggregate's run history                                                                                 |
+| D4  | Ownership of an awaited child          | `run.start.parent.call`, nullable, so the session view routes Resume without reading another aggregate's run history                                                                                   |
 | D5  | Blocked reason                         | In the projection, not a row: it is a fact about this build and its catalog, not about the run                                                                                                         |
 | D6  | `run.start.checkpointId`, `workflow.*` | Deleted with the workflow-script runner (codemode lane 7)                                                                                                                                              |
 

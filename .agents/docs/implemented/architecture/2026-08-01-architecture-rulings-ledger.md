@@ -128,8 +128,9 @@ intake; #12277 deleted it, and the effect-migration ratchet itself was retired i
 **Evidence.** Five prior conversions each left a `tryPromise` wall or a Promise facade so
 the file would compile mid-migration; the 2026-09-07 promise-boundary audit classified those
 as the debt being retired, not progress. R1's boundaries are the only places a run
-is not debt: `packages/{extension,desktop,cli}/src/**`, the SDK entry files, and the named
-runtime entries below.
+is not debt: `packages/{extension,desktop,cli}/src/**` and the named runtime entries below.
+The SDK's entry files run nothing (see the SDK surface entry below), and ESLint holds them
+to that since the core-quality `effect-run` baseline was retired into it.
 
 **Forbids.** A bridging module that reads a global and exposes it as a `Layer`; a Promise
 method whose body only runs an Effect; a "release-N" compatibility column; a feature flag

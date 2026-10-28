@@ -179,10 +179,17 @@ export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
   // xAI stores and chains too, but has no background mode or summary
   // control; a chained request reuses the stored instructions.
   const xai = config.provider === ModelProvider.XAI;
+  // Background responses serve the GPT family only, as the
+  // `useBackgroundResponses` setting describes; another model on this arm
+  // (an o-series deep-research model, Meta's) streams in the foreground.
+  const background =
+    !xai && config.id.toLowerCase().startsWith('gpt')
+      ? 'supported'
+      : 'unsupported';
   return {
     ...base,
     protocol: 'openai-responses',
-    background: xai ? 'unsupported' : 'supported',
+    background,
     supportsTemperature,
     supportsMaxOutputTokens: true,
     supportsStorage: true,

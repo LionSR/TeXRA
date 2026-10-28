@@ -23,9 +23,9 @@ a gate, listed here by what it answers.
 - **Mocks of harness internals are measured.**
   `config/ratchets/core-quality/core-module-mocks.json`
   (`scripts/core-quality-measure.mjs`) counts `vi.mock` of `@agent/*`
-  internals from CLI, desktop and shared support, and only shrinks. The
-  older `host-agent-mock-baseline.json` is kept empty because a budget file
-  may not be deleted.
+  internals from CLI, desktop and shared support, and only shrinks. It
+  replaced the older `host-agent-mock-baseline.json`, deleted once it was
+  empty (`ZERO_RULES`, below).
 - **A suite names its subject.** One suite per module, path-mirrored under
   `src/test-kernel/`, or one named cross-module scenario stated in the PR
   body (`src/test-kernel/AGENTS.md`).
@@ -67,10 +67,18 @@ evidence cites the id, says what changed, and deletes or rewrites the entry.
 - `config/ratchets/core-quality/` holds shrink-only per-rule baselines,
   `file-size.json` among them (`npm run check:core-quality`, in
   `gate:invariants`). A file over its budget fails, and a shorter file
-  passes.
+  passes. `--update` lowers a file's cap only to its length rounded up to
+  a multiple of 25 lines, and only when that is below the cap, so trimming
+  a few lines leaves `file-size.json` as it was.
+- A rule held at zero has no baseline file: it is a lint error (`any`,
+  `new Promise`, `.then(` and `Effect.run*` over the core, in
+  `eslint.config.mjs`) or a hard-coded zero in its checker. `ZERO_RULES`
+  (`scripts/ratchet-zero-rules.mjs`) lists each such rule's former baseline
+  and the one place that now fails a site.
 - `scripts/check-ratchet-baselines.mjs` runs first in `gate:invariants` and
   fails a raised count, a new allowance or a deleted baseline compared with
-  the PR base.
+  the PR base. A baseline that was empty at the base may be deleted only
+  when `ZERO_RULES` lists it, and a listed file that still exists fails.
 - `src/test-kernel/architecture/unknownErrorChannelRatchet.vitest.ts`
   forbids an Effect error channel spelled `unknown`.
 

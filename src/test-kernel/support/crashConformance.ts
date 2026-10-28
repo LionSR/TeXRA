@@ -217,7 +217,11 @@ function outcome(rows: readonly Row[], root: string) {
     children: new Set(
       rows
         .filter((row) => row.type === 'run.start' && row.parent === root)
-        .map((row) => (json(row).parent as { callId: string }).callId),
+        .map(
+          (row) =>
+            (json(row).parent as { call: { callId: string } | null }).call
+              ?.callId ?? null,
+        ),
     ).size,
     childAnswers: [
       ...new Set(
@@ -494,7 +498,8 @@ function violations(
     (row) => row.type === 'run.start' && row.parent !== null,
   );
   const callOf = (child: Row) =>
-    (json(child).parent as { callId: string }).callId;
+    (json(child).parent as { call: { callId: string } | null }).call?.callId ??
+    null;
   const relaunches = children.filter((child) =>
     children.some(
       (earlier) =>
@@ -1076,7 +1081,7 @@ export function crashConformanceSuite(): void {
               const calls = final.flatMap((row) =>
                 row.type === 'run.start' && row.parent !== null
                   ? [
-                      `${row.parent}/${(json(row).parent as { callId: string }).callId}`,
+                      `${row.parent}/${(json(row).parent as { call: { callId: string } | null }).call?.callId ?? null}`,
                     ]
                   : [],
               );
@@ -1227,7 +1232,11 @@ export function crashConformanceSuite(): void {
           const childCalls = (rows: readonly Row[]) =>
             rows
               .filter((row) => row.type === 'run.start' && row.parent === root)
-              .map((row) => (json(row).parent as { callId: string }).callId);
+              .map(
+                (row) =>
+                  (json(row).parent as { call: { callId: string } }).call
+                    .callId,
+              );
           // Two revisions, each its own persona child, and both documents.
           expect(expected).toEqual({
             outcome: 'completed',
@@ -1256,7 +1265,9 @@ export function crashConformanceSuite(): void {
                   ),
                 )
                 .map(
-                  (child) => (json(child).parent as { callId: string }).callId,
+                  (child) =>
+                    (json(child).parent as { call: { callId: string } }).call
+                      .callId,
                 ),
             );
             const relaunched = childCalls(
