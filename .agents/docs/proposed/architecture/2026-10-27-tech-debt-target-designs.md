@@ -548,6 +548,46 @@ rows on interrupt too is the optional D2.
 | T4    | Typed shared keys                                                                                                                                                                                             | −10     | type-assertions 2 → 0                                                                    |
 | T5    | Scope finalizer plus `FiberMap`; the sweep (`toolUseDispatch.ts:916-946`), `ScriptDoor.settleAbandoned` (`RunCall.ts:115-121`), `ScriptTool.ts:270-284` and the context capture deleted. Behaviour-preserving | −50     | terminal-row and context duals removed (`moveBoundary` stays for interrupts and crashes) |
 
+## Progress and corrections (2026-10-28)
+
+Landed since this note: #14364 (L2 to L5, H1 to H5, S1, S3 to S5, V1 to V7,
+M3 to M5, T2, T5) and, after it, #14368, #14371 and #14373. Open: #14367,
+#14369, #14370 and #14372.
+
+- **Liveness, in process (§1):** done by #14373. The registry entry holds the
+  run's controls and `LiveRun.launched` (an open activation) is the one
+  answer for kill, wait and report suppression; `RunHandle`, `track` and
+  `untrackIfCurrent` are deleted. It also fixed a just-launched child reading
+  as gone to `ExecutionsTool`'s kill and to `shouldSkipWait`.
+- **The rest of §1 is extended by the 1.0 PRD**, which owns its order: the
+  activation opened at the call of `launch` and `resume` is the resume
+  attempt (it replaces `Resumes`, the SDK's `resuming` and `starting` maps and
+  the joiner's claim re-take), and an SDK `Run` is a view over the session that
+  owns no fiber, buffer or port. A review of that design found a lost stop: a
+  `run.stop` during a resume's decision phase, before `start` registers the
+  run, takes the ownerless branch of `RunRegistry.stop` and writes a cancelled
+  end, and the resume then activates the cancelled run.
+- **S6:** the history query's `runs` from the view is #14367. It drops the
+  `ended_at` and `error` columns, which the view does not hold and nothing
+  reads.
+- **H1:** the follower the hosts share is now the harness's
+  `followPendingRequests` on `FiberMap` (#14368); `answerRequests` uses it.
+- **Storage (§2), one more stored-shape change before the freeze:** the
+  `conversation.progress` row restates the loop's tool count; #14372 retires
+  it. Retired kinds read as `DatabaseRowCorrupt` until then, which marks the
+  run damaged against the Storage-format rule; #14372 makes a retired kind
+  read as an earlier build's row.
+- **Settings:** the approval policy's write reaction was a port on the shared
+  write function plus a host binding used only for that key; #14370 moves it
+  to each host's caller. The `invalidatesModelOptions` reactions per host stay
+  as they are, which is the intended split.
+- **D5:** done, but `packages/harness/example/_support.ts` still writes the old
+  `polishModel` key.
+- **V9:** see the general-package design's 2026-10-28 re-check: of the 487
+  names on `./host` and `./schemas`, the forgotten-exports rule keeps all but
+  six; the remaining surface cuts are moves of app vocabulary and narrower
+  root signatures.
+
 ## Order of work
 
 1. **Before the storage freeze:** S0, then S2 (with D4 and D5 decided).
