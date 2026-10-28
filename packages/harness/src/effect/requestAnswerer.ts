@@ -10,9 +10,8 @@ import {
   Deferred,
   Duration,
   Effect,
-  Exit,
   Fiber,
-  FiberSet,
+  FiberMap,
   Schedule,
   type Scope,
   Stream,
@@ -22,8 +21,10 @@ import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { requestParksItsCaller, type RequestDecision } from '@shared/schemas';
-import type { PendingRequest } from '@shared/session/readonlyViews';
-import type { RequestError } from '@shared/session/runtimeRequest';
+import type {
+  PendingRequest,
+  SessionView,
+} from '@shared/session/readonlyViews';
 import { attentionOf } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -65,111 +66,92 @@ const decisionOf = (
   );
 
 /**
- * Answer the runs' requests of `session` with the host's `approve`, until
- * interrupted: every request a parked run waits on here (the attention rule
- * every host reads), once, through the session's one `request.decide`, each
- * on its own fiber in `prompts`. A decision the session refuses to record is
- * tried again briefly, then logged and its request offered again on the
- * next view; a handler still deciding a request that left the view (another
- * surface answered it) is interrupted.
+ * Run `program` once for each request `select` picks from the session's
+ * view, for as long as the view lists it. A program that returns runs again
+ * on the next view that still lists its request; one that holds something
+ * for its request (a decision on record, a preview, a staged card) ends with
+ * `Effect.never` and releases it in a finalizer, which runs once the view
+ * drops the request, however it was decided.
  */
-function answerRequests(
-  session: RuntimeSessionHandle,
-  host: AnsweringHost,
-  prompts: FiberSet.FiberSet<void>,
-): Effect.Effect<void> {
-  // The handler fiber asked about each request, keyed by run and request
-  // as the fold keys a pending request.
-  const asked = new Map<string, Fiber.Fiber<void>>();
-  const keyOf = (request: PendingRequest): string =>
-    `${request.runId}\0${request.requestId}`;
-  const forget = (pending: PendingRequest): Effect.Effect<void> =>
-    Effect.sync(() => {
-      asked.delete(keyOf(pending));
-    });
-  // The session's one `request.decide`, tried again when its write is
-  // refused.
-  const record = (
-    pending: PendingRequest,
-    decision: RequestDecision,
-  ): Effect.Effect<void, RequestError> =>
-    session.requests
-      .request({
-        kind: 'request.decide',
-        runId: pending.runId,
-        requestId: pending.requestId,
-        decision,
-      })
-      .pipe(Effect.retry({ schedule: DECIDE_RETRY, times: 3 }), Effect.asVoid);
-  const answer = (pending: PendingRequest): Effect.Effect<void> =>
-    decisionOf(host, pending).pipe(
-      Effect.flatMap((decision) => record(pending, decision)),
-      // An interrupt is a withdrawal; anything else is logged.
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.void
-          : Effect.logWarning(
-              `The decision on request ${pending.requestId} was not recorded; it is offered again on the next view`,
-            ).pipe(
-              Effect.annotateLogs({ data: cause }),
-              withLogChannel(CHANNEL),
-              Effect.andThen(forget(pending)),
-            ),
-      ),
-    );
-  return session.view.changes.pipe(
-    Stream.runForEach((view) =>
-      Effect.forEach(
-        attentionOf(view).requests.filter(
-          (pending) =>
-            requestParksItsCaller(pending.payload) &&
-            !asked.has(keyOf(pending)),
-        ),
-        (pending) =>
-          // One handler awaiting its embedder never holds the next. Held
-          // in the map before it starts, and forgotten by the fiber's own
-          // exit when it fails or is withdrawn. The exit observer is what
-          // makes a prompt withdrawn in the tick it was forked, before its
-          // first step ran, forget itself too; a finalizer inside the effect
-          // never runs for a fiber that never started. A decided request
-          // stays held until the view drops it, so the fold catching up
-          // cannot re-ask it.
-          FiberSet.run(prompts, answer(pending), {
-            startImmediately: false,
-          }).pipe(
-            Effect.tap((fiber) =>
-              Effect.sync(() => {
-                const key = keyOf(pending);
-                asked.set(key, fiber);
-                fiber.addObserver((exit) => {
-                  if (Exit.isFailure(exit) && asked.get(key) === fiber)
-                    asked.delete(key);
-                });
-              }),
-            ),
-          ),
+export const followPendingRequests = <P extends PendingRequest, R>(
+  view: { readonly changes: Stream.Stream<SessionView> },
+  select: (view: SessionView) => readonly P[],
+  program: (request: P) => Effect.Effect<void, never, R>,
+): Effect.Effect<void, never, R | Scope.Scope> =>
+  Effect.gen(function* () {
+    // Keyed by run and request, as the fold keys a pending request.
+    const keyOf = (request: PendingRequest): string =>
+      `${request.runId}\0${request.requestId}`;
+    const fibers = yield* FiberMap.make<string>();
+    yield* Stream.runForEach(view.changes, (level) => {
+      const listed = new Set(level.requests.map(keyOf));
+      return Effect.forEach(
+        [...fibers].filter(([key]) => !listed.has(key)),
+        // Forked: the view loop never waits on a program's finalizers.
+        ([, fiber]) => Effect.forkChild(Fiber.interrupt(fiber)),
         { discard: true },
       ).pipe(
-        // A request gone from the list is decided for good: a handler still
-        // deciding it lost to another surface's decision, so it stops.
         Effect.andThen(
-          Effect.suspend(() => {
-            const listed = new Set(view.requests.map(keyOf));
-            return Effect.forEach(
-              [...asked].filter(([id]) => !listed.has(id)),
-              ([id, fiber]) => {
-                asked.delete(id);
-                // Forked: the view loop never waits on an embedder's handler.
-                return Effect.forkChild(Fiber.interrupt(fiber));
-              },
-              { discard: true },
-            );
-          }),
+          Effect.forEach(
+            select(level),
+            (request) =>
+              FiberMap.run(fibers, keyOf(request), program(request), {
+                onlyIfMissing: true,
+              }),
+            { discard: true },
+          ),
+        ),
+      );
+    });
+  });
+
+/**
+ * Answer the runs' requests of `session` with the host's `approve`, until
+ * interrupted: every request a parked run waits on here (the attention rule
+ * every host reads), once, through the session's one `request.decide`. A
+ * decision the session refuses to record is tried again briefly, then
+ * logged and its request offered again on the next view; a handler still
+ * deciding a request that left the view (another surface answered it) is
+ * interrupted.
+ */
+const answerRequests = (
+  session: RuntimeSessionHandle,
+  host: AnsweringHost,
+): Effect.Effect<void, never, Scope.Scope> =>
+  followPendingRequests(
+    session.view,
+    (view) =>
+      attentionOf(view).requests.filter((pending) =>
+        requestParksItsCaller(pending.payload),
+      ),
+    (pending) =>
+      decisionOf(host, pending).pipe(
+        Effect.flatMap((decision) =>
+          session.requests
+            .request({
+              kind: 'request.decide',
+              runId: pending.runId,
+              requestId: pending.requestId,
+              decision,
+            })
+            .pipe(Effect.retry({ schedule: DECIDE_RETRY, times: 3 })),
+        ),
+        // A decided request stays held until the view drops it, so the fold
+        // catching up cannot re-ask it.
+        Effect.andThen(Effect.never),
+        // An interrupt is a withdrawal; anything else is logged.
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : Effect.logWarning(
+                `The decision on request ${pending.requestId} was not recorded; it is offered again on the next view`,
+              ).pipe(
+                Effect.annotateLogs({ data: cause }),
+                withLogChannel(CHANNEL),
+              ),
         ),
       ),
-    ),
   );
-}
 
 /**
  * Attach `host` to `session` for the caller's scope, the session's one host:
@@ -191,12 +173,11 @@ export function attachHost(
       (detach) => Effect.sync(detach),
     );
     if (!answers(host)) return;
-    const prompts = yield* FiberSet.make<void>();
+    // The session ended: closing the answerer's scope interrupts every
+    // prompt still out, so none decides against it.
     yield* Effect.forkScoped(
-      answerRequests(session, host, prompts).pipe(
+      Effect.scoped(answerRequests(session, host)).pipe(
         Effect.raceFirst(Deferred.await(ended)),
-        // The session ended: no prompt still out decides against it.
-        Effect.ensuring(FiberSet.clear(prompts)),
       ),
     );
   });

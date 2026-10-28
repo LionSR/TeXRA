@@ -103,6 +103,8 @@ export {
   SessionHostInteractions,
   type HostInteractions,
 } from '@agent/runtime/HostInteractions';
+// One program per pending request a host follows, while the view lists it.
+export { followPendingRequests } from './effect/requestAnswerer.js';
 export { buildDiffHunks, type DiffHunks } from '@utils/text/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
 export { presentRunFailure } from '@agent/runtime/terminalResultToast';
