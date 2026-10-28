@@ -87,6 +87,8 @@ export interface SendOptions {
   readonly hold?: QueuedFollowUp['holdUntil'];
   /** Only from the run's parent: its rows' edge, read in this job. */
   readonly fromParent?: boolean;
+  /** No generation here reads the row: the input with it queued must owe a wake (`needsWake`). */
+  readonly wakesOnly?: boolean;
 }
 
 /** A send decided inside a job: its rows, and how it landed. */
@@ -313,6 +315,13 @@ export class Inbox {
         runRelation(sender, runId, this.parentOf),
       );
       if (!input.followUpIds.has(row.followUpId)) {
+        // The row commits after every row read here.
+        const followUps = [...input.followUps, { ...row, commit: Infinity }];
+        if (
+          options.wakesOnly === true &&
+          !needsWake({ ...input, followUps }, this.port.run)
+        )
+          return only(CLOSED);
         const aggregate = qualifyAggregateId('run', runId);
         const queued = { type: 'followup.queued', ...row } as const;
         return {

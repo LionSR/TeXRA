@@ -16,7 +16,7 @@ import type { InboxItem } from './Inbox';
  * {@link presentFollowUpResult}: a resume's refusal (`ResumeRefusal`; a
  * message to a run with no loop here is admitted only as a resume would be,
  * and `not_resumable` there also covers a closed input, a disposed session,
- * or a message that is not the user's own), or one of the message's alone:
+ * or a message that does not wake the run), or one of the message's alone:
  *
  * - `read_failed`: the run's claim or state could not be read just now
  *   (a busy or failing store), which says nothing about the run itself.
@@ -286,10 +286,9 @@ export function startFollowUpWake(
  *
  * A generation live here decides for itself (`LiveRun.readsMessages`): a
  * one-shot loop ends after its turn and reads none. With no generation here,
- * the persisted facts decide, and only the user's own message continues a
- * run that stopped with a checkpoint: a run's message or a notification
- * never restarts work the user stopped. A state that cannot be read cannot
- * be continued.
+ * the persisted facts decide: the run's records whether it can continue
+ * (a state that cannot be read cannot), and its input rows, in the send's
+ * job, whether this message wakes it (`needsWake`).
  */
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
@@ -317,8 +316,6 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       );
       if (rejection !== null)
         return { status: 'failed', reason: rejection.kind } as const;
-      if (hold === 'generation' || item.from.kind !== 'user')
-        return { status: 'failed', reason: 'not_resumable' } as const;
     }
     // A user's message to a run that is stopping continues it after the
     // stop: its row lands after the run's end, which the wake reads.
@@ -328,7 +325,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     return yield* session.followUps.send(
       runId,
       { ...item, ...media },
-      { hold, fromParent },
+      { hold, fromParent, wakesOnly: live?.live !== true },
     );
   }).pipe(withPerKeyLane(session.followUps.sendLanes, runId));
   if ('status' in sent) return sent;
