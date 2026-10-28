@@ -50,7 +50,6 @@ import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   createHostRunActions,
-  localRunActionPorts,
   type HostRunActions,
   type WorkflowDiffRequest,
 } from '@texra/controllers/session/hostRunActions';
@@ -62,7 +61,7 @@ import {
   type SharedHostRequestPorts,
 } from '@texra/controllers/session/sharedHostRequests';
 import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
-import { serviceRecords } from '@texra/controllers/server/serviceSession';
+import { windowRecords } from '@texra/controllers/server/serviceSession';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 
 import {
@@ -129,10 +128,7 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
   const { roots } = project;
   /** Where the window reads its runs' records: its own session, or the
    *  service's, bound once. */
-  const records =
-    project.service === undefined
-      ? { local: project.session, remote: undefined }
-      : { remote: serviceRecords(project.service, project.root) };
+  const { records, exportRecords } = windowRecords(project);
   /** The rooted filesystems of this window's paper, built once from the
    *  roots its session holds for its lifetime, never from an ambient store. */
   const sessionFiles = sessionFsLayer(roots);
@@ -156,13 +152,7 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
   const runActions = runtime.runSync(
     createHostRunActions({
       ...run, // this window's launch follow-up and output opener
-      ...(records.remote === undefined
-        ? localRunActionPorts(records.local)
-        : {
-            roots,
-            readConfig: records.remote.readConfig,
-            present: project.present,
-          }),
+      ...records,
       session: project.session,
       loadModelOptions: () =>
         withProcessServices(
@@ -257,17 +247,11 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
     Effect.cachedWithTTL(
       Effect.tryPromise({
         try: async () => {
-          const { ChatExportController: Controller, localExportRecords } =
+          const { ChatExportController: Controller } =
             await import('@texra/controllers/progressView/ChatExportController');
           return new Controller({
             roots,
-            records:
-              records.remote === undefined
-                ? localExportRecords(records.local)
-                : {
-                    input: records.remote.exportInput,
-                    trace: records.remote.exportTrace,
-                  },
+            records: exportRecords,
             latexPreamble,
           });
         },

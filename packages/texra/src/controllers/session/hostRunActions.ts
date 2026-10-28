@@ -7,7 +7,6 @@ import {
   Rejected,
   type RequestError,
   type RequestRefusal,
-  type LocalSession,
   type Run,
   type Session,
   type StartInput,
@@ -115,8 +114,8 @@ class RunConfigUnreadable extends Schema.TaggedError<RunConfigUnreadable>()(
 type RunValidatedOptions = Pick<StartInput, 'helperModel' | 'approval'>;
 
 /** What the run actions read and present beside the window's `Session`:
- *  filled from this process's session where the window holds one
- *  ({@link localRunActionPorts}), from the service where it runs there. */
+ *  filled from this process's session where the window holds one, from
+ *  the service where it runs there (`windowRecords`). */
 export interface RunActionRecordPorts {
   /** The window's roots: its workspace and its settings stores. */
   readonly roots: WorkspaceRoots;
@@ -130,15 +129,6 @@ export interface RunActionRecordPorts {
   /** Where a failure before a run opens is presented. */
   readonly present: Pick<SessionHostInteractions, 'emit'>;
 }
-
-/** The ports of a window whose process holds its session. */
-export const localRunActionPorts = (
-  session: LocalSession,
-): RunActionRecordPorts => ({
-  roots: session.roots,
-  readConfig: (runId) => session.records(runId).readConfig(),
-  present: session,
-});
 
 export interface HostRunActionPorts extends RunActionRecordPorts {
   /** Where this window's run actions land: its own session, or the

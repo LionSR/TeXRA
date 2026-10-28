@@ -56,20 +56,12 @@ import { DOCUMENTS_OUTPUT_KEY } from '@texra/shared/plugins/documents';
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
 import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
-import { serviceRecords } from '@texra/controllers/server/serviceSession';
+import { windowRecords } from '@texra/controllers/server/serviceSession';
 import {
   attachWindowHost,
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
-import {
-  localExportRecords,
-  type ChatExportRecords,
-} from '@texra/controllers/progressView/ChatExportController';
-import {
-  localRunActionPorts,
-  type HostRunActions,
-  type RunActionRecordPorts,
-} from '@texra/controllers/session/hostRunActions';
+import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
@@ -462,37 +454,27 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * What the run actions and the transcript export read, from the one
-   * place the window's runs are held: its own session, or the
-   * service. In service mode a failure before a run opens is presented on
-   * this window's presentation host, held for the provider's life.
+   * What the run actions and the transcript export read (`windowRecords`).
+   * In service mode a failure before a run opens is presented on this
+   * window's presentation host, held for the provider's life.
    */
   private windowRecords(
     windowSession: WindowSession,
     presentation: Pick<HostInteractions, 'emit'>,
-  ): {
-    readonly records: RunActionRecordPorts;
-    readonly exportRecords: ChatExportRecords;
-  } {
+  ) {
     if (windowSession.service === undefined)
-      return {
-        records: localRunActionPorts(windowSession.session),
-        exportRecords: localExportRecords(windowSession.session),
-      };
+      return windowRecords(windowSession);
     const present = new SessionHostInteractions();
     this.runtime.runSync(
       Effect.acquireRelease(present.use(presentation), (detach) =>
         Effect.sync(detach),
       ).pipe(Scope.provide(this.scope)),
     );
-    const remote = serviceRecords(
-      windowSession.service,
-      this.roots.workspace ?? '',
-    );
-    return {
-      records: { roots: this.roots, readConfig: remote.readConfig, present },
-      exportRecords: { input: remote.exportInput, trace: remote.exportTrace },
-    };
+    return windowRecords({
+      service: windowSession.service,
+      roots: this.roots,
+      present,
+    });
   }
 
   /** Offer the service this window's capabilities for its project's runs. */
