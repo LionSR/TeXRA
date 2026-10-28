@@ -42,7 +42,6 @@
     ],
     "request.opened": [
       "packages/harness/src/agent/runtime/loop/toolGuard.ts",
-      "packages/harness/src/agent/runtime/requestPolicy.ts",
       "packages/texra/src/tools/inquiry/ExternalInquiryTool.ts"
     ],
     "run.activate": [

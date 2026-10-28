@@ -375,7 +375,7 @@ an option of the root launch, and `RootLaunchOptions` has no such property. The
 session's `interactions.approvalPromptsUnavailable` getter reads the attached
 host's answer (`HostInteractions.ts:218-222`). Each step
 applies the session's approval policy to it (`liveToolGates`,
-`packages/harness/src/agent/runtime/requestPolicy.ts:185-208`) when it resolves the tools it offers
+`packages/harness/src/agent/runtime/requestPolicy.ts:186-209`) when it resolves the tools it offers
 (`packages/harness/src/agent/runtime/loop/step.ts:204-207`), so a policy change or a host
 attached mid-run reaches the next step's offer, and a delegated child, which
 runs on its parent's session, and a run the session wakes on its own get the

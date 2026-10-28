@@ -58,7 +58,7 @@ its kind is its `type` column.
 - **Request**: A decision that may wait on a person: a `request.opened` row,
   closed by one `request.decided` row; an approval policy that answers at once
   commits both in one batch (`shared/schemas/sessionEvent.ts:371-384`,
-  `agent/runtime/requestPolicy.ts:340-352`).
+  `agent/runtime/requestPolicy.ts:333-345`).
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row (`controllers/session/storeSchema.ts:54-65`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
@@ -384,7 +384,7 @@ points are normative:
   (`agent/runtime/ModelInvoker.ts:610-670`, `:702-704`;
   `agent/runtime/run/invocation.ts:383-393`).
 - **W7**, `request.opened` / `request.decided`: the opening commits before any
-  wait; a decision commits once (`agent/runtime/requestPolicy.ts:271-289`,
+  wait; a decision commits once (`agent/runtime/requestPolicy.ts:267-282`,
   `:340-352`).
 
 **W1.** The invoker MUST commit the attempt's rows, the blobs of its request
@@ -739,25 +739,25 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 
 ### 8.3 Protocol
 
-- A request's id is part of its payload (`agent/runtime/requestPolicy.ts:324`).
+- A request's id is part of its payload (`agent/runtime/requestPolicy.ts:317`).
   A tool call's request id is derived from the response, call, attempt and
   ordinal, so a resumed attempt rejoins the request it left standing
   (`shared/session/inFlight.ts:309-312`).
 - The opening and any decision the approval policy gives at once MUST commit in
   one batch, so no surface lists it pending
-  (`agent/runtime/requestPolicy.ts:340-352`).
+  (`agent/runtime/requestPolicy.ts:333-345`).
 - A decision MUST commit only if its request is open and undecided; the first
   decision wins, and a later one writes nothing
-  (`agent/runtime/requestPolicy.ts:271-289`).
+  (`agent/runtime/requestPolicy.ts:267-282`).
 - The asker waits on the committed `request.decided` row, read from the tail
-  (`agent/runtime/requestPolicy.ts:291-317`). If the session closes first, the
+  (`agent/runtime/requestPolicy.ts:284-310`). If the session closes first, the
   asker goes on as cancelled with no row written, and the request stays open
-  (`agent/runtime/requestPolicy.ts:353-366`).
+  (`agent/runtime/requestPolicy.ts:346-359`).
 - An interrupted asker decides its request `cancel` through the same door,
   unless the session is closed. This is best effort: a write the session refuses
   (it is draining, or the claim is gone) is logged and leaves the request open,
   for the next resume to cancel as unbound
-  (`agent/runtime/requestPolicy.ts:369-394`).
+  (`agent/runtime/requestPolicy.ts:362-387`).
 - A request is a row, so it outlives its process. A resume cancels the unbound
   ones (section 7.2) and re-enters the bound ones under the same id
   (`shared/session/inFlight.ts:347-371`). An open `externalInquiry` is neither:
