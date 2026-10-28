@@ -294,7 +294,7 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
         yield* untilStored(parent.storage, (rows) =>
           rows.some((row) => row.run === child && row.type === 'run.report'),
         );
-        expect(registry.parentOf(child)).toBeNull();
+        expect(parent.session.view.run(child)?.parentId).toBeNull();
         expect(yield* queuedFollowUps(parent.session, parent.runId)).toEqual(
           [],
         );

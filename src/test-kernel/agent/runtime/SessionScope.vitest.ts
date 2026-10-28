@@ -32,7 +32,6 @@ describe('sendFollowUp host-path session routing', () => {
         registryOf(processSession.runs).track(
           testRunHandle({
             runId: generateRunId(),
-            parent: parentRun,
             agent: 'orchestrator',
           }),
         );

@@ -496,7 +496,7 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
         createChildRun: () =>
           restore(Effect.void).pipe(
             Effect.as(
-              createChildRun(session, runId, parentRunId, {
+              createChildRun(session, runId, {
                 kind: 'process',
                 tool: 'bash',
               }),

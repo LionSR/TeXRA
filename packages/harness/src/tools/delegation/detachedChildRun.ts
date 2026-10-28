@@ -211,9 +211,7 @@ export const launchProcessChild = <TTurn>(
         // leaves the run CANCELLED with no loop behind it.
         createChildRun: () =>
           restore(Effect.void).pipe(
-            Effect.as(
-              createChildRun(session, runId, parentRunId, launch.identity),
-            ),
+            Effect.as(createChildRun(session, runId, launch.identity)),
           ),
         buildLaunch: (childRun) =>
           launch.buildLaunch({ logger: childRun.logger, runId }),

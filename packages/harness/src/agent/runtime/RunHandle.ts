@@ -41,14 +41,11 @@ export interface RunControls {
 }
 
 /**
- * Handle for one live agent run. The parent
- * edge is not the handle's: it is the run's rows (`RunRegistry.parentOf`).
+ * Handle for one live agent run. The parent edge is not the handle's: it is
+ * the run's rows, and its activation's for a run not yet created.
  */
 export class RunHandle {
   private liveControls?: RunControls;
-  /** The run that launched this one, as its launch named it: the parent its
-   *  birth writes, never cut. A detach is the rows' (`parentOf`). */
-  readonly launchParent: RunId | null;
 
   constructor(
     /**
@@ -57,10 +54,7 @@ export class RunHandle {
      * so the handle and the event plane cannot describe the run differently.
      */
     readonly run: RunFacts,
-    launchParent: RunId | null,
-  ) {
-    this.launchParent = launchParent;
-  }
+  ) {}
 
   get runId(): RunId {
     return this.run.runId;

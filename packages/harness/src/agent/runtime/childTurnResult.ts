@@ -291,16 +291,16 @@ export const turnResultPart = (
       }));
 };
 
-/** A child's parent as a job reads it: from the child's rows once its run
- *  exists, else from this process's registry entry for its launch (minus a
- *  detach), which only this process can hold for a run not yet created. */
+/** A child's attached parent as a job reads it: from the child's rows once
+ *  its run exists (minus a committed detach), else its launch's, which only
+ *  this process holds for a run not yet created. */
 export const parentEdgeIn = Effect.fn('childTurnResult.parentEdgeIn')(
   function* (
     session: SessionHandle,
     child: RunId,
+    launchParent: RunId,
   ): Effect.fn.Return<RunId | null, Error> {
-    if (!(yield* getRunRecords(session, child).exists()))
-      return session.runs.get(child)?.parent ?? null;
+    if (!(yield* getRunRecords(session, child).exists())) return launchParent;
     return (yield* persistedParentRunId(session, child)) ?? null;
   },
 );
@@ -314,13 +314,14 @@ export const parentEdgeIn = Effect.fn('childTurnResult.parentEdgeIn')(
 export const sendToParent = (
   session: SessionHandle,
   item: InboxItem & { readonly from: { readonly kind: 'run' } },
+  launchParent: RunId,
   options: SendOptions,
   trace: AgentTrace | undefined,
 ): Effect.Effect<RunId | null, Error> =>
   Effect.suspend(() => {
     let reached: RunId | null = null;
     const part = Effect.gen(function* () {
-      const to = yield* parentEdgeIn(session, item.from.runId);
+      const to = yield* parentEdgeIn(session, item.from.runId, launchParent);
       if (to === null) return { rows: [] };
       const admitted = yield* parentAdmission(
         session,
@@ -343,13 +344,14 @@ export const sendToParent = (
 export const deliverLaunchFailure = (
   session: SessionHandle,
   child: RunId,
+  launchParent: RunId,
   text: string,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
     if (yield* getRunRecords(session, child).exists()) return;
     const from = { kind: 'run', runId: child } as const;
     const item = { text, from, deliveryId: `${child}:launch` };
-    const to = yield* sendToParent(session, item, {}, undefined);
+    const to = yield* sendToParent(session, item, launchParent, {}, undefined);
     if (to !== null) yield* wakeParent(session, { to, item }, undefined);
   }).pipe(
     // The launch's own failure stands; this one is logged beside it.

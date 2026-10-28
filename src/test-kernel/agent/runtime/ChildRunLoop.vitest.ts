@@ -149,7 +149,7 @@ function createFakeStrategy(): FakeStrategyHandle {
 const childRunPort = (runId: RunId) =>
   Effect.sync(() => {
     trackedRunIds.add(runId);
-    return createChildRun(session, runId, PARENT_RUN_ID, {
+    return createChildRun(session, runId, {
       kind: 'agent',
       agent: 'fake-cli',
       tool: 'codex',

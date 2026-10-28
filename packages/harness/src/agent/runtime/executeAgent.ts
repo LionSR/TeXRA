@@ -255,9 +255,6 @@ export function executeAgent(
       ctx,
       (handle) =>
         Effect.gen(function* () {
-          // This run's parent edge now: a detach during preparation
-          // promoted it to a top-level run.
-          const parentRunId = runSession.runs.get(runId)?.parent ?? undefined;
           // The run directory is created by the first write into it.
           yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
             Effect.annotateLogs({
@@ -272,7 +269,7 @@ export function executeAgent(
           );
           // Subagents don't need to force-open the progress board or show notifications;
           // the orchestrator's run is already visible.
-          if (parentRunId === undefined) {
+          if (options.parentRunId === undefined) {
             yield* runSession.interactions.emit(
               'requestEnsureProgressView',
               {
@@ -348,6 +345,7 @@ export function resumeToolUseFromResumeData(
     const ctx = yield* buildAgentLaunchContext({
       definition,
       runId: identity.runId,
+      parentRunId,
       onAdmitted: ({ commit }) =>
         options.onAdmitted?.(identity.runId, commit) ?? Effect.void,
       session: runSession,

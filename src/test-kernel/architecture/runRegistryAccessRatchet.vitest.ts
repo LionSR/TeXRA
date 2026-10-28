@@ -29,10 +29,8 @@ const REGISTRY_IMPORTERS: Readonly<Record<string, string>> = {
   // A deletion is an inactive-run step on the registry's lane.
   'packages/harness/src/controllers/session/SessionRequests.ts':
     'session layer',
-  // The run loop: its lineage, its children, its birth.
-  'packages/harness/src/agent/runtime/loop/toolUse.ts': 'run loop',
+  // The run loop: its birth.
   'packages/harness/src/agent/runtime/loop/runProgram.ts': 'run loop',
-  'packages/harness/src/agent/runtime/loop/hooks.ts': 'run loop',
   // The lifecycle tracks and untracks a run's handle.
   'packages/harness/src/agent/runtime/AgentRunLifecycle.ts': 'run lifecycle',
   // A root launch and a resume start their runs at the door.

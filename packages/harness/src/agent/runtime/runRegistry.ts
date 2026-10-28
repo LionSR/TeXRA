@@ -110,8 +110,10 @@ interface RunEntry {
   /** The launch in flight ({@link RunRegistry.start}), from the call until
    *  its fiber exits: a run's whole life here, setup and end included. */
   activation?: {
-    /** The run that launched it; its edge is {@link RunRegistry.parentOf}. */
-    readonly launchParent: RunId | null;
+    /** The edge of a run not yet created: its launch's, cut by a detach
+     *  that commits before it is ({@link RunRegistry.bornDetached}), which
+     *  no row carries; created detached, its rows then agree. */
+    unbornParent: RunId | null;
     /** The stop begun for it, recorded at the request, before the
      *  interrupt, for its cleanup (a `user` reason outlives a later
      *  `shutdown`) and for child admission ({@link RunRegistry.assertAdmitsChild}). */
@@ -134,11 +136,6 @@ export class RunRegistry implements RunsShape {
   private readonly entries = new Map<RunId, RunEntry>();
   /** {@link awaitDrained}'s waiters: by run, and `''` for the last entry. */
   private readonly drains = new Map<string, Deferred.Deferred<void>>();
-  /** Children a detach cut before their run was created, so no row carries
-   *  it: added once that detach commits, read through {@link parentOf},
-   *  removed with the entry. A marked child is created detached, so once
-   *  created its rows agree. */
-  private readonly unbornDetached = new Set<RunId>();
   /** Steps admitted but not yet started; disposal fails them all at once. */
   private readonly waiting = new Set<Deferred.Deferred<never, Error>>();
   /** The session's child-run concurrency budget, made on first use. */
@@ -187,7 +184,6 @@ export class RunRegistry implements RunsShape {
     if (entry.hold !== undefined || entry.launches > 0) return;
     if (this.entries.get(runId) === entry) {
       this.entries.delete(runId);
-      this.unbornDetached.delete(runId);
       this.completeDrain(runId);
       if (this.entries.size === 0) this.completeDrain('');
     }
@@ -226,7 +222,7 @@ export class RunRegistry implements RunsShape {
     const entry = this.entries.get(runId);
     if (entry === undefined) return undefined;
     const { handle } = entry;
-    const [live, parent] = [this.isLive(runId), this.parentOf(runId)];
+    const live = this.isLive(runId);
     const drained = this.awaitDrained(runId);
     const controls = handle?.controls;
     const readsMessages =
@@ -240,7 +236,6 @@ export class RunRegistry implements RunsShape {
       controls,
       live,
       readsMessages,
-      parent,
       stopReason: entry.activation?.stopReason,
       drained,
     };
@@ -274,22 +269,24 @@ export class RunRegistry implements RunsShape {
    *  (handle or launch) whose edge names it, once. */
   private childRunIds(parentRunId: RunId): readonly RunId[] {
     return [...this.entries.keys()].filter(
-      (id) => this.isRetained(id) && this.parentOf(id) === parentRunId,
+      (id) => this.isRetained(id) && this.attachedParent(id) === parentRunId,
     );
   }
 
-  /** The run's parent edge here, from its rows: the settled view's for a
-   *  run it holds; an unborn one's launch's, unless a detach cut it. A
-   *  decision that writes reads the run's records in its job instead. */
-  readonly parentOf = (runId: RunId): RunId | null => {
+  /** The run's attached parent here: the settled view's for a run that
+   *  exists, its activation's for one not yet created. A decision that
+   *  writes reads the run's records in its job instead. */
+  private attachedParent(runId: RunId): RunId | null {
     const run = this.init.session().view.run(runId);
-    if (run !== undefined) return run.parentId;
-    if (this.unbornDetached.has(runId)) return null;
-    const entry = this.entries.get(runId);
-    return (
-      entry?.activation?.launchParent ?? entry?.handle?.launchParent ?? null
-    );
-  };
+    return run
+      ? run.parentId
+      : (this.entries.get(runId)?.activation?.unbornParent ?? null);
+  }
+
+  /** A detach cut the run before it was created: its birth is a root's. */
+  bornDetached(runId: RunId): boolean {
+    return this.entries.get(runId)?.activation?.unbornParent === null;
+  }
 
   hasActiveChildren = (parentRunId: RunId): boolean =>
     this.childRunIds(parentRunId).length > 0;
@@ -313,12 +310,12 @@ export class RunRegistry implements RunsShape {
   /**
    * Refuse a child admitted under a parent whose stop has begun or folded
    * (the view's `cancelled`). A child held here already answers by its
-   * edge now ({@link parentOf}), so one a detach cut is admitted as a root,
-   * and is not refused while the stop runs: it is one being severed.
+   * edge now ({@link attachedParent}), so one a detach cut is admitted as a
+   * root, and is not refused while the stop runs: it is one being severed.
    */
   private assertAdmitsChild(launchParent: RunId, childRunId: RunId): void {
     const parentRunId = this.isRetained(childRunId)
-      ? this.parentOf(childRunId)
+      ? this.attachedParent(childRunId)
       : launchParent;
     if (parentRunId === null) return;
     const stopping =
@@ -364,7 +361,7 @@ export class RunRegistry implements RunsShape {
       // A launch live here keeps its activation: this one is refused.
       const own = entry.activation
         ? undefined
-        : { launchParent, stopped: false };
+        : { unbornParent: launchParent, stopped: false };
       entry.activation ??= own;
       return Effect.tap(
         this.fork(settle(this.admit(runId, program, false))),
@@ -535,11 +532,11 @@ export class RunRegistry implements RunsShape {
     });
   }
 
-  /** Register a run handle. */
+  /** Register a run handle, a child's refused under a stopped parent. */
   track(handle: RunHandle): void {
     this.assertActive();
-    if (handle.launchParent !== null)
-      this.assertAdmitsChild(handle.launchParent, handle.runId);
+    const parent = this.entries.get(handle.runId)?.activation?.unbornParent;
+    if (parent) this.assertAdmitsChild(parent, handle.runId);
     this.entryFor(handle.runId).handle = handle;
   }
 
@@ -656,7 +653,7 @@ export class RunRegistry implements RunsShape {
     } as const;
     const active = new Set(this.entries.keys());
     const stops = [...active].flatMap((runId) => {
-      const parent = this.parentOf(runId);
+      const parent = this.attachedParent(runId);
       return parent !== null && active.has(parent)
         ? []
         : [{ runId, stop: this.stop(runId, shutdown) }];
@@ -711,8 +708,8 @@ export class RunRegistry implements RunsShape {
    * decides which children are born and severs those durably (their claims
    * held), keeping the grants each inherited. The unborn ones have no row to
    * carry it: once the batch commits (a refused one cuts none), before the
-   * publisher runs any birth job, they are marked {@link unbornDetached},
-   * which their birth job reads (`openRun`): a child is born detached, or
+   * publisher runs any birth job, their activations are cut, which their
+   * birth job reads ({@link bornDetached}): a child is born detached, or
    * detached by rows. The stop marked the parent before reading its
    * children, so none is admitted in between.
    */
@@ -749,8 +746,10 @@ export class RunRegistry implements RunsShape {
         yield* session.log.afterCommit(
           Effect.sync(() => {
             for (const id of children)
-              if (!kept.has(id) && this.entries.has(id))
-                this.unbornDetached.add(id);
+              if (!kept.has(id)) {
+                const activation = this.entries.get(id)?.activation;
+                if (activation) activation.unbornParent = null;
+              }
           }),
         );
       }).pipe(Effect.scoped),

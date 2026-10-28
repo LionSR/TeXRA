@@ -43,7 +43,6 @@ export function childRunDescription(raw: string): string {
 export function createChildRun(
   session: SessionHandle,
   runId: RunId,
-  parentRunId: RunId,
   /** What owns this run — the launch site declares the truth once. */
   identity: RunIdentity,
 ): ChildRunPort {
@@ -51,7 +50,7 @@ export function createChildRun(
   // is built with the session as its sink, and closed with the run.
   return {
     logger: new TraceEmitter((event) => session.log.publish(runId, event)),
-    handle: new RunHandle({ runId, identity }, parentRunId),
+    handle: new RunHandle({ runId, identity }),
   };
 }
 

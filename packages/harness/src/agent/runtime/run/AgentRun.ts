@@ -53,6 +53,10 @@ import type { SessionHandle } from '../SessionHandle';
  * run's instruction, logged once its opening inserted the launch's media.
  */
 interface LaunchEntry {
+  /** The parent this activation runs under, read once as it starts (a
+   *  fresh run's launch, else its rows' edge): a child detached mid-run
+   *  keeps child behaviour until its next activation. */
+  readonly parent: RunId | null;
   readonly registration: readonly SessionEventDraft[] | null;
   readonly seed?: readonly RunHistoryDraft[] | null;
   readonly opening: Alongside;
@@ -209,7 +213,7 @@ export const agentRunLayer = (
       // tools stay out, and its turns get the model's whole output budget.
       const textOnly =
         script === null && !inherits && persona.tools.length === 0;
-      const root = (session.runs.get(runId)?.parent ?? null) === null;
+      const root = ctx.entry.parent === null;
       // A resumed run rebinds what its rows fold to (its model is its
       // newest config's); a fresh run binds the launch model under today's
       // default route.

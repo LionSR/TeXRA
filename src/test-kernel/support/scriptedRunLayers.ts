@@ -294,6 +294,7 @@ export function testAgentRun(
       attachedMemoryMisses: [],
     },
     entry: {
+      parent: null,
       registration: null,
       opening: Effect.succeed([]),
       entered: () => Effect.void,
@@ -343,7 +344,6 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
       const handle = testRunHandle({
         runId: init.runId,
         agent: 'chat',
-        parent: init.parentRunId ?? null,
       });
       registryOf(init.session.runs).track(handle);
       yield* Effect.addFinalizer(() =>
@@ -365,16 +365,16 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
           ...testRunTools(hostStores(), tools),
           finalToolName: init.finalToolName ?? null,
           callbacks: init.onIdle ? { onIdle: init.onIdle } : {},
-          ...('initialUserMessage' in init
-            ? {
-                entry: {
-                  registration: null,
-                  opening: Effect.succeed([]),
-                  entered: () => Effect.void,
-                  initialUserMessage: init.initialUserMessage,
-                },
-              }
-            : {}),
+          entry: {
+            parent: init.parentRunId ?? null,
+            registration: null,
+            opening: Effect.succeed([]),
+            entered: () => Effect.void,
+            initialUserMessage:
+              'initialUserMessage' in init
+                ? init.initialUserMessage
+                : 'Do the thing.',
+          },
         },
       );
     }),

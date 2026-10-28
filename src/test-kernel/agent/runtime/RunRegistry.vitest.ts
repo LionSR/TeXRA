@@ -37,8 +37,8 @@ import { generateRunId } from '@utils/core';
 setupPlatform({ workspacePath: '/workspace' });
 
 /** Builds a `RunHandle` for a toolUse test-subagent, the shape most tests need. */
-function createHandle(runId: RunId, parent: RunId | null = null): RunHandle {
-  return testRunHandle({ runId, parent, agent: 'test-subagent' });
+function createHandle(runId: RunId): RunHandle {
+  return testRunHandle({ runId, agent: 'test-subagent' });
 }
 
 /**
@@ -122,8 +122,8 @@ function trackInterruptibleHandle(
   parent: RunId | null,
   interrupt: () => void,
 ): void {
-  registry.track(createHandle(runId, parent));
-  admitInterruptibleRun(registry, runId, interrupt);
+  registry.track(createHandle(runId));
+  admitInterruptibleRun(registry, runId, interrupt, parent);
 }
 
 describe('runRegistry', () => {
@@ -202,6 +202,17 @@ describe('runRegistry', () => {
           childInterrupt,
         );
         setPhase(rootRunId, RUN_PHASE.RUNNING);
+        /** The refusal a child launched under the root meets, if any. */
+        const refusal = (childRunId: RunId) =>
+          Effect.map(
+            Effect.exit(
+              registry.start(childRunId, Effect.void, (run) => run, rootRunId),
+            ),
+            (exit) => Exit.isFailure(exit) && Cause.squash(exit.cause),
+          );
+        const stopped = {
+          message: expect.stringMatching(/that run was stopped/),
+        };
 
         // The detaching stop settles completely, its children severed,
         // while the parent's `run.end` has not folded yet. The stop still
@@ -211,37 +222,18 @@ describe('runRegistry', () => {
           detachActiveChildren: true,
           reason: 'user',
         }).settlement;
-        expect(registry.parentOf(childRunId)).toBeNull();
-        expect(() =>
-          registry.track(createHandle(lateChildRunId, rootRunId)),
-        ).toThrow(/that run was stopped/);
-        expect(registry.get(lateChildRunId)?.handle).toBeUndefined();
+        expect(registry.bornDetached(childRunId)).toBe(true);
+        expect(yield* refusal(lateChildRunId)).toMatchObject(stopped);
 
         // The fold changes nothing for the detached child: its sever stands.
         setPhase(rootRunId, RUN_PHASE.CANCELLED);
         yield* Deferred.succeed(ended, undefined);
         yield* Fiber.await(root);
         expect(childInterrupt).not.toHaveBeenCalled();
-        expect(registry.parentOf(childRunId)).toBeNull();
+        expect(registry.bornDetached(childRunId)).toBe(true);
 
         // From the fold on, admission itself refuses the stopped parent.
-        expect(() =>
-          registry.track(createHandle(postFoldChildRunId, rootRunId)),
-        ).toThrow(/that run was stopped/);
-        const launched = yield* Effect.exit(
-          registry.start(
-            postFoldChildRunId,
-            Effect.void,
-            (run) => run,
-            rootRunId,
-          ),
-        );
-        expect(
-          Exit.isFailure(launched) && Cause.squash(launched.cause),
-        ).toMatchObject({
-          message: expect.stringMatching(/that run was stopped/),
-        });
-        expect(registry.get(postFoldChildRunId)?.handle).toBeUndefined();
+        expect(yield* refusal(postFoldChildRunId)).toMatchObject(stopped);
       }),
   );
 });
@@ -276,7 +268,7 @@ it.effect(
       yield* Effect.yieldNow;
 
       // A parked turn may have no running generation, but its handle retains ownership.
-      const parked = createHandle(runId, generateRunId());
+      const parked = createHandle(runId);
       registry.track(parked);
       expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
       untrackRun(registry, runId);

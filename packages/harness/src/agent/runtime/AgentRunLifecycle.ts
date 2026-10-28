@@ -41,7 +41,7 @@ const logLifecycleWarning = (message: string, data: unknown) =>
   );
 
 export interface RunLifecycleOptions {
-  /** The launching run: the parent edge on the live handle. */
+  /** The parent this activation runs under: its launch's, or its rows'. */
   parentRunId?: RunId;
   /** Fires once with the run's id, right after its handle is tracked,
    *  forked detached: nothing it does may abort the run, and it is logged. */
@@ -238,18 +238,17 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
   const runs = registryOf(yield* Runs);
   const agentIdentifier = ctx.config.agent;
   const script = ctx.config.script ?? null;
-  const handle = new RunHandle(
-    {
-      runId,
-      // The identity its launch registered: a background script's run is
-      // the parent's agent making one call; a recipe's is its agent's.
-      identity:
-        script?.kind === 'background'
-          ? { kind: 'script', title: script.title }
-          : { kind: 'agent', agent: agentIdentifier },
-    },
-    options?.parentRunId ?? null,
-  );
+  // Read once: a child detached mid-run ends as a child.
+  const parentRunId = options?.parentRunId ?? null;
+  const handle = new RunHandle({
+    runId,
+    // The identity its launch registered: a background script's run is
+    // the parent's agent making one call; a recipe's is its agent's.
+    identity:
+      script?.kind === 'background'
+        ? { kind: 'script', title: script.title }
+        : { kind: 'agent', agent: agentIdentifier },
+  });
   const finish = options?.finishLastTurn;
   // The terminal finalizer; outcome and error facts vary per exit, and a
   // child's last turn (`lastResult`) is finished under the resolved outcome.
@@ -290,7 +289,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
         const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
         // Root failures are logged here; a subagent's is delivered to its
         // orchestrator, so a second wrapper error would blame the parent.
-        if (kind !== 'abort' && runs.parentOf(runId) === null) {
+        if (kind !== 'abort' && parentRunId === null) {
           yield* logSdkError(ctx.logger, errorMsg, err, {
             operation: `execute ${agentIdentifier}`,
           });
@@ -329,7 +328,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     const outcome = stopped ? RUN_OUTCOME.CANCELLED : AGENT_ERROR_OUTCOME[kind];
     // A child's failure rides its result, the error its delivery reports.
     const subagentResult: RunEndResult | undefined =
-      runs.parentOf(runId) !== null
+      parentRunId !== null
         ? {
             ...(carried ??
               buildTerminalRunEndResult(

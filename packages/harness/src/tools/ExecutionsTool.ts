@@ -5,15 +5,16 @@
  *
  * Every fact about a run — what it is, what it is called, how far it got,
  * whose child it is, what it still has to do — is read off the session fold
- * (`SessionView`). The fold is the one reading of the durable rows, so this
- * surface never resolves liveness, parentage or a task list a second time.
+ * (`SessionView`), and whether it is live here off `Runs`. The fold is the
+ * one reading of the durable rows, so this surface never resolves
+ * parentage or a task list a second time.
  */
 
 // Third-party imports
 import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
-import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runRecords';
 import {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
@@ -451,11 +452,9 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
     );
   }
 
-  // Only your own children, by the edge the rows leave (a detach may be in).
-  const owner = (yield* getRunRecords(context.session, runId).exists())
-    ? yield* persistedParentRunId(context.session, runId)
-    : (runs.get(runId)?.parent ?? null);
-  if (owner !== context.runId) {
+  // Only your own children, by the attached parent the fold reads.
+  const view = yield* context.session.view.read([]);
+  if (view.runs.get(runId)?.parentId !== context.runId) {
     return yield* Effect.fail(
       new ToolError(`Cannot kill run ${runId}: not a child of this session.`),
     );

@@ -29,7 +29,7 @@ import type { FollowUps } from '../FollowUps';
 /**
  * A fresh run's registration as its birth job decides it. A child a
  * detaching stop cut before it was born (marked once that detach commits,
- * before this job runs, and read here through `RunRegistry.parentOf`) is
+ * before this job runs, and read here through `RunRegistry.bornDetached`) is
  * born detached: no parent, and the grants a detach keeps, inherited from
  * that parent.
  */
@@ -41,7 +41,7 @@ const birthRows = (
   if (
     start?.type !== 'run.start' ||
     start.parent === null ||
-    registryOf(run.session.runs).parentOf(run.runId) !== null
+    !registryOf(run.session.runs).bornDetached(run.runId)
   )
     return rows;
   const snapshot = grantsKept(

@@ -33,8 +33,6 @@ export interface LiveRun {
    *  and a run with no loop of its own (a background command) reads what
    *  its launch said it takes. */
   readonly readsMessages: boolean;
-  /** Its parent edge (`RunRegistry.parentOf`). */
-  readonly parent: RunId | null;
   /** Why it was stopped here, while it unwinds from that stop. */
   readonly stopReason: RunStopReason | undefined;
   /** Resolves once every owner of it here has left. */

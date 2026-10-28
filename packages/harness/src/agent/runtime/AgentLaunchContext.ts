@@ -81,12 +81,11 @@ export interface AgentLaunchContext extends LaunchResolvedRunFacts {
 interface AgentLaunchInput {
   definition: PreparedAgentDefinition;
   runId: RunId;
-  /**
-   * A fresh run's registration, which its opening batch commits; absent,
-   * the launch resumes a run an earlier activation started: its cell
-   * activates it, and the initial instruction is not logged again.
-   */
+  /** A fresh run's registration, which its opening batch commits; absent,
+   *  a resume: its cell activates the run, which logs no instruction again. */
   registration?: RegisterRunOptions;
+  /** A resume's parent, its rows' edge: what this activation runs under. */
+  parentRunId?: RunId;
   /** The run's admission, once its activation's batch committed: no wait. */
   onAdmitted?: AgentRunShape['entry']['entered'];
   /** Session owning this run's coordination state. */
@@ -290,7 +289,8 @@ const enterRun = Effect.fn('enterRun')(function* (
       held = null;
     }).pipe(Effect.andThen(input.onAdmitted?.(state) ?? Effect.void));
   const seed = input.registration?.seed ?? null;
-  return { logger, entry: { registration, seed, opening, entered } };
+  const parent = input.registration?.parentRunId ?? input.parentRunId ?? null;
+  return { logger, entry: { parent, registration, seed, opening, entered } };
 });
 
 /**

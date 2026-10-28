@@ -385,11 +385,10 @@ const progressNotify =
     strategy: NativeChildStrategy<TTurn, R>,
   ) =>
   (update: SubagentProgressUpdate): void => {
-    const { notify, session, runId, agentName } = loop.params;
+    const { notify, session, runId, agentName, parentRunId } = loop.params;
     if (notify) return notify(update);
     if (strategy.deliveryMode === 'persistOnly') return;
-    if (loop.runs.parentOf(runId) === null) return;
-    session.followUps.sendNotice(parentEdgeIn(session, runId), {
+    session.followUps.sendNotice(parentEdgeIn(session, runId, parentRunId), {
       text: formatSubagentProgress(runId, agentName, update),
       from: { kind: 'run', runId },
     });
@@ -593,7 +592,7 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   strategy: NativeChildStrategy<TTurn, R>,
 ): Effect.fn.Return<TTurn | undefined, Error, R> {
-  const { session, runId } = loop.params;
+  const { session, runId, parentRunId } = loop.params;
   const turns = nativeTurns(loop, strategy, yield* Effect.context<R>());
   loop.turnStart = yield* Clock.currentTimeMillis;
   const turned = yield* attemptTurn(
@@ -616,7 +615,7 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
     if (strategy.deliveryMode !== 'persistOnly') {
       const wallTimeMs = (yield* Clock.currentTimeMillis) - loop.turnStart;
       const message = strategy.formatError(turn, err, wallTimeMs);
-      yield* deliverLaunchFailure(session, runId, message);
+      yield* deliverLaunchFailure(session, runId, parentRunId, message);
     }
     return yield* Effect.fail(ensureError(loop.failure.cause));
   }
@@ -671,7 +670,7 @@ const sendStopNotice = Effect.fn('childRunLoop.sendStopNotice')(function* <
   TTurn,
   R,
 >(loop: ChildLoop<TTurn, R>, strategy: NativeChildStrategy<TTurn, R>) {
-  const { session, runId } = loop.params;
+  const { session, runId, parentRunId } = loop.params;
   if (
     strategy.stopNotice === undefined ||
     strategy.deliveryMode === 'persistOnly' ||
@@ -690,7 +689,8 @@ const sendStopNotice = Effect.fn('childRunLoop.sendStopNotice')(function* <
     );
   const deliveryId = `${runId}:${loop.attemptId}:stopped`;
   const item = { text, from: { kind: 'run', runId } as const, deliveryId };
-  yield* sendToParent(session, item, { hold: 'instruction' }, loop.trace);
+  const hold = { hold: 'instruction' } as const;
+  yield* sendToParent(session, item, parentRunId, hold, loop.trace);
 });
 
 /**

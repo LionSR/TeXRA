@@ -43,7 +43,6 @@ import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { turnText } from '../run/turnText';
 import { claimFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
-import { registryOf, Runs } from '../runRegistry';
 import {
   appendRow,
   configRow,
@@ -63,6 +62,7 @@ import { dispatchPendingResponse } from './toolUseDispatch';
 import { openingHooks, stopHooks } from './hooks';
 import { stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
+import type { Runs } from '../runRegistry';
 import type { RunControls, RunHandle } from '../RunHandle';
 import type { ChildRunBoundary } from '../childRunLoop';
 import type { RunEndResult } from '../RunEndResult';
@@ -146,11 +146,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   TurnServices | ModelInvoker | Scope.Scope
 > {
   const run = yield* AgentRun;
-  const runs = registryOf(yield* Runs);
   const invoker = yield* ModelInvoker;
   const access = yield* ModelAccess;
   const { runId, session, logger } = run;
-  const isChild = () => runs.parentOf(runId) !== null;
+  const isChild = () => run.entry.parent !== null;
   // A conversation claims its own input lease, never a parent's (FollowUps).
   const followUps = yield* claimFollowUps(run);
   const compaction = yield* backgroundCompaction({

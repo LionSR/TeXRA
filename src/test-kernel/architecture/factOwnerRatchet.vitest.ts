@@ -95,10 +95,10 @@ const OWNERS: readonly {
     },
   },
   {
-    fact: "a run's parent edge before its rows exist (`parentOf`)",
+    fact: "a run's parent edge before its rows exist",
     owner: RUN_REGISTRY,
     use: 'reads',
-    name: 'launchParent',
+    name: 'unbornParent',
   },
   {
     fact: "a run's terminal row, written once per lifecycle",
