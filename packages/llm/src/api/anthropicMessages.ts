@@ -21,14 +21,13 @@ import {
 import {
   decodeModelConfiguration,
   FILE_UPLOAD_LIFETIME_SECONDS,
-  ResolvedTurnSchema,
   type AnthropicMessagesConfiguration,
   type Model,
   type ResolvedTurn,
   type TurnResult,
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
-import { decodeTurnRequest, fitLimit } from './turnInput.js';
+import { decodeTurnRequest, fitLimit, resolveTurn } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
 import { ModelError, fillModelError, sdkModelError } from '../errors.js';
@@ -629,8 +628,8 @@ export function anthropicMessagesModel(
     'llm.anthropic.prepareTurn',
   )(function* (request) {
     const input = yield* decodeTurnRequest(
-      request,
       'The canonical Anthropic input is invalid.',
+      request,
     );
     if (
       input.mode === 'background' ||
@@ -642,29 +641,26 @@ export function anthropicMessagesModel(
         message:
           'The selected Anthropic model does not support these authored controls.',
       });
-    const prepared = Schema.decodeUnknownResult(ResolvedTurnSchema)({
-      ...origin,
-      mode: 'foreground',
-      system: input.system,
-      messages: input.messages,
-      tools: input.tools ?? [],
-      controls: {
-        ...fitLimit(config.defaults, input.maxOutputTokens),
-        parallelToolCalls: config.defaults.parallelToolCalls,
-        toolChoice: input.toolChoice ?? 'auto',
-        effort: config.defaults.effort,
-        cache: config.defaults.cache,
-        stopSequences: config.defaults.stopSequences,
+    const prepared = yield* resolveTurn(
+      'Anthropic requires complete supported invocation controls.',
+      {
+        ...origin,
+        mode: 'foreground',
+        system: input.system,
+        messages: input.messages,
+        tools: input.tools ?? [],
+        controls: {
+          ...fitLimit(config.defaults, input.maxOutputTokens),
+          parallelToolCalls: config.defaults.parallelToolCalls,
+          toolChoice: input.toolChoice ?? 'auto',
+          effort: config.defaults.effort,
+          cache: config.defaults.cache,
+          stopSequences: config.defaults.stopSequences,
+        },
       },
-    });
-    if (!Result.isSuccess(prepared))
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message: 'Anthropic requires complete supported invocation controls.',
-        cause: prepared.failure,
-      });
-    yield* invocationBody(prepared.success, origin, config, uploads);
-    return prepared.success;
+    );
+    yield* invocationBody(prepared, origin, config, uploads);
+    return prepared;
   });
 
   const streamTurn: Model['streamTurn'] = (input) =>
