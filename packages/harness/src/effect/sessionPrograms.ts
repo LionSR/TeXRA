@@ -248,13 +248,7 @@ function resume(
                 ),
               ),
             );
-          // Only a child its parent no longer owns resumes with no lifetime
-          // of its own to report.
-          return resumed.completion
-            ? resumed.completion.pipe(Effect.mapError(runFailure))
-            : Effect.fail(
-                runFailure(new Error(`Run ${runId} has no result of its own.`)),
-              );
+          return resumed.completion.pipe(Effect.mapError(runFailure));
         }),
       ),
     ).pipe(

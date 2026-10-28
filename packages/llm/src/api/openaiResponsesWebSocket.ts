@@ -20,11 +20,7 @@ import {
   type Model,
   type OpenAIResponsesConfiguration,
 } from '../turn.js';
-import {
-  ModelError,
-  authOrRejectionKind,
-  enrichModelError,
-} from '../errors.js';
+import { ModelError, authOrRejectionKind, fillModelError } from '../errors.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
 import { responseEvents } from './openaiResponsesCodec.js';
 import {
@@ -235,9 +231,9 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       let returnedModel: string | undefined;
       let completed = false;
       const enrich = (error: ModelError) =>
-        enrichModelError(error, {
-          responseId: error.responseId ?? responseId,
-          model: error.model ?? returnedModel ?? config.requestedModel,
+        fillModelError(error, {
+          responseId,
+          model: returnedModel ?? config.requestedModel,
         });
       return Stream.unwrap(
         Effect.gen(function* () {

@@ -24,7 +24,7 @@ describe('persisted parent edge', () => {
             aggregateId: qualifyAggregateId('run', 'aaa010' as RunId),
             identity: { kind: 'agent', agent: 'assistant' },
             userFollowUpSupport: 'unsupported',
-            parent: { id: 'aaa0ff' as RunId, callId: null },
+            parent: { id: 'aaa0ff' as RunId, call: null },
             provenance: null,
           },
         ]);

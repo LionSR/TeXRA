@@ -24,14 +24,20 @@ import { registryOf } from '@agent/runtime/runRegistry';
 import type { AgentEvent } from '@agent/trace';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
-import { qualifyAggregateId, type RunId } from '@shared/schemas';
+import {
+  type CommitOrdinal,
+  qualifyAggregateId,
+  type RunId,
+} from '@shared/schemas';
 import { descendantRuns } from '@shared/session/sessionView';
 
 import { RunFailure, TraceUnavailable } from './errors.js';
 import type { Run } from './sessions.js';
 
-/** A run that returned without ever publishing its stream: the launcher's
- *  contract broke, and a caller waiting on admission must hear it. */
+/** A run that returned without ever publishing its stream: a resumed run
+ *  that ended before its activation committed (its result's error says
+ *  why), or a launcher whose contract broke. A caller waiting on admission
+ *  must hear it. */
 const NEVER_ENTERED = 'The run ended without entering the session.';
 
 const CHANNEL = 'agentPackage';
@@ -137,7 +143,12 @@ interface LaunchHooks {
   /** Whether the handoff was abandoned before the run could be stopped by
    *  id: a launch that reads it starts no run once it is true. */
   readonly isCancellationRequested: () => boolean;
-  readonly onAdmitted: () => Effect.Effect<void>;
+  /** The run is admitted at `commit`, its activation's: the batch with its
+   *  `run.start` or its `run.activate`. */
+  readonly onAdmitted: (
+    runId: RunId,
+    commit: CommitOrdinal,
+  ) => Effect.Effect<void>;
   readonly onJoined: () => void;
 }
 
@@ -168,25 +179,26 @@ export function handOver(
   return Effect.gen(function* () {
     const trace = yield* traceHandover(runId);
     const unlisten = session.trace.listen(runId, trace.offer);
-    const admitted = yield* Deferred.make<void, RunFailure>();
+    const admitted = yield* Deferred.make<CommitOrdinal, RunFailure>();
     // Settling a run that was admitted changes nothing here; one that never
-    // was fails its admission with its own failure, or with the launcher's
-    // broken contract.
+    // was fails its admission with its own failure, its result's error, or
+    // the launcher's broken contract.
     const settle = (
       exit: Exit.Exit<RunEndResult, RunFailure>,
     ): Effect.Effect<void> =>
       Effect.sync(unlisten).pipe(
         Effect.andThen(trace.settle(exit)),
         Effect.andThen(
-          Exit.isFailure(exit)
-            ? Deferred.failCause(admitted, exit.cause)
-            : Deferred.fail(
-                admitted,
-                new RunFailure({
-                  cause: new Error(NEVER_ENTERED),
-                  message: NEVER_ENTERED,
-                }),
-              ),
+          Effect.suspend(() => {
+            if (Exit.isFailure(exit))
+              return Deferred.failCause(admitted, exit.cause);
+            const message = exit.value.error?.message ?? NEVER_ENTERED;
+            const failure = new RunFailure({
+              cause: new Error(message),
+              message,
+            });
+            return Deferred.fail(admitted, failure);
+          }),
         ),
       );
     let joined = false;
@@ -209,7 +221,8 @@ export function handOver(
         const runFiber = yield* Effect.forkDetach(
           launch({
             isCancellationRequested: () => cancelled,
-            onAdmitted: () => Deferred.done(admitted, Exit.void),
+            onAdmitted: (_, commit) =>
+              Deferred.done(admitted, Exit.succeed(commit)),
             onJoined: () => {
               joined = true;
             },
@@ -222,14 +235,17 @@ export function handOver(
           { startImmediately: true },
         );
         spawned.push(runFiber);
-        yield* restore(Deferred.await(admitted));
+        const activation = yield* restore(Deferred.await(admitted));
         const view = session.view.changes.pipe(
-          // The level replays on subscribe, and the fold lands the run's
-          // `run.start` asynchronously, so a replayed level can predate the
-          // run.
-          Stream.dropWhile((level) => !level.runs.has(runId)),
-          // The view is the end condition: the first level holding the
-          // run's durable outcome is the last element.
+          // The level replays on subscribe, and the fold lands the
+          // activation's row asynchronously, so a replayed level can predate
+          // it: the run absent, or a resumed run with the outcome of the
+          // activation before.
+          Stream.dropWhile(
+            (level) => level.cursor < activation || !level.runs.has(runId),
+          ),
+          // The view is the end condition: the first level holding this
+          // activation's durable outcome is the last element.
           Stream.takeUntil(
             (level) => level.runs.get(runId)?.durableOutcome != null,
           ),
