@@ -21,8 +21,7 @@ Browser-safe Effect Schemas, derived types, and pure read helpers for
   [`ApprovalPolicySchema`](#approvalpolicyschema), [`resolveBypass`](#resolvebypass).
 - **Agent definitions & run outcomes**: [`AgentConfigSchema`](#agentconfigschema),
   [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
-  [`RunEndResult`](#runendresult), [`RunIdSchema`](#runidschema),
-  [`RunOutcomeSchema`](#runoutcomeschema).
+  [`RunEndResult`](#runendresult), [`RunIdSchema`](#runidschema).
 - **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
   [`configTreeRows`](#configtreerows), [`GlobalStateKey`](#globalstatekey),
   [`WorkspaceStateKey`](#workspacestatekey), [`TraceDocumentSchema`](#tracedocumentschema).
@@ -1322,16 +1321,6 @@ Normalize a file path to forward slashes for consistent comparisons.
 function normalizeFilePath(filePath: string): string
 ```
 
-## NotOwner
-
-Another live owner holds the run this request would act on.
-
-```ts
-class NotOwner extends Schema.TaggedError<NotOwner>()('NotOwner', {
-  runId: RunIdSchema,
-})
-```
-
 ## NullableFileFieldsSchema
 
 Used by AgentConfig where `editedFile` may be null.
@@ -1976,12 +1965,6 @@ type RunLifecycleStatus = RunPhase | typeof RUN_LIFECYCLE_READY;
 type RunOutcome = typeof RunOutcomeSchema.Type;
 ```
 
-## RunOutcomeSchema
-
-```ts
-const RunOutcomeSchema: Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>
-```
-
 ## RunPhase
 
 ```ts
@@ -2322,14 +2305,6 @@ A trailing newline does not produce a phantom empty element.
 function splitContentLines(text: string): string[]
 ```
 
-## StagedToolEdit
-
-A pending tool edit as the session holds it.
-
-```ts
-type StagedToolEdit = typeof StagedToolEditSchema.Type;
-```
-
 ## StateSettingEntry
 
 ```ts
@@ -2576,28 +2551,10 @@ A pending tool edit's staged content.
 type ToolEditContent = typeof ToolEditContentSchema.Type;
 ```
 
-## ToolEditContentSchema
-
-What a pending tool edit would change: the original and proposed
-content a host shows beside the request's path and line counts, and
-the diff between them, computed once where the request is built: its
-hunks and the 0-based line of the proposed text a diff view reveals
-first (null when nothing changed).
-
-```ts
-const ToolEditContentSchema: Struct<{ readonly originalContent: String; readonly proposedContent: String; readonly hunks: $Array<Struct<{ readonly oldStart: Int; readonly oldLines: Int; readonly newStart: Int; readonly newLines: Int; readonly lines: $Array<String>; }>>; readonly firstChangedLine: NullOr<Int>; }>
-```
-
 ## ToolEditPermission
 
 ```ts
 type ToolEditPermission = typeof ToolEditPermissionSchema.Type;
-```
-
-## ToolEditPermissionSchema
-
-```ts
-const ToolEditPermissionSchema: Struct<{ readonly requestId: String; readonly allowBypass: Boolean; readonly runId: Union<readonly [brand<String, "RunId">, Literal<"">]>; readonly path: String; readonly relativePath: String; readonly sourceTool: String; readonly addedLines: Int; readonly removedLines: Int; }>
 ```
 
 ## ToolFact
