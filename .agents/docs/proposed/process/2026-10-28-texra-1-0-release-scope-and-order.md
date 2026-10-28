@@ -399,9 +399,10 @@ same person's.
 | 8   | The LLM-jargon session asks whether to delete the cross-process "held result" protocol or keep it.                                                              | The LLM-jargon session              |
 | 9   | The Effect-modernization session asks whether to open a PR for wave two and whether to revert the `Redacted` keys in the three subscription-usage adapters.     | The Effect-modernization session    |
 
-Cleared since the queue was written: #14340, #14343 and #14348 merged
-(`main` at `2874076`); #14351 merges on green CI. None of the four changes a
-row.
+Cleared since the queue was written: #14340, #14343, #14348 and #14351
+merged (`main` at `4993684`). None of the four changes a row. The
+effect-native series (#14336, #14345, #14347, #14348, #14349, #14351) is
+now entirely on `main`.
 
 ## Freeze and release
 
