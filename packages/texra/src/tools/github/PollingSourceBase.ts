@@ -188,13 +188,14 @@ export abstract class PollingSourceBase<
   /** The stop request for the owned poll loop; absent while it is stopped. */
   private pollLoopStop: Deferred.Deferred<void> | undefined;
 
-  constructor(
-    protected readonly config: PollingSourceConfig,
-    /** Where this source polls and delivers; absent on a source a test
-     *  drives through its hooks alone, whose deliveries belong to the
-     *  caller and which cannot be subscribed to. */
-    private readonly lifetime?: PollingLifetime,
-  ) {
+  protected readonly config: PollingSourceConfig;
+  /** Where this source polls and delivers; absent on a source a test
+   *  drives through its hooks alone, whose deliveries belong to the
+   *  caller and which cannot be subscribed to. */
+  private readonly lifetime?: PollingLifetime;
+  constructor(config: PollingSourceConfig, lifetime?: PollingLifetime) {
+    this.config = config;
+    this.lifetime = lifetime;
     this.inLogChannel = withLogChannel(config.name);
   }
 

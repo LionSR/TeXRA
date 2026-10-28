@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 
 import { ensureError } from '@utils/errors/errorMessage';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
+import type { Environment } from 'nunjucks';
 
 /**
  * File name exposed to prompt XML and workflow output instructions.
@@ -58,16 +59,15 @@ export function getListOfFiles(
  * a failed import surfaces on each render. A fresh environment per
  * render costs little: `renderString` compiles the template each call anyway.
  */
-const promptEnvironment: Effect.Effect<import('nunjucks').Environment, Error> =
-  Effect.tryPromise({
-    try: () => import('nunjucks'),
-    catch: ensureError,
-  }).pipe(
-    Effect.map(
-      ({ default: nunjucks }) =>
-        new nunjucks.Environment([], { autoescape: false }),
-    ),
-  );
+const promptEnvironment: Effect.Effect<Environment, Error> = Effect.tryPromise({
+  try: () => import('nunjucks'),
+  catch: ensureError,
+}).pipe(
+  Effect.map(
+    ({ default: nunjucks }) =>
+      new nunjucks.Environment([], { autoescape: false }),
+  ),
+);
 
 /**
  * Render a prompt string using nunjucks templating.

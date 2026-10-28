@@ -173,7 +173,9 @@ export class RunRegistry implements RunsShape {
   /** Resume one persisted run on this session (`resumeRun`). */
   readonly resume: RunPrograms['resume'];
 
-  constructor(private readonly init: RunRegistryInit) {
+  private readonly init: RunRegistryInit;
+  constructor(init: RunRegistryInit) {
+    this.init = init;
     this.programs = init.programs;
     this.resume = init.programs.resume;
   }

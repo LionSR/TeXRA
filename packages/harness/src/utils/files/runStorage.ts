@@ -64,18 +64,26 @@ export class RunFileService {
   /** The files the run read, which an edit of one needs; read-only here. */
   public readonly readFiles: ReadonlySet<string> = new Set<string>();
 
+  public readonly runId: RunId;
+  private readonly roots: {
+    readonly storage: string;
+    readonly workspace: string | undefined;
+  };
+
   constructor(
-    public readonly runId: RunId,
+    runId: RunId,
     /**
      * The run's session roots. Every workspace and storage path this service
      * resolves reads them here rather than from the calling context's roots
      * scope, which a run's Effect fiber is not guaranteed to sit inside.
      */
-    private readonly roots: {
+    roots: {
       readonly storage: string;
       readonly workspace: string | undefined;
     },
   ) {
+    this.runId = runId;
+    this.roots = roots;
     this.runDirectory = runDirUnder(roots.storage, runId);
   }
 

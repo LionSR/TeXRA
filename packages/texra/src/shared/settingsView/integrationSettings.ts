@@ -24,19 +24,22 @@ import {
 import { type PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 
 /** The `codex` plugin's repository-scoped keys. */
-export enum CodexStateKey {
-  MODEL = 'texra.codexModel',
-  SANDBOX_MODE = 'texra.codexSandboxMode',
-  REASONING_EFFORT = 'texra.codexReasoningEffort',
-  APPROVAL_POLICY = 'texra.codexApprovalPolicy',
-}
+export const CodexStateKey = Object.freeze({
+  MODEL: 'texra.codexModel',
+  SANDBOX_MODE: 'texra.codexSandboxMode',
+  REASONING_EFFORT: 'texra.codexReasoningEffort',
+  APPROVAL_POLICY: 'texra.codexApprovalPolicy',
+} as const);
+export type CodexStateKey = (typeof CodexStateKey)[keyof typeof CodexStateKey];
 
 /** The `claude-agent` plugin's repository-scoped keys. */
-export enum ClaudeAgentStateKey {
-  MODEL = 'texra.claudeAgentModel',
-  PERMISSION_MODE = 'texra.claudeAgentPermissionMode',
-  EFFORT = 'texra.claudeAgentEffort',
-}
+export const ClaudeAgentStateKey = Object.freeze({
+  MODEL: 'texra.claudeAgentModel',
+  PERMISSION_MODE: 'texra.claudeAgentPermissionMode',
+  EFFORT: 'texra.claudeAgentEffort',
+} as const);
+export type ClaudeAgentStateKey =
+  (typeof ClaudeAgentStateKey)[keyof typeof ClaudeAgentStateKey];
 
 /** An external coding agent's row: repo-scoped, on the approval tab and in `/config`. */
 function agentCliSetting(

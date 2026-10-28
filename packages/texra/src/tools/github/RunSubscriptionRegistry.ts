@@ -104,9 +104,9 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     });
   }
 
-  private constructor(
-    private readonly opts: RunSubscriptionRegistryOptions<K, Input>,
-  ) {
+  private readonly opts: RunSubscriptionRegistryOptions<K, Input>;
+  private constructor(opts: RunSubscriptionRegistryOptions<K, Input>) {
+    this.opts = opts;
     this.source = opts.source;
   }
 

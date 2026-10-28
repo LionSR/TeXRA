@@ -33,7 +33,10 @@ function buildBackgroundTaskLog(tasks: BackgroundTasks): ToolUseLog {
 export class ClaudeBackgroundTaskTracker {
   private active: ToolCardHandle | undefined;
 
-  constructor(private readonly logger: AgentTrace) {}
+  private readonly logger: AgentTrace;
+  constructor(logger: AgentTrace) {
+    this.logger = logger;
+  }
 
   replace(tasks: BackgroundTasks): void {
     const log = buildBackgroundTaskLog(tasks);

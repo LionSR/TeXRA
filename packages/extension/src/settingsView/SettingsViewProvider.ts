@@ -35,13 +35,15 @@ export class SettingsViewProvider {
   private readonly contentProvider: BundledViewContentProvider;
   private readonly messageHandler: SettingsViewMessageHandler;
 
+  private readonly runtime: ProcessRuntime;
   constructor(
     context: vscode.ExtensionContext,
     secrets: PlatformSecrets,
-    private readonly runtime: ProcessRuntime,
+    runtime: ProcessRuntime,
     roots: WorkspaceRoots,
     progressView: ProgressViewProvider,
   ) {
+    this.runtime = runtime;
     this.contentProvider = new BundledViewContentProvider(
       context,
       'SettingsView',

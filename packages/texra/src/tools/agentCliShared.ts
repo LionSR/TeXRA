@@ -47,7 +47,10 @@ import type { SettingsStores } from '@texra-ai/harness/host';
 export class StreamedToolCards {
   private readonly cards = new Map<string, ToolCardHandle>();
 
-  constructor(private readonly logger: AgentTrace) {}
+  private readonly logger: AgentTrace;
+  constructor(logger: AgentTrace) {
+    this.logger = logger;
+  }
 
   /** Open a card for `id` with its first log. */
   open(id: string, log: ToolUseLog): void {

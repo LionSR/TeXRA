@@ -279,7 +279,10 @@ const sinkLanes = new WeakMap<NdjsonStdoutSink, PerKeyLane>();
 export class NdjsonStdoutSink {
   private stdoutClosed = false;
 
-  constructor(private readonly stdout: NdjsonWritable = processStdoutTarget) {}
+  private readonly stdout: NdjsonWritable;
+  constructor(stdout: NdjsonWritable = processStdoutTarget) {
+    this.stdout = stdout;
+  }
 
   writeRecord(unstamped: CliNdjsonRecord): void {
     if (this.isClosed()) return;
