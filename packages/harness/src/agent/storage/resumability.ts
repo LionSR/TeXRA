@@ -60,27 +60,3 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
     ? { kind: 'checkpoint' }
     : { kind: 'none' };
 });
-
-/**
- * Whether a resume of `runId` has rows to continue from. Fails when they
- * cannot be read (an earlier build's with its refusal), so "nothing to
- * resume" stays apart from "resume failed".
- */
-export const canResume = Effect.fn('canResume')(function* (
-  runId: RunId,
-  session: SessionHandle,
-): Effect.fn.Return<boolean, Error> {
-  const decision = yield* deriveResumability(runId, session);
-  if (decision.kind === 'unreadable')
-    return yield* Effect.fail(
-      new Error(
-        `Failed to read the resume state of run ${runId}: ${decision.cause}`,
-      ),
-    );
-  if (decision.kind === 'earlierBuild') return yield* decision.refusal;
-  if (decision.kind === 'none')
-    yield* Effect.logWarning(`Run ${runId} is not resumable`).pipe(
-      withLogChannel(CHANNEL),
-    );
-  return decision.kind === 'checkpoint';
-});

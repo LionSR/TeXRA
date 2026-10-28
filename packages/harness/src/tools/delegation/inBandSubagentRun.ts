@@ -23,6 +23,7 @@ import {
 } from '@agent/runtime/AgentLaunchContext';
 import type { ResumeTurnIdentity } from '@agent/runtime/executeAgent';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import { runRejection } from '@agent/runtime/runClassification';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import {
@@ -332,7 +333,8 @@ export const executeSubagentInBand = (
  * Resume a persisted child under the run id it already has and await it as
  * {@link executeSubagentInBand} awaits a launch: the child continues where
  * its last owner stopped, in one cycle, and its typed result is read back
- * from the record. Its stored configuration is what it runs under.
+ * from the record. A child this process cannot resume (`runRejection`) is
+ * refused first; one it can runs under its stored configuration.
  */
 export const resumeSubagentInBand = (
   options: InBandSubagentRunBaseOptions,
@@ -340,6 +342,11 @@ export const resumeSubagentInBand = (
   awaitInBand(
     options.runId,
     Effect.gen(function* () {
+      const rejection = yield* runRejection(options.runId, options.session);
+      if (rejection !== null)
+        return yield* new SubagentDurabilityError({
+          message: `Subagent ${options.runId} cannot be resumed here (${rejection.kind}).`,
+        });
       const agentConfig = yield* getRunRecords(
         options.session,
         options.runId,

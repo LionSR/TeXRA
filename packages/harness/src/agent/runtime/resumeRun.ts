@@ -34,7 +34,6 @@ import { runRejection } from './runClassification';
 
 import { type RunEndResult } from './RunEndResult';
 import {
-  ResumeSessionUnavailableError,
   resumeToolUseFromResumeData,
   type ResumeToolUseFromResumeDataOptions,
   type ResumeTurnIdentity,
@@ -257,9 +256,6 @@ function refusalFor(
   // A live owner refused the claim, or took it after its owner was proved dead.
   if (heldElsewhereBy(error) !== null)
     return Effect.succeed({ failed: 'owned_elsewhere' });
-  if (error instanceof ResumeSessionUnavailableError) {
-    return Effect.succeed({ failed: 'finished' });
-  }
   if (error instanceof DatabaseRowEarlier)
     return Effect.succeed({ failed: 'earlier_build' });
   if (namesUnusableCheckpoint(error)) {
