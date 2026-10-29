@@ -36,8 +36,8 @@ import {
   type StateReadFailed,
   type StateWriteFailed,
 } from '@platform/interfaces';
-import type { PluginContext } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import type { PluginContext } from '@tools/sessionTools';
 import { entriesOf } from '@tools/catalogEntries';
 import {
   readDisabledTools,

@@ -16,10 +16,10 @@ import { describe, expect } from 'vitest';
 
 import '@test/support/sessionGraphTestSetup';
 
+import { withProcessServices } from '@texra-ai/harness/host';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { Runs } from '@agent/runtime/runRegistry';
-import { withProcessServices } from '@platform/processRuntime';
 import { AgentConfigSchema } from '@shared/schemas';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {

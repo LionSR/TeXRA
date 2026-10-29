@@ -5,7 +5,7 @@ import { describe, expect } from 'vitest';
 
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
-import { GlobalValues } from '@platform/processRuntime';
+import { GlobalValues } from '@platform/stateStores';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { globalValuesOver } from '@test/support/setupPlatform';

@@ -5,13 +5,14 @@
  * session the same way. `Sessions.layer` is an embedder's
  * composition of that process from its platform and plugins.
  */
-import { Context, Effect, Layer } from 'effect';
+import { Context, Effect, Layer, type ManagedRuntime } from 'effect';
 
+import type { ProcessServices } from '@agent/runtime/processServices';
+import { SessionOwner } from '@agent/runtime/sessionOwner';
 import {
   ownerProcessLayer,
   type ProcessLayerOptions,
 } from '@controllers/session/sessionLayer';
-import { SessionOwner, type ProcessServices } from '@platform/processRuntime';
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -168,5 +169,32 @@ function sessionsLayer(
         ? Layer.empty
         : Layer.succeed(CommandDirs)(options.commandDirs),
     ),
+  );
+}
+
+/** The runtime a composition root makes over `processLayer`: the process
+ *  services, and the `Sessions` that open and close its sessions. Each root
+ *  keeps it in a local and threads it to the surfaces that run on it; there
+ *  is no ambient slot to read it back from. */
+export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
+  ProcessServices | Sessions,
+  never
+>;
+
+/**
+ * `effect` over this runtime's services (a {@link ProcessRuntime}'s, or a
+ * host runtime's that serves more), as a program rather than a run: a
+ * composition root hands the process services to a program it must give away
+ * (a shutdown handler, a host callback typed as an Effect) without
+ * stepping through a Promise to get them. The services are the runtime's own
+ * context, built once and cached there, so this is the same provision
+ * `runPromise` would have made, minus the boundary.
+ */
+export function withProcessServices<A, E, R = ProcessServices | Sessions>(
+  processRuntime: ManagedRuntime.ManagedRuntime<R, never>,
+  effect: Effect.Effect<A, E, NoInfer<R>>,
+): Effect.Effect<A, E> {
+  return Effect.flatMap(processRuntime.contextEffect, (context) =>
+    Effect.provide(effect, context),
   );
 }

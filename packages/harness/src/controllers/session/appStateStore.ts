@@ -6,7 +6,7 @@ import { Effect, Layer, RcMap, Result, Schema } from 'effect';
 
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { withLogChannel } from '@logger/effectLog';
-import { GlobalValues, StateStores } from '@platform/processRuntime';
+import { GlobalValues, StateStores } from '@platform/stateStores';
 import {
   AppState,
   StateReadFailed,

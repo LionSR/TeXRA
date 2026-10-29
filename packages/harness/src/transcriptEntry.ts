@@ -66,7 +66,7 @@ export {
 export {
   viewDiagnosticsLayer,
   withForkFailureReporting,
-} from '@platform/processRuntime';
+} from '@logger/effectDiagnostics';
 
 // The rows: one kind each, the headline a row is listed by, and the
 // untruncated text a host elides to fit.

@@ -42,7 +42,7 @@ import {
  *   step serves it to, and the one host door (the settings Git tab reading
  *   the GitHub plugin's process services through `ToolCatalog`), so plugin
  *   state is used past its switch and its pin. The table holds each
- *   plugin with its services erased (`PluginContext` in `processRuntime.ts`),
+ *   plugin with its services erased (`PluginContext` in `sessionTools.ts`),
  *   so no `ProcessServices` arm names one.
  */
 /** The app's plugin arms (the harness's built-ins own none). */
@@ -91,7 +91,6 @@ const SERVICE_HOMES = new Set([
   'packages/texra/src/tools/agentCliSessionStores.ts',
   'packages/texra/src/tools/integrationPlugins.ts',
   'packages/texra/src/tools/registry.ts',
-  'packages/harness/src/platform/processRuntime.ts',
 ]);
 
 const files = () => ALL_HOST_PRODUCTION_ROOTS.flatMap(productionFilesUnder);

@@ -38,7 +38,8 @@
 
 // Building the process and opening sessions.
 export { Sessions } from './effect/processLayer.js';
-export type { AgentPlatform, Composition } from './effect/sessions.js';
+export type { AgentPlatform } from './platform/agentPlatform.js';
+export type { Composition } from './effect/sessions.js';
 export type { Plugin } from '@tools/plugins';
 export type { WorkspaceRoots } from '@platform/workspaceRoots';
 export type {

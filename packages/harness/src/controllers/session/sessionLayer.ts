@@ -39,22 +39,21 @@ import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { registryOf, RunRegistry } from '@agent/runtime/runRegistry';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
-import {
-  SESSION_CLOSE_DEADLINE_MS,
-  type SessionHandle,
-  type SessionHandleInit,
+import type {
+  SessionHandle,
+  SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
 import { presentTerminalResult } from '@agent/runtime/terminalResultToast';
-import { mcpConfigPathOf } from '@common/plugins/mcpServers';
-import { withLogChannel } from '@logger/effectLog';
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { AppSignals } from '@platform/appSignals';
 import {
   holdProcessRoot,
+  SESSION_CLOSE_DEADLINE_MS,
   SessionOwner,
-  type HostSkillOptions,
-  type ProcessServices,
-} from '@platform/processRuntime';
+} from '@agent/runtime/sessionOwner';
+import type { ProcessServices } from '@agent/runtime/processServices';
+import { mcpConfigPathOf } from '@common/plugins/mcpServers';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { withLogChannel } from '@logger/effectLog';
+import { AppSignals } from '@platform/appSignals';
 import {
   AgentDirectories,
   AppState,
@@ -91,6 +90,7 @@ import {
 } from '@shared/session/database';
 import type { SettingsCatalog } from '@shared/state/stateSettings';
 import { UsageLog } from '@shared/usageLog';
+import type { HostSkillOptions } from '@skills/skillSources';
 import { ToolCatalogOwner } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';

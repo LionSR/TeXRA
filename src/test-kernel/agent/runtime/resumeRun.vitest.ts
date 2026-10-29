@@ -41,11 +41,11 @@ import { it } from '@effect/vitest';
 import { Cause, Effect, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
+import { withProcessServices } from '@texra-ai/harness/host';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withProcessServices } from '@platform/processRuntime';
 import { type RunId } from '@shared/schemas';
 import { queuedFollowUps } from '@test/support/sessionTestUtils';
 import {

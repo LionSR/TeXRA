@@ -130,7 +130,7 @@ const HARNESS_ENTRY_FILES = [
 const EFFECT_RUN_ENTRIES = [
   'packages/extension/src/progressView/frontend/sessionTransport.ts',
   'packages/texra/src/shared/signals.ts',
-  'packages/harness/src/platform/processRuntime.ts',
+  'packages/harness/src/logger/effectDiagnostics.ts',
   // Worker entry: no process runtime exists in the worker.
   'packages/harness/src/agent/codeSandbox/worker.ts',
 ];

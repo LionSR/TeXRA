@@ -2,12 +2,10 @@ import { Context, Effect, Layer, ManagedRuntime } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
 import { processLayer } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@agent/runtime/processServices';
+import type { SessionOwner } from '@agent/runtime/sessionOwner';
 import { validationModelLayer } from '@cli/runtime/validationModel';
-import {
-  type ProcessServices,
-  type SessionOwner,
-  withForkFailureReporting,
-} from '@platform/processRuntime';
+import { withForkFailureReporting } from '@logger/effectDiagnostics';
 import type { Plugin } from '@tools/plugins';
 import { initTestProcessRuntime } from './testProcessRuntime';
 import { createFakeWorkspaceRoots } from './FakePlatform';

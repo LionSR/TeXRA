@@ -15,12 +15,9 @@ import { ConfigProvider, Context, Effect, Layer } from 'effect';
 import { afterEach, beforeEach, vi } from 'vitest';
 
 import type { AgentCatalogShape } from '@agent/index/agentCatalog';
+import type { ProcessServices } from '@agent/runtime/processServices';
+import type { SessionOwner } from '@agent/runtime/sessionOwner';
 import type { ProcessLayerOptions } from '@controllers/session/sessionLayer';
-import {
-  GlobalValues,
-  type ProcessServices,
-  type SessionOwner,
-} from '@platform/processRuntime';
 import {
   AgentDirectories,
   AppState,
@@ -28,6 +25,7 @@ import {
   type StateStore,
 } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
+import { GlobalValues } from '@platform/stateStores';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { GlobalDatabase, type CurrentValues } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
@@ -330,7 +328,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('./testProcessRuntime'),
     import('effect'),
     import('@test/support/fetchTestUtils'),
-    import('@platform/processRuntime'),
+    import('@agent/runtime/sessionOwner'),
     import('@agent/index/agentCatalog'),
     // The production composition even in a suite that mocks its module
     // (`AgentPackage`'s stand-in composes over this runtime).

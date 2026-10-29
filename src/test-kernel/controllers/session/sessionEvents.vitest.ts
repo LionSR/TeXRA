@@ -77,7 +77,7 @@ import {
 import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { type GlobalValues } from '@platform/processRuntime';
+import type { GlobalValues } from '@platform/stateStores';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   qualifyAggregateId,

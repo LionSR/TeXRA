@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
 
+import { withProcessServices } from '@texra-ai/harness/host';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { withProcessServices } from '@platform/processRuntime';
 import {
   AgentConfigSchema,
   MESSAGE_TYPES,

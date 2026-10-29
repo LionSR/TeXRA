@@ -26,7 +26,7 @@ import {
 
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { RunAttempt } from '@agent/followUp/ToolUseFollowUp';
-import type { ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@agent/runtime/processServices';
 import { grantsKept, type ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   qualifyAggregateId,

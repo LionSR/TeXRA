@@ -22,7 +22,8 @@
 import { Context, Effect, type ManagedRuntime, References } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { SessionOwner, type ProcessServices } from '@platform/processRuntime';
+import { SessionOwner } from '@agent/runtime/sessionOwner';
+import type { ProcessServices } from '@agent/runtime/processServices';
 import type { LocalSession, Sessions } from '@texra-ai/harness';
 
 /** The harness's runtime: a host's, with the internal session owner a root

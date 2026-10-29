@@ -10,7 +10,7 @@ import {
   launchProcessChild,
   type ProcessChildLaunch,
 } from '@agent/runtime/delegation/detachedChildRun';
-import type { ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@agent/runtime/processServices';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   qualifyAggregateId,

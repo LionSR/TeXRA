@@ -29,7 +29,7 @@ import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
-import type { ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@agent/runtime/processServices';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';

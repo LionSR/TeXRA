@@ -548,7 +548,7 @@ through the one `processLayer` option, rather than being repeated per host.
    `AgentCatalog` service, `packages/harness/src/agent/index/agentCatalog.ts`). There is no per-embedder agent
    namespace.
 4. **One session per storage root.** `SessionOwner.open`
-   (`packages/harness/src/platform/processRuntime.ts`) returns the session
+   (`packages/harness/src/agent/runtime/sessionOwner.ts`) returns the session
    already open over the same root, built from what its first opener
    supplied. Embedding inside a process that already hosts TeXRA shares that
    session.

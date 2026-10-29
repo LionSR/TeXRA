@@ -41,6 +41,7 @@ import { it } from '@effect/vitest';
 import { Effect, Layer, Schema, Stream, SubscriptionRef } from 'effect';
 import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
+import { withProcessServices } from '@texra-ai/harness/host';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
@@ -57,7 +58,6 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { makeSessionStore } from '@controllers/session/sessionStore';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { withProcessServices } from '@platform/processRuntime';
 import {
   qualifyAggregateId,
   isDisplaySessionEvent,

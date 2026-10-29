@@ -54,7 +54,7 @@ import {
   type ScriptSource,
 } from '@agent/runtime/RunCall';
 import type { AgentTrace } from '@agent/trace';
-import type { ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@agent/runtime/processServices';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   type DispatchFacts,

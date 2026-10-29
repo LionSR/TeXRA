@@ -7,7 +7,7 @@ Folder-scoped addition to the root [AGENTS.md](../../AGENTS.md) for
 
 - `packages/harness/src/common/` holds host-neutral, cross-cutting logic with domain meaning (errors, parsing, plugins, storage, teams). Check a module's dependencies before using it from browser code.
 - `packages/harness/src/utils/` is host-agnostic, not browser-safe: an import added to a module in the closure of the `./schemas` or `./transcript` entry must stay browser-safe. `utils/core/` has path basics, abort and failure helpers, id minting, and `withPerKeyLane` (`perKeyQueue.ts`).
-- `packages/harness/src/platform/` defines the host ports and the process runtime types. Each host's composition root builds one `ManagedRuntime` over `processLayer()` and opens and closes sessions through its `SessionOwner`.
+- `packages/harness/src/platform/` defines the host ports and imports nothing above it. Each host's composition root builds one `ProcessRuntime` over `processLayer()` (`packages/harness/src/effect/processLayer.ts`) and opens and closes sessions through its `SessionOwner` (`packages/harness/src/agent/runtime/sessionOwner.ts`).
 - Hosts and the app hold a session as the public `LocalSession` (`Sessions.open`, `packages/harness/src/effect/sessions.ts`): its view, a run's records (`records(runId)`), the runs this process holds (`held`), the run listing and deletion, and its notices (`emit`), all typed. The internal `SessionHandle` is the harness's; a host never names it.
 
 ## Configuration, storage, and workspace files

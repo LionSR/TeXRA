@@ -15,13 +15,13 @@ import {
 } from 'effect';
 
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
+import type { AgentCatalogServices } from '@agent/runtime/processServices';
 import { withLogChannel } from '@logger/effectLog';
 import {
   AgentDirectories,
   type AgentDirectoriesFailed,
   type StateReadFailed,
 } from '@platform/interfaces';
-import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   AgentDelegationScope,

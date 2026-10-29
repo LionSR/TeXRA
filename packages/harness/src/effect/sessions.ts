@@ -15,13 +15,8 @@ import type {
 } from '@agent/runtime/HostInteractions';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { AgentRunListingEntry } from '@agent/storage/runListing';
-import type {
-  AgentDirectoriesPort,
-  ToolMissingHandler,
-} from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
+import type { AgentPlatform } from '@platform/agentPlatform';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { HostSkillOptions } from '@platform/processRuntime';
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
 import type {
   CommitOrdinal,
@@ -42,6 +37,7 @@ import type {
   PendingRequest,
   SessionView,
 } from '@shared/session/readonlyViews';
+import type { HostSkillOptions } from '@skills/skillSources';
 import type { Plugin } from '@tools/plugins';
 import type { Effect, Stream, Scope, SubscriptionRef } from 'effect';
 
@@ -52,25 +48,6 @@ import type {
   ToolsRefused,
 } from './errors.js';
 import type { HeldRun, RunDeletion, RunRecords } from './sessionReads.js';
-
-/**
- * The process services the package composes, together with the workspace
- * roots the package's runs work in. `nodePlatform()` builds all of them; an
- * embedder supplying its own names its workspace roots beside them.
- */
-export interface AgentPlatform {
-  /** The agent directories this process's `AgentDirectories` service serves. */
-  readonly agentDirectories: AgentDirectoriesPort;
-  /** Surfaces a tool-missing error to the embedder, served as
-   *  `ToolMissingReporter`; absent, a missing-tool probe answers without
-   *  surfacing. */
-  readonly toolMissingHandler?: ToolMissingHandler;
-  /** The app's directories on every command's PATH (`CommandDirs`). */
-  readonly commandDirs?: () => readonly string[];
-  readonly roots: WorkspaceRoots;
-  /** The secret store this process's `Secrets` service reads from. */
-  readonly secrets: PlatformSecrets;
-}
 
 /** What an embedder composes the process from: its platform, its plugins
  *  (the harness's built-ins among them) and its skill sources, without
