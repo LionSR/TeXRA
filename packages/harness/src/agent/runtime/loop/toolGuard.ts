@@ -247,12 +247,13 @@ const rejection = Effect.fn('toolUse.guard')(function* (
 
 /** One call through the chain, over the `issued` input and its recorded
  *  `hooks`: its rejection, else the tool's body on the final input, which
- *  `bodyStarts` announces (and records) once the chain has let it run. */
+ *  `bodyStarts` is handed (and records) once the chain has let it run. */
 export const guardedToolCall = (
   tool: RuntimeTool,
   issued: unknown,
   hooks: CallHooks = { outcomes: [], fromHook: (input) => input },
-  bodyStarts: Effect.Effect<void, Error> = Effect.void,
+  bodyStarts: (input: unknown) => Effect.Effect<void, Error> = () =>
+    Effect.void,
 ): ReturnType<RuntimeTool['call']> => {
   const { deny, hook, rewritten } = answerOf(hooks.outcomes);
   if (deny !== null)
@@ -262,7 +263,7 @@ export const guardedToolCall = (
     Effect.flatMap((rejected) =>
       rejected
         ? Effect.succeed(rejected)
-        : Effect.andThen(bodyStarts, tool.call(input)).pipe(
+        : Effect.andThen(bodyStarts(input), tool.call(input)).pipe(
             Effect.updateService(RunCall, (call) => call && { ...call, hook }),
           ),
     ),

@@ -63,7 +63,8 @@ the operation that actually runs:
    person. A tool whose body opens its own request is asked about there, after
    its proposal exists, with what the hooks said: an edit's review before the
    edit is applied, a plan, a delegation proposal. A hook's `ask` forces that
-   review. A question the body asks the user is not a permission check, so a
+   review, and no grant turned on while it waits answers it; only a person
+   does. A question the body asks the user is not a permission check, so a
    hook adds no prompt to it.
 
 A resumed run reads the hooks' answers and the rewrite from their

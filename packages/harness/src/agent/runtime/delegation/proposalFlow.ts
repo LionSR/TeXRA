@@ -152,9 +152,10 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
   ): Effect.fn.Return<DelegationProposalDecision, ProposalRequestError> {
     const { session, runId, config } = parent.run;
-    if (isTrustedScript(config))
-      return { result: { action: 'approve' }, childApproval: 'inherit' };
     const hook = (yield* RunCall)?.hook;
+    // A trusted recipe's delegation is approved unless a hook asked for it.
+    if (isTrustedScript(config) && hook !== 'ask')
+      return { result: { action: 'approve' }, childApproval: 'inherit' };
     const answer = session.approvals.permission(runId, 'proposal', hook);
     if (answer !== 'allow' && answer !== 'ask')
       return { result: answer, childApproval: 'inherit' };
@@ -172,7 +173,12 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     const { requests } = parent;
     const result = yield* requests.open({
       kind: 'proposal',
-      data: { requestId: requests.nextId('proposal'), runId, ...proposal },
+      data: {
+        requestId: requests.nextId('proposal'),
+        allowBypass: hook !== 'ask',
+        runId,
+        ...proposal,
+      },
     });
     return { result, childApproval: 'inherit' };
   },

@@ -126,6 +126,7 @@ describe('approval prompt hooks', () => {
           kind: 'proposal',
           data: {
             requestId: 'proposal-1',
+            allowBypass: true,
             runId: ROOT_RUN,
             agent: 'review',
             model: 'deepseek/deepseek-v4-flash',

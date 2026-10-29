@@ -143,7 +143,6 @@ function withDocuments(result: ToolResult): ToolResult {
 export const DocumentTaskTool = defineTool({
   name: 'document_task',
   launchesTasks: true,
-  requiresApproval: 'inBody',
   replay: 'safe',
   lane: 'own',
   scriptGlobal: { positional: 'prompt' },
