@@ -108,7 +108,13 @@ export {
 } from '@agent/runtime/HostInteractions';
 // One program per pending request a host follows, while the view lists it.
 export { followPendingRequests } from './effect/requestAnswerer.js';
-export { buildDiffHunks, type DiffHunks } from '@utils/text/unifiedDiff';
+export {
+  buildDiffHunks,
+  countLineChanges,
+  reportDiffTimeout,
+  type DiffHunks,
+  type Hunk,
+} from '@utils/text/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
 export { presentRunFailure } from '@agent/runtime/terminalResultToast';
 // Which side of a trace event a run wrote.

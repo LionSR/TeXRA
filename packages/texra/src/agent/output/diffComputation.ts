@@ -2,12 +2,18 @@
  * Diff statistics computation for output files.
  *
  * Computes line-based diff statistics between base files and outputs
- * using the diff-match-patch library.
+ * from the harness's diff hunks, the same ones a reader sees beside the diff.
  */
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/host';
+import {
+  buildDiffHunks,
+  countLineChanges,
+  pathToLocationIn,
+  reportDiffTimeout,
+  withLogChannel,
+} from '@texra-ai/harness/host';
 import { absentReason } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
@@ -17,7 +23,6 @@ import {
   type FileLocation,
 } from '@texra-ai/harness/schemas';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
-import { diffLineChanges } from '@texra/utils/text/diff';
 
 import { traceFileLineage } from './lineageMapping';
 import { ensureRoundData, type OutputState } from './outputState';
@@ -53,7 +58,9 @@ const computeDiffStats = Effect.fn('documents.computeDiffStats')(
       { concurrency: 2 },
     );
 
-    return diffLineChanges(baseContent, outContent);
+    const { hunks, timeout } = buildDiffHunks(baseContent, outContent);
+    yield* reportDiffTimeout(timeout);
+    return countLineChanges(hunks);
   },
   // An unreadable side of the pair yields no stats rather than failing the
   // round, but never silently: a missing file is expected on a historical

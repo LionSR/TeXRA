@@ -1,54 +1,18 @@
 /**
  * diff-match-patch helpers.
  *
- * dmp is a metric library here, not a text pipeline: every
- * diff a user or a model reads comes from the harness's `buildDiffHunks`. What
- * survives here is what dmp does that jsdiff does not — a Levenshtein
- * distance and a cheap line-change count for run bookkeeping.
+ * dmp is a metric library here, not a text pipeline: every diff a user or a
+ * model reads, and every line count beside one, comes from the harness's
+ * `buildDiffHunks`. What survives here is what dmp does that jsdiff does not:
+ * a Levenshtein distance.
  */
 
 // Third-party imports
-import { countLines } from '@texra-ai/harness/schemas';
-import { diff_match_patch, DIFF_DELETE, DIFF_INSERT } from 'diff-match-patch';
-
-// Local imports - utils
-
-interface DiffLineChanges {
-  added: number;
-  removed: number;
-}
-
-/**
- * Character diff with diff-match-patch's line-check speedup, no semantic
- * cleanup — the shape both metric callers below want.
- */
-function diffChars(oldText: string, newText: string) {
-  return new diff_match_patch().diff_main(oldText, newText, true);
-}
+import { diff_match_patch } from 'diff-match-patch';
 
 /** diff-match-patch Levenshtein distance between two strings. */
 export function diffTextLevenshtein(oldText: string, newText: string): number {
-  return new diff_match_patch().diff_levenshtein(diffChars(oldText, newText));
-}
-
-/**
- * Approximate added/removed line counts for run bookkeeping.
- *
- * Deliberately not the numbers shown beside a diff body: those come from
- * `countLineChanges`, folded over the very hunks the reader sees.
- */
-export function diffLineChanges(
-  oldText: string,
-  newText: string,
-): DiffLineChanges {
-  let added = 0;
-  let removed = 0;
-  for (const [op, text] of diffChars(oldText, newText)) {
-    if (op === DIFF_INSERT) {
-      added += countLines(text);
-    } else if (op === DIFF_DELETE) {
-      removed += countLines(text);
-    }
-  }
-  return { added, removed };
+  const dmp = new diff_match_patch();
+  // Line-check speedup, no semantic cleanup.
+  return dmp.diff_levenshtein(dmp.diff_main(oldText, newText, true));
 }

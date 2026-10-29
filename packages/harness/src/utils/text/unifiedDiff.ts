@@ -194,7 +194,7 @@ export function reportDiffTimeout(
 }
 
 /** A hunk as its readers see it: jsdiff's, or one carried as data. */
-type Hunk = Readonly<Omit<StructuredPatchHunk, 'lines'>> & {
+export type Hunk = Readonly<Omit<StructuredPatchHunk, 'lines'>> & {
   readonly lines: readonly string[];
 };
 
