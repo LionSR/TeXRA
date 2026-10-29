@@ -135,14 +135,21 @@ interface HookPoint {
 
 type Services = ChildProcessSpawner | FileSystem.FileSystem;
 
+/** How a stale hook ends, never run, and what a `PreToolUse` one answers. */
+const STALE_MESSAGE = 'the hook this call was offered under is gone or changed';
+const STALE = {
+  run: { kind: 'unstartable', message: STALE_MESSAGE },
+  denial: { decision: 'deny', reason: `${STALE_MESSAGE}: the call is not run` },
+} as const;
+
 /** A turn's stop: its rows, and the turn a block opens next. */
 type StopPoint = Omit<PromptPoint, 'parts'> & { block: FollowUpBatch | null };
 
 const effectOf = (
   outcomes: readonly HookOutcomePayload[],
 ): Omit<HookPoint, 'rows'> => {
-  const denials = outcomes.flatMap(({ plugin, deny }) =>
-    deny === null ? [] : [`${deny} (hook of ${plugin})`],
+  const denials = outcomes.flatMap(({ plugin, decision, reason }) =>
+    decision === 'deny' ? [`${reason} (hook of ${plugin})`] : [],
   );
   const contexts = outcomes.flatMap(({ event, plugin, context }) =>
     context === null ? [] : [`[${event} hook of ${plugin}]\n${context}`],
@@ -190,29 +197,23 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
     (step) =>
       Effect.gen(function* () {
         const { run: ended, durationMs } = step.stale
-          ? {
-              run: {
-                kind: 'unstartable' as const,
-                message:
-                  'the hook this call was offered under is gone or changed',
-              },
-              durationMs: 0,
-            }
+          ? { run: STALE.run, durationMs: 0 }
           : yield* runHook(step.hook, stdin, {
               pluginRoot: step.root,
               projectDir: workspace,
               pluginData: pluginDataDir(globalStorage, step.name),
             });
-        const verdict = interpretHookRun(input, ended);
-        if (verdict.warning !== null)
-          run.logger.warn(`${verdict.warning} (plugin ${step.name})`);
-        if (verdict.systemMessage !== null)
-          run.logger.info(
-            `${event} hook of ${step.name}: ${verdict.systemMessage}`,
-          );
+        const { status, warning, systemMessage, ...said } = interpretHookRun(
+          input,
+          ended,
+        );
+        if (warning !== null)
+          run.logger.warn(`${warning} (plugin ${step.name})`);
+        if (systemMessage !== null)
+          run.logger.info(`${event} hook of ${step.name}: ${systemMessage}`);
         // A failure keeps the start of stderr, or why the process never ran.
         const stderr =
-          verdict.status === 'ok' || ended.kind === 'timeout'
+          status === 'ok' || ended.kind === 'timeout'
             ? ''
             : (ended.kind === 'unstartable'
                 ? ended.message
@@ -224,14 +225,10 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
           plugin: step.plugin,
           hook: step.hook.id,
           durationMs,
-          status: verdict.status,
+          status,
           exitCode: ended.kind === 'exited' ? ended.exitCode : null,
-          deny:
-            step.stale && event === 'PreToolUse'
-              ? 'the hook that governed this call when it was offered is gone or changed, so the call is not run'
-              : verdict.deny,
-          context: verdict.context,
-          ignored: verdict.ignored,
+          ...said,
+          ...(step.stale && event === 'PreToolUse' && STALE.denial),
           stderr: stderr === '' ? null : stderr,
         } satisfies HookOutcomePayload;
       }),

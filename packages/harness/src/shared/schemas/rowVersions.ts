@@ -172,6 +172,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // row would resume a script against the modules shipped now.
   'tools.offered': { version: 4, upcast: [] },
   'context.blob': V1,
-  'hook.outcome': V1,
+  // v2: a `PreToolUse` answer is `decision` (allow, deny, ask) with its
+  // `reason` and `updatedInput`, not a `deny` reason alone (no upcaster: an
+  // earlier build's row has no decision to read).
+  'hook.outcome': { version: 2, upcast: [] },
   'child.turn': V1,
 };

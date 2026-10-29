@@ -238,8 +238,11 @@ recorded in full or not at all.
 - `PostToolUse` commits with the call's `tool.result`.
 - `Stop` and `SubagentStop` commit before the turn's `waiting` position.
 
-The row kind is versioned like every other (`'hook.outcome': V1` in
-`rowVersions.ts`).
+The row kind is versioned like every other (`'hook.outcome'` in
+`rowVersions.ts`). Its v2 records a `PreToolUse` hook's answer as `decision`
+(`allow`, `deny` or `ask`) with its `reason` and any `updatedInput`, so a later
+build can act on them without running the hook again; this build acts on
+`deny` alone.
 
 ## Refused or deferred in v1
 

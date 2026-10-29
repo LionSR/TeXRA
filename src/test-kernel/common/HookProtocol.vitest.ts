@@ -1,6 +1,6 @@
 // Security edge of the Claude Code hooks protocol: exit 2 on PreToolUse
-// denies even with invalid JSON (a policy hook must not fail open), and
-// `permissionDecision: "allow"` never approves: it is no objection.
+// denies even with invalid JSON (a policy hook must not fail open), and a
+// `permissionDecision` is read as the hook's answer, whatever the exit code.
 import { describe, expect, it } from 'vitest';
 
 import { interpretHookRun } from '@common/plugins/hookProtocol';
@@ -26,11 +26,12 @@ describe('the Claude Code hooks protocol at our edge', () => {
     );
     expect(verdict).toMatchObject({
       status: 'blocked',
-      deny: 'no rm here\nmore',
+      decision: 'deny',
+      reason: 'no rm here\nmore',
     });
   });
 
-  it('reads allow as no objection and deny as a denial, whatever the exit code', () => {
+  it('reads allow and deny as the hook answered them, whatever the exit code', () => {
     const allow = interpretHookRun(
       { hook_event_name: 'PreToolUse' },
       ran(
@@ -44,7 +45,12 @@ describe('the Claude Code hooks protocol at our edge', () => {
         }),
       ),
     );
-    expect(allow).toMatchObject({ status: 'ok', deny: null, context: null });
+    expect(allow).toMatchObject({
+      status: 'ok',
+      decision: 'allow',
+      reason: 'fine',
+      context: null,
+    });
     const deny = interpretHookRun(
       { hook_event_name: 'PreToolUse' },
       ran(
@@ -60,7 +66,8 @@ describe('the Claude Code hooks protocol at our edge', () => {
     );
     expect(deny).toMatchObject({
       status: 'ok',
-      deny: 'Database writes are not allowed',
+      decision: 'deny',
+      reason: 'Database writes are not allowed',
     });
   });
 });
