@@ -77,7 +77,6 @@ function requestEdit(path: string, proposedContent: string) {
       originalContent: '',
       proposedContent,
       sourceTool: 'write_file',
-      runId: ROOT_RUN,
     }).pipe(
       Effect.provide(
         nativeToolTestLayer({

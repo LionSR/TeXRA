@@ -1,26 +1,14 @@
 import { Effect, HashMap, Option, SubscriptionRef } from 'effect';
 
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { requireRun, sessionOf } from '@agent/runtime/RunCall';
+import { RunCall, requireRun, sessionOf } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
-  decideApproval,
-  isApprovalDenied,
-  approvalPolicyDenialMessage,
-} from '@shared/approvalPolicy';
-import {
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
   type RefusalDecision,
-  type RunId,
   type ToolEditPermission,
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
-import type {
-  StagedToolEdit,
-  ToolEditContent,
-} from '@shared/session/runtimeRequest';
-import { Settings } from '@shared/config/settings';
+import type { StagedToolEdit } from '@shared/session/runtimeRequest';
 import { errorResult } from '@tools/core/result';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import {
@@ -42,7 +30,6 @@ export interface ToolEditProposal {
   readonly originalContent: string;
   readonly proposedContent: string;
   readonly sourceTool: string;
-  readonly runId?: RunId | null;
 }
 
 /**
@@ -62,55 +49,6 @@ export type ToolEditApprovalResult =
     }
   | RefusalDecision;
 
-/**
- * Build the tool-edit permission payload every host lists from the fold, the
- * tool-edit counterpart of `prepareBashApprovalPrompt`.
- *
- * Owning it here gives one bypass-affordance derivation and one diff pass
- * (the hunks, their line counts and the first changed line), so the TUI's
- * inline card and the webview panel cannot report different numbers for the
- * same edit. The host supplies the `requestId` it tracks the request under
- * and the display path it shows; revealing the host's approval surface
- * belongs to the caller, not to this projection — a host with no separate
- * view has nothing to reveal.
- */
-export function prepareToolEditApprovalPrompt(
-  session: SessionHandle,
-  params: {
-    requestId: string;
-    request: ToolEditProposal;
-    relativePath: string;
-  },
-): Pick<ToolEditContent, 'hunks' | 'firstChangedLine'> & {
-  permission: ToolEditPermission;
-  diffTimeout: string | undefined;
-} {
-  const { requestId, request, relativePath } = params;
-  const { runId } = request;
-  const isBypassed =
-    runId != null && session.approvals.bypass(runId, 'toolEdit') !== null;
-  const { hunks, timeout } = diffEdit(
-    request.originalContent,
-    request.proposedContent,
-  );
-  const lineChanges = countLineChanges(hunks);
-  return {
-    permission: {
-      requestId,
-      path: request.path,
-      relativePath,
-      sourceTool: request.sourceTool,
-      allowBypass: !isBypassed,
-      runId: runId ?? '',
-      addedLines: lineChanges.added,
-      removedLines: lineChanges.removed,
-    },
-    hunks,
-    firstChangedLine: firstChangedLine(hunks, request.proposedContent),
-    diffTimeout: timeout,
-  };
-}
-
 /** One diff pass over an edit; identical texts skip the engine entirely. */
 function diffEdit(original: string, proposed: string): DiffHunks {
   return original === proposed
@@ -123,8 +61,9 @@ function diffEdit(original: string, proposed: string): DiffHunks {
 // ============================================================================
 
 /**
- * Ask the person for an edit: policy first (allow, deny), else a
- * `request.opened` on the run with its content held in the session's
+ * Ask the person for an edit when `sessionPermission` (`loop/toolGuard.ts`),
+ * given what the call's hooks said, asks: a `request.opened` on the run with
+ * its content held in the session's
  * tool-edit store, serialized behind the run's other prompts, answered by a
  * surface's `request.decide`. An approve applies the file as the user left
  * it: the decision's content, else the edit a surface recorded, else the
@@ -135,99 +74,79 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     request: ToolEditProposal,
   ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolContext> {
     const call = yield* requireRun('A tool-edit approval');
-    const approvalsEnabled = yield* Settings.get<boolean>(
-      call.env.roots,
-      TOOL_EDIT_APPROVAL_CONFIG_KEY,
-    );
     const { run, requests } = call;
     const session = sessionOf(run);
-    const contextRunId = run.runId;
-    const preparedRequest: ToolEditProposal =
-      request.runId || !contextRunId
-        ? request
-        : { ...request, runId: contextRunId };
-
-    const runId = preparedRequest.runId ?? undefined;
-    const isRunBypassed =
-      runId !== undefined &&
-      session.approvals.bypass(runId, 'toolEdit') !== null;
+    const { runId } = run;
     const acceptProposedAsIs = (): Effect.Effect<ToolEditApprovalResult> =>
-      finalizeApprovalResult(preparedRequest.proposedContent, preparedRequest);
-    const policy = session.approvals.policy(runId);
-    const decision = decideApproval({
-      policy,
-      promptRequired: approvalsEnabled,
-      scopedBypass: isRunBypassed,
-      canPresent: !session.interactions.approvalPromptsUnavailable,
-    });
-    if (decision === 'allow') return yield* acceptProposedAsIs();
-    if (isApprovalDenied(decision)) {
-      session.interactions.approvalDenied(
-        { kind: 'executable', policy },
-        run.runId,
-      );
-      return { action: 'deny', reason: approvalPolicyDenialMessage(decision) };
-    }
-    if (!runId) {
-      return yield* Effect.fail(
-        new Error('A tool-edit approval needs a run to open its request on.'),
-      );
-    }
+      finalizeApprovalResult(request.proposedContent, request);
+    const hook = (yield* RunCall)?.hook;
+    const answer = session.approvals.permission(runId, 'toolEdit', hook);
+    if (answer === 'allow') return yield* acceptProposedAsIs();
+    if (answer !== 'ask') return answer;
 
-    const { diffTimeout, ...prompt } = prepareToolEditApprovalPrompt(session, {
+    // One diff pass gives the hunks, their line counts and the first
+    // changed line, so every surface reports the same numbers for one edit.
+    const { originalContent, proposedContent, path, sourceTool } = request;
+    const { hunks, timeout } = diffEdit(originalContent, proposedContent);
+    yield* reportDiffTimeout(timeout);
+    const lines = countLineChanges(hunks);
+    const permission: ToolEditPermission = {
       requestId: requests.nextId('toolEdit'),
-      request: preparedRequest,
-      // The call's own workspace root, as data: the display path a host shows
-      // is relative to the session that raised the request, not to whichever
-      // roots the answering fiber happens to carry.
-      relativePath: workspaceRelativePath(
-        call.env.roots.workspace,
-        preparedRequest.path,
-      ),
-    });
-    yield* reportDiffTimeout(diffTimeout);
-    const { permission, hunks } = prompt;
+      path,
+      // The call's own workspace root, as data: the display path a host
+      // shows is relative to the session that raised the request, not to
+      // whichever roots the answering fiber happens to carry.
+      relativePath: workspaceRelativePath(call.env.roots.workspace, path),
+      sourceTool,
+      allowBypass: session.approvals.bypass(runId, 'toolEdit') === null,
+      runId,
+      addedLines: lines.added,
+      removedLines: lines.removed,
+    };
     const { requestId } = permission;
     const { toolEdits } = session.view;
-    return yield* session.approvals.enqueue('toolEdit', runId, {
-      // The content is held in the session's store from before the request
-      // opens until this call stops waiting on it, however it stops: a
-      // surface reading the committed row never finds the request listed
-      // with nothing to show for it, and nothing is left behind.
-      prompt: Effect.acquireUseRelease(
-        SubscriptionRef.update(
-          toolEdits,
-          HashMap.set<string, StagedToolEdit>(requestId, {
-            originalContent: preparedRequest.originalContent,
-            proposedContent: preparedRequest.proposedContent,
-            hunks,
-            firstChangedLine: prompt.firstChangedLine,
-            edited: null,
-          }),
-        ),
-        () =>
-          requests.open({ kind: 'toolEdit', data: permission }).pipe(
-            Effect.flatMap((decided): Effect.Effect<ToolEditApprovalResult> =>
-              decided.action !== 'approve'
-                ? Effect.succeed(refusalOf('toolEdit', decided))
-                : // An approval naming no content applies the user's edit
-                  // of the proposal, when a surface sent one.
-                  Effect.flatMap(SubscriptionRef.get(toolEdits), (held) =>
-                    finalizeApprovalResult(
-                      (
-                        decided.content ??
-                        Option.getOrUndefined(HashMap.get(held, requestId))
-                          ?.edited ??
-                        preparedRequest.proposedContent
-                      ).replaceAll('\r\n', '\n'),
-                      preparedRequest,
-                    ),
-                  ),
-            ),
-          ),
-        () => SubscriptionRef.update(toolEdits, HashMap.remove(requestId)),
+    // The content is held in the session's store from before the request
+    // opens until this call stops waiting on it, however it stops: a
+    // surface reading the committed row never finds the request listed with
+    // nothing to show for it, and nothing is left behind.
+    const review = Effect.acquireUseRelease(
+      SubscriptionRef.update(
+        toolEdits,
+        HashMap.set<string, StagedToolEdit>(requestId, {
+          originalContent,
+          proposedContent,
+          hunks,
+          firstChangedLine: firstChangedLine(hunks, proposedContent),
+          edited: null,
+        }),
       ),
-      bypassed: Effect.suspend(acceptProposedAsIs),
+      () =>
+        requests.open({ kind: 'toolEdit', data: permission }).pipe(
+          Effect.flatMap((decided): Effect.Effect<ToolEditApprovalResult> =>
+            decided.action !== 'approve'
+              ? Effect.succeed(refusalOf('toolEdit', decided))
+              : // An approval naming no content applies the user's edit
+                // of the proposal, when a surface sent one.
+                Effect.flatMap(SubscriptionRef.get(toolEdits), (held) =>
+                  finalizeApprovalResult(
+                    (
+                      decided.content ??
+                      Option.getOrUndefined(HashMap.get(held, requestId))
+                        ?.edited ??
+                      request.proposedContent
+                    ).replaceAll('\r\n', '\n'),
+                    request,
+                  ),
+                ),
+          ),
+        ),
+      () => SubscriptionRef.update(toolEdits, HashMap.remove(requestId)),
+    );
+    // An edit grant turned on while it waited answers it, unless a hook
+    // asked.
+    return yield* session.approvals.enqueue('toolEdit', runId, {
+      prompt: review,
+      bypassed: hook === 'ask' ? review : Effect.suspend(acceptProposedAsIs),
     });
   },
 );
@@ -235,7 +154,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
 function finalizeApprovalResult(
   appliedContent: string,
   request: ToolEditProposal,
-): Effect.Effect<AcceptedToolEditApprovalResult> {
+): Effect.Effect<ToolEditApprovalResult> {
   // One pass answers both the start line and the counts.
   const { hunks, timeout } = diffEdit(request.originalContent, appliedContent);
 
@@ -251,12 +170,6 @@ function finalizeApprovalResult(
     }),
   );
 }
-
-/** The `action: 'apply'` branch of {@link ToolEditApprovalResult}. */
-type AcceptedToolEditApprovalResult = Extract<
-  ToolEditApprovalResult,
-  { action: 'apply' }
->;
 
 /**
  * Append the unified user-adjustment diff note to a base output message, or

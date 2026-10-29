@@ -95,7 +95,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
 
 export const EditFileTool = defineTool({
   name: 'edit_file',
-  requiresApproval: 'inBody',
+  requiresApproval: 'edit',
   description:
     'Performs exact string replacements in workspace files using literal matching. Copy text exactly as it appears in read_file output after the line-number prefix.',
   schema: EditInputSchema,

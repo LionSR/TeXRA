@@ -209,6 +209,9 @@ export interface RunCallShape {
    *  a result as skipped, before the script's own result commits; an
    *  interrupt leaves the rows for the resume. Null for any other call. */
   readonly scriptCalls: Effect.Effect<ScriptDoor, never, ToolServices> | null;
+  /** What the call's `PreToolUse` hooks said about the input it runs on,
+   *  for the edit review its body opens: absent when no hook answered. */
+  readonly hook?: 'allow' | 'ask';
 }
 
 /** The current call's place in its run, which the run loop provides beside

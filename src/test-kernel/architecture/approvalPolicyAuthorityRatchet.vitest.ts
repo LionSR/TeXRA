@@ -20,14 +20,15 @@ const VOCABULARY_OWNER = 'packages/harness/src/shared/approvalPolicy.ts';
  * Sites allowed to call `decideApproval` / `decideRetryApproval` /
  * `decideHumanInputRequest` / `decideProposalApproval`. Core is the one
  * authority: `requestPolicy.ts` decides what the policy settles when a request
- * opens, the command and edit tools decide what only they know. A host must not grow a second evaluator — extend
- * this allowlist in the same PR if a new core surface is intentional.
+ * opens, and the run loop's chain decides whether a tool call's operation
+ * runs (`sessionPermission`). A host must not grow a second
+ * evaluator; extend this allowlist in the same PR if a new core surface is
+ * intentional.
  */
 const EVALUATOR_CALL_ALLOWLIST = new Set([
   'packages/harness/src/shared/approvalPolicy.ts',
   'packages/harness/src/agent/runtime/requestPolicy.ts',
-  'packages/harness/src/tools/approval/bashApproval.ts',
-  'packages/harness/src/tools/approval/toolEditApproval.ts',
+  'packages/harness/src/agent/runtime/loop/toolGuard.ts',
   'packages/harness/src/agent/runtime/delegation/proposalFlow.ts',
 ]);
 

@@ -123,11 +123,10 @@ export function stepHooks(
   };
 }
 
-/** What the hooks of one point decided, and the rows that record it. */
+/** What the hooks of one point said, and the rows that record it. */
 interface HookPoint {
   readonly rows: readonly RunHistoryDraft[];
-  /** A `PreToolUse` denial's reasons, joined; null when none denied. */
-  readonly deny: string | null;
+  readonly outcomes: readonly HookOutcomePayload[];
   /** The context the model reads beside the prompt or the result, each
    *  labelled with its event and plugin; null when none. */
   readonly context: string | null;
@@ -145,17 +144,16 @@ const STALE = {
 /** A turn's stop: its rows, and the turn a block opens next. */
 type StopPoint = Omit<PromptPoint, 'parts'> & { block: FollowUpBatch | null };
 
-const effectOf = (
+const pointOf = (
   outcomes: readonly HookOutcomePayload[],
-): Omit<HookPoint, 'rows'> => {
-  const denials = outcomes.flatMap(({ plugin, decision, reason }) =>
-    decision === 'deny' ? [`${reason} (hook of ${plugin})`] : [],
-  );
+  rows: readonly RunHistoryDraft[] = [],
+): HookPoint => {
   const contexts = outcomes.flatMap(({ event, plugin, context }) =>
     context === null ? [] : [`[${event} hook of ${plugin}]\n${context}`],
   );
   return {
-    deny: denials.length === 0 ? null : denials.join('\n'),
+    rows,
+    outcomes,
     context: contexts.length === 0 ? null : contexts.join('\n\n'),
   };
 };
@@ -176,20 +174,20 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
   names?: readonly string[],
 ): Effect.fn.Return<HookPoint, never, Services> {
   const recorded = state.hookOutcomes[point];
-  if (recorded !== undefined) return { rows: [], ...effectOf(recorded) };
+  if (recorded !== undefined) return pointOf(recorded);
   const event = input.hook_event_name;
   const matched = hooks.filter(
     ({ hook }) =>
       hook.event === event &&
       (names === undefined || matchesHook(hook.matcher, names)),
   );
-  if (matched.length === 0) return { rows: [], deny: null, context: null };
+  if (matched.length === 0) return pointOf([]);
   const { workspace, globalStorage } = run.session.roots;
   if (workspace === undefined) {
     run.logger.warn(
       `Not running ${matched.length} ${event} hook(s): this run has no workspace to run them in.`,
     );
-    return { rows: [], deny: null, context: null };
+    return pointOf([]);
   }
   const stdin = encodeHookInput(input);
   const outcomes = yield* Effect.forEach(
@@ -234,14 +232,14 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
       }),
     { concurrency: 'unbounded' },
   );
-  return {
-    rows: outcomes.map((payload): RunHistoryDraft => ({
+  return pointOf(
+    outcomes,
+    outcomes.map((payload): RunHistoryDraft => ({
       type: 'hook.outcome',
       aggregateId: qualifyAggregateId('run', run.runId),
       payload,
     })),
-    ...effectOf(outcomes),
-  };
+  );
 });
 
 /** The root of `run`'s parent chain: the session its hooks see. */
@@ -377,11 +375,13 @@ export const stopHooks = Effect.fn('Hooks.stop')(function* (
 
 /**
  * One tool call's `PreToolUse`, under the hooks of the step that offered it,
- * matched on the call's Claude Code name and its own. `denied` is the error
- * result a denial settles the call with; anything else leaves the decision
- * to the approval policy. `after` runs the call's `PostToolUse` once it
- * executed, timed from here, and returns the rows that commit with its
- * settlement (none for a denied call, or a result that is not `executed`).
+ * matched on the call's Claude Code name and its own (or as the run
+ * recorded them). It returns their `outcomes`, which the chain
+ * (`toolGuard.ts`) decides on, and `fromHook`, which reads a rewrite as the
+ * harness tool's input. `after`
+ * runs the call's `PostToolUse` once it executed, timed from here, and
+ * returns the rows that commit with its settlement (none for a result that
+ * is not `executed`).
  */
 export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
   run: AgentRunShape,
@@ -391,13 +391,14 @@ export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
   responseId: string,
   toolInput: unknown,
 ) {
-  const { toolName, toolInput: claudeInput } = claudeToolCall(
-    call.toolName,
-    toolInput,
-    (file) =>
-      typeof file === 'string'
-        ? path.resolve(run.session.roots.workspace ?? '', file)
-        : file,
+  const {
+    toolName,
+    toolInput: claudeInput,
+    fromHook,
+  } = claudeToolCall(call.toolName, toolInput, (file) =>
+    typeof file === 'string'
+      ? path.resolve(run.session.roots.workspace ?? '', file)
+      : file,
   );
   const names = [toolName, call.toolName];
   const base = {
@@ -422,7 +423,7 @@ export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
     startedAt = now;
   });
   const after = Effect.fn('Hooks.postToolUse')(function* (result: ToolResult) {
-    if (pre.deny !== null || result.status !== 'executed') return [];
+    if (result.status !== 'executed') return [];
     const post = yield* hooksAt(
       run,
       yield* cell.current,
@@ -430,6 +431,9 @@ export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
       `PostToolUse:${at}`,
       {
         ...base,
+        tool_input:
+          pre.outcomes.find((o) => o.updatedInput !== null)?.updatedInput ??
+          claudeInput,
         hook_event_name: 'PostToolUse',
         tool_response: result,
         ...(startedAt === undefined
@@ -440,15 +444,13 @@ export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
     );
     return post.rows;
   });
-  const denied: ToolResult | null =
-    pre.deny === null
-      ? null
-      : {
-          status: 'error',
-          error: `Blocked by a PreToolUse hook: ${pre.deny}`,
-          diagnostics: { code: 'hook_denied', tool: call.toolName },
-        };
-  return { rows: pre.rows, denied, bodyStarts, after };
+  return {
+    rows: pre.rows,
+    outcomes: pre.outcomes,
+    fromHook,
+    bodyStarts,
+    after,
+  };
 });
 
 /** The text part a call's recorded hooks add after its result, if any. */
@@ -457,7 +459,7 @@ export const callHookText = (
   responseId: string,
   callId: string,
 ): InputPart[] => {
-  const { context } = effectOf([
+  const { context } = pointOf([
     ...(state.hookOutcomes[`PreToolUse:${responseId}/${callId}`] ?? []),
     ...(state.hookOutcomes[`PostToolUse:${responseId}/${callId}`] ?? []),
   ]);

@@ -87,7 +87,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
 export const writeFileTool = (writeFilter?: WriteFilter) =>
   defineTool({
     name: 'write_file',
-    requiresApproval: 'inBody',
+    requiresApproval: 'edit',
     description:
       'Overwrite a workspace file with the provided content. Creates the file if it does not exist.',
     schema: WriteInputSchema,

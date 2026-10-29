@@ -178,7 +178,8 @@ type Absolute = (path: unknown) => unknown;
  * the name a plugin's matcher and `tool_name` see, and the call's input under
  * the field names and meanings the Claude Code hooks reference documents for
  * that tool, file paths absolute. A harness-only field (`literal`,
- * `max_results`) has no counterpart and is not sent.
+ * `max_results`) has no counterpart and is not sent. `back` reads a hook's
+ * rewrite under renamed fields as the harness tool's input.
  */
 const CLAUDE_TOOLS: Readonly<
   Record<
@@ -186,6 +187,7 @@ const CLAUDE_TOOLS: Readonly<
     {
       readonly name: string;
       readonly input: (i: Fields, abs: Absolute) => Fields;
+      readonly back?: (i: Fields) => Fields;
     }
   >
 > = {
@@ -208,6 +210,16 @@ const CLAUDE_TOOLS: Readonly<
             : undefined,
       };
     },
+    back: ({ file_path, offset, limit }) => ({
+      path: file_path,
+      range:
+        typeof offset === 'number'
+          ? {
+              start: offset,
+              end: typeof limit === 'number' ? offset + limit - 1 : null,
+            }
+          : null,
+    }),
   },
   write_file: {
     name: 'Write',
@@ -215,6 +227,7 @@ const CLAUDE_TOOLS: Readonly<
       file_path: abs(input.path),
       content: input.content,
     }),
+    back: ({ file_path, content }) => ({ path: file_path, content }),
   },
   edit_file: {
     name: 'Edit',
@@ -222,6 +235,12 @@ const CLAUDE_TOOLS: Readonly<
       file_path: abs(input.path),
       old_string: input.old_str,
       new_string: input.new_str,
+      replace_all: input.replace_all,
+    }),
+    back: (input) => ({
+      path: input.file_path,
+      old_str: input.old_string,
+      new_str: input.new_string,
       replace_all: input.replace_all,
     }),
   },
@@ -264,16 +283,22 @@ export const CLAUDE_COUNTERPART_TOOLS: readonly string[] = Object.freeze(
  * A call as a Claude Code hook sees it: for a tool with a Claude Code
  * counterpart, that tool's name and its input translated (absent fields
  * dropped); any other tool, or an input that is not an object, keeps its
- * harness name and input unchanged.
+ * harness name and input unchanged. `fromHook` reads an input a hook
+ * rewrote, in the shape the hook saw, as the harness tool's.
  */
 export function claudeToolCall(
   name: string,
   input: unknown,
   abs: Absolute,
-): { readonly toolName: string; readonly toolInput: unknown } {
+): {
+  readonly toolName: string;
+  readonly toolInput: unknown;
+  readonly fromHook: (rewritten: Fields) => Fields;
+} {
   const tool = CLAUDE_TOOLS[name];
+  const fromHook = tool?.back ?? ((rewritten: Fields) => rewritten);
   if (tool === undefined || typeof input !== 'object' || input === null)
-    return { toolName: name, toolInput: input };
+    return { toolName: name, toolInput: input, fromHook };
   return {
     toolName: tool.name,
     toolInput: Object.fromEntries(
@@ -281,5 +306,6 @@ export function claudeToolCall(
         ([, value]) => value != null,
       ),
     ),
+    fromHook,
   };
 }

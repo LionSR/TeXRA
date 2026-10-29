@@ -44,6 +44,7 @@ import type {
   RuntimeTool as ITool,
   RuntimeToolRegistry,
 } from '@agent/runtime/ToolServices';
+import type { ITool as ToolDeclaration } from '@agent/core/tools/ToolTypes';
 import { mcpPluginId } from '@common/plugins/mcpServers';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { SettingsStores } from '@shared/config/settings';
@@ -64,6 +65,12 @@ import {
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 
+/** Whether a call of `tool` may ask a person: it declares a command or
+ *  `requiresApproval`. Such a tool is withheld from a run nobody can ask. */
+export const asksApproval = <E, R>(
+  tool: Pick<ToolDeclaration<E, R>, 'guard' | 'requiresApproval'>,
+): boolean =>
+  tool.guard?.bash !== undefined || tool.requiresApproval !== undefined;
 /**
  * The host capabilities a session's host serves now (`ITool.hostCapability`
  * names one), by the session's storage root: what a plugin whose tools need
@@ -175,7 +182,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         source,
         `this host does not serve "${tool.hostCapability}".`,
       );
-    if (tool?.requiresApproval && input.approvalPromptsUnavailable) {
+    if (tool && asksApproval(tool) && input.approvalPromptsUnavailable) {
       // One whose plugin is off is withheld for that, silently.
       if (enabled.has(name)) withheldForApproval.push(name);
       return false;

@@ -27,10 +27,6 @@ import type {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import type { RunHistoryRefused } from '@shared/session/runHistory';
-import {
-  decideProposalApproval,
-  approvalPolicyDenialMessage,
-} from '@shared/approvalPolicy';
 import { refusalOf } from '@shared/session/approvalDecision';
 import { errorResult } from '@tools/core/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -152,39 +148,20 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     const { session, runId, config } = parent.run;
     if (isTrustedScript(config))
       return { result: { action: 'approve' }, childApproval: 'inherit' };
-    const policy = session.approvals.policy(runId);
-    const decision = decideProposalApproval({
-      policy,
-      scopedBypass: session.approvals.bypass(runId, 'superYolo') !== null,
-      canPresent: !session.interactions.approvalPromptsUnavailable,
-    });
-    switch (decision) {
-      case 'deny-policy':
-        session.interactions.approvalDenied(
-          { kind: 'proposal', policy },
-          runId,
-        );
-        return {
-          result: {
-            action: 'deny',
-            reason: approvalPolicyDenialMessage(decision),
-          },
-          childApproval: 'inherit',
-        };
-      case 'bypass':
-        return {
-          result: { action: 'approve' },
-          childApproval:
-            session.approvals.bypass(runId, 'superYolo') === 'goal'
-              ? 'goal-approved'
-              : 'auto-approved',
-        };
-      case 'unattended':
-        // `inherit` keeps the child on inherited per-kind approval state,
-        // so its bash and edits still gate.
-        return { result: { action: 'approve' }, childApproval: 'inherit' };
-      case 'present':
-        break;
+    const answer = session.approvals.permission(runId, 'proposal', undefined);
+    if (answer !== 'allow' && answer !== 'ask')
+      return { result: answer, childApproval: 'inherit' };
+    if (answer === 'allow') {
+      // Under `yolo` alone the child inherits per-kind approval state, so
+      // its bash and edits still gate; the run's delegated-work grant
+      // approves them too.
+      const granted = session.approvals.bypass(runId, 'superYolo');
+      const childApproval =
+        granted === 'goal' ? 'goal-approved' : 'auto-approved';
+      return {
+        result: { action: 'approve' },
+        childApproval: granted === null ? 'inherit' : childApproval,
+      };
     }
     if (ask !== undefined)
       return { result: yield* ask, childApproval: 'inherit' };

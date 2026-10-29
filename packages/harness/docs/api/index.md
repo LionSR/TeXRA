@@ -319,16 +319,15 @@ interface ITool<E = Error, R = never> {
    */
   readonly replay?: 'safe' | 'unsafe';
   /**
-   * Whether a call needs a person's approval, and who asks for it. `true`:
-   * the run loop asks before the body runs, spelling the call as `guard.bash`
-   * does when the guard names one and as the tool's name and arguments
-   * otherwise, so a tool cannot declare approval and run unasked.
-   * `'inBody'`: the body opens its own request (a file-edit review, a plan, a
-   * question, a delegation proposal, an external inquiry) and the loop does
-   * not ask again. Either
-   * way, a run that cannot present a prompt is not offered the tool.
+   * Whether a call needs a person's approval, and who asks. `true` (implied
+   * by `guard.bash`): the run loop, before the body runs. `'edit'`: the
+   * body's review of the edit it proposes (`requestToolEditApproval`).
+   * `'inBody'`: the body's own request (a plan, a question, a delegation
+   * proposal, an external inquiry); the loop asks first only when a hook
+   * asks. A run that cannot present a prompt is not offered such a tool
+   * (`asksApproval`).
    */
-  readonly requiresApproval?: boolean | 'inBody';
+  readonly requiresApproval?: true | 'edit' | 'inBody';
   /** Its card opens before the call runs; a fast tool's opens and closes
    *  with its settlement. */
   readonly slow?: boolean;

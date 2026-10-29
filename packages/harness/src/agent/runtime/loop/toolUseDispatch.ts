@@ -525,15 +525,14 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       standing,
       'The resumed call no longer asks it.',
     );
-    // Its step's PreToolUse hooks, recorded before the approval and the body.
+    // Its step's PreToolUse hooks, recorded before the chain decides on what
+    // they said and the body runs on the input they leave.
     const pre =
       tool &&
       (yield* preToolUse(run, cell, step, fact, responseId, parsedInput));
     if (pre && pre.rows.length > 0) yield* commit(fact, pre.rows);
     let result: ToolResult;
-    if (pre && pre.denied !== null) {
-      result = pre.denied;
-    } else if (!tool || !pre) {
+    if (!tool || !pre) {
       result = {
         status: 'error',
         error: unsent
@@ -562,11 +561,12 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         logId: fact.logId,
         ...place,
       };
-      // Guard first, under the step's roots and plugin services: a refused
-      // path or unapproved command settles the call without the body running.
+      // The chain first, under the step's roots and plugin services: a hook's
+      // denial, a rejected path or an unapproved call ends the call with an
+      // error result before the body runs.
       const invoked = yield* Effect.exit(
         Effect.scoped(
-          guardedToolCall(tool, parsedInput, bodyStarts).pipe(
+          guardedToolCall(tool, parsedInput, pre, bodyStarts).pipe(
             Effect.provideService(ToolContext, {
               callId: fact.callId,
               env: {

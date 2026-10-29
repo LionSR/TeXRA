@@ -8,10 +8,8 @@
  * recorded as the `request.decided` row beside the request's own
  * `request.opened`, in the same batch, so no surface ever lists it pending.
  *
- * A command or edit reaches the session's door already decided by its tool,
- * which alone holds the approvals setting and the run's scoped bypass, and a
- * delegation proposal by its flow (`proposalFlow.ts`, `yolo` included); those
- * present.
+ * A command, an edit and a delegation proposal reach the door already
+ * decided by `sessionPermission` (`loop/toolGuard.ts`), so they present.
  */
 
 import {
@@ -37,7 +35,6 @@ import {
   decideRetryApproval,
   decideApproval,
   isApprovalDenied,
-  approvalPolicyDenialMessage,
   humanInputDenialMessage,
   retryDenialMessage,
   type ApprovalPolicyDecision,
@@ -107,16 +104,9 @@ function answerFor(
   const policy = session.approvals.policy(runId);
   switch (payload.kind) {
     case 'planApproval': {
-      const decision = executableDecision(session, runId);
-      if (decision === 'present') return undefined;
-      if (decision === 'allow') return { decision: { action: 'approve' } };
-      return {
-        decision: {
-          action: 'deny',
-          reason: approvalPolicyDenialMessage(decision),
-        },
-        denial: { kind: 'plan', policy },
-      };
+      const answer = session.approvals.permission(runId, 'plan', undefined);
+      if (answer === 'ask') return undefined;
+      return { decision: answer === 'allow' ? { action: 'approve' } : answer };
     }
     case 'userQuestion': {
       const decision = decideHumanInputRequest({

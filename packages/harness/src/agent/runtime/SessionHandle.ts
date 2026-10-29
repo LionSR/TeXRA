@@ -61,7 +61,7 @@ import type {
   HostInteractions,
 } from './HostInteractions';
 import type { HistoryQuery } from './historyQuery/HistoryQuery';
-import type { SessionApprovals } from './runApprovalQueue';
+import type { ApprovalsWithPermission } from './loop/toolGuard';
 import type { RunsShape } from './runs';
 
 /** A write the store refused: nothing was written. */
@@ -342,7 +342,7 @@ export interface SessionHandle {
    *  questions to a person (`ask`, `decide`). */
   readonly requests: SessionRequests;
   /** Approval policy, prompt lanes and each run's grants. */
-  readonly approvals: SessionApprovals;
+  readonly approvals: ApprovalsWithPermission;
   /** The session's presentation host. */
   readonly interactions: SessionHostInteractions;
   /** Every run's input, one reader each. */

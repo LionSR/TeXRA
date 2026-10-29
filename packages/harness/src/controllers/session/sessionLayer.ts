@@ -36,6 +36,7 @@ import { rootRun } from '@agent/runtime/rootLaunch';
 import { onHeldResult } from '@agent/runtime/runLaunchGuard';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
+import { sessionPermission } from '@agent/runtime/loop/toolGuard';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { registryOf, RunRegistry } from '@agent/runtime/runRegistry';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
@@ -220,7 +221,10 @@ const sessionHandleLayer = (key: SessionKey) =>
           services: yield* Effect.context<ProcessServices>(),
           closed: store.closed,
         }),
-        approvals: createSessionApprovals(() => session),
+        approvals: {
+          ...createSessionApprovals(() => session),
+          permission: sessionPermission(() => session),
+        },
         interactions,
         followUps: new Inbox({
           log: store.log,

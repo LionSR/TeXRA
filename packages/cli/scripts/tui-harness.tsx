@@ -91,11 +91,15 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { nodeFileServices } from '@utils/files/fsDurability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  buildDiffHunks,
+  countLineChanges,
+  firstChangedLine,
+} from '@utils/text/unifiedDiff';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
@@ -1354,14 +1358,23 @@ if (SHOW_PLAN) {
 if (SHOW_EDIT_APPROVAL) {
   const showApproval = () => {
     const request = makeEditApprovalRequest();
-    const { permission, hunks, firstChangedLine } =
-      prepareToolEditApprovalPrompt(session(), {
-        requestId: 'harness-edit-approval',
-        request,
-        relativePath: request.path,
-      });
-    // The preview the durable payload cannot carry is held in the session's
-    // store, exactly as `requestToolEditApproval` holds it.
+    // The payload and the preview `requestToolEditApproval` builds, the
+    // preview held in the session's store as it holds it.
+    const { hunks } = buildDiffHunks(
+      request.originalContent,
+      request.proposedContent,
+    );
+    const lines = countLineChanges(hunks);
+    const permission = {
+      requestId: 'harness-edit-approval',
+      path: request.path,
+      relativePath: request.path,
+      sourceTool: request.sourceTool,
+      allowBypass: true,
+      runId: request.runId,
+      addedLines: lines.added,
+      removedLines: lines.removed,
+    };
     harnessRuntime.runSync(
       SubscriptionRef.update(
         session().view.toolEdits,
@@ -1369,7 +1382,7 @@ if (SHOW_EDIT_APPROVAL) {
           originalContent: request.originalContent,
           proposedContent: request.proposedContent,
           hunks,
-          firstChangedLine,
+          firstChangedLine: firstChangedLine(hunks, request.proposedContent),
           edited: null,
         }),
       ),
