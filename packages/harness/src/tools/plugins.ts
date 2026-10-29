@@ -17,7 +17,7 @@
  */
 
 // Third-party imports
-import { Effect, type Layer, Result, Schema, Stream } from 'effect';
+import { Effect, type Layer, Result, Schema } from 'effect';
 
 // Local imports
 import type { SessionLog } from '@agent/runtime/SessionHandle';
@@ -26,30 +26,27 @@ import type {
   PluginToolServices,
   ToolServices,
 } from '@agent/runtime/ToolServices';
-import { AppSignals } from '@platform/appSignals';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
 import {
   qualifyAggregateId,
-  type CommitOrdinal,
   type JsonValue,
   type RunId,
-  type SessionEvent,
   type SessionEventDraft,
   type ToolFact,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
-import type { SessionView } from '@shared/session/sessionView';
 import { decodeDisabledTools, GlobalStateKey } from '@shared/state/stateKeys';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
-import type {
-  AgentBlock,
-  PluginHold,
-  ProcessPluginLayer,
-  PromptSection,
-  RequestDecisionHook,
-  SessionPluginLayer,
+import {
+  ToolRegistry,
+  type AgentBlock,
+  type PluginHold,
+  type ProcessPluginLayer,
+  type PromptSection,
+  type RequestDecisionHook,
+  type SessionPluginLayer,
 } from '@tools/toolTable';
 
 /** One stored row of a plugin's kind, as its arm's transition rule reads
@@ -91,6 +88,11 @@ export interface PluginArm {
    *  them (`workspaceFilesWritten`), a window hearing a service task's
    *  write as it hears its own. */
   readonly writes?: (value: JsonValue) => readonly string[];
+  /** What a fork of a run starts with of the run's own row of the kind:
+   *  its row at the fork's cut (`cut`) or its latest (`current`). Absent,
+   *  the fork starts without one. A fact about the plugin's own aggregate
+   *  is that aggregate's, and stays with the source either way. */
+  readonly fork?: 'cut' | 'current';
 }
 
 /**
@@ -196,71 +198,6 @@ export function readDisabledTools(store: StateStore) {
   );
 }
 
-/**
- * Announce the workspace files every run's facts say it wrote above `since`
- * (an arm's `writes`), once each and in commit order: a run that changes
- * the workspace past the editor's own write path records it as a fact on
- * its own rows, and every process that folds the run announces it, so a
- * window hears a background service task's change as it hears its own. The view
- * only says which runs to look at: a run whose announced fact differs from
- * the last level read, the first level included. The rows themselves are
- * read (`rows`), since the view keeps each kind's latest value only and its
- * tail coalesces wakes; a row at or below `since` (the history a reopened
- * session replays) is never announced. A failed read (a busy store) is
- * logged and retried on the next change, from where the last good read left
- * off: it never stops the announcer.
- */
-export function announceRunFacts(
-  changes: Stream.Stream<SessionView>,
-  rows: (runId: RunId) => Effect.Effect<readonly SessionEvent[], Error>,
-  since: CommitOrdinal,
-  arms: PluginArms,
-): Effect.Effect<void, never, AppSignals> {
-  return AppSignals.use((signals) => {
-    const writing = new Map(
-      Object.entries(arms).flatMap(([name, { writes }]) =>
-        writes === undefined ? [] : [[name, writes] as const],
-      ),
-    );
-    const seen = new Map<RunId, string>();
-    const announcedTo = new Map<RunId, CommitOrdinal>();
-    const announce = (runId: RunId) =>
-      rows(runId).pipe(
-        Effect.map((stored) => {
-          let last = announcedTo.get(runId) ?? since;
-          for (const row of stored) {
-            if (row.type !== 'plugin.fact' || row.commit <= last) continue;
-            const writes = writing.get(`${row.plugin}/${row.kind}`);
-            if (writes !== undefined)
-              signals.emit('workspaceFilesWritten', {
-                absolutePaths: [...writes(row.value)],
-              });
-            last = row.commit;
-          }
-          announcedTo.set(runId, last);
-        }),
-        Effect.catch((error) => {
-          seen.delete(runId);
-          return Effect.logWarning(
-            `Run ${runId}'s facts were not read; announcing them on the next change`,
-          ).pipe(Effect.annotateLogs({ data: error }));
-        }),
-      );
-    return Stream.runForEach(changes, (view) => {
-      const moved: RunId[] = [];
-      for (const run of view.runs.values()) {
-        const facts = [...writing.keys()].map((key) => run.facts[key]);
-        if (facts.every((fact) => fact === undefined)) continue;
-        const written = JSON.stringify(facts);
-        if (seen.get(run.id) === written) continue;
-        seen.set(run.id, written);
-        moved.push(run.id);
-      }
-      return Effect.forEach(moved, announce, { discard: true });
-    });
-  });
-}
-
 /** The plugin arms a store reads, by `plugin/kind`. */
 export type PluginArms = Readonly<Record<string, PluginArm>>;
 
@@ -307,6 +244,21 @@ export function checkOwnFacts(
 
 type OwnFactRow = Extract<SessionEventDraft, { type: 'plugin.fact' }>;
 
+/** A fact about the run itself, as its row on `runId`'s history: a call's
+ *  (`factRows`) or a copy a fork starts with (`forkedFacts`). */
+const runFactRow = (
+  { plugin, kind, version, value }: Omit<ToolFact, 'aggregate'>,
+  runId: RunId,
+): RunHistoryDraft => ({
+  type: 'plugin.fact',
+  plugin,
+  kind,
+  version,
+  value,
+  aggregateId: qualifyAggregateId('run', runId),
+  parent: null,
+});
+
 /** A fact about its plugin's own aggregate, as its row hung under
  *  `runId`: a call's (`factRows`) or a decision's (`Plugin.decision`). */
 export const ownFactRow = (
@@ -340,13 +292,7 @@ export function factRows(
   const run: RunHistoryDraft[] = [];
   const own: OwnFactRow[] = [];
   for (const { aggregate, ...fact } of facts)
-    if (aggregate === undefined)
-      run.push({
-        type: 'plugin.fact',
-        ...fact,
-        aggregateId: qualifyAggregateId('run', runId),
-        parent: null,
-      });
+    if (aggregate === undefined) run.push(runFactRow(fact, runId));
     else own.push(ownFactRow({ ...fact, aggregate }, runId));
   const current = (draft: OwnFactRow) =>
     Effect.gen(function* () {
@@ -374,3 +320,28 @@ export function factRows(
     ),
   };
 }
+
+/**
+ * The facts a fork `runId` of run `from` starts with: copies of the facts
+ * `from` stated about itself, per kind as its arm says (`PluginArm.fork`):
+ * its row at `cut`, its latest row, or none.
+ */
+export const forkedFacts = Effect.fn('forkedFacts')(function* (
+  log: Pick<SessionLog, 'rows'>,
+  from: RunId,
+  cut: number,
+  runId: RunId,
+) {
+  const arms = armsOf((yield* ToolRegistry).entries.values());
+  const kept = new Map<string, RunHistoryDraft>();
+  for (const row of yield* log.rows(qualifyAggregateId('run', from), [
+    'plugin.fact',
+  ])) {
+    if (row.type !== 'plugin.fact') continue;
+    const name = `${row.plugin}/${row.kind}`;
+    const fork = arms[name]?.fork;
+    if (fork === undefined || (fork === 'cut' && row.seq > cut)) continue;
+    kept.set(name, runFactRow(row, runId));
+  }
+  return [...kept.values()];
+});
