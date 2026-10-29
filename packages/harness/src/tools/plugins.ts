@@ -34,19 +34,21 @@ import {
   type SessionEventDraft,
   type ToolFact,
 } from '@shared/schemas';
-import { DatabaseWriteFailed } from '@shared/session/database';
+import {
+  type DatabaseReadFailed,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { decodeDisabledTools, GlobalStateKey } from '@shared/state/stateKeys';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
-import {
-  ToolRegistry,
-  type AgentBlock,
-  type PluginHold,
-  type ProcessPluginLayer,
-  type PromptSection,
-  type RequestDecisionHook,
-  type SessionPluginLayer,
+import type {
+  AgentBlock,
+  PluginHold,
+  ProcessPluginLayer,
+  PromptSection,
+  RequestDecisionHook,
+  SessionPluginLayer,
 } from '@tools/toolTable';
 
 /** One stored row of a plugin's kind, as its arm's transition rule reads
@@ -321,21 +323,23 @@ export function factRows(
 }
 
 /** The facts a fork `runId` of run `from` starts with: of each kind whose
- *  arm says `fork: 'cut'`, the latest row `from` held at `cut`. */
-export const forkedFacts = Effect.fn('forkedFacts')(function* (
+ *  arm in `arms` says `fork: 'cut'`, the latest row `from` held at `cut`. */
+export const forkedFacts = (
   log: Pick<SessionLog, 'rows'>,
+  arms: PluginArms,
   from: RunId,
   cut: number,
   runId: RunId,
-) {
-  const arms = armsOf((yield* ToolRegistry).entries.values());
-  const kept = new Map<string, RunHistoryDraft>();
-  for (const row of yield* log.rows(qualifyAggregateId('run', from), [
-    'plugin.fact',
-  ])) {
-    if (row.type !== 'plugin.fact' || row.seq > cut) continue;
-    const name = `${row.plugin}/${row.kind}`;
-    if (arms[name]?.fork === 'cut') kept.set(name, runFactRow(row, runId));
-  }
-  return [...kept.values()];
-});
+): Effect.Effect<readonly RunHistoryDraft[], DatabaseReadFailed> =>
+  Effect.map(
+    log.rows(qualifyAggregateId('run', from), ['plugin.fact']),
+    (rows) => {
+      const kept = new Map<string, RunHistoryDraft>();
+      for (const row of rows) {
+        if (row.type !== 'plugin.fact' || row.seq > cut) continue;
+        const name = `${row.plugin}/${row.kind}`;
+        if (arms[name]?.fork === 'cut') kept.set(name, runFactRow(row, runId));
+      }
+      return [...kept.values()];
+    },
+  );

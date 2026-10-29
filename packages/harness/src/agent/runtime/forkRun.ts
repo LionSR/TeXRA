@@ -27,8 +27,6 @@ import {
 } from '@shared/schemas';
 import { Rejected } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import { forkedFacts } from '@tools/plugins';
-import type { ToolRegistry } from '@tools/toolTable';
 import { generateRunId } from '@utils/core';
 
 import { configRow, positionRow } from './loop/rows';
@@ -188,7 +186,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
   session: SessionHandle,
   from: { readonly id: RunId; readonly uid: string },
   at: number | null,
-): Effect.fn.Return<RunId, Rejected | Error, ToolRegistry> {
+): Effect.fn.Return<RunId, Rejected | Error> {
   // The title the source shows, with its authorship.
   const cutAt = yield* cutOf(session, from.id, at);
   const { seq: cut, state, start, title, record } = cutAt;
@@ -209,7 +207,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
   });
   yield* cell.append([
     ...viewRows(runId, state, state.messages),
-    ...(yield* forkedFacts(session.log, from.id, cut, runId)),
+    ...(yield* session.tools.forkedFacts(session.log, from.id, cut, runId)),
     ...(state.backend === null
       ? []
       : [
@@ -253,8 +251,7 @@ export const forkSeed = Effect.fn('forkSeed')(function* (
   boundAt: number | undefined,
 ): Effect.fn.Return<
   { readonly record: AgentConfig; readonly seed: RunHistoryDraft[] },
-  Rejected | Error,
-  ToolRegistry
+  Rejected | Error
 > {
   const { seq, state, record } = yield* cutOf(session, from, null, before);
   const text = { kind: 'text' as const, text: prompt };
@@ -286,7 +283,7 @@ export const forkSeed = Effect.fn('forkSeed')(function* (
     record: { ...record, model },
     seed: [
       ...viewRows(runId, state, messages),
-      ...(yield* forkedFacts(session.log, from, seq, runId)),
+      ...(yield* session.tools.forkedFacts(session.log, from, seq, runId)),
       ...binding,
     ],
   };
