@@ -91,7 +91,7 @@ describe(
           );
           expect(ended).toMatchObject({
             outcome: 'failed',
-            error: { message: expect.stringContaining('injected appendAll') },
+            failure: { message: expect.stringContaining('injected appendAll') },
           });
           expect(
             storedRows(roots.storage).filter((row) => row.run === runId),

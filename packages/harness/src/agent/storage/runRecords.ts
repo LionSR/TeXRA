@@ -25,7 +25,6 @@ import {
   emptyRunEndOutput,
   isTaskConfig,
   sumRunUsageTotals,
-  type RunUsageTotals,
   RunWorkspaceFilesSchema,
   type ResultMeta,
   type RunEnd,
@@ -169,27 +168,6 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
   }
   return open;
 });
-
-/** `end` with its run's children's spend added to its own: a document
- *  task's revisions are its children's runs, which hold what it cost. */
-export const withChildSpend = <
-  T extends { readonly runId: RunId; readonly usage?: RunUsageTotals },
->(
-  session: SessionHandle,
-  end: T,
-): Effect.Effect<T & { readonly usage: RunUsageTotals }, DatabaseReadFailed> =>
-  Effect.forEach(session.view.run(end.runId)?.childIds ?? [], (child) =>
-    getRunRecords(session, child).readRunEnd(),
-  ).pipe(
-    Effect.map((ends) => ({
-      ...end,
-      usage: sumRunUsageTotals(
-        [end.usage, ...ends.map((child) => child?.usage)].filter(
-          (u) => u !== undefined,
-        ),
-      ),
-    })),
-  );
 
 /**
  * The public value of one run's result endpoint (`readResult`): the run's
