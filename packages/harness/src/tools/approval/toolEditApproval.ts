@@ -98,7 +98,8 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       // whichever roots the answering fiber happens to carry.
       relativePath: workspaceRelativePath(call.env.roots.workspace, path),
       sourceTool,
-      allowBypass: session.approvals.bypass(runId, 'toolEdit') === null,
+      allowBypass:
+        hook !== 'ask' && session.approvals.bypass(runId, 'toolEdit') === null,
       runId,
       addedLines: lines.added,
       removedLines: lines.removed,
