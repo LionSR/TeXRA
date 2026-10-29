@@ -275,7 +275,7 @@ describe('wakeRun', () => {
         const decide = vi.fn(() => Effect.succeed(false));
         const ended = vi
           .spyOn(runLifecycle, 'finalizeRun')
-          .mockReturnValue(Effect.succeed({ recorded: true }));
+          .mockReturnValue(Effect.succeed({ end: null, wrote: false }));
 
         const woken = yield* wakeRun(runId, session).pipe(
           withResumePort(decide),

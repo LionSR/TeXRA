@@ -599,8 +599,8 @@ export class RunRegistry implements RunsShape {
    * {@link RunStop.accepted} answers at once; a detaching one after the
    * children's `run.detach` batch commits, or a child completing meanwhile
    * would route its result to the just-stopped parent. A run nothing here
-   * owns is stopped under its claim, descendants swept, and given the end
-   * the stop owes it ({@link stopEnd}); a refused row fails it.
+   * owns has its descendants swept and is given the end the stop owes it
+   * ({@link stopEnd}), under its claim; a refused row fails it.
    */
   stop(runId: RunId, options: RunStopOptions): RunStop {
     const entry = this.entries.get(runId);
@@ -648,33 +648,21 @@ export class RunRegistry implements RunsShape {
         }),
       ),
     );
-    const { log } = this.init.session();
-    return {
-      accepted: () => reached,
-      settlement: local
-        ? apply
-        : Effect.scoped(Effect.andThen(log.hold(runId, { ends: true }), apply)),
-    };
+    return { accepted: () => reached, settlement: apply };
   }
 
   /** The end a stop owes a run no generation here took it for, decided
-   *  here only: a user's stop ends it cancelled, under its claim (an end it
-   *  wrote stands); a shutdown or a release owes none and leaves it
-   *  resumable. A generation a stop reached ends itself, cancelled, through
-   *  its lifecycle. */
+   *  here only: a user's stop ends it cancelled, an ownerless end under its
+   *  claim (an end it wrote stands); a shutdown or a release owes none and
+   *  leaves it resumable. A generation a stop reached ends itself,
+   *  cancelled, through its lifecycle. */
   private stopEnd(
     runId: RunId,
     cause: StopCause | undefined,
   ): Effect.Effect<void, Error> | undefined {
     if (cause !== 'user') return undefined;
-    const session = this.init.session();
     const end = { runId, outcome: RUN_OUTCOME.CANCELLED, ownerless: true };
-    return Effect.scoped(
-      Effect.andThen(
-        session.log.hold(runId, { ends: true }),
-        finalizeRun(session, end),
-      ),
-    ).pipe(Effect.asVoid);
+    return Effect.asVoid(finalizeRun(this.init.session(), end));
   }
 
   /** The session is closing: refuse every run registered from here on, and

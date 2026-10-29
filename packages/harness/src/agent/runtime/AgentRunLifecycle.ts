@@ -60,15 +60,14 @@ interface EndActivationParams {
    * while that phase is still non-terminal — see {@link endActivation}.
    */
   readonly outcome: RunOutcome;
-  /** Classified error facts on the `run.end` row, dropped when stop
-   *  precedence resolves another outcome than `outcome`. */
+  /** Classified error facts on the `run.end` row. */
   readonly error?: ResultEvent['error'];
   /** What the flow produced; absent when the run ended first, and on the
    *  child-run path, whose product is its per-turn delivery. */
   readonly output?: RunEndOutput;
   /** Transcript stage closed with the resolved outcome (guarded). */
   readonly stage?: Pick<StageHandle, 'end'>;
-  /** A child's last turn result under the resolved outcome. */
+  /** A child's last turn result under the outcome its end resolves. */
   readonly lastTurn?: (
     outcome: RunOutcome,
   ) => Effect.Effect<TransactionPart | undefined>;
@@ -82,8 +81,9 @@ interface EndActivationResult {
   /** The `run.end` row write's failure: the terminal still ran, and the
    *  event reports FAILED with its reason. */
   readonly persistFailure?: Error;
-  /** False for a run that never opened: no row was written, so its
-   *  failure is its launch's to present. */
+  /** False when no `run.end` is recorded: a run that never opened, whose
+   *  failure is its launch's to present, or a child whose end waits for its
+   *  held result's delivery. */
   readonly recorded: boolean;
 }
 
@@ -101,14 +101,14 @@ export const endActivation = Effect.fn('endActivation')(
     const { session, runId } = params;
     // Stop precedence, read once: a stop that reached the run before its exit
     // outranks the flow's report, on the stage here as on the row below.
-    const stopped = params.stopped === true;
+    const outcome =
+      params.stopped === true ? RUN_OUTCOME.CANCELLED : params.outcome;
     // Close the transcript stage first: its `stage.end` is published ahead of
     // the `run.end` row, and a refusal of it is that row's write failure.
     if (params.stage) {
       const stage = params.stage;
-      const stageOutcome = stopped ? RUN_OUTCOME.CANCELLED : params.outcome;
       yield* Effect.try({
-        try: () => stage.end(stageOutcome),
+        try: () => stage.end(outcome),
         catch: ensureError,
       }).pipe(
         Effect.catch((stageErr) =>
@@ -119,17 +119,11 @@ export const endActivation = Effect.fn('endActivation')(
         ),
       );
     }
-    // A trace row the store refused means the run's record is incomplete:
-    // the run failed, whatever it reported, and its row says why.
-    const lost = yield* session.trace.lost(runId);
-    const reported = lost === undefined ? params.outcome : RUN_OUTCOME.FAILED;
-    // The `run.end` row written below is the run's terminal fact: the report
-    // is only the verdict for a run no stop reached.
-    const outcome = stopped ? RUN_OUTCOME.CANCELLED : reported;
-    const error =
-      lost ?? (outcome === params.outcome ? params.error : undefined);
+    const { error } = params;
     const output = params.output ?? emptyRunEndOutput();
-    // `finalizeRun` adds the usage totals from history.
+    // `finalizeRun` resolves a lost trace row and adds the usage totals;
+    // the event is the end it wrote, or this activation's own report where
+    // it wrote none (an earlier end stands, or a held result waits).
     const event: ResultEvent = {
       type: 'run.end',
       outcome,
@@ -137,17 +131,20 @@ export const endActivation = Effect.fn('endActivation')(
       ...(error ? { error } : {}),
       output,
     };
-    const lastTurn = params.lastTurn && (yield* params.lastTurn(outcome));
     const finalization = yield* finalizeRun(session, {
       runId,
       outcome,
       error,
       output,
-      lastTurn,
+      lastTurn: params.lastTurn,
       ownerless: params.ownerless,
     }).pipe(Effect.result);
-    if (Result.isSuccess(finalization))
-      return { event, recorded: finalization.success.recorded };
+    if (Result.isSuccess(finalization)) {
+      const { end, wrote } = finalization.success;
+      return end !== null && wrote
+        ? { event: { type: 'run.end', runId, ...end }, recorded: true }
+        : { event, recorded: end !== null };
+    }
     // A run whose `run.end` did not commit failed, whatever it reported.
     const unsaved = finalization.failure;
     yield* logLifecycleWarning('Failed to finalize durable run state', {
@@ -288,9 +285,9 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
             info: { message: fallbackMsg, userRetryable: false },
           }),
         );
-    // A stop that reached the run outranks the failure beside it; the
-    // failure still rides the cancelled row as its error detail.
-    const outcome = stopped ? RUN_OUTCOME.CANCELLED : AGENT_ERROR_OUTCOME[kind];
+    // A stop that reached the run outranks the failure beside it (the end
+    // resolves it); the failure still rides the cancelled row as its error.
+    const outcome = AGENT_ERROR_OUTCOME[kind];
     /** The report of a run that ended before its loop produced an output. */
     const emptyReport = (ended: RunOutcome): RunReport => {
       const misses = ctx.opening?.attachedMemoryMisses ?? [];

@@ -6,7 +6,6 @@
 import { Cause, Effect, Exit, Schedule, type Scope } from 'effect';
 
 import { endIn, finalizeRun } from '@agent/storage/runLifecycle';
-import { getRunRecords } from '@agent/storage/runRecords';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import {
@@ -32,27 +31,9 @@ import { presentRunFailure } from './terminalResultToast';
 import type { SessionHandle } from './SessionHandle';
 
 /**
- * Let go of `runId`'s claim where no hold of this process keeps it (a
- * birth's): a hold taken and let go at once. A run never born has none.
- */
-const letGoOfClaim = (
-  session: SessionHandle,
-  runId: RunId,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    // A run never born has no claim to let go.
-    if (!(yield* getRunRecords(session, runId).exists())) return;
-    yield* Effect.scoped(session.log.hold(runId, { ends: true }));
-  }).pipe(
-    Effect.catch((error) =>
-      warn(undefined, `The claim on ${runId} was not let go.`, error),
-    ),
-  );
-
-/**
  * Hand a registered process child to its loop, which owns its end from
  * there. A hand-off that fails ends the run ownerless (an end the run
- * already wrote stands), with its classified error, and lets its birth's
+ * already wrote stands), with its classified error, which lets its birth's
  * claim go. The ending's failures join the hand-off's own as one
  * aggregate; an interruption unwinds as itself.
  */
@@ -84,7 +65,6 @@ export function runWithLaunchGuard<A, E, R>(
                 }),
               );
               if (Exit.isFailure(end)) failures.push(Cause.squash(end.cause));
-              yield* letGoOfClaim(session, runId);
             }),
       ),
     );
@@ -199,11 +179,12 @@ const deliverOne = Effect.fn('runLaunchGuard.deliverOne')(function* (
   }
   // The held last turn ends the child, through its cell, in this append:
   // its unread input consumed, its halt, what it left open, its `run.end`.
-  yield* endIn(session, append, {
-    runId: child,
-    outcome: ends,
-    lastTurn: Effect.succeed({ rows: delivered }),
-  });
+  yield* endIn(
+    session,
+    append,
+    { runId: child, outcome: ends },
+    Effect.succeed({ rows: delivered }),
+  );
 });
 
 /**
