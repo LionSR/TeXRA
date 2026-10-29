@@ -50,7 +50,7 @@ export type FollowUpFailureReason =
  */
 export type SubmitFollowUpResult =
   | { status: 'sent' }
-  | { status: 'queued'; wake?: 'failed' }
+  | { status: 'queued'; wake?: 'failed' | null }
   | { status: 'failed'; reason: FollowUpFailureReason };
 
 /** How one input is delivered to a run. */

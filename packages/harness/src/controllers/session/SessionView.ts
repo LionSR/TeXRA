@@ -30,18 +30,22 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type { SessionViewAccess } from '@agent/runtime/SessionHandle';
+import type {
+  SessionHandle,
+  SessionViewAccess,
+} from '@agent/runtime/SessionHandle';
 import type { AppSignals } from '@platform/appSignals';
 import {
   qualifyAggregateId,
   type LocalRuntimeState,
+  type RunId,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import { Database, type DatabaseReadFailed } from '@shared/session/database';
 import type { SessionView as ReadonlySessionView } from '@shared/session/readonlyViews';
 import type {
-  Outcome,
-  RuntimeRequest,
+  RequestOf,
+  RequestOutcomes,
   StagedToolEdits,
 } from '@shared/session/runtimeRequest';
 import { SessionInputs } from '@shared/session/sessionInputs';
@@ -297,27 +301,44 @@ export const makeSessionViewAccess = Effect.fn(
   };
 });
 
-/**
- * Answer a surface's `request.preview` or `request.edit` from the session's
- * tool-edit store, for a request the view lists on the run the surface
- * named: another run's staged content is not that caller's. An edit fails
- * with `refusal` once the request no longer waits.
- */
-export function answerToolEditRequest<E>(
-  view: Pick<SessionViewAccess, 'ref' | 'toolEdits'>,
-  req: Extract<RuntimeRequest, { kind: 'request.preview' | 'request.edit' }>,
-  refusal: E,
-): Effect.Effect<Outcome, E> {
-  const pending = SubscriptionRef.getUnsafe(view.ref).requests.some(
-    (row) => row.runId === req.runId && row.requestId === req.requestId,
+/** The pending request `requestId` of run `runId`, if the view lists it:
+ *  another run's request, and the content staged for it, is not the caller's. */
+export const pendingOf = (
+  view: Pick<SessionViewAccess, 'ref'>,
+  { runId, requestId }: { readonly runId: RunId; readonly requestId: string },
+): SessionView['requests'][number] | undefined =>
+  SubscriptionRef.getUnsafe(view.ref).requests.find(
+    (row) => row.runId === runId && row.requestId === requestId,
   );
-  if (req.kind === 'request.preview')
-    return Effect.map(SubscriptionRef.get(view.toolEdits), (held) => ({
-      kind: 'preview',
-      preview: pending
-        ? Option.getOrNull(HashMap.get(held, req.requestId))
-        : null,
-    }));
+
+/** What a tool edit's requests read: the session's view and staged edits. */
+type ToolEditDeps = { readonly session: () => Pick<SessionHandle, 'view'> };
+
+/** A surface's `request.preview`: the tool edit the session staged for a
+ *  request the view lists, null when none. */
+export const previewToolEdit = (
+  { session }: ToolEditDeps,
+  req: RequestOf<'request.preview'>,
+): Effect.Effect<RequestOutcomes['request.preview']> => {
+  const { view } = session();
+  const pending = pendingOf(view, req) !== undefined;
+  return Effect.map(SubscriptionRef.get(view.toolEdits), (held) => ({
+    kind: 'preview' as const,
+    preview: pending
+      ? Option.getOrNull(HashMap.get(held, req.requestId))
+      : null,
+  }));
+};
+
+/** A surface's `request.edit` of a tool edit the view lists, failing with
+ *  `refusal` once the request no longer waits. */
+export function editToolEdit<E>(
+  deps: ToolEditDeps,
+  req: RequestOf<'request.edit'>,
+  refusal: E,
+): Effect.Effect<RequestOutcomes['request.edit'], E> {
+  const { view } = deps.session();
+  const pending = pendingOf(view, req) !== undefined;
   // The host read these bytes itself, so they may be CRLF.
   const edited = req.content.replaceAll('\r\n', '\n');
   return SubscriptionRef.modify(view.toolEdits, (held) => {
@@ -330,6 +351,6 @@ export function answerToolEditRequest<E>(
       (stored) => stored,
       () => refusal,
     ),
-    Effect.as({ kind: 'done' }),
+    Effect.as({ kind: 'done' } as const),
   );
 }

@@ -36,8 +36,10 @@ import type {
   DatabaseReadFailed,
   SessionStoreMovedAside,
 } from '@shared/session/database';
-import type { RequestError } from '@shared/session/runtimeRequest';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type {
+  AnswerRequest,
+  RequestError,
+} from '@shared/session/runtimeRequest';
 import type {
   PendingRequest,
   SessionView,
@@ -252,10 +254,9 @@ export interface Session {
   /** Everything else you ask of the session, as one typed request
    *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
    *  approval, stop, fork or delete a run, switch its model, and so on).
-   *  Answered exactly once, with an outcome or a {@link RequestError}. */
-  readonly request: (
-    request: RuntimeRequest,
-  ) => Effect.Effect<Outcome, RequestError>;
+   *  Answered exactly once, with the outcome its kind answers with
+   *  (`RequestOutcomes`) or a {@link RequestError}. */
+  readonly request: AnswerRequest<RequestError>;
   /** Attach `host` until the caller's scope closes: it shows notices, and
    *  its `approve` answers the runs' approval requests. A session has one
    *  host at a time; attaching a second while one is attached is a defect. */

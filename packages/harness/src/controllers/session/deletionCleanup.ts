@@ -22,11 +22,11 @@ import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
-import { Rejected, type RequestError } from '@shared/session/runtimeRequest';
+import { Rejected } from '@shared/session/runtimeRequest';
 import type {
-  Outcome,
+  RequestOf,
+  RequestOutcomes,
   RunFilesResult,
-  RuntimeRequest,
 } from '@shared/session/runtimeRequest';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { copyOrRemoveRunDir } from '@utils/files/runStorageFs';
@@ -165,8 +165,8 @@ export const runFiles = (
       }) => Effect.Effect<void, Error, Scope.Scope>;
     };
   },
-  req: Extract<RuntimeRequest, { kind: 'run.files' }>,
-): Effect.Effect<Outcome, RequestError, RunFilesServices> =>
+  req: RequestOf<'run.files'>,
+): Effect.Effect<RequestOutcomes['run.files'], Rejected, RunFilesServices> =>
   session.runs.launch({ hold: req.runId }).pipe(
     Effect.mapError((cause) =>
       cause instanceof Rejected
@@ -196,7 +196,7 @@ export const runFiles = (
         ),
       ),
     ),
-    Effect.map((result): Outcome => ({ kind: 'runFiles', result })),
+    Effect.map((result) => ({ kind: 'runFiles' as const, result })),
     Effect.scoped,
     (program) => withSessionFs(session.roots, program),
     withLogChannel('runFiles'),

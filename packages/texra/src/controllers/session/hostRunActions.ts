@@ -477,12 +477,7 @@ export const createHostRunActions = Effect.fn(
         .request({ kind: 'followUp.send', runId, text })
         .pipe(
           Effect.flatMap((outcome) => {
-            if (outcome.kind !== 'followUp') return Effect.void;
-            const shown = presentFollowUpResult(
-              outcome.status === 'sent'
-                ? { status: 'sent' }
-                : { status: 'queued', wake: outcome.wake ?? undefined },
-            );
+            const shown = presentFollowUpResult(outcome);
             return shown.severity === 'none'
               ? Effect.void
               : present(shown.message);
@@ -608,10 +603,6 @@ export const createHostRunActions = Effect.fn(
                 }),
               ),
             ),
-          );
-        if (outcome.kind !== 'runFiles')
-          return yield* Effect.die(
-            new Error(`run.files answered ${outcome.kind}`),
           );
         const { result } = outcome;
         return {

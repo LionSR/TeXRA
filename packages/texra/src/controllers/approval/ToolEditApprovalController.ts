@@ -208,7 +208,7 @@ export class ToolEditApprovalController {
         runId,
         requestId,
       });
-      if (outcome.kind !== 'preview' || outcome.preview === null) {
+      if (outcome.preview === null) {
         // The card still answers from its payload; there is no diff to show.
         yield* Effect.logWarning(
           `The session holds no preview of tool edit ${requestId}`,

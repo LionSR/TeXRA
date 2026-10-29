@@ -47,9 +47,11 @@ import {
   NotOwner,
   Rejected,
   Unavailable,
-  type RequestError,
+  type RequestOf,
+  type RequestOutcomes,
+  type RuntimeRequest,
+  type SessionRequestError,
 } from '@shared/session/runtimeRequest';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import { runActionRefusal } from '@shared/session/runActions';
 import { ownFactRow } from '@tools/plugins';
@@ -57,9 +59,9 @@ import type { ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runFiles, type RunFilesServices } from './deletionCleanup';
-import { answerToolEditRequest } from './SessionView';
+import { editToolEdit, pendingOf, previewToolEdit } from './SessionView';
 
-const done: Outcome = Object.freeze({ kind: 'done' } as const);
+const done = Object.freeze({ kind: 'done' } as const);
 type RequestServices = GlobalValues | RunFilesServices;
 /** What a handler reads of `services`; never the whole captured context. */
 const servicesOf = Context.pick(GlobalValues, FileSystem.FileSystem, Path.Path);
@@ -88,15 +90,6 @@ export interface SessionRequestsInit {
   readonly closed: () => boolean;
 }
 
-/** The run action a request performs, where the run's `actions` gates it. */
-const GATED_ACTIONS: Partial<Record<RuntimeRequest['kind'], RunAction>> = {
-  'run.delete': 'delete',
-  'run.compact': 'compact',
-  'run.rename': 'rename',
-  'run.files': 'files',
-  'policy.set': 'grant',
-};
-
 /** One session's requests, as every handler below reads them. */
 interface RequestDeps extends SessionRequestsInit {
   /** One in-process lane per request id, making the pending check, the
@@ -112,8 +105,8 @@ const withRunClaim = <A, R>(
   deps: RequestDeps,
   runId: RunId,
   heldHere: boolean,
-  write: Effect.Effect<A, RequestError, R>,
-): Effect.Effect<A, RequestError, R> =>
+  write: Effect.Effect<A, SessionRequestError, R>,
+): Effect.Effect<A, SessionRequestError, R> =>
   heldHere
     ? write
     : Effect.scoped(
@@ -123,16 +116,16 @@ const withRunClaim = <A, R>(
           .pipe(Effect.mapError(claimRejection(runId)), Effect.andThen(write)),
       );
 
-/** Refuse a gated request the run's `actions` no longer hold; a run not
- *  folded yet, or held elsewhere, is left to `admit` and the claim; a stop
- *  is ungated. */
+/** Refuse a request whose `action` (null: ungated) the run's `actions` no
+ *  longer hold; a run not folded yet, or held elsewhere, is left to `admit`
+ *  and the claim. */
 const requireRunAction = (
   deps: RequestDeps,
   req: RuntimeRequest,
-): Effect.Effect<void, RequestError> => {
-  let action = GATED_ACTIONS[req.kind];
-  if (req.kind === 'policy.set' && narrows(req.change)) action = undefined;
-  if (action === undefined) return Effect.void;
+  action: RunAction | null,
+): Effect.Effect<void, SessionRequestError> => {
+  if (action === null || (req.kind === 'policy.set' && narrows(req.change)))
+    return Effect.void;
   const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
   const run = deps.session().view.run(runId);
   // `readOnly` with a foreign owner: a live one (a dead owner's run is not
@@ -149,14 +142,14 @@ const requireRunAction = (
 const admit = (
   deps: RequestDeps,
   req: RuntimeRequest,
-): Effect.Effect<AggregateState, RequestError> => {
+): Effect.Effect<AggregateState, SessionRequestError> => {
   const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
   return Effect.flatMap(
     deps.log.aggregateState([qualifyAggregateId('run', runId)]).pipe(
       Effect.orDie,
       Effect.map((rows) => rows[0]),
     ),
-    (state): Effect.Effect<AggregateState, RequestError> => {
+    (state): Effect.Effect<AggregateState, SessionRequestError> => {
       if (!state || state.closed) {
         return Effect.fail(
           new Unavailable({
@@ -188,9 +181,9 @@ const admit = (
 /** The user's title: the run's `run.description` row, under its claim. */
 const rename = (
   deps: RequestDeps,
-  req: Extract<RuntimeRequest, { kind: 'run.rename' }>,
+  req: RequestOf<'run.rename'>,
   heldHere: boolean,
-): Effect.Effect<Outcome, RequestError> =>
+): Effect.Effect<typeof done, SessionRequestError> =>
   withRunClaim(
     deps,
     req.runId,
@@ -216,12 +209,6 @@ const rename = (
       ),
   );
 
-/** The pending request `requestId` of run `runId`, if the view lists it. */
-const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
-  SubscriptionRef.getUnsafe(deps.session().view.ref).requests.find(
-    (row) => row.runId === runId && row.requestId === requestId,
-  );
-
 /**
  * The one way in for a surface's decision: a pending request's
  * `request.decided` row, which the waiting run reads from the tail.
@@ -233,11 +220,11 @@ const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
  */
 const decideRequest = (
   deps: RequestDeps,
-  req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
+  req: RequestOf<'request.decide'>,
   heldHere: boolean,
-): Effect.Effect<Outcome, RequestError, GlobalValues> => {
+): Effect.Effect<typeof done, SessionRequestError, GlobalValues> => {
   const answer = Effect.gen(function* () {
-    const pending = pendingOf(deps, req.runId, req.requestId);
+    const pending = pendingOf(deps.session().view, req);
     if (pending === undefined) return yield* settled(req.runId);
     // A request that parks its caller is answered by the fiber waiting on it,
     // and that fiber died with the owner this decision takes over from:
@@ -279,8 +266,8 @@ const decideRequest = (
 /** Answered by the run's live loop once its resume here settles (none: refused): a /compact or /model sent mid-resume waits until the run rests. */
 const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
   deps: RequestDeps,
-  req: Extract<RuntimeRequest, { kind: `run.${'compact' | 'model'}` }>,
-): Effect.fn.Return<Outcome, RequestError> {
+  req: RequestOf<'run.compact' | 'run.model'>,
+): Effect.fn.Return<typeof done, SessionRequestError> {
   const { runId } = req;
   const unavailable = (reason: string) => new Unavailable({ runId, reason });
   const runs = registryOf(deps.session().runs);
@@ -310,7 +297,7 @@ const deleteAdmittedRun = (
   runId: RunId,
   admitted: AggregateState,
   mode: DeletionMode,
-): Effect.Effect<Outcome, RequestError> => {
+): Effect.Effect<typeof done, SessionRequestError> => {
   const aggregateId = qualifyAggregateId('run', runId);
   return Effect.gen(function* () {
     if (admitted.startCommit === null) {
@@ -325,7 +312,7 @@ const deleteAdmittedRun = (
         deps.log.removeRun(aggregateId, mode, admitted.startCommit),
       )
       .pipe(
-        Effect.mapError((error): RequestError => {
+        Effect.mapError((error): SessionRequestError => {
           if (error instanceof RunLive)
             return new Unavailable({
               runId,
@@ -349,73 +336,118 @@ const deleteAdmittedRun = (
   });
 };
 
-const handle = (
+/** Each request kind's handler, given `Extra` and needing `R`. */
+type Handlers<Extra extends unknown[], R = never> = {
+  readonly [K in RuntimeRequest['kind']]: (
+    deps: RequestDeps,
+    req: RequestOf<K>,
+    ...extra: Extra
+  ) => Effect.Effect<RequestOutcomes[K], SessionRequestError, R>;
+};
+
+/** `handle` behind the run's gate (`action`) and `admit`, over the run it
+ *  found; `heldHere`: this process holds its claim (a parked request's fiber). */
+const admitted =
+  <K extends RuntimeRequest['kind']>(
+    action: RunAction | null,
+    handle: Handlers<[heldHere: boolean, AggregateState], RequestServices>[K],
+  ) =>
+  (deps: RequestDeps, req: RequestOf<K>) =>
+    Effect.gen(function* () {
+      yield* requireRunAction(deps, req, action);
+      const state = yield* admit(deps, req);
+      const heldHere =
+        state.ownerId !== null &&
+        SubscriptionRef.getUnsafe(deps.local).self.includes(state.ownerId);
+      return yield* handle(deps, req, heldHere, state).pipe(
+        Effect.provideContext(servicesOf(deps.services)),
+      );
+    });
+
+/** A message skips `admit`: `submitFollowUp` refuses under the run's claim
+ *  and keeps its run's sends in order, its media read included. */
+const sendFollowUp = Effect.fn('SessionRequests.sendFollowUp')(function* (
   deps: RequestDeps,
-  req: Exclude<RuntimeRequest, { kind: 'followUp.send' }>,
-  admitted: AggregateState,
-  heldHere: boolean,
-): Effect.Effect<Outcome, RequestError, RequestServices> => {
-  switch (req.kind) {
-    case 'run.stop':
-      return Effect.gen(function* () {
-        // An explicit child policy wins; an unset one is the session's
-        // "Keep subagents running", resolved once for every request's stop.
-        const detachActiveChildren =
-          req.detachActiveChildren ??
-          (yield* detachSubagentsOnStop(deps.session().roots));
-        yield* deps.session().runs.stop(req.runId, {
-          detachActiveChildren,
-          reason: req.reason,
-        }).settlement;
-      }).pipe(
-        // A setting that would not read, or a refused terminal row (a live
-        // foreign owner, a rolled-back transaction): the run is still in
-        // flight, so the requester hears that rather than `done`.
-        Effect.mapError(
-          (error): RequestError =>
-            new Unavailable({
-              runId: req.runId,
-              reason: `The ${runNoun(deps.session(), req.runId)} could not be stopped: ${toErrorMessage(error)}`,
-            }),
-        ),
-        Effect.as(done),
-        Effect.uninterruptible,
-      );
-    case 'run.delete':
-      return deleteAdmittedRun(deps, req.runId, admitted, 'single');
-    case 'run.compact':
-    case 'run.model':
-      return viaControls(deps, req);
-    case 'run.rename':
-      return rename(deps, req, heldHere);
-    case 'run.files':
-      return runFiles(deps.session(), req);
-    case 'run.fork':
-      return forkRun(
-        deps.session(),
-        { id: req.runId, uid: admitted.uid },
-        req.at ?? null,
-      ).pipe(
-        Effect.catchIf((e): e is Error => !(e instanceof Rejected), Effect.die),
-        Effect.map((runId): Outcome => ({ kind: 'forked', runId })),
-      );
-    case 'request.decide':
-      return decideRequest(deps, req, heldHere);
-    case 'request.preview':
-    case 'request.edit':
-      return answerToolEditRequest(
-        deps.session().view,
-        req,
-        settled(req.runId),
-      );
-    case 'policy.set':
-      return withRunClaim(
-        deps,
-        req.change.runId,
-        heldHere,
-        setPolicy(deps.session(), req.change, heldHere),
-      );
-  }
+  req: RequestOf<'followUp.send'>,
+) {
+  const attach = Effect.provideContext(
+    attachedMedia(req.media ?? [], deps.session().roots),
+    mediaReadOf(deps.services),
+  );
+  const result = yield* submitFollowUp(
+    req.runId,
+    {
+      text: req.text,
+      from: { kind: 'user' },
+      ...(req.displayText == null ? {} : { displayText: req.displayText }),
+    },
+    { session: deps.session(), hold: req.holdUntil ?? undefined, attach },
+  ).pipe(
+    Effect.catchIf((e): e is Error => !(e instanceof Rejected), Effect.die),
+  );
+  if (result.status !== 'failed')
+    return { kind: 'followUp' as const, ...result };
+  return yield* new Unavailable({
+    runId: req.runId,
+    reason: describeFollowUpFailure(result.reason),
+  });
+});
+
+/** Every request kind's handler. */
+const handlers: Handlers<[]> = {
+  'run.stop': admitted(null, (deps, req) =>
+    Effect.gen(function* () {
+      // An explicit child policy wins; an unset one is the session's
+      // "Keep subagents running", resolved once for every request's stop.
+      const detachActiveChildren =
+        req.detachActiveChildren ??
+        (yield* detachSubagentsOnStop(deps.session().roots));
+      yield* deps.session().runs.stop(req.runId, {
+        detachActiveChildren,
+        reason: req.reason,
+      }).settlement;
+    }).pipe(
+      // A setting that would not read, or a refused terminal row (a live
+      // foreign owner, a rolled-back transaction): the run is still in
+      // flight, so the requester hears that rather than `done`.
+      Effect.mapError(
+        (error) =>
+          new Unavailable({
+            runId: req.runId,
+            reason: `The ${runNoun(deps.session(), req.runId)} could not be stopped: ${toErrorMessage(error)}`,
+          }),
+      ),
+      Effect.as(done),
+      Effect.uninterruptible,
+    ),
+  ),
+  'run.delete': admitted('delete', (deps, req, _, state) =>
+    deleteAdmittedRun(deps, req.runId, state, 'single'),
+  ),
+  'run.compact': admitted<'run.compact'>('compact', viaControls),
+  'run.model': admitted<'run.model'>(null, viaControls),
+  'run.rename': admitted('rename', rename),
+  'run.files': admitted('files', (deps, req) => runFiles(deps.session(), req)),
+  'run.fork': admitted(null, (deps, req, _, { uid }) =>
+    forkRun(deps.session(), { id: req.runId, uid }, req.at ?? null).pipe(
+      Effect.catchIf((e): e is Error => !(e instanceof Rejected), Effect.die),
+      Effect.map((runId) => ({ kind: 'forked' as const, runId })),
+    ),
+  ),
+  'request.decide': admitted(null, decideRequest),
+  'request.preview': admitted(null, previewToolEdit),
+  'request.edit': admitted(null, (deps, req) =>
+    editToolEdit(deps, req, settled(req.runId)),
+  ),
+  'policy.set': admitted('grant', (deps, req, heldHere) =>
+    withRunClaim(
+      deps,
+      req.change.runId,
+      heldHere,
+      setPolicy(deps.session(), req.change, heldHere),
+    ),
+  ),
+  'followUp.send': sendFollowUp,
 };
 
 /** The session's requests: the handler that admits on the log's sequence
@@ -427,44 +459,8 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
     decisionLanes: new Map(),
     asks: requestAsks(init),
   };
-  const request = Effect.fn('SessionRequests.request')(function* (
-    req: RuntimeRequest,
-  ) {
-    // A message skips `admit`: `submitFollowUp` refuses under the run's claim
-    // and keeps its run's sends in order, its media read included.
-    if (req.kind === 'followUp.send') {
-      const attach = Effect.provideContext(
-        attachedMedia(req.media ?? [], deps.session().roots),
-        mediaReadOf(deps.services),
-      );
-      const result = yield* submitFollowUp(
-        req.runId,
-        {
-          text: req.text,
-          from: { kind: 'user' },
-          ...(req.displayText == null ? {} : { displayText: req.displayText }),
-        },
-        { session: deps.session(), hold: req.holdUntil ?? undefined, attach },
-      ).pipe(
-        Effect.catchIf((e): e is Error => !(e instanceof Rejected), Effect.die),
-      );
-      if (result.status !== 'failed')
-        return { kind: 'followUp' as const, ...result };
-      return yield* new Unavailable({
-        runId: req.runId,
-        reason: describeFollowUpFailure(result.reason),
-      });
-    }
-    yield* requireRunAction(deps, req);
-    const admitted = yield* admit(deps, req);
-    // This process holds the run's claim: a parked request has a fiber here.
-    const heldHere =
-      admitted.ownerId !== null &&
-      SubscriptionRef.getUnsafe(deps.local).self.includes(admitted.ownerId);
-    return yield* handle(deps, req, admitted, heldHere).pipe(
-      Effect.provideContext(servicesOf(deps.services)),
-    );
-  });
+  const request: SessionRequests['request'] = (req) =>
+    Effect.withSpan(handlers[req.kind](deps, req), 'SessionRequests.request');
 
   const removeRun = Effect.fn('SessionRequests.removeRun')(function* (
     runId: RunId,

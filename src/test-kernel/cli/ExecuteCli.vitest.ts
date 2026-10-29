@@ -113,13 +113,13 @@ function runSessionFake(): LocalSession {
           interrupt: Effect.void,
         })),
       ),
-    request: (req: RuntimeRequest) =>
+    request: ((req: RuntimeRequest) =>
       req.kind === 'run.stop'
         ? Effect.suspend(
             (): Effect.Effect<Outcome, never> =>
               mocks.stopRequest(req) ?? Effect.succeed({ kind: 'done' }),
           )
-        : session.request(req),
+        : session.request(req)) as LocalSession['request'],
   };
 }
 

@@ -42,9 +42,9 @@ import {
   NotOwner,
   Rejected,
   Unavailable,
-  type Outcome,
-  type RequestError,
+  type RequestOutcomes,
   type RuntimeRequest,
+  type SessionRequestError,
 } from '@shared/session/runtimeRequest';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { Settings } from '@shared/config/settings';
@@ -256,7 +256,7 @@ export const goalGrant =
  *  `NotOwner`, another owner holding the run. */
 export const claimRejection =
   (runId: RunId) =>
-  (error: unknown): RequestError =>
+  (error: unknown): SessionRequestError =>
     error instanceof DatabaseClaimRefused && error.verdict === 'unprovable'
       ? new Rejected({ reason: error.message })
       : new NotOwner({ runId });
@@ -266,7 +266,7 @@ export const claimRejection =
  *  `Unavailable` that `unavailable` describes, a closed run's included. */
 export const writeRejection =
   (unavailable: ConstructorParameters<typeof Unavailable>[0]) =>
-  (error: unknown): RequestError =>
+  (error: unknown): SessionRequestError =>
     heldElsewhereBy(error) === null
       ? new Unavailable(unavailable)
       : claimRejection(unavailable.runId)(error);
@@ -300,7 +300,7 @@ const COVERED_KINDS: Record<
 function approvePendingUnderBypass(
   session: SessionHandle,
   { runId, bypass, exceptRequestId }: BypassChange,
-): Effect.Effect<void, RequestError> {
+): Effect.Effect<void, SessionRequestError> {
   const kinds = COVERED_KINDS[bypass];
   return Effect.forEach(
     SubscriptionRef.getUnsafe(session.view.ref).requests.filter(
@@ -338,7 +338,7 @@ export function setPolicy(
   session: SessionHandle,
   change: PolicyChange,
   heldHere: boolean,
-): Effect.Effect<Outcome, RequestError> {
+): Effect.Effect<RequestOutcomes['policy.set'], SessionRequestError> {
   const { runId } = change;
   // A limit only lowers; the delegated-work grant covers the command and
   // edit grants too.

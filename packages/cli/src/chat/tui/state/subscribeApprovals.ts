@@ -242,9 +242,9 @@ export function createTuiHostInteractions(
                   kind: 'unavailable' as const,
                   reason: `the session did not send it (${toErrorMessage(Cause.squash(cause))})`,
                 }),
-                onSuccess: (outcome) =>
-                  outcome.kind === 'preview' && outcome.preview !== null
-                    ? { kind: 'preview' as const, content: outcome.preview }
+                onSuccess: ({ preview }) =>
+                  preview !== null
+                    ? { kind: 'preview' as const, content: preview }
                     : {
                         kind: 'unavailable' as const,
                         reason: 'the session holds no preview of this edit',

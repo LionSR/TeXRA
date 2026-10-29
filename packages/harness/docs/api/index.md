@@ -114,6 +114,16 @@ interface AgentRunListingEntry {
 }
 ```
 
+## AnswerRequest
+
+Answer a request with its kind's outcome, or fail with `E`.
+
+```ts
+type AnswerRequest<E> = <K extends RuntimeRequest['kind']>(
+  req: RequestOf<K>,
+) => Effect.Effect<RequestOutcomes[K], E>;
+```
+
 ## ApprovalHandler
 
 A host's answer to each request a run of the session waits on: an
@@ -564,6 +574,37 @@ How a runtime request fails: one of the tagged errors above.
 type RequestError = typeof RequestErrorSchema.Type;
 ```
 
+## RequestOf
+
+The request of kind `K`.
+
+```ts
+type RequestOf<K extends RuntimeRequest['kind']> = Extract<
+  RuntimeRequest,
+  { kind: K }
+> & { readonly kind: K };
+```
+
+## RequestOutcomes
+
+The outcome each request kind answers with: `done`, unless the kind
+returns data (a fork, a file result, a follow-up's status, a preview).
+
+```ts
+type RequestOutcomes = Record<
+  Exclude<
+    RuntimeRequest['kind'],
+    'run.fork' | 'run.files' | 'followUp.send' | 'request.preview'
+  >,
+  Extract<Outcome, { kind: 'done' }>
+> & {
+  readonly 'run.fork': Extract<Outcome, { kind: 'forked' }>;
+  readonly 'run.files': Extract<Outcome, { kind: 'runFiles' }>;
+  readonly 'followUp.send': Extract<Outcome, { kind: 'followUp' }>;
+  readonly 'request.preview': Extract<Outcome, { kind: 'preview' }>;
+};
+```
+
 ## RequestRefusal
 
 A request's refusal, as opposed to its defect: the three a handler may
@@ -815,10 +856,9 @@ interface Session {
   /** Everything else you ask of the session, as one typed request
    *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
    *  approval, stop, fork or delete a run, switch its model, and so on).
-   *  Answered exactly once, with an outcome or a {@link RequestError}. */
-  readonly request: (
-    request: RuntimeRequest,
-  ) => Effect.Effect<Outcome, RequestError>;
+   *  Answered exactly once, with the outcome its kind answers with
+   *  (`RequestOutcomes`) or a {@link RequestError}. */
+  readonly request: AnswerRequest<RequestError>;
   /** Attach `host` until the caller's scope closes: it shows notices, and
    *  its `approve` answers the runs' approval requests. A session has one
    *  host at a time; attaching a second while one is attached is a defect. */

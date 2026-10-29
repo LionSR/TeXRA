@@ -34,7 +34,8 @@ import {
  *
  * Both scans read string literals and property names, not types: a literal
  * compared with or assigned to a property other than `type` (a request's
- * `kind: 'run.model'`) belongs to another union and is skipped, and a
+ * `kind: 'run.model'`) belongs to another union and is skipped, as is a
+ * key of a table that also has keys no row type has (the request kinds), and a
  * same-named value of another union (the trace's `run.end` event) is
  * listed with its reason. Rows read in SQL text are not scanned, nor is a
  * field reached by a computed name (`entry['launchParent']`); an optional
@@ -205,6 +206,7 @@ function isTypeSlot(expression: ts.Expression): boolean {
  */
 function literalUse(
   literal: ts.StringLiteralLike,
+  types: ReadonlySet<string>,
 ): 'constructs' | 'reads' | 'listed' | null {
   if (ts.isLiteralTypeNode(literal.parent)) return null;
   let at: ts.Node = literal;
@@ -212,6 +214,14 @@ function literalUse(
   const parent = at.parent;
   if (ts.isPropertyAssignment(parent) && parent.initializer === at)
     return nameOf(parent.name) === 'type' ? 'constructs' : null;
+  // A table keyed by another union (a request's `kind`) that shares a name.
+  if (
+    ts.isPropertyAssignment(parent) &&
+    parent.parent.properties.some(
+      (p) => p.name !== undefined && !types.has(nameOf(p.name) ?? ''),
+    )
+  )
+    return null;
   if (ts.isPropertyAssignment(parent))
     return parent.initializer.kind === ts.SyntaxKind.TrueKeyword
       ? 'listed'
@@ -273,7 +283,7 @@ function scan(file: string, types: ReadonlySet<string>): FileUses {
   };
   const visit = (node: ts.Node): void => {
     if (ts.isStringLiteralLike(node) && types.has(node.text))
-      add(uses.rows, node.text, literalUse(node));
+      add(uses.rows, node.text, literalUse(node, types));
     else if (ts.isIdentifier(node) && OWNED_FIELDS.has(node.text))
       add(uses.fields, node.text, fieldUse(node));
     ts.forEachChild(node, visit);

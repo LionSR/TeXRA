@@ -920,13 +920,7 @@ export function createChatSessionController(
                 kind: 'refused' as const,
                 reason: requestErrorText(error),
               }),
-              onSuccess: (value) =>
-                value.kind === 'followUp'
-                  ? { kind: 'sent' as const, value }
-                  : {
-                      kind: 'refused' as const,
-                      reason: describeFollowUpFailure('not_resumable'),
-                    },
+              onSuccess: (value) => ({ kind: 'sent' as const, value }),
             }),
             // `match` recovers only the typed refusal; a defect is read the
             // way `SessionBridge` answers `Internal`: logged and worded.
@@ -963,11 +957,7 @@ export function createChatSessionController(
             ),
             shutdownScope,
           );
-        const presentation = presentFollowUpResult(
-          outcome.value.status === 'sent'
-            ? { status: 'sent' }
-            : { status: 'queued', wake: outcome.value.wake ?? undefined },
-        );
+        const presentation = presentFollowUpResult(outcome.value);
         if (presentation.severity !== 'none') {
           appendLocalNotice(presentation.message, target);
         }

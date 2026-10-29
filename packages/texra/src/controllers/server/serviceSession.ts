@@ -11,6 +11,7 @@ import {
   JsonValueSchema,
   RUN_OUTCOME,
   type RunId,
+  type RuntimeRequest,
 } from '@texra-ai/harness/schemas';
 import {
   Cause,
@@ -426,7 +427,8 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       { ...end, runId },
     );
   };
-  const request: Session['request'] = (runtimeRequest) =>
+  // cast: the service answers each request with its kind's outcome.
+  const request = ((runtimeRequest: RuntimeRequest) =>
     callService(
       link,
       (reason) => new Rejected({ reason }),
@@ -442,7 +444,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
               : error,
           ),
         ),
-    );
+    )) as Session['request'];
   // The watch names its runs to this window's own view too, so the view
   // folds their transcripts while it runs; each service the link holds
   // serves it from the cursor it last delivered.

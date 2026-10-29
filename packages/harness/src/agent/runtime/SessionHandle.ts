@@ -43,12 +43,13 @@ import type {
   SessionStoreMovedAside,
 } from '@shared/session/database';
 import type {
-  RequestError,
+  AnswerRequest,
+  RequestOutcomes,
+  SessionRequestError,
   StagedToolEdits,
 } from '@shared/session/runtimeRequest';
 import type { RunHistory } from '@shared/session/runHistory';
 import type { RunRows } from '@shared/session/runRowsShape';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Append, UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { SessionInputs } from '@shared/session/sessionInputs';
@@ -281,18 +282,16 @@ export interface AskOptions<E> {
  * requests independently.
  */
 export interface SessionRequests {
-  /** Answer one request a surface issued: exactly once, an {@link Outcome}
-   *  the host renders or a request error. */
-  readonly request: (
-    req: RuntimeRequest,
-  ) => Effect.Effect<Outcome, RequestError>;
+  /** Answer one request a surface issued: exactly once, the outcome its
+   *  kind answers with or a request error. */
+  readonly request: AnswerRequest<SessionRequestError>;
   /** Internal deletion policies share the same admission and transaction as
    *  a user's `run.delete`. */
   readonly removeRun: (
     runId: RunId,
     mode: DeletionMode,
     expectedStartCommit: CommitOrdinal,
-  ) => Effect.Effect<Outcome, RequestError>;
+  ) => Effect.Effect<RequestOutcomes['run.delete'], SessionRequestError>;
   /**
    * Ask a person: open the request on its run and wait for its decision.
    * The one door for a request a tool raises. An interruption anywhere in

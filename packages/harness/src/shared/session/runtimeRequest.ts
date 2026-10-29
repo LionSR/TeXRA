@@ -12,7 +12,7 @@
  * The union carries the arms the runtime answers today; a lane that routes
  * another retained command adds its arm with its handler.
  */
-import { type HashMap, Schema, Struct } from 'effect';
+import { type Effect, type HashMap, Schema, Struct } from 'effect';
 
 import {
   APPROVAL_BYPASS_KINDS,
@@ -248,10 +248,34 @@ export const OutcomeSchema = Schema.Union([
 /** What the runtime answers a request with. */
 export type Outcome = typeof OutcomeSchema.Type;
 
+/** The request of kind `K`. */
+export type RequestOf<K extends RuntimeRequest['kind']> = Extract<
+  RuntimeRequest,
+  { kind: K }
+> & { readonly kind: K };
+/** The outcome each request kind answers with: `done`, unless the kind
+ *  returns data (a fork, a file result, a follow-up's status, a preview). */
+export type RequestOutcomes = Record<
+  Exclude<
+    RuntimeRequest['kind'],
+    'run.fork' | 'run.files' | 'followUp.send' | 'request.preview'
+  >,
+  Extract<Outcome, { kind: 'done' }>
+> & {
+  readonly 'run.fork': Extract<Outcome, { kind: 'forked' }>;
+  readonly 'run.files': Extract<Outcome, { kind: 'runFiles' }>;
+  readonly 'followUp.send': Extract<Outcome, { kind: 'followUp' }>;
+  readonly 'request.preview': Extract<Outcome, { kind: 'preview' }>;
+};
+/** Answer a request with its kind's outcome, or fail with `E`. */
+export type AnswerRequest<E> = <K extends RuntimeRequest['kind']>(
+  req: RequestOf<K>,
+) => Effect.Effect<RequestOutcomes[K], E>;
+
 // How a runtime request fails. Yieldable `Schema.TaggedError`s in the
 // runtime, carried over the RPC edge as themselves (`RequestErrorSchema`);
-// `Invalid` is the arm a bridge that parses requests answers with. A request
-// naming a stream the runtime no longer has is `Unavailable`, never a
+// the runtime raises three (`SessionRequestError`), the bridges the rest. A
+// request naming a stream the runtime no longer has is `Unavailable`, never a
 // defect: with two surfaces on one session, one can act from a view that has
 // not yet folded the other's `run.removed`, and a defect would bypass the
 // response path and leave the sender's latch pending forever.
@@ -290,6 +314,9 @@ export class Internal extends Schema.TaggedError<Internal>()('Internal', {
 export class Invalid extends Schema.TaggedError<Invalid>()('Invalid', {
   reason: Schema.String,
 }) {}
+
+/** How the runtime itself fails a request, in process. */
+export type SessionRequestError = NotOwner | Unavailable | Rejected;
 
 /** The wire form of a request's failure: the classes themselves. */
 export const RequestErrorSchema = Schema.Union([

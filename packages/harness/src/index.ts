@@ -96,7 +96,10 @@ export {
   NotOwner,
   Rejected,
   Unavailable,
+  type AnswerRequest,
   type RequestError,
+  type RequestOf,
+  type RequestOutcomes,
   type RequestRefusal,
 } from '@shared/session/runtimeRequest';
 export type { Outcome, RunStopReason } from '@shared/session/runtimeRequest';

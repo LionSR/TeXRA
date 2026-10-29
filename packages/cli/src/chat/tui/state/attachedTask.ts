@@ -16,7 +16,7 @@ import { watchTask } from '@cli/runtime/taskAttach';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 import { requestErrorText } from '@ui/copy/requestErrors';
-import type { Outcome } from '@texra-ai/harness';
+import type { AnswerRequest } from '@texra-ai/harness';
 import type { GlobalValues } from '@texra-ai/harness/host';
 
 /** One level of the attached task, as the view paints it. */
@@ -30,7 +30,7 @@ export interface AttachedTaskLevel {
 
 /** What the attached view does to the task, each a request to the service. */
 export interface AttachedTaskActions {
-  readonly request: (request: RuntimeRequest) => Effect.Effect<Outcome, Error>;
+  readonly request: AnswerRequest<Error>;
 }
 
 /** The run ids of `root` and every run under it. */
@@ -63,14 +63,15 @@ export function followAttachedTask(
   return Effect.gen(function* () {
     const { client } = yield* connect();
     onReady({
-      request: (request) =>
+      // cast: the service answers each request with its kind's outcome.
+      request: ((request: RuntimeRequest) =>
         client['task.request']({ workspace: task.workspace, request }).pipe(
           Effect.mapError((error) =>
             error._tag === 'RpcClientError'
               ? error
               : new Error(requestErrorText(error)),
           ),
-        ),
+        )) as AnswerRequest<Error>,
     });
     const aggregate = qualifyAggregateId('run', task.runId);
     let seen = false;
