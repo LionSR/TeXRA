@@ -243,7 +243,10 @@ describe('childRunLoop E2E fixtures', () => {
             Effect.tap(start(...args), () =>
               Effect.sync(() => {
                 if (outcome === RUN_OUTCOME.CANCELLED)
-                  stop = session.runs.stop(runId, { reason: 'user' });
+                  stop = session.runs.stop(runId, {
+                    reason: 'user',
+                    detachActiveChildren: false,
+                  });
               }),
             ),
           );

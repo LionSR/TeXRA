@@ -280,7 +280,10 @@ describe('wakeRun', () => {
         const woken = yield* wakeRun(runId, session).pipe(
           withResumePort(decide),
         );
-        session.runs.stop(runId, { reason: 'user' });
+        session.runs.stop(runId, {
+          reason: 'user',
+          detachActiveChildren: false,
+        });
         yield* woken;
 
         expect(decide).not.toHaveBeenCalled();

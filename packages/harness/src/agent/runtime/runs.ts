@@ -100,11 +100,12 @@ export interface RunStop {
  *  run that is interrupted ends `cancelled` through its lifecycle. */
 export type StopCause = RunStopReason | 'released';
 
-/** Child policy of a stop. An explicit value wins: the CLI's bare-Escape stop
- *  always detaches and shutdown always cascades. A `run.stop` request that
- *  leaves it unset is resolved by the session request handler through
- *  `detachSubagentsOnStop()`; a missing option here reads as cascade, since a
- *  child left running has no owner. */
+/** What a stop does to the run's children, decided once by the stop
+ *  (`RunRegistry.stop`): `detachActiveChildren` when the caller sets it (the
+ *  session's close and the headless CLI's shutdown always cascade), else the
+ *  session's "Keep subagents running" setting, read as the stop runs. A
+ *  detached child runs on as a root, and an in-band call awaiting it stops
+ *  only its wait. */
 export interface RunStopOptions {
   readonly detachActiveChildren?: boolean;
   /** Why the run stops. A `user` stop is an explicit stop of the work: the
