@@ -366,7 +366,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     };
     const maybeAdvertiseRecovery = (runId: RunId) =>
       Effect.gen(function* () {
-        if (!run.ok || !run.outcomePersisted) return;
+        if (!run.ok) return;
         const resumable = yield* session.records(runId).readResumable();
         if (
           yield* advertisesInterruptedRun(

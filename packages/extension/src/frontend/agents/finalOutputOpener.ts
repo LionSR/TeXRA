@@ -4,7 +4,8 @@ import { Effect, Result } from 'effect';
 import { withLogChannel } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
-import type { RunEndResult, AgentConfig } from '@texra-ai/harness/schemas';
+import type { RunEnd } from '@texra-ai/harness';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
 const CHANNEL = 'FinalOutputOpener';
@@ -19,7 +20,7 @@ const CHANNEL = 'FinalOutputOpener';
  * supplies the VS Code open verb and status-bar hint.
  */
 export const openFinalOutputIfAvailable =
-  (stores: SettingsStores, config: AgentConfig) => (result: RunEndResult) =>
+  (stores: SettingsStores, config: AgentConfig) => (result: RunEnd) =>
     Effect.gen(function* () {
       const primary = yield* selectAutoOpenFinalOutput(stores, config, result);
       if (!primary) return;

@@ -17,7 +17,6 @@ import {
   type RunId,
   type AgentConfigPayload,
   generateRunId,
-  type RunEndResult,
   isLiveRun,
   ensureError,
   toErrorMessage,
@@ -55,7 +54,6 @@ import { writeTextStderr, writeTextStderrAndWait } from './logSinks';
 import {
   type CliRunResult,
   readCliPluginPins,
-  readCliRunOutcomeState,
   runOutcomeExitCode,
 } from './terminalStatus';
 import {
@@ -99,7 +97,7 @@ export interface CliExecuteOptions {
    *  document task's output copy and result record), with its committed
    *  outcome: part of the finalization a shutdown waits for, so a signal
    *  never cuts it short. Its failure fails the finalization. */
-  readonly afterRun?: (result: RunEndResult) => Effect.Effect<void, Error>;
+  readonly afterRun?: (result: CliRunResult) => Effect.Effect<void, Error>;
   /** The persisted run `texra resume` continues through the session's
    *  resume; unset, the run starts fresh under a minted id. */
   readonly runId?: RunId;
@@ -108,7 +106,6 @@ export interface CliExecuteOptions {
 export type CliConfigExecuteResult =
   | {
       readonly ok: true;
-      readonly outcomePersisted: boolean;
       readonly result: CliRunResult;
     }
   | {
@@ -337,7 +334,9 @@ export function executeCliConfig(
             admitted = true;
           }),
         ),
-        Effect.flatMap((run) => run.result),
+        Effect.flatMap((run) =>
+          Effect.map(run.result, (end) => ({ ...end, runId: run.runId })),
+        ),
       ),
     );
     const shutdownStatus = Effect.suspend(() =>
@@ -469,15 +468,8 @@ export function executeCliConfig(
       ),
     );
 
-    // A finalization notice is not the run's own failure, so it goes
-    // straight to this host and never sets `failurePresented` (§15).
-    const reportFinalizationFailure = (error: unknown): void => {
-      presentationHost.emit('requestShowError', {
-        message: toErrorMessage(error),
-      });
-    };
     let runResult:
-      | { readonly ok: true; readonly result: RunEndResult }
+      | { readonly ok: true; readonly result: CliRunResult }
       | { readonly ok: false } = { ok: false };
     let primaryRunFailure: { readonly error: unknown } | undefined;
     let shutdownLaunchAborted = false;
@@ -488,9 +480,9 @@ export function executeCliConfig(
     const detachPresentation = Scope.close(presentationScope, Exit.void);
     const exit = yield* Fiber.await(launched);
     ended = true;
-    // A run the shutdown stopped after admission ends CANCELLED; an
-    // interrupts-only exit is a launch the shutdown interrupted (or a run
-    // whose end did not save), and a user abort below is a stop too.
+    // A run the shutdown stopped after admission stores no end, so its
+    // result fails; an interrupts-only exit is a launch the shutdown
+    // interrupted, and a user abort below is a stop too.
     let interrupted = false;
     if (Exit.isSuccess(exit)) {
       runResult = { ok: true as const, result: exit.value };
@@ -506,7 +498,10 @@ export function executeCliConfig(
       // exit code here; anything else (e.g. registerRun disk I/O,
       // workspaceState.update failures) is unexpected and must keep
       // propagating to bin/texra.ts's crash handler.
-      if (shutdownRequested && isUserAbort(err)) {
+      if (
+        shutdownRequested &&
+        (isUserAbort(err) || (admitted && failure instanceof RunFailure))
+      ) {
         interrupted = true;
         shutdownLaunchAborted = !admitted;
       } else if (err instanceof CliUsageError) {
@@ -578,18 +573,8 @@ export function executeCliConfig(
         // presenter, which `settled` waits for: the presentation host stays
         // attached until it has.
         yield* session.settled;
-        if (!runResult.ok) return undefined;
-        const state = yield* readCliRunOutcomeState(
-          session,
-          runResult.result,
-          reportFinalizationFailure,
-        );
-        if (options.afterRun)
-          yield* options.afterRun({
-            ...runResult.result,
-            outcome: state.outcome,
-          });
-        return state;
+        if (runResult.ok && options.afterRun)
+          yield* options.afterRun(runResult.result);
       }),
     );
     Deferred.doneUnsafe(shutdownFinalizationDone, Effect.void);
@@ -620,14 +605,8 @@ export function executeCliConfig(
       };
     }
 
-    return yield* Effect.sync(() => {
-      const { outcome, outcomePersisted } = finalization.success!;
-      return {
-        ok: true as const,
-        outcomePersisted,
-        result: { ...runResult.result, outcome, plugins },
-      };
-    }).pipe(Effect.ensuring(detachPresentation));
+    yield* detachPresentation;
+    return { ok: true as const, result: { ...runResult.result, plugins } };
   }).pipe(
     Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
   );

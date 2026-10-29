@@ -23,14 +23,6 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeSessions } from '../../../packages/harness/src/effect/sessionPrograms';
 import type { AgentPlatform } from '../../../packages/harness/src/index';
 
-interface RootLaunchOptions {
-  readonly onRun?: (handle: unknown) => Effect.Effect<void>;
-  readonly onAdmitted?: (
-    runId: string,
-    commit: number,
-  ) => Effect.Effect<void, Error>;
-}
-
 /** A session view run entry as the package's fold keys it. */
 interface FakeRunView {
   readonly id: string;
@@ -46,8 +38,9 @@ const RUN_ID = 'ae0001';
 
 /**
  * The runtime session the package opens, as the process's session owner
- * serves it: its run completes, but its final view never folds, and its
- * view's level stream ends as the fold does (`foldDeath`).
+ * serves it: its run opens at commit 0, but its final view never folds, its
+ * view's level stream ends as the fold does (`foldDeath`), and its log
+ * settles only past the fold, so it dies with it.
  */
 class FakeSession {
   readonly viewRef = Effect.runSync(
@@ -56,27 +49,20 @@ class FakeSession {
       runs: new Map(),
     }),
   );
-  // The package launches through its session's runs: a root launch.
+  // The package launches through its session's runs: a root launch, which
+  // answers the commit of the run's opening.
   readonly runs = {
     get: () => undefined,
-    interrupt: () => false,
-    attemptOf: () => undefined,
-    launch: ({ options }: { readonly options: RootLaunchOptions }) =>
-      Effect.gen({ self: this }, function* () {
-        yield* options.onAdmitted?.(RUN_ID, 0) ?? Effect.void;
-        yield* SubscriptionRef.update(this.viewRef, (current) => ({
-          ...current,
-          runs: new Map(current.runs).set(RUN_ID, {
-            id: RUN_ID,
-            ancestors: [],
-            childIds: [],
-            durableOutcome: null,
-          }),
-        }));
-        yield* options.onRun?.({ runId: RUN_ID, interrupt: vi.fn() }) ??
-          Effect.void;
-        return { outcome: 'COMPLETED' } as never;
-      }).pipe(Effect.uninterruptible),
+    launch: () =>
+      SubscriptionRef.update(this.viewRef, (current) => ({
+        ...current,
+        runs: new Map(current.runs).set(RUN_ID, {
+          id: RUN_ID,
+          ancestors: [],
+          childIds: [],
+          durableOutcome: null,
+        }),
+      })).pipe(Effect.as(0)),
   };
   readonly interactions = {
     approvalPromptsUnavailable: false,
@@ -84,8 +70,13 @@ class FakeSession {
     use: () => Effect.succeed(() => undefined),
   };
   readonly requests = { request: () => Effect.succeed({ kind: 'done' }) };
-  readonly log = { movedAside: null, settled: Effect.void };
-  readonly followUps = { resumes: { joined: () => false } };
+  readonly log = {
+    movedAside: null,
+    tail: () => Stream.empty,
+    settled: Effect.suspend(() => Deferred.await(this.foldDeath)).pipe(
+      Effect.orDie,
+    ),
+  };
   readonly view = {
     ref: this.viewRef,
     changes: Stream.merge(
@@ -110,10 +101,10 @@ class FakeSession {
 
 /**
  * A session whose run's previous activation completed, as a same-session
- * resume meets it: the view still holds that outcome when the launch admits
- * the run at commit 1, and the new activation folds once the run's two
- * readers (the handle's drain and the test's) have read that level. The start's
- * own check reads no run, so the launch seeds the old outcome.
+ * resume meets it: the view still holds that outcome when the launch opens
+ * the run at commit 1, and the new activation folds once the test's reader
+ * has read that level. The start's own check reads no run, so the launch
+ * seeds the old outcome.
  */
 class RelaunchedSession extends FakeSession {
   readonly readers = Effect.runSync(Queue.unbounded<void>());
@@ -125,14 +116,16 @@ class RelaunchedSession extends FakeSession {
   };
   override readonly runs: FakeSession['runs'] = {
     ...this.runs,
-    launch: ({ options }: { readonly options: RootLaunchOptions }) =>
+    launch: () =>
       Effect.gen({ self: this }, function* () {
         yield* this.fold(0, 'completed');
-        yield* options.onAdmitted?.(RUN_ID, 1) ?? Effect.void;
-        yield* Queue.takeN(this.readers, 2);
-        yield* this.fold(1, null);
-        yield* this.fold(2, 'completed');
-        return { outcome: 'completed' } as never;
+        yield* Effect.forkDetach(
+          Queue.take(this.readers).pipe(
+            Effect.andThen(this.fold(1, null)),
+            Effect.andThen(this.fold(2, 'completed')),
+          ),
+        );
+        return 1;
       }),
   };
 
@@ -231,7 +224,6 @@ describe('agent package sessions', () => {
         });
         const levels = yield* Effect.forkChild(Stream.runCollect(run.view));
 
-        yield* run.result;
         expect(
           (yield* Fiber.join(levels)).map((level) => [
             level.cursor,

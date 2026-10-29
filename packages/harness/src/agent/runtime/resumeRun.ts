@@ -46,28 +46,29 @@ import { resumeBlocker } from './resumeBlocker';
 import { type RunEndResult } from './RunEndResult';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { prepareAgentDefinition } from './AgentLaunchContext';
+import { activationIfOpened } from './rootLaunch';
 import { deliverHeld, runWithLaunchGuard } from './runLaunchGuard';
 import { startChildRunLoop } from './childRunLoop';
 import { registryOf, type AgentRunServices, RunLive } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
 
-type ResumeRunCompletion = Effect.Effect<RunEndResult, Error>;
 /** A resume answers once the run rests with the input it was resumed for
  *  taken, or once the run ends, whether or not it took that input. */
 export type ResumeRunResult =
-  | {
-      readonly started: true;
-      readonly delivered: boolean;
-      /** The run's lifetime past its idle acknowledgement, ending with its
-       *  result. */
-      readonly completion: ResumeRunCompletion;
-    }
+  | { readonly started: true; readonly delivered: boolean }
   | { readonly failed: ResumeRefusal };
 
 /** A resume's answer: its result, or that an open call of `ownedBy` owns
  *  the run, as its records said under its claim, so it resumes with that
  *  parent. */
 export type ResumeAttempt = ResumeRunResult | { readonly ownedBy: RunId };
+
+/** What a resume's caller hears: the commit of the activation it opened or
+ *  joined, which it now holds, or, before any, the refusal or the owning
+ *  parent its decision answered. */
+export type ResumeHandOff =
+  | { readonly activation: CommitOrdinal }
+  | Exclude<ResumeAttempt, { readonly started: true }>;
 
 export interface ResumeRunOptions extends Pick<
   ExecuteAgentOptions,
@@ -78,15 +79,6 @@ export interface ResumeRunOptions extends Pick<
   readonly stopAfterCycle?: boolean;
   /** Session owning the resumed run's coordination state. */
   readonly session: SessionHandle;
-  /** This caller's hook once the run is admitted at `commit`, its
-   *  `run.activate`; `joined`: it found the resume in flight, an observer.
-   *  A caller with a hook hands out its own handle and marks that itself
-   *  (`handOver`); its answer alone hands nothing off. */
-  readonly onAdmitted?: (
-    runId: RunId,
-    commit: CommitOrdinal,
-    joined: boolean,
-  ) => Effect.Effect<void>;
 }
 
 const CHANNEL = 'ResumeRun';
@@ -103,45 +95,47 @@ function namesUnusableCheckpoint(error: unknown): boolean {
 }
 
 /**
- * Resume `runId` as a caller of its resume, joined or opened here; a run
- * another launch holds here is refused. An owned child answers `ownedBy`,
- * for a caller that follows the parent itself. The last caller to leave
- * before any took the answer stops the resume and the run it launched.
+ * Resume `runId` as a caller of its resume, joined or opened here, until
+ * the resume activates the run, which the caller then holds; a run another
+ * launch holds here is refused, and an owned child answers `ownedBy`, for
+ * a caller that follows the parent itself. The last caller to leave before
+ * any held the run stops the resume and the run it launched.
  */
 export const resumeRun = (
   runId: RunId,
   options: ResumeRunOptions,
-): Effect.Effect<ResumeAttempt, Error> =>
+): Effect.Effect<ResumeHandOff, Error> =>
   Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const runs = registryOf(options.session.runs);
-      const opened = yield* openResume(runId, options, false);
-      if (opened === undefined) return REFUSED;
-      const { attempt, joined } = opened;
+      const attempt = yield* openResume(runId, options, false);
+      if (attempt === undefined) return REFUSED;
       attempt.waiters += 1;
-      const { onAdmitted } = options;
-      const answer = Effect.gen(function* () {
-        const hook = yield* Effect.forkChild(
-          Effect.flatMap(
-            Deferred.await(attempt.admitted),
-            (commit) => onAdmitted?.(runId, commit, joined) ?? Effect.void,
-          ),
-        );
-        // A caller that leaves takes its hook with it.
-        const result = yield* attempt.answer.pipe(
-          Effect.onError(() => Fiber.interrupt(hook)),
-        );
-        // Admitted, this caller's hook runs to its end; never admitted, never.
-        yield* Deferred.isDoneUnsafe(attempt.admitted)
-          ? Fiber.join(hook)
-          : Fiber.interrupt(hook);
-        return result;
+      const handOff = (activation: CommitOrdinal): ResumeHandOff => ({
+        activation,
       });
-      return yield* restore(answer).pipe(
+      // Activated, or never: a run the resume started that rests with no
+      // turn (an idle child) opens its activation with its next turn, and
+      // one that leaves first never does.
+      const answered = Effect.flatMap(attempt.answer, (answer) =>
+        'started' in answer
+          ? Effect.andThen(
+              runs.awaitDrained(runId),
+              activationIfOpened(attempt.admitted),
+            ).pipe(Effect.map(handOff))
+          : Effect.succeed<ResumeHandOff>(answer),
+      );
+      const activated = Deferred.await(attempt.admitted);
+      return yield* restore(
+        Effect.raceFirst(Effect.map(activated, handOff), answered),
+      ).pipe(
+        // A caller interrupted as the run activated never holds it.
+        Effect.tap(() => restore(Effect.void)),
         Effect.onExit((exit) =>
           Effect.sync(() => {
             attempt.waiters -= 1;
-            if (Exit.isSuccess(exit) && !onAdmitted) attempt.handedOff = true;
+            if (Exit.isSuccess(exit) && 'activation' in exit.value)
+              attempt.handedOff = true;
             else if (
               attempt.waiters === 0 &&
               !attempt.handedOff &&
@@ -355,7 +349,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         ),
         Fiber.join(launched).pipe(Effect.as(false), Effect.interruptible),
       );
-      return { rested, launched, admitted };
+      return { rested, admitted };
     }),
   );
   if (Result.isFailure(resumed)) {
@@ -363,29 +357,12 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     if (refusal) return refusal;
     return yield* Effect.fail(resumed.failure);
   }
-  const { rested, launched, admitted } = resumed.success;
+  const { rested, admitted } = resumed.success;
   // A run that ended first delivered the batch if none of it is queued.
   const delivered =
     rested ||
     !(yield* session.followUps.read(runId)).followUps.some((input) =>
       admitted.has(input.followUpId),
     );
-  // A child loop that ended with no turn (a stop, a turn that threw) has
-  // its result on its `run.end`.
-  const completion = Effect.gen(function* () {
-    const turn = yield* Fiber.join(launched);
-    if (turn !== undefined) return turn;
-    const end = yield* getRunRecords(session, runId).readRunEnd();
-    if (end === null)
-      return yield* Effect.fail(new Error(`Run ${runId} has no run.end.`));
-    const { error, ...recorded } = end;
-    const message = error?.message ?? `Run ${runId} ${end.outcome}.`;
-    const userRetryable = error?.userRetryable ?? false;
-    return {
-      ...recorded,
-      runId,
-      ...(error && { error: { message, userRetryable } }),
-    };
-  });
-  return { started: true, delivered, completion };
+  return { started: true, delivered };
 });

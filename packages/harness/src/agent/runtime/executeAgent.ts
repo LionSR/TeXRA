@@ -80,11 +80,10 @@ export interface ExecuteAgentOptions {
   /** Fires once with the run's id as the run starts. */
   readonly onRun?: (runId: RunId) => Effect.Effect<void, Error>;
   /**
-   * The one admission hook, once per caller, with the run admitted and the
-   * commit of the batch that opened this activation (a fresh run's opening,
-   * a resume's `run.activate`). The run runs it as that batch commits,
-   * which it holds: keep it short. A joiner of a resume runs it once the
-   * resume has admitted the run.
+   * The one admission hook, with the run admitted and the commit of the
+   * batch that opened this activation (a fresh run's opening, a resume's
+   * `run.activate`). The run runs it as that batch commits, which it holds:
+   * keep it short.
    */
   readonly onAdmitted?: (
     runId: RunId,

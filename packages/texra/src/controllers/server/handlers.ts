@@ -185,10 +185,7 @@ const internal = Effect.fn('handlers.internal')(function* (
 function runEnded(
   { session }: ServiceProject,
   runId: RunId,
-): Effect.Effect<
-  Pick<RunEnd, 'outcome' | 'output' | 'error'> & { at: CommitOrdinal },
-  TaskFailed
-> {
+): Effect.Effect<RunEnd & { at: CommitOrdinal }, TaskFailed> {
   return Effect.gen(function* () {
     yield* session.held(runId)?.drained ?? Effect.void;
     const ended = Option.getOrUndefined(
@@ -213,10 +210,7 @@ function runEnded(
             }),
         ),
       );
-    if (end !== null) {
-      const { outcome, output, error } = end;
-      return { outcome, output, at, ...(error !== undefined && { error }) };
-    }
+    if (end !== null) return { ...end, at };
     return {
       outcome: run?.durableOutcome ?? RUN_OUTCOME.CANCELLED,
       output: emptyRunEndOutput(),

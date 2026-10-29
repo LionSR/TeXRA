@@ -200,23 +200,24 @@ const program = Effect.gen(function* () {
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` (`./host`) serves it; `Sessions.layer({ platform, plugins })` composes that process for the layer's lifetime. Build it once per process.                                          |
 | `Session`  | One workspace's runs: `start` and `resume` give a `Run`; `request` sends everything else (follow-ups, approvals, stop, fork); `attach(host)` answers approvals until the caller's scope closes; `view.current()` and `view.changes` read the session's state as immutable snapshots. `roots` names the workspace. |
-| `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts; `interrupt`. `start` returns once the run exists, before its first model call.                                                        |
+| `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts; `interrupt`, the user's `run.stop`. `start` returns once the run exists, before its first model call.                                 |
 
 `run.events` is the run's trace as a `Stream`, and any number of readers
 can read it at any time. Each read is the run's events read back from the
 session, from the start of the activation the handle is for, following the
-run until that activation ends; it fails with `RunFailure` if the run
-failed. Ending a read stops that reader, not the run, and taking only
-`result` keeps nothing in memory. Every event except `stream.chunk` is a
+run until that activation ends; it fails as `result` does. A `Run` is a
+view of one activation of the run in its session and holds nothing: ending a
+read stops that reader, not the run. Every event except `stream.chunk` is a
 stored row, and streamed text arrives as the session holds it: a stream
 that ended before the read reached it comes as one chunk of its final text,
 so a reader's chunks always add up to each stream's final text.
 
 Every failure is a typed error on the effect that owns it. A refusal before
 any model work fails `session.start` with one of the tagged errors the
-surface names (`AgentNotFound`, `ToolsRefused`); a run that fails after entering its session
-fails `run.result` and `run.events` with `RunFailure`, whose `cause` is
-exactly what the launch path threw.
+surface names (`AgentNotFound`, `ToolsRefused`); a launch that fails
+before its run enters the session fails `start` with `RunFailure`, whose
+`cause` is exactly what the launch path threw. A run that fails after
+entering stores a failed end, which `run.result` returns.
 
 `run.view` is the derived session state every host renders, so run
 status, transcript rows, and pending approvals are read from it rather than
@@ -226,9 +227,7 @@ final view is included even when consumption starts after `result` completes,
 and the first view yielded always holds the run's row. `result` completes
 only once the final view is applied, independently of whether the caller
 reads it; if the session's state reducer dies first, `result` and every `view`
-consumer die with its defect instead of waiting. A run that fails on its own
-fails `result` with its own error without waiting for the view update; a
-reducer defect then reaches `view` consumers only. Ending consumption stops that
+consumer die with its defect instead of waiting. Ending consumption stops that
 reader while the run continues. If launch fails before the run enters the
 session, there is no `view` at all: `start` itself carries the failure.
 
@@ -334,9 +333,11 @@ the session store's source; in short:
 
 ## Run results
 
-There is exactly one result shape: `RunEndResult`, the run's `run.end`
-payload plus the `runId` it belongs to. It carries an `outcome`, an optional
-`usage`, an `output`, and, on a failed run, a structured `error`. Every run's
+There is exactly one result shape: `RunEnd`, the end the run stored for
+its activation. It carries an `outcome`, an optional `usage`, an `output`,
+and, on a failed run, its classified `error` (`kind`, `message`): a failed
+run's `result` succeeds with that end, and fails with `RunFailure` only when
+no end was stored. Every run's
 output is one shape, `{ response, files, structured? }`: the reply text, the
 workspace-relative files its tool calls edited, and the `structured` value of
 a `submit_output` tool when the run used one. A recipe's run (`script.kind:

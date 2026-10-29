@@ -19,6 +19,7 @@ import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
 import { runEndFromEvents } from '@shared/session/runFacts';
 import {
+  type CommitOrdinal,
   qualifyAggregateId,
   emptyRunEndOutput,
   isTaskConfig,
@@ -295,11 +296,19 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     readResultMeta: (): Effect.Effect<ResultMeta | null, DatabaseReadFailed> =>
       read((held) => held?.result ?? null),
     /** The run's terminal result ({@link runEndOf}), or null while the
-     *  lifecycle it is in has not ended. */
-    readRunEnd: (): Effect.Effect<RunEnd | null, DatabaseReadFailed> =>
-      Effect.flatMap(whole, (run) =>
-        run === null ? Effect.succeed(null) : runEndOf(run.held, run.rows),
-      ),
+     *  lifecycle it is in has not ended; `after` an activation's commit, the
+     *  end of that activation, whatever later ones wrote. */
+    readRunEnd: (
+      after?: CommitOrdinal,
+    ): Effect.Effect<RunEnd | null, DatabaseReadFailed> =>
+      Effect.flatMap(whole, (run) => {
+        if (run === null) return Effect.succeed(null);
+        if (after === undefined) return runEndOf(run.held, run.rows);
+        const end = run.rows.findIndex(
+          (row) => row.commit > after && runEndFromEvents([row], runId),
+        );
+        return runEndOf(run.held, end < 0 ? [] : run.rows.slice(0, end + 1));
+      }),
     /** The run's result: its producer record joined to its terminal result,
      *  the output as delivered (the subagent's reply, which only its record
      *  holds, over the run's own output). A background
