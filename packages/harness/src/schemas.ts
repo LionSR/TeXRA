@@ -330,6 +330,7 @@ export {
   ownerIdentity,
   type Plan,
   type PlanApprovalPermission,
+  planOf,
   planSummaryLine,
   type ProgressPermissionKind,
   type ProposalFileFields,

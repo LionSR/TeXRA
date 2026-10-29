@@ -362,7 +362,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     latestLine: null,
     transcript: emptyTranscript(),
   };
-  return { ...common, recipe: null, plan: null };
+  return { ...common, recipe: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -753,9 +753,6 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
           ),
         },
       };
-    case 'run.fact':
-      // Each family (and `plugin.fact` kind) is its own latest-only key.
-      return { ...run, plan: event.fact.plan };
     case 'plugin.fact':
       return {
         ...run,

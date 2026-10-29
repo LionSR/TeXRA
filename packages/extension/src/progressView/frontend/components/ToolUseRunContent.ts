@@ -1,7 +1,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
-import { acceptsFollowUp } from '@texra-ai/harness/schemas';
+import { acceptsFollowUp, planOf } from '@texra-ai/harness/schemas';
 import { BaseRunContent } from './BaseRunContent';
 import { conversationContentStyles } from './ConversationContent.styles';
 import './PlanView';
@@ -24,7 +24,7 @@ export class ToolUseRunContent extends BaseRunContent {
         <div class="conversation-column conversation-prelude">
           ${this.renderForkedFrom(run)}
           <plan-view
-            .plan=${run.plan}
+            .plan=${planOf(run)}
             .runId=${run.id}
             .surface=${this.surface}
           ></plan-view>
