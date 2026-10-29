@@ -599,8 +599,9 @@ export class RunRegistry implements RunsShape {
    * {@link RunStop.accepted} answers at once; a detaching one after the
    * children's `run.detach` batch commits, or a child completing meanwhile
    * would route its result to the just-stopped parent. A run nothing here
-   * owns has its descendants swept and is given the end the stop owes it
-   * ({@link stopEnd}), under its claim; a refused row fails it.
+   * owns is stopped under its claim, taken before its children are touched,
+   * descendants swept, and given the end the stop owes it ({@link stopEnd});
+   * a refused claim or row fails it.
    */
   stop(runId: RunId, options: RunStopOptions): RunStop {
     const entry = this.entries.get(runId);
@@ -648,7 +649,11 @@ export class RunRegistry implements RunsShape {
         }),
       ),
     );
-    return { accepted: () => reached, settlement: apply };
+    const held = this.init.session().log.hold(runId, { ends: true });
+    return {
+      accepted: () => reached,
+      settlement: local ? apply : Effect.scoped(Effect.andThen(held, apply)),
+    };
   }
 
   /** The end a stop owes a run no generation here took it for, decided
