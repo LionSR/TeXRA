@@ -97,8 +97,8 @@ export function confirmCardKeyRows<Extra extends KeyHint = ConfirmCardKeyRow>({
           {
             key: 'a',
             action: alwaysAllowLabel,
-            // Surface-only (ruling A9-6): `approvalDecisionArms` decomposes
-            // it into the request's own session bypass plus a plain approve.
+            // Surface-only (ruling A9-6): `approvalDecisionArm` sends it as
+            // a plain approve that grants the request's own session bypass.
             decision: { action: APPROVE_SESSION_ACTION },
           } as const,
         ]),

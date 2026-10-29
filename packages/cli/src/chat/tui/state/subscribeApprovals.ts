@@ -131,8 +131,8 @@ export function createTuiHostInteractions(
     triggerRetry: (runId, requestId) =>
       Effect.sync(() => {
         switched.add(requestId);
-        // This capability already selected the credential route; decomposing
-        // the decision again would call the capability recursively.
+        // This capability already selected the credential route; mapping the
+        // decision to an arm again would call the capability recursively.
         landRequestDecision(
           stores.requests,
           stores.runtime,

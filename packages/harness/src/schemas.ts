@@ -188,6 +188,7 @@ export {
 // The approvals a run may skip, and how a run's own and inherited grants
 // resolve against the policy.
 export {
+  APPROVAL_BYPASS_KINDS,
   resolveBypass,
   runBypasses,
   stricterPolicy,

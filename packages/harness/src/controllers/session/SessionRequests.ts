@@ -18,6 +18,7 @@ import { requestAsks } from '@agent/runtime/requestPolicy';
 import {
   claimRejection,
   narrows,
+  recordDecision,
   setPolicy,
   writeRejection,
 } from '@agent/runtime/runApprovalQueue';
@@ -132,6 +133,7 @@ const requireRunAction = (
 ): Effect.Effect<void, RequestError> => {
   let action = GATED_ACTIONS[req.kind];
   if (req.kind === 'policy.set' && narrows(req.change)) action = undefined;
+  if (req.kind === 'request.decide' && req.grant != null) action = 'grant';
   if (action === undefined) return Effect.void;
   const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
   const run = deps.session().view.run(runId);
@@ -257,16 +259,7 @@ const decideRequest = (
       commit: (own) => log.transact(own.map((f) => ownFactRow(f, req.runId))),
     });
     if (side) yield* Effect.orDie(side);
-    const recorded = yield* deps.asks
-      .decide(req.runId, req.requestId, req.decision)
-      .pipe(
-        Effect.mapError(
-          writeRejection({
-            runId: req.runId,
-            reason: 'The decision could not be recorded.',
-          }),
-        ),
-      );
+    const recorded = yield* recordDecision(deps.session(), req, heldHere);
     if (!recorded) return yield* settled(req.runId);
     return done;
   });
@@ -413,7 +406,7 @@ const handle = (
         deps,
         req.change.runId,
         heldHere,
-        setPolicy(deps.session(), req.change, heldHere),
+        setPolicy(deps.session(), req.change, heldHere, Effect.succeed(done)),
       );
   }
 };
