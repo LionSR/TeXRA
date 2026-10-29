@@ -621,6 +621,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
                       log: 'Warn',
                       message: 'Opening the Git settings',
                     }),
+                    withLogChannel(EXTENSION_CHANNEL),
                   )
               : Effect.void,
           ),

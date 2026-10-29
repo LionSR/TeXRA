@@ -235,6 +235,8 @@ const stopProcess = Effect.fn('LeanServer.stopProcess')(function* (
         ),
       ),
     );
+  // Only the wait matters: a server ended by the signal just sent has no exit
+  // code, which fails the read.
   yield* Effect.ignore(handle.exitCode).pipe(
     Effect.timeoutOption(SHUTDOWN_TIMEOUT),
   );

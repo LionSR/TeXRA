@@ -109,6 +109,7 @@ export function settingsToolCommands(ports: {
           log: 'Warn',
           message: 'The empty plugin page could not be posted either.',
         }),
+        withLogChannel(SETTINGS_LOG_CHANNEL),
         rowsLane.withPermits(1),
         Effect.andThen(refresh),
       ),
