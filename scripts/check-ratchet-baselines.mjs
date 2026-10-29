@@ -13,7 +13,8 @@
  * added item on every field that is not a path; and the added row's key must
  * be the donor's with each path that differs renamed by a move in
  * `git diff --find-renames <base>` (a module specifier names the file it
- * resolves to by its trailing path). Retained rows cannot grow.
+ * resolves to by its trailing path, and a `module#name` names its module).
+ * Retained rows cannot grow.
  * A deleted baseline file fails, unless it was empty at the base and is
  * listed in ZERO_RULES (ratchet-zero-rules.mjs), whose named checker holds
  * its rule at zero without a file; a listed file that still exists fails, so
@@ -123,8 +124,17 @@ function readBaseline(file, text) {
         !items.every((item) => typeof item === 'string')
       )
         fail(`${shape}.${key}`);
-      for (const item of items)
-        add(JSON.stringify([key, item]), `${shape}:${key}`);
+      for (const item of items) {
+        // A name's row is its bare `module#name`, valued by its kind, so
+        // `type X` -> `X` widens and `X` -> `type X` narrows.
+        const bare = item.replace(/^type /, '');
+        if (shape === 'names')
+          add(
+            JSON.stringify([key, bare]),
+            bare === item ? 'value' : 'type-only',
+          );
+        else add(JSON.stringify([key, item]), `${shape}:${key}`);
+      }
     }
   } else {
     if (!Array.isArray(entries)) fail(shape);
@@ -219,13 +229,22 @@ function moved(removed, added, renames) {
   const parts = (key) => (key.startsWith('[') ? JSON.parse(key) : [key]);
   const from = parts(removed);
   const to = parts(added);
+  // A `module#name` part moves with its module; the name stays.
+  const split = (part) => {
+    const at = part.lastIndexOf('#');
+    return at < 0 ? [part, ''] : [part.slice(0, at), part.slice(at)];
+  };
   return (
     from.length === to.length &&
-    from.every(
-      (part, i) =>
-        part === to[i] ||
-        renames.some(([old, next]) => names(part, old) && names(to[i], next)),
-    )
+    from.every((part, i) => {
+      if (part === to[i]) return true;
+      const [path, name] = split(part);
+      const [nextPath, nextName] = split(to[i]);
+      return (
+        name === nextName &&
+        renames.some(([old, next]) => names(path, old) && names(nextPath, next))
+      );
+    })
   );
 }
 

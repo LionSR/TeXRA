@@ -1,5 +1,5 @@
 // Node imports
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 // Third-party imports
@@ -427,7 +427,7 @@ interface HarnessBaseline {
  * HARNESS_BASELINE_FILE, which only shrinks.
  */
 const HARNESS_LAYERS: readonly (readonly string[])[] = [
-  ['logger'],
+  ['logger', 'types'],
   ['utils'],
   ['shared'],
   ['common'],
@@ -640,9 +640,10 @@ describe('LAY-2 harness layer order', () => {
   ) as HarnessBaseline;
 
   it('places every harness directory in a layer', () => {
-    const unplaced = [
-      ...new Set([...live.keys()].flatMap((e) => e.split('->'))),
-    ]
+    const directories = readdirSync(resolve(REPO_ROOT, HARNESS_SRC), {
+      withFileTypes: true,
+    }).filter((entry) => entry.isDirectory());
+    const unplaced = [...directories.map((entry) => entry.name), 'entries']
       .filter((directory) => harnessLayer(directory) < 0)
       .toSorted();
 

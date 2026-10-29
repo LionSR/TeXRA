@@ -15,7 +15,7 @@ Folder-scoped addition to the root [AGENTS.md](../../AGENTS.md) for
 The top-level directories of `packages/harness/src`, bottom first. An import
 points to a strictly lower layer:
 
-1. `logger/`: log channels and the log sink; imports nothing in the harness.
+1. `logger/`: log channels and the log sink; `types/`: ambient module declarations. Neither imports anything in the harness.
 2. `utils/`: helpers with no domain owner.
 3. `shared/`: wire contracts, schemas, the session row model and its folds.
 4. `common/`: cross-cutting logic with domain meaning (errors, parsing, storage layout).
