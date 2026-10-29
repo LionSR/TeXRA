@@ -443,7 +443,7 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
 
 export const AcceptRunFilesTool = defineTool({
   name: 'accept_run_files',
-  requiresApproval: 'edit',
+  requiresApproval: 'inBody',
   description: `Accept output files from a completed document task into the workspace.
 
 Only document task results (<subagent-result kind="task">) list output

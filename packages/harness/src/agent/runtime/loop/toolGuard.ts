@@ -5,8 +5,9 @@
  * so a resume reads them back), the final input decoded again, the paths it
  * writes checked, then the policy's one reading ({@link sessionPermission})
  * over that input, whose ask opens the call's request through the run's
- * lane. A file edit is decided in its body's review
- * (`requestToolEditApproval`), with the hooks' answer on `RunCall.hook`.
+ * lane. A tool whose body opens its own request (an edit's review, a plan,
+ * a delegation proposal) is decided there, after its proposal exists, with
+ * the hooks' answer on `RunCall.hook`; a question it asks is no permission.
  * A body's own requests go through `callRequests`.
  */
 import { isDeepStrictEqual } from 'node:util';
@@ -165,11 +166,12 @@ const rejection = Effect.fn('toolUse.guard')(function* (
 ): Effect.fn.Return<ToolResult | undefined, Error, ToolServices> {
   const { guard, definition } = tool;
   // The loop asks about a command, a tool that requires approval, and a call
-  // a hook asked about, except an edit, whose own review asks.
+  // a hook asked about. A tool whose body opens its own request (`'inBody'`)
+  // answers the hook there, from `RunCall.hook`.
   const asks =
     guard?.bash !== undefined ||
     tool.requiresApproval === true ||
-    (hook === 'ask' && tool.requiresApproval !== 'edit');
+    (hook === 'ask' && tool.requiresApproval === undefined);
   if (!guard?.writes && !asks && !rewritten) return undefined;
   // The chain reads the call's own validated arguments, from the same schema
   // `call` validates with; a tool whose parameters are a pass-through JSON

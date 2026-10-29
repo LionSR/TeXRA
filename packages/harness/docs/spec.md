@@ -58,7 +58,7 @@ its kind is its `type` column.
 - **Request**: A decision that may wait on a person: a `request.opened` row,
   closed by one `request.decided` row; an approval policy that answers at once
   commits both in one batch (`shared/schemas/sessionEvent.ts:371-384`,
-  `agent/runtime/requestPolicy.ts:323-333`).
+  `agent/runtime/requestPolicy.ts:326-336`).
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row (`controllers/session/storeSchema.ts:54-65`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
@@ -369,7 +369,7 @@ points are normative:
 - **W3**, `tool.intent`: commits after PreToolUse hooks and the guard, before
   the body runs, once per attempt
   (`agent/runtime/loop/toolUseDispatch.ts:523-555`;
-  `agent/runtime/loop/toolGuard.ts:250-269`).
+  `agent/runtime/loop/toolGuard.ts:259-278`).
 - **W4**, `tool.result`: commits, with the call's card rows, before the delivery
   that lets the loop continue (`agent/runtime/loop/toolUseDispatch.ts:380-406`,
   `:656-680`, `:1100-1103`).
@@ -382,7 +382,7 @@ points are normative:
   (`agent/runtime/ModelInvoker.ts:610-670`, `:702-704`;
   `agent/runtime/run/invocation.ts:381-391`).
 - **W7**, `request.opened` / `request.decided`: the opening commits before any
-  wait; a decision commits once (`agent/runtime/requestPolicy.ts:257-275`,
+  wait; a decision commits once (`agent/runtime/requestPolicy.ts:260-278`,
   `:333-345`).
 
 **W1.** The invoker MUST commit the attempt's rows, the blobs of its request
@@ -407,8 +407,8 @@ does not cover a compaction summary, whose answer its caller lands as a
 
 **W3.** A call's `tool.intent` MUST commit after its PreToolUse hooks and its
 guard, and before its body (`agent/runtime/loop/toolUseDispatch.ts:523-555`,
-`agent/runtime/loop/toolGuard.ts:250-269`). The guard asks for a command's
-approval (`agent/runtime/loop/toolGuard.ts:162-166`, `:225-244`). A slow tool's
+`agent/runtime/loop/toolGuard.ts:259-278`). The guard asks for a command's
+approval (`agent/runtime/loop/toolGuard.ts:171-175`, `:234-253`). A slow tool's
 `tool.start` card MUST commit in the intent's batch
 (`agent/runtime/loop/toolUseDispatch.ts:544-547`). An attempt whose intent is
 already committed MUST NOT commit another
@@ -742,25 +742,25 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 
 ### 8.3 Protocol
 
-- A request's id is part of its payload (`agent/runtime/requestPolicy.ts:310`).
+- A request's id is part of its payload (`agent/runtime/requestPolicy.ts:313`).
   A tool call's request id is derived from the response, call, attempt and
   ordinal, so a resumed attempt rejoins the request it left standing
   (`shared/session/inFlight.ts:309-312`).
 - The opening and any decision the approval policy gives at once MUST commit in
   one batch, so no surface lists it pending
-  (`agent/runtime/requestPolicy.ts:323-333`).
+  (`agent/runtime/requestPolicy.ts:326-336`).
 - A decision MUST commit only if its request is open and undecided; the first
   decision wins, and a later one writes nothing
-  (`agent/runtime/requestPolicy.ts:257-275`).
+  (`agent/runtime/requestPolicy.ts:260-278`).
 - The asker waits on the committed `request.decided` row, read from the tail
-  (`agent/runtime/requestPolicy.ts:277-303`). If the session closes first, the
+  (`agent/runtime/requestPolicy.ts:280-306`). If the session closes first, the
   asker goes on as cancelled with no row written, and the request stays open
-  (`agent/runtime/requestPolicy.ts:334-347`).
+  (`agent/runtime/requestPolicy.ts:337-350`).
 - An interrupted asker decides its request `cancel` through the same door,
   unless the session is closed. This is best effort: a write the session refuses
   (it is draining, or the claim is gone) is logged and leaves the request open,
   for the next resume to cancel as unbound
-  (`agent/runtime/requestPolicy.ts:350-373`).
+  (`agent/runtime/requestPolicy.ts:353-376`).
 - A request is a row, so it outlives its process. A resume cancels the unbound
   ones (section 7.2) and re-enters the bound ones under the same id
   (`shared/session/inFlight.ts:347-371`). An open `externalInquiry` is neither:

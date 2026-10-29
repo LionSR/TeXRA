@@ -55,6 +55,7 @@ import type { Append } from '@shared/session/sessionEvents';
 import type { ToolStep } from '@tools/sessionTools';
 
 import { HostCapabilities, type StepToolInputs } from './agentToolResolution';
+import { RunCall } from './RunCall';
 import type { AgentRunShape } from './run/AgentRun';
 import type {
   AskOptions,
@@ -95,6 +96,7 @@ function answerFor(
   session: SessionHandle,
   runId: RunId,
   payload: PermissionPayload,
+  hook: 'allow' | 'ask' | undefined,
 ):
   | {
       readonly decision: RequestDecision;
@@ -104,7 +106,7 @@ function answerFor(
   const policy = session.approvals.policy(runId);
   switch (payload.kind) {
     case 'planApproval': {
-      const answer = session.approvals.permission(runId, 'plan', undefined);
+      const answer = session.approvals.permission(runId, 'plan', hook);
       if (answer === 'ask') return undefined;
       return { decision: answer === 'allow' ? { action: 'approve' } : answer };
     }
@@ -156,8 +158,9 @@ export function policyDecidedRows(
   session: SessionHandle,
   runId: RunId,
   payload: PermissionPayload,
+  hook?: 'allow' | 'ask',
 ): Extract<RunHistoryDraft, { type: 'request.decided' }>[] {
-  const answer = answerFor(session, runId, payload);
+  const answer = answerFor(session, runId, payload, hook);
   if (answer === undefined) return [];
   if (answer.denial) session.interactions.approvalDenied(answer.denial, runId);
   return [
@@ -328,7 +331,7 @@ export function requestAsks({
           requestId,
           payload,
         },
-        ...policyDecidedRows(session(), runId, payload),
+        ...policyDecidedRows(session(), runId, payload, (yield* RunCall)?.hook),
       ];
       const from = yield* open(rows);
       return yield* decision(runId, requestId, from).pipe(

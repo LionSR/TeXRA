@@ -210,7 +210,8 @@ export interface RunCallShape {
    *  interrupt leaves the rows for the resume. Null for any other call. */
   readonly scriptCalls: Effect.Effect<ScriptDoor, never, ToolServices> | null;
   /** What the call's `PreToolUse` hooks said about the input it runs on,
-   *  for the edit review its body opens: absent when no hook answered. */
+   *  for the review its body opens (an edit, a plan, a delegation
+   *  proposal): absent when no hook answered. */
   readonly hook?: 'allow' | 'ask';
 }
 

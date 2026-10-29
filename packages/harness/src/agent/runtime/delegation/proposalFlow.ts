@@ -14,7 +14,7 @@ import {
   findAgentByIdentifier,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
-import { type RunToolCall } from '@agent/runtime/RunCall';
+import { RunCall, type RunToolCall } from '@agent/runtime/RunCall';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type {
   AgentProposal,
@@ -148,7 +148,8 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     const { session, runId, config } = parent.run;
     if (isTrustedScript(config))
       return { result: { action: 'approve' }, childApproval: 'inherit' };
-    const answer = session.approvals.permission(runId, 'proposal', undefined);
+    const hook = (yield* RunCall)?.hook;
+    const answer = session.approvals.permission(runId, 'proposal', hook);
     if (answer !== 'allow' && answer !== 'ask')
       return { result: answer, childApproval: 'inherit' };
     if (answer === 'allow') {

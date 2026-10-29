@@ -45,7 +45,8 @@ the operation that actually runs:
    reason as the call's error result. When several hooks answer, one deny is
    enough.
 2. An `updatedInput` replaces the input (a Claude Code tool's fields are read
-   back as the harness tool's). Two different rewrites deny the call, and so
+   back as the harness tool's, and a harness-only field the hook never saw,
+   such as `grep`'s `literal`, keeps its issued value). Two different rewrites deny the call, and so
    does a rewrite the tool's schema refuses. The path checks, the prompt and
    the body all use the final input; the call as the model issued it stays
    recorded, so a script's replay still matches it.
@@ -58,8 +59,11 @@ the operation that actually runs:
    is about a different operation and counts as no answer. `defer`, like no
    answer, leaves the call to the policy.
 4. An ask is a request on the run, as every approval is; no hook waits for a
-   person. A file edit is asked about in its review, over the proposed edit and
-   before it is applied, with what the hooks said.
+   person. A tool whose body opens its own request is asked about there, after
+   its proposal exists, with what the hooks said: an edit's review before the
+   edit is applied, a plan, a delegation proposal. A hook's `ask` forces that
+   review. A question the body asks the user is not a permission check, so a
+   hook adds no prompt to it.
 
 A resumed run reads the hooks' answers and the rewrite from their
 `hook.outcome` rows and never runs them again.
