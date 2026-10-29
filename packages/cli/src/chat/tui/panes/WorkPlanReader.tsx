@@ -2,13 +2,13 @@
 
 import { useInput, useWindowSize } from 'ink';
 
+import { planOf, type RunId } from '@texra-ai/harness/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { CLOSE_HINTS, READER_SCROLL_HINTS } from '@cli/tui/ui/KeyHints';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
 import { sessionView } from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
-import type { RunId } from '@texra-ai/harness/schemas';
 
 export function WorkPlanReader({
   availableRows,
@@ -30,7 +30,8 @@ export function WorkPlanReader({
     hints: READER_SCROLL_HINTS,
     title,
   });
-  const text = `Objective\n${run?.plan?.objective ?? '(no objective)'}`;
+  const plan = run ? planOf(run) : null;
+  const text = `Objective\n${plan?.objective ?? '(no objective)'}`;
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) onClose();

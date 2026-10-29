@@ -1,5 +1,5 @@
 {
-  "packages/harness/src/agent/runtime/AgentRunLifecycle.ts": 450,
+  "packages/harness/src/agent/runtime/AgentRunLifecycle.ts": 425,
   "packages/harness/src/agent/runtime/childRunLoop.ts": 900,
   "packages/harness/src/agent/runtime/delegation/AgentTool.ts": 594,
   "packages/harness/src/agent/runtime/loop/hooks.ts": 469,

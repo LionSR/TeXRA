@@ -717,7 +717,9 @@ async function generate(root) {
   await shows('the idle prompt', 'Ctrl-C exit');
   tty.write('\x03');
   const exit = await tty.exited;
-  if (exit.exitCode !== 0)
+  // The chat's last run is the one the user stopped, which ended cancelled:
+  // an idle exit reports it as interrupted (130), as `texra run` does.
+  if (exit.exitCode !== 130)
     fail(`texra chat exited ${exit.exitCode}\n${tty.screen()}`);
   cli.run(['plugin', 'disable', 'golden-hooks', '--print']);
 

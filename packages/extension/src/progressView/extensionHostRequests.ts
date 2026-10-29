@@ -19,6 +19,7 @@ import {
   type HostRequestFailure,
   type RequestRefusal,
   type Run,
+  type RunEnd,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
@@ -38,7 +39,6 @@ import { workspaceRelativePath } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
   type AgentConfig,
-  type RunEndResult,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import {
@@ -545,7 +545,7 @@ export const createExtensionHostRequests = Effect.fn(
     runs: {
       launched: (run: Run) =>
         Effect.sync(() => options.presentLaunchedRun(run.runId)),
-      openFinalOutput: (config: AgentConfig, result: RunEndResult) =>
+      openFinalOutput: (config: AgentConfig, result: RunEnd) =>
         withProcessServices(
           runtime,
           openFinalOutputIfAvailable(roots, config)(result),

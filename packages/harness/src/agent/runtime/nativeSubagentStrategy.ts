@@ -6,7 +6,7 @@
 
 import { Effect } from 'effect';
 
-import { type RunEndResult } from '@agent/runtime/RunEndResult';
+import { type RunReport } from '@agent/runtime/runReport';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -76,17 +76,17 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
 
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
-): NativeChildStrategy<RunEndResult, AgentRunServices> {
+): NativeChildStrategy<RunReport, AgentRunServices> {
   const config = params.definition
     ? params.definition.config
     : params.resume.config;
-  // A child's provider/runtime failure rides its turn's `error`
+  // A child's provider/runtime failure rides its report's `failure`
   // (`runWithLifecycle` returns a terminal failed result rather than
   // rejecting); a thrown call reaches `formatError` as its `err`.
-  let lastResult: RunEndResult | undefined;
+  let lastResult: RunReport | undefined;
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
-    call: Effect.Effect<RunEndResult, Error, AgentRunServices>,
+    call: Effect.Effect<RunReport, Error, AgentRunServices>,
   ) {
     lastResult = undefined;
     return yield* call.pipe(
@@ -117,12 +117,12 @@ export function createNativeSubagentStrategy(
             onProgress: notify,
             turns: {
               turnPermit: turns.turnPermit,
-              finishTurn: (turn: RunEndResult) =>
+              finishTurn: (turn: RunReport) =>
                 Effect.suspend(() => {
                   lastResult = turn;
                   return turns.finishTurn(turn);
                 }),
-              finishLastTurn: (turn: RunEndResult) =>
+              finishLastTurn: (turn: RunReport) =>
                 Effect.suspend(() => {
                   lastResult = turn;
                   return turns.finishLastTurn(turn);
@@ -134,7 +134,6 @@ export function createNativeSubagentStrategy(
             const definition = yield* prepareAgentDefinition({
               config,
               session: params.session,
-              suppressErrorNotification: true,
               stopAfterCycle,
             });
             return yield* programs.executeAgent(definition, params.runId, {
@@ -152,10 +151,10 @@ export function createNativeSubagentStrategy(
 
     isTurnInterrupted: (turn) =>
       params.inBand !== true && turn.outcome === RUN_OUTCOME.CANCELLED,
-    isTurnError: (turn) => turn.error !== undefined,
+    isTurnError: (turn) => turn.failure !== undefined,
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
-      turn: RunEndResult,
+      turn: RunReport,
       /** The turn's wall time, measured by the loop. */
       wallTimeMs: number,
     ) {
@@ -193,7 +192,7 @@ export function createNativeSubagentStrategy(
       return formatSubagentError(
         params.runId,
         config.agent,
-        turn?.error ?? normalizeProviderError(err),
+        turn?.failure ?? normalizeProviderError(err),
         {
           wallTimeMs,
           workingDirectory: params.workingDirectory,

@@ -97,7 +97,7 @@ export function addTurnUsage(
 // ------------------------------------------------------------ launch facts
 
 /** An attached memory the opening could not read, and why. */
-export const AttachedMemoryMissSchema = Schema.Struct({
+const AttachedMemoryMissSchema = Schema.Struct({
   path: Schema.String,
   reason: Schema.String,
 });

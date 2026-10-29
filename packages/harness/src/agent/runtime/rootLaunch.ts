@@ -1,4 +1,4 @@
-import { Effect, Fiber, SubscriptionRef } from 'effect';
+import { Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { SessionOwner } from '@platform/processRuntime';
@@ -9,7 +9,7 @@ import {
   type ApprovalPolicyLimit,
 } from '@shared/approvalBypassKind';
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
-import type { RunId } from '@shared/schemas';
+import type { CommitOrdinal, RunId } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
 import { humanGrant } from './runApprovalQueue';
 import { prepareAgentDefinition } from './AgentLaunchContext';
@@ -17,9 +17,7 @@ import { runWithLaunchGuard } from './runLaunchGuard';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { applyHelperModelPreference } from './helperModelName';
 import { registryOf } from './runRegistry';
-import { presentRunFailure } from './terminalResultToast';
 import type { SessionHandle } from './SessionHandle';
-import type { RunEndResult } from './RunEndResult';
 
 /**
  * Options for a root launch (`Runs.launch({ request, options })`). Fields
@@ -29,16 +27,11 @@ import type { RunEndResult } from './RunEndResult';
  */
 export interface RootLaunchOptions extends Pick<
   ExecuteAgentOptions,
-  'tools' | 'onRun' | 'onAdmitted'
+  'tools' | 'onRun'
 > {
   /** Stop the run after one model/tool cycle instead of waiting for
    *  follow-up input. */
   stopAfterCycle?: boolean;
-  /**
-   * The caller owns presentation for failures before registration; after
-   * that the run's `result` event presents.
-   */
-  suppressErrorNotification?: boolean;
   /**
    * Opt-in for a host's quick fix-up actions: run the launched agent on the
    * configured helper model instead of the selected one. Off for a direct
@@ -70,53 +63,67 @@ export interface RootLaunchRequest {
   readonly runId?: RunId;
 }
 
+/** The commit `opened` holds, once a launch's or resume's program is over:
+ *  with none, its run's activation never committed and nothing entered the
+ *  session. */
+export const activationIfOpened = (
+  opened: Deferred.Deferred<CommitOrdinal>,
+): Effect.Effect<CommitOrdinal, Error> =>
+  Effect.suspend(() =>
+    Deferred.isDoneUnsafe(opened)
+      ? Deferred.await(opened)
+      : Effect.fail(new Error('The run ended without entering the session.')),
+  );
+
 /**
  * START HERE — a root launch, what `Runs.launch({ request, options })` runs
  * (its session's `programs.root`): the composition root's `SessionOwner`
  * must still hold the session; the run id is minted when the request names
- * none; the run is admitted at the session's door and awaited, the caller's
- * interruption stopping it. A run that fails before it opens has no row to
- * present it: its launch does, once, unless the caller presents it.
+ * none. It answers the commit of the run's opening once that commits, the
+ * run going on on the session's fork; a launch that fails first fails this,
+ * and the caller's interruption before then stops the run.
  *
  * Use `Runs.launch` unless you need per-chunk streaming/lifecycle callbacks
  * or subagent lineage; for those, drop to the lower-level `executeAgent`,
  * where the caller owns runId generation and the registration.
  */
-export const rootRun = Effect.fn('rootRun')(
-  function* (
-    request: RootLaunchRequest,
-    options: RootLaunchOptions & { readonly session: SessionHandle },
-  ): Effect.fn.Return<RunEndResult, Error, SessionOwner> {
-    const { session } = options;
-    if (!(yield* (yield* SessionOwner).holds(session)))
-      return yield* Effect.fail(
-        new Error('This session is closed; open it again to launch a run.'),
-      );
-    const runId = request.runId ?? generateRunId();
-    // The caller's interruption stops the run from the moment it starts.
-    return yield* Effect.uninterruptibleMask((restore) =>
-      Effect.flatMap(
-        registryOf(session.runs).start(
-          runId,
-          admittedRun(runId, request, options),
-          (run) => run,
-        ),
-        (fiber) =>
-          restore(Fiber.join(fiber)).pipe(
-            Effect.onInterrupt(() => Fiber.interrupt(fiber)),
-          ),
-      ),
+export const rootRun = Effect.fn('rootRun')(function* (
+  request: RootLaunchRequest,
+  options: RootLaunchOptions & { readonly session: SessionHandle },
+): Effect.fn.Return<CommitOrdinal, Error, SessionOwner> {
+  const { session } = options;
+  if (!(yield* (yield* SessionOwner).holds(session)))
+    return yield* Effect.fail(
+      new Error('This session is closed; open it again to launch a run.'),
     );
-  },
-  (launch, _request, options) =>
-    launch.pipe(
-      Effect.tapError((error) =>
-        options.suppressErrorNotification === true
-          ? Effect.void
-          : presentRunFailure(options.session.interactions, error),
+  const runId = request.runId ?? generateRunId();
+  const opened = yield* Deferred.make<CommitOrdinal>();
+  const launch = {
+    ...options,
+    onAdmitted: (_: RunId, commit: CommitOrdinal) =>
+      Deferred.succeed(opened, commit),
+  };
+  return yield* Effect.uninterruptibleMask((restore) =>
+    Effect.flatMap(
+      registryOf(session.runs).start(
+        runId,
+        admittedRun(runId, request, launch),
+        (run) => run,
       ),
+      (fiber) =>
+        restore(
+          Effect.raceFirst(
+            Deferred.await(opened),
+            Fiber.join(fiber).pipe(Effect.andThen(activationIfOpened(opened))),
+          ),
+        ).pipe(
+          // A caller interrupted as the run opened never holds it.
+          Effect.tap(() => restore(Effect.void)),
+          Effect.onInterrupt(() => Fiber.interrupt(fiber)),
+        ),
     ),
-);
+  );
+});
 
 /**
  * The run a root launch admits, on the launched fiber: it resolves the model
@@ -128,11 +135,11 @@ export const rootRun = Effect.fn('rootRun')(
 const admittedRun = Effect.fn('admittedRun')(function* (
   runId: RunId,
   request: RootLaunchRequest,
-  options: RootLaunchOptions & { readonly session: SessionHandle },
+  options: RootLaunchOptions &
+    Pick<ExecuteAgentOptions, 'session' | 'onAdmitted'>,
 ) {
   const {
     preferHelperModel,
-    suppressErrorNotification,
     continues,
     approveDelegatedWork,
     approvalPolicy,
@@ -149,7 +156,6 @@ const admittedRun = Effect.fn('admittedRun')(function* (
   const definition = yield* prepareAgentDefinition({
     config,
     session: runSession,
-    suppressErrorNotification,
     stopAfterCycle,
   });
   // A chat round takes the human grants of the round it continues, never

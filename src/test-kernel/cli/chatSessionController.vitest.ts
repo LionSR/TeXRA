@@ -75,7 +75,6 @@ import type {
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import { readCliRunOutcomeState } from '@cli/runtime/terminalStatus';
 import type { SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import type { ChatSessionControllerInit } from '@cli/chat/chatSessionController';
 import { createChatSessionController } from '@cli/chat/chatSessionController';
@@ -89,7 +88,6 @@ import {
 } from '@cli/chat/tui/state/sessionRunState';
 import {
   qualifyAggregateId,
-  emptyRunEndOutput,
   RUN_OUTCOME,
   type RunId,
   type RunOutcome,
@@ -348,43 +346,6 @@ const resumedRun = (
   runId: RunId,
   outcome: () => RunOutcome = () => RUN_OUTCOME.COMPLETED,
 ) => ({ runId, result: Effect.sync(() => ({ outcome: outcome() })) });
-
-describe('CLI terminal outcome resolution', () => {
-  // The persisted outcome is a committed `run.end` row on a real session over
-  // the fake platform's storage; the read path under test folds it, so no
-  // record store is stubbed.
-  it.effect('prefers the persisted post-shutdown outcome', () =>
-    Effect.gen(function* () {
-      const session = yield* createTestSession();
-      const runId = '5d0001' as RunId;
-      publishTestRunStart(session, runId);
-      publishTestRows(session, [
-        {
-          type: 'run.end',
-          aggregateId: qualifyAggregateId('run', runId),
-          outcome: RUN_OUTCOME.CANCELLED,
-          output: emptyRunEndOutput(),
-        },
-      ]);
-      yield* session.log.settled;
-
-      expect(
-        yield* readCliRunOutcomeState(
-          testSessionOf(session),
-          {
-            outcome: RUN_OUTCOME.COMPLETED,
-            output: { response: '', files: [] },
-            runId,
-          },
-          (error) => expect.unreachable(error.message),
-        ),
-      ).toEqual({
-        outcome: RUN_OUTCOME.CANCELLED,
-        outcomePersisted: true,
-      });
-    }),
-  );
-});
 
 describe('createChatSessionController', () => {
   beforeAll(bindTestSessionView);

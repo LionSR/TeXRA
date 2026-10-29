@@ -20,7 +20,6 @@ import {
   JsonValueSchema,
   OwnerIdSchema,
   PermissionPayloadSchema,
-  PlanSchema,
   PluginFactDraftSchema,
   requestParksItsCaller,
   RunActionSchema,
@@ -211,7 +210,6 @@ const RunViewSchema = Schema.Struct({
   /** A task's run: the key of the plugin block whose recipe it opened on
    *  (`script.block`); null otherwise. A task takes no messages. */
   recipe: Schema.NullOr(Schema.String),
-  plan: Schema.NullOr(PlanSchema),
 });
 export type RunView = typeof RunViewSchema.Type;
 

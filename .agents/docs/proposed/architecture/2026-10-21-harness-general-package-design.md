@@ -137,8 +137,10 @@ cannot.
 
 The thirteen nouns of the core-concepts note keep their owners. The process
 owner is `effect/processLayer.ts:116`, which becomes `sdk/processLayer.ts`. The
-foundation order is declared and ratcheted:
-`utils < common < platform < shared < {agent, tools} < session < sdk`.
+foundation order the code follows is declared in `packages/harness/AGENTS.md`
+("Layer order") and ratcheted by `src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts`:
+`logger < utils < shared < common < platform < …`, with `session` and `sdk`
+on top.
 
 ### Layout
 

@@ -6,7 +6,8 @@ import {
   finalWorkflowOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
-import type { RunEndResult, AgentConfig } from '@texra-ai/harness/schemas';
+import type { RunEnd } from '@texra-ai/harness';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
@@ -30,11 +31,7 @@ import type { SettingsStores } from '@texra-ai/harness/host';
  * calling context carries.
  */
 export const selectAutoOpenFinalOutput = Effect.fn('selectAutoOpenFinalOutput')(
-  function* (
-    stores: SettingsStores,
-    config: AgentConfig,
-    result: RunEndResult,
-  ) {
+  function* (stores: SettingsStores, config: AgentConfig, result: RunEnd) {
     const documents = documentsResultOf(result.output.structured);
     if (
       config.script?.kind !== 'recipe' ||

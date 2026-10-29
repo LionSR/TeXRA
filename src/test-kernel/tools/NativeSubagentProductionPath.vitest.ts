@@ -61,7 +61,7 @@ import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared/runtime boundaries
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp, wakeRun } from '@agent/followUp/ToolUseFollowUp';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { launchDetachedSubagent } from '@agent/runtime/delegation/subagentRun';
@@ -69,7 +69,6 @@ import { withProcessServices } from '@platform/processRuntime';
 import {
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
 } from '@shared/schemas';
@@ -667,11 +666,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* waitForParentTurns(3);
         expect(
           yield* Fiber.join(recovered).pipe(Effect.timeout('5 seconds')),
-        ).toEqual({
-          started: true,
-          delivered: true,
-          completion: expect.anything(),
-        });
+        ).toEqual({ activation: expect.any(Number) });
         const recoveredControls = session.runs.get(runId)?.controls;
         expect(recoveredControls).toBeDefined();
         childTurns.push({ text: 'Recovered result D.' });
@@ -696,18 +691,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
         // An already idle saved run needs no new input or model turn to
         // acknowledge recovery, and its live driver still owns later input.
-        expect(
-          yield* withProcessServices(
-            testRuntime(),
-            resumeRun(runId, {
-              session,
-            }),
-          ).pipe(Effect.timeout('5 seconds')),
-        ).toEqual({
-          started: true,
-          delivered: true,
-          completion: expect.anything(),
-        });
+        yield* Effect.flatten(wakeRun(runId, session)).pipe(
+          Effect.timeout('5 seconds'),
+        );
         expect(session.runs.get(runId)?.controls).toBeDefined();
         yield* session.view.changes.pipe(
           Stream.filter(
@@ -725,20 +711,14 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         parentTurns.push({ text: 'Parent received failed recovery.' });
         yield* queueRecovery(runId, 'Keep this unconsumed input.');
-        const failedRecovery = yield* withProcessServices(
-          testRuntime(),
-          resumeRun(runId, { session }),
-        );
-        expect(failedRecovery).toEqual({
-          started: true,
-          delivered: false,
-          completion: expect.anything(),
-        });
-        // A resumed child's lifetime ends with its own result, as a root's.
-        if (!('started' in failedRecovery)) throw new Error('resume refused');
-        expect((yield* failedRecovery.completion).outcome).toBe(
-          RUN_OUTCOME.FAILED,
-        );
+        // Its turn fails before it opens: the resume hands no run over, and
+        // the parent hears the failure.
+        expect(
+          (yield* withProcessServices(
+            testRuntime(),
+            Effect.flip(resumeRun(runId, { session })),
+          )).message,
+        ).toBe('The run ended without entering the session.');
         yield* waitForParentTurns(5);
       }),
     60_000,

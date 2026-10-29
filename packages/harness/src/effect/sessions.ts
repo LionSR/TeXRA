@@ -13,7 +13,6 @@ import type {
   HostInteractions,
   SessionHostInteractions,
 } from '@agent/runtime/HostInteractions';
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { AgentRunListingEntry } from '@agent/storage/runListing';
 import type {
   AgentDirectoriesPort,
@@ -29,6 +28,7 @@ import type {
   SessionViewInput,
   InlinePersona,
   RequestDecision,
+  RunEnd,
   RunId,
   TranscriptSubscription,
 } from '@shared/schemas';
@@ -179,13 +179,13 @@ export interface Run {
    *  this names the child you asked for. */
   readonly redirectedFrom?: RunId;
   /**
-   * How the run ended. A failed run fails this with its own
-   * {@link RunFailure}; a stopped one (`interrupt`, a `run.stop` request)
-   * gets the end it stored, `cancelled`, unless the stop met a failure,
-   * which fails it. A finished run's result arrives once the session
-   * view shows its stored outcome, so a view read afterwards includes it.
+   * How this activation ended: the end it stored, whatever its outcome. A
+   * failed run's end carries its classified `error`, a stopped one's is
+   * `cancelled`. It fails with {@link RunFailure} only when the activation
+   * stored no end that can be read. It arrives once the session view shows
+   * that end, so a view read afterwards includes it.
    */
-  readonly result: Effect.Effect<RunEndResult, RunFailure>;
+  readonly result: Effect.Effect<RunEnd, RunFailure>;
   /**
    * The session view while this run lasts: from the first snapshot that
    * shows the run to the first that shows its stored outcome. It cannot
@@ -195,15 +195,14 @@ export interface Run {
   /**
    * What the run does as it does it: streamed text, tool calls, stages,
    * usage. Pipe it through `responseText` for just the answer's text.
-   * Ends when the run ends, and fails with {@link RunFailure} if the run
-   * failed. Read it as often as you like and whenever you like: each read
-   * is this activation's events read back from the session, from the
-   * activation's start, and stopping early stops your reading, not the
-   * run. A stream that ended before the read reached it arrives whole, as
-   * one chunk.
+   * Ends when the run ends, and fails as {@link result} does. Read it as
+   * often as you like and whenever you like: each read is this activation's
+   * events read back from the session, from the activation's start, and
+   * stopping early stops your reading, not the run. A stream that ended
+   * before the read reached it arrives whole, as one chunk.
    */
   readonly events: Stream.Stream<AgentEvent, RunFailure>;
-  /** Stop the run. */
+  /** Stop the run, as the user's `run.stop` does. */
   readonly interrupt: Effect.Effect<void>;
 }
 
