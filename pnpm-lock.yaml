@@ -358,8 +358,8 @@ importers:
   packages/desktop:
     dependencies:
       dockview:
-        specifier: 8.6.1
-        version: 8.6.1
+        specifier: 8.6.2
+        version: 8.6.2
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
@@ -3239,11 +3239,11 @@ packages:
   dmg-builder@26.18.0:
     resolution: {integrity: sha512-ozCGC54wi2C1RkS2v69y9lQxvoQ1Coh+iT8CmWiyY8y1ZuOKVvuNson2Hd+HEOs9+EZNNsOBbzKgQZ4SNqWd0w==}
 
-  dockview-core@8.6.1:
-    resolution: {integrity: sha512-DayOT2iM66kwlhxUYgP490UE1moxL8yZD6DVIXcX+LPowE7x537S6gwF/K8iWog+XR+aRvgwI3FJhLn90FJHTQ==}
+  dockview-core@8.6.2:
+    resolution: {integrity: sha512-GeGv58jEzVm91pa7movZFhQVOOQkWWTEJu2kjae5cjXGJ763hv+leKDWWdIeF+Ox9+2CZGZq00CDLizDtc8H8A==}
 
-  dockview@8.6.1:
-    resolution: {integrity: sha512-2WZyTw+Wln7ZX7er4XhH6S9i3InfdbdQZZo/tK26GdQudKn913ctbRN2tkZgXCN9mToGSd5aj8ANp1Lid/MMEQ==}
+  dockview@8.6.2:
+    resolution: {integrity: sha512-nv9wVNDO8/k8slAOPruFJLMMSVL32T2c3Z63NHbxw3QkHjHOkXrxf99+3Rorya+D1XCxFiD+im2c5Chg9A2N8g==}
 
   dompurify@3.4.15:
     resolution: {integrity: sha512-EUBjM+B+lkDE41iE82DDSCfkoPGfXx8IxFxPMjNzm/Uk4xDet77rTN9wqlxlVg71kK7XGuUMv6wUxJUwwv+Xyw==}
@@ -7938,11 +7938,11 @@ snapshots:
       - electron-builder-squirrel-windows
       - supports-color
 
-  dockview-core@8.6.1: {}
+  dockview-core@8.6.2: {}
 
-  dockview@8.6.1:
+  dockview@8.6.2:
     dependencies:
-      dockview-core: 8.6.1
+      dockview-core: 8.6.2
 
   dompurify@3.4.15:
     optionalDependencies:
