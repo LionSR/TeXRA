@@ -12,6 +12,12 @@ references point into that tree, except the lane 4 re-check, which reads
 the split doc is
 [`2026-10-02-harness-package-split.md`](../../implemented/architecture/2026-10-02-harness-package-split.md).
 
+The [29 October peer-source review](2026-10-21-harness-general-package-design/2026-10-29-peer-source-review.md)
+compares the implementation at pinned revisions with pi-durable and DeepSeek
+Harness. It updates the evidence for execution ownership, input receipts,
+permission, and recovery, and proposes consolidating decisions within the
+existing owners before further directory changes.
+
 ## Summary
 
 The owner wants `@texra-ai/harness` to be a general package, as usable as
