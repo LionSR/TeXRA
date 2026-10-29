@@ -100,10 +100,11 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
     );
     if (traceResult.status !== 'ok')
       return yield* new Rejected({
-        reason:
-          traceResult.status === 'config_missing'
-            ? 'This run has no saved data to export.'
-            : 'No transcript was saved for this run, so there is nothing to export. Try exporting a more recent run.',
+        reason: {
+          config_missing: 'This run has no saved data to export.',
+          streamLogs_missing:
+            'No transcript was saved for this run, so there is nothing to export. Try exporting a more recent run.',
+        }[traceResult.status],
       });
     const { trace, record } = traceResult;
 
