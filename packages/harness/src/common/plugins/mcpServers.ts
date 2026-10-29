@@ -3,10 +3,12 @@
  * (`{ "<name>": { "command", "args"?, "env"? } }`), stdio servers only: the
  * one reader of the user's `~/.texra/mcp.json` (`@tools/mcp/mcpConfig`) and
  * of the servers an installed plugin declares (`./pluginManifest`). An entry
- * that does not validate is skipped with a warning its reader reports.
+ * that does not validate is skipped with a warning its reader reports. It
+ * also names that file's path and a configured server's plugin id.
  */
 // Node imports
 import { createHmac, randomBytes } from 'node:crypto';
+import * as path from 'node:path';
 
 // Third-party imports
 import { Effect, Result, Schema } from 'effect';
@@ -27,6 +29,14 @@ export interface McpServerConfig {
   /** The directory it runs in: an installed plugin's root. */
   readonly cwd?: string;
 }
+
+/** The user's MCP config file: `mcp.json` at a storage root. */
+export function mcpConfigPathOf(storageRoot: string): string {
+  return path.join(storageRoot, 'mcp.json');
+}
+
+/** The plugin id of the configured server named `server`. */
+export const mcpPluginId = (server: string): string => `mcp:${server}`;
 
 /** A revision key as app state stores it: 32 random bytes, hex. */
 const REVISION_KEY_PATTERN = /^[0-9a-f]{64}$/;

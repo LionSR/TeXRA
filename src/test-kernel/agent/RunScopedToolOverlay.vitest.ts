@@ -19,6 +19,7 @@ import {
   type RunLaunch,
 } from '@agent/runtime/run/AgentRun';
 import { validationModelLayer } from '@cli/runtime/validationModel';
+import { mcpConfigPathOf } from '@common/plugins/mcpServers';
 import { AppSignals } from '@platform/appSignals';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -37,7 +38,6 @@ import {
   FakeSecrets,
 } from '@test/support/FakePlatform';
 import { texraPlugins } from '@texra/tools/registry';
-import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { generateRunId } from '@utils/core';
 

@@ -34,8 +34,8 @@ import {
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
+import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { parseWorkingDirectory } from '@tools/pathResolution';
-import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { ToolRegistry } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

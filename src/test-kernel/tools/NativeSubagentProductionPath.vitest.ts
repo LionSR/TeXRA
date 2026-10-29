@@ -64,6 +64,7 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
+import { launchDetachedSubagent } from '@agent/runtime/delegation/subagentRun';
 import { withProcessServices } from '@platform/processRuntime';
 import {
   AgentConfigSchema,
@@ -94,7 +95,6 @@ import {
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript/completedRunArchive';
 import { generateRunId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';

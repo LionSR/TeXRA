@@ -39,6 +39,7 @@ import {
   type TransactionPart,
   type TurnResultRow,
 } from '@agent/runtime/childTurnResult';
+import { pauseChildRun } from '@agent/runtime/delegation/childRun';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import {
@@ -58,7 +59,6 @@ import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { outcomeFromCause } from '@shared/runs/runStatus';
-import { pauseChildRun } from '@tools/delegation/childRun';
 import { aggregateError } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 

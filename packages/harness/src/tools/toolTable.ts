@@ -19,7 +19,6 @@ import type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { LogWriteError } from '@agent/runtime/SessionHandle';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import type { AppSignals } from '@platform/appSignals';
 import type { AppState, ConfigProvider } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -32,7 +31,6 @@ import {
   type ToolFact,
 } from '@shared/schemas';
 import type { ToolCatalog } from '@tools/liveTools';
-import type { McpServerPlugin } from '@tools/mcp/mcpConfig';
 import type { Plugin } from '@tools/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -82,30 +80,6 @@ export class PluginHold extends Context.Service<
   PluginHold,
   (until: Effect.Effect<void>) => Effect.Effect<void>
 >()('@texra-ai/harness/tools/PluginHold') {}
-
-/**
- * An installed plugin a step loads while it is enabled and trusted: its MCP
- * servers, if any, whose tools the catalog contributes under its one id and every
- * tool-use run is offered, and the plugin as read, whose
- * skills the step lists. Its servers are held under its trust digest
- * (`source.trust.digest`), which changes exactly when what it would start
- * or ship does, and so replaces them.
- */
-interface InstalledToolPlugin {
-  readonly id: string;
-  readonly servers: readonly McpServerPlugin[];
-  readonly source: LoadablePlugin;
-}
-
-/**
- * The installed plugins that load now, read at each step, each with the
- * servers it starts (none for one that ships only skills), and why each
- * enabled one that does not load is held back.
- */
-export type InstalledToolReader = Effect.Effect<{
-  readonly plugins: readonly InstalledToolPlugin[];
-  readonly warnings: readonly string[];
-}>;
 
 /**
  * A plugin's section of each request's system text, rendered from the tool

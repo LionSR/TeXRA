@@ -44,7 +44,7 @@ const REGISTRY_IMPORTERS: Readonly<Record<string, string>> = {
   // The SDK's run handle interrupts the fiber it handed over.
   'packages/harness/src/effect/runHandle.ts': 'SDK run handle',
   // A delegation helper, no tool: an in-band child's stop.
-  'packages/harness/src/tools/delegation/inBandSubagentRun.ts':
+  'packages/harness/src/agent/runtime/delegation/inBandSubagentRun.ts':
     'delegation helper',
 };
 

@@ -30,6 +30,7 @@ import {
 import type { McpServerConfig } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import type { ToolResult } from '@shared/schemas';
+import { MCP_TOOL_PREFIX } from '@shared/tools/toolDisplayName';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
 import { environment, ProjectEnvironment } from '@utils/system/nodeWorkspace';
@@ -42,8 +43,6 @@ import type { LoadedPluginTools } from './mcpConfig';
 
 const CHANNEL = 'mcp';
 
-/** Every MCP tool's name starts with this, then `<server>__<tool>`. */
-const MCP_TOOL_PREFIX = 'mcp__';
 /** The protocol revision the harness speaks; a server answers its own. */
 const PROTOCOL_VERSION = '2025-06-18';
 const START_TIMEOUT = Duration.seconds(30);
@@ -105,19 +104,6 @@ const CallToolResultSchema = Schema.Struct({
 
 /** A call's arguments: the JSON object the server's schema describes. */
 const McpArgumentsSchema = Schema.Record(Schema.String, Schema.Unknown);
-
-/** The plugin id of the server named `server`. */
-export const mcpPluginId = (server: string): string => `mcp:${server}`;
-
-/** The server an MCP tool name (or `mcp__<server>__*` wildcard) names, or
- *  `undefined` for any other tool name. */
-export function mcpServerOfToolName(name: string): string | undefined {
-  if (!name.startsWith(MCP_TOOL_PREFIX)) return undefined;
-  const separator = name.indexOf('__', MCP_TOOL_PREFIX.length);
-  return separator > MCP_TOOL_PREFIX.length
-    ? name.slice(MCP_TOOL_PREFIX.length, separator)
-    : undefined;
-}
 
 /**
  * The model-facing name of one server tool: `mcp__<server>__<tool>` when

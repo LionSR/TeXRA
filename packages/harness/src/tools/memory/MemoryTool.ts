@@ -10,21 +10,21 @@ import {
 } from '@agent/runtime/RunCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { withLogChannel } from '@logger/effectLog';
-import { StorageFs } from '@platform/rootedFs';
-import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import {
   DIRECTORY_LISTING_DEPTH,
   displayToStoragePath,
   MAX_PINNED_MEMORIES,
   MEMORY_DISPLAY_ROOT,
   toDisplayPath,
-} from '@tools/memory/memoryUtils';
+} from '@common/memory/memoryUtils';
 import {
   createMeta,
   formatAttribution,
   type MemoryFileMeta,
-} from '@tools/memory/memoryMeta';
+} from '@common/memory/memoryMeta';
+import { withLogChannel } from '@logger/effectLog';
+import { StorageFs } from '@platform/rootedFs';
+import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
 import {
   deleteMemoryPath,
