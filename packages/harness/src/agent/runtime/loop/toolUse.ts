@@ -65,7 +65,7 @@ import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { registryOf, Runs } from '../runRegistry';
 import type { RunControls } from '../runs';
 import type { ChildRunBoundary } from '../childRunLoop';
-import type { RunEndResult } from '../RunEndResult';
+import type { RunReport } from '../runReport';
 
 const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
@@ -75,7 +75,7 @@ export interface ToolUseStart {
   /** The caller launched this as a resume; the run history decides what it is. */
   readonly resume: boolean;
   /** A native child's turn permit, and the turn result its boundary commits. */
-  readonly turns?: ChildRunBoundary<RunEndResult>;
+  readonly turns?: ChildRunBoundary<RunReport>;
 }
 
 /** A user message the loop appends itself. */
@@ -138,7 +138,7 @@ const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
 export const runToolUse = Effect.fn('toolUse.run')(function* (
   start: ToolUseStart,
 ): Effect.fn.Return<
-  RunEndResult,
+  RunReport,
   Error,
   TurnServices | ModelInvoker | Scope.Scope
 > {
@@ -518,8 +518,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const finish = (state: RunState, outcome: RunOutcome): RunExit =>
     ({ state, outcome }) as const;
 
-  /** The run's report: what it answered and edited, its spend, its error. */
-  const result = (outcome: RunOutcome, at: RunState): RunEndResult => ({
+  /** The run's report: what it answered and edited, and its failure. */
+  const result = (outcome: RunOutcome, at: RunState): RunReport => ({
     outcome,
     output: {
       response,
@@ -530,9 +530,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }),
     },
     runId,
-    usage: at.usage,
     ...(outcome === RUN_OUTCOME.FAILED && at.lastError !== null
-      ? { error: at.lastError }
+      ? { failure: at.lastError }
       : {}),
     ...(at.input.memoryMisses?.length
       ? { memoryMisses: [...at.input.memoryMisses] }

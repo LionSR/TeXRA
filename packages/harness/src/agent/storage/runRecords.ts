@@ -24,7 +24,6 @@ import {
   emptyRunEndOutput,
   isTaskConfig,
   sumRunUsageTotals,
-  type RunUsageTotals,
   RunWorkspaceFilesSchema,
   type ResultMeta,
   type RunEnd,
@@ -169,27 +168,6 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
   return open;
 });
 
-/** `end` with its run's children's spend added to its own: a document
- *  task's revisions are its children's runs, which hold what it cost. */
-export const withChildSpend = <
-  T extends { readonly runId: RunId; readonly usage?: RunUsageTotals },
->(
-  session: SessionHandle,
-  end: T,
-): Effect.Effect<T & { readonly usage: RunUsageTotals }, DatabaseReadFailed> =>
-  Effect.forEach(session.view.run(end.runId)?.childIds ?? [], (child) =>
-    getRunRecords(session, child).readRunEnd(),
-  ).pipe(
-    Effect.map((ends) => ({
-      ...end,
-      usage: sumRunUsageTotals(
-        [end.usage, ...ends.map((child) => child?.usage)].filter(
-          (u) => u !== undefined,
-        ),
-      ),
-    })),
-  );
-
 /**
  * The public value of one run's result endpoint (`readResult`): the run's
  * terminal result with the output as its delivery reported it, or a
@@ -207,7 +185,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
   /**
    * The run's terminal result: the `run.end` row's outcome, error and
    * output, and the usage its run history folds from its priced response
-   * rows (a recipe's: its children's, {@link withChildSpend}); none
+   * rows (a recipe's: its children's too); none
    * for a run without one; an unreadable one is logged and reads the same,
    * so it never also costs the run its terminal fact.
    */
@@ -226,10 +204,23 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
         ).pipe(Effect.annotateLogs({ runId, error: folded.failure.message }));
       }
       const own = Result.isSuccess(folded) ? folded.success?.usage : undefined;
-      const usage =
+      // A document task's revisions are its children's runs, which hold
+      // what it cost.
+      const children =
         held.config && isTaskConfig(held.config)
-          ? (yield* withChildSpend(session, { runId, usage: own })).usage
-          : own;
+          ? yield* Effect.forEach(
+              session.view.run(runId)?.childIds ?? [],
+              (child) => getRunRecords(session, child).readRunEnd(),
+            )
+          : null;
+      const usage =
+        children === null
+          ? own
+          : sumRunUsageTotals(
+              [own, ...children.map((child) => child?.usage)].filter(
+                (u) => u !== undefined,
+              ),
+            );
       const { outcome, error, output } = end;
       return {
         outcome,

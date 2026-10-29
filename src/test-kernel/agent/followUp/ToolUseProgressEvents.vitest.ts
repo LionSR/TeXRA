@@ -96,7 +96,7 @@ describe('the tool-use turn', () => {
         expect(result).toMatchObject({
           outcome: RUN_OUTCOME.FAILED,
           output: { response: 'I checked the tool.' },
-          error: { message: 'Later provider failure' },
+          failure: { message: 'Later provider failure' },
         });
       }),
   );

@@ -6,7 +6,7 @@ import { Runs } from '@agent/runtime/runRegistry';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
-import { type RunEndResult } from '@agent/runtime/RunEndResult';
+import { type RunReport } from '@agent/runtime/runReport';
 import type { RunLaunch } from '@agent/runtime/run/AgentRun';
 import { setLogSink } from '@logger/logSink';
 import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
@@ -109,7 +109,7 @@ describe('runWithLifecycle', () => {
                   outcome: RUN_OUTCOME.COMPLETED,
                   runId,
                   output: { response: '', files: [] },
-                } satisfies RunEndResult),
+                } satisfies RunReport),
             ),
           ),
         );
