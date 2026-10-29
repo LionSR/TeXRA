@@ -167,36 +167,30 @@ type Fields = Readonly<Record<string, unknown>>;
 /** A file path made absolute against the workspace; absent stays absent. */
 type Absolute = (path: unknown) => unknown;
 
-/**
- * A harness tool's input both ways: `input` is what a hook sees, and `back`
- * reads a hook's rewrite of it as the harness tool's input, keeping the
- * issued value of every field the hook never saw.
- */
+/** A harness tool's input both ways: `input` is what a hook sees; `back`
+ *  reads a hook's rewrite as the harness tool's, keeping every issued field
+ *  the hook never saw. */
 interface Translation {
   readonly input: (input: Fields, abs: Absolute) => Fields;
   readonly back: (rewritten: Fields, issued: Fields) => Fields;
 }
 
-/** The translation that renames fields, harness name to counterpart name,
- *  with `path` made absolute. */
-const renamed = (fields: Readonly<Record<string, string>>): Translation => {
-  const pairs = Object.entries(fields);
-  return {
-    input: (input, abs) =>
-      Object.fromEntries(
-        pairs.map(([ours, theirs]) => [
-          theirs,
-          ours === 'path' ? abs(input[ours]) : input[ours],
-        ]),
-      ),
-    back: (rewritten, issued) => ({
-      ...issued,
-      ...Object.fromEntries(
-        pairs.map(([ours, theirs]) => [ours, rewritten[theirs]]),
-      ),
-    }),
-  };
-};
+/** Fields renamed, harness name to counterpart name, `path` absolute. */
+const renamed = (fields: Readonly<Record<string, string>>): Translation => ({
+  input: (input, abs) =>
+    Object.fromEntries(
+      Object.entries(fields).map(([ours, theirs]) => [
+        theirs,
+        ours === 'path' ? abs(input[ours]) : input[ours],
+      ]),
+    ),
+  back: (rewritten, issued) => ({
+    ...issued,
+    ...Object.fromEntries(
+      Object.entries(fields).map(([ours, theirs]) => [ours, rewritten[theirs]]),
+    ),
+  }),
+});
 
 /** The translation of fields that keep their names. */
 const same = (...keys: readonly string[]): Translation =>

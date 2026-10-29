@@ -136,6 +136,12 @@ type ProposalRequestError =
   | DatabaseWriteFailed
   | RunHistoryRefused;
 
+/** How a child records an approval the run's delegated-work grant gave. */
+const GRANTED_CHILD = {
+  goal: 'goal-approved',
+  human: 'auto-approved',
+} as const;
+
 /** Request the shared proposal decision, honoring the run's bypass policy.
  *  `ask` presents it in place of this call's own proposal request: the
  *  calls of one script share one request (`agent`). */
@@ -153,16 +159,11 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     if (answer !== 'allow' && answer !== 'ask')
       return { result: answer, childApproval: 'inherit' };
     if (answer === 'allow') {
-      // Under `yolo` alone the child inherits per-kind approval state, so
-      // its bash and edits still gate; the run's delegated-work grant
-      // approves them too.
+      // Under `yolo` alone the child inherits, so its bash and edits still
+      // gate; the run's delegated-work grant approves them too.
       const granted = session.approvals.bypass(runId, 'superYolo');
-      const childApproval =
-        granted === 'goal' ? 'goal-approved' : 'auto-approved';
-      return {
-        result: { action: 'approve' },
-        childApproval: granted === null ? 'inherit' : childApproval,
-      };
+      const childApproval = granted ? GRANTED_CHILD[granted] : 'inherit';
+      return { result: { action: 'approve' }, childApproval };
     }
     if (ask !== undefined)
       return { result: yield* ask, childApproval: 'inherit' };

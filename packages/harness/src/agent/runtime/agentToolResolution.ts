@@ -65,8 +65,7 @@ import {
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 
-/** Whether a call of `tool` may ask a person: it declares a command or
- *  `requiresApproval`. Such a tool is withheld from a run nobody can ask. */
+/** Whether `tool` may ask a person, so a run nobody can ask withholds it. */
 export const asksApproval = <E, R>(
   tool: Pick<ToolDeclaration<E, R>, 'guard' | 'requiresApproval'>,
 ): boolean =>

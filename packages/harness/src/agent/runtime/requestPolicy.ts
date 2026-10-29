@@ -70,9 +70,9 @@ import type {
 const canPresent = (session: SessionHandle): boolean =>
   !session.interactions.approvalPromptsUnavailable;
 
-/** The policy's answer for an executable request (a plan, or any
- *  approval-gated tool) under what the host can answer: one reading for
- *  every run, which a plugin hook's `permission_mode` shares. */
+/** The policy's answer for a run's approval-gated tools under what the
+ *  host can answer: whether a step withholds them, and the `permission_mode`
+ *  a plugin hook is told. */
 export const executableDecision = (
   session: SessionHandle,
   runId: RunId,

@@ -111,8 +111,7 @@ export const sessionPermission =
     return hook ?? (decision === 'allow' ? 'allow' : 'ask');
   };
 
-/** What a call's `PreToolUse` hooks said, as recorded, and how a rewrite
- *  reads as the tool's input. */
+/** A call's recorded `PreToolUse` outcomes, and how a rewrite reads. */
 type CallHooks = Pick<
   Effect.Success<ReturnType<typeof preToolUse>>,
   'outcomes' | 'fromHook'

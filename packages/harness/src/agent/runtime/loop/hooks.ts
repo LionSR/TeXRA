@@ -376,12 +376,11 @@ export const stopHooks = Effect.fn('Hooks.stop')(function* (
 /**
  * One tool call's `PreToolUse`, under the hooks of the step that offered it,
  * matched on the call's Claude Code name and its own (or as the run
- * recorded them). It returns their `outcomes`, which the chain
- * (`toolGuard.ts`) decides on, and `fromHook`, which reads a rewrite as the
- * harness tool's input. `after`
- * runs the call's `PostToolUse` once it executed, timed from here, and
- * returns the rows that commit with its settlement (none for a result that
- * is not `executed`).
+ * recorded them): their `outcomes`, which the chain (`toolGuard.ts`) decides
+ * on, and `fromHook`, which reads a rewrite as the harness tool's input.
+ * `after` runs the call's `PostToolUse` once it executed, timed from here,
+ * and returns the rows that commit with its settlement (none for a result
+ * that is not `executed`).
  */
 export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
   run: AgentRunShape,
@@ -391,20 +390,16 @@ export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
   responseId: string,
   toolInput: unknown,
 ) {
-  const {
-    toolName,
-    toolInput: claudeInput,
-    fromHook,
-  } = claudeToolCall(call.toolName, toolInput, (file) =>
+  const claude = claudeToolCall(call.toolName, toolInput, (file) =>
     typeof file === 'string'
       ? path.resolve(run.session.roots.workspace ?? '', file)
       : file,
   );
-  const names = [toolName, call.toolName];
+  const names = [claude.toolName, call.toolName];
   const base = {
     ...inputBase(run),
-    tool_name: toolName,
-    tool_input: claudeInput,
+    tool_name: claude.toolName,
+    tool_input: claude.toolInput,
     tool_use_id: call.callId,
   };
   // Call ids are unique within one response only.
@@ -433,7 +428,7 @@ export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
         ...base,
         tool_input:
           pre.outcomes.find((o) => o.updatedInput !== null)?.updatedInput ??
-          claudeInput,
+          claude.toolInput,
         hook_event_name: 'PostToolUse',
         tool_response: result,
         ...(startedAt === undefined
@@ -444,13 +439,7 @@ export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
     );
     return post.rows;
   });
-  return {
-    rows: pre.rows,
-    outcomes: pre.outcomes,
-    fromHook,
-    bodyStarts,
-    after,
-  };
+  return { ...pre, fromHook: claude.fromHook, bodyStarts, after };
 });
 
 /** The text part a call's recorded hooks add after its result, if any. */
