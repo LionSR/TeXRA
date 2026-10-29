@@ -95,8 +95,9 @@ export interface RunStop {
 
 /** Why a run here stops: a stop's reason, or `released`: its holder let go
  *  of it (the last caller of a resume left before any took it, or a handle
- *  or an in-band call interrupted it), which, like `shutdown`, leaves it
- *  resumable. */
+ *  or an in-band call interrupted it). Before admission a `released` stop,
+ *  like `shutdown`, writes no end and leaves the run resumable; an admitted
+ *  run that is interrupted ends `cancelled` through its lifecycle. */
 export type StopCause = RunStopReason | 'released';
 
 /** Child policy of a stop. An explicit value wins: the CLI's bare-Escape stop
