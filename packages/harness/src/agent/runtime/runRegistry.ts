@@ -17,7 +17,6 @@ import {
   Effect,
   Exit,
   Fiber,
-  Latch,
   Schema,
   type Scope,
   Semaphore,
@@ -25,6 +24,7 @@ import {
 } from 'effect';
 
 import { finalizeRun } from '@agent/storage/runLifecycle';
+import { getRunRecords } from '@agent/storage/runRecords';
 import type { RunAttempt } from '@agent/followUp/ToolUseFollowUp';
 import type { ProcessServices } from '@platform/processRuntime';
 import { grantsKept, type ApprovalGrants } from '@shared/approvalBypassKind';
@@ -103,7 +103,8 @@ interface RunEntry {
   /** The fiber running this run here — its liveness, stop target and terminal
    *  owner — written by that fiber's first step, erased by its own exit. */
   fiber?: AnyFiber;
-  hold?: AnyFiber;
+  /** A hold's token, for its caller's scope ({@link RunRegistry.hold}). */
+  hold?: object;
   /** The running loop's controls, attached for its life ({@link attachControls}). */
   controls?: RunControls;
   /** The launch in flight ({@link RunRegistry.start}), from the call until
@@ -197,15 +198,14 @@ export class RunRegistry implements RunsShape {
     if (drained) Deferred.doneUnsafe(drained, Effect.void);
   }
 
-  /** Register a fiber in `slot` on its entry; its own exit erases it. */
-  private setFiber(runId: RunId, fiber: AnyFiber, slot: 'fiber' | 'hold') {
+  /** Register the run's fiber on its entry; its own exit erases it. */
+  private setFiber(runId: RunId, fiber: AnyFiber) {
     const entry = this.entryFor(runId);
-    entry[slot] = fiber;
+    entry.fiber = fiber;
     fiber.addObserver(() => {
-      if (entry[slot] === fiber) {
-        entry[slot] = undefined;
-        this.prune(runId, entry);
-      }
+      if (entry.fiber !== fiber) return;
+      entry.fiber = undefined;
+      this.prune(runId, entry);
     });
   }
 
@@ -249,11 +249,7 @@ export class RunRegistry implements RunsShape {
   private isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);
     if (entry === undefined) return false;
-    return (
-      entry.fiber !== undefined ||
-      entry.hold !== undefined ||
-      entry.launches > 0
-    );
+    return (entry.fiber ?? entry.hold) !== undefined || entry.launches > 0;
   }
 
   /** A launch of `runId` is in flight here (`LiveRun.launched`). */
@@ -465,8 +461,8 @@ export class RunRegistry implements RunsShape {
           inactiveStep
             ? operation
             : Effect.withFiber((self) => {
-                this.setFiber(runId, self, 'fiber');
-                return operation;
+                this.setFiber(runId, self);
+                return this.claimed(runId, operation);
               }),
           { startImmediately: true },
         );
@@ -485,58 +481,64 @@ export class RunRegistry implements RunsShape {
     });
   }
 
-  /** Hold an inactive run for the caller's scope, refusing a live owner as an
-   *  inactive-run step does ({@link withInactiveRunStep}): an idle fiber on
-   *  the entry, which {@link isLive} reports and no stop reaches, carrying
-   *  the run's DB claim in its own scope, so one construct fences both. */
-  private hold(runId: RunId): Effect.Effect<void, Error, Scope.Scope> {
-    return Effect.suspend(() => {
-      const refused = this.closedRefusal();
-      if (refused) return Effect.fail(refused);
-      return Effect.asVoid(
-        Effect.acquireRelease(
-          Effect.gen({ self: this }, function* () {
-            const ready = Deferred.makeUnsafe<void, Error>();
-            const latch = yield* Latch.make(false);
-            const hold = Effect.scoped(
-              Effect.gen({ self: this }, function* () {
-                yield* this.init.session().log.hold(runId);
-                yield* Deferred.succeed(ready, undefined);
-                yield* Latch.await(latch);
-              }),
-            ).pipe(Effect.catch((error) => Deferred.fail(ready, error)));
-            // Registered as its first step, as in `admit`; scoped, not a child,
-            // so the hold outlives the fiber that took it until the scope closes.
-            const fiber = yield* Effect.forkScoped(
-              Effect.withFiber((self) => {
-                if (
-                  this.isLive(runId) ||
-                  this.isLaunched(runId) ||
-                  this.isLaneOccupied(runId)
-                )
-                  return Deferred.fail(ready, new RunLive({ runId }));
-                this.setFiber(runId, self, 'hold');
-                return hold;
-              }),
-              { startImmediately: true },
-            );
-            yield* Deferred.await(ready);
-            return { latch, fiber };
-          }),
-          // The join awaits the claim release before the caller's scope
-          // closes; the hold was the run's liveness, so its end owes the wake.
-          ({ latch, fiber }) =>
-            Latch.open(latch).pipe(
-              Effect.andThen(Fiber.join(fiber)),
-              Effect.andThen(
-                Effect.sync(() => {
-                  if (!this.isLive(runId)) this.init.wake(runId);
-                }),
-              ),
-            ),
-        ),
-      );
+  /** A generation's run under its claim, let go before its fiber exits (a
+   *  parent woken then reads the child): held from the start if the run
+   *  exists (a resume, a process child), so nothing moves it between its
+   *  launch's read and its run; a birth's claim is taken at the end to go. */
+  private claimed<A, E, R>(
+    runId: RunId,
+    operation: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | Error, R> {
+    const session = this.init.session();
+    const hold = Effect.flatMap(
+      getRunRecords(session, runId).exists(),
+      (born) =>
+        born
+          ? Effect.as(session.log.hold(runId, { ends: true }), true)
+          : Effect.succeed(false),
+    );
+    const letGo = Effect.ignore(hold, {
+      log: 'Warn',
+      message: `The claim on ${runId} was not let go.`,
     });
+    return Effect.scoped(
+      Effect.uninterruptibleMask((restore) =>
+        Effect.flatMap(hold, (held) =>
+          restore(operation).pipe(Effect.ensuring(held ? Effect.void : letGo)),
+        ),
+      ),
+    );
+  }
+
+  /** Hold an inactive run for the caller's scope, refusing a live owner as an
+   *  inactive-run step does ({@link withInactiveRunStep}): live from the step
+   *  that checks ({@link isLive}), out of any stop's reach, its DB claim let
+   *  go before its end, which owes the wake. */
+  private hold(runId: RunId): Effect.Effect<void, Error, Scope.Scope> {
+    return Effect.uninterruptible(
+      Effect.suspend((): Effect.Effect<void, Error, Scope.Scope> => {
+        const busy =
+          this.isLive(runId) ||
+          this.isLaunched(runId) ||
+          this.isLaneOccupied(runId);
+        const refused =
+          this.closedRefusal() ?? (busy ? new RunLive({ runId }) : undefined);
+        if (refused) return Effect.fail(refused);
+        const entry = this.entryFor(runId);
+        const token = {};
+        entry.hold = token;
+        const release = Effect.sync(() => {
+          if (entry.hold !== token) return;
+          entry.hold = undefined;
+          this.prune(runId, entry);
+          if (!this.isLive(runId)) this.init.wake(runId);
+        });
+        return Effect.addFinalizer(() => release).pipe(
+          Effect.andThen(this.init.session().log.hold(runId)),
+          Effect.onError(() => release),
+        );
+      }),
+    );
   }
 
   /** The session's one child-run concurrency budget: the cap on concurrently
