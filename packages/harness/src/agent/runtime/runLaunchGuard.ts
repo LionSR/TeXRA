@@ -1,8 +1,7 @@
 /**
- * The ends a run's driver does not write (a failed child hand-off; a held
- * child's end, delivered by whoever next admits its parent: `deliverHeld`),
- * and the terminal a run's launch owns: the host's final artifacts and the
- * claim.
+ * The ends a run's driver does not write: a failed process-child hand-off,
+ * and a held child's end, delivered by whoever next admits its parent
+ * (`deliverHeld`). A run's claim is its generation's (`RunRegistry.admit`).
  */
 import { Cause, Effect, Exit, Schedule, type Scope } from 'effect';
 
@@ -36,7 +35,7 @@ import type { SessionHandle } from './SessionHandle';
  * Let go of `runId`'s claim where no hold of this process keeps it (a
  * birth's): a hold taken and let go at once. A run never born has none.
  */
-export const letGoOfClaim = (
+const letGoOfClaim = (
   session: SessionHandle,
   runId: RunId,
 ): Effect.Effect<void> =>
@@ -51,79 +50,45 @@ export const letGoOfClaim = (
   );
 
 /**
- * The one terminal of a run's launch, in the exit-protocol pattern: a stop
- * lands before it or after it, never inside. It lets the claim go.
- *
- * When `owned`, the launch owns the run for its whole life (a fresh root,
- * a standalone resume): a run that already exists (a resume) has its claim
- * held around `operation`, so no other owner moves it between the resume's
- * read and its launch; a fresh run is born with its claim at its opening.
- * Otherwise `operation` only hands a registered child to its loop,
- * which owns the ending from there: the guard ends the run when the
- * handoff fails. Either way a claim no hold
- * here took (a birth's) is let go once the operation is done; a loop still
- * holding its own keeps it.
- *
- * The terminal's failures replace the operation's own as one aggregate; an
- * interruption unwinds as itself.
+ * Hand a registered process child to its loop, which owns its end from
+ * there. A hand-off that fails ends the run ownerless (an end the run
+ * already wrote stands), with its classified error, and lets its birth's
+ * claim go. The ending's failures join the hand-off's own as one
+ * aggregate; an interruption unwinds as itself.
  */
 export function runWithLaunchGuard<A, E, R>(
   session: SessionHandle,
   runId: RunId,
   operation: Effect.Effect<A, E, R>,
-  owned = false,
 ): Effect.Effect<A, E | Error, R> {
   return Effect.suspend(() => {
     const failures: unknown[] = [];
-    const collect = <X, Y>(exit: Exit.Exit<X, Y>): void => {
-      if (Exit.isFailure(exit)) failures.push(Cause.squash(exit.cause));
-    };
-    const terminal = (held: boolean) => (exit: Exit.Exit<A, E>) =>
-      Effect.gen(function* () {
-        // A hand-off that failed: an ownerless end (an end the run already
-        // wrote stands), a failure with its classified error.
-        if (!owned && Exit.isFailure(exit)) {
-          const outcome = outcomeFromCause(exit.cause);
-          const error = Cause.squash(exit.cause);
-          collect(
-            yield* Effect.exit(
-              finalizeRun(session, {
-                runId,
-                outcome,
-                ownerless: true,
-                ...(outcome === RUN_OUTCOME.FAILED && {
-                  error: {
-                    kind: classifyAgentError(error),
-                    message: getSdkErrorMessage(error),
-                  },
+    const handedOff = operation.pipe(
+      Effect.onExit((exit) =>
+        Exit.isSuccess(exit)
+          ? Effect.void
+          : Effect.gen(function* () {
+              const outcome = outcomeFromCause(exit.cause);
+              const error = Cause.squash(exit.cause);
+              const end = yield* Effect.exit(
+                finalizeRun(session, {
+                  runId,
+                  outcome,
+                  ownerless: true,
+                  ...(outcome === RUN_OUTCOME.FAILED && {
+                    error: {
+                      kind: classifyAgentError(error),
+                      message: getSdkErrorMessage(error),
+                    },
+                  }),
                 }),
-              }),
-            ),
-          );
-        }
-        if (!held) yield* letGoOfClaim(session, runId);
-      }).pipe(Effect.uninterruptible);
-    const guarded: Effect.Effect<A, E | Error, R> = !owned
-      ? operation.pipe(
-          Effect.onExit((exit) =>
-            Exit.isSuccess(exit) ? Effect.void : terminal(false)(exit),
-          ),
-        )
-      : // No interrupt lands between taking the hold and attaching the
-        // terminal, so a held run always gets its terminal; a refused
-        // hold still fails as itself.
-        Effect.scoped(
-          Effect.uninterruptibleMask((restore) =>
-            Effect.gen(function* () {
-              const held = yield* getRunRecords(session, runId).exists();
-              if (held) yield* session.log.hold(runId, { ends: true });
-              return yield* restore(operation).pipe(
-                Effect.onExit(terminal(held)),
               );
+              if (Exit.isFailure(end)) failures.push(Cause.squash(end.cause));
+              yield* letGoOfClaim(session, runId);
             }),
-          ),
-        );
-    return Effect.exit(guarded).pipe(
+      ),
+    );
+    return Effect.exit(handedOff).pipe(
       Effect.flatMap((exit) => {
         if (
           failures.length === 0 ||

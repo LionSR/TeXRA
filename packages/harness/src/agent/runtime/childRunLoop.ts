@@ -6,7 +6,6 @@ import {
   Effect,
   Exit,
   type Fiber,
-  Scope,
   type Semaphore,
 } from 'effect';
 
@@ -22,9 +21,7 @@ import {
   type AgentRunServices,
   Runs,
 } from '@agent/runtime/runRegistry';
-import { letGoOfClaim } from '@agent/runtime/runLaunchGuard';
 import type { RunInput } from '@agent/followUp/RunInput';
-import { getRunRecords } from '@agent/storage/runRecords';
 import {
   childTurnResult,
   commitPart,
@@ -253,9 +250,6 @@ class ChildLoop<TTurn, R> {
   readonly attemptId = randomUUID();
   stage: StageHandle | undefined;
   budget: Semaphore.Semaphore | undefined;
-  /** Lets the child's claim go: a process child holds it for its loop's
-   *  life; a native child's run claimed itself as it entered. */
-  releaseClaim: Effect.Effect<void> = Effect.void;
   ownershipReleased = false;
   turnIndex = 0;
   turnStart = 0;
@@ -769,9 +763,10 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
 
 /**
  * The loop's terminal (exit protocol): a stop lands before or after it, so
- * the terminal row, the provider ids, the claim, the parent's resume and
- * the stage are all handled on every exit; the body's failure propagates as
- * itself, joined by the cleanup's.
+ * the terminal row, the provider ids and the stage are all handled on every
+ * exit; the body's failure propagates as itself, joined by the cleanup's.
+ * The parent is woken once the generation let the child's claim go
+ * ({@link startChildRunLoop}).
  */
 const endChildLoop = <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
@@ -796,24 +791,14 @@ const endChildLoop = <TTurn, R>(
         failed: loop.failure !== undefined,
       });
       const terminal = yield* Effect.exit(writeEnd(loop, stopped));
-      const { end } = loop;
       // Provider ids stay reserved until the terminal (or pause) row is
       // written, so a call naming one finds this run, not a gap.
       const owned = yield* Effect.exit(
         Effect.sync(() => loop.releaseOwnership()),
       );
-      // The parent may immediately read this child; release its claim first.
-      yield* loop.releaseClaim;
-      const wake = yield* Effect.exit(
-        wakeParent(
-          loop.params.session,
-          end.kind === 'finished' ? end.result.delivery : undefined,
-          loop.trace,
-        ),
-      );
       // A stage its end did not close.
       loop.stage?.end(RUN_OUTCOME.FAILED);
-      const failures = [terminal, owned, wake].flatMap((exit) =>
+      const failures = [terminal, owned].flatMap((exit) =>
         Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
       );
       if (failures.length > 0)
@@ -823,9 +808,9 @@ const endChildLoop = <TTurn, R>(
     }),
   );
 
-/** The launched run, all on its fiber: its setup (the budget its turns
- *  take, its stage), the child's claim for its whole life, a
- *  process child's reader, its turns, and its terminal on every exit. */
+/** The launched run, all on its fiber, whose generation holds the child's
+ *  claim: its setup (the budget its turns take, its stage), a process
+ *  child's reader, its turns, and its terminal on every exit. */
 const runChildLoop = <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
 ): Effect.Effect<TTurn | undefined, Error, R | Runs> =>
@@ -837,20 +822,6 @@ const runChildLoop = <TTurn, R>(
         yield* resolveChildRunConcurrencyBudget(session.roots),
       );
     loop.stage = loop.trace?.openStage(params.strategy.stageLabel);
-    // A run that exists is held for the loop's life (a resume's hold goes
-    // when it hands over); a fresh native one claims itself at birth.
-    const held =
-      params.childRun !== undefined ||
-      (yield* getRunRecords(session, runId).exists());
-    const claimHeld = yield* Scope.make();
-    if (held)
-      yield* session.log.hold(runId, { ends: true }).pipe(
-        Scope.provide(claimHeld),
-        Effect.onError(() => Scope.close(claimHeld, Exit.void)),
-      );
-    loop.releaseClaim = held
-      ? Scope.close(claimHeld, Exit.void)
-      : letGoOfClaim(session, runId);
     // A native child's own loop opens its reader, as any run's loop does.
     if (params.childRun === undefined)
       return yield* driveNative(loop, params.strategy);
@@ -878,13 +849,19 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
   return Effect.flatMap(Runs, (runs) => {
     const loop = new ChildLoop(params, registryOf(runs));
     // Admitted a tick later; a refused one still lets an agent CLI's
-    // provider ids go.
+    // provider ids go. The parent may read this child at once: it is woken
+    // once the generation let the child's claim go.
     const launched = loop.runs.start(
       params.runId,
       runChildLoop(loop),
       (admitted) =>
         Effect.andThen(Effect.yieldNow, admitted).pipe(
           Effect.ensuring(Effect.sync(() => loop.releaseOwnership())),
+          Effect.onExit(() =>
+            loop.end.kind === 'finished'
+              ? wakeParent(params.session, loop.end.result.delivery, loop.trace)
+              : Effect.void,
+          ),
         ),
       params.parentRunId,
     );

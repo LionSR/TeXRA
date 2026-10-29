@@ -25,8 +25,8 @@ is the module map by concern. Run-loop rules are in
 ## Top-level modules
 
 - **Launch and configuration**: `AgentLaunchContext`; `agentToolResolution`
-  (the effective tool list); `runLaunchGuard` (the run's terminal `run.end`
-  and claim, including a held child's end).
+  (the effective tool list); `runLaunchGuard` (the end of a failed
+  process-child hand-off, and a held child's end).
 - **Start and resume**: `rootLaunch` (what `Runs.launch({ request, options })`
   runs: assigns the `runId`, registers, runs); `executeAgent` (the one
   run program, fresh or resumed); `AgentRunLifecycle`
