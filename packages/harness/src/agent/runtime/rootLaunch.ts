@@ -13,7 +13,6 @@ import type { CommitOrdinal, RunId } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
 import { humanGrant } from './runApprovalQueue';
 import { prepareAgentDefinition } from './AgentLaunchContext';
-import { runWithLaunchGuard } from './runLaunchGuard';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { applyHelperModelPreference } from './helperModelName';
 import { registryOf } from './runRegistry';
@@ -126,11 +125,10 @@ export const rootRun = Effect.fn('rootRun')(function* (
 });
 
 /**
- * The run a root launch admits, on the launched fiber: it resolves the model
- * and runs the run under the launch terminal ({@link runWithLaunchGuard}),
- * which lets the run's claim go once it ends. The
- * run is born with its opening, so a launch that fails before it leaves no
- * run: its failure is the launch's.
+ * The run a root launch admits, on the launched fiber, whose generation
+ * holds the run's claim: it resolves the model and runs the run. The run is
+ * born with its opening, so a launch that fails before it leaves no run:
+ * its failure is the launch's.
  */
 const admittedRun = Effect.fn('admittedRun')(function* (
   runId: RunId,
@@ -176,16 +174,11 @@ const admittedRun = Effect.fn('admittedRun')(function* (
   // policy later never widens this run.
   const limit: ApprovalPolicyLimit | undefined =
     approvalPolicy === 'yolo' ? undefined : approvalPolicy;
-  return yield* runWithLaunchGuard(
-    runSession,
-    runId,
-    executeAgent(definition, runId, {
-      ...executeAgentOptions,
-      registration: {
-        identity: { kind: 'agent', agent: definition.config.agent },
-        grants: limit === undefined ? grants : { ...grants, limit },
-      },
-    }),
-    true,
-  );
+  return yield* executeAgent(definition, runId, {
+    ...executeAgentOptions,
+    registration: {
+      identity: { kind: 'agent', agent: definition.config.agent },
+      grants: limit === undefined ? grants : { ...grants, limit },
+    },
+  });
 });

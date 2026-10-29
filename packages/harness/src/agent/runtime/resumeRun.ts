@@ -47,7 +47,7 @@ import { type RunReport } from './runReport';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { activationIfOpened } from './rootLaunch';
-import { deliverHeld, runWithLaunchGuard } from './runLaunchGuard';
+import { deliverHeld } from './runLaunchGuard';
 import { startChildRunLoop } from './childRunLoop';
 import { registryOf, type AgentRunServices, RunLive } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
@@ -311,7 +311,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         );
         launched = yield* registryOf(session.runs).start(
           runId,
-          runWithLaunchGuard(session, runId, program, true),
+          program,
           (admitted) => admitted,
         );
       } else {
