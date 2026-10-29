@@ -45,6 +45,7 @@ import {
   type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
 import { presentTerminalResult } from '@agent/runtime/terminalResultToast';
+import { mcpConfigPathOf } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { AppSignals } from '@platform/appSignals';
@@ -91,7 +92,6 @@ import {
 import type { SettingsCatalog } from '@shared/state/stateSettings';
 import { UsageLog } from '@shared/usageLog';
 import { ToolCatalogOwner } from '@tools/liveTools';
-import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import type { Plugin } from '@tools/plugins';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';

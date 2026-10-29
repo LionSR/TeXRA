@@ -25,8 +25,6 @@
  * run shows in its transcript. The project-level `.texra/mcp.json` is not
  * read: a checked-in file that spawns processes needs a trust prompt first.
  */
-import * as path from 'node:path';
-
 import {
   Duration,
   Effect,
@@ -44,25 +42,16 @@ import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import {
   envDigest,
   jsonSyntaxError,
+  mcpPluginId,
   parseMcpServers,
   type McpServerConfig,
 } from '@common/plugins/mcpServers';
+import type { LoadablePlugin } from '@common/plugins/pluginTrust';
+import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { sha256 } from '@utils/core/idHash';
 
-import {
-  acquireMcpServer,
-  mcpPluginId,
-  mcpServerOfToolName,
-} from './mcpServer';
-
-/** The config file's name inside the user's `~/.texra` directory. */
-const MCP_CONFIG_FILE_NAME = 'mcp.json';
-
-/** The user's MCP config file: `mcp.json` at a storage root. */
-export function mcpConfigPathOf(storageRoot: string): string {
-  return path.join(storageRoot, MCP_CONFIG_FILE_NAME);
-}
+import { acquireMcpServer } from './mcpServer';
 
 const McpConfigFileSchema = Schema.Struct({
   mcpServers: Schema.Record(Schema.String, Schema.Unknown),
@@ -151,6 +140,30 @@ export interface McpServerPlugin {
  *  each resolution, and the configuration problems the read found. */
 export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
   readonly plugins: readonly McpServerPlugin[];
+  readonly warnings: readonly string[];
+}>;
+
+/**
+ * An installed plugin a step loads while it is enabled and trusted: its MCP
+ * servers, if any, whose tools the catalog contributes under its one id and every
+ * tool-use run is offered, and the plugin as read, whose
+ * skills the step lists. Its servers are held under its trust digest
+ * (`source.trust.digest`), which changes exactly when what it would start
+ * or ship does, and so replaces them.
+ */
+interface InstalledToolPlugin {
+  readonly id: string;
+  readonly servers: readonly McpServerPlugin[];
+  readonly source: LoadablePlugin;
+}
+
+/**
+ * The installed plugins that load now, read at each step, each with the
+ * servers it starts (none for one that ships only skills), and why each
+ * enabled one that does not load is held back.
+ */
+export type InstalledToolReader = Effect.Effect<{
+  readonly plugins: readonly InstalledToolPlugin[];
   readonly warnings: readonly string[];
 }>;
 

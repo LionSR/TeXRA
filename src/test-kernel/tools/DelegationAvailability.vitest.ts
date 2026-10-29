@@ -3,11 +3,11 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { apiKeySecretName } from '@texra-ai/llm';
+import { selectAvailableDelegationModel } from '@agent/runtime/delegation/delegationAvailability';
 import {
   fakeProcessServices,
   installedHost,
 } from '@test/support/setupPlatform';
-import { selectAvailableDelegationModel } from '@tools/delegation/delegationAvailability';
 
 describe('delegation model availability', () => {
   // Only an OpenAI key is stored, so a named Anthropic model cannot run: the

@@ -32,6 +32,7 @@ import {
   type ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { createChildRun } from '@agent/runtime/delegation/childRun';
 import { qualifyAggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { closeTestDefaultSession } from '@test/support/sessionEnd';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -45,7 +46,6 @@ import {
   publishTestRunStart,
   queuedFollowUps,
 } from '@test/support/sessionTestUtils';
-import { createChildRun } from '@tools/delegation/childRun';
 import { shouldSkipWait } from '@tools/executions/waitCoordination';
 import { generateRunId } from '@utils/core';
 

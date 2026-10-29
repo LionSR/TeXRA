@@ -9,6 +9,7 @@ import { Runs } from '@agent/runtime/runRegistry';
 // Local imports
 import { getRunRecords } from '@agent/storage/runRecords';
 import type { ProcessChildStrategy } from '@agent/runtime/childRunLoop';
+import { launchProcessChild } from '@agent/runtime/delegation/detachedChildRun';
 import {
   AgentConfigSchema,
   aggregateTarget,
@@ -22,7 +23,6 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { seedReport } from '@test/support/runRecordSeeds';
-import { launchProcessChild } from '@tools/delegation/detachedChildRun';
 
 const parentRunId = 'c11112' as RunId;
 const config = Schema.decodeUnknownSync(AgentConfigSchema)({

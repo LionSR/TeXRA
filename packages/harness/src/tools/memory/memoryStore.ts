@@ -14,6 +14,12 @@
  */
 import { Effect, Result, type PlatformError } from 'effect';
 
+import {
+  displayToStoragePath,
+  MAX_PINNED_MEMORIES,
+  MEMORY_DISPLAY_ROOT,
+  toDisplayPath,
+} from '@agent/memory/memoryUtils';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import type { StorageFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';
@@ -26,12 +32,6 @@ import {
   onMemoryTreeLane,
   setMemoryPinned,
 } from './memoryFileSystem';
-import {
-  displayToStoragePath,
-  MAX_PINNED_MEMORIES,
-  MEMORY_DISPLAY_ROOT,
-  toDisplayPath,
-} from './memoryUtils';
 
 /** The storage path of a memory named in any of the three forms; fails on
  *  a path outside the memory root. */

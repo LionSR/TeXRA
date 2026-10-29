@@ -12,12 +12,15 @@ import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
 import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
 import { type RunToolCall } from '@agent/runtime/RunCall';
+import {
+  agentChildRunId,
+  earlierChild,
+} from '@agent/runtime/delegation/agentChild';
+import { childRunDescription } from '@agent/runtime/delegation/childRun';
+import { startDetachedChildRunLoop } from '@agent/runtime/delegation/detachedChildRun';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { executed } from '@tools/core/result';
-import { agentChildRunId, earlierChild } from '@tools/delegation/agentChild';
-import { childRunDescription } from '@tools/delegation/childRun';
-import { startDetachedChildRunLoop } from '@tools/delegation/detachedChildRun';
 
 /** What the model reads for a script sent to the background. */
 const receipt = (title: string, runId: RunId, again: boolean) => ({

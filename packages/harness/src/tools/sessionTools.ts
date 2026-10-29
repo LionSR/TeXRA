@@ -33,13 +33,10 @@ import {
   type ToolEntry,
 } from '@tools/catalogEntries';
 import type { Plugin } from '@tools/plugins';
-import {
-  PluginHold,
-  type InstalledToolReader,
-  type SessionPluginLayer,
-} from '@tools/toolTable';
+import { PluginHold, type SessionPluginLayer } from '@tools/toolTable';
 import {
   projectServers,
+  type InstalledToolReader,
   type PluginLoader,
   type ProjectServers,
 } from '@tools/mcp/mcpConfig';

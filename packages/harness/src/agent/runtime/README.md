@@ -55,7 +55,9 @@ is the module map by concern. Run-loop rules are in
   parent, in one transaction); `childRunBudget` (per-session concurrency);
   `ModelRetryGate` (process-shared recovery probes per model route);
   `nativeSubagentStrategy`; `scriptRun`; `recipeResult`; `subagentResults` and
-  `deliveryEnvelope` (the XML envelope every child path builds).
+  `deliveryEnvelope` (the XML envelope every child path builds);
+  `delegation/` (the child launches: the `agent` tool and `ChildRuns`, a
+  detached or process child, and which models a child may use).
 - **Control**: `runApprovalQueue`;
   `requestPolicy` (what the approval policy decides when a request opens).
 - **Helper model**: `helperModel` (`helperCall`, the gated, priced and logged

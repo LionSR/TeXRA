@@ -42,7 +42,7 @@ history (`RunCell.append`), never through the trace.
 ```
 
 A run's trace (`AgentLaunchContext.ts`) and a delegated child's
-(`packages/harness/src/tools/delegation/childRun.ts`) publish to the session
+(`packages/harness/src/agent/runtime/delegation/childRun.ts`) publish to the session
 log only. Readers never subscribe to the emitter: the progress view and the
 desktop renderer read the session view folded from the event table, and an
 SDK caller's run handle `events` reads the run's rows and streamed text back
