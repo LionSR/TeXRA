@@ -380,10 +380,10 @@ export interface SessionOwnerShape {
   readonly list: Effect.Effect<readonly SessionHandle[]>;
   /** Whether it still holds `session`: its own root's entry, never another's. */
   readonly holds: (session: SessionHandle) => Effect.Effect<boolean>;
-  /** Close the session of a storage root: refuse new runs, interrupt the
-   *  ones it owns and wait for them inside {@link SESSION_CLOSE_DEADLINE_MS},
-   *  end the ones still live, flush, release. A root with no open
-   *  session reports `settled`. Never touches another root's session. */
+  /** Close a storage root's session: refuse new runs, stop its own ones and
+   *  wait inside {@link SESSION_CLOSE_DEADLINE_MS}, report those still live
+   *  abandoned, flush, release. A root with no open session reports
+   *  `settled`. Never touches another root's session. */
   readonly close: (root: string) => Effect.Effect<SessionCloseReport>;
   /** A process shutdown's close: drain what the plugins' pollers admitted,
    *  then close every held session at once, under one deadline. */

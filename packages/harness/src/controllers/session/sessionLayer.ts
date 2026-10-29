@@ -358,7 +358,7 @@ class SessionMap extends Context.Service<
 }
 
 /** One lane per root for {@link openSession} and {@link closeSession}: a
- *  close holds the map entry for up to two budgets, and an open landing
+ *  close holds the map entry for its one close budget, and an open landing
  *  meanwhile took that entry, then held a session the close shut under it. */
 const rootLanes = new Map<string, PerKeyLane>();
 
