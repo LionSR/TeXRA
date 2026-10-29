@@ -55,7 +55,7 @@ export interface LiveRun {
    *  its launch said it takes. */
   readonly readsMessages: boolean;
   /** Why it was stopped here, while it unwinds from that stop. */
-  readonly stopReason: RunStopReason | undefined;
+  readonly stopReason: StopCause | undefined;
   /** Resolves once every owner of it here has left. */
   readonly drained: Effect.Effect<void>;
 }
@@ -92,6 +92,12 @@ export interface RunStop {
    *  batch, or the terminal row of a stop that reached no live target. */
   readonly settlement: Effect.Effect<void, Error>;
 }
+
+/** Why a run here stops: a stop's reason, or `released`: its holder let go
+ *  of it (the last caller of a resume left before any took it, or a handle
+ *  or an in-band call interrupted it), which, like `shutdown`, leaves it
+ *  resumable. */
+export type StopCause = RunStopReason | 'released';
 
 /** Child policy of a stop. An explicit value wins: the CLI's bare-Escape stop
  *  always detaches and shutdown always cascades. A `run.stop` request that

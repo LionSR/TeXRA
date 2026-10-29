@@ -669,9 +669,9 @@ any took its answer stops it (`agent/runtime/resumeRun.ts`,
 `agent/followUp/ToolUseFollowUp.ts`); a run another launch holds in this
 process is refused. A child an open call
 of its parent owns resumes through that parent
-(`agent/runtime/resumeRun.ts:193-196`; a wake follows it itself,
-`agent/followUp/ToolUseFollowUp.ts:256-257`, and the package's resume through
-`effect/sessionPrograms.ts:222`).
+(`agent/runtime/resumeRun.ts:193-196`; a resume a wake took follows it
+itself, whoever opened it, `agent/followUp/ToolUseFollowUp.ts:262-263`, and
+the package's resume through `effect/sessionPrograms.ts:222`).
 
 The resume first takes the run's claim in its own transaction, before its
 ownership, admission and blocker checks (`agent/runtime/resumeRun.ts:184-192`,

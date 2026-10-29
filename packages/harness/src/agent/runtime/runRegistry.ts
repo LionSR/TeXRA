@@ -46,6 +46,7 @@ import type {
   RunsShape,
   RunStop,
   RunStopOptions,
+  StopCause,
 } from './runs';
 import type { executeAgent } from './executeAgent';
 import type { decideResume } from './resumeRun';
@@ -69,7 +70,7 @@ class RunAdmissionClosed extends Schema.TaggedError<RunAdmissionClosed>()(
 /**
  * What the session hands its runs. They read a run's phase from the
  * session's fold (`RunView.status`) and keep no phase of their own; a stop
- * in progress is its activation's `stopReason` until the fold shows the run
+ * in progress is its activation's `stop` until the fold shows the run
  * cancelled.
  */
 export interface RunRegistryInit {
@@ -112,13 +113,12 @@ interface RunEntry {
      *  that commits before it is ({@link RunRegistry.bornDetached}), which
      *  no row carries; created detached, its rows then agree. */
     unbornParent: RunId | null;
-    /** The stop begun for it, recorded at the request, before the
-     *  interrupt, for its cleanup (a `user` reason outlives a later
-     *  `shutdown`) and for child admission ({@link RunRegistry.assertAdmitsChild}). */
-    stopReason?: RunStopReason;
-    /** A stop reached it: one its program had not started is interrupted
-     *  as it starts. */
-    stopped: boolean;
+    /** The stop begun for it and why, recorded by every stop at the
+     *  request, before the interrupt: a program not yet running is
+     *  interrupted as it starts, a resume decides nothing, its cleanup reads
+     *  why (a `user` stop outlives a later one), and a child is refused
+     *  under it ({@link RunRegistry.assertAdmitsChild}). */
+    stop?: StopCause;
     /** A resume's, from its call until the activation closes with its fiber. */
     attempt?: RunAttempt;
     /** The resume's fiber while it decides, what a stop interrupts; once
@@ -238,7 +238,7 @@ export class RunRegistry implements RunsShape {
       launched: this.isLaunched(runId),
       parent: this.attachedParent(runId),
       readsMessages,
-      stopReason: entry.activation?.stopReason,
+      stopReason: entry.activation?.stop,
       drained,
     };
   }
@@ -314,7 +314,7 @@ export class RunRegistry implements RunsShape {
       : launchParent;
     if (parentRunId === null) return;
     const stopping =
-      this.entries.get(parentRunId)?.activation?.stopReason !== undefined;
+      this.entries.get(parentRunId)?.activation?.stop !== undefined;
     if (stopping && this.isLaunched(childRunId)) return;
     const folded = this.init.session().view.run(parentRunId)?.status;
     if (stopping || folded === RUN_PHASE.CANCELLED)
@@ -359,7 +359,7 @@ export class RunRegistry implements RunsShape {
       // other launch keeps it, refusing this one.
       const own =
         activation === undefined
-          ? { unbornParent: launchParent, stopped: false, attempt }
+          ? { unbornParent: launchParent, attempt }
           : (!attempt && activation.deciding && activation) || undefined;
       if (own) own.deciding = undefined;
       if (attempt && own) attempt.activation = own;
@@ -453,7 +453,7 @@ export class RunRegistry implements RunsShape {
           { startImmediately: true },
         );
         // A stop that reached the launch before its program ran.
-        if (!inactiveStep && this.entries.get(runId)?.activation?.stopped)
+        if (!inactiveStep && this.entries.get(runId)?.activation?.stop)
           fiber.interruptUnsafe();
         // An interrupted join interrupts the fiber and awaits its cleanup.
         return yield* Fiber.join(fiber).pipe(
@@ -559,15 +559,15 @@ export class RunRegistry implements RunsShape {
   // ------------------------------------------------------------------ stop
 
   /** Stop the run's launch here by run id: synchronous, answered at once
-   *  from every host surface. The stop is recorded on its activation (a
-   *  program not yet running is interrupted as it starts) and its fiber
-   *  interrupted; a stop's reason is {@link markStopped}'s. The answer is read
-   *  before the interrupt, which can unwind the run and clear its entry. */
-  interrupt(runId: RunId): boolean {
+   *  from every host surface. The stop is recorded on its activation
+   *  ({@link markStopped}) and its fiber, or its resume's while it decides,
+   *  interrupted. The answer is read before the interrupt, which can unwind
+   *  the run and clear its entry. */
+  interrupt(runId: RunId, cause: StopCause = 'released'): boolean {
     const entry = this.entries.get(runId);
     const reached =
       entry?.activation !== undefined || entry?.fiber !== undefined;
-    if (entry?.activation) entry.activation.stopped = true;
+    this.markStopped(runId, cause);
     entry?.activation?.deciding?.interruptUnsafe();
     entry?.fiber?.interruptUnsafe();
     return reached;
@@ -587,7 +587,7 @@ export class RunRegistry implements RunsShape {
     // Marked at the request: from here a child is refused under the run
     // (`assertAdmitsChild`) and a user's message sent while the stop runs
     // waits for the run to drain (`submitFollowUp`); a failed stop unmarks.
-    const marked = entry?.activation?.stopReason;
+    const marked = entry?.activation?.stop;
     if (entry !== undefined) this.markStopped(runId, options.reason);
 
     const detach = options.detachActiveChildren === true;
@@ -634,7 +634,7 @@ export class RunRegistry implements RunsShape {
           Effect.sync(() => {
             const current = this.entries.get(runId);
             if (!reached && current?.activation)
-              current.activation.stopReason = marked;
+              current.activation.stop = marked;
           }),
         ),
       );
@@ -687,10 +687,9 @@ export class RunRegistry implements RunsShape {
 
   /** Record why `runId` stops, before it is interrupted, on its activation;
    *  only a run this process launched has one. */
-  private markStopped(runId: RunId, reason: RunStopReason | undefined): void {
+  private markStopped(runId: RunId, cause: StopCause): void {
     const activation = this.entries.get(runId)?.activation;
-    if (activation === undefined || reason === undefined) return;
-    if (activation.stopReason !== 'user') activation.stopReason = reason;
+    if (activation && activation.stop !== 'user') activation.stop = cause;
   }
 
   /** Stop `runId` here, its children first when `cascadeChildren`: each run
@@ -700,15 +699,14 @@ export class RunRegistry implements RunsShape {
     runId: RunId,
     visited: Set<string>,
     cascadeChildren: boolean,
-    reason: RunStopReason | undefined,
+    reason: RunStopReason,
   ): boolean {
     if (visited.has(runId)) return false;
     visited.add(runId);
     if (cascadeChildren)
       for (const child of this.childRunIds(runId))
         this.terminate(child, visited, true, reason);
-    this.markStopped(runId, reason);
-    return this.interrupt(runId);
+    return this.interrupt(runId, reason);
   }
 
   // ---------------------------------------------------------------- detach

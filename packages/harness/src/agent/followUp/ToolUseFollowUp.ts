@@ -9,6 +9,7 @@ import type {
   ResumeRunResult,
 } from '@agent/runtime/resumeRun';
 import { registryOf } from '@agent/runtime/runRegistry';
+import type { StopCause } from '@agent/runtime/runs';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
@@ -18,7 +19,6 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
-import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { InboxItem } from './Inbox';
 
@@ -134,7 +134,7 @@ export interface RunAttempt {
   /** The activation it opened (`RunRegistry.start` links it): the one
    *  record of a stop's reason, which its generation's exit and its own
    *  read, and which outlives the registry's entry. */
-  activation?: { readonly stopReason?: RunStopReason };
+  activation?: { readonly stop?: StopCause };
 }
 
 /**
@@ -183,13 +183,13 @@ export const openResume = (
       answer: Deferred.await(done),
       admitted: yield* Deferred.make<CommitOrdinal>(),
       waiters: 0,
-      handedOff: false,
+      handedOff: wake,
     };
     const { session } = options;
     // A stop recorded before this fiber ran had no fiber to interrupt: the
     // decision reads it first, under its exit's handler.
     const decided = Effect.suspend(() =>
-      attempt.activation?.stopReason === undefined
+      attempt.activation?.stop === undefined
         ? runs.programs.resume(runId, options, (commit) =>
             Deferred.succeed(attempt.admitted, commit),
           )
@@ -197,7 +197,7 @@ export const openResume = (
     ).pipe(Effect.onExit(stoppedUnadmitted(session, runId, attempt)));
     const fiber = yield* runs.start(
       runId,
-      wake ? woken(runId, session, decided) : decided,
+      answered(runId, session, attempt, decided),
       (decision) => decision,
       null,
       attempt,
@@ -220,7 +220,7 @@ const stoppedUnadmitted =
     if (
       !Exit.hasInterrupts(exit) ||
       Deferred.isDoneUnsafe(attempt.admitted) ||
-      attempt.activation?.stopReason !== 'user'
+      attempt.activation?.stop !== 'user'
     )
       return Effect.void;
     const cancelled = {
@@ -240,18 +240,24 @@ const stoppedUnadmitted =
     );
   };
 
-/** A wake's resume: it follows an owning parent and tells the user what the
- *  run did not take; a fault is told and answers as a refusal. */
-const woken = <R>(
+/**
+ * What a resume's answer owes once no caller holds it (a wake took it,
+ * `handedOff`), whoever opened it: it follows an owning parent, and tells
+ * the user what the run did not take, or a fault. A caller that holds the
+ * answer acts on it itself.
+ */
+const answered = <R>(
   runId: RunId,
   session: SessionHandle,
+  attempt: RunAttempt,
   decided: Effect.Effect<ResumeAttempt, Error, R>,
-): Effect.Effect<ResumeAttempt, never, R> => {
+): Effect.Effect<ResumeAttempt, Error, R> => {
   // Latched: a run id deleted and re-created is not the run this wake was for.
   let missing = false;
   const gone = () => (missing ||= session.view.run(runId) === undefined);
   return decided.pipe(
     Effect.tap((result) => {
+      if (!attempt.handedOff) return Effect.void;
       // The parent's open call reattaches the run it owns.
       if ('ownedBy' in result)
         return Effect.flatten(wakeRun(result.ownedBy, session));
@@ -270,9 +276,9 @@ const woken = <R>(
         { replayWhenAttached: true },
       );
     }),
-    Effect.catchCause((cause) => {
-      if (Cause.hasInterruptsOnly(cause) || gone())
-        return Effect.succeed(REFUSED);
+    Effect.tapCause((cause) => {
+      if (!attempt.handedOff || Cause.hasInterruptsOnly(cause) || gone())
+        return Effect.void;
       const error = Cause.squash(cause);
       return Effect.logError(`Failed to resume run ${runId}`).pipe(
         Effect.annotateLogs({ data: error }),
@@ -280,7 +286,6 @@ const woken = <R>(
         Effect.andThen(
           presentRunFailure(session.interactions, error, 'Resume failed: '),
         ),
-        Effect.as(REFUSED),
       );
     }),
   );
