@@ -181,10 +181,7 @@ export const toolCatalogLayer = (
       const shared: ProcessCatalog = {
         builtIn: plugins.map((plugin) => ({
           plugin,
-          entries: entriesOf(
-            plugin.id,
-            new Map(Object.entries(plugin.tools ?? {})),
-          ),
+          entries: entriesOf(plugin.id, plugin.tools ?? []),
         })),
         onOf,
         on,

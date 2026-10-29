@@ -1054,7 +1054,7 @@ interface PluginDefinition<ROut, C = PluginToolServices> extends Omit<
   Plugin,
   'tools' | 'processLayer' | 'sessionLayer' | 'availability'
 > {
-  readonly tools?: Readonly<Record<string, ITool<Error, C | ROut>>>;
+  readonly tools?: readonly ITool<Error, C | ROut>[];
   readonly processLayer?: ProcessPluginLayer<ROut>;
   readonly sessionLayer?: Layer.Layer<ROut, never, PluginHold>;
   /** Probed outside any step, whether or not the plugin is on: it may

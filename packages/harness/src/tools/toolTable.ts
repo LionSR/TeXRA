@@ -221,9 +221,10 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
       );
     if (entries.has(plugin.id)) refuse(`plugin ${plugin.id} is listed twice.`);
     entries.set(plugin.id, plugin);
-    for (const [name, tool] of Object.entries(plugin.tools ?? {})) {
+    for (const tool of plugin.tools ?? []) {
+      const { name } = tool.definition;
       if (byName.has(name))
-        refuse(`tool ${name} of plugin ${plugin.id} is another plugin's.`);
+        refuse(`tool ${name} of plugin ${plugin.id} is already registered.`);
       byName.set(name, tool);
     }
     if (plugin.decision !== undefined) {

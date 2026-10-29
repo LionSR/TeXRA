@@ -125,11 +125,11 @@ const serves = (capabilities: () => readonly string[]) =>
 
 const latexExtract: Plugin = {
   id: 'latex-extract',
-  tools: {
-    extract_figures: ExtractLatexFiguresTool,
-    extract_tikz_figures: ExtractTikzFiguresTool,
-    extract_bib_entries: ExtractBibliographyTool,
-  },
+  tools: [
+    ExtractLatexFiguresTool,
+    ExtractTikzFiguresTool,
+    ExtractBibliographyTool,
+  ],
 };
 
 /** The editor's diagnostics, offered while an editor attached for the
@@ -138,7 +138,7 @@ const latexExtract: Plugin = {
 const latexDiagnostics = (editors: EditorRegistry) =>
   definePlugin<EditorHost>({
     id: 'latex-diagnostics',
-    tools: { diagnostics: DiagnosticsTool },
+    tools: [DiagnosticsTool],
     processLayer: {
       layer: Layer.mergeAll(
         Layer.succeed(EditorHost)(editors),
@@ -149,10 +149,7 @@ const latexDiagnostics = (editors: EditorRegistry) =>
 
 const arxiv: Plugin = {
   id: 'arxiv',
-  tools: {
-    arxiv_search: ArxivSearchTool,
-    download_arxiv_source: ArxivDownloadTool,
-  },
+  tools: [ArxivSearchTool, ArxivDownloadTool],
 };
 
 const TEX_INSTRUCTIONS = `Find the project's TeX sources with relative paths (e.g., \`find . -name "*.tex"\`).\nFor math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.`;
@@ -167,12 +164,12 @@ const TEX_INSTRUCTIONS = `Find the project's TeX sources with relative paths (e.
 const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
   definePlugin<EditorHost>({
     id: 'core',
-    tools: {
-      inline_comment: InlineCommentTool,
-      open_pdf: OpenPdfTool,
-      ask_user_question: AskUserQuestionTool,
-      lean_loogle: LeanLoogleTool,
-    },
+    tools: [
+      InlineCommentTool,
+      OpenPdfTool,
+      AskUserQuestionTool,
+      LeanLoogleTool,
+    ],
     prompt: ({ config }) => {
       const bibPath = Settings.getConfig<string>(config, 'bib.defaultPath');
       return bibPath
@@ -212,16 +209,16 @@ const setup = (platform: SetupPlatformShape, host: SetupHost['Service']) =>
         ),
       ),
     },
-    tools: {
-      probe_environment: ProbeEnvironmentTool,
-      unset_api_key: UnsetApiKeyTool,
-      invoke_command: InvokeCommandTool,
-      install_vscode_extension: InstallVscodeExtensionTool,
-      read_config: ReadConfigTool,
-      update_config: UpdateConfigTool,
-      send_to_terminal: SendToTerminalTool,
-      apply_team: ApplyTeamTool,
-    },
+    tools: [
+      ProbeEnvironmentTool,
+      UnsetApiKeyTool,
+      InvokeCommandTool,
+      InstallVscodeExtensionTool,
+      ReadConfigTool,
+      UpdateConfigTool,
+      SendToTerminalTool,
+      ApplyTeamTool,
+    ],
   });
 
 /** Document tasks: the `task:` block of an agent file, the tools their
@@ -247,16 +244,16 @@ const documents: Plugin = {
         ].join(' ')
       : '',
   scriptModules: { documents: DOCUMENTS_MODULE },
-  tools: {
-    accept_run_files: AcceptRunFilesTool,
-    document_task: DocumentTaskTool,
-    document_context: DocumentContextTool,
-    document_extract: DocumentExtractTool,
-    document_compile: DocumentCompileTool,
-    document_diff: DocumentDiffTool,
-    document_review: DocumentReviewTool,
-    document_propose: DocumentProposeTool,
-  },
+  tools: [
+    AcceptRunFilesTool,
+    DocumentTaskTool,
+    DocumentContextTool,
+    DocumentExtractTool,
+    DocumentCompileTool,
+    DocumentDiffTool,
+    DocumentReviewTool,
+    DocumentProposeTool,
+  ],
   arms: APP_PLUGIN_ARMS.documents,
 };
 

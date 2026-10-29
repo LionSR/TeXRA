@@ -40,7 +40,7 @@ const publishPreprintTool = defineTool({
 
 const preprintPlugin = definePlugin({
   id: 'preprint-tools',
-  tools: { publish_preprint: publishPreprintTool },
+  tools: [publishPreprintTool],
 });
 
 const { platform, requests } = await makeExampleWorkspace([

@@ -183,10 +183,11 @@ A defined tool: plain data plus a `call` that validates and normalizes
 failures. An anonymous object type so the SDK's `.d.ts` inlines it.
 
 ```ts
-type DefinedTool<T, R = never> = Omit<
+type DefinedTool<T, R = never, Name extends string = string> = Omit<
   ITool<Error, R>,
-  'call' | 'guard'
+  'call' | 'guard' | 'definition'
 > & {
+  readonly definition: ToolDefinition & { readonly name: Name };
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
@@ -201,9 +202,9 @@ and turn ordinary failures into `{ status: 'error' }` feedback.
 Interruption, run history refusals and database write failures propagate.
 
 ```ts
-function defineTool<T, R = never>(
-  def: DefineToolOptions<T, R>,
-): DefinedTool<T, R>
+function defineTool<T, R = never, const Name extends string = string>(
+  def: DefineToolOptions<T, R> & { readonly name: Name },
+): DefinedTool<T, R, Name>
 ```
 
 ## HeldRun
@@ -487,8 +488,8 @@ interface Plugin {
    *  directory): lowercase letters, digits and dashes, starting with a
    *  letter or digit. A list with any other id is refused. */
   readonly id: string;
-  /** Its tools, by registered name. */
-  readonly tools?: Readonly<Record<string, ITool<Error, PluginToolServices>>>;
+  /** Its tools, registered by each tool's `definition.name`, in order. */
+  readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /**
    * Present when the plugin has an external dependency: it is probed, and
    * its tools are withheld while the dependency is missing. Without it the

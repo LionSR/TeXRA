@@ -340,7 +340,7 @@ const checkToolGroup = Effect.fn('checkToolGroup')(function* (
   );
   return {
     id,
-    tools: Object.keys(tools ?? {}),
+    tools: (tools ?? []).map((tool) => tool.definition.name),
     status: available ? 'available' : 'not-found',
     statusLabel,
     statusDetail,
@@ -362,7 +362,7 @@ const probeToolGroup = (
       withLogChannel(CHANNEL),
       Effect.as({
         id: plugin.id,
-        tools: Object.keys(plugin.tools ?? {}),
+        tools: (plugin.tools ?? []).map((tool) => tool.definition.name),
         status: 'unknown' as const,
         statusLabel: undefined,
         statusDetail: `Availability check failed: ${toErrorMessage(error)}`,
