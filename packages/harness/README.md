@@ -239,9 +239,9 @@ the latest level. The exported `SessionView`, `RunView`, and
 `TranscriptView` types are read-only all the way down (`ReadonlyMap`, readonly
 arrays); a write through a cast corrupts the session every later run in the
 process reads. A run is a row of `SessionView.runs`. The run's transcript rows
-(`RunView.transcript`) are subscribed on its behalf, the run itself and its
-descendants as they appear, until the run's final view: a reader that needs
-them later watches them (`view.watch`).
+(`RunView.transcript`) are subscribed while its `run.view` is read, the run
+itself and its descendants as they appear, until the run's final view: a
+reader that needs them otherwise watches them (`view.watch`).
 
 Runs share one session per workspace storage root: opening a root twice
 resolves the session already open there, while a second root gets its own. A
