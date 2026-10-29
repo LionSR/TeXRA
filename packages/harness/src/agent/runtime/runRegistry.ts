@@ -666,21 +666,16 @@ export class RunRegistry implements RunsShape {
     };
   }
 
-  /** The end a stop owes a run no generation here took it for, decided
-   *  here only: a user's stop ends it cancelled, an ownerless end (one it
-   *  wrote stands); a shutdown or a release owes none. A generation a stop
-   *  reached ends itself, cancelled, through its lifecycle. */
+  /** The end a stop owes a run no generation here took it for, decided here
+   *  only: a user's stop ends it cancelled, ownerless; a shutdown or a release
+   *  owes none. A generation a stop reached ends itself, cancelled. */
   private stopEnd(
     runId: RunId,
     cause: StopCause | undefined,
   ): Effect.Effect<void, Error> | undefined {
     if (cause !== 'user') return undefined;
-    const end = {
-      runId,
-      outcome: RUN_OUTCOME.CANCELLED,
-      ownerless: true,
-      stopped: true,
-    };
+    const { CANCELLED: outcome } = RUN_OUTCOME;
+    const end = { runId, outcome, ownerless: true, stopped: true };
     return Effect.asVoid(finalizeRun(this.init.session(), end));
   }
 
