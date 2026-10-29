@@ -198,13 +198,13 @@ export interface FinalizeRunInput {
   readonly runId: RunId;
   readonly outcome: RunOutcome;
   /** An end no driver here writes (a stop that reached no live target, a
-   *  failed hand-off, a backstop): under a claim it takes itself, it retires
-   *  the run's open owned children first, which refuse a driver's own end. */
+   *  failed hand-off, a backstop), under a claim it takes itself. */
   readonly ownerless?: boolean;
+  /** A stop ended the run: a trace row the store refused does not fail it. */
+  readonly stopped?: boolean;
   /** The classified error behind a FAILED outcome, when the run has one. */
   readonly error?: RunEnd['error'];
-  /** What the run produced; absent (an empty output) for a backstop, and
-   *  for a child, whose product is its per-turn delivery. */
+  /** What the run produced; absent (empty) for a backstop or a child. */
   readonly output?: RunEndOutput;
   /** A child's last turn result under the outcome its end resolves,
    *  committed with that end (or, if refused, the notice that it was lost). */
@@ -213,8 +213,7 @@ export interface FinalizeRunInput {
   ) => Effect.Effect<TransactionPart | undefined>;
 }
 
-/** The `run.end` the store holds: this call's (`wrote`) or an earlier one;
- *  none for a run never born or one whose held result awaits delivery. */
+/** The `run.end` held (`wrote`: this call's); none if unborn or held back. */
 export interface FinalizedRun {
   readonly end: Omit<RunEnd, 'usage'> | null;
   readonly wrote: boolean;
@@ -315,6 +314,7 @@ const beforeEnd = Effect.fn('beforeEnd')(function* (
       runId: child.runId,
       outcome: RUN_OUTCOME.CANCELLED,
       ownerless: true,
+      stopped: true,
     });
   }
   return facts?.end != null;
@@ -334,19 +334,19 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
         endIn(session, tx.append, ending, lastTurn).pipe(Effect.scoped),
       ),
     );
-  // Rows the run published and the store refused fail it, whoever ends it.
-  const lost = yield* session.trace.lost(runId);
-  const failed = lost !== undefined && outcome !== RUN_OUTCOME.CANCELLED;
-  const { lastTurn: finish, ...rest } = input;
-  const requested = {
-    ...rest,
-    outcome: failed ? RUN_OUTCOME.FAILED : outcome,
-    error: lost ?? input.error,
-  };
-  const lastTurn = finish && (yield* finish(requested.outcome));
   const stood = yield* beforeEnd(session, runId, ownerless === true).pipe(
     defectAsFailure,
   );
+  // Read once readied (a refusal leaves them unread): rows the store refused
+  // fail the run unless a stop ended it, whoever ends it.
+  const lost = yield* session.trace.lost(runId);
+  const failed = lost !== undefined && input.stopped !== true;
+  const requested = {
+    ...input,
+    outcome: failed ? RUN_OUTCOME.FAILED : outcome,
+    error: lost ?? input.error,
+  };
+  const lastTurn = input.lastTurn && (yield* input.lastTurn(requested.outcome));
   let status = yield* end(requested, lastTurn);
   // A refused last turn: a committed end is this call's unless one `stood`;
   // with none, the end records the loss (a failed read: the backstop's).

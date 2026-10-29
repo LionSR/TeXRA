@@ -675,7 +675,12 @@ export class RunRegistry implements RunsShape {
     cause: StopCause | undefined,
   ): Effect.Effect<void, Error> | undefined {
     if (cause !== 'user') return undefined;
-    const end = { runId, outcome: RUN_OUTCOME.CANCELLED, ownerless: true };
+    const end = {
+      runId,
+      outcome: RUN_OUTCOME.CANCELLED,
+      ownerless: true,
+      stopped: true,
+    };
     return Effect.asVoid(finalizeRun(this.init.session(), end));
   }
 
