@@ -27,17 +27,7 @@ points to a strictly lower layer:
 9. `effect/`: the SDK (`Sessions`, `processLayer`).
 10. The entry files at the root (`index.ts`, `node.ts`, `plugins.ts`, `schemas.ts`, `host.ts`, `transcriptEntry.ts`).
 
-`src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts` holds this order as `HARNESS_LAYERS` and
-fails a new import that points up, stays within its layer, or closes a two-way
-directory pair. The ones that exist are listed in
-`config/ratchets/harness-layer-edges-baseline.json`, which only shrinks. The
-known exceptions: `platform/processRuntime.ts` names types from `agent/`,
-`tools/`, `skills/` and `effect/` (`ProcessServices` and the session owner
-belong above the ports); `shared/config/settings.ts` and `shared/usageLog.ts`
-name `platform/` ports; run storage and the settings-reading system helpers in
-`utils/` reach `shared/`, `common/` and `platform/`; and `agent/`, `tools/` and
-`transcript/` form one cycle. When a row disappears, shrink the file with
-`npx vitest run src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts -u`.
+`src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts` holds this order as `HARNESS_LAYERS`. Every edge that points up, stays within its layer, or is half of a two-way directory pair lists the names it imports in `config/ratchets/harness-layer-names-baseline.json`, which only shrinks. A new name on such an edge fails, and so does a new edge of that kind; downward imports are free. The known exceptions: `platform/processRuntime.ts` names types from `agent/`, `tools/`, `skills/` and `effect/` (`ProcessServices` and the session owner belong above the ports); `shared/config/settings.ts` and `shared/usageLog.ts` name `platform/` ports; run storage and the settings-reading system helpers in `utils/` reach `shared/`, `common/` and `platform/`; and `agent/`, `tools/` and `transcript/` form one cycle. When a name disappears, shrink the file with `npx vitest run src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts -u`.
 
 ## Configuration, storage, and workspace files
 

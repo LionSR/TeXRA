@@ -264,15 +264,15 @@ function addEdge(
   );
 }
 
-/** Calls `onImport` with each module a file loads and the kind it implies. */
+/** Calls `onImport` with each module a file loads, its kind, and the node. */
 function visitImports(
   sourceFile: ts.SourceFile,
-  onImport: (specifier: string, kind: EdgeKind) => void,
+  onImport: (specifier: string, kind: EdgeKind, node: ts.Node) => void,
 ): void {
   const visit = (node: ts.Node): void => {
     const reference = moduleReference(node);
     if (reference?.specifier != null) {
-      onImport(reference.specifier, reference.kind);
+      onImport(reference.specifier, reference.kind, node);
     }
 
     ts.forEachChild(node, visit);
@@ -308,10 +308,6 @@ function collectSubsystemEdges(): SubsystemEdge[] {
     );
   }
 
-  return edgeList(edges);
-}
-
-function edgeList(edges: Map<string, EdgeKind>): SubsystemEdge[] {
   return [...edges.entries()]
     .map(([key, kind]) => {
       const [from, to] = key.split('->');
@@ -332,38 +328,103 @@ function harnessDirectory(path: string): string | null {
   return parts.length > 1 ? (parts[0] ?? null) : 'entries';
 }
 
-/** Directed imports between the harness's top-level directories. */
-function collectHarnessEdges(): SubsystemEdge[] {
-  const edges = new Map<string, EdgeKind>();
+/**
+ * The names an import brings in, each with whether that use is type-only. A
+ * namespace, side-effect, dynamic or `export *` import is `*`.
+ */
+function importedNames(
+  node: ts.Node,
+  kind: EdgeKind,
+): { name: string; typeOnly: boolean }[] {
+  const typeOnly = kind === 'type-only';
+  if (ts.isImportTypeNode(node) && node.qualifier != null) {
+    let qualifier: ts.EntityName = node.qualifier;
+    while (ts.isQualifiedName(qualifier)) qualifier = qualifier.left;
+    return [{ name: qualifier.text, typeOnly: true }];
+  }
+  const clause = ts.isImportDeclaration(node) ? node.importClause : undefined;
+  const bindings =
+    clause?.namedBindings ??
+    (ts.isExportDeclaration(node) ? node.exportClause : undefined);
+  let named: { name: string; typeOnly: boolean }[] = [];
+  if (bindings != null) {
+    named =
+      ts.isNamedImports(bindings) || ts.isNamedExports(bindings)
+        ? bindings.elements.map((element) => ({
+            name: (element.propertyName ?? element.name).text,
+            typeOnly: typeOnly || element.isTypeOnly,
+          }))
+        : [{ name: '*', typeOnly }];
+  }
+  const names = [
+    ...(clause?.name != null ? [{ name: 'default', typeOnly }] : []),
+    ...named,
+  ];
+  return names.length > 0 ? names : [{ name: '*', typeOnly }];
+}
+
+/** `module#name` under its harness directory, without extension or `/index`. */
+function harnessName(path: string, name: string): string {
+  const module = path
+    .slice(HARNESS_SRC.length)
+    .split('/')
+    .slice(1)
+    .join('/')
+    .replace(/\.(?:[cm]?[jt]sx?)$/, '')
+    .replace(/\/index$/, '');
+  return `${module}#${name}`;
+}
+
+/**
+ * The names each harness directory imports from another, keyed `from->to`.
+ * A name is `type module#name` when every use of it across the edge is
+ * type-only.
+ */
+function collectHarnessNames(): Map<string, string[]> {
+  const uses = new Map<string, Map<string, boolean>>();
   for (const file of sourceFilesUnder(resolve(REPO_ROOT, HARNESS_SRC))) {
     const from = harnessDirectory(repoRelative(file));
     if (from == null) continue;
     visitImports(
       parseSourceFile(file, { setParentNodes: false }),
-      (specifier, kind) => {
+      (specifier, kind, node) => {
         const path = resolveImportPath(file, specifier);
-        addEdge(
-          edges,
-          from,
-          path == null ? null : harnessDirectory(path),
-          kind,
-        );
+        const to = path == null ? null : harnessDirectory(path);
+        if (path == null || to == null || to === from) return;
+        const names = uses.get(edgeKey({ from, to })) ?? new Map();
+        uses.set(edgeKey({ from, to }), names);
+        for (const { name, typeOnly } of importedNames(node, kind)) {
+          const key = harnessName(path, name);
+          names.set(key, (names.get(key) ?? true) && typeOnly);
+        }
       },
     );
   }
-  return edgeList(edges);
+  return new Map(
+    [...uses].map(([edge, names]) => [
+      edge,
+      [...names]
+        .map(([name, typeOnly]) => (typeOnly ? `type ${name}` : name))
+        .toSorted(),
+    ]),
+  );
 }
 
 const HARNESS_BASELINE_FILE =
-  'config/ratchets/harness-layer-edges-baseline.json';
+  'config/ratchets/harness-layer-names-baseline.json';
 const HARNESS_BASELINE_PATH = resolve(REPO_ROOT, HARNESS_BASELINE_FILE);
+
+interface HarnessBaseline {
+  semantics: string;
+  names: Record<string, string[]>;
+}
 
 /**
  * The harness's layer order, bottom first; packages/harness/AGENTS.md
  * "Layer order" says what sits where. An import points to a strictly lower
- * layer. Every other harness import (upward, within one layer, or either
- * half of a two-way directory pair) is listed in HARNESS_BASELINE_FILE,
- * which only shrinks.
+ * layer. Every other harness edge (upward, within one layer, or either half
+ * of a two-way directory pair) lists the names it imports in
+ * HARNESS_BASELINE_FILE, which only shrinks.
  */
 const HARNESS_LAYERS: readonly (readonly string[])[] = [
   ['logger'],
@@ -382,28 +443,18 @@ function harnessLayer(directory: string): number {
   return HARNESS_LAYERS.findIndex((layer) => layer.includes(directory));
 }
 
-/** Why an import breaks the order, or null when it points down. */
-function layerBreak(
-  edge: SubsystemEdge,
-  keys: ReadonlySet<string>,
-): 'upward' | 'same layer' | 'two-way' | null {
-  const from = harnessLayer(edge.from);
-  const to = harnessLayer(edge.to);
-  if (to > from) return 'upward';
-  if (to === from) return 'same layer';
-  return keys.has(edgeKey({ from: edge.to, to: edge.from })) ? 'two-way' : null;
+/** Whether a `from->to` edge does not point strictly down. */
+function breaksLayers(edge: string, edges: ReadonlySet<string>): boolean {
+  const [from = '', to = ''] = edge.split('->');
+  return harnessLayer(to) >= harnessLayer(from) || edges.has(`${to}->${from}`);
 }
 
-/** The live harness imports that do not point strictly down. */
-function harnessLayerBreaks(edges: SubsystemEdge[]): SubsystemEdge[] {
-  const keys = new Set(edges.map(edgeKey));
-  return edges.filter((edge) => layerBreak(edge, keys) != null);
-}
-
-function readHarnessBaseline(): EdgeBaseline {
-  return JSON.parse(
-    readFileSync(HARNESS_BASELINE_PATH, 'utf8'),
-  ) as EdgeBaseline;
+/** The live edges that break the order, with their names. */
+function harnessLayerBreaks(
+  names: ReadonlyMap<string, string[]>,
+): Map<string, string[]> {
+  const edges = new Set(names.keys());
+  return new Map([...names].filter(([edge]) => breaksLayers(edge, edges)));
 }
 
 function readBaseline(): EdgeBaseline {
@@ -427,7 +478,6 @@ function edgeKey(edge: Pick<SubsystemEdge, 'from' | 'to'>): string {
 function findRatchetViolations(
   current: SubsystemEdge[],
   baseline: SubsystemEdge[],
-  admitted: ReadonlyMap<string, string> = ADMITTED_TYPE_ONLY_EDGES,
 ): EdgeViolation[] {
   const baselineByEdge = new Map(baseline.map((edge) => [edgeKey(edge), edge]));
   const violations: EdgeViolation[] = [];
@@ -435,7 +485,10 @@ function findRatchetViolations(
   for (const edge of current) {
     const baselineEdge = baselineByEdge.get(edgeKey(edge));
     if (baselineEdge == null) {
-      if (edge.kind === 'type-only' && admitted.has(edgeKey(edge))) {
+      if (
+        edge.kind === 'type-only' &&
+        ADMITTED_TYPE_ONLY_EDGES.has(edgeKey(edge))
+      ) {
         continue;
       }
       violations.push({
@@ -580,12 +633,16 @@ describe('LAY-1 subsystem edge ratchet', () => {
 });
 
 describe('LAY-2 harness layer order', () => {
-  const edges = collectHarnessEdges();
-  const keys = new Set(edges.map(edgeKey));
-  const baseline = readHarnessBaseline();
+  const live = collectHarnessNames();
+  const breaks = harnessLayerBreaks(live);
+  const baseline = JSON.parse(
+    readFileSync(HARNESS_BASELINE_PATH, 'utf8'),
+  ) as HarnessBaseline;
 
   it('places every harness directory in a layer', () => {
-    const unplaced = [...new Set(edges.flatMap(({ from, to }) => [from, to]))]
+    const unplaced = [
+      ...new Set([...live.keys()].flatMap((e) => e.split('->'))),
+    ]
       .filter((directory) => harnessLayer(directory) < 0)
       .toSorted();
 
@@ -595,47 +652,56 @@ describe('LAY-2 harness layer order', () => {
     ).toEqual([]);
   });
 
-  it('adds no upward, same-layer or two-way import', () => {
-    const violations = findRatchetViolations(
-      harnessLayerBreaks(edges),
-      baseline.edges,
-      new Map(),
-    ).filter((violation) => violation.reason !== 'value-overstated');
-    const lines = violations.map((violation) => {
-      const [from = '', to = ''] = violation.edge.split('->');
-      const why = layerBreak({ from, to, kind: violation.currentKind }, keys);
-      return `${formatViolations([violation])} (${why})`;
+  it('imports no new name up, within a layer, or across a two-way pair', () => {
+    const added = [...breaks].flatMap(([edge, names]) => {
+      const listed = new Set(baseline.names[edge] ?? []);
+      // A listed value name also covers its type-only use.
+      return names
+        .filter(
+          (name) =>
+            !listed.has(name) && !listed.has(name.replace(/^type /, '')),
+        )
+        .map((name) =>
+          listed.has(`type ${name}`)
+            ? `${name} on ${edge} gained a value import`
+            : `new name ${name} on ${edge}`,
+        );
     });
 
     expect(
-      lines,
+      added,
       `harness imports point down HARNESS_LAYERS; move the code to the layer that owns it instead. Do not widen ${HARNESS_BASELINE_FILE}.`,
     ).toEqual([]);
   });
 
-  it('counts a downward import as a break when its reverse exists', () => {
-    const up = {
-      from: 'shared',
-      to: 'controllers',
-      kind: 'type-only' as const,
-    };
-    const down = { from: 'controllers', to: 'shared', kind: 'value' as const };
+  it('counts a downward edge as a break when its reverse exists', () => {
+    const down = new Map([['controllers->shared', ['x#a']]]);
 
-    expect(harnessLayerBreaks([down])).toEqual([]);
-    expect(harnessLayerBreaks([up, down])).toEqual([up, down]);
+    expect(harnessLayerBreaks(down)).toEqual(new Map());
+    const pair = new Map([...down, ['shared->controllers', ['type y#b']]]);
+    expect(harnessLayerBreaks(pair)).toEqual(pair);
   });
 
-  it('lists only imports that still break the order', async () => {
-    const live = new Map(harnessLayerBreaks(edges).map((e) => [edgeKey(e), e]));
-    const kept = baseline.edges.flatMap((edge) => {
-      const current = live.get(edgeKey(edge));
-      return current == null
-        ? []
-        : [{ ...edge, kind: edge.kind === 'value' ? current.kind : edge.kind }];
+  it('lists only names that still break the order', async () => {
+    // Each listed name stays while the edge still imports it, narrows to
+    // its `type` form once only a type use is left, and is dropped when gone.
+    // A type name with a new value use stays as it is: that is a widening
+    // the test above fails.
+    const rows = Object.entries(baseline.names).flatMap(([edge, listed]) => {
+      const names = new Set(breaks.get(edge));
+      const kept = listed.flatMap((name) => {
+        const bare = name.replace(/^type /, '');
+        if (names.has(name) || (name !== bare && names.has(bare)))
+          return [name];
+        return names.has(`type ${bare}`) ? [`type ${bare}`] : [];
+      });
+      return kept.length > 0 ? [[edge, kept.toSorted()] as const] : [];
     });
-    const rows = kept.map((edge) => `    ${JSON.stringify(edge)}`).join(',\n');
     const text = await format(
-      `{"semantics": ${JSON.stringify(baseline.semantics)}, "edges": [\n${rows}\n]}`,
+      JSON.stringify({
+        semantics: baseline.semantics,
+        names: Object.fromEntries(rows),
+      }),
       {
         ...(await resolveConfig(HARNESS_BASELINE_PATH)),
         filepath: HARNESS_BASELINE_PATH,
@@ -644,7 +710,7 @@ describe('LAY-2 harness layer order', () => {
 
     await expect(text).toMatchFileSnapshot(
       HARNESS_BASELINE_PATH,
-      `a listed import now points down, is type-only, or is gone: run \`npx vitest run src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts -u\` to shrink ${HARNESS_BASELINE_FILE}`,
+      `a listed name is gone, now only a type, or its edge points down: run \`npx vitest run src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts -u\` to shrink ${HARNESS_BASELINE_FILE}`,
     );
   });
 });

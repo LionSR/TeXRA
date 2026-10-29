@@ -113,8 +113,9 @@ function readBaseline(file, text) {
         fail(`${shape}.${key}`);
       add(key, entry.count);
     }
-  } else if (shape === 'hosts' || shape === 'readers') {
-    // A list per key: the deep imports per host, the files per row type.
+  } else if (shape === 'hosts' || shape === 'readers' || shape === 'names') {
+    // A list per key: the deep imports per host, the files per row type, the
+    // names imported across a harness edge that breaks the layer order.
     if (!isObject(entries)) fail(shape);
     for (const [key, items] of Object.entries(entries)) {
       if (
