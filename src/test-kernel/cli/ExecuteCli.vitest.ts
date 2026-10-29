@@ -95,23 +95,12 @@ function runSessionFake(): LocalSession {
       Effect.promise(() => mocks.admit(input)).pipe(
         Effect.map((): Run => ({
           runId: input.runId as RunId,
-          // A run the shutdown stopped stores no end.
           result: Effect.tryPromise({
-            try: () => mocks.rootLaunch(input),
+            try: () =>
+              mocks.rootLaunch(input) as Promise<Effect.Success<Run['result']>>,
             catch: (cause) =>
               new RunFailure({ cause, message: toErrorMessage(cause) }),
-          }).pipe(
-            Effect.flatMap((ended): Run['result'] =>
-              ended === STOPPED
-                ? Effect.fail(
-                    new RunFailure({
-                      cause: null,
-                      message: 'The run ended without a stored end.',
-                    }),
-                  )
-                : Effect.succeed(ended as Effect.Success<Run['result']>),
-            ),
-          ),
+          }),
           view: Stream.empty,
           events: Stream.empty,
           interrupt: Effect.void,
@@ -159,8 +148,8 @@ const COMPLETED_RUN = {
   runId: 'ec0000000001',
 } as const;
 
-/** A run the shutdown stopped, which stores no end. */
-const STOPPED = Symbol('stopped');
+/** The end a run the shutdown stopped stores. */
+const STOPPED = { ...COMPLETED_RUN, outcome: 'cancelled' } as const;
 
 function baseConfig(): Parameters<typeof executeCliConfig>[0] {
   return { agent: 'chat', model: 'test-model', instruction: '' };
