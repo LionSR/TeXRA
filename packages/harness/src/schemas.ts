@@ -18,7 +18,7 @@
  *   [`ApprovalPolicySchema`](#approvalpolicyschema), [`resolveBypass`](#resolvebypass).
  * - **Agent definitions & run outcomes**: [`AgentConfigSchema`](#agentconfigschema),
  *   [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
- *   [`RunEndResult`](#runendresult), [`RunIdSchema`](#runidschema).
+ *   [`RunIdSchema`](#runidschema).
  * - **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
  *   [`configTreeRows`](#configtreerows), [`GlobalStateKey`](#globalstatekey),
  *   [`WorkspaceStateKey`](#workspacestatekey), [`TraceDocumentSchema`](#tracedocumentschema).
@@ -31,9 +31,6 @@ export type {
 // and its JSON with the fields its category hides dropped.
 export type { RunRecord } from '@agent/core/definition/RunRecord';
 export { serializeFilteredConfig } from '@tools/executions/configView';
-// `RunEndResult` comes from its own module so declaration emit does not pull
-// the provider SDK types in (the leak check in `scripts/validate-artifacts.mjs`).
-export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 // A fresh run id, for a caller that names a run before a session launches it.
 export { generateRunId } from '@utils/core';
@@ -188,6 +185,7 @@ export {
 // The approvals a run may skip, and how a run's own and inherited grants
 // resolve against the policy.
 export {
+  APPROVAL_BYPASS_KINDS,
   resolveBypass,
   runBypasses,
   stricterPolicy,
@@ -333,6 +331,7 @@ export {
   ownerIdentity,
   type Plan,
   type PlanApprovalPermission,
+  planOf,
   planSummaryLine,
   type ProgressPermissionKind,
   type ProposalFileFields,

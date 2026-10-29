@@ -1657,7 +1657,7 @@ delivers it.
 ```ts
 type SubmitFollowUpResult =
   | { status: 'sent' }
-  | { status: 'queued'; wake?: 'failed' }
+  | { status: 'queued'; wake?: 'failed' | null }
   | { status: 'failed'; reason: FollowUpFailureReason };
 ```
 

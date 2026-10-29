@@ -5,13 +5,12 @@
  */
 
 import type { SessionOwner } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
+import type { CommitOrdinal, RunId } from '@shared/schemas';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import type { Effect, Scope } from 'effect';
-import type { RunEndResult } from './RunEndResult';
 import type { RootLaunchOptions, RootLaunchRequest } from './rootLaunch';
 
-/** A root launch: what to run, and how its launch settles. */
+/** A root launch: what to run, and with which options. */
 export interface RootLaunch {
   readonly request: RootLaunchRequest;
   readonly options: RootLaunchOptions;
@@ -67,7 +66,8 @@ export interface LiveRun {
  * composition root's `SessionOwner`, which no tool is given.
  */
 export interface RunsShape {
-  launch(spec: RootLaunch): Effect.Effect<RunEndResult, Error, SessionOwner>;
+  /** Launch a root run: the commit of its opening, once that commits. */
+  launch(spec: RootLaunch): Effect.Effect<CommitOrdinal, Error, SessionOwner>;
   /** Hold a stopped run for the caller's scope, its claim taken: refused
    *  while it is live here or held elsewhere. */
   launch(spec: {

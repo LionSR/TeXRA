@@ -26,10 +26,7 @@ import {
 import { CliUsageError, type CliContext } from './cliContext';
 import { type CliRunResult } from './terminalStatus';
 import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
-import type {
-  RunEndResult,
-  AgentConfigPayload,
-} from '@texra-ai/harness/schemas';
+import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
 type OutputFlag = '--output' | '--output-dir';
 
@@ -308,7 +305,7 @@ function copyOutputFile(
 export function resolveWorkflowOutput(
   outputFile: string | undefined,
   outputDir: string | undefined,
-  result: RunEndResult,
+  result: CliRunResult,
   context: CliContext,
   options: WorkflowOutputResolutionOptions,
 ): Effect.Effect<CliWorkflowRunResult, Error, FileSystem.FileSystem> {

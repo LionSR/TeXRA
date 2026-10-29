@@ -8,6 +8,7 @@ import {
   type RequestError,
   type RequestRefusal,
   type Run,
+  type RunEnd,
   type Session,
   type StartInput,
   Unavailable,
@@ -68,7 +69,7 @@ import {
   type ProgressFollowUpModelOption,
   type ProgressFollowUpState,
 } from '../progressView/ProgressFollowUpController';
-import type { RunEndResult, AgentConfig } from '@texra-ai/harness/schemas';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'HostRunActions';
 
@@ -140,7 +141,7 @@ export interface HostRunActionPorts {
   /** Open a settled run's final output, when its agent names one. */
   openFinalOutput(
     config: AgentConfig,
-    result: RunEndResult,
+    result: RunEnd,
   ): Effect.Effect<void, Error>;
   loadModelOptions(): Effect.Effect<
     readonly ProgressFollowUpModelOption[],
@@ -478,11 +479,7 @@ export const createHostRunActions = Effect.fn(
         .pipe(
           Effect.flatMap((outcome) => {
             if (outcome.kind !== 'followUp') return Effect.void;
-            const shown = presentFollowUpResult(
-              outcome.status === 'sent'
-                ? { status: 'sent' }
-                : { status: 'queued', wake: outcome.wake ?? undefined },
-            );
+            const shown = presentFollowUpResult(outcome);
             return shown.severity === 'none'
               ? Effect.void
               : present(shown.message);

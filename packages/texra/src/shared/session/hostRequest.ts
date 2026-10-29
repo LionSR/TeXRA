@@ -11,6 +11,7 @@
 import { Schema } from 'effect';
 
 import {
+  APPROVAL_BYPASS_KINDS,
   CredentialSwitchSchema,
   RunIdSchema,
   StoredMediaSchema,
@@ -171,7 +172,8 @@ export const HostRequestSchema = Schema.Union([
    *  approval applies the proposed file as the user left it, so the host
    *  reads the edit back and sends the `request.decide` itself; the others
    *  open editors and leave the approval pending. A reject reads nothing off
-   *  the preview, so it is a plain `request.decide` on every host. */
+   *  the preview, so it is a plain `request.decide` on every host. `grant`
+   *  is an approval's session bypass, sent with its `request.decide`. */
   Schema.Struct({
     kind: Schema.Literal('toolEdit'),
     requestId: Schema.String.check(Schema.isMinLength(1)),
@@ -181,6 +183,9 @@ export const HostRequestSchema = Schema.Union([
       'previewProposed',
       'showLatexdiff',
     ]),
+    grant: Schema.optional(
+      Schema.NullOr(Schema.Literals(APPROVAL_BYPASS_KINDS)),
+    ),
   }),
   /** An output file's verbs on a workflow run's file list. */
   Schema.Struct({

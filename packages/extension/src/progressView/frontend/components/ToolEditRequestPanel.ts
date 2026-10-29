@@ -57,8 +57,8 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
    * A windowed host applies the proposed file as the user left it in its
    * diff view, so this panel's approve is the host's `toolEdit` verb: the
    * tool-edit controller reads the edited content back and sends the
-   * `request.decide` itself. A reject and the run grant's bypass change stay
-   * the runtime arms they are; a host without a diff view (the TUI)
+   * `request.decide` itself, with the approval's session `grant`. A reject
+   * stays the runtime arm it is; a host without a diff view (the TUI)
    * decides from the payload alone and never reaches this override.
    */
   protected override emitRuntimeArm(runtime: RuntimeRequest): void {
@@ -71,6 +71,7 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
           kind: 'toolEdit',
           requestId: runtime.requestId,
           action: 'approve',
+          grant: runtime.grant,
         }),
       );
       return;

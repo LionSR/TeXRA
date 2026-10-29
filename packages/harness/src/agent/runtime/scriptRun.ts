@@ -13,7 +13,7 @@ import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import type { NativeChildStrategy } from '@agent/runtime/childRunLoop';
 import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
+import type { RunReport } from '@agent/runtime/runReport';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import {
@@ -245,7 +245,7 @@ export function createScriptRunStrategy(
   params: Parameters<typeof createNativeSubagentStrategy>[0] & {
     readonly title: string;
   },
-): NativeChildStrategy<RunEndResult, AgentRunServices> {
+): NativeChildStrategy<RunReport, AgentRunServices> {
   const { session, runId, title, startedAt } = params;
   const attributes = [{ name: 'title', value: title }];
   const native = createNativeSubagentStrategy(params);

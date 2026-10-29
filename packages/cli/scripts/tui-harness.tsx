@@ -1335,17 +1335,18 @@ if (SHOW_CHILDREN) {
 
 if (SHOW_PLAN) {
   publish({
-    type: 'run.fact',
+    type: 'plugin.fact',
     aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
-    fact: {
-      key: 'plan',
-      plan: {
-        objective: [
-          'Coordinate a small math proof through nested CLI work.',
-          'Route proof obligations to the right specialist.',
-          'Have a subagent inspect the Lean-style finite case.',
-        ].join('\n'),
-      },
+    plugin: 'goal',
+    kind: 'plan',
+    version: 1,
+    parent: null,
+    value: {
+      objective: [
+        'Coordinate a small math proof through nested CLI work.',
+        'Route proof obligations to the right specialist.',
+        'Have a subagent inspect the Lean-style finite case.',
+      ].join('\n'),
     },
   });
 }

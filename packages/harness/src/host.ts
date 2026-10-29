@@ -236,11 +236,7 @@ export {
 // Failures as hosts and plugins read them: the agent error, predicates, cause
 // chain, abort, provider message (`toErrorMessage` is in `./schemas`).
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
-export {
-  agentErrorPresentation,
-  type AgentErrorKind,
-  type AgentErrorPresentation,
-} from '@common/errors/agentErrorClassification';
+export type { AgentErrorKind } from '@common/errors/agentErrorClassification';
 export { causeChain } from '@utils/errors/errorMessage';
 export {
   isFileNotFoundError,

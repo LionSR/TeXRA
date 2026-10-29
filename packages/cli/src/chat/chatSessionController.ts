@@ -963,11 +963,7 @@ export function createChatSessionController(
             ),
             shutdownScope,
           );
-        const presentation = presentFollowUpResult(
-          outcome.value.status === 'sent'
-            ? { status: 'sent' }
-            : { status: 'queued', wake: outcome.value.wake ?? undefined },
-        );
+        const presentation = presentFollowUpResult(outcome.value);
         if (presentation.severity !== 'none') {
           appendLocalNotice(presentation.message, target);
         }

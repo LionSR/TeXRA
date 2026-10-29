@@ -1,252 +1,118 @@
 /**
- * The {@link Run} handle of `@texra-ai/harness`: how a launch, fresh or
- * resumed, becomes the one value an embedder holds. Every decision about a
- * run's handle is stated here, once: which level is the run's first, when
- * its transcript interest changes, when its drain ends, and which failure
- * wins.
- * `session.start` and `session.resume` (`sessionPrograms.ts`) differ only in
- * the launch they hand {@link handOver}.
+ * The {@link Run} of `@texra-ai/harness`: one activation of a run, as a
+ * view over its session's rows. It is `(session, runId, activation)`, the
+ * activation's commit, and holds nothing: the run is its registry's, which
+ * a launch or resume hands it to before this is built
+ * (`sessionPrograms.ts`), so a reader that leaves, or a handle nobody reads,
+ * changes nothing about the run.
  */
-import {
-  type Context,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  Stream,
-  Cause,
-} from 'effect';
+import { Effect, Stream, SubscriptionRef } from 'effect';
 
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import { registryOf } from '@agent/runtime/runRegistry';
+import { getRunRecords } from '@agent/storage/runRecords';
 import { replayTrace } from '@controllers/session/runTrace';
-import type { ProcessServices } from '@platform/processRuntime';
 import {
   type CommitOrdinal,
   qualifyAggregateId,
-  RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
-import { descendantRuns } from '@shared/session/sessionView';
+import { lastLifecycleRow } from '@shared/session/runFacts';
+import { descendantRuns, type SessionView } from '@shared/session/sessionView';
 
 import { RunFailure } from './errors.js';
 import type { Run } from './sessions.js';
 
-/** A run that returned without ever publishing its stream: a resumed run
- *  that ended before its activation committed (its result's error says
- *  why), or a launcher whose contract broke. A caller waiting on admission
- *  must hear it. */
-const NEVER_ENTERED = 'The run ended without entering the session.';
-
-/**
- * A run's end as its handle reports it. A stop interrupts the run's fiber,
- * which re-raises the interruption once the run's end commits: that stored
- * end is how the run ended, and the interruption, passed on, would interrupt
- * whoever reads it. With none stored, or a failed one, the interruption
- * stays: a joiner that left a run still going, an end that did not save.
- */
-const reportedEnd = (
+/** The {@link Run} of `runId`'s activation at `activation` on `session`;
+ *  `redirectedFrom`, the owned child a resume of it was asked for. */
+export function runView(
   session: RuntimeSessionHandle,
   runId: RunId,
-  exit: Exit.Exit<RunEndResult, RunFailure>,
-): Effect.Effect<RunEndResult, RunFailure> =>
-  Exit.isSuccess(exit) || !Cause.hasInterruptsOnly(exit.cause)
-    ? exit
-    : session.log.facts(runId).pipe(
-        Effect.map((facts) => facts?.end ?? null),
-        // An end that cannot be read fails the result with why, rather
-        // than passing the stop on as if none were stored.
-        Effect.mapError(
-          (error) =>
-            new RunFailure({
-              cause: error,
-              message: `Run ${runId} stopped; its stored end could not be read: ${error.message}`,
-            }),
-        ),
-        Effect.flatMap((end) =>
-          end === null || end.outcome === RUN_OUTCOME.FAILED
-            ? exit
-            : Effect.succeed({
-                runId,
-                outcome: end.outcome,
-                output: end.output,
-              }),
-        ),
-      );
-
-/** What a launch reports to its handle: the moment the run exists in its
- *  session. */
-interface LaunchHooks {
-  /** The run is admitted at `commit`, its activation's: the batch with its
-   *  `run.start` or its `run.activate`; `joined`: this caller joined a
-   *  resume already in flight, an observer. */
-  readonly onAdmitted: (
-    runId: RunId,
-    commit: CommitOrdinal,
-    joined?: boolean,
-  ) => Effect.Effect<void>;
-}
-
-/** One launch of `runId`, fresh or resumed, wired to the hooks its handle
- *  hands it; it ends with the run's result. */
-type Launch = (
-  hooks: LaunchHooks,
-) => Effect.Effect<RunEndResult, RunFailure, ProcessServices>;
-
-/**
- * Launch `runId` on `session` and hand back its {@link Run} once it exists
- * there; a launch that fails first fails this with its own error.
- *
- * The handoff is all-or-nothing for its caller: this either returns a
- * `Run`, or it ends every fiber it started. Each caller of a resume waits
- * on it (`resumeRun`): abandoning the handoff before a `Run` is returned
- * stops the run only when no other caller still waits on it, and once any
- * caller holds a `Run` only a stop or the session's close ends the run. A
- * `Run` whose caller joined a resume in flight is an observer: its
- * `interrupt` ends only its own wait and its events.
- */
-export function handOver(
-  session: RuntimeSessionHandle,
-  services: Context.Context<ProcessServices>,
-  runId: RunId,
-  launch: Launch,
-): Effect.Effect<Run, RunFailure> {
-  return Effect.gen(function* () {
-    const admitted = yield* Deferred.make<CommitOrdinal, RunFailure>();
-    // This activation's end, read once as it exits: a resume writes another.
-    const ended = yield* Deferred.make<RunEndResult, RunFailure>();
-    let joined = false;
-    // Settling a run that was admitted changes nothing here; one that never
-    // was fails its admission with its own failure, its result's error, or
-    // the launcher's broken contract.
-    const settle = (
-      exit: Exit.Exit<RunEndResult, RunFailure>,
-    ): Effect.Effect<void> =>
-      Effect.exit(reportedEnd(session, runId, exit)).pipe(
-        Effect.flatMap((end) => Deferred.done(ended, end)),
-        Effect.andThen(
-          Effect.suspend(() => {
-            if (Exit.isFailure(exit))
-              return Deferred.failCause(admitted, exit.cause);
-            const message = exit.value.error?.message ?? NEVER_ENTERED;
-            const failure = new RunFailure({
-              cause: new Error(message),
-              message,
-            });
-            return Deferred.fail(admitted, failure);
-          }),
-        ),
-      );
-    // The launch and the drain are the run's, and until the caller holds the
-    // `Run` that names them they are nobody's: whatever ends this handoff short
-    // of that ends them too. So the handoff is uninterruptible but for the
-    // admission wait, where an interruption ends the launch fiber (which stops
-    // its run: `resumeRun`, `rootRun`), and the
-    // exit handler outside the mask covers the rest, the boundary included: an
-    // interrupt that lands while the tail runs is raised the moment the mask
-    // lifts, with a `Run` built that reaches no one.
-    const interruptLaunch = (): boolean =>
-      registryOf(session.runs).interrupt(runId);
-    const spawned: Fiber.Fiber<unknown, Error>[] = [];
-    return yield* Effect.uninterruptibleMask((restore) =>
+  activation: CommitOrdinal,
+  redirectedFrom?: RunId,
+): Run {
+  const failure = (message: string, cause: unknown = new Error(message)) =>
+    new RunFailure({ cause, message });
+  // The activation is over once its end or the next activation commits, or
+  // once nothing here holds the run any more: an end that did not save, a
+  // session closing.
+  const over = Effect.raceFirst(
+    session.log.tail(activation).pipe(
+      Stream.filter((row) => lastLifecycleRow([row], runId) !== undefined),
+      Stream.runHead,
+    ),
+    Effect.suspend(() => session.runs.get(runId)?.drained ?? Effect.void),
+  );
+  // Read once the view applied it, so a view read afterwards includes it.
+  const result = over.pipe(
+    Effect.andThen(session.log.settled),
+    Effect.andThen(() => getRunRecords(session, runId).readRunEnd(activation)),
+    Effect.mapError((error) =>
+      failure(`Run ${runId}'s end could not be read: ${error.message}`, error),
+    ),
+    Effect.flatMap((end) =>
+      end === null
+        ? Effect.fail(failure(`Run ${runId} ended without a stored end.`))
+        : Effect.succeed(end),
+    ),
+  );
+  return {
+    runId,
+    ...(redirectedFrom !== undefined && { redirectedFrom }),
+    result,
+    // The transcript tier folds only for subscribed aggregates: while this
+    // view is read, on a port of its own, the run and its descendants, taken
+    // before the first level is, so even an ended run's one level holds its
+    // transcript; descendants join as the view gains them.
+    view: Stream.unwrap(
       Effect.gen(function* () {
-        const runFiber = yield* Effect.forkDetach(
-          launch({
-            onAdmitted: (_, commit, observer = false) => {
-              joined = observer;
-              return Deferred.done(admitted, Exit.succeed(commit));
-            },
-          }).pipe(
-            Effect.onExit(settle),
-            // The embedder owns this runtime. Provide the process's existing
-            // context: tool I/O shares its scoped clients, `settle` its logger.
-            Effect.provideContext(services),
-          ),
-          { startImmediately: true },
+        const port = `sdk/${runId}/${crypto.randomUUID()}`;
+        let subscribed = '';
+        const interest = (level: SessionView) => {
+          // The run itself even before the view holds it.
+          const ids = [
+            runId,
+            ...descendantRuns(level, runId, { includeRoot: false }),
+          ];
+          if (ids.join('\0') === subscribed) return Effect.void;
+          subscribed = ids.join('\0');
+          return session.view.subscribe(
+            port,
+            ids.map((id) => ({
+              id: qualifyAggregateId('run', id),
+              fromSeq: 0,
+            })),
+          );
+        };
+        yield* Effect.acquireRelease(
+          interest(SubscriptionRef.getUnsafe(session.view.ref)),
+          () => session.view.subscribe(port, []),
         );
-        spawned.push(runFiber);
-        const activation = yield* restore(Deferred.await(admitted));
-        const view = session.view.changes.pipe(
+        const replayed = qualifyAggregateId('run', runId);
+        return session.view.changes.pipe(
           // The level replays on subscribe, and the fold lands the
-          // activation's row asynchronously, so a replayed level can predate
-          // it: the run absent, or a resumed run with the outcome of the
-          // activation before.
+          // activation's row and the subscription's replay asynchronously,
+          // so a replayed level can predate them: the run absent, its
+          // transcript not yet read, or a resumed run with the outcome of
+          // the activation before.
           Stream.dropWhile(
-            (level) => level.cursor < activation || !level.runs.has(runId),
+            (level) =>
+              level.cursor < activation ||
+              !level.runs.has(runId) ||
+              !level.transcriptSeq.has(replayed),
           ),
-          // The view is the end condition: the first level holding this
-          // activation's durable outcome is the last element.
+          // The first level holding this activation's durable outcome is the
+          // last element.
           Stream.takeUntil(
             (level) => level.runs.get(runId)?.durableOutcome != null,
           ),
+          Stream.tap(interest),
         );
-        // The transcript tier folds only for subscribed aggregates, on a
-        // port of this handle's own (two callers may hold one run): its
-        // stream now, its descendants as the view gains them, cleared when
-        // the drain ends so a long-lived session does not keep every run's
-        // rows resident.
-        const port = `sdk/${runId}/${crypto.randomUUID()}`;
-        let subscribed = '';
-        const interest = (ids: readonly RunId[]): Effect.Effect<void> =>
-          Effect.suspend(() => {
-            const key = ids.join('\0');
-            if (key === subscribed) return Effect.void;
-            subscribed = key;
-            return session.view.subscribe(
-              port,
-              ids.map((id) => ({
-                id: qualifyAggregateId('run', id),
-                fromSeq: 0,
-              })),
-            );
-          });
-        yield* interest([runId]);
-        // The package owns this drain: the descendants join the subscription as
-        // the view gains them, and the run's `result` waits for its final fold
-        // even when nobody reads `view`, and fails if the fold dies first.
-        const drain = yield* Effect.forkDetach(
-          Stream.runDrain(
-            view.pipe(
-              Stream.tap((level) =>
-                interest(descendantRuns(level, runId, { includeRoot: true })),
-              ),
-            ),
-          ).pipe(Effect.ensuring(session.view.subscribe(port, []))),
-          { startImmediately: true },
-        );
-        spawned.push(drain);
-        const result = Effect.tap(Deferred.await(ended), Fiber.join(drain));
-        // A caller interrupted while the handle was built never holds it.
-        yield* restore(Effect.void);
-        return {
-          runId,
-          result,
-          view,
-          // Every reader replays this activation from the session's rows.
-          events: replayTrace(session, runId, activation, result),
-          // A launch not yet admitted is stopped where it stands, and then
-          // by id, in case it started a run meanwhile.
-          interrupt: Effect.suspend(() => {
-            if (joined) return Fiber.interrupt(runFiber);
-            if (interruptLaunch()) return Effect.void;
-            return Fiber.interrupt(runFiber).pipe(
-              Effect.andThen(Effect.sync(interruptLaunch)),
-            );
-          }),
-        };
       }),
-    ).pipe(
-      Effect.onExit((exit) =>
-        Exit.isSuccess(exit)
-          ? Effect.sync(() => {
-              // Handed out: leaving it no longer stops a resume.
-              const resuming = registryOf(session.runs).attemptOf(runId);
-              if (resuming) resuming.handedOff = true;
-            })
-          : // The launch leaves with its caller (`resumeRun`, `rootRun`).
-            Fiber.interruptAll(spawned),
-      ),
-    );
-  });
+    ),
+    // Every reader replays this activation from the session's rows.
+    events: replayTrace(session, runId, activation, result),
+    interrupt: session.requests
+      .request({ kind: 'run.stop', runId, reason: 'user' })
+      .pipe(Effect.ignore({ log: 'Warn', message: `Stopping run ${runId}` })),
+  };
 }

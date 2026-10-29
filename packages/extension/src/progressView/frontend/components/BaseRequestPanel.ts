@@ -29,7 +29,7 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 // Local imports - shared schemas
 import {
-  approvalDecisionArms,
+  approvalDecisionArm,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
@@ -179,16 +179,15 @@ export abstract class BaseRequestPanel<
 
   protected emitAction(decision: SurfaceDecision): void {
     if (this.readOnly) return;
-    for (const arm of approvalDecisionArms(this.permission, decision)) {
-      if ('host' in arm) this.dispatchEvent(SessionUiEvents.host(arm.host));
-      else this.emitRuntimeArm(arm.runtime);
-    }
+    const arm = approvalDecisionArm(this.permission, decision);
+    if ('host' in arm) this.dispatchEvent(SessionUiEvents.host(arm.host));
+    else this.emitRuntimeArm(arm.runtime);
   }
 
   /**
-   * One runtime arm of a decision. A panel whose host answers a runtime arm
-   * with a verb of its own (the tool-edit panel's approve/reject) overrides
-   * this instead of re-implementing the loop and its gate above.
+   * Send a decision's runtime arm. A panel whose host answers it with a verb
+   * of its own (the tool-edit panel's approve) overrides this instead of
+   * re-implementing `emitAction`'s read-only check and host-arm dispatch.
    */
   protected emitRuntimeArm(runtime: RuntimeRequest): void {
     this.dispatchEvent(SessionUiEvents.runtime(runtime));

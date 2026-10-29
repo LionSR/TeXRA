@@ -3,11 +3,7 @@ import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 
 import { runRejection } from '@agent/storage/resumability';
 import { finalizeRun } from '@agent/storage/runLifecycle';
-import type {
-  ResumeAttempt,
-  ResumeRunOptions,
-  ResumeRunResult,
-} from '@agent/runtime/resumeRun';
+import type { ResumeAttempt, ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type { StopCause } from '@agent/runtime/runs';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -50,7 +46,7 @@ export type FollowUpFailureReason =
  */
 export type SubmitFollowUpResult =
   | { status: 'sent' }
-  | { status: 'queued'; wake?: 'failed' }
+  | { status: 'queued'; wake?: 'failed' | null }
   | { status: 'failed'; reason: FollowUpFailureReason };
 
 /** How one input is delivered to a run. */
@@ -118,7 +114,9 @@ export function presentFollowUpResult(
 const CHANNEL = 'ToolUseFollowUp';
 
 /** A resume's refusal of a run that cannot continue here. */
-export const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
+export const REFUSED: { readonly failed: ResumeRefusal } = {
+  failed: 'not_resumable',
+};
 
 /** A resume in flight here, on its run's activation. */
 export interface RunAttempt {
@@ -128,8 +126,8 @@ export interface RunAttempt {
   readonly admitted: Deferred.Deferred<CommitOrdinal>;
   /** The callers waiting on its answer. */
   waiters: number;
-  /** A caller took its answer, or none holds it (a wake): only a stop or
-   *  the session's close ends the run now. */
+  /** A caller holds the activated run, or none holds the resume (a wake):
+   *  only a stop or the session's close ends the run now. */
   handedOff: boolean;
   /** The activation it opened (`RunRegistry.start` links it): the one
    *  record of a stop's reason, which its generation's exit and its own
@@ -151,9 +149,8 @@ export const wakeRun = (
 ): Effect.Effect<Effect.Effect<void>> =>
   Effect.gen(function* () {
     if (session.view.run(runId) === undefined) return Effect.void;
-    const opened = yield* openResume(runId, { session }, true);
-    if (opened === undefined) return Effect.void;
-    const { attempt } = opened;
+    const attempt = yield* openResume(runId, { session }, true);
+    if (attempt === undefined) return Effect.void;
     attempt.handedOff = true;
     // Observation only: interruptible even where the caller is masked.
     return Effect.asVoid(Effect.interruptible(Effect.exit(attempt.answer)));
@@ -169,15 +166,13 @@ export const openResume = (
   runId: RunId,
   options: ResumeRunOptions,
   wake: boolean,
-): Effect.Effect<
-  { readonly attempt: RunAttempt; readonly joined: boolean } | undefined
-> =>
+): Effect.Effect<RunAttempt | undefined> =>
   // Uninterruptible: an attempt others can join always gets its answer.
   Effect.uninterruptible(
     Effect.gen(function* () {
       const runs = registryOf(options.session.runs);
       const found = runs.attemptOf(runId);
-      if (found) return { attempt: found, joined: true };
+      if (found) return found;
       const here = runs.get(runId);
       if (here?.live || here?.launched) return undefined;
       const done = yield* Deferred.make<ResumeAttempt, Error>();
@@ -211,7 +206,7 @@ export const openResume = (
         return yield* openResume(runId, options, wake);
       }
       fiber.addObserver((exit) => Deferred.doneUnsafe(done, exit));
-      return { attempt, joined: false };
+      return attempt;
     }),
   );
 

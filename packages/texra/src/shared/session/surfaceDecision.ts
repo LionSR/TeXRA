@@ -1,9 +1,8 @@
 /**
  * What a surface does with one decision on a pending request: the
- * `request.decide`, `policy.set`, and
- * `host.request` arms it names. Both surfaces that present requests, the
- * progress view's request panels and the TUI's approval modal, map through
- * here, so one decision means one thing on both.
+ * `request.decide` or `host.request` arm it names. Both surfaces that
+ * present requests, the progress view's request panels and the TUI's
+ * approval modal, map through here, so one decision means one thing on both.
  *
  * Pure and host-neutral: it reaches the harness's schemas and the two request
  * protocols, and nothing else.
@@ -22,16 +21,16 @@ import type { HostRequest } from './hostRequest';
 /**
  * Surface-only approval action emitted by the inline edit/command approval
  * button / `a` shortcut on the edit and bash approval prompts. It never
- * becomes a durable decision: {@link approvalDecisionArms} decomposes it into
- * a plain approve plus a session-bypass enable (ruling A9-6).
+ * becomes a durable decision: {@link approvalDecisionArm} sends it as a
+ * plain approve that grants the session bypass.
  */
 export const APPROVE_SESSION_ACTION = 'approveSession';
 
 /**
  * Surface-only approval action emitted by the approve-all-delegated-work item
  * on the agent-proposal Approve menu. Like {@link APPROVE_SESSION_ACTION},
- * {@link approvalDecisionArms} decomposes it into a plain proposal approve
- * plus a per-run delegated-work bypass enable.
+ * {@link approvalDecisionArm} sends it as a plain proposal approve that
+ * grants the run's delegated-work bypass.
  */
 export const APPROVE_ALL_DELEGATED_WORK_ACTION = 'approveSuperYolo';
 
@@ -50,7 +49,7 @@ export type SurfaceDecision =
   | { readonly action: ToolEditPreviewAction };
 
 /**
- * One wire arm a decision names: a request to the run's runtime, or a
+ * The wire arm a decision names: a request to the run's runtime, or a
  * capability only the host can perform. A tool edit's verbs act on the
  * preview the host staged and a retry's own-key switch stores a credential,
  * so those two kinds are the only ones that name a host arm.
@@ -67,24 +66,27 @@ const BYPASS_OF_KIND: Partial<
 };
 
 /**
- * The arms one decision names: a session-wide approval is the
- * bypass change and the approval itself, in that order; a tool-edit preview
- * verb is a host capability that leaves the request pending; a retry on the
- * user's own key is the host's `useOwnApiKey`, which stores the key and then
- * decides the retry itself. Everything else is one `request.decide`.
+ * The arm one decision names: a session-wide approval is the approval with
+ * its bypass `grant`; a tool-edit preview verb is a host capability that
+ * leaves the request pending; a retry on the user's own key is the host's
+ * `useOwnApiKey`, which stores the key and then decides the retry itself.
+ * Everything else is a plain `request.decide`.
  */
-export function approvalDecisionArms(
+export function approvalDecisionArm(
   permission: PendingRequest['payload'],
   decision: SurfaceDecision,
-): readonly ApprovalArm[] {
+): ApprovalArm {
   const { runId, requestId } = permission.data;
   if (runId === '') {
     throw new Error(
       `Permission ${permission.kind}:${requestId} names no run to decide on.`,
     );
   }
-  const decide = (d: RequestDecision): ApprovalArm => ({
-    runtime: { kind: 'request.decide', runId, requestId, decision: d },
+  const decide = (
+    d: RequestDecision,
+    grant?: ApprovalBypassKind,
+  ): ApprovalArm => ({
+    runtime: { kind: 'request.decide', runId, requestId, decision: d, grant },
   });
   switch (decision.action) {
     case APPROVE_SESSION_ACTION:
@@ -101,39 +103,15 @@ export function approvalDecisionArms(
           `A ${permission.kind} request has no session bypass to enable.`,
         );
       }
-      // Enable the session-wide bypass first: the field-level mutation the
-      // approval authority applies, not a snapshot.
-      return [
-        {
-          runtime: {
-            kind: 'policy.set',
-            change: {
-              field: 'bypass',
-              runId,
-              bypass,
-              enabled: true,
-              exceptRequestId: requestId,
-            },
-          },
-        },
-        decide({ action: 'approve' }),
-      ];
+      return decide({ action: 'approve' }, bypass);
     }
     case 'openDiff':
     case 'showLatexdiff':
     case 'previewProposed':
-      return [
-        {
-          host: {
-            kind: 'toolEdit',
-            requestId,
-            action: decision.action,
-          },
-        },
-      ];
+      return { host: { kind: 'toolEdit', requestId, action: decision.action } };
     case 'retry': {
       if (decision.credentials !== 'personal' || permission.kind !== 'retry') {
-        return [decide(decision)];
+        return decide(decision);
       }
       const { data } = permission;
       if (data.credentialSwitch == null) {
@@ -141,16 +119,14 @@ export function approvalDecisionArms(
           `Retry ${requestId} offers no move onto the user's own credential.`,
         );
       }
-      return [
-        {
-          host: {
-            kind: 'useOwnApiKey',
-            runId,
-            requestId,
-            credentialSwitch: data.credentialSwitch,
-          },
+      return {
+        host: {
+          kind: 'useOwnApiKey',
+          runId,
+          requestId,
+          credentialSwitch: data.credentialSwitch,
         },
-      ];
+      };
     }
     case 'approve':
     case 'approve_and_goal':
@@ -160,7 +136,7 @@ export function approvalDecisionArms(
     case 'reject':
     case 'deny':
     case 'cancel':
-      return [decide(decision)];
+      return decide(decision);
     default:
       return decision satisfies never;
   }

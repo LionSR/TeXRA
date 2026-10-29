@@ -8,14 +8,12 @@ import { withLogChannel } from '@logger/effectLog';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
   type CommitOrdinal,
-  isTaskConfig,
   type RunId,
   type RequestEnsureProgressViewPayload,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 
-import { withChildSpend } from '../storage/runRecords';
 import {
   buildAgentLaunchContext,
   type PreparedAgentDefinition,
@@ -31,7 +29,7 @@ import { runToolUse } from './loop/toolUse';
 import type { AgentRunServices } from './runRegistry';
 import type { RegisterRunOptions } from '../storage/runLifecycle';
 import type { ChildRunTurns } from './childRunLoop';
-import type { RunEndResult } from './RunEndResult';
+import type { RunReport } from './runReport';
 import type { SessionHandle } from './SessionHandle';
 
 const CHANNEL = 'executeAgent';
@@ -72,7 +70,7 @@ export interface ExecuteAgentOptions {
    *  a fresh run's is its registration's. */
   readonly parentRunId?: RunId;
   /** The child-run policy: each turn's permit, each turn's settlement. */
-  readonly turns?: ChildRunTurns<RunEndResult>;
+  readonly turns?: ChildRunTurns<RunReport>;
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
@@ -80,11 +78,10 @@ export interface ExecuteAgentOptions {
   /** Fires once with the run's id as the run starts. */
   readonly onRun?: (runId: RunId) => Effect.Effect<void, Error>;
   /**
-   * The one admission hook, once per caller, with the run admitted and the
-   * commit of the batch that opened this activation (a fresh run's opening,
-   * a resume's `run.activate`). The run runs it as that batch commits,
-   * which it holds: keep it short. A joiner of a resume runs it once the
-   * resume has admitted the run.
+   * The one admission hook, with the run admitted and the commit of the
+   * batch that opened this activation (a fresh run's opening, a resume's
+   * `run.activate`). The run runs it as that batch commits, which it holds:
+   * keep it short.
    */
   readonly onAdmitted?: (
     runId: RunId,
@@ -105,7 +102,7 @@ export function executeAgent(
   definition: PreparedAgentDefinition,
   runId: RunId,
   options: ExecuteAgentOptions,
-): Effect.Effect<RunEndResult, Error, AgentRunServices> {
+): Effect.Effect<RunReport, Error, AgentRunServices> {
   return Effect.gen(function* () {
     // Done once the run exists: its description is a row of it.
     const opened = yield* Deferred.make<void>();
@@ -121,16 +118,10 @@ export function executeAgent(
       session: options.session,
     });
     const { config, session } = launch;
-    // A failed run arrives as a FAILED result carrying its structured
-    // error, so there is nothing to unwrap here; a task's result carries
-    // its children's spend.
+    // A failed run arrives as a FAILED report carrying its failure, so
+    // there is nothing to unwrap here.
     const resume = options.registration === undefined;
     const loop = runToolUse({ turns: options.turns, resume }).pipe(
-      Effect.flatMap((ended) =>
-        isTaskConfig(config)
-          ? withChildSpend(session, ended)
-          : Effect.succeed(ended),
-      ),
       Effect.provide(
         modelInvokerLayer().pipe(
           Layer.provideMerge(

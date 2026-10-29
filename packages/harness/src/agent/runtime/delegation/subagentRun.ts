@@ -110,7 +110,6 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     const definition = yield* prepareAgentDefinition({
       config: Schema.decodeUnknownSync(AgentConfigSchema)(childConfigPayload),
       session: parentSession,
-      suppressErrorNotification: true,
     });
     const { config } = definition;
     yield* startDetachedChildRunLoop({

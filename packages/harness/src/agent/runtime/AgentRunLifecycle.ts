@@ -23,7 +23,7 @@ import {
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { receiveTerminalFailure } from './terminalResultToast';
-import { buildTerminalRunEndResult, type RunEndResult } from './RunEndResult';
+import type { RunReport } from './runReport';
 import type { AgentRunServices } from './runRegistry';
 import type { ChildRunTurns } from './childRunLoop';
 import type { TransactionPart } from './childTurnResult';
@@ -44,7 +44,7 @@ export interface RunLifecycleOptions {
    *  nothing it does may abort the run, and it is logged. */
   onRun?: (runId: RunId) => Effect.Effect<void, Error>;
   /** A child's last turn result, from the result its run ends with. */
-  finishLastTurn?: ChildRunTurns<RunEndResult>['finishLastTurn'];
+  finishLastTurn?: ChildRunTurns<RunReport>['finishLastTurn'];
 }
 
 interface EndActivationParams {
@@ -190,9 +190,9 @@ function toRunFailureError(error: RetryErrorInfo): Error {
  * failure for a run whose durable record says cancelled.
  */
 function withResolvedOutcome(
-  result: RunEndResult,
+  result: RunReport,
   outcome: RunOutcome,
-): RunEndResult {
+): RunReport {
   if (result.outcome === outcome) return result;
   return { ...result, outcome };
 }
@@ -208,9 +208,9 @@ function withResolvedOutcome(
  */
 export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
   ctx: RunLaunch,
-  runner: () => Effect.Effect<RunEndResult, Error, R>,
+  runner: () => Effect.Effect<RunReport, Error, R>,
   options?: RunLifecycleOptions,
-): Effect.fn.Return<RunEndResult, Error, R | AgentRunServices> {
+): Effect.fn.Return<RunReport, Error, R | AgentRunServices> {
   const { runId, session } = ctx;
   const agentIdentifier = ctx.config.agent;
   // Read once as the run entered: a child detached mid-run ends as a child.
@@ -222,7 +222,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     lastResult,
     ...arm
   }: Pick<EndActivationParams, 'outcome' | 'error' | 'output' | 'stopped'> & {
-    lastResult?: RunEndResult;
+    lastResult?: RunReport;
   }) =>
     endActivation({
       session,
@@ -239,7 +239,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
    */
   const finalizeFailedRun = Effect.fn(function* (
     err: unknown,
-    carried: RunEndResult | undefined,
+    carried: RunReport | undefined,
     stopped = false,
   ) {
     // A throw in this fallible prologue must not strand the run without its
@@ -291,18 +291,16 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     // A stop that reached the run outranks the failure beside it; the
     // failure still rides the cancelled row as its error detail.
     const outcome = stopped ? RUN_OUTCOME.CANCELLED : AGENT_ERROR_OUTCOME[kind];
+    /** The report of a run that ended before its loop produced an output. */
+    const emptyReport = (ended: RunOutcome): RunReport => {
+      const misses = ctx.opening?.attachedMemoryMisses ?? [];
+      const report = { outcome: ended, output: emptyRunEndOutput(), runId };
+      return misses.length > 0 ? { ...report, memoryMisses: misses } : report;
+    };
     // A child's failure rides its result, the error its delivery reports.
-    const subagentResult: RunEndResult | undefined =
+    const subagentResult: RunReport | undefined =
       parentRunId !== null
-        ? {
-            ...(carried ??
-              buildTerminalRunEndResult(
-                outcome,
-                runId,
-                ctx.opening?.attachedMemoryMisses,
-              )),
-            error: info,
-          }
+        ? { ...(carried ?? emptyReport(outcome)), failure: info }
         : undefined;
     // One finalize covers the three exits below; its row is the toast's.
     const finalized = yield* finalizeTerminal({
@@ -317,13 +315,7 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
     if (subagentResult) {
       return withResolvedOutcome(subagentResult, resolvedOutcome);
     }
-    if (kind === 'abort') {
-      return buildTerminalRunEndResult(
-        resolvedOutcome,
-        runId,
-        ctx.opening?.attachedMemoryMisses,
-      );
-    }
+    if (kind === 'abort') return emptyReport(resolvedOutcome);
 
     const failure = new AgentError({ message: errorMsg, cause: err });
     receiveTerminalFailure(failure, finalized);
@@ -343,12 +335,12 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
    * FAILED without it and finalizes as an outcome-only terminal result.
    */
   const terminal = (
-    exit: Exit.Exit<RunEndResult, Error>,
-  ): Effect.Effect<RunEndResult, Error> => {
+    exit: Exit.Exit<RunReport, Error>,
+  ): Effect.Effect<RunReport, Error> => {
     if (Exit.isSuccess(exit)) {
       const result = exit.value;
-      if (result.error) {
-        return finalizeFailedRun(toRunFailureError(result.error), result);
+      if (result.failure) {
+        return finalizeFailedRun(toRunFailureError(result.failure), result);
       }
       // The phase decides the verdict here exactly as on a failure: a stop
       // that won on the phase must not let the caller observe COMPLETED.

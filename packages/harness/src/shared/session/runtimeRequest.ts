@@ -110,13 +110,18 @@ export const RuntimeRequestSchema = Schema.Union([
    * waiting run, the recovery bindings, and every surface read. A decision
    * for a request its run is not parked on is delivered as a follow-up.
    * `useOwnApiKey` is the host command that ends in
-   * `{ action: 'retry', credentials: 'personal' }` here.
+   * `{ action: 'retry', credentials: 'personal' }` here. `grant` approves
+   * for the session: the run's bypass of that kind turns on with the
+   * decision, recorded as its `approval.policy` row, never in the decision.
    */
   Schema.Struct({
     kind: Schema.Literal('request.decide'),
     ...runScoped,
     requestId: Schema.String.check(Schema.isMinLength(1)),
     decision: RequestDecisionSchema,
+    grant: Schema.optional(
+      Schema.NullOr(Schema.Literals(APPROVAL_BYPASS_KINDS)),
+    ),
   }),
   /** A pending tool edit's preview, as the session staged it beside the
    *  request: answered `preview`, null when none is staged. */
@@ -143,12 +148,9 @@ export const RuntimeRequestSchema = Schema.Union([
         field: Schema.Literal('bypass'),
         ...runScoped,
         bypass: Schema.Literals(APPROVAL_BYPASS_KINDS),
-        enabled: Schema.Boolean,
         /** Turning a bypass on also approves the run's requests already
-         *  pending under it. This one is the surface's own, decided by the
-         *  `request.decide` that follows, which may carry more than a plain
-         *  approval. */
-        exceptRequestId: Schema.optional(Schema.String),
+         *  pending under it. */
+        enabled: Schema.Boolean,
       }),
       /** Narrow the run's limit at once (a chat's `/approval`): it only
        *  ever lowers, never raises, the run's own limit. */
