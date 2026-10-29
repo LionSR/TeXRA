@@ -633,8 +633,7 @@ makes it shared); a host-specific refusing `SetupPlatform` in the harness.
 
 **Moved since.** The plan, once a core `run.fact` row, is the goal plugin's
 `goal/plan` arm (2026-10-29): one kind of application state, committed with
-the approving `plan` result, and kept by a fork at its cut (`PluginArm.fork`).
-`run.fact` is a retired row kind.
+the approving `plan` result. `run.fact` is a retired row kind.
 
 ---
 

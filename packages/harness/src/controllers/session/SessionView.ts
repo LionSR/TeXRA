@@ -31,13 +31,10 @@ import {
 } from 'effect';
 
 import type { SessionViewAccess } from '@agent/runtime/SessionHandle';
-import { AppSignals } from '@platform/appSignals';
+import type { AppSignals } from '@platform/appSignals';
 import {
   qualifyAggregateId,
-  type CommitOrdinal,
   type LocalRuntimeState,
-  type RunId,
-  type SessionEvent,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import { Database, type DatabaseReadFailed } from '@shared/session/database';
@@ -50,7 +47,7 @@ import type {
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { SessionView } from '@shared/session/sessionView';
-import { armsOf, type PluginArms } from '@tools/plugins';
+import { announceRunFacts, armsOf } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 import { LocalRuntimeSource, TranscriptSubscriptions } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
@@ -185,71 +182,6 @@ export class RemoteSessionView extends Context.Service<
 }
 
 /**
- * Announce the workspace files every run's facts say it wrote above `since`
- * (an arm's `writes`), once each and in commit order: a run that changes
- * the workspace past the editor's own write path records it as a fact on
- * its own rows, and every process that folds the run announces it, so a
- * window hears a background service task's change as it hears its own. The view
- * only says which runs to look at: a run whose announced fact differs from
- * the last level read, the first level included. The rows themselves are
- * read (`rows`), since the view keeps each kind's latest value only and its
- * tail coalesces wakes; a row at or below `since` (the history a reopened
- * session replays) is never announced. A failed read (a busy store) is
- * logged and retried on the next change, from where the last good read left
- * off: it never stops the announcer.
- */
-function announceRunFacts(
-  changes: Stream.Stream<SessionView>,
-  rows: (runId: RunId) => Effect.Effect<readonly SessionEvent[], Error>,
-  since: CommitOrdinal,
-  arms: PluginArms,
-): Effect.Effect<void, never, AppSignals> {
-  return AppSignals.use((signals) => {
-    const writing = new Map(
-      Object.entries(arms).flatMap(([name, { writes }]) =>
-        writes === undefined ? [] : [[name, writes] as const],
-      ),
-    );
-    const seen = new Map<RunId, string>();
-    const announcedTo = new Map<RunId, CommitOrdinal>();
-    const announce = (runId: RunId) =>
-      rows(runId).pipe(
-        Effect.map((stored) => {
-          let last = announcedTo.get(runId) ?? since;
-          for (const row of stored) {
-            if (row.type !== 'plugin.fact' || row.commit <= last) continue;
-            const writes = writing.get(`${row.plugin}/${row.kind}`);
-            if (writes !== undefined)
-              signals.emit('workspaceFilesWritten', {
-                absolutePaths: [...writes(row.value)],
-              });
-            last = row.commit;
-          }
-          announcedTo.set(runId, last);
-        }),
-        Effect.catch((error) => {
-          seen.delete(runId);
-          return Effect.logWarning(
-            `Run ${runId}'s facts were not read; announcing them on the next change`,
-          ).pipe(Effect.annotateLogs({ data: error }));
-        }),
-      );
-    return Stream.runForEach(changes, (view) => {
-      const moved: RunId[] = [];
-      for (const run of view.runs.values()) {
-        const facts = [...writing.keys()].map((key) => run.facts[key]);
-        if (facts.every((fact) => fact === undefined)) continue;
-        const written = JSON.stringify(facts);
-        if (seen.get(run.id) === written) continue;
-        seen.set(run.id, written);
-        moved.push(run.id);
-      }
-      return Effect.forEach(moved, announce, { discard: true });
-    });
-  });
-}
-
-/**
  * A session's view as its handle carries it (`SessionHandle.view`): the
  * current view, the replay it is built from, the transcript subscriptions
  * that decide which transcripts it holds, and the local runtime state it
@@ -280,6 +212,9 @@ export const makeSessionViewAccess = Effect.fn(
   const inputs = yield* SessionInputs;
   const subscriptions = yield* TranscriptSubscriptions;
   const local = yield* LocalRuntimeSource;
+  // What the session's runs announce from here on, to this process's
+  // listeners, for the session's life: rows above the commit the store
+  // holds now, so a reopened session never replays history as news.
   const database = yield* Database;
   yield* announceRunFacts(
     changes,

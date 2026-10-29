@@ -15,15 +15,13 @@ export const PlanSchema = Schema.Struct({
 export type Plan = typeof PlanSchema.Type;
 
 /** The goal plugin's row kind: the run's approved plan, a fact of the
- *  `plan` call the user approved. A fork starts with the plan its source
- *  held at the cut. */
+ *  `plan` call the user approved. */
 export const GOAL_PLAN_ARM = Object.freeze({
   plugin: 'goal',
   kind: 'plan',
   version: 1,
   schema: PlanSchema,
   upcasters: Object.freeze([]),
-  fork: 'cut',
 } as const);
 
 /** The plan the user last approved in `run` (its `RunView.facts`), if any. */

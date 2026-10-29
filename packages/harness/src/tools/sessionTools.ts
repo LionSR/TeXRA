@@ -23,20 +23,16 @@ import {
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import type { SessionLog } from '@agent/runtime/SessionHandle';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginContext } from '@platform/processRuntime';
-import type { RunId } from '@shared/schemas';
-import type { DatabaseReadFailed } from '@shared/session/database';
-import type { RunHistoryDraft } from '@shared/session/runState';
 import {
   entriesOf,
   mergeEntries,
   type HeldPlugins,
   type ToolEntry,
 } from '@tools/catalogEntries';
-import { armsOf, forkedFacts, type Plugin } from '@tools/plugins';
+import type { Plugin } from '@tools/plugins';
 import { PluginHold, type SessionPluginLayer } from '@tools/toolTable';
 import {
   projectServers,
@@ -85,14 +81,6 @@ export interface SessionTools {
     declared: readonly string[],
     root: boolean,
   ) => Effect.Effect<HeldPlugins, never, Scope.Scope>;
-  /** The facts a fork `runId` of run `from`, cut at its row `cut`, starts
-   *  with, by its plugins' arms (`forkedFacts`). */
-  readonly forkedFacts: (
-    log: Pick<SessionLog, 'rows'>,
-    from: RunId,
-    cut: number,
-    runId: RunId,
-  ) => Effect.Effect<readonly RunHistoryDraft[], DatabaseReadFailed>;
 }
 
 /** The process side every session's catalog reads. */
@@ -326,11 +314,8 @@ export const sessionTools = Effect.fnUntraced(function* (
   );
   const servers = yield* projectServers(shared.spawner, shared.loader);
   const resources = { layers, holdServer: servers.holdServer };
-  const arms = armsOf(shared.builtIn.map(({ plugin }) => plugin));
   return {
     pin: (off, options) => pinStep(shared, resources, off, options),
-    forkedFacts: (log, from, cut, runId) =>
-      forkedFacts(log, arms, from, cut, runId),
     hold: (declared, root) =>
       Effect.map(servers.hold(declared, root), ({ warnings, held }) => ({
         warnings,

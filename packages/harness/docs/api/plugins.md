@@ -1037,10 +1037,6 @@ interface PluginArm {
    *  them (`workspaceFilesWritten`), a window hearing a service task's
    *  write as it hears its own. */
   readonly writes?: (value: JsonValue) => readonly string[];
-  /** `cut`: a fork of a run starts with the run's row of the kind as it
-   *  stood at the cut; absent, without one. A fact about the plugin's own
-   *  aggregate is that aggregate's, and stays with the source. */
-  readonly fork?: 'cut';
 }
 ```
 

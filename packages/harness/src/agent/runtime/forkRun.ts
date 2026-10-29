@@ -9,10 +9,9 @@
  * run's offered set is
  * recorded only where a step opens, so the fork's first step records its
  * own. Nothing pending is copied (no follow-up, request or retry permit),
- * its usage starts at zero, and of the source's own plugin facts it takes
- * what each kind's arm says a fork starts with (`PluginArm.fork`).
- * `forkSeed` is the same cut as a child its caller launches at once: a
- * script's `self()`.
+ * its usage starts at zero, and the source's plugin facts stay with the
+ * source. `forkSeed` is the same cut as a child its caller launches at
+ * once: a script's `self()`.
  */
 import { Effect } from 'effect';
 
@@ -207,7 +206,6 @@ export const forkRun = Effect.fn('forkRun')(function* (
   });
   yield* cell.append([
     ...viewRows(runId, state, state.messages),
-    ...(yield* session.tools.forkedFacts(session.log, from.id, cut, runId)),
     ...(state.backend === null
       ? []
       : [
@@ -253,7 +251,7 @@ export const forkSeed = Effect.fn('forkSeed')(function* (
   { readonly record: AgentConfig; readonly seed: RunHistoryDraft[] },
   Rejected | Error
 > {
-  const { seq, state, record } = yield* cutOf(session, from, null, before);
+  const { state, record } = yield* cutOf(session, from, null, before);
   const text = { kind: 'text' as const, text: prompt };
   // The prompt is the next user message; a cut that already ends on one
   // (a turn's beginning) takes it as that message's last part.
@@ -281,10 +279,6 @@ export const forkSeed = Effect.fn('forkSeed')(function* (
         ];
   return {
     record: { ...record, model },
-    seed: [
-      ...viewRows(runId, state, messages),
-      ...(yield* session.tools.forkedFacts(session.log, from, seq, runId)),
-      ...binding,
-    ],
+    seed: [...viewRows(runId, state, messages), ...binding],
   };
 });
