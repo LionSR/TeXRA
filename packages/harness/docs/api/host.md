@@ -2038,7 +2038,7 @@ interface RootedFileSystem extends FileSystem.FileSystem {
     target: string,
     data: Uint8Array,
   ) => Effect.Effect<void, PlatformError.PlatformError>;
-  /** Directory entries with the type of each, one `stat` per entry. */
+  /** Directory entries with the type of each, from one typed listing. */
   readonly readDirectoryTyped: (
     target: string,
   ) => Effect.Effect<

@@ -195,8 +195,9 @@ export const readDirectoryTyped = Effect.fn('fsDurability.readDirectoryTyped')(
  * failure costs a row. The strict form stays with the containment and
  * deletion walkers, where a refused answer is the safe one.
  *
- * The Node call is the one `FileSystem` cannot make: `readDirectory` returns
- * names alone, and the pre-`readdir` answer is what carries the types.
+ * It reads the dirents through Node's `readdir` directly, so its callers need
+ * only `Path`; the strict form gets the same typed listing from
+ * `FileSystem.readDirectoryEntries`.
  */
 export const readDirectoryTypedTolerant = Effect.fn(
   'fsDurability.readDirectoryTypedTolerant',
