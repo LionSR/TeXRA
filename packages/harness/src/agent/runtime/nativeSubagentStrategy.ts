@@ -80,7 +80,7 @@ export function createNativeSubagentStrategy(
   const config = params.definition
     ? params.definition.config
     : params.resume.config;
-  // A child's provider/runtime failure rides its turn's `error`
+  // A child's provider/runtime failure rides its report's `failure`
   // (`runWithLifecycle` returns a terminal failed result rather than
   // rejecting); a thrown call reaches `formatError` as its `err`.
   let lastResult: RunReport | undefined;
@@ -134,7 +134,6 @@ export function createNativeSubagentStrategy(
             const definition = yield* prepareAgentDefinition({
               config,
               session: params.session,
-              suppressErrorNotification: true,
               stopAfterCycle,
             });
             return yield* programs.executeAgent(definition, params.runId, {

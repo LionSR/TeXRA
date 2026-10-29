@@ -315,7 +315,6 @@ export const executeSubagentInBand = (
           options.configPayload,
         ),
         session: options.session,
-        suppressErrorNotification: true,
         stopAfterCycle: true,
       });
       return yield* executeInBand(options, { kind: 'fresh', definition });

@@ -33,11 +33,6 @@ export interface RootLaunchOptions extends Pick<
    *  follow-up input. */
   stopAfterCycle?: boolean;
   /**
-   * The caller owns presentation for failures before registration; after
-   * that the run's `result` event presents.
-   */
-  suppressErrorNotification?: boolean;
-  /**
    * Opt-in for a host's quick fix-up actions: run the launched agent on the
    * configured helper model instead of the selected one. Off for a direct
    * launch and for orchestrator delegations, which keep the chosen model.
@@ -145,7 +140,6 @@ const admittedRun = Effect.fn('admittedRun')(function* (
 ) {
   const {
     preferHelperModel,
-    suppressErrorNotification,
     continues,
     approveDelegatedWork,
     approvalPolicy,
@@ -162,7 +156,6 @@ const admittedRun = Effect.fn('admittedRun')(function* (
   const definition = yield* prepareAgentDefinition({
     config,
     session: runSession,
-    suppressErrorNotification,
     stopAfterCycle,
   });
   // A chat round takes the human grants of the round it continues, never
