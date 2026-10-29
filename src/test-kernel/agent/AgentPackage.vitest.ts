@@ -14,7 +14,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - package API under test
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import type { RunId } from '@shared/schemas';
+import type { RunId, TranscriptSubscription } from '@shared/schemas';
 import {
   emptySessionView,
   type SessionView as RuntimeSessionView,
@@ -83,7 +83,12 @@ class FakeSession {
       SubscriptionRef.changes(this.viewRef),
       Stream.fromEffect(Effect.suspend(() => Deferred.await(this.foldDeath))),
     ),
-    subscribe: () => Effect.void,
+    // A subscription's replay lands as a level holding its transcripts.
+    subscribe: (_port: string, set: readonly TranscriptSubscription[]) =>
+      SubscriptionRef.update(this.viewRef, (current) => ({
+        ...current,
+        transcriptSeq: new Map(set.map(({ id }) => [id, 0])),
+      })),
     inputs: () => Stream.empty,
   };
 
