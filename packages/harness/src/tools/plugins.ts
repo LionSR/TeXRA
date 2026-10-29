@@ -88,11 +88,10 @@ export interface PluginArm {
    *  them (`workspaceFilesWritten`), a window hearing a service task's
    *  write as it hears its own. */
   readonly writes?: (value: JsonValue) => readonly string[];
-  /** What a fork of a run starts with of the run's own row of the kind:
-   *  its row at the fork's cut (`cut`) or its latest (`current`). Absent,
-   *  the fork starts without one. A fact about the plugin's own aggregate
-   *  is that aggregate's, and stays with the source either way. */
-  readonly fork?: 'cut' | 'current';
+  /** `cut`: a fork of a run starts with the run's row of the kind as it
+   *  stood at the cut; absent, without one. A fact about the plugin's own
+   *  aggregate is that aggregate's, and stays with the source. */
+  readonly fork?: 'cut';
 }
 
 /**
@@ -321,11 +320,8 @@ export function factRows(
   };
 }
 
-/**
- * The facts a fork `runId` of run `from` starts with: copies of the facts
- * `from` stated about itself, per kind as its arm says (`PluginArm.fork`):
- * its row at `cut`, its latest row, or none.
- */
+/** The facts a fork `runId` of run `from` starts with: of each kind whose
+ *  arm says `fork: 'cut'`, the latest row `from` held at `cut`. */
 export const forkedFacts = Effect.fn('forkedFacts')(function* (
   log: Pick<SessionLog, 'rows'>,
   from: RunId,
@@ -337,11 +333,9 @@ export const forkedFacts = Effect.fn('forkedFacts')(function* (
   for (const row of yield* log.rows(qualifyAggregateId('run', from), [
     'plugin.fact',
   ])) {
-    if (row.type !== 'plugin.fact') continue;
+    if (row.type !== 'plugin.fact' || row.seq > cut) continue;
     const name = `${row.plugin}/${row.kind}`;
-    const fork = arms[name]?.fork;
-    if (fork === undefined || (fork === 'cut' && row.seq > cut)) continue;
-    kept.set(name, runFactRow(row, runId));
+    if (arms[name]?.fork === 'cut') kept.set(name, runFactRow(row, runId));
   }
   return [...kept.values()];
 });
