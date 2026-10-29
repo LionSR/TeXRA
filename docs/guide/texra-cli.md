@@ -186,6 +186,9 @@ texra run polish --input paper.tex
 
 A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) that an
 Anthropic API key can spend once you link a Console organization to the plan.
+A ChatGPT Pro or Business plan includes [monthly API credits](https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions)
+that an OpenAI API key can spend once you claim them for an API organization
+you own.
 
 A project's `.env` file is read by every task of that project. A key set
 only in this terminal does not reach a task that runs in the TeXRA service;
