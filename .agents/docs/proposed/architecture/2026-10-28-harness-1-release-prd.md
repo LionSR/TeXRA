@@ -343,8 +343,36 @@ Prompt 模板与脚本代码是两种组合方式。1.0 保留参数化 prompt �
 
 第 4 片（#14389）让 activation 就是恢复尝试，修复 R15、R3、R16 两处，以及三处复审发现的竞态：停止落在决策纤程启动之前；两个恢复尝试争同一个 activation（注册改为一个同步步骤，后来者加入进行中的尝试）；停止落在生成已启动、准入之前（“这次 activation 被停止及原因”只由 activation 记录持有，决策、生成准入、退出与 `interrupt` 都读它）。用户停止在准入之前的任何时刻都以 cancelled 结束；`shutdown` 停止或调用方离开不写结束，运行保持可恢复。仍开放、各需单独一片：
 
-1. **`OwnedByParent` 往返仍在**：SDK 先交出 `Run`、后到恢复的答复，所以 `ownedBy` 仍被转成错误再捕获后跟随父运行。本 PRD“Resume 的职责和删除顺序”第 2 条要求删除它；需在交接前拿到准入结果，单列一片（R14）。
+1. ~~`OwnedByParent` 往返~~：已由 #14395 删除，`ownedBy` 是 `resumeRun` 的返回值（R14 完成）。
 2. **会话的 fork 集合已关闭时**，决策纤程不会运行，activation 直到会话释放才清除。会话关闭路径应同步结束这类 activation。
+
+### 2026-10-29 软件设计哲学复核（五个视角，main @ cae1afc30a）
+
+五个独立评审按 Ousterhout 的视角重新对比三家（报告：深模块、信息隐藏、改动放大、错误与特例、分层与透传）。评分：
+
+| 视角       | TeXRA | pi（durable / coding-agent） | DeepSeek |
+| ---------- | ----- | ---------------------------- | -------- |
+| 深模块     | B+    | B（A- / C）                  | B-       |
+| 信息隐藏   | B     | A-                           | C+       |
+| 改动放大   | B     | B（A- / C）                  | C        |
+| 错误与特例 | B+    | A-                           | B        |
+| 分层与透传 | B     | C+（B / C）                  | B        |
+
+TeXRA 强在耐久性（重试预算按行计、子结果与父投递同一事务、`run.end` 只写一次）、行格式的隐藏（6 个归约器，读取方受检查约束）和用户直接面对的 `Run`。pi 的 durable 库强在生命周期语义：提交是有类型的状态机，一个 `endRun` 了结一次运行的全部输入，分叉策略是必填数据。注意 pi 发布的 coding-agent 不依赖 durable，本 PRD 中标“pi”的保证来自库，不来自 pi 的 CLI。
+
+多个视角独立得出的同一结论（可信度高，并入排期）：
+
+1. **请求入口按种类定类型**（错误、分层、深模块三份）：7 种请求与 9 种决定互不约束，两个读取方对同一不可能组合分别读成拒绝与取消；`request` 的 5 种 `Outcome` 让 11 处调用方各自收窄或编造兜底。并入第 7 步之前，作为回执的前提。
+2. **停止只决定一次，含子运行去留**（信息隐藏、改动放大）：“停止优先于运行报告”写在 5 个文件；子运行去留仍在 `terminate`、`endOwnedChildren`、进程内委派的 join（`inBandSubagentRun.ts`，不读停止策略，推断）与两个设置读取方；`finalizeRun` 只回 `{recorded}`，`endActivation` 重算一次。由 `RunRegistry.stop` 决定一次、记在 activation 上，其余读取；`finalizeRun` 返回它写下的结束。第 4 步下一片。
+3. **claim 协议收口**（信息隐藏）：`log.hold(` 有 13 处、7 个文件（不是 3 处）；`{ends:true}` 持有、结束、释放的序列 6 处；“被别处持有”三种表示，CLI 两处解析原始错误。`finalizeRun` 自己取 claim，宿主收到有类型的拒绝；`endIn` 在 `runLaunchGuard.ts` 被直接调用、绕过级联与兜底，随之收口。第 4 步。
+4. **shell 授权由工具声明，不比名字**（错误、改动放大）：`toolGuard.ts` 的 `SHELL_TOOL = 'bash'` 让声明 `guard.bash` 的 MCP、Codex、Claude、SendToTerminal 都归为 bash 类，第二个 shell 工具得不到会话授权。公开插件接口，冻结前、#14413 之后。
+5. **格式批增加三项（冻结后不可改）**：`followup.consumed` 加处置（并入、过期通知、关闭未读等至少五种含义现共用一行）；去掉 `run.end` 输出与用量合计在持久数据上的解码默认值（`shared/schemas/runRecords.ts`、`usage.ts`）；委派提案载荷加 `allowBypass`。
+
+单个视角提出、成本小的：`requestBashApproval` 移入循环层并删 `requireRun`/`sessionOf` 转型往返（约 −15）；启动选项统一一套词汇并拆出 `RunsShape.launch` 的 `{hold}` 重载（约 −20 至 −35）；`Plugin.tools` 以工具自身名字为键；失败的尝试自带已流出文本，删 `streamedTail` 与 `prepareAttempt`（约 −10）；`childRunLoop.ts` 不再重新提供整个捕获的上下文；`edgesOf` 穷尽匹配；提供方用量换算移入 `packages/llm`；`RunView` 带上运行输出、CLI 结果定类型；#14413 后慢工具卡片仍显示原始输入，与审批提示不一致（推断，契约 5 要求一致）。
+
+拒绝：pi 的 2,528 行调度器作为停止所有者；pi 手传 `context`；会话粒度的租约；DeepSeek 的开放事件表、把持久化做成可选插件、按配置装配重试与审批的装饰器。
+
+改正：`OwnedByParent` 已删；AGENTS.md 与 harness AGENTS.md 仍写“用 `session.runs.launch` 启动”，宿主实际用 `session.start`；#14402 的合并提交信息说分叉经 `forkedFacts` 带上计划，实际已移出、分叉仍丢全部插件事实；`detachSubagentsOnStop.ts` 与 `runs.ts` 注释说 CLI 的 Esc 总是脱离子运行（#13102 已去掉）、会话关闭会收尾子运行（#14411 后不成立）；“approval 策略在 4 个文件被读”只对 `approvals.policy(` 成立，`approvalPromptsUnavailable` 在 10 个文件被读。
 
 ### 2026-10-28 七条设计线的排期
 
