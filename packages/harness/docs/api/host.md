@@ -325,36 +325,6 @@ class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
 type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];
 ```
 
-## agentErrorPresentation
-
-Map a classified error to host guidance, with no notification for aborts.
-
-```ts
-function agentErrorPresentation(error: {
-  kind: AgentErrorKind;
-  message?: string;
-  /** Docs page of a refusing request (`Rejected.docsPage`), surfaced
-   *  beside the error so the host's dialog keeps the guide affordance. */
-  docsPage?: string;
-}): AgentErrorPresentation | null
-```
-
-## AgentErrorPresentation
-
-How a host presents an agent error: an instruction, or a plain error.
-
-```ts
-type AgentErrorPresentation =
-  | {
-      readonly type: 'instruction';
-      readonly payload: RequestShowInstructionPayload;
-    }
-  | {
-      readonly type: 'error';
-      readonly payload: RequestShowErrorPayload;
-    };
-```
-
 ## AgentRuntimeEmitOptions
 
 ```ts

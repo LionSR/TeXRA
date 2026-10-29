@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit, FileSystem, Schema, Scope } from 'effect';
+import { Effect, Exit, FileSystem, Scope } from 'effect';
 
 import { ModelProvider, selectModel } from '@texra-ai/llm';
 import { AgentCatalog } from '@agent/index/agentCatalog';
@@ -21,10 +21,7 @@ import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import { AgentError } from '@common/errors/agentErrors';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
-import {
-  attachErrorPresentationClaimed,
-  hasErrorPresentationClaimed,
-} from '@common/errors/sdkError/errorMetadata';
+import { attachErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import { AppState } from '@platform/interfaces';
 import {
   INSTRUCTION_ACTION,
@@ -128,7 +125,6 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   function* (input: {
     config: AgentConfig;
     session: SessionHandle;
-    suppressErrorNotification?: boolean;
     /** The launch ends the run after one cycle (an awaited child). */
     stopAfterCycle?: boolean;
   }) {
@@ -193,30 +189,6 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       input.stopAfterCycle === true || config.script != null;
     return { config, persona, agentEntry, modelConfig, stopAfterCycle };
   },
-  // No run exists yet, so no `result` event will present this failure: the
-  // generic toast is its one surface. Once assembly begins, the terminal
-  // `result` event is the only presentation.
-  (effect, input) =>
-    effect.pipe(
-      Effect.onError((cause) =>
-        Effect.suspend(() => {
-          const error = Cause.squash(cause);
-          if (
-            input.suppressErrorNotification ||
-            error instanceof Schema.SchemaError ||
-            hasErrorPresentationClaimed(error)
-          ) {
-            return Effect.void;
-          }
-          attachErrorPresentationClaimed(error);
-          return input.session.interactions.emit(
-            'requestShowError',
-            { message: toErrorMessage(error) },
-            { replayWhenAttached: true },
-          );
-        }),
-      ),
-    ),
 );
 export type PreparedAgentDefinition = Effect.Success<
   ReturnType<typeof prepareAgentDefinition>

@@ -303,7 +303,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         const program = prepareAgentDefinition({
           config,
           session,
-          suppressErrorNotification: true,
           stopAfterCycle: options.stopAfterCycle,
         }).pipe(
           Effect.flatMap((definition) =>

@@ -134,7 +134,6 @@ export function createNativeSubagentStrategy(
             const definition = yield* prepareAgentDefinition({
               config,
               session: params.session,
-              suppressErrorNotification: true,
               stopAfterCycle,
             });
             return yield* programs.executeAgent(definition, params.runId, {
