@@ -382,7 +382,7 @@ export interface SessionOwnerShape {
   readonly holds: (session: SessionHandle) => Effect.Effect<boolean>;
   /** Close the session of a storage root: refuse new runs, interrupt the
    *  ones it owns and wait for them inside {@link SESSION_CLOSE_DEADLINE_MS},
-   *  end the ones still live, flush, release. A root with no open
+   *  report live runs as abandoned, flush, release. A root with no open
    *  session reports `settled`. Never touches another root's session. */
   readonly close: (root: string) => Effect.Effect<SessionCloseReport>;
   /** A process shutdown's close: drain what the plugins' pollers admitted,

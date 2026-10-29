@@ -41,8 +41,8 @@ export class Sessions extends Context.Service<
       options?: OpenOptions,
     ) => Effect.Effect<LocalSession, SessionOpenError>;
     /**
-     * Refuse new runs, settle the ones it owns inside the runtime's
-     * shutdown-phase budget, flush, release.
+     * Refuse new runs, interrupt owned runs, and wait within the close budget.
+     * Report runs still live as abandoned, then flush and release the session.
      */
     readonly close: (
       roots: WorkspaceRoots,
