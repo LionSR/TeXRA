@@ -3,7 +3,7 @@
   "readers": {
     "child.park": [
       "packages/harness/src/agent/runtime/runLaunchGuard.ts",
-      "packages/harness/src/tools/delegation/childRun.ts"
+      "packages/harness/src/agent/runtime/delegation/childRun.ts"
     ],
     "context.blob": ["packages/harness/src/controllers/session/rowCodec.ts"],
     "context.edit": [
@@ -63,7 +63,7 @@
     "tool.result": [
       "packages/harness/src/agent/runtime/scriptRun.ts",
       "packages/harness/src/controllers/session/rowReader.ts",
-      "packages/harness/src/tools/delegation/agentChild.ts",
+      "packages/harness/src/agent/runtime/delegation/agentChild.ts",
       "packages/harness/src/tools/plan/PlanTool.ts"
     ]
   }

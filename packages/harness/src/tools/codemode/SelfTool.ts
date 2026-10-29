@@ -17,6 +17,14 @@ import {
   type ScriptScope,
 } from '@agent/runtime/RunCall';
 import { getRunRecords } from '@agent/storage/runRecords';
+import { childResult, failedResult } from '@agent/runtime/delegation/AgentTool';
+import {
+  agentChildRunId,
+  countLaunch,
+  recoverAgentChild,
+} from '@agent/runtime/delegation/agentChild';
+import { executeSubagentInBand } from '@agent/runtime/delegation/inBandSubagentRun';
+import { describeSubagentProgress } from '@agent/runtime/delegation/subagentRun';
 import {
   AgentConfigSchema,
   ToolError,
@@ -25,14 +33,6 @@ import {
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult } from '@tools/core/result';
-import { childResult, failedResult } from '@tools/delegation/AgentTool';
-import {
-  agentChildRunId,
-  countLaunch,
-  recoverAgentChild,
-} from '@tools/delegation/agentChild';
-import { executeSubagentInBand } from '@tools/delegation/inBandSubagentRun';
-import { describeSubagentProgress } from '@tools/delegation/subagentRun';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 

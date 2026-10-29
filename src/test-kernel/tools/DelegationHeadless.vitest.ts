@@ -24,6 +24,8 @@ import '@test/support/sessionGraphTestSetup';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { agentTool } from '@agent/runtime/delegation/AgentTool';
+import { executeSubagentInBand } from '@agent/runtime/delegation/inBandSubagentRun';
 import { withProcessServices } from '@platform/processRuntime';
 import {
   AgentConfigSchema,
@@ -52,8 +54,6 @@ import {
   type StoredRow,
 } from '@test/support/storeFaults';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { agentTool } from '@tools/delegation/AgentTool';
-import { executeSubagentInBand } from '@tools/delegation/inBandSubagentRun';
 import { generateRunId } from '@utils/core';
 
 /** The parent's model, which its children inherit: the validation model

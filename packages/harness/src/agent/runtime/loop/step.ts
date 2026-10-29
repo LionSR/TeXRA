@@ -38,6 +38,7 @@ import stableStringify from 'safe-stable-stringify';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
+import { readDelegationTargets } from '@agent/runtime/delegation/delegationAvailability';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginContext } from '@platform/processRuntime';
@@ -50,11 +51,10 @@ import {
   type SkillCatalogEntry,
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
+import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
-import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { readDisabledTools } from '@tools/plugins';
-import { readDelegationTargets } from '@tools/delegation/delegationAvailability';
 import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 

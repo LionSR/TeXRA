@@ -28,7 +28,7 @@ const EVALUATOR_CALL_ALLOWLIST = new Set([
   'packages/harness/src/agent/runtime/requestPolicy.ts',
   'packages/harness/src/tools/approval/bashApproval.ts',
   'packages/harness/src/tools/approval/toolEditApproval.ts',
-  'packages/harness/src/tools/delegation/proposalFlow.ts',
+  'packages/harness/src/agent/runtime/delegation/proposalFlow.ts',
 ]);
 
 /**
@@ -58,8 +58,8 @@ const BYPASS_WRITE_ALLOWLIST = new Set([
   // `policy.set`, the one host door, committed as its row.
   'packages/harness/src/controllers/session/pendingUnderBypass.ts',
   // A delegated child's grants, from how its proposal was approved.
-  'packages/harness/src/tools/delegation/subagentRun.ts',
-  'packages/harness/src/tools/delegation/AgentTool.ts',
+  'packages/harness/src/agent/runtime/delegation/subagentRun.ts',
+  'packages/harness/src/agent/runtime/delegation/AgentTool.ts',
   // A plan run as a goal: the grants the person chose, on the goal's run.
   'packages/harness/src/tools/plan/PlanTool.ts',
 ]);

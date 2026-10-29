@@ -42,7 +42,7 @@ const REGISTRY_IMPORTERS: Readonly<Record<string, string>> = {
   // A follow-up's routing and the wake's fork onto the session.
   'packages/harness/src/agent/followUp/ToolUseFollowUp.ts': 'follow-ups',
   // A delegation helper, no tool: an in-band child's stop.
-  'packages/harness/src/tools/delegation/inBandSubagentRun.ts':
+  'packages/harness/src/agent/runtime/delegation/inBandSubagentRun.ts':
     'delegation helper',
 };
 

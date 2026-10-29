@@ -37,7 +37,7 @@ const DETACHED_FORK_ALLOWLIST: Readonly<Record<string, number>> = {
   // The host's `onRun` observer, which may last as long as the run.
   'packages/harness/src/agent/runtime/AgentRunLifecycle.ts': 1,
   // A late child-loop failure's diagnosis, joined on the launched fiber.
-  'packages/harness/src/tools/delegation/detachedChildRun.ts': 1,
+  'packages/harness/src/agent/runtime/delegation/detachedChildRun.ts': 1,
   // A guest script's issued calls, in the script's own scoped set: each runs
   // the caller's handler, which launches any run through the door itself.
   'packages/harness/src/agent/codeSandbox/codeSandbox.ts': 1,

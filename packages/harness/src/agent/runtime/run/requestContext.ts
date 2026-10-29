@@ -28,6 +28,7 @@ import {
 } from '@texra-ai/llm';
 
 import { contextUpdate } from '@agent/prompt/PromptBuilder';
+import { delegationSection } from '@agent/runtime/delegation/delegationAvailability';
 import {
   JsonValueSchema,
   qualifyAggregateId,
@@ -40,7 +41,6 @@ import {
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import { delegationSection } from '@tools/delegation/delegationAvailability';
 import { sha256 } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { envFlag } from '@utils/system/envFlags';

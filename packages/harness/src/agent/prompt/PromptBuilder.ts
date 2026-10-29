@@ -3,9 +3,9 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports - agent
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
+import { delegationUpdate } from '@agent/runtime/delegation/delegationAvailability';
 import type { RunContext, SkillCatalogEntry } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settings';
-import { delegationUpdate } from '@tools/delegation/delegationAvailability';
 import type { Plugin } from '@tools/plugins';
 import type { PromptSection } from '@tools/toolTable';
 

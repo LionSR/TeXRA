@@ -14,6 +14,17 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  formatBashDelivery,
+  formatBashError,
+  type BackgroundBashCall,
+  type BashDeliveryStreamExcerpt,
+} from '@agent/runtime/delegation/bashDelivery';
+import {
+  childRunDescription,
+  createChildRun,
+} from '@agent/runtime/delegation/childRun';
+import { startDetachedChildRunLoop } from '@agent/runtime/delegation/detachedChildRun';
+import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
   backgroundBashOutputData,
@@ -26,12 +37,6 @@ import {
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settings';
-import {
-  formatBashDelivery,
-  formatBashError,
-  type BackgroundBashCall,
-  type BashDeliveryStreamExcerpt,
-} from '@tools/delegation/bashDelivery';
 import { executed } from '@tools/core/result';
 import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -42,8 +47,6 @@ import { appendHead, appendTail } from '@utils/text/appendTail';
 // Local file imports
 import { defineTool } from './core/definition';
 import { nullishWithDefault } from './core/inputSchema';
-import { childRunDescription, createChildRun } from './delegation/childRun';
-import { startDetachedChildRunLoop } from './delegation/detachedChildRun';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;

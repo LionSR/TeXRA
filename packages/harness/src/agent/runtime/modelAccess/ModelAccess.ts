@@ -25,7 +25,6 @@ import {
 import { getHelperModelName } from '@agent/runtime/helperModelName';
 import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import { readModelOptions } from '@model/computeModelOptions';
 import { readModelSettings } from '@model/modelSettings';
 import type { StateReadFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -135,20 +134,15 @@ export class ModelAccess extends Context.Service<
 const settingsOf = (stores: SettingsStores) =>
   Effect.mapError(readModelSettings(stores), RouteUnavailable.of);
 
-/** The helper model's request: the configured model, if it can serve now. */
+/** The helper model's request: the configured model. Its bind decides
+ *  whether it can serve now, as a run's does. */
 const helperRequest = Effect.fn('ModelAccess.helper')(function* (
   stores: SettingsStores,
-): Effect.fn.Return<BindRequest, RouteUnavailable, Secrets> {
+): Effect.fn.Return<BindRequest, RouteUnavailable> {
   const modelId = yield* Effect.mapError(
     getHelperModelName(stores),
     RouteUnavailable.of,
   );
-  const [option] = yield* Effect.mapError(
-    readModelOptions(stores, [modelId]),
-    RouteUnavailable.of,
-  );
-  const reason = option?.unavailableReason;
-  if (reason) return yield* RouteUnavailable.of(new Error(reason));
   // One-shot deterministic text: the whole output budget, never sampled.
   return { modelId, declinedRoutes: [], textOnly: true, temperature: 0 };
 });
