@@ -20,10 +20,12 @@ import {
 import { Settings } from '@shared/config/settings';
 import {
   GOAL_MAX_COST_SETTING,
+  GOAL_PLAN_ARM,
   qualifyAggregateId,
   RunIdSchema,
   type Plan,
   type RunId,
+  type ToolFact,
   type ToolResult,
 } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
@@ -68,6 +70,14 @@ const PlanToolInputSchema = Schema.Struct({
 
 type PlanToolInput = typeof PlanToolInputSchema.Type;
 
+/** `plan` as the run's approved plan: the approving result's fact. */
+const approvedPlan = (plan: Plan): ToolFact => ({
+  plugin: GOAL_PLAN_ARM.plugin,
+  kind: GOAL_PLAN_ARM.kind,
+  version: GOAL_PLAN_ARM.version,
+  value: plan,
+});
+
 /**
  * Run the just-approved plan as a goal: the goal template, a background
  * script of this conversation whose rounds are this agent again (`self()`),
@@ -86,9 +96,9 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
     call.run.toolPolicy.stopAfterCycle === true ||
     call.run.config.script != null
   )
-    return errorResult(
+    return executed(
       'A goal runs from a conversation, forks it and reports to its later turns; this run is not one: work on the approved plan in this run instead.',
-      { summary: 'Plan approved: no goal outside a conversation' },
+      'Plan approved: no goal outside a conversation',
     );
   // One goal at a time: two would race each other's edits and caps. The
   // goals this conversation launched are its `plan` results' runs; one is
@@ -134,9 +144,9 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
         : session.runs.get(goal) !== undefined,
     );
   if (running !== undefined)
-    return errorResult(
+    return executed(
       `The plan is approved, but a goal is already running (run ${running}): it was not started again. Work on the plan in this conversation, or stop that goal first and run the plan as a goal again.`,
-      { summary: 'Plan approved: a goal is already running' },
+      'Plan approved: a goal is already running',
     );
   const maxCostUsd = yield* Settings.get<number>(
     call.env.roots,
@@ -164,13 +174,6 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   } satisfies ToolResult;
 });
 
-/** Show `plan` as the run's plan (null clears it): the run's `plan` fact,
- *  and the progress a parent of this run reads. */
-const showPlan = (call: RunToolCall, plan: Plan | null): void => {
-  call.run.logger.emit({ type: 'run.fact', fact: { key: 'plan', plan } });
-  call.run.callbacks.onProgress?.({ kind: 'plan', plan });
-};
-
 /**
  * Request user approval for a new plan. Pauses run until approved/rejected.
  */
@@ -196,25 +199,33 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
     yield* Effect.logInfo('Plan approved by user').pipe(
       withLogChannel(CHANNEL),
     );
-    return executed(
-      'Plan approved by the user. Work toward the objective.',
-      'Plan approved: proceed with implementation',
-    );
+    return {
+      ...executed(
+        'Plan approved by the user. Work toward the objective.',
+        'Plan approved: proceed with implementation',
+      ),
+      facts: [approvedPlan(plan)],
+    };
   }
 
   if (result.action === 'approve_and_goal') {
     yield* Effect.logInfo('Plan approved by user with goal mode').pipe(
       withLogChannel(CHANNEL),
     );
-    return yield* runPlanAsGoal(
+    const goal = yield* runPlanAsGoal(
       call,
       plan,
       result.autoApproveAll ? 'allAgentWork' : 'commands',
     );
+    // Approved whether or not the goal started; only a launch that failed
+    // (an error result, which carries no facts) leaves it unrecorded.
+    return goal.status === 'executed'
+      ? { ...goal, facts: [approvedPlan(plan)] }
+      : goal;
   }
 
-  // Rejected — clear the plan from UI
-  showPlan(call, null);
+  // Tell a parent of this run that the proposal was withdrawn.
+  call.run.callbacks.onProgress?.({ kind: 'plan', plan: null });
 
   const refusal = refusalOf('planApproval', result);
 
@@ -270,7 +281,7 @@ const executeUpdate = Effect.fn('PlanTool.executeUpdate')(function* (
   call: RunToolCall,
   plan: Plan,
 ) {
-  showPlan(call, plan);
+  call.run.callbacks.onProgress?.({ kind: 'plan', plan });
 
   // Every update is a (re-)proposal: with no step statuses to record,
   // the only reason to call update is a new or changed objective, and

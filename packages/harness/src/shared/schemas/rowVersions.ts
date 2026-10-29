@@ -46,6 +46,7 @@ export const RETIRED_ROW_KINDS: ReadonlySet<string> = new Set<string>([
   'model.compaction',
   'model.retry',
   'output.produced',
+  'run.fact',
   'run.snapshot',
   'tool.binding',
   'workflow.attempt',
@@ -91,7 +92,6 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v2: a recipe's value is `structured`, with no `documents` (no upcaster,
   // as `run.config`).
   'run.end': { version: 2, upcast: [] },
-  'run.fact': V1,
   'child.park': V1,
   'run.removed': V1,
   'run.description': V1,
