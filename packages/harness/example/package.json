@@ -8,11 +8,11 @@
     "start": "node 01-llm-turn.ts && node 02-session-and-events.ts && node 03-custom-tools-and-plugins.ts && node 04-approvals-and-requests.ts && node 05-durable-resume-and-fork.ts && node 06-views-and-transcript.ts"
   },
   "dependencies": {
-    "@effect/platform-node": "^4.0.6",
-    "@effect/sql-sqlite-node": "^4.0.6",
+    "@effect/platform-node": "^4.1.0",
+    "@effect/sql-sqlite-node": "^4.1.0",
     "@texra-ai/harness": "file:harness.tgz",
     "@texra-ai/llm": "file:llm.tgz",
-    "effect": "^4.0.6",
+    "effect": "^4.1.0",
     "undici": "^8.0.2"
   },
   "devDependencies": {
