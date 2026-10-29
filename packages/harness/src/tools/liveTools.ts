@@ -54,11 +54,10 @@ import {
 } from '@tools/sessionTools';
 import {
   ToolRegistry,
-  type InstalledToolReader,
   type PluginLayerServices,
   type ToolTable,
 } from '@tools/toolTable';
-import type { PluginLoader } from '@tools/mcp/mcpConfig';
+import type { InstalledToolReader, PluginLoader } from '@tools/mcp/mcpConfig';
 
 /** The process's tool catalog's identifier: what a program that reads the
  *  catalog requires. */

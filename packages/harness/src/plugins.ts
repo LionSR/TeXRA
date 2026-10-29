@@ -152,8 +152,8 @@ export {
   CALL_FIELDS,
   fileList,
   type ChildLaunch,
-} from '@tools/delegation/AgentTool';
-export type { ProcessChildLaunch } from '@tools/delegation/detachedChildRun';
+} from '@agent/runtime/delegation/AgentTool';
+export type { ProcessChildLaunch } from '@agent/runtime/delegation/detachedChildRun';
 export type {
   ChildRunPause,
   ChildStrategyBase,

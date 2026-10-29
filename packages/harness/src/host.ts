@@ -193,9 +193,10 @@ export {
   pathToLocationIn,
 } from '@utils/files/fileLocation';
 // The user's MCP servers: their config file, and a namespaced tool's server.
-export { mcpConfigPathOf, readMcpConfig } from '@tools/mcp/mcpConfig';
+export { readMcpConfig } from '@tools/mcp/mcpConfig';
+export { mcpConfigPathOf } from '@common/plugins/mcpServers';
 export type { McpServerConfig } from '@common/plugins/mcpServers';
-export { mcpServerOfToolName } from '@tools/mcp/mcpServer';
+export { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 // The skills a session's roots discover (the settings inventory, the enabled
 // ones a person activates) with their issues, and a host's skill sources and
 // source options.

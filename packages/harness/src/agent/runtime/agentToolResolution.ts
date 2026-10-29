@@ -44,9 +44,11 @@ import type {
   RuntimeTool as ITool,
   RuntimeToolRegistry,
 } from '@agent/runtime/ToolServices';
+import { mcpPluginId } from '@common/plugins/mcpServers';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { SettingsStores } from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import {
   sameIdentity,
   type OfferedTool,
@@ -59,7 +61,6 @@ import {
   type HeldPlugins,
   type ToolEntry,
 } from '@tools/catalogEntries';
-import { mcpPluginId, mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 

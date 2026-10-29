@@ -19,11 +19,11 @@ import {
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { displayToStoragePath } from '@agent/memory/memoryUtils';
 import type { RunId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
-import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import type { ToolRegistry } from '@tools/toolTable';

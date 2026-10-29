@@ -2,6 +2,14 @@ import { Context, Effect, type Scope } from 'effect';
 import type { ITool, ToolContext } from '@agent/core/tools/ToolTypes';
 import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import { getRunRecords } from '@agent/storage/runRecords';
+import {
+  launchChildAgent,
+  type ChildLaunch,
+} from '@agent/runtime/delegation/AgentTool';
+import {
+  launchProcessChild,
+  type ProcessChildLaunch,
+} from '@agent/runtime/delegation/detachedChildRun';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
@@ -11,14 +19,6 @@ import {
   type SessionEvent,
   type ToolResult,
 } from '@shared/schemas';
-import {
-  launchChildAgent,
-  type ChildLaunch,
-} from '@tools/delegation/AgentTool';
-import {
-  launchProcessChild,
-  type ProcessChildLaunch,
-} from '@tools/delegation/detachedChildRun';
 
 import { Runs } from './runRegistry';
 import type { RunCallShape } from './RunCall';

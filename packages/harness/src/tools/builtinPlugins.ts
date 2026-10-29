@@ -7,13 +7,13 @@
 
 // Local imports
 import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
+import { agentTool } from '@agent/runtime/delegation/AgentTool';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import { BashTool } from '@tools/bash';
 import { codeSandboxLayer, ScriptTool } from '@tools/codemode/ScriptTool';
 import { SelfTool } from '@tools/codemode/SelfTool';
-import { agentTool } from '@tools/delegation/AgentTool';
 import { EditFileTool } from '@tools/EditTool';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { GlobTool } from '@tools/glob';
