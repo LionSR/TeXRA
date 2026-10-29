@@ -7,8 +7,7 @@
  * - a second launch of a running run starts it twice;
  * - a run is born without the identity of the agent it runs, or keeps its
  *   claim after its launch ends;
- * - a launch whose opening is refused leaves a run, a claim, or a failure
- *   nobody presents.
+ * - a launch whose opening is refused leaves a run or a claim.
  */
 import '@test/support/sessionGraphTestSetup';
 
@@ -77,11 +76,10 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
   );
 
   it.live(
-    'a launch whose opening is refused fails as itself, leaves no run or claim, and presents its failure',
+    'a launch whose opening is refused fails as itself and leaves no run or claim',
     () =>
       Effect.gen(function* () {
         const roots = testWorkspaceRoots();
-        // No UI is attached when the launch fails.
         const session = yield* openTestDefaultSession({ roots });
         const runId = generateRunId();
         const faults = yield* sessionStoreFaults(roots.storage);
@@ -93,19 +91,6 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
         expect(
           storedRows(roots.storage).filter((row) => row.run === runId),
         ).toEqual([]);
-        // A UI that attaches after the launch failed is still shown it.
-        const shown: unknown[] = [];
-        yield* session.interactions.use({
-          emit: (event, payload) => {
-            shown.push({ event, payload });
-          },
-        });
-        expect(shown).toContainEqual({
-          event: 'requestShowError',
-          payload: expect.objectContaining({
-            message: expect.stringContaining('injected appendAll fault'),
-          }),
-        });
       }),
   );
 });

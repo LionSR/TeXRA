@@ -4,7 +4,7 @@
  * Composes `Sessions.layer({ platform, plugins: harnessBuiltins })`, opens a
  * session, checks an `InlinePersonaSchema` definition, handles an `AgentNotFound`
  * refusal on a missing agent, and runs an inline persona while streaming its
- * `run.events` (through `responseText`) and awaiting `run.result` (`RunEndResult`),
+ * `run.events` (through `responseText`) and awaiting `run.result` (`RunEnd`),
  * then reads the ended run's events again, replayed from the session.
  */
 import { Effect, Result, Schema, Stream } from 'effect';

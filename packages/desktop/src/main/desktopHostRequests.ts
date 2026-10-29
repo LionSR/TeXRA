@@ -6,7 +6,7 @@
 // `Rejected` with its reason, never dropped.
 
 import { Effect } from 'effect';
-import { Cancelled, Rejected, type Run } from '@texra-ai/harness';
+import { Cancelled, Rejected, type Run, type RunEnd } from '@texra-ai/harness';
 import {
   AgentDirectories,
   AppSignals,
@@ -19,11 +19,7 @@ import {
   type RuntimePresentationEventPayloads,
   pathToLocationIn,
 } from '@texra-ai/harness/host';
-import {
-  toErrorMessage,
-  type AgentConfig,
-  type RunEndResult,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage, type AgentConfig } from '@texra-ai/harness/schemas';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
@@ -307,7 +303,7 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
           ).pipe(Effect.andThen(snapshot.clearAgentConfigBanner)),
         // Desktop has no editor integration to preview through, so the
         // output goes to the preview-with-fallback host directly.
-        openFinalOutput: (config: AgentConfig, result: RunEndResult) =>
+        openFinalOutput: (config: AgentConfig, result: RunEnd) =>
           withProcessServices(
             runtime,
             selectAutoOpenFinalOutput(roots, config, result),

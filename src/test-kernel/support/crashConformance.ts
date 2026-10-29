@@ -730,7 +730,7 @@ const resumeFrom = (
             testRuntime(),
             resumeRun(root, { session }),
           );
-          if (!('started' in resumed))
+          if (!('activation' in resumed))
             return `the resume was refused: ${JSON.stringify(resumed)}`;
         }
         yield* steps(session, storage);

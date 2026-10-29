@@ -9,6 +9,7 @@
 import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
 import { agentTool } from '@agent/runtime/delegation/AgentTool';
 import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { GOAL_PLAN_ARM } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import { BashTool } from '@tools/bash';
@@ -95,6 +96,7 @@ export const memoryWorkflow: Plugin = builtin({
 export const goal: Plugin = builtin({
   id: 'goal',
   tools: { plan: PlanTool },
+  arms: [GOAL_PLAN_ARM],
   // A goal is a script whose rounds are `self()`.
   requires: ['codemode'],
   injectedWhen: { plan: true },

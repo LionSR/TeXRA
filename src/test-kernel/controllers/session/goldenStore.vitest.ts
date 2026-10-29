@@ -639,7 +639,17 @@ describe('the golden run killed after its effect', () => {
         testRuntime(),
         resumeRun(KILLED, { session }),
       );
-      expect(result).toMatchObject({ started: true });
+      if (!('activation' in result)) throw new Error('resume refused');
+      // The resumed activation rests, or ends.
+      yield* Stream.runHead(
+        Stream.filter(session.view.changes, (view) => {
+          const run = view.runs.get(KILLED);
+          return (
+            view.cursor > result.activation &&
+            (run?.status === 'waiting' || run?.durableOutcome != null)
+          );
+        }),
+      );
       yield* closeTestDefaultSession;
       const settled = raw(storage, (db) =>
         db

@@ -9,7 +9,6 @@
 import {
   generateRunId,
   JsonValueSchema,
-  RUN_OUTCOME,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import {
@@ -37,6 +36,7 @@ import {
   ToolsRefused,
   type ITool,
   type Run,
+  type RunEnd,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
@@ -44,7 +44,6 @@ import {
   StateReadFailed,
   StateWriteFailed,
   type StateStore,
-  agentErrorPresentation,
   attachErrorPresentationClaimed,
   describeFollowUpFailure,
   replayTrace,
@@ -64,7 +63,6 @@ import type {
   TranscriptSubscription,
   SessionViewInput,
 } from '@texra-ai/harness/transcript';
-import type { RunEndResult } from '@texra-ai/harness/schemas';
 
 /** The transcript port of the window's own view. */
 const WINDOW_PORT = 'window';
@@ -393,39 +391,26 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
             ),
       ),
     );
-  /** The run's result from the service's answer, held until this window's
-   *  fold shows it too. A run that failed fails this at once, as a run
-   *  here does: with its error, which the service's terminal presenter
-   *  showed this window, so it is marked presented, or without one (an
-   *  end with no error recorded) as a plain failure. */
-  const endOf = (
-    runId: RunId,
-    { at, error, ...end }: Effect.Success<ReturnType<typeof answered>>,
-  ): Effect.Effect<RunEndResult, RunFailure> => {
-    if (end.outcome === RUN_OUTCOME.FAILED) {
-      const cause = new Error(
-        error?.message ?? `The task failed (run ${runId}).`,
-      );
-      if (error !== undefined && agentErrorPresentation(error) !== null)
-        attachErrorPresentationClaimed(cause);
-      return Effect.fail(runFailure(cause.message, cause));
-    }
-    // The answer and the fold's `task.watch` stream arrive apart: a
-    // result that settled on the answer alone could find the window
-    // still showing the run live, or a resumed run with the outcome
-    // its previous activation left. Held until this window's fold is
-    // at or past `at`, the log's commit when the service answered,
-    // where it holds the run's end, or its removal. The fold-aware
-    // stream ends the wait with the fold, never parks on it.
-    return Effect.as(
+  /** The run's stored end from the service's answer, whatever its outcome,
+   *  held until this window's fold shows it too: the answer and the fold's
+   *  `task.watch` stream arrive apart, so an end that settled on the answer
+   *  alone could find the window still showing the run live, or a resumed
+   *  run with the outcome its previous activation left. Held until this
+   *  window's fold is at or past `at`, the log's commit when the service
+   *  answered, where it holds the run's end, or its removal. The fold-aware
+   *  stream ends the wait with the fold, never parks on it. */
+  const endOf = ({
+    at,
+    ...end
+  }: Effect.Success<ReturnType<typeof answered>>): Effect.Effect<RunEnd> =>
+    Effect.as(
       Stream.runDrain(
         graph.view.changes.pipe(
           Stream.takeUntil((level) => level.cursor >= at),
         ),
       ),
-      { ...end, runId },
+      end,
     );
-  };
   const request: Session['request'] = (runtimeRequest) =>
     callService(
       link,
@@ -519,9 +504,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   ): Effect.Effect<Run> =>
     Effect.gen(function* () {
       const answer = Fiber.join(yield* Effect.forkIn(answered(runId), scope));
-      const result = yield* Effect.cached(
-        Effect.flatMap(answer, (end) => endOf(runId, end)),
-      );
+      const result = yield* Effect.cached(Effect.flatMap(answer, endOf));
       // The service's commit when it answered, past every row the run
       // wrote, failed or not. With no answer (no service will give one,
       // and no row is coming through the watch), none: the replay ends at
