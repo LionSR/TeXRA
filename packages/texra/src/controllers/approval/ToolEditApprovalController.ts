@@ -58,6 +58,8 @@ const CHANNEL = 'ToolEditApproval';
  */
 type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 type PreviewCall<A> = Effect.Effect<A, HostRequestFailure, PreviewServices>;
+/** An approval's session bypass, sent with its `request.decide`. */
+type Grant = Extract<HostRequest, { kind: 'toolEdit' }>['grant'];
 
 /** A pending tool edit as a host stages it: its prompt and its content. */
 export type ToolEditPreviewRequest = ToolEditPermission & ToolEditContent;
@@ -147,7 +149,7 @@ export class ToolEditApprovalController {
   handleAction(
     payload: Pick<
       Extract<HostRequest, { kind: 'toolEdit' }>,
-      'requestId' | 'action'
+      'requestId' | 'action' | 'grant'
     >,
   ): Effect.Effect<void, never, PreviewServices> {
     return Effect.suspend(() => {
@@ -161,12 +163,14 @@ export class ToolEditApprovalController {
           .requests.find((r) => r.requestId === payload.requestId);
         return pending === undefined
           ? Effect.void
-          : this.decide(pending).pipe(Effect.catch((e) => this.report(e)));
+          : this.decide(pending, payload.grant).pipe(
+              Effect.catch((e) => this.report(e)),
+            );
       }
       const action = (): PreviewCall<void> => {
         switch (payload.action) {
           case 'approve':
-            return this.approve(entry);
+            return this.approve(entry, payload.grant);
           case 'openDiff':
             return Effect.uninterruptible(entry.preview.showDiff());
           case 'previewProposed':
@@ -295,10 +299,10 @@ export class ToolEditApprovalController {
 
   /** Approve as the Approve button does: the document as the user left it
    *  in this view becomes the session's edit, which the approval applies. */
-  private approve(entry: StagedPreview): PreviewCall<void> {
+  private approve(entry: StagedPreview, grant?: Grant): PreviewCall<void> {
     return entry.preview.readProposedContent().pipe(
       Effect.flatMap((edited) => this.edit(entry, edited)),
-      Effect.andThen(this.decide(entry.pending)),
+      Effect.andThen(this.decide(entry.pending, grant)),
     );
   }
 
@@ -322,6 +326,7 @@ export class ToolEditApprovalController {
 
   private decide(
     pending: PendingRequest,
+    grant?: Grant,
   ): Effect.Effect<void, HostRequestFailure> {
     const { runId, requestId } = pending;
     return this.options.session
@@ -330,6 +335,7 @@ export class ToolEditApprovalController {
         runId,
         requestId,
         decision: { action: 'approve' },
+        grant,
       })
       .pipe(Effect.asVoid);
   }

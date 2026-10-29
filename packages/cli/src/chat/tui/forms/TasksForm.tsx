@@ -23,7 +23,7 @@ import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import {
-  approvalDecisionArms,
+  approvalDecisionArm,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import type { ServiceConnection } from '@texra/controllers/server/client';
@@ -275,8 +275,8 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
 
   const decide = (decision: SurfaceDecision): void => {
     if (!pending) return;
-    const arms = approvalDecisionArms(pending.payload, decision);
-    if (arms.some((arm) => 'host' in arm)) {
+    const arm = approvalDecisionArm(pending.payload, decision);
+    if ('host' in arm) {
       setNotice(
         'That choice needs the window running the task; approve or reject here instead.',
       );
@@ -285,13 +285,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     const { requestId } = pending;
     setDecided((held) => new Set(held).add(requestId));
     act(
-      (ready) =>
-        Effect.forEach(
-          arms,
-          (arm) =>
-            'runtime' in arm ? ready.request(arm.runtime) : Effect.void,
-          { discard: true },
-        ),
+      (ready) => ready.request(arm.runtime),
       // Refused: the request is still open, so it comes back.
       () =>
         setDecided((held) => {

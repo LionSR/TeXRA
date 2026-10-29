@@ -42,7 +42,6 @@ import {
   NotOwner,
   Rejected,
   Unavailable,
-  type Outcome,
   type RequestError,
   type RuntimeRequest,
 } from '@shared/session/runtimeRequest';
@@ -272,6 +271,7 @@ export const writeRejection =
       : claimRejection(unavailable.runId)(error);
 
 type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
+type Answer<A, R> = Effect.Effect<A, RequestError, R>;
 type BypassChange = Extract<PolicyChange, { field: 'bypass' }>;
 
 /** The request kinds each bypass covers. The delegated-work grant covers all
@@ -287,26 +287,20 @@ const COVERED_KINDS: Record<
 };
 
 /**
- * Approve what waits behind a bypass that was just turned on: the run's
- * pending requests of the kinds it covers. Each decision re-reads the
- * committed rows in the session's publisher, so a request a surface decided
- * meanwhile is left with that surface's answer. The request the surface
- * decides itself (its own decision may carry more than a plain approval) is
- * left to it, and so is a bash command that is another tool's call, which
- * offers no bypass; a tool edit's approval applies the edit the user made in
- * a host's view (`request.edit`). A request whose opening is still
- * committing is not listed yet and stays pending for the user.
+ * Approve the run's requests pending under a bypass just turned on. Each
+ * decision re-reads the committed rows, so one decided meanwhile keeps its
+ * answer; another tool's bash call offers no bypass; a tool edit's approval
+ * applies the user's edit; a request still being opened stays pending.
  */
 function approvePendingUnderBypass(
   session: SessionHandle,
-  { runId, bypass, exceptRequestId }: BypassChange,
+  { runId, bypass }: BypassChange,
 ): Effect.Effect<void, RequestError> {
   const kinds = COVERED_KINDS[bypass];
   return Effect.forEach(
     SubscriptionRef.getUnsafe(session.view.ref).requests.filter(
-      ({ runId: requestRunId, requestId, payload }) =>
+      ({ runId: requestRunId, payload }) =>
         requestRunId === runId &&
-        requestId !== exceptRequestId &&
         kinds.includes(payload.kind) &&
         !(payload.kind === 'bash' && !payload.data.allowBypass),
     ),
@@ -329,17 +323,17 @@ export const narrows = (change: PolicyChange): boolean =>
   change.field === 'limit' || !change.enabled;
 
 /**
- * Apply a grant change (a bypass, or a lower limit), acknowledged once its `approval.policy` row is
- * durable: the row is the grant, so nothing is held to undo when it does
- * not land. The caller holds the run's claim. Turning a bypass on then
- * approves what already waits behind it, on a run this process drives.
+ * Apply a grant change (a bypass, or a lower limit) once its `approval.policy`
+ * row is durable, then `decide`, the decision it came with. Turning a bypass
+ * on then approves what else waits behind it, on a run this process drives,
+ * even when `decide` fails. The caller holds the run's claim.
  */
-export function setPolicy(
+export function setPolicy<A, R>(
   session: SessionHandle,
   change: PolicyChange,
   heldHere: boolean,
-): Effect.Effect<Outcome, RequestError> {
-  const { runId } = change;
+  decide: Effect.Effect<A, RequestError, R>,
+): Effect.Effect<A, RequestError, R> {
   // A limit only lowers; the delegated-work grant covers the command and
   // edit grants too.
   const edit =
@@ -357,19 +351,50 @@ export function setPolicy(
             : [change.bypass],
           change.enabled,
         );
-  return session.approvals.change(runId, edit).pipe(
+  return session.approvals.change(change.runId, edit).pipe(
     Effect.mapError(
       writeRejection({
-        runId,
+        runId: change.runId,
         reason: 'The approval change could not be saved.',
       }),
     ),
+    Effect.andThen(Effect.exit(decide)),
     // A run held elsewhere has no fiber here to act on a decision.
-    Effect.andThen(
+    Effect.tap(() =>
       change.field === 'bypass' && change.enabled && heldHere
         ? approvePendingUnderBypass(session, change)
         : Effect.void,
     ),
-    Effect.as({ kind: 'done' } as const),
+    Effect.flatten,
   );
 }
+
+/**
+ * Decide `req` through `answer`, which `write`s it (did it land?) if it can
+ * still be decided. Its `grant` lands first whatever the request's state, so
+ * a request the run opens once it reads the decision is approved as it opens.
+ */
+export const decideUnderGrant = <A, R>(
+  session: SessionHandle,
+  req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
+  heldHere: boolean,
+  answer: (write: Effect.Effect<boolean, RequestError>) => Answer<A, R>,
+): Answer<A, R> => {
+  const { runId, requestId, decision, grant } = req;
+  const write = session.requests.decide(runId, requestId, decision).pipe(
+    Effect.mapError(
+      writeRejection({
+        runId,
+        reason: 'The decision could not be recorded.',
+      }),
+    ),
+  );
+  return grant == null
+    ? answer(write)
+    : setPolicy(
+        session,
+        { field: 'bypass', runId, bypass: grant, enabled: true },
+        heldHere,
+        answer(write),
+      );
+};

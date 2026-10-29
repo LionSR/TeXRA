@@ -5,9 +5,9 @@
 // what the fold cannot: the presentation a host stages beside the fact (a
 // tool edit's before and after text, a retry's personal-key lookup), the
 // "decided here, not yet folded there" gap, and the jump-to-waiting order.
-// A decision leaves as the arms `approvalDecisionArms` names: the run's
-// `request.decide`, the `policy.set` a session bypass names, and the host
-// capability a retry on the user's own key needs.
+// A decision leaves as the arm `approvalDecisionArm` names: the run's
+// `request.decide` (with the bypass a session-wide approval grants), or the
+// host capability a retry on the user's own key needs.
 
 import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect, absurd } from 'effect';
@@ -21,7 +21,7 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import {
-  approvalDecisionArms,
+  approvalDecisionArm,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
@@ -141,7 +141,7 @@ const decided = signal<ReadonlySet<string>>(new Set());
 const promoted = signal<RunId | undefined>(undefined);
 
 /**
- * The host capabilities a decision can name (`approvalDecisionArms`'s host
+ * The host capabilities a decision can name (`approvalDecisionArm`'s host
  * arms): the attached TUI host installs its executor for as long as it is
  * attached. A capability named while nothing is attached cannot be dropped
  * quietly — the request would stay pending with nobody working on it.
@@ -319,8 +319,8 @@ export function reopenRequest(requestId: string): void {
 }
 
 /**
- * Issue the runtime requests one decision names, in order; a refusal reads
- * in the conversation and puts `requestId` back on this surface, since the
+ * Issue the runtime request one decision names; a refusal reads in the
+ * conversation and puts `requestId` back on this surface, since the
  * durable request it answered is still pending and nobody else will re-ask.
  * `onRefused` is the same undo for a caller keeping its own "already acted"
  * guard beside this one (the TUI host's automatic answers): a guard left set
@@ -332,16 +332,14 @@ function issue(
   runId: RunId,
   requestId: string,
   onRefused: (() => void) | undefined,
-  ...arms: RuntimeRequest[]
+  request: RuntimeRequest,
 ): void {
   const reopen = (): void => {
     reopenRequest(requestId);
     onRefused?.();
   };
   runtime.runFork(
-    Effect.forEach(arms, (request) => requests.request(request), {
-      discard: true,
-    }).pipe(
+    requests.request(request).pipe(
       Effect.match({
         onFailure: (error) => {
           reopen();
@@ -367,11 +365,10 @@ function issue(
 }
 
 /**
- * Apply one decision: the arms the shared vocabulary names (PRD 8.2), in the
- * order it names them — the `policy.set` a session bypass implies before the
- * `request.decide` it precedes, and the host capability a retry on the
- * user's own key needs instead of a decision, since that host lands the
- * decision itself once the credential is in place.
+ * Apply one decision: the arm the shared vocabulary names (PRD 8.2), the
+ * `request.decide`, or the host capability a retry on the user's own key
+ * needs instead of a decision, since that host lands the decision itself
+ * once the credential is in place.
  */
 function decideRequest(
   requests: SessionRequests,
@@ -382,37 +379,23 @@ function decideRequest(
 ): void {
   markDecided(request.requestId);
   const { runId } = request;
-  const arms = approvalDecisionArms(payload, decision);
-  const runtimeArms = arms.flatMap((arm) =>
-    'runtime' in arm ? [arm.runtime] : [],
-  );
-  if (runtimeArms.length > 0) {
-    issue(
-      requests,
-      runtime,
-      runId,
-      request.requestId,
-      undefined,
-      ...runtimeArms,
+  const arm = approvalDecisionArm(payload, decision);
+  if ('runtime' in arm)
+    issue(requests, runtime, runId, request.requestId, undefined, arm.runtime);
+  else if (hostCapability) hostCapability(arm.host);
+  else
+    runtime.runFork(
+      Effect.logWarning(
+        `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
+      ).pipe(withLogChannel('cli.tui')),
     );
-  }
-  for (const arm of arms) {
-    if (!('host' in arm)) continue;
-    if (hostCapability) hostCapability(arm.host);
-    else
-      runtime.runFork(
-        Effect.logWarning(
-          `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
-        ).pipe(withLogChannel('cli.tui')),
-      );
-  }
 }
 
 /**
  * Land one durable decision a host capability took itself — the retry a
  * stored credential let this host switch onto the user's own key. The
- * `request.decide` alone, with no arm decomposition: the decomposition is
- * what named the capability, so re-entering it here would hand the
+ * `request.decide` alone, without going back through `approvalDecisionArm`:
+ * that is what named the capability, so re-entering it here would hand the
  * capability back to itself and the request would never be answered.
  */
 export function landRequestDecision(
