@@ -226,7 +226,7 @@ function sessionOf(
     ...sessionReads(handle),
     start: (input) => start(handle, services, owner, input),
     resume: (runId, input) => resume(handle, runId, input),
-    request: (request) => handle.requests.request(request),
+    request: handle.requests.request,
     attach: (host) => attachHost(handle, host),
   };
 }

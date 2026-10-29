@@ -379,10 +379,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
                           if (outcome.kind !== 'followUp') return;
                           // Queued but not taken: the run did not wake, and
                           // waits for a resume before it reads the message.
-                          const shown = presentFollowUpResult({
-                            status: outcome.status,
-                            ...(outcome.wake == null ? {} : { wake: 'failed' }),
-                          });
+                          const shown = presentFollowUpResult(outcome);
                           if (shown.severity !== 'none') say(shown.message);
                         }),
                       ),
