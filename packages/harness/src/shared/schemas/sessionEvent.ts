@@ -37,7 +37,6 @@ import {
 import { RunIdSchema } from './identifiers';
 import { FollowUpContentSchema } from './followUp';
 import { PermissionPayloadSchema } from './progressView/data';
-import { RunFactSchema } from './rowValues';
 import { RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import { RunBindingSchema } from './runFacts';
@@ -250,7 +249,6 @@ const DisplayRowDraftSchema = Schema.Union([
    * from nothing else.
    */
   durable('run.end', RunEndRowSchema.fields),
-  durable('run.fact', { fact: RunFactSchema }),
   /**
    * A child driven by the child loop, which has no run history or rounds, parks
    * on its own row (one run model, 3.3): `parked` before the loop blocks on
@@ -459,8 +457,8 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
  * fold reads it over the whole aggregate, so listing it would pull the latest
  * one of every run into every renderer for no reader.
  *
- * `run.fact` and `plugin.fact` hold several families on one type, so they
- * are read grouped by family as well (`listingKeyOf`, `Database`).
+ * `plugin.fact` holds several kinds on one type, so it is read grouped by
+ * kind as well (`listingKeyOf`, `Database`).
  */
 export function listingTypeOf(
   event: Pick<SessionEvent, 'type'>,
@@ -507,8 +505,8 @@ export function listingTypeOf(
  * The `latest` key one row folds under: its listing type, qualified by the
  * row's own discriminator where it carries one. The mirror of the listing
  * query's `GROUP BY`, so "the newest row the fold holds" means the same
- * thing on a cold read and on a replay: one `run.fact` family's newest row
- * never suppresses another's.
+ * thing on a cold read and on a replay: one plugin kind's newest row never
+ * suppresses another's.
  */
 export function listingKeyOf(event: SessionEvent): string | null {
   // A run's spend: the listing returns its total at its newest priced row,
@@ -521,7 +519,7 @@ export function listingKeyOf(event: SessionEvent): string | null {
   // Both a run's latest model title and its latest user title are kept:
   // the fold lets the user's win.
   if (event.type === 'run.description') return `${type}/${event.by}`;
-  return event.type === 'run.fact' ? `${type}/${event.fact.key}` : type;
+  return type;
 }
 
 /**
@@ -547,7 +545,7 @@ export function pendingKeyOf(
 
 /** Every `AgentEvent` arm but the chunk: each is stored as a row of its run. */
 // prettier-ignore
-export const TRACE_ROW_TYPES = Object.freeze(['log', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'run.fact', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplaySessionEvent['type'][]);
+export const TRACE_ROW_TYPES = Object.freeze(['log', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplaySessionEvent['type'][]);
 
 export const DISPLAY_EVENT_TYPES: readonly string[] = Object.freeze(
   DisplaySessionEventDraftSchema.members.map(
