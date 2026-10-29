@@ -9,6 +9,8 @@
  * (`requestToolEditApproval`), with the hooks' answer on `RunCall.hook`.
  * A body's own requests go through `callRequests`.
  */
+import { isDeepStrictEqual } from 'node:util';
+
 import { Effect, Result, Schema } from 'effect';
 
 import { ToolContext, type CallRequests } from '@agent/core/tools/ToolTypes';
@@ -123,8 +125,13 @@ const answerOf = (outcomes: readonly HookOutcomePayload[]) => {
   const denials = outcomes.flatMap(({ plugin, decision, reason }) =>
     decision === 'deny' ? [`${reason} (hook of ${plugin})`] : [],
   );
-  const rewrites = outcomes.map((o) => JSON.stringify(o.updatedInput));
-  if (new Set(rewrites.filter((r) => r !== 'null')).size > 1)
+  // Compared as script replay compares a call: key order is not a
+  // different operation.
+  if (
+    outcomes.some(
+      (o) => o.updatedInput && !isDeepStrictEqual(o.updatedInput, rewritten),
+    )
+  )
     denials.push('the hooks rewrote the call to different inputs');
   // An `allow` about the input another hook then rewrote is about a
   // different operation.
