@@ -138,6 +138,7 @@ export const endActivation = Effect.fn('endActivation')(
       output,
       lastTurn: params.lastTurn,
       ownerless: params.ownerless,
+      stopped: params.stopped,
     }).pipe(Effect.result);
     if (Result.isSuccess(finalization)) {
       const { end, wrote } = finalization.success;

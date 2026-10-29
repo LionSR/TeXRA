@@ -56,6 +56,7 @@ export function runWithLaunchGuard<A, E, R>(
                   runId,
                   outcome,
                   ownerless: true,
+                  stopped: outcome === RUN_OUTCOME.CANCELLED,
                   ...(outcome === RUN_OUTCOME.FAILED && {
                     error: {
                       kind: classifyAgentError(error),
