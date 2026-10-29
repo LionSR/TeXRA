@@ -398,9 +398,11 @@ describe('executeCliConfig', () => {
       expect(onInterruptedRunFinalized).toHaveBeenCalledExactlyOnceWith(
         launchedRunId(),
       );
-      expect(yield* Fiber.join(run)).toEqual({
-        ok: false,
-        exitCode: CliExitCode.Interrupted,
+      // The stored cancelled end is the run's result: the record every
+      // caller emits, whose outcome exits as the interruption (130).
+      expect(yield* Fiber.join(run)).toMatchObject({
+        ok: true,
+        result: { outcome: 'cancelled', runId: launchedRunId() },
       });
     }),
   );
