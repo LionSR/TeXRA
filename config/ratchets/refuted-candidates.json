@@ -22,7 +22,7 @@
     {
       "id": "EFF-ADOPT-per-key-lane-semaphore",
       "candidate": "withPerKeyLane onto an Effect Semaphore",
-      "why": "Semaphore barges; the lane is FIFO and offers a synchronous refuse. The six lane maps are also self-pruning, so making them services is a pure net-add.",
+      "why": "Re-checked on Effect 4.1.0. Semaphore no longer barges (4.0.7), but take, takeScoped and withPermit are Effects that join its queue one evaluation after refuseClaim decides, and the fiber can yield in between (Scheduler.shouldYield at MaxOpsBeforeYield, 2048 by default), so a fiber that claimed later enters first: a one-permit Semaphore per lane did so at 2 of 2101 claim offsets at the default budget and in about half of 150 six-fiber runs at budgets 8 and 13, the Deferred chain never. The chain swaps its tail in the step that runs refuseClaim, which RunRegistry's admission relies on. An RcMap of semaphores would own the lane map each caller passes (RunRegistry keeps its lanes on its run entries, two callers key a WeakMap), needs a Scope to build, and answers get as an Effect, so refuseClaim could not read the occupant in the claim step. The lane maps prune themselves, so making them services is a pure net-add.",
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
