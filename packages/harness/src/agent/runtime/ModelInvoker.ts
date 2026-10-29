@@ -33,6 +33,7 @@ import {
 } from 'effect';
 import {
   ModelError,
+  fillModelError,
   type BackgroundEvent,
   type TurnEvent,
   type TurnRequest,
@@ -206,26 +207,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           roots: session.roots,
         });
 
-      /**
-       * The tail of the text the failing attempt had streamed, which its
-       * `failed` row carries for the retry surface. Attempts of one run go
-       * one at a time, so the last one written is the failure's.
-       */
-      let streamedTail = '';
-      const failAttempt = (error: ModelError, streamedText = '') =>
-        Effect.suspend(() => {
-          streamedTail = streamedText;
-          return Effect.fail(error);
-        });
-
-      /** Prepare one attempt's turn: a failure is the attempt's own, unsent. */
-      const prepareAttempt = (bound: BoundModel, request: TurnRequest) =>
-        Effect.tapError(bound.model.prepareTurn(request), () =>
-          Effect.sync(() => {
-            streamedTail = '';
-          }),
-        );
-
       interface AttemptTrace {
         readonly thinking: StreamHandle;
         readonly output: StreamHandle;
@@ -331,7 +312,11 @@ export const modelInvokerLayer = (): Layer.Layer<
           if (Result.isFailure(found))
             return yield* Effect.die(Cause.squash(streamed.cause));
           return yield* found.success instanceof ModelError
-            ? failAttempt(found.success, completed.streamedText)
+            ? Effect.fail(
+                fillModelError(found.success, {
+                  partialText: completed.streamedText,
+                }),
+              )
             : Effect.fail(found.success);
         }
         const responseTimeMs = (yield* Clock.currentTimeMillis) - started;
@@ -339,12 +324,12 @@ export const modelInvokerLayer = (): Layer.Layer<
         if (turn === null) {
           trace.thinking.finalize(undefined);
           trace.output.finalize();
-          return yield* failAttempt(
+          return yield* Effect.fail(
             new ModelError({
               kind: 'malformed-output',
               message: EMPTY_RESPONSE_ERROR_MESSAGE,
+              partialText: completed.streamedText,
             }),
-            completed.streamedText,
           );
         }
         const text = turnText(turn);
@@ -421,7 +406,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           ...chainedContinuation(state, bound.origin),
           cacheKey: run.runId,
         };
-        let resolved = yield* prepareAttempt(bound, turnRequest);
+        let resolved = yield* bound.model.prepareTurn(turnRequest);
         yield* saveDebug(state.messages, 'messages', invocation, bound);
         // The run's context size (`contextTokens`: the last response's
         // provider-counted usage plus an estimate of what was added since).
@@ -431,7 +416,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         if (resolved.mode === 'foreground' && bound.config.contextWindow > 0) {
           const inputTokens = contextTokens(state);
           if (inputTokens > bound.config.contextWindow) {
-            return yield* failAttempt(
+            return yield* Effect.fail(
               new ModelError({
                 kind: 'context-overflow',
                 message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${bound.config.contextWindow} tokens.`,
@@ -467,7 +452,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             );
             // The clamp is part of the request, so it is prepared again:
             // execution never reapplies defaults over a resolved turn.
-            resolved = yield* prepareAttempt(bound, {
+            resolved = yield* bound.model.prepareTurn({
               ...turnRequest,
               maxOutputTokens: reduced,
             });
@@ -525,7 +510,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         > {
           const background = bound.model.background;
           if (background === undefined) {
-            return yield* failAttempt(
+            return yield* Effect.fail(
               new ModelError({
                 kind: 'unsupported',
                 message:
@@ -691,7 +676,6 @@ export const modelInvokerLayer = (): Layer.Layer<
             bound,
           ) {
             const info = failureInfo(error, bound.config.provider, {
-              partialText: unsent ? undefined : streamedTail,
               unsent,
             });
             if (next.kind === 'ask' || next.kind === 'stop')
