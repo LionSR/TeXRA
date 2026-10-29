@@ -6,7 +6,7 @@
  * (`sessionPrograms.ts`), so a reader that leaves, or a handle nobody reads,
  * changes nothing about the run.
  */
-import { Effect, Stream } from 'effect';
+import { Effect, Stream, SubscriptionRef } from 'effect';
 
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -17,7 +17,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { lastLifecycleRow } from '@shared/session/runFacts';
-import { descendantRuns } from '@shared/session/sessionView';
+import { descendantRuns, type SessionView } from '@shared/session/sessionView';
 
 import { RunFailure } from './errors.js';
 import type { Run } from './sessions.js';
@@ -60,38 +60,52 @@ export function runView(
     ...(redirectedFrom !== undefined && { redirectedFrom }),
     result,
     // The transcript tier folds only for subscribed aggregates: while this
-    // view is read, on a port of its own, the run and its descendants as the
-    // view gains them.
+    // view is read, on a port of its own, the run and its descendants, taken
+    // before the first level is, so even an ended run's one level holds its
+    // transcript; descendants join as the view gains them.
     view: Stream.unwrap(
       Effect.gen(function* () {
         const port = `sdk/${runId}/${crypto.randomUUID()}`;
-        yield* Effect.addFinalizer(() => session.view.subscribe(port, []));
         let subscribed = '';
+        const interest = (level: SessionView) => {
+          // The run itself even before the view holds it.
+          const ids = [
+            runId,
+            ...descendantRuns(level, runId, { includeRoot: false }),
+          ];
+          if (ids.join('\0') === subscribed) return Effect.void;
+          subscribed = ids.join('\0');
+          return session.view.subscribe(
+            port,
+            ids.map((id) => ({
+              id: qualifyAggregateId('run', id),
+              fromSeq: 0,
+            })),
+          );
+        };
+        yield* Effect.acquireRelease(
+          interest(SubscriptionRef.getUnsafe(session.view.ref)),
+          () => session.view.subscribe(port, []),
+        );
+        const replayed = qualifyAggregateId('run', runId);
         return session.view.changes.pipe(
           // The level replays on subscribe, and the fold lands the
-          // activation's row asynchronously, so a replayed level can predate
-          // it: the run absent, or a resumed run with the outcome of the
-          // activation before.
+          // activation's row and the subscription's replay asynchronously,
+          // so a replayed level can predate them: the run absent, its
+          // transcript not yet read, or a resumed run with the outcome of
+          // the activation before.
           Stream.dropWhile(
-            (level) => level.cursor < activation || !level.runs.has(runId),
+            (level) =>
+              level.cursor < activation ||
+              !level.runs.has(runId) ||
+              !level.transcriptSeq.has(replayed),
           ),
           // The first level holding this activation's durable outcome is the
           // last element.
           Stream.takeUntil(
             (level) => level.runs.get(runId)?.durableOutcome != null,
           ),
-          Stream.tap((level) => {
-            const ids = descendantRuns(level, runId, { includeRoot: true });
-            if (ids.join('\0') === subscribed) return Effect.void;
-            subscribed = ids.join('\0');
-            return session.view.subscribe(
-              port,
-              ids.map((id) => ({
-                id: qualifyAggregateId('run', id),
-                fromSeq: 0,
-              })),
-            );
-          }),
+          Stream.tap(interest),
         );
       }),
     ),
