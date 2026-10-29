@@ -271,6 +271,7 @@ export const writeRejection =
       : claimRejection(unavailable.runId)(error);
 
 type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
+type Answer<A, R> = Effect.Effect<A, RequestError, R>;
 type BypassChange = Extract<PolicyChange, { field: 'bypass' }>;
 
 /** The request kinds each bypass covers. The delegated-work grant covers all
@@ -286,12 +287,10 @@ const COVERED_KINDS: Record<
 };
 
 /**
- * Approve what waits behind a bypass just turned on: the run's pending
- * requests of the kinds it covers. Each decision re-reads the committed rows,
- * so one decided meanwhile (the grant's own included) keeps its answer; a
- * bash command that is another tool's call offers no bypass. A tool edit's
- * approval applies the user's edit (`request.edit`); a request still
- * committing its opening is not listed yet and stays pending.
+ * Approve the run's requests pending under a bypass just turned on. Each
+ * decision re-reads the committed rows, so one decided meanwhile keeps its
+ * answer; another tool's bash call offers no bypass; a tool edit's approval
+ * applies the user's edit; a request still being opened stays pending.
  */
 function approvePendingUnderBypass(
   session: SessionHandle,
@@ -325,17 +324,16 @@ export const narrows = (change: PolicyChange): boolean =>
 
 /**
  * Apply a grant change (a bypass, or a lower limit) once its `approval.policy`
- * row, the grant itself, is durable; then `decide`, the decision it came with.
- * Turning a bypass on then approves what else already waits behind it, on a
- * run this process drives. The caller holds the run's claim.
+ * row is durable, then `decide`, the decision it came with. Turning a bypass
+ * on then approves what else waits behind it, on a run this process drives,
+ * even when `decide` fails. The caller holds the run's claim.
  */
-export function setPolicy<A>(
+export function setPolicy<A, R>(
   session: SessionHandle,
   change: PolicyChange,
   heldHere: boolean,
-  decide: Effect.Effect<A, RequestError>,
-): Effect.Effect<A, RequestError> {
-  const { runId } = change;
+  decide: Effect.Effect<A, RequestError, R>,
+): Effect.Effect<A, RequestError, R> {
   // A limit only lowers; the delegated-work grant covers the command and
   // edit grants too.
   const edit =
@@ -353,35 +351,37 @@ export function setPolicy<A>(
             : [change.bypass],
           change.enabled,
         );
-  return session.approvals.change(runId, edit).pipe(
+  return session.approvals.change(change.runId, edit).pipe(
     Effect.mapError(
       writeRejection({
-        runId,
+        runId: change.runId,
         reason: 'The approval change could not be saved.',
       }),
     ),
-    Effect.andThen(decide),
+    Effect.andThen(Effect.exit(decide)),
     // A run held elsewhere has no fiber here to act on a decision.
     Effect.tap(() =>
       change.field === 'bypass' && change.enabled && heldHere
         ? approvePendingUnderBypass(session, change)
         : Effect.void,
     ),
+    Effect.flatten,
   );
 }
 
 /**
- * Record a surface's decision, and whether it landed. Its `grant` (approving
- * for the session) lands first, so a request the run opens once it reads the
- * decision is approved as it opens. The caller holds the lane and the claim.
+ * Decide `req` through `answer`, which `write`s it (did it land?) if it can
+ * still be decided. Its `grant` lands first whatever the request's state, so
+ * a request the run opens once it reads the decision is approved as it opens.
  */
-export const recordDecision = (
+export const decideUnderGrant = <A, R>(
   session: SessionHandle,
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
   heldHere: boolean,
-): Effect.Effect<boolean, RequestError> => {
+  answer: (write: Effect.Effect<boolean, RequestError>) => Answer<A, R>,
+): Answer<A, R> => {
   const { runId, requestId, decision, grant } = req;
-  const recorded = session.requests.decide(runId, requestId, decision).pipe(
+  const write = session.requests.decide(runId, requestId, decision).pipe(
     Effect.mapError(
       writeRejection({
         runId,
@@ -390,11 +390,11 @@ export const recordDecision = (
     ),
   );
   return grant == null
-    ? recorded
+    ? answer(write)
     : setPolicy(
         session,
         { field: 'bypass', runId, bypass: grant, enabled: true },
         heldHere,
-        recorded,
+        answer(write),
       );
 };

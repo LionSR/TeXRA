@@ -18,7 +18,7 @@ import { requestAsks } from '@agent/runtime/requestPolicy';
 import {
   claimRejection,
   narrows,
-  recordDecision,
+  decideUnderGrant,
   setPolicy,
   writeRejection,
 } from '@agent/runtime/runApprovalQueue';
@@ -231,42 +231,44 @@ const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
  * surfaces deciding at once one records and the other hears `settled`. The
  * plugin owning the request's kind records its side first (an inquiry's
  * answer, on its cross-project thread), outside the run's transaction, so
- * the whole decision takes the request's lane.
+ * the whole decision takes the request's lane. Its `grant` lands even when
+ * the request no longer takes a decision ({@link decideUnderGrant}).
  */
 const decideRequest = (
   deps: RequestDeps,
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
   heldHere: boolean,
 ): Effect.Effect<Outcome, RequestError, GlobalValues> => {
-  const answer = Effect.gen(function* () {
-    const pending = pendingOf(deps, req.runId, req.requestId);
-    if (pending === undefined) return yield* settled(req.runId);
-    // A request that parks its caller is answered by the fiber waiting on it,
-    // and that fiber died with the owner this decision takes over from:
-    // recording a decision would clear the panel without doing what it says.
-    // Resuming the run re-enters the call, which asks again and is answered then.
-    if (!heldHere && requestParksItsCaller(pending.payload)) {
-      return yield* new Unavailable({
-        runId: req.runId,
-        reason: `The ${runNoun(deps.session(), req.runId)} that asked is no longer running: resume it to answer this request.`,
+  const answer = (write: Effect.Effect<boolean, RequestError>) =>
+    Effect.gen(function* () {
+      const pending = pendingOf(deps, req.runId, req.requestId);
+      if (pending === undefined) return yield* settled(req.runId);
+      // A request that parks its caller is answered by the fiber waiting on it,
+      // and that fiber died with the owner this decision takes over from:
+      // recording a decision would clear the panel without doing what it says.
+      // Resuming the run re-enters the call, which asks again and is answered then.
+      if (!heldHere && requestParksItsCaller(pending.payload)) {
+        return yield* new Unavailable({
+          runId: req.runId,
+          reason: `The ${runNoun(deps.session(), req.runId)} that asked is no longer running: resume it to answer this request.`,
+        });
+      }
+      const { log } = deps.session();
+      const side = deps.plugins.decisions.get(pending.payload.kind)?.record({
+        payload: pending.payload,
+        decision: req.decision,
+        inbox: (runId) => runInbox(deps.session(), runId),
+        commit: (own) => log.transact(own.map((f) => ownFactRow(f, req.runId))),
       });
-    }
-    const { log } = deps.session();
-    const side = deps.plugins.decisions.get(pending.payload.kind)?.record({
-      payload: pending.payload,
-      decision: req.decision,
-      inbox: (runId) => runInbox(deps.session(), runId),
-      commit: (own) => log.transact(own.map((f) => ownFactRow(f, req.runId))),
+      if (side) yield* Effect.orDie(side);
+      if (!(yield* write)) return yield* settled(req.runId);
+      return done;
     });
-    if (side) yield* Effect.orDie(side);
-    const recorded = yield* recordDecision(deps.session(), req, heldHere);
-    if (!recorded) return yield* settled(req.runId);
-    return done;
-  });
+  const decided = decideUnderGrant(deps.session(), req, heldHere, answer);
   return withPerKeyLane(
     deps.decisionLanes,
     `${req.runId}/${req.requestId}`,
-  )(withRunClaim(deps, req.runId, heldHere, answer));
+  )(withRunClaim(deps, req.runId, heldHere, decided));
 };
 
 /** Answered by the run's live loop once its resume here settles (none: refused): a /compact or /model sent mid-resume waits until the run rests. */
