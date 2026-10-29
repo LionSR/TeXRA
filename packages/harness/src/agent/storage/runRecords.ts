@@ -180,12 +180,10 @@ export type RunResult =
   | (Omit<RunEnd, 'outcome'> & { readonly outcome?: RunOutcome });
 
 /**
- * The run's terminal result of the lifecycle `rows` end with: the
- * `run.end` row's outcome, error and output, and the usage its activation
- * spent, folded from its priced rows from its own `run.activate` on (a
- * recipe's with the spend of the children it started then); none for a
- * lifecycle with no end; an unreadable fold is logged and reads as no
- * usage, so it never also costs the run its terminal fact.
+ * The terminal result of the lifecycle `rows` end with: its `run.end`'s
+ * outcome, error and output, and the usage its activation spent, from its
+ * own `run.activate` on (a recipe's with its children's then); none with
+ * no end. An unreadable fold is logged and reads as no usage.
  */
 const runEndOf = (
   session: SessionHandle,
@@ -228,7 +226,8 @@ const runEndOf = (
     }
     const own = Result.isSuccess(folded) ? folded.success?.usage : undefined;
     // A document task's revisions are its children's runs, which hold
-    // what it cost: those this activation started.
+    // what it cost: those this activation started, each as it had ended
+    // by this end, whatever a later resume of it spent.
     const children =
       held.config && isTaskConfig(held.config)
         ? yield* Effect.forEach(
@@ -236,9 +235,19 @@ const runEndOf = (
             (child) =>
               Effect.flatMap(session.log.facts(child), (facts) => {
                 const born = facts?.start?.commit ?? -1;
-                return born > (start?.commit ?? -1) && born <= end.commit
-                  ? getRunRecords(session, child).readRunEnd()
-                  : Effect.succeed(null);
+                const late = born > end.commit;
+                if (facts === null || born <= (start?.commit ?? -1) || late)
+                  return Effect.succeed(null);
+                return Effect.flatMap(
+                  session.log.rows(qualifyAggregateId('run', child)),
+                  (rows) =>
+                    runEndOf(
+                      session,
+                      child,
+                      facts,
+                      rows.filter((row) => row.commit <= end.commit),
+                    ),
+                );
               }),
           )
         : null;
