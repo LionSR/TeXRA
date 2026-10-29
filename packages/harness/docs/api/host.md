@@ -2274,7 +2274,7 @@ type SentReasoning =
 ## SESSION_CLOSE_DEADLINE_MS
 
 The budget one session close spends waiting for its runs to end before it
-ends the ones still live itself (`SessionOwner.close`). A hung run must
+reports the ones still live abandoned (`SessionOwner.close`). A hung run must
 not wedge desktop quit, eat the extension's ~5s deactivate budget, or
 stall a CLI SIGTERM indefinitely. The closes of a process's sessions start
 together, so they finish under one deadline for the process, not one each.

@@ -34,7 +34,6 @@ import { RouteRetries } from '@agent/runtime/run/invocation';
 import { decideResume } from '@agent/runtime/resumeRun';
 import { rootRun } from '@agent/runtime/rootLaunch';
 import { onHeldResult } from '@agent/runtime/runLaunchGuard';
-import { finalizeRun } from '@agent/storage/runLifecycle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { registryOf, RunRegistry } from '@agent/runtime/runRegistry';
@@ -73,12 +72,7 @@ import {
   workspaceEnvironmentLayer,
 } from '@platform/defaults/nodePlatform';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
-import {
-  aggregateTarget,
-  RUN_OUTCOME,
-  type RunId,
-  type SessionCloseReport,
-} from '@shared/schemas';
+import { aggregateTarget, type SessionCloseReport } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   Database,
@@ -458,35 +452,13 @@ const heldSession = (root: string) =>
   });
 
 /**
- * Settle one run from outside its driver: what a close does for a run still
- * live when its budget ran out. Its end is ownerless (CANCELLED unless its
- * driver already wrote one), with its checkpoint kept, since a cancelled
- * run is exactly the one a user resumes. A failure is logged, never
- * raised: a later launch classifies the run from its checkpoint.
- */
-const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    if (!(yield* session.log.owns(runId))) return;
-    yield* finalizeRun(session, {
-      runId,
-      outcome: RUN_OUTCOME.CANCELLED,
-      ownerless: true,
-    });
-  }).pipe(
-    Effect.catchCause((cause) =>
-      logFailure(
-        `Failed to settle run ${runId} as its session closed; a later launch classifies it from its checkpoint`,
-      )(Cause.squash(cause)),
-    ),
-  );
-
-/**
  * Close the session of one root, the one way a session ends: refuse new
- * runs; stop every run, cascading, settling the undriven and waiting for the
- * rest ({@link SESSION_CLOSE_DEADLINE_MS}); settle in a second budget each
- * run still held ({@link settleRun}), reported abandoned; release the entry,
- * whose finalizers flush and unwind. Uninterruptible: the budget is its one
- * cancellation, and every step after it still runs. */
+ * runs; stop every run, cascading, and wait for them to end within its
+ * budget ({@link SESSION_CLOSE_DEADLINE_MS}); release the entry, whose
+ * finalizers flush and unwind. A shutdown writes no end of its own: a run
+ * still live past the budget is reported abandoned and left resumable, its
+ * state classified from its checkpoint by the next launch. Uninterruptible:
+ * the budget is its one cancellation, and every step after it still runs. */
 const closeSession = (root: string) =>
   Effect.gen(function* () {
     const sessions = yield* SessionMap;
@@ -494,39 +466,20 @@ const closeSession = (root: string) =>
     // A root with nothing open: nothing to settle, nothing abandoned.
     if (held === undefined)
       return { settled: true, abandoned: [] } satisfies SessionCloseReport;
-    const { key, session, runs } = held;
-    // A run the stop reached no driver for, or whose stop failed, is settled
-    // now rather than waited out; the rest drain, none admitted meanwhile.
-    const drained = yield* Effect.gen(function* () {
-      const undriven = yield* runs.stopAll();
-      for (const runId of undriven) yield* settleRun(session, runId);
-      yield* runs.awaitDrained();
-    }).pipe(
-      Effect.interruptible,
-      Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
-    );
+    const { key, runs } = held;
+    runs.stopAll();
+    const drained = yield* runs
+      .awaitDrained()
+      .pipe(
+        Effect.interruptible,
+        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+      );
     const settled = Option.isSome(drained);
     const abandoned = settled ? [] : runs.get().map((run) => run.runId);
-    if (abandoned.length > 0) {
+    if (abandoned.length > 0)
       yield* Effect.logWarning(
-        `Session ${root} closed with runs still live past its budget; settling them from the close: ${abandoned.join(', ')}`,
+        `Session ${root} closed with runs still live past its budget; the next launch classifies them from their checkpoints: ${abandoned.join(', ')}`,
       ).pipe(withLogChannel(CHANNEL));
-      // The settlement has a budget of its own: a store too stuck to take
-      // the terminal rows must not hold the process's exit. A run left
-      // unsettled is classified from its checkpoint by the next launch.
-      yield* Effect.forEach(abandoned, (runId) => settleRun(session, runId), {
-        discard: true,
-      }).pipe(
-        Effect.interruptible,
-        Effect.timeoutOrElse({
-          duration: SESSION_CLOSE_DEADLINE_MS,
-          orElse: () =>
-            Effect.logWarning(
-              `Session ${root} could not settle its abandoned runs within the close budget; the next launch classifies them from their checkpoints`,
-            ).pipe(withLogChannel(CHANNEL)),
-        }),
-      );
-    }
     yield* sessions.invalidate(key);
     return { settled, abandoned } satisfies SessionCloseReport;
   }).pipe(Effect.uninterruptible, withPerKeyLane(rootLanes, root));

@@ -1,18 +1,15 @@
-import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
+import { Cause, Deferred, Effect, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import { runRejection } from '@agent/storage/resumability';
-import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResumeAttempt, ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { registryOf } from '@agent/runtime/runRegistry';
-import type { StopCause } from '@agent/runtime/runs';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
 import {
   type CommitOrdinal,
   type ResumeRefusal,
-  RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -129,10 +126,9 @@ export interface RunAttempt {
   /** A caller holds the activated run, or none holds the resume (a wake):
    *  only a stop or the session's close ends the run now. */
   handedOff: boolean;
-  /** The activation it opened (`RunRegistry.start` links it): the one
-   *  record of a stop's reason, which its generation's exit and its own
-   *  read, and which outlives the registry's entry. */
-  activation?: { readonly stop?: StopCause };
+  /** The activation it opened, which `RunRegistry.start` links: unset, a
+   *  launch already held the run and refused this one. */
+  activation?: object;
 }
 
 /**
@@ -182,19 +178,15 @@ export const openResume = (
         waiters: 0,
         handedOff: wake,
       };
-      const { session } = options;
-      // A stop recorded before this fiber ran had no fiber to interrupt: the
-      // decision reads it first, under its exit's handler.
+      // Built as it runs: a stop before it decides nothing (`start`).
       const decided = Effect.suspend(() =>
-        attempt.activation?.stop === undefined
-          ? runs.programs.resume(runId, options, (commit) =>
-              Deferred.succeed(attempt.admitted, commit),
-            )
-          : Effect.interrupt,
-      ).pipe(Effect.onExit(stoppedUnadmitted(session, runId, attempt)));
+        runs.programs.resume(runId, options, (commit) =>
+          Deferred.succeed(attempt.admitted, commit),
+        ),
+      );
       const fiber = yield* runs.start(
         runId,
-        answered(runId, session, attempt, decided),
+        answered(runId, options.session, attempt, decided),
         (decision) => decision,
         null,
         attempt,
@@ -209,34 +201,6 @@ export const openResume = (
       return attempt;
     }),
   );
-
-/** A user's stop that reached the resume before it admitted the run ends
- *  the run cancelled, as a stop of a run nothing here drives does. */
-const stoppedUnadmitted =
-  (session: SessionHandle, runId: RunId, attempt: RunAttempt) =>
-  <A, E>(exit: Exit.Exit<A, E>): Effect.Effect<void> => {
-    if (
-      !Exit.hasInterrupts(exit) ||
-      Deferred.isDoneUnsafe(attempt.admitted) ||
-      attempt.activation?.stop !== 'user'
-    )
-      return Effect.void;
-    const cancelled = {
-      runId,
-      outcome: RUN_OUTCOME.CANCELLED,
-      ownerless: true,
-    };
-    return session.log.hold(runId, { ends: true }).pipe(
-      Effect.andThen(finalizeRun(session, cancelled)),
-      Effect.scoped,
-      Effect.catch((error) =>
-        Effect.logWarning(`The stop of run ${runId} wrote no end`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-        ),
-      ),
-    );
-  };
 
 /**
  * What a resume's answer owes once no caller holds it (a wake took it,
