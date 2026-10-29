@@ -1,4 +1,3 @@
-import * as os from 'node:os';
 import { Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
@@ -11,18 +10,17 @@ import type { OwnerLiveness } from '@shared/schemas';
 const CHANNEL = 'LeaseOwnerLiveness';
 
 /**
- * Identity of the process recorded as an aggregate's claim owner: a pid, the
- * opaque process-start identity `nodeProcesses` produced for it when the
- * claim was taken (null where the host could not read one), and the machine
- * it runs on. Liveness is a kernel fact derived from these three fields;
- * nothing here is compared to a clock and no socket protocol is involved.
- * The owner id the database stores decodes to exactly this shape
- * (`ownerIdentity` in `@shared/schemas`).
+ * Identity of the process recorded as an aggregate's claim owner: a pid and
+ * the opaque process-start identity `nodeProcesses` produced for it when the
+ * claim was taken (null where the host could not read one). Liveness is a
+ * kernel fact derived from these two fields; nothing here is compared to a
+ * clock and no socket protocol is involved. The owner id the database
+ * stores decodes to this shape plus the hostname the owner started under
+ * (`ownerIdentity` in `@shared/schemas`), which no proof reads.
  */
 interface ClaimOwnerRecord {
   readonly pid: number;
   readonly processStart: string | null;
-  readonly hostname: string;
 }
 
 /**
@@ -44,15 +42,23 @@ const pidProvablyDead = (pid: number): Effect.Effect<boolean> =>
  *
  * | observed                                       | verdict    |
  * | ---------------------------------------------- | ---------- |
- * | owner recorded on another host                 | unprovable |
  * | `kill(pid, 0)` gives ESRCH                     | dead       |
  * | pid exists, identity equals the record         | alive      |
  * | pid exists, identity differs (pid reuse)       | dead       |
  * | pid exists, identity unreadable on either side | unprovable |
  *
- * Hostnames compare case-insensitively on every supported platform. A
- * cross-host owner is unprovable by construction: a local pid says nothing
- * about a process on another machine sharing the storage directory.
+ * The recorded hostname is not compared. A session store opens only on a
+ * local filesystem (`localDatabasePath`), so an owner it records ran on
+ * this machine or on one whose disk, or a copy of it, this machine now
+ * holds; a process of the second kind has no pid here, or its pid names
+ * another process, and reads dead. A hostname does not identify the
+ * machine anyway: macOS renames it with the network it joins, so comparing
+ * one would hold a crashed process's runs on every other network. Pids
+ * compare only within one pid namespace, so a process inside a container
+ * that bind-mounts the store and one outside it read each other dead while
+ * both run. A claim taken across that boundary moves in one write
+ * transaction, and the process it was taken from has its next append
+ * refused as `DatabaseNotOwner`, nothing written.
  *
  * The verdict is total: `nodeProcesses.identity` reports an unreadable
  * identity as undefined rather than rejecting, and the `kill(pid, 0)` beside
@@ -64,13 +70,6 @@ export const proveOwnerLiveness = Effect.fn(
 )(function* (
   owner: ClaimOwnerRecord,
 ): Effect.fn.Return<OwnerLiveness, never, ProcessProbe> {
-  const localHostname = os.hostname();
-  if (owner.hostname.toLowerCase() !== localHostname.toLowerCase()) {
-    yield* Effect.logWarning(
-      `Claim owner pid ${owner.pid} was recorded on host ${owner.hostname}; its liveness is unprovable from ${localHostname}`,
-    ).pipe(withLogChannel(CHANNEL));
-    return 'unprovable';
-  }
   if (yield* pidProvablyDead(owner.pid)) return 'dead';
   const observed = yield* nodeProcesses.identity(owner.pid);
   if (observed === undefined) {

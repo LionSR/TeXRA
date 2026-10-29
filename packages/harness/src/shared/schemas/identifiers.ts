@@ -36,8 +36,8 @@ const decodeOwnerIdentityJson = Schema.decodeUnknownResult(
 );
 
 /**
- * JSON.stringify([hostname.toLowerCase(), pid, processStart]). Host identity
- * is necessary: a missing local pid cannot prove a foreign process dead.
+ * JSON.stringify([hostname.toLowerCase(), pid, processStart]). Liveness
+ * proofs read the pid and start; the hostname is kept for diagnostics.
  */
 export const OwnerIdSchema = Schema.String.check(
   Schema.makeFilter(

@@ -1302,6 +1302,12 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A task interrupted by a crash is no longer held forever after the
+  network changes.** On macOS the computer's name follows the network (a
+  router-assigned name at home, `name.local` elsewhere), and a task whose
+  process stopped under one name was treated as running on another
+  computer: it was never shown as interrupted and could not be resumed.
+  TeXRA now identifies the process itself, not the computer's name.
 - **One notice when a message cannot wake its task.** A message sent to a
   task whose agent or plugin is missing or off showed two notices, the
   second a generic "could not be resumed automatically" that suggested a
