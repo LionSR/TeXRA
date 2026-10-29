@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 // Third-party imports
+import { format, resolveConfig } from 'prettier';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
@@ -113,14 +114,10 @@ function subsystemFromRepoRelative(path: string): string | null {
   return SUBSYSTEMS.has(subsystem) ? subsystem : null;
 }
 
-function resolveImportedSubsystem(
-  file: string,
-  specifier: string,
-): string | null {
+/** The repo path an import names, or null for a package outside the aliases. */
+function resolveImportPath(file: string, specifier: string): string | null {
   if (specifier.startsWith('.')) {
-    return subsystemFromRepoRelative(
-      repoRelative(resolve(dirname(file), specifier)),
-    );
+    return repoRelative(resolve(dirname(file), specifier));
   }
 
   // Match the most specific (longest) alias so a carve-out like
@@ -135,10 +132,17 @@ function resolveImportedSubsystem(
       bestMatch = { alias, target };
     }
   }
-  if (bestMatch == null) return null;
-  return subsystemFromRepoRelative(
-    `${bestMatch.target}${specifier.slice(bestMatch.alias.length)}`,
-  );
+  return bestMatch == null
+    ? null
+    : `${bestMatch.target}${specifier.slice(bestMatch.alias.length)}`;
+}
+
+function resolveImportedSubsystem(
+  file: string,
+  specifier: string,
+): string | null {
+  const path = resolveImportPath(file, specifier);
+  return path == null ? null : subsystemFromRepoRelative(path);
 }
 
 function stringLiteralText(node: ts.Node): string | null {
@@ -260,21 +264,15 @@ function addEdge(
   );
 }
 
+/** Calls `onImport` with each module a file loads and the kind it implies. */
 function visitImports(
   sourceFile: ts.SourceFile,
-  file: string,
-  from: string,
-  edges: Map<string, EdgeKind>,
+  onImport: (specifier: string, kind: EdgeKind) => void,
 ): void {
   const visit = (node: ts.Node): void => {
     const reference = moduleReference(node);
     if (reference?.specifier != null) {
-      addEdge(
-        edges,
-        from,
-        resolveImportedSubsystem(file, reference.specifier),
-        reference.kind,
-      );
+      onImport(reference.specifier, reference.kind);
     }
 
     ts.forEachChild(node, visit);
@@ -305,12 +303,15 @@ function collectSubsystemEdges(): SubsystemEdge[] {
 
     visitImports(
       parseSourceFile(file, { setParentNodes: false }),
-      file,
-      from,
-      edges,
+      (specifier, kind) =>
+        addEdge(edges, from, resolveImportedSubsystem(file, specifier), kind),
     );
   }
 
+  return edgeList(edges);
+}
+
+function edgeList(edges: Map<string, EdgeKind>): SubsystemEdge[] {
   return [...edges.entries()]
     .map(([key, kind]) => {
       const [from, to] = key.split('->');
@@ -320,6 +321,89 @@ function collectSubsystemEdges(): SubsystemEdge[] {
       return { from, to, kind };
     })
     .toSorted(compareEdges);
+}
+
+const HARNESS_SRC = 'packages/harness/src/';
+
+/** A harness file's top-level directory; the package entries at its root are `entries`. */
+function harnessDirectory(path: string): string | null {
+  if (!path.startsWith(HARNESS_SRC)) return null;
+  const parts = path.slice(HARNESS_SRC.length).split('/');
+  return parts.length > 1 ? (parts[0] ?? null) : 'entries';
+}
+
+/** Directed imports between the harness's top-level directories. */
+function collectHarnessEdges(): SubsystemEdge[] {
+  const edges = new Map<string, EdgeKind>();
+  for (const file of sourceFilesUnder(resolve(REPO_ROOT, HARNESS_SRC))) {
+    const from = harnessDirectory(repoRelative(file));
+    if (from == null) continue;
+    visitImports(
+      parseSourceFile(file, { setParentNodes: false }),
+      (specifier, kind) => {
+        const path = resolveImportPath(file, specifier);
+        addEdge(
+          edges,
+          from,
+          path == null ? null : harnessDirectory(path),
+          kind,
+        );
+      },
+    );
+  }
+  return edgeList(edges);
+}
+
+const HARNESS_BASELINE_FILE =
+  'config/ratchets/harness-layer-edges-baseline.json';
+const HARNESS_BASELINE_PATH = resolve(REPO_ROOT, HARNESS_BASELINE_FILE);
+
+/**
+ * The harness's layer order, bottom first; packages/harness/AGENTS.md
+ * "Layer order" says what sits where. An import points to a strictly lower
+ * layer. Every other harness import (upward, within one layer, or either
+ * half of a two-way directory pair) is listed in HARNESS_BASELINE_FILE,
+ * which only shrinks.
+ */
+const HARNESS_LAYERS: readonly (readonly string[])[] = [
+  ['logger'],
+  ['utils'],
+  ['shared'],
+  ['common'],
+  ['platform'],
+  ['model', 'skills'],
+  ['agent', 'tools', 'transcript'],
+  ['controllers'],
+  ['effect'],
+  ['entries'],
+];
+
+function harnessLayer(directory: string): number {
+  return HARNESS_LAYERS.findIndex((layer) => layer.includes(directory));
+}
+
+/** Why an import breaks the order, or null when it points down. */
+function layerBreak(
+  edge: SubsystemEdge,
+  keys: ReadonlySet<string>,
+): 'upward' | 'same layer' | 'two-way' | null {
+  const from = harnessLayer(edge.from);
+  const to = harnessLayer(edge.to);
+  if (to > from) return 'upward';
+  if (to === from) return 'same layer';
+  return keys.has(edgeKey({ from: edge.to, to: edge.from })) ? 'two-way' : null;
+}
+
+/** The live harness imports that do not point strictly down. */
+function harnessLayerBreaks(edges: SubsystemEdge[]): SubsystemEdge[] {
+  const keys = new Set(edges.map(edgeKey));
+  return edges.filter((edge) => layerBreak(edge, keys) != null);
+}
+
+function readHarnessBaseline(): EdgeBaseline {
+  return JSON.parse(
+    readFileSync(HARNESS_BASELINE_PATH, 'utf8'),
+  ) as EdgeBaseline;
 }
 
 function readBaseline(): EdgeBaseline {
@@ -343,6 +427,7 @@ function edgeKey(edge: Pick<SubsystemEdge, 'from' | 'to'>): string {
 function findRatchetViolations(
   current: SubsystemEdge[],
   baseline: SubsystemEdge[],
+  admitted: ReadonlyMap<string, string> = ADMITTED_TYPE_ONLY_EDGES,
 ): EdgeViolation[] {
   const baselineByEdge = new Map(baseline.map((edge) => [edgeKey(edge), edge]));
   const violations: EdgeViolation[] = [];
@@ -350,10 +435,7 @@ function findRatchetViolations(
   for (const edge of current) {
     const baselineEdge = baselineByEdge.get(edgeKey(edge));
     if (baselineEdge == null) {
-      if (
-        edge.kind === 'type-only' &&
-        ADMITTED_TYPE_ONLY_EDGES.has(edgeKey(edge))
-      ) {
+      if (edge.kind === 'type-only' && admitted.has(edgeKey(edge))) {
         continue;
       }
       violations.push({
@@ -494,5 +576,75 @@ describe('LAY-1 subsystem edge ratchet', () => {
         currentKind: 'value',
       },
     ]);
+  });
+});
+
+describe('LAY-2 harness layer order', () => {
+  const edges = collectHarnessEdges();
+  const keys = new Set(edges.map(edgeKey));
+  const baseline = readHarnessBaseline();
+
+  it('places every harness directory in a layer', () => {
+    const unplaced = [...new Set(edges.flatMap(({ from, to }) => [from, to]))]
+      .filter((directory) => harnessLayer(directory) < 0)
+      .toSorted();
+
+    expect(
+      unplaced,
+      'add each new packages/harness/src directory to HARNESS_LAYERS and to the order in packages/harness/AGENTS.md',
+    ).toEqual([]);
+  });
+
+  it('adds no upward, same-layer or two-way import', () => {
+    const violations = findRatchetViolations(
+      harnessLayerBreaks(edges),
+      baseline.edges,
+      new Map(),
+    ).filter((violation) => violation.reason !== 'value-overstated');
+    const lines = violations.map((violation) => {
+      const [from = '', to = ''] = violation.edge.split('->');
+      const why = layerBreak({ from, to, kind: violation.currentKind }, keys);
+      return `${formatViolations([violation])} (${why})`;
+    });
+
+    expect(
+      lines,
+      `harness imports point down HARNESS_LAYERS; move the code to the layer that owns it instead. Do not widen ${HARNESS_BASELINE_FILE}.`,
+    ).toEqual([]);
+  });
+
+  it('counts a downward import as a break when its reverse exists', () => {
+    const up = {
+      from: 'shared',
+      to: 'controllers',
+      kind: 'type-only' as const,
+    };
+    const down = { from: 'controllers', to: 'shared', kind: 'value' as const };
+
+    expect(harnessLayerBreaks([down])).toEqual([]);
+    expect(harnessLayerBreaks([up, down])).toEqual([up, down]);
+  });
+
+  it('lists only imports that still break the order', async () => {
+    const live = new Map(harnessLayerBreaks(edges).map((e) => [edgeKey(e), e]));
+    const kept = baseline.edges.flatMap((edge) => {
+      const current = live.get(edgeKey(edge));
+      return current == null
+        ? []
+        : [{ ...edge, kind: edge.kind === 'value' ? current.kind : edge.kind }];
+    });
+    const rows = kept.map((edge) => `    ${JSON.stringify(edge)}`).join(',\n');
+    const text = await format(
+      `{"semantics": ${JSON.stringify(baseline.semantics)}, "edges": [\n${rows}\n]}`,
+      {
+        ...(await resolveConfig(HARNESS_BASELINE_PATH)),
+        filepath: HARNESS_BASELINE_PATH,
+      },
+    );
+
+    await expect(text).toMatchFileSnapshot(
+      HARNESS_BASELINE_PATH,
+      `a listed import now points down, is type-only, or is gone: run \`npx vitest run src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts -u\` to shrink ${HARNESS_BASELINE_FILE}`,
+    );
   });
 });

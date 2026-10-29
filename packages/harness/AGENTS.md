@@ -10,6 +10,35 @@ Folder-scoped addition to the root [AGENTS.md](../../AGENTS.md) for
 - `packages/harness/src/platform/` defines the host ports and the process runtime types. Each host's composition root builds one `ManagedRuntime` over `processLayer()` and opens and closes sessions through its `SessionOwner`.
 - Hosts and the app hold a session as the public `LocalSession` (`Sessions.open`, `packages/harness/src/effect/sessions.ts`): its view, a run's records (`records(runId)`), the runs this process holds (`held`), the run listing and deletion, and its notices (`emit`), all typed. The internal `SessionHandle` is the harness's; a host never names it.
 
+## Layer order
+
+The top-level directories of `packages/harness/src`, bottom first. An import
+points to a strictly lower layer:
+
+1. `logger/`: log channels and the log sink; imports nothing in the harness.
+2. `utils/`: helpers with no domain owner.
+3. `shared/`: wire contracts, schemas, the session row model and its folds.
+4. `common/`: cross-cutting logic with domain meaning (errors, parsing, storage layout).
+5. `platform/`: the host ports and the process runtime types.
+6. `model/`, `skills/`: model capabilities and pricing; skill discovery.
+7. `agent/`, `tools/`, `transcript/`: the run runtime, the tool engine with the
+   built-in tools, and run-transcript persistence. They import each other.
+8. `controllers/`: the SQLite session stores and the session composition.
+9. `effect/`: the SDK (`Sessions`, `processLayer`).
+10. The entry files at the root (`index.ts`, `node.ts`, `plugins.ts`, `schemas.ts`, `host.ts`, `transcriptEntry.ts`).
+
+`src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts` holds this order as `HARNESS_LAYERS` and
+fails a new import that points up, stays within its layer, or closes a two-way
+directory pair. The ones that exist are listed in
+`config/ratchets/harness-layer-edges-baseline.json`, which only shrinks. The
+known exceptions: `platform/processRuntime.ts` names types from `agent/`,
+`tools/`, `skills/` and `effect/` (`ProcessServices` and the session owner
+belong above the ports); `shared/config/settings.ts` and `shared/usageLog.ts`
+name `platform/` ports; run storage and the settings-reading system helpers in
+`utils/` reach `shared/`, `common/` and `platform/`; and `agent/`, `tools/` and
+`transcript/` form one cycle. When a row disappears, shrink the file with
+`npx vitest run src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts -u`.
+
 ## Configuration, storage, and workspace files
 
 - **Raw config paths.** Read with `config.get(path)` on the `ConfigProvider` the caller holds (a tool call's `call.roots.config`, a run's or a host command's `session.roots.config`) and write with its `update(...)`. There is no `updateConfig`/`watchConfig` helper and no change-notification API.
