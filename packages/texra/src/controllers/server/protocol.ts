@@ -74,7 +74,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 36;
+export const PROTOCOL_VERSION = 37;
 
 /** What `service.hello` and `texra service status` report. */
 export const ServiceInfoSchema = Schema.Struct({
@@ -220,18 +220,12 @@ export const TexraRpcs = RpcGroup.make(
     error: TaskFailed,
   }),
   /** What a task's current activation ends with, once it ends: its
-   *  outcome, output, and the error a failed one ended with; and `at`,
-   *  the service's fold position where it saw the end, so a window's
-   *  fold at or past it shows the end (or the run's removal) too. */
+   *  stored end; and `at`, the service's fold position where it saw the
+   *  end, so a window's fold at or past it shows the end (or the run's
+   *  removal) too. */
   Rpc.make('task.ended', {
     payload: { workspace, runId: RunIdSchema },
-    success: RunEndSchema.mapFields(
-      Struct.pick(['outcome', 'output', 'error']),
-    ).mapFields(
-      Struct.assign({
-        at: CommitOrdinalSchema,
-      }),
-    ),
+    success: RunEndSchema.mapFields(Struct.assign({ at: CommitOrdinalSchema })),
     error: TaskFailed,
   }),
   /** The run's saved setup; null when it saved none. */

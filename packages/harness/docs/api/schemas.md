@@ -21,7 +21,7 @@ Browser-safe Effect Schemas, derived types, and pure read helpers for
   [`ApprovalPolicySchema`](#approvalpolicyschema), [`resolveBypass`](#resolvebypass).
 - **Agent definitions & run outcomes**: [`AgentConfigSchema`](#agentconfigschema),
   [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
-  [`RunEndResult`](#runendresult), [`RunIdSchema`](#runidschema).
+  [`RunIdSchema`](#runidschema).
 - **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
   [`configTreeRows`](#configtreerows), [`GlobalStateKey`](#globalstatekey),
   [`WorkspaceStateKey`](#workspacestatekey), [`TraceDocumentSchema`](#tracedocumentschema).
@@ -1878,12 +1878,6 @@ function runBypasses<Id>(
 
 ```ts
 type RunEndOutput = typeof RunEndOutputSchema.Type;
-```
-
-## RunEndResult
-
-```ts
-type RunEndResult = typeof RunEndResultSchema.Type;
 ```
 
 ## RunEndSchema

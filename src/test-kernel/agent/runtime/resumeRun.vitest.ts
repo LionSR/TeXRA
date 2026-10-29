@@ -41,7 +41,7 @@ import { it } from '@effect/vitest';
 import { Cause, Effect, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp, wakeRun } from '@agent/followUp/ToolUseFollowUp';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -113,8 +113,8 @@ const packageSession = (session: SessionHandle) =>
     return yield* sessions.open(testWorkspaceRoots());
   });
 
-/** What a resume that reached the run's next idle turn answers. */
-const DELIVERED = { started: true, delivered: true };
+/** What a resume that activated the run answers. */
+const ACTIVATED = { activation: expect.any(Number) };
 
 describe(
   'resumeRun over a crashed store',
@@ -172,15 +172,18 @@ describe(
             read: false,
           });
           yield* config.release;
-          const result = yield* Fiber.join(resumed);
-          expect(result).toMatchObject(DELIVERED);
-          expect(answersOf(storage, runId).at(-1)).toContain('raced');
+          expect(yield* Fiber.join(resumed)).toMatchObject(ACTIVATED);
+          yield* untilStored(
+            storage,
+            () => answersOf(storage, runId).at(-1)?.includes('raced') ?? false,
+          );
 
-          // A root's lifetime is the caller's to await past the
-          // acknowledgement: its input ending ends it.
-          if (!('started' in result)) throw new Error('resume refused');
+          // A root outlives its resume: its input ending ends it.
           yield* session.followUps.closeInput(runId);
-          expect((yield* result.completion)?.outcome).toBe('cancelled');
+          yield* untilStored(
+            storage,
+            () => endsOf(storage, runId).at(-1) === 'cancelled',
+          );
         }),
     );
 
@@ -193,26 +196,18 @@ describe(
           const faults = yield* sessionStoreFaults(storage);
           // The first resume waits on the run's claim, inside its resume.
           const claim = yield* faults.holdNext('acquireClaims');
-          const admitted: string[] = [];
-          const admit =
-            (who: string) => (_: RunId, __: number, joined: boolean) =>
-              Effect.sync(() => void admitted.push(`${who} ${joined}`));
-          const first = yield* Effect.forkChild(
-            resume(runId, { session, onAdmitted: admit('first') }),
-          );
+          const first = yield* Effect.forkChild(resume(runId, { session }));
           yield* claim.reached;
           // Joined as it is forked: the resume is the run's activation.
-          const second = yield* Effect.forkChild(
-            resume(runId, { session, onAdmitted: admit('second') }),
-            { startImmediately: true },
-          );
+          const second = yield* Effect.forkChild(resume(runId, { session }), {
+            startImmediately: true,
+          });
           yield* claim.release;
 
           const joined = yield* Fiber.join(second);
-          expect(joined).toMatchObject(DELIVERED);
+          expect(joined).toMatchObject(ACTIVATED);
           expect(yield* Fiber.join(first)).toEqual(joined);
           expect(activations(storage, runId)).toBe(2);
-          expect(admitted.toSorted()).toEqual(['first false', 'second true']);
         }),
     );
 
@@ -225,7 +220,11 @@ describe(
           });
           yield* send(session, runId, 'continue');
 
-          expect(yield* resume(runId, { session })).toMatchObject(DELIVERED);
+          expect(yield* resume(runId, { session })).toMatchObject(ACTIVATED);
+          yield* untilStored(
+            storage,
+            () => offeredTools(storage, runId).length > 1,
+          );
           const [launched, resumed] = offeredTools(storage, runId);
           expect(launched).toContain('bash');
           expect(resumed).toContain('read_file');
@@ -262,7 +261,8 @@ describe(
             { hold: 'turn' },
           );
 
-          expect(yield* resume(runId, { session })).toMatchObject(DELIVERED);
+          // The receipt is what a wake (no caller holds the run) answers on.
+          yield* Effect.flatten(wakeRun(runId, session));
           expect(answersOf(storage, runId)).toHaveLength(2);
           writeFileSync(
             join(testWorkspaceRoots().storage, 'golden-park.release'),
@@ -278,18 +278,10 @@ describe(
           const { session, runId, storage } = yield* parkedRunAfterCrash({
             owner: JSON.stringify(['other-host', 4321, 'start-1']),
           });
-          let rearranged = false;
 
-          expect(
-            yield* resume(runId, {
-              session,
-              onAdmitted: () =>
-                Effect.sync(() => {
-                  rearranged = true;
-                }),
-            }),
-          ).toEqual({ failed: 'owned_elsewhere' });
-          expect(rearranged).toBe(false);
+          expect(yield* resume(runId, { session })).toEqual({
+            failed: 'owned_elsewhere',
+          });
           expect(activations(storage, runId)).toBe(1);
         }),
     );

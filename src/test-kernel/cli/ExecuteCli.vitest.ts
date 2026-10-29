@@ -20,7 +20,7 @@ import {
   APPROVAL_BYPASS_KINDS,
   NO_APPROVAL_GRANTS,
 } from '@shared/approvalBypassKind';
-import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
+import { qualifyAggregateId } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
@@ -49,7 +49,6 @@ const mocks = vi.hoisted(() => ({
   createHeadlessCliHostInteractions: vi.fn(),
   createCliRuntimeHost: vi.fn(),
   prepareInteractivePrompt: vi.fn(),
-  readCliRunOutcomeState: vi.fn(),
   rootLaunch: vi.fn(),
   admit: vi.fn(),
   stopRequest: vi.fn(),
@@ -96,18 +95,12 @@ function runSessionFake(): LocalSession {
       Effect.promise(() => mocks.admit(input)).pipe(
         Effect.map((): Run => ({
           runId: input.runId as RunId,
-          // A stopped run commits its CANCELLED end and re-raises the stop.
           result: Effect.tryPromise({
-            try: () => mocks.rootLaunch(input),
+            try: () =>
+              mocks.rootLaunch(input) as Promise<Effect.Success<Run['result']>>,
             catch: (cause) =>
               new RunFailure({ cause, message: toErrorMessage(cause) }),
-          }).pipe(
-            Effect.flatMap((ended): Run['result'] =>
-              ended === STOPPED
-                ? Effect.interrupt
-                : Effect.succeed(ended as Effect.Success<Run['result']>),
-            ),
-          ),
+          }),
           view: Stream.empty,
           events: Stream.empty,
           interrupt: Effect.void,
@@ -130,12 +123,6 @@ vi.mock('@cli/runtime/cliPresentationHost', () => ({
 vi.mock('@cli/runtime/approvalAdapter', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/approvalAdapter')>()),
   createHeadlessCliHostInteractions: mocks.createHeadlessCliHostInteractions,
-}));
-
-vi.mock('@cli/runtime/terminalStatus', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/terminalStatus')>()),
-  readCliRunOutcomeState: (...args: unknown[]) =>
-    Effect.tryPromise(() => mocks.readCliRunOutcomeState(...args)),
 }));
 
 vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
@@ -161,9 +148,8 @@ const COMPLETED_RUN = {
   runId: 'ec0000000001',
 } as const;
 
-/** A run the shutdown stopped whose result re-raises the stop, as
- *  `AgentRunLifecycle` does once its CANCELLED end is committed. */
-const STOPPED = Symbol('stopped');
+/** The end a run the shutdown stopped stores. */
+const STOPPED = { ...COMPLETED_RUN, outcome: 'cancelled' } as const;
 
 function baseConfig(): Parameters<typeof executeCliConfig>[0] {
   return { agent: 'chat', model: 'test-model', instruction: '' };
@@ -267,10 +253,6 @@ async function stubExecuteCliDeps(): Promise<void> {
     attachRunProgressRenderer: mocks.attachRunProgressRenderer,
     prepareInteractivePrompt: mocks.prepareInteractivePrompt,
     close: mocks.close,
-  });
-  mocks.readCliRunOutcomeState.mockResolvedValue({
-    outcome: 'completed',
-    outcomePersisted: true,
   });
   mocks.rootLaunch.mockResolvedValue(COMPLETED_RUN);
   mocks.admit.mockResolvedValue(undefined);
@@ -402,10 +384,6 @@ describe('executeCliConfig', () => {
         reason: 'shutdown',
       });
 
-      mocks.readCliRunOutcomeState.mockResolvedValueOnce({
-        outcome: RUN_OUTCOME.CANCELLED,
-        outcomePersisted: true,
-      });
       hangingRun.resolve(STOPPED);
       yield* Deferred.await(finalized);
       yield* settle;
@@ -420,9 +398,11 @@ describe('executeCliConfig', () => {
       expect(onInterruptedRunFinalized).toHaveBeenCalledExactlyOnceWith(
         launchedRunId(),
       );
-      expect(yield* Fiber.join(run)).toEqual({
-        ok: false,
-        exitCode: CliExitCode.Interrupted,
+      // The stored cancelled end is the run's result: the record every
+      // caller emits, whose outcome exits as the interruption (130).
+      expect(yield* Fiber.join(run)).toMatchObject({
+        ok: true,
+        result: { outcome: 'cancelled', runId: launchedRunId() },
       });
     }),
   );
