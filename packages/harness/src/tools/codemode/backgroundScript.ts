@@ -89,7 +89,6 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
       },
     }),
     session,
-    suppressErrorNotification: true,
   });
   yield* startDetachedChildRunLoop({
     session,
