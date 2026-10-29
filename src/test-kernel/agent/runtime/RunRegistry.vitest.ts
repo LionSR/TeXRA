@@ -131,7 +131,7 @@ describe('runRegistry', () => {
           ),
         );
         yield* Deferred.await(ended);
-        yield* registry.stopAll();
+        registry.stopAll();
         expect(registry.get(runId)?.live === true).toBe(true);
         const drain = yield* Effect.forkChild(
           registry

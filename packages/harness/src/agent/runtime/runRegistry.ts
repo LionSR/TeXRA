@@ -12,10 +12,10 @@
  */
 
 import {
-  Cause,
   Context,
   Deferred,
   Effect,
+  Exit,
   Fiber,
   Latch,
   Schema,
@@ -213,7 +213,7 @@ export class RunRegistry implements RunsShape {
 
   /** One run this process holds, or every one: a launch still resolving
    *  (no loop yet) included, which is what `awaitDrained`
-   *  waits on and a close stops and, past its budget, settles. */
+   *  waits on and a close stops and, past its budget, reports. */
   // cast: the overloads RunsShape names, answered by one body.
   readonly get = ((runId?: RunId) =>
     runId === undefined
@@ -364,17 +364,35 @@ export class RunRegistry implements RunsShape {
       if (own) own.deciding = undefined;
       if (attempt && own) attempt.activation = own;
       entry.activation ??= own;
-      const body = attempt ? program : this.admit(runId, program, false);
+      // A stop recorded before a resume's decision ran had no fiber to
+      // interrupt: it reads it first. A stop that ended the decision before
+      // it admitted a generation owes the run its end ({@link stopEnd}).
+      const body = !attempt
+        ? this.admit(runId, program, false)
+        : Effect.suspend(() => (own?.stop ? Effect.interrupt : program)).pipe(
+            Effect.onExit((exit) =>
+              Effect.ignore(
+                (Exit.hasInterrupts(exit) &&
+                  !Deferred.isDoneUnsafe(attempt.admitted) &&
+                  this.stopEnd(runId, own?.stop)) ||
+                  Effect.void,
+                { log: 'Warn', message: `The stop of ${runId} wrote no end` },
+              ),
+            ),
+          );
+      let ran = false;
       const fiber = this.init.fork(
         Effect.withFiber((self) => {
+          ran = true;
           if (attempt && own) own.deciding = self;
           return settle(own ? body : Effect.fail(new RunLive({ runId })));
         }).pipe(Effect.provideService(Runs, this)),
       );
-      // A deciding resume leaves the activation to its generation.
+      // A deciding resume leaves the activation to its generation; one a
+      // closed fork never ran leaves with its fiber.
       fiber.addObserver(() => {
         if (own === undefined || entry.activation !== own) return;
-        if (attempt !== undefined && own.deciding !== fiber) return;
+        if (attempt !== undefined && ran && own.deciding !== fiber) return;
         entry.activation = undefined;
         this.prune(runId, entry);
       });
@@ -579,8 +597,8 @@ export class RunRegistry implements RunsShape {
    * {@link RunStop.accepted} answers at once; a detaching one after the
    * children's `run.detach` batch commits, or a child completing meanwhile
    * would route its result to the just-stopped parent. A run nothing here
-   * owns is stopped under its claim, descendants swept, the terminal row
-   * written here; a refused row fails it.
+   * owns is stopped under its claim, descendants swept, and given the end
+   * the stop owes it ({@link stopEnd}); a refused row fails it.
    */
   stop(runId: RunId, options: RunStopOptions): RunStop {
     const entry = this.entries.get(runId);
@@ -593,6 +611,7 @@ export class RunRegistry implements RunsShape {
     const detach = options.detachActiveChildren === true;
     // Something here to stop: a launch, or its fiber.
     const local = this.isLaunched(runId) || entry?.fiber !== undefined;
+    const end = this.stopEnd(runId, options.reason);
     let reached = false;
     const stopHere = (): boolean => {
       // Shared by the child sweep and the root cascade: each run once.
@@ -600,89 +619,75 @@ export class RunRegistry implements RunsShape {
       reached = this.terminate(runId, visited, !detach, options.reason);
       return reached;
     };
-
-    let settlement: Effect.Effect<void, Error>;
-    if (local && !detach) {
+    if (!detach && (local || end === undefined)) {
       stopHere();
-      settlement = Effect.void;
-    } else {
-      const apply = (
-        detach ? this.detachActiveChildren(runId) : Effect.void
-      ).pipe(
-        Effect.andThen(
-          Effect.suspend(() =>
-            // A reached target finalizes itself; an ownerless stop writes the
-            // terminal row as an inactive-run step, which a generation admitted
-            // meanwhile refuses (`RunLive`) and becomes the target instead.
-            stopHere()
-              ? Effect.void
-              : this.withInactiveRunStep(
-                  runId,
-                  finalizeRun(this.init.session(), {
-                    runId,
-                    outcome: RUN_OUTCOME.CANCELLED,
-                    ownerless: true,
-                  }),
-                ).pipe(
-                  Effect.catchIf(isRunLive, () => Effect.sync(stopHere)),
-                  Effect.asVoid,
-                ),
-          ),
-        ),
-        // Refused before anything was stopped: the run goes on, unmarked.
-        Effect.tapError(() =>
-          Effect.sync(() => {
-            const current = this.entries.get(runId);
-            if (!reached && current?.activation)
-              current.activation.stop = marked;
-          }),
-        ),
-      );
-      settlement = local
-        ? apply
-        : Effect.scoped(
-            this.init
-              .session()
-              .log.hold(runId, { ends: true })
-              .pipe(Effect.andThen(apply)),
-          );
+      return { accepted: () => reached, settlement: Effect.void };
     }
-    return { accepted: () => reached, settlement };
+    const apply = (
+      detach ? this.detachActiveChildren(runId) : Effect.void
+    ).pipe(
+      Effect.andThen(
+        Effect.suspend(() =>
+          // A reached target ends itself; an end owed otherwise is written
+          // as an inactive-run step, which a generation admitted meanwhile
+          // refuses (`RunLive`) and becomes the target instead.
+          stopHere() || end === undefined
+            ? Effect.void
+            : this.withInactiveRunStep(runId, end).pipe(
+                Effect.catchIf(isRunLive, () => Effect.sync(stopHere)),
+              ),
+        ),
+      ),
+      // Refused before anything was stopped: the run goes on, unmarked.
+      Effect.tapError(() =>
+        Effect.sync(() => {
+          const current = this.entries.get(runId);
+          if (!reached && current?.activation) current.activation.stop = marked;
+        }),
+      ),
+    );
+    const { log } = this.init.session();
+    return {
+      accepted: () => reached,
+      settlement: local
+        ? apply
+        : Effect.scoped(Effect.andThen(log.hold(runId, { ends: true }), apply)),
+    };
+  }
+
+  /** The end a stop owes a run no generation here took it for, decided
+   *  here only: a user's stop ends it cancelled, under its claim (an end it
+   *  wrote stands); a shutdown or a release owes none and leaves it
+   *  resumable. A generation a stop reached ends itself, cancelled, through
+   *  its lifecycle. */
+  private stopEnd(
+    runId: RunId,
+    cause: StopCause | undefined,
+  ): Effect.Effect<void, Error> | undefined {
+    if (cause !== 'user') return undefined;
+    const session = this.init.session();
+    const end = { runId, outcome: RUN_OUTCOME.CANCELLED, ownerless: true };
+    return Effect.scoped(
+      Effect.andThen(
+        session.log.hold(runId, { ends: true }),
+        finalizeRun(session, end),
+      ),
+    ).pipe(Effect.asVoid);
   }
 
   /** The session is closing: refuse every run registered from here on, and
    *  stop every run whose parent this registry does not hold (that parent's
-   *  cascade stops the rest). Answers the runs left for the caller to settle:
-   *  those no live target took the stop for, and those whose stop failed to
-   *  record what it owed storage (logged here). Stopped runs keep their
-   *  records until they settle ({@link awaitDrained}). */
-  stopAll(): Effect.Effect<readonly RunId[]> {
+   *  cascade stops the rest). A shutdown owes no end ({@link stopEnd}): a run
+   *  nothing here drives is left resumable, and a stopped one keeps its
+   *  record until it has ended itself ({@link awaitDrained}). */
+  stopAll(): void {
     this.closing = true;
-    const shutdown = {
-      detachActiveChildren: false,
-      reason: 'shutdown',
-    } as const;
     const active = new Set(this.entries.keys());
-    const stops = [...active].flatMap((runId) => {
+    for (const runId of active) {
       const parent = this.attachedParent(runId);
-      return parent !== null && active.has(parent)
-        ? []
-        : [{ runId, stop: this.stop(runId, shutdown) }];
-    });
-    return Effect.forEach(
-      stops,
-      ({ runId, stop }) =>
-        stop.settlement.pipe(
-          Effect.as(stop.accepted() ? [] : [runId]),
-          Effect.catchCause((cause) =>
-            Effect.logWarning(`The stop of run ${runId} failed`).pipe(
-              Effect.annotateLogs({ data: Cause.squash(cause) }),
-              Effect.as([runId]),
-            ),
-          ),
-        ),
-      { concurrency: 'unbounded' },
-    ).pipe(Effect.map((left) => left.flat()));
+      if (parent === null || !active.has(parent))
+        this.stop(runId, { detachActiveChildren: false, reason: 'shutdown' });
+    }
   }
 
   /** Record why `runId` stops, before it is interrupted, on its activation;
