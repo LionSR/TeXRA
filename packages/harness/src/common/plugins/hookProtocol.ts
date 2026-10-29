@@ -10,7 +10,11 @@ import { Result, Schema } from 'effect';
 
 // Local imports
 import { safeParseJson } from '@common/parsing/safeParseJson';
-import type { HookEvent, HookStatus } from '@shared/schemas';
+import type {
+  HookEvent,
+  HookOutcomePayload,
+  HookStatus,
+} from '@shared/schemas';
 
 // --------------------------------------------------------------------- input
 
@@ -136,9 +140,7 @@ const HookOutputSchemas = {
         Schema.Literals(['allow', 'deny', 'ask', 'defer']),
       ),
       permissionDecisionReason: Schema.optional(Schema.String),
-      updatedInput: Schema.optional(
-        Schema.Record(Schema.String, Schema.Unknown),
-      ),
+      updatedInput: Schema.optional(Schema.JsonObject),
       additionalContext: Schema.optional(Schema.String),
     }),
   }),
@@ -177,16 +179,13 @@ type HookAsked = Pick<HookInput, 'hook_event_name'> & {
   readonly stop_hook_active?: boolean;
 };
 
-/** What one hook invocation does in v1, before it is recorded. */
-interface HookVerdict {
+/** What one hook invocation does in v1, before it is recorded (the
+ *  recorded fields are `HookOutcomePayloadSchema`'s). */
+interface HookVerdict extends Pick<
+  HookOutcomePayload,
+  'decision' | 'reason' | 'updatedInput' | 'context' | 'ignored'
+> {
   readonly status: HookStatus;
-  /** A `PreToolUse` denial's reason. */
-  readonly deny: string | null;
-  /** Text the model reads beside the prompt or the tool result; for a
-   *  stop, the instruction its block continues the run with. */
-  readonly context: string | null;
-  /** What it asked for that v1 parses and does not act on. */
-  readonly ignored: readonly string[];
   /** A message the hook shows the user. */
   readonly systemMessage: string | null;
   /** Why the invocation had no effect, or what it asked for in vain: logged
@@ -196,6 +195,10 @@ interface HookVerdict {
 
 /** `PreToolUse`'s deprecated top-level decisions, as the reference maps them. */
 const DEPRECATED_DECISIONS = { approve: 'allow', block: 'deny' } as const;
+
+/** The answer of a hook that said nothing about a call. */
+const NO_ANSWER: Pick<HookVerdict, 'decision' | 'reason' | 'updatedInput'> =
+  Object.freeze({ decision: null, reason: null, updatedInput: null });
 
 const firstLine = (text: string) => text.trim().split('\n')[0] ?? '';
 
@@ -236,7 +239,7 @@ function effectOf(asked: HookAsked, output: HookOutput) {
     'terminalSequence',
   ] as const)
     if (output[field] !== undefined) ignored.push(field);
-  let deny: string | null = null;
+  let answer = NO_ANSWER;
   let context: string | null = null;
   switch (event) {
     case 'PreToolUse': {
@@ -244,17 +247,22 @@ function effectOf(asked: HookAsked, output: HookOutput) {
         output,
       );
       const hso = pre.hookSpecificOutput;
-      const decision =
+      const said =
         hso?.permissionDecision ??
         (pre.decision && DEPRECATED_DECISIONS[pre.decision]);
-      if (decision === 'deny')
-        deny =
+      // `defer` leaves the call to the approval policy, as no answer does.
+      const decision = said === undefined || said === 'defer' ? null : said;
+      answer = {
+        decision,
+        reason:
           hso?.permissionDecisionReason ??
           pre.reason ??
-          'Denied by a PreToolUse hook.';
-      else if (decision === 'ask' || decision === 'defer')
+          (decision === 'deny' ? 'Denied by a PreToolUse hook.' : null),
+        updatedInput: hso?.updatedInput ?? null,
+      };
+      if (said === 'ask' || said === 'defer')
         ignored.push(
-          `permissionDecision: "${decision}" (the approval policy decides)`,
+          `permissionDecision: "${said}" (the approval policy decides)`,
         );
       if (hso?.updatedInput !== undefined) ignored.push('updatedInput');
       context = joined([hso?.additionalContext]);
@@ -321,7 +329,7 @@ function effectOf(asked: HookAsked, output: HookOutput) {
     }
   }
   return {
-    deny,
+    ...answer,
     context,
     ignored,
     systemMessage: output.systemMessage ?? null,
@@ -348,7 +356,7 @@ const ignoredWarning = (event: HookEvent, ignored: readonly string[]) =>
 export function interpretHookRun(asked: HookAsked, run: HookRun): HookVerdict {
   const event = asked.hook_event_name;
   const none = {
-    deny: null,
+    ...NO_ANSWER,
     context: null,
     ignored: [],
     systemMessage: null,
@@ -385,12 +393,11 @@ export function interpretHookRun(asked: HookAsked, run: HookRun): HookVerdict {
   const effect = parsed === undefined ? null : effectOf(asked, parsed);
   if (run.exitCode === 2) {
     const ignored = [...(effect?.ignored ?? [])];
-    let deny: string | null = null;
     let context = effect?.context ?? null;
     const reason =
-      effect?.deny ?? (stderr || `A ${event} hook exited with code 2.`);
-    if (event === 'PreToolUse') deny = reason;
-    else if (event === 'PostToolUse')
+      (effect?.decision === 'deny' ? effect.reason : null) ??
+      (stderr || `A ${event} hook exited with code 2.`);
+    if (event === 'PostToolUse')
       context = joined([context ?? undefined, stderr]);
     else if ((event === 'Stop' || event === 'SubagentStop') && context === null)
       context = stopBlock(
@@ -411,7 +418,11 @@ export function interpretHookRun(asked: HookAsked, run: HookRun): HookVerdict {
     ].filter((line): line is string => line !== null);
     return {
       status: 'blocked',
-      deny,
+      // On `PreToolUse`, exit 2 denies whatever the output said.
+      ...(event === 'PreToolUse'
+        ? { decision: 'deny' as const, reason }
+        : NO_ANSWER),
+      updatedInput: effect?.updatedInput ?? null,
       context,
       ignored,
       systemMessage: effect?.systemMessage ?? null,
