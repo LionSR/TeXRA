@@ -79,7 +79,9 @@ export interface ResumeRunOptions extends Pick<
   /** Session owning the resumed run's coordination state. */
   readonly session: SessionHandle;
   /** This caller's hook once the run is admitted at `commit`, its
-   *  `run.activate`; `joined`: it found the resume in flight, an observer. */
+   *  `run.activate`; `joined`: it found the resume in flight, an observer.
+   *  A caller with a hook hands out its own handle and marks that itself
+   *  (`handOver`); its answer alone hands nothing off. */
   readonly onAdmitted?: (
     runId: RunId,
     commit: CommitOrdinal,
@@ -139,7 +141,7 @@ export const resumeRun = (
         Effect.onExit((exit) =>
           Effect.sync(() => {
             attempt.waiters -= 1;
-            if (Exit.isSuccess(exit)) attempt.handedOff = true;
+            if (Exit.isSuccess(exit) && !onAdmitted) attempt.handedOff = true;
             else if (
               attempt.waiters === 0 &&
               !attempt.handedOff &&

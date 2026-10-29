@@ -172,45 +172,48 @@ export const openResume = (
 ): Effect.Effect<
   { readonly attempt: RunAttempt; readonly joined: boolean } | undefined
 > =>
-  Effect.gen(function* () {
-    const runs = registryOf(options.session.runs);
-    const found = runs.attemptOf(runId);
-    if (found) return { attempt: found, joined: true };
-    const here = runs.get(runId);
-    if (here?.live || here?.launched) return undefined;
-    const done = yield* Deferred.make<ResumeAttempt, Error>();
-    const attempt: RunAttempt = {
-      answer: Deferred.await(done),
-      admitted: yield* Deferred.make<CommitOrdinal>(),
-      waiters: 0,
-      handedOff: wake,
-    };
-    const { session } = options;
-    // A stop recorded before this fiber ran had no fiber to interrupt: the
-    // decision reads it first, under its exit's handler.
-    const decided = Effect.suspend(() =>
-      attempt.activation?.stop === undefined
-        ? runs.programs.resume(runId, options, (commit) =>
-            Deferred.succeed(attempt.admitted, commit),
-          )
-        : Effect.interrupt,
-    ).pipe(Effect.onExit(stoppedUnadmitted(session, runId, attempt)));
-    const fiber = yield* runs.start(
-      runId,
-      answered(runId, session, attempt, decided),
-      (decision) => decision,
-      null,
-      attempt,
-    );
-    // Another resume holds the activation: this one's launch is refused
-    // (`RunLive`), and it joins that one.
-    if (attempt.activation === undefined) {
-      yield* Effect.exit(Fiber.join(fiber));
-      return yield* openResume(runId, options, wake);
-    }
-    fiber.addObserver((exit) => Deferred.doneUnsafe(done, exit));
-    return { attempt, joined: false };
-  });
+  // Uninterruptible: an attempt others can join always gets its answer.
+  Effect.uninterruptible(
+    Effect.gen(function* () {
+      const runs = registryOf(options.session.runs);
+      const found = runs.attemptOf(runId);
+      if (found) return { attempt: found, joined: true };
+      const here = runs.get(runId);
+      if (here?.live || here?.launched) return undefined;
+      const done = yield* Deferred.make<ResumeAttempt, Error>();
+      const attempt: RunAttempt = {
+        answer: Deferred.await(done),
+        admitted: yield* Deferred.make<CommitOrdinal>(),
+        waiters: 0,
+        handedOff: wake,
+      };
+      const { session } = options;
+      // A stop recorded before this fiber ran had no fiber to interrupt: the
+      // decision reads it first, under its exit's handler.
+      const decided = Effect.suspend(() =>
+        attempt.activation?.stop === undefined
+          ? runs.programs.resume(runId, options, (commit) =>
+              Deferred.succeed(attempt.admitted, commit),
+            )
+          : Effect.interrupt,
+      ).pipe(Effect.onExit(stoppedUnadmitted(session, runId, attempt)));
+      const fiber = yield* runs.start(
+        runId,
+        answered(runId, session, attempt, decided),
+        (decision) => decision,
+        null,
+        attempt,
+      );
+      // Another resume holds the activation: this one's launch is refused
+      // (`RunLive`), and it joins that one.
+      if (attempt.activation === undefined) {
+        yield* Effect.exit(Fiber.join(fiber));
+        return yield* openResume(runId, options, wake);
+      }
+      fiber.addObserver((exit) => Deferred.doneUnsafe(done, exit));
+      return { attempt, joined: false };
+    }),
+  );
 
 /** A user's stop that reached the resume before it admitted the run ends
  *  the run cancelled, as a stop of a run nothing here drives does. */

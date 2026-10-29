@@ -217,6 +217,8 @@ export function handOver(
         );
         spawned.push(drain);
         const result = Effect.tap(Deferred.await(ended), Fiber.join(drain));
+        // A caller interrupted while the handle was built never holds it.
+        yield* restore(Effect.void);
         return {
           runId,
           result,
