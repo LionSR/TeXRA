@@ -17,7 +17,7 @@ import { unloadable } from '@shared/session/runHistory';
 import { applyRunRows, type RunState } from '@shared/session/runState';
 import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
-import { runEndFromEvents } from '@shared/session/runFacts';
+import { lastLifecycleRow, runEndFromEvents } from '@shared/session/runFacts';
 import {
   type CommitOrdinal,
   qualifyAggregateId,
@@ -295,8 +295,10 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       Effect.flatMap(whole, (run) => {
         if (run === null) return Effect.succeed(null);
         if (after === undefined) return runEndOf(run.held, run.rows);
+        // Its end, or none if the next activation comes first.
         const end = run.rows.findIndex(
-          (row) => row.commit > after && runEndFromEvents([row], runId),
+          (row) =>
+            row.commit > after && lastLifecycleRow([row], runId) !== undefined,
         );
         return runEndOf(run.held, end < 0 ? [] : run.rows.slice(0, end + 1));
       }),

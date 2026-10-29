@@ -11,8 +11,13 @@ import { Effect, Stream } from 'effect';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { replayTrace } from '@controllers/session/runTrace';
-import type { CommitOrdinal, RunId } from '@shared/schemas';
-import { runEndFromEvents } from '@shared/session/runFacts';
+import {
+  type CommitOrdinal,
+  qualifyAggregateId,
+  type RunId,
+} from '@shared/schemas';
+import { lastLifecycleRow } from '@shared/session/runFacts';
+import { descendantRuns } from '@shared/session/sessionView';
 
 import { RunFailure } from './errors.js';
 import type { Run } from './sessions.js';
@@ -27,11 +32,12 @@ export function runView(
 ): Run {
   const failure = (message: string, cause: unknown = new Error(message)) =>
     new RunFailure({ cause, message });
-  // The activation is over once its end commits, or once nothing here holds
-  // the run any more: an end that did not save, a session closing.
+  // The activation is over once its end or the next activation commits, or
+  // once nothing here holds the run any more: an end that did not save, a
+  // session closing.
   const over = Effect.raceFirst(
     session.log.tail(activation).pipe(
-      Stream.filter((row) => runEndFromEvents([row], runId) !== null),
+      Stream.filter((row) => lastLifecycleRow([row], runId) !== undefined),
       Stream.runHead,
     ),
     Effect.suspend(() => session.runs.get(runId)?.drained ?? Effect.void),
@@ -53,18 +59,41 @@ export function runView(
     runId,
     ...(redirectedFrom !== undefined && { redirectedFrom }),
     result,
-    view: session.view.changes.pipe(
-      // The level replays on subscribe, and the fold lands the activation's
-      // row asynchronously, so a replayed level can predate it: the run
-      // absent, or a resumed run with the outcome of the activation before.
-      Stream.dropWhile(
-        (level) => level.cursor < activation || !level.runs.has(runId),
-      ),
-      // The first level holding this activation's durable outcome is the
-      // last element.
-      Stream.takeUntil(
-        (level) => level.runs.get(runId)?.durableOutcome != null,
-      ),
+    // The transcript tier folds only for subscribed aggregates: while this
+    // view is read, on a port of its own, the run and its descendants as the
+    // view gains them.
+    view: Stream.unwrap(
+      Effect.gen(function* () {
+        const port = `sdk/${runId}/${crypto.randomUUID()}`;
+        yield* Effect.addFinalizer(() => session.view.subscribe(port, []));
+        let subscribed = '';
+        return session.view.changes.pipe(
+          // The level replays on subscribe, and the fold lands the
+          // activation's row asynchronously, so a replayed level can predate
+          // it: the run absent, or a resumed run with the outcome of the
+          // activation before.
+          Stream.dropWhile(
+            (level) => level.cursor < activation || !level.runs.has(runId),
+          ),
+          // The first level holding this activation's durable outcome is the
+          // last element.
+          Stream.takeUntil(
+            (level) => level.runs.get(runId)?.durableOutcome != null,
+          ),
+          Stream.tap((level) => {
+            const ids = descendantRuns(level, runId, { includeRoot: true });
+            if (ids.join('\0') === subscribed) return Effect.void;
+            subscribed = ids.join('\0');
+            return session.view.subscribe(
+              port,
+              ids.map((id) => ({
+                id: qualifyAggregateId('run', id),
+                fromSeq: 0,
+              })),
+            );
+          }),
+        );
+      }),
     ),
     // Every reader replays this activation from the session's rows.
     events: replayTrace(session, runId, activation, result),

@@ -389,7 +389,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       // run's): output that cannot be written fails this command, never the
       // recorded run. Inside the finalization a shutdown waits for.
       afterRun: Effect.fn('workflow.afterRun')(function* (ended) {
-        if (ended.error) return;
         // The defaults the run executed, as its recorded configuration
         // states them (the launch resolves an empty output list to the
         // agent's declared ones); the input-derived
