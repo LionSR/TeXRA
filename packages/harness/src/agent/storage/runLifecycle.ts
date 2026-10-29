@@ -293,16 +293,16 @@ export const endIn = Effect.fn('endIn')(function* (
   return result;
 });
 
-/** No run ends while its open call owns a child that has not ended. An
- *  ownerless end (`cascade`), under the claim it takes, retires such a child
- *  first; the run's own terminal, or a stop whose child is live, is refused. */
-const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
+/** Ready a run's end, answering whether one stood: an ownerless end
+ *  (`cascade`) claims a born run and retires the children its open calls
+ *  own; a driver's own end, or a stop whose child is live, is refused. */
+const beforeEnd = Effect.fn('beforeEnd')(function* (
   session: SessionHandle,
   runId: RunId,
   cascade: boolean,
 ) {
-  if (cascade && (yield* getRunRecords(session, runId).exists()))
-    yield* session.log.hold(runId, { ends: true });
+  const facts = yield* session.log.facts(runId);
+  if (cascade && facts !== null) yield* session.log.hold(runId, { ends: true });
   for (const child of yield* openOwnedChildren(session, runId)) {
     if (!cascade || session.runs.get(child.runId)?.live === true)
       return yield* Effect.fail(
@@ -317,6 +317,7 @@ const endOwnedChildren = Effect.fn('endOwnedChildren')(function* (
       ownerless: true,
     });
   }
+  return facts?.end != null;
 });
 
 /** The one writer of a run's end ({@link endIn}, in its own transaction),
@@ -343,13 +344,12 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     error: lost ?? input.error,
   };
   const lastTurn = finish && (yield* finish(requested.outcome));
-  yield* endOwnedChildren(session, runId, ownerless === true).pipe(
+  const stood = yield* beforeEnd(session, runId, ownerless === true).pipe(
     defectAsFailure,
   );
   let status = yield* end(requested, lastTurn);
-  // A refused last turn: the end keeps its outcome and records the loss,
-  // once a read shows no end committed with it (its publication may have
-  // failed after); a failed read leaves the end to the backstop, loudly.
+  // A refused last turn: a committed end is this call's unless one `stood`;
+  // with none, the end records the loss (a failed read: the backstop's).
   const read =
     Exit.isFailure(status) && lastTurn !== undefined
       ? yield* Effect.result(session.log.rows(qualifyAggregateId('run', runId)))
@@ -360,7 +360,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
       `Run ${runId}: its end with its last turn: ${cause}`,
     );
     const landed = runEndFromEvents(read.success, runId);
-    if (landed !== null) return { end: endOf(landed), wrote: true };
+    if (landed !== null) return { end: endOf(landed), wrote: !stood };
     // The parent's notice rides this end's append (both commit or neither),
     // one per lifecycle (its `run.activate`) so a later loss is no replay;
     // a parent that refuses it is the end's note, on the card.
