@@ -1004,6 +1004,7 @@ function makeAgentProposalPayload(): AgentProposalPermission {
     instruction: AGENT_PROPOSAL_INSTRUCTION,
     memories: [],
     workingDirectory: HARNESS_CWD,
+    allowBypass: true,
     ...(SCRIPT_PROPOSAL
       ? {
           script: {
