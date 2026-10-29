@@ -4,7 +4,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { ANTHROPIC_PLAN_CREDITS } from '@ui/copy/modelAccess';
+import { PLAN_CREDITS_SUMMARY } from '@ui/copy/modelAccess';
 import {
   ONBOARDING_CARD_LEDE,
   ONBOARDING_CARD_TITLE,
@@ -249,9 +249,7 @@ export class OnboardingWelcomeCard extends LitElement {
               <span class="choice-description" aria-hidden="true">
                 ${ONBOARDING_CHOICE_API_KEY.description}
               </span>
-              <span class="choice-description">
-                ${ANTHROPIC_PLAN_CREDITS.hint}
-              </span>
+              <span class="choice-description"> ${PLAN_CREDITS_SUMMARY} </span>
             </div>
           </div>
           <div class="skip-row">

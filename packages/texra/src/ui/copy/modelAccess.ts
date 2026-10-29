@@ -39,18 +39,49 @@ export const OWN_API_KEYS = {
   },
 } as const;
 
+/** One plan's API-credit reminder: the hint under its provider's key row
+ *  and the page that carries the amounts, which change. */
+export interface PlanCredits {
+  readonly hint: string;
+  readonly docLabel: string;
+  readonly docUrl: string;
+}
+
 /**
- * The reminder beside an Anthropic key: Claude Max and Team plans include
- * monthly Claude API credits, spent through an ordinary Console API key once
- * a Console organization is linked to the plan. Amounts stay on the linked
- * page because they change.
+ * The reminders beside a provider key for consumer plans that include API
+ * credits, keyed by the provider whose key spends them. Claude Max and Team
+ * plans include monthly Claude API credits, spent through an ordinary Console
+ * API key once a Console organization is linked to the plan. ChatGPT Pro and
+ * Business plans include monthly OpenAI API credits, claimed in ChatGPT's
+ * billing settings for an API organization the subscriber owns and spent
+ * through an ordinary OpenAI API key; the ChatGPT sign-in (Codex) does not
+ * draw on them. Amounts stay on the linked pages because they change.
  */
-export const ANTHROPIC_PLAN_CREDITS = {
-  hint: "Claude Max or Team? Your plan includes monthly API credits. Link a Console organization in claude.ai's Billing settings, then add a Console API key here.",
-  docLabel: 'About plan API credits',
-  docUrl:
-    'https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers',
-} as const;
+const PLAN_CREDITS: Readonly<Record<string, PlanCredits>> = Object.freeze({
+  anthropic: {
+    hint: "Claude Max or Team? Your plan includes monthly API credits. Link a Console organization in claude.ai's Billing settings, then add a Console API key here.",
+    docLabel: 'About plan API credits',
+    docUrl:
+      'https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers',
+  },
+  openai: {
+    hint: "ChatGPT Pro or Business? Your plan includes monthly API credits. Claim them in ChatGPT's Billing settings for an API organization you own, then add an OpenAI API key here.",
+    docLabel: 'About plan API credits',
+    docUrl:
+      'https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions',
+  },
+});
+
+/** The plan-credits reminder for `provider`'s key, or undefined when no
+ *  consumer plan of that provider includes API credits. */
+export function planCreditsHint(provider: string): PlanCredits | undefined {
+  return PLAN_CREDITS[provider];
+}
+
+/** The one-line form of the reminders above, where a surface names the
+ *  API-key choice once for every provider rather than one row per key. */
+export const PLAN_CREDITS_SUMMARY =
+  "Claude Max or Team, or ChatGPT Pro or Business? Your plan includes monthly API credits you can spend through that provider's API key.";
 
 /**
  * Display names for the ChatGPT plans the Codex token can name, keyed by the

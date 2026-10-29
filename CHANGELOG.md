@@ -841,12 +841,15 @@ history`, a resume and a follow-up say it was "written by an earlier
   route through a ChatGPT subscription, since the Codex backend no longer
   serves them.
 
-- **Claude Max and Team plans' API credits are pointed out where you add an
-  Anthropic key.** The welcome card, the Anthropic row in Settings → API
-  keys, and the terminal's key entry note that these plans include monthly
-  Claude API credits, spent through a Console API key once a Console
-  organization is linked to the plan in claude.ai's Billing settings. The
-  Anthropic "Get API key" link opens the Console's API keys page.
+- **Claude and ChatGPT plans' API credits are pointed out where you add a
+  key.** The welcome card, the Anthropic and OpenAI rows in Settings → API
+  keys, and the terminal's key entry note that Claude Max and Team plans
+  include monthly Claude API credits, spent through a Console API key once a
+  Console organization is linked to the plan in claude.ai's Billing settings,
+  and that ChatGPT Pro and Business plans include monthly OpenAI API credits,
+  spent through an OpenAI API key once claimed in ChatGPT's Billing settings
+  for an API organization you own. The ChatGPT sign-in does not draw on
+  them. The Anthropic "Get API key" link opens the Console's API keys page.
 
 - **A dockable desktop workspace.** Arrange Agent, Files, editors, terminals,
   and Browser in movable tab groups. Drag previews show the destination,
