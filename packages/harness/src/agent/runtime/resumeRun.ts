@@ -43,7 +43,7 @@ import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 import { createScriptRunStrategy } from './scriptRun';
 import { resumeBlocker } from './resumeBlocker';
 
-import { type RunEndResult } from './RunEndResult';
+import { type RunReport } from './runReport';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { activationIfOpened } from './rootLaunch';
@@ -298,7 +298,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       // Its parent, read once under the claim: the run's edge for this
       // activation.
       const parentRunId = yield* persistedParentRunId(session, runId);
-      let launched: Fiber.Fiber<RunEndResult | undefined, Error>;
+      let launched: Fiber.Fiber<RunReport | undefined, Error>;
       if (parentRunId === undefined) {
         const program = prepareAgentDefinition({
           config,
