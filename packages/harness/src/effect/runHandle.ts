@@ -20,8 +20,8 @@ import {
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import { registryOf } from '@agent/runtime/runRegistry';
+import type { ProcessServices } from '@agent/runtime/processServices';
 import { replayTrace } from '@controllers/session/runTrace';
-import type { ProcessServices } from '@platform/processRuntime';
 import {
   type CommitOrdinal,
   qualifyAggregateId,

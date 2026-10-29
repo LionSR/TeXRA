@@ -25,7 +25,6 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
-import type { PluginContext } from '@platform/processRuntime';
 import {
   entriesOf,
   mergeEntries,
@@ -41,6 +40,16 @@ import {
   type ProjectServers,
 } from '@tools/mcp/mcpConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+/**
+ * The services a step pinned from its plugins' layers (a plugin's
+ * `processLayer` and `sessionLayer`), erased: the harness names no plugin's
+ * service. A plugin's own code requires them by name, which `definePlugin`
+ * checks against what its layers serve, and reaches them
+ * only through the step that pinned the plugin, which provides this context
+ * to the call.
+ */
+export type PluginContext = Context.Context<never>;
 
 /** What one step pinned: its tools and the plugins they come from. */
 export interface ToolStep {

@@ -12,13 +12,12 @@ import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
+import type { AgentPlatform } from '@platform/agentPlatform';
 import {
   settingsCatalog,
   type SettingsCatalog,
 } from '@shared/state/stateSettings';
 import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
-
-import type { AgentPlatform } from '../../effect/sessions.js';
 
 /** Filesystem locations used by the default Node platform. */
 export interface NodePlatformOptions {

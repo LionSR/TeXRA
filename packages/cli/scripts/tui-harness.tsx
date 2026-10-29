@@ -33,9 +33,9 @@ import {
   describeFollowUpFailure,
   Secrets,
 } from '@texra-ai/harness/host';
+import { SessionOwner } from '@agent/runtime/sessionOwner';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { SessionOwner } from '@platform/processRuntime';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { runBypasses } from '@shared/approvalBypassKind';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';

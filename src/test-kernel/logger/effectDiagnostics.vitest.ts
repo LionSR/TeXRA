@@ -2,9 +2,11 @@ import { it } from '@effect/vitest';
 import { Effect, ManagedRuntime } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import {
+  effectDiagnosticsLayer,
+  withForkFailureReporting,
+} from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { withForkFailureReporting } from '@platform/processRuntime';
 
 import {
   captureLogEntries,

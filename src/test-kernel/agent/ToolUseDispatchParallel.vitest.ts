@@ -49,7 +49,6 @@ import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import type { PluginContext } from '@platform/processRuntime';
 import {
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -70,6 +69,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import type { PluginContext } from '@tools/sessionTools';
 import { ScriptTool } from '@tools/codemode/ScriptTool';
 
 import { recordSessionEvents } from './progressTestUtils';

@@ -1857,7 +1857,9 @@ interface ProcessLayerOptions {
 ## ProcessRuntime
 
 The runtime a composition root makes over `processLayer`: the process
-services, and the `Sessions` that open and close its sessions.
+services, and the `Sessions` that open and close its sessions. Each root
+keeps it in a local and threads it to the surfaces that run on it; there
+is no ambient slot to read it back from.
 
 ```ts
 type ProcessRuntime = ManagedRuntime.ManagedRuntime<
@@ -1868,25 +1870,17 @@ type ProcessRuntime = ManagedRuntime.ManagedRuntime<
 
 ## ProcessServices
 
-The runtime over the process-lifetime services every entry provides: the
-cohort-A tags, the language-model bridge and the HTTP client, merged once in
-`processLayer`'s `services` layer, plus the standard library's
-`FileSystem`, `Path` and `ChildProcessSpawner`, which the same install
-provides from `@effect/platform-node` so a program that reads a file or
-starts a child process takes them from context instead of building a Node
-layer of its own, and
-`GlobalStorageFs`, the cross-workspace storage view every session of the
-process shares, `GlobalDatabase`, that same root's one database handle,
-which the app's records and the CLI's input history read through,
-`ProjectDatabases`, whose project-scoped borrows share each persistent
-connection between application state and a session graph, `ToolRegistry`,
-the plugin table every run's offered tools are rebuilt from,
-`ToolCatalog`, the tool catalog each session's steps pin their tools in
-(its owner's view, `ToolCatalogOwner`, stays inside the composition), and
-`ToolAvailability`, each workspace's last dependency probe, and
-`AppSignals`, the process's app-lifecycle signal hub. Every run
-and session of the process is provided these; the `Sessions` above them
-is the composition root's alone ({@link ProcessRuntime}).
+The services every run and session of the process is provided, merged
+once by `processLayer`: the host ports and the HTTP client; the standard
+library's `FileSystem`, `Path` and `ChildProcessSpawner`, so a program
+takes them from context instead of building a Node layer; the
+cross-workspace storage view and its one database (`GlobalDatabase`); the
+project databases, whose borrows share each connection between application
+state and a session graph; the plugin table (`ToolRegistry`); the catalog
+each session's steps pin their tools in (`ToolCatalog`; its owner's view
+stays inside the composition); each workspace's last dependency probe
+(`ToolAvailability`); and the app-lifecycle signals. The `Sessions` above
+them is the composition root's alone (`ProcessRuntime`).
 
 ```ts
 type ProcessServices =
@@ -2930,15 +2924,13 @@ function withPerKeyLane<Key, RefusalE = never>(
 `effect` over this runtime's services (a {@link ProcessRuntime}'s, or a
 host runtime's that serves more), as a program rather than a run: a
 composition root hands the process services to a program it must give away
-— a shutdown handler, a host callback typed as an Effect — without
+(a shutdown handler, a host callback typed as an Effect) without
 stepping through a Promise to get them. The services are the runtime's own
 context, built once and cached there, so this is the same provision
 `runPromise` would have made, minus the boundary.
 
 ```ts
 function withProcessServices<A, E, R = ProcessServices | Sessions>(
-  // Not named `runtime`: the migration ratchet pins this file's one approved
-  // `runtime` binding to `withForkFailureReporting`'s parameter.
   processRuntime: ManagedRuntime.ManagedRuntime<R, never>,
   effect: Effect.Effect<A, E, NoInfer<R>>,
 ): Effect.Effect<A, E>

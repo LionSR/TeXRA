@@ -5,7 +5,7 @@
       "count": 1,
       "reason": "The body forks the subject's own body-local ManagedRuntime and asserts that the lifecycle shutdown disposes that runtime (Fiber.await expects a Failure for exactly that reason), so the receiver is the assertion subject and cannot disappear; the suite is otherwise it.live + Effect.gen."
     },
-    "src/test-kernel/platform/processRuntime.vitest.ts": {
+    "src/test-kernel/logger/effectDiagnostics.vitest.ts": {
       "count": 1,
       "reason": "These are runs of the subject: the suite tests the process runtime's own fork-failure reporting, so `runtime.runFork` is the asserted behaviour and not the test executing its program; the bodies are already it.live + Effect.gen."
     }

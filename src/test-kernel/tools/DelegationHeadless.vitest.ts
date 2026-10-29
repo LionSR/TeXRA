@@ -21,12 +21,12 @@ import { describe, expect } from 'vitest';
 
 import '@test/support/sessionGraphTestSetup';
 
+import { withProcessServices } from '@texra-ai/harness/host';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { agentTool } from '@agent/runtime/delegation/AgentTool';
 import { executeSubagentInBand } from '@agent/runtime/delegation/inBandSubagentRun';
-import { withProcessServices } from '@platform/processRuntime';
 import {
   AgentConfigSchema,
   type RequestDecision,

@@ -4,7 +4,7 @@
  * `Runs` tag that serves these is its module's.
  */
 
-import type { SessionOwner } from '@platform/processRuntime';
+import type { SessionOwner } from '@agent/runtime/sessionOwner';
 import type { RunId } from '@shared/schemas';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import type { Effect, Scope } from 'effect';

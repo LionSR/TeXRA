@@ -2,12 +2,12 @@
 import { Effect, Layer, Scope } from 'effect';
 
 import { Runs } from '@agent/runtime/runRegistry';
-import type { PluginContext } from '@platform/processRuntime';
 import {
   claudeAgentSessionsLayer,
   codexThreadsLayer,
 } from '@texra/tools/agentCliSessionStores';
 import { GitHubSubscriptions } from '@texra/tools/github/subscriptionBindings';
+import type { PluginContext } from '@tools/sessionTools';
 import { codeSandboxLayer } from '@tools/codemode/ScriptTool';
 import { PluginHold } from '@tools/toolTable';
 

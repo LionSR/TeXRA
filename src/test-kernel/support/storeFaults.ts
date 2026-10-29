@@ -38,12 +38,12 @@ import {
 import { afterEach, beforeEach, vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
+import { withProcessServices } from '@texra-ai/harness/host';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import type {
   SessionHandle,
   SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
-import { withProcessServices } from '@platform/processRuntime';
 import {
   AgentConfigSchema,
   type RunId,

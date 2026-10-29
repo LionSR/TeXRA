@@ -20,7 +20,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
+import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionOwner';
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import {

@@ -28,7 +28,7 @@ import type {
   SessionHandle,
   SessionRequests,
 } from '@agent/runtime/SessionHandle';
-import { GlobalValues } from '@platform/processRuntime';
+import { GlobalValues } from '@platform/stateStores';
 import {
   qualifyAggregateId,
   requestParksItsCaller,

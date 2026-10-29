@@ -42,11 +42,13 @@ export type { ProcessLayerOptions } from '@controllers/session/sessionLayer';
 export { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 export {
   withProcessServices,
-  type AgentCatalogServices,
-  type PluginContext,
   type ProcessRuntime,
-  type ProcessServices,
-} from '@platform/processRuntime';
+} from './effect/processLayer.js';
+export type {
+  AgentCatalogServices,
+  ProcessServices,
+} from '@agent/runtime/processServices';
+export type { PluginContext } from '@tools/sessionTools';
 // The agent catalog: reads, launch resolution, custom copies, the workspace's
 // selection, and the agent directories a host serves it.
 export {
@@ -76,7 +78,7 @@ export { registerCustomAgentRoot } from '@tools/agentCatalogFollower';
 // The process's stores: the global root's current values, each family a
 // host or plugin declares (`ValueFamily`), the per-project settings stores,
 // and storage maintenance under a storage root.
-export { GlobalValues, StateStores } from '@platform/processRuntime';
+export { GlobalValues, StateStores } from '@platform/stateStores';
 export type { ValueFamily } from '@shared/session/valueFamily';
 export {
   DatabaseWriteFailed,
@@ -141,7 +143,7 @@ export {
   type AppSignalPayloads,
 } from '@platform/appSignals';
 // The budget a session close waits for its runs: a plugin's drain fits it.
-export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
+export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionOwner';
 // Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
 // The canned model a package-validation build provides beneath the process.
@@ -205,8 +207,10 @@ export {
   type EnabledSkill,
   type SkillRoots,
 } from '@skills/runtimeSkills';
-export type { HostSkillOptions } from '@platform/processRuntime';
-export type { SkillSourceOptions } from '@skills/skillSources';
+export type {
+  HostSkillOptions,
+  SkillSourceOptions,
+} from '@skills/skillSources';
 export type {
   SkillIssueCode,
   SkillIssueSeverity,

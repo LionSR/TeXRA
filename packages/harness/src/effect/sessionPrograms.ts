@@ -26,7 +26,8 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
-import { SessionOwner, type ProcessServices } from '@platform/processRuntime';
+import { SessionOwner } from '@agent/runtime/sessionOwner';
+import type { ProcessServices } from '@agent/runtime/processServices';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentConfigSchema,

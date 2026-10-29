@@ -19,9 +19,9 @@ import {
   type AgentCatalogLoadError,
 } from '@agent/index/agentCatalog';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentCatalogServices } from '@agent/runtime/processServices';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { StateReadFailed } from '@platform/interfaces';
-import type { AgentCatalogServices } from '@platform/processRuntime';
 import { agentName, type ResumeBlocker } from '@shared/schemas';
 
 import type { SessionHandle } from './SessionHandle';

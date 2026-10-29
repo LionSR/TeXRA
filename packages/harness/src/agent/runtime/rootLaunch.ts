@@ -1,7 +1,7 @@
 import { Effect, Fiber, SubscriptionRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { SessionOwner } from '@platform/processRuntime';
+import { SessionOwner } from '@agent/runtime/sessionOwner';
 import {
   APPROVAL_BYPASS_KINDS,
   inheritedGrants,

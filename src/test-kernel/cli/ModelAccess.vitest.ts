@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 
+import type { ProcessServices } from '@agent/runtime/processServices';
 import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
-import type { ProcessServices } from '@platform/processRuntime';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { setupPlatform } from '@test/support/setupPlatform';

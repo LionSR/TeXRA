@@ -21,8 +21,8 @@ import type { LogWriteError } from '@agent/runtime/SessionHandle';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AppSignals } from '@platform/appSignals';
 import type { AppState, ConfigProvider } from '@platform/interfaces';
+import type { GlobalValues } from '@platform/stateStores';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { GlobalValues } from '@platform/processRuntime';
 import {
   AgentDefinitionSchema,
   type PermissionPayload,

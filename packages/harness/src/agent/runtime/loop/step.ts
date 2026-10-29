@@ -41,7 +41,6 @@ import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { readDelegationTargets } from '@agent/runtime/delegation/delegationAvailability';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
-import type { PluginContext } from '@platform/processRuntime';
 import { Settings } from '@shared/config/settings';
 import {
   AGENT_SKILLS_CONFIG_KEY,
@@ -53,6 +52,7 @@ import {
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
+import type { PluginContext } from '@tools/sessionTools';
 import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
 import { readDisabledTools } from '@tools/plugins';
 import { sha256 } from '@utils/core/idHash';

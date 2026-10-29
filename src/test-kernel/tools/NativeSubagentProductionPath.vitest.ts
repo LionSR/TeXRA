@@ -51,6 +51,7 @@ vi.mock('@agent/runtime/modelAccess/ModelAccess', async (importActual) => {
 });
 
 // Local imports - agent runtime
+import { withProcessServices } from '@texra-ai/harness/host';
 import { AgentCatalog } from '@agent/index/agentCatalog';
 import { getRunRecords, readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
@@ -65,7 +66,6 @@ import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { launchDetachedSubagent } from '@agent/runtime/delegation/subagentRun';
-import { withProcessServices } from '@platform/processRuntime';
 import {
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,

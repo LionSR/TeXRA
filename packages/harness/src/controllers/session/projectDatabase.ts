@@ -9,7 +9,7 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
-import { GlobalValues } from '@platform/processRuntime';
+import { GlobalValues } from '@platform/stateStores';
 import { Database, ProjectDatabases } from '@shared/session/database';
 import { WORKSPACE_STORES } from '@shared/session/valueFamily';
 
