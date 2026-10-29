@@ -247,6 +247,7 @@ describe('plugin rosters', () => {
       'documents/accepted',
       'documents/output',
       'external-inquiry/thread',
+      'goal/plan',
     ]);
   });
 

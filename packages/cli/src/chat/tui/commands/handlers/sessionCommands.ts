@@ -1,7 +1,7 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Result, Stream } from 'effect';
 
-import { isLiveRun, runBypasses } from '@texra-ai/harness/schemas';
+import { isLiveRun, planOf, runBypasses } from '@texra-ai/harness/schemas';
 import { isRequestRefusal, type Session } from '@texra-ai/harness';
 import { describeFollowUpFailure } from '@texra-ai/harness/host';
 import { readModelOptions } from '@texra-ai/harness/host';
@@ -67,7 +67,7 @@ export function showCliWorkPlan(): void {
   }
   clearTransientNotice();
   const run = runViewOf(currentView(), runId);
-  if (run && run.plan !== null) {
+  if (run && planOf(run) !== null) {
     openWorkPlanReader(runId);
   } else {
     closeForegroundReader();

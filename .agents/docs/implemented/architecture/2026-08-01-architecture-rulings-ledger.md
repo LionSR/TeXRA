@@ -631,9 +631,9 @@ write path for plugin rows; a second plugin-layer cache, `Layer.fresh` on a
 plugin layer, or a plugin layer constructed per step (its identity is what
 makes it shared); a host-specific refusing `SetupPlatform` in the harness.
 
-**Not moved, and why.** The `run.fact` plan row stays core: the plan tool is
-the harness's (`packages/harness/src/tools/plan/PlanTool.ts`) and `run.fact`
-is its display mirror.
+**Moved since.** The plan, once a core `run.fact` row, is the goal plugin's
+`goal/plan` arm (2026-10-29): one kind of application state, committed with
+the approving `plan` result. `run.fact` is a retired row kind.
 
 ---
 
