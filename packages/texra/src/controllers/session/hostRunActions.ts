@@ -1,5 +1,4 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
-import * as path from 'node:path';
 
 import {
   DatabaseReadFailed,
@@ -22,12 +21,10 @@ import {
   type Secrets,
   StateReadFailed,
   withLogChannel,
-  pathToLocationIn,
   presentFollowUpResult,
   presentRunFailure,
   type SessionHostInteractions,
 } from '@texra-ai/harness/host';
-import { entryTypeIn } from '@texra-ai/harness/node';
 import { Cause, Effect, FileSystem, Schema, type Scope } from 'effect';
 
 import { type ApiKeyProviderId, type SecretsFailed } from '@texra-ai/llm';
@@ -64,11 +61,9 @@ import {
   ProgressApiKeyRetryController,
 } from '../progressView/ProgressApiKeyRetryController';
 import {
-  ProgressFollowUpController,
+  planCompileFixer,
   type CompileFixerPlanFailed,
-  type ProgressFollowUpModelOption,
-  type ProgressFollowUpState,
-} from '../progressView/ProgressFollowUpController';
+} from '../progressView/compileFixer';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'HostRunActions';
@@ -144,7 +139,7 @@ export interface HostRunActionPorts {
     result: RunEnd,
   ): Effect.Effect<void, Error>;
   loadModelOptions(): Effect.Effect<
-    readonly ProgressFollowUpModelOption[],
+    Parameters<typeof planCompileFixer>[0]['modelOptions'],
     ModelHostFactUnreadable | StateReadFailed
   >;
   /**
@@ -242,7 +237,9 @@ export interface HostRunActions {
   fork(runId: RunId, at: number | null): Effect.Effect<RunId, RequestRefusal>;
   /** The run's output facts as the view holds them, read by the workflow
    *  controllers. */
-  readonly runOutputs: ProgressFollowUpState;
+  readonly runOutputs: {
+    getOutputFiles(runId: RunId): ReturnType<typeof documentsOf>['files'];
+  };
   sendFollowUp(runId: RunId, text: string): Effect.Effect<void>;
 }
 
@@ -338,8 +335,6 @@ export const createHostRunActions = Effect.fn(
   };
   const runOutputs = {
     getOutputFiles: (runId: RunId) => documentsOfRun(runId)?.files ?? {},
-    getCompileFailures: (runId: RunId) =>
-      documentsOfRun(runId)?.compileFailures ?? {},
   };
 
   const readConfig = Effect.fn('HostRunActions.readConfig')(function* (
@@ -441,33 +436,6 @@ export const createHostRunActions = Effect.fn(
         action: 'retry',
         credentials: 'personal',
       }),
-  });
-
-  const followUp = new ProgressFollowUpController({
-    loadModelOptions: () => ports.loadModelOptions(),
-    state: runOutputs,
-    // The session's own folder, carried as data: the planner resolves and
-    // probes its candidates there rather than through the calling
-    // context's ambient roots.
-    workspace: {
-      locatePath: (target) => {
-        // With no folder open every path is outside it.
-        const location = roots.workspace
-          ? pathToLocationIn(roots.workspace, target)
-          : undefined;
-        return location?.kind === 'workspace'
-          ? location
-          : { kind: 'external' as const };
-      },
-      // Asked only of a path `locatePath` placed in the folder.
-      exists: (relativePath) =>
-        roots.workspace
-          ? Effect.map(
-              entryTypeIn(fs, path.join(roots.workspace, relativePath)),
-              (type) => type !== undefined,
-            )
-          : Effect.succeed(false),
-    },
   });
 
   return {
@@ -630,7 +598,14 @@ export const createHostRunActions = Effect.fn(
         );
       }
       const config = yield* readConfig(runId);
-      const plan = yield* followUp.planCompileFixerForRun(runId, config);
+      const modelOptions = yield* ports.loadModelOptions();
+      const plan = yield* planCompileFixer({
+        runId,
+        runConfig: config,
+        documents: documentsOfRun(runId),
+        modelOptions,
+        workspaceRoot: roots.workspace,
+      }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
       if (plan.kind === 'warning') {
         yield* ports.showWarning(plan.message);
       } else if (plan.kind === 'info') {

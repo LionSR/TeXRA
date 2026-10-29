@@ -17,11 +17,8 @@ import { type AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
 import type { AppSignals } from '@texra-ai/harness/host';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { HostRunActions } from '../session/hostRunActions';
-import type { RunOutputsSource } from './runOutputs';
 
 const CHANNEL = 'ProgressWorkflowFileActions';
-
-type ProgressWorkflowFileActionsState = RunOutputsSource;
 
 /**
  * One file action. Its failure channel is the host's own vocabulary: every
@@ -51,7 +48,7 @@ interface ProgressWorkflowFileActionsHost {
 }
 
 interface ProgressWorkflowFileActionsControllerDeps {
-  state: ProgressWorkflowFileActionsState;
+  state: HostRunActions['runOutputs'];
   host: ProgressWorkflowFileActionsHost;
   /** Storage root of the session whose runs this controller acts on. */
   storageRoot: string;
