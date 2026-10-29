@@ -14,13 +14,13 @@
  */
 import { Effect, Result, type PlatformError } from 'effect';
 
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import {
   displayToStoragePath,
   MAX_PINNED_MEMORIES,
   MEMORY_DISPLAY_ROOT,
   toDisplayPath,
-} from '@common/memory/memoryUtils';
+} from '@agent/memory/memoryUtils';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import type { StorageFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';

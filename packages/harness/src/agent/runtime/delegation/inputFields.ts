@@ -19,7 +19,7 @@ import {
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { displayToStoragePath } from '@common/memory/memoryUtils';
+import { displayToStoragePath } from '@agent/memory/memoryUtils';
 import type { RunId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { Settings } from '@shared/config/settings';

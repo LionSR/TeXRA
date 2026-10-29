@@ -7,8 +7,8 @@ import { Effect, type FileSystem, Option } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { MEMORY_DISPLAY_ROOT } from '@agent/memory/memoryUtils';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { MEMORY_DISPLAY_ROOT } from '@common/memory/memoryUtils';
 import { StorageFs } from '@platform/rootedFs';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { MemoryTool } from '@tools/memory/MemoryTool';

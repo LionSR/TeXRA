@@ -24,20 +24,20 @@ import {
   Stream,
 } from 'effect';
 
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import {
   MAX_PINNED_MEMORIES,
   MAX_PREVIEW_CHARS,
   MAX_PREVIEW_LINES,
   relativeToDisplayPath,
-} from '@common/memory/memoryUtils';
+} from '@agent/memory/memoryUtils';
 import {
   buildFile,
   parseFrontmatter,
   formatAttribution,
   setPinnedMeta,
   type MemoryFileMeta,
-} from '@common/memory/memoryMeta';
+} from '@agent/memory/memoryMeta';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
 import { StorageFs } from '@platform/rootedFs';
 import type { MemoryViewItem } from '@shared/tools/memoryView';
