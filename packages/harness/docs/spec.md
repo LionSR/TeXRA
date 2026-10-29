@@ -369,7 +369,7 @@ points are normative:
 - **W3**, `tool.intent`: commits after PreToolUse hooks and the guard, before
   the body runs, once per attempt
   (`agent/runtime/loop/toolUseDispatch.ts:523-555`;
-  `agent/runtime/loop/toolGuard.ts:258-277`).
+  `agent/runtime/loop/toolGuard.ts:251-270`).
 - **W4**, `tool.result`: commits, with the call's card rows, before the delivery
   that lets the loop continue (`agent/runtime/loop/toolUseDispatch.ts:380-406`,
   `:656-680`, `:1100-1103`).
@@ -407,8 +407,8 @@ does not cover a compaction summary, whose answer its caller lands as a
 
 **W3.** A call's `tool.intent` MUST commit after its PreToolUse hooks and its
 guard, and before its body (`agent/runtime/loop/toolUseDispatch.ts:523-555`,
-`agent/runtime/loop/toolGuard.ts:258-277`). The guard asks for a command's
-approval (`agent/runtime/loop/toolGuard.ts:170-174`, `:233-252`). A slow tool's
+`agent/runtime/loop/toolGuard.ts:251-270`). The guard asks for a command's
+approval (`agent/runtime/loop/toolGuard.ts:163-167`, `:226-245`). A slow tool's
 `tool.start` card MUST commit in the intent's batch
 (`agent/runtime/loop/toolUseDispatch.ts:544-547`). An attempt whose intent is
 already committed MUST NOT commit another

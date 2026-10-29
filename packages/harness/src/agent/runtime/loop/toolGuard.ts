@@ -51,16 +51,16 @@ const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 /** The tool whose calls the run's command grant answers. */
 const SHELL_TOOL = 'bash';
 
-/** Each operation a run asks permission for: the grant that answers it and
- *  the setting that says whether it is asked (none: always). A call of any
- *  tool but the shell takes the run's delegated-work grant, so a command
- *  grant never approves it. */
+/** Each operation a run asks permission for: the grant that answers it, the
+ *  setting that says whether it is asked (none: always), and what a denial
+ *  is told as. A call of any tool but the shell takes the run's
+ *  delegated-work grant, so a command grant never approves it. */
 const OPERATIONS = {
-  bash: ['bash', BASH_APPROVAL_CONFIG_KEY],
-  call: ['superYolo', BASH_APPROVAL_CONFIG_KEY],
-  toolEdit: ['toolEdit', TOOL_EDIT_APPROVAL_CONFIG_KEY],
-  plan: ['superYolo', null],
-  proposal: ['superYolo', null],
+  bash: ['bash', BASH_APPROVAL_CONFIG_KEY, 'executable'],
+  call: ['superYolo', BASH_APPROVAL_CONFIG_KEY, 'executable'],
+  toolEdit: ['toolEdit', TOOL_EDIT_APPROVAL_CONFIG_KEY, 'executable'],
+  plan: ['superYolo', null, 'plan'],
+  proposal: ['superYolo', null, 'proposal'],
 } as const;
 
 type HookAnswer = 'allow' | 'ask' | undefined;
@@ -86,7 +86,7 @@ export const sessionPermission =
     session: () => Pick<SessionHandle, 'approvals' | 'interactions' | 'roots'>,
   ): ApprovalsWithPermission['permission'] =>
   (runId, operation, hook) => {
-    const [grant, setting] = OPERATIONS[operation];
+    const [grant, setting, kind] = OPERATIONS[operation];
     const { approvals, interactions, roots } = session();
     const canPresent = !interactions.approvalPromptsUnavailable;
     const policy = approvals.policy(runId);
@@ -101,10 +101,6 @@ export const sessionPermission =
       ? decision
       : hook === 'ask' && !canPresent && 'deny-unpresentable';
     if (denied) {
-      const kind =
-        operation === 'plan' || operation === 'proposal'
-          ? operation
-          : 'executable';
       interactions.approvalDenied({ kind, policy }, runId);
       return { action: 'deny', reason: approvalPolicyDenialMessage(denied) };
     }
@@ -142,11 +138,8 @@ const answerOf = (outcomes: readonly HookOutcomePayload[]) => {
         (answer === 'ask' || !rewritten || o.updatedInput !== null),
     ),
   );
-  return {
-    deny: denials.length === 0 ? null : denials.join('\n'),
-    hook,
-    rewritten,
-  };
+  const deny = denials.length === 0 ? null : denials.join('\n');
+  return { deny, hook, rewritten };
 };
 
 const hookDenied = (tool: string, why: string): ToolResult => ({

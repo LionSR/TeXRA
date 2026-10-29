@@ -18,7 +18,7 @@ const VOCABULARY_OWNER = 'packages/harness/src/shared/approvalPolicy.ts';
 
 /**
  * Sites allowed to call `decideApproval` / `decideRetryApproval` /
- * `decideHumanInputRequest` / `decideProposalApproval`. Core is the one
+ * `decideHumanInputRequest`. Core is the one
  * authority: `requestPolicy.ts` decides what the policy settles when a request
  * opens, and the run loop's chain decides whether a tool call's operation
  * runs (`sessionPermission`). A host must not grow a second
@@ -29,7 +29,6 @@ const EVALUATOR_CALL_ALLOWLIST = new Set([
   'packages/harness/src/shared/approvalPolicy.ts',
   'packages/harness/src/agent/runtime/requestPolicy.ts',
   'packages/harness/src/agent/runtime/loop/toolGuard.ts',
-  'packages/harness/src/agent/runtime/delegation/proposalFlow.ts',
 ]);
 
 /**
@@ -66,7 +65,7 @@ const BYPASS_WRITE_ALLOWLIST = new Set([
 ]);
 
 const EVALUATOR_CALL =
-  /\b(?:decideApproval|decideRetryApproval|decideHumanInputRequest|decideProposalApproval)\s*\(/;
+  /\b(?:decideApproval|decideRetryApproval|decideHumanInputRequest)\s*\(/;
 const BYPASS_WRITE_CALL =
   /\b(?:humanGrant|goalGrant|delegatedChildGrants)\s*\(|\.approvals\.change\s*\(/;
 const POLICY_OVERRIDE_CALL = /\.approvals\.override\s*\(/;

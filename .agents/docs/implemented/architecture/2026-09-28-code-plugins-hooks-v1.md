@@ -45,8 +45,9 @@ the operation that actually runs:
    reason as the call's error result. When several hooks answer, one deny is
    enough.
 2. An `updatedInput` replaces the input (a Claude Code tool's fields are read
-   back as the harness tool's, and a harness-only field the hook never saw,
-   such as `grep`'s `literal`, keeps its issued value). Two different rewrites deny the call, and so
+   back as the harness tool's). The hook sees the input as the tool decodes
+   it (a line range sent as an array is that range), and a rewrite keeps every
+   decoded field the hook never saw, such as `grep`'s `literal`. Two different rewrites deny the call, and so
    does a rewrite the tool's schema refuses. The path checks, the prompt and
    the body all use the final input; the call as the model issued it stays
    recorded, so a script's replay still matches it.

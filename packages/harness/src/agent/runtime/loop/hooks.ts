@@ -10,7 +10,14 @@
  */
 import * as path from 'node:path';
 
-import { Clock, Effect, FileSystem, SynchronizedRef } from 'effect';
+import {
+  Clock,
+  Effect,
+  FileSystem,
+  Result,
+  Schema,
+  SynchronizedRef,
+} from 'effect';
 
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import {
@@ -385,12 +392,16 @@ export const stopHooks = Effect.fn('Hooks.stop')(function* (
 export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
   run: AgentRunShape,
   cell: Pick<RunCell, 'current'>,
-  step: Pick<StepTools, 'hooks'>,
+  step: Pick<StepTools, 'hooks' | 'registry'>,
   call: { readonly callId: string; readonly toolName: string },
   responseId: string,
   toolInput: unknown,
 ) {
-  const claude = claudeToolCall(call.toolName, toolInput, (file) =>
+  // Hooks see the decoded input, so a rewrite keeps the fields they never saw.
+  const schema = step.registry.get(call.toolName)?.definition.schema;
+  const read = schema && Schema.decodeUnknownResult(schema)(toolInput);
+  const issued = read && Result.isSuccess(read) ? read.success : toolInput;
+  const claude = claudeToolCall(call.toolName, issued, (file) =>
     typeof file === 'string'
       ? path.resolve(run.session.roots.workspace ?? '', file)
       : file,
