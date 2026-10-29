@@ -117,9 +117,11 @@ describe('tool availability service', () => {
             tools: named('token'),
             availability: {
               reprobeOnSecrets: ['token.key'],
-              probe: ({ workspace }: ToolProbeInputs) =>
-                Effect.sync(() => probedRoots.push(workspace)),
-              check: () => Effect.succeed(true),
+              check: ({ workspace }: ToolProbeInputs) =>
+                Effect.sync(() => {
+                  probedRoots.push(workspace);
+                  return { available: true };
+                }),
             },
           },
         ];

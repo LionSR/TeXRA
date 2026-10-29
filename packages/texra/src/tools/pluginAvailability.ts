@@ -10,10 +10,6 @@ import { Effect, Option, Config } from 'effect';
 
 // Local imports
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@texra-ai/llm';
-import {
-  type ToolAvailabilityChecks,
-  type ToolProbeServices,
-} from '@texra-ai/harness/plugins';
 import { Secrets, Settings, withLogChannel } from '@texra-ai/harness/host';
 import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
@@ -33,178 +29,125 @@ import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import {
   isLeanServerActive,
   summarizeLeanServers,
-  type LeanServerInfo,
 } from '@texra/tools/lean/leanServerRegistry';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { ZOTERO_PORT_KEY } from '@texra/tools/zotero/bbtClient';
 import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import {
-  prerequisitesChecks,
   probeSdkBinaryStatus,
   probeZoteroBbt,
   probeZoteroConnector,
-  zoteroProbePort,
-  type SdkBinaryStatus,
 } from '@texra/tools/availabilityProbes';
 import { isGitRepository } from '@texra/utils/git/isGitRepository';
+import type { ToolAvailabilityChecks } from '@texra-ai/harness/plugins';
 
 const CHANNEL = 'pluginAvailability';
 
 // Interruption reaches the spawned `wolframscript -version`, so an
 // interrupted dashboard refresh kills the probe instead of abandoning it.
 export const WOLFRAM_AVAILABILITY: ToolAvailabilityChecks = {
-  check: () => checkToolInstalled('wolframscript', false),
+  check: () =>
+    Effect.map(checkToolInstalled('wolframscript', false), (available) => ({
+      available,
+    })),
 };
 
 export const ZOTERO_AVAILABILITY: ToolAvailabilityChecks = {
-  probe: ({ config }) =>
-    Effect.sync(() => Settings.getConfig<number>(config, ZOTERO_PORT_KEY)),
-  check: (probeResult) => probeZoteroBbt(zoteroProbePort(probeResult)),
-  detailCheck: Effect.fn('pluginAvailability.zoteroDetail')(function* (
-    probeResult?: unknown,
-  ) {
-    const port = zoteroProbePort(probeResult);
-    const zoteroOk = yield* probeZoteroConnector(port);
+  check: Effect.fn('pluginAvailability.zotero')(function* ({ config }) {
+    const port = Settings.getConfig<number>(config, ZOTERO_PORT_KEY);
     const bbtOk = yield* probeZoteroBbt(port);
-    if (zoteroOk && bbtOk) {
-      return `Zotero running on port ${port}, Better BibTeX responding.`;
-    }
-    if (zoteroOk && !bbtOk) {
-      return `Zotero detected on port ${port}, but Better BibTeX is not responding. Install the Better BibTeX plugin.`;
-    }
-    return `Zotero not detected on port ${port}. Make sure Zotero is running.`;
+    const zoteroOk = yield* probeZoteroConnector(port);
+    let statusDetail = `Zotero not detected on port ${port}. Make sure Zotero is running.`;
+    if (zoteroOk)
+      statusDetail = bbtOk
+        ? `Zotero running on port ${port}, Better BibTeX responding.`
+        : `Zotero detected on port ${port}, but Better BibTeX is not responding. Install the Better BibTeX plugin.`;
+    return {
+      available: bbtOk,
+      statusDetail,
+    };
   }),
 };
 
-interface Lean4Prerequisites {
-  extensionAvailable: boolean;
-  lakeAvailable: boolean;
-  /** The VS Code build drives Lean through the lean4 extension; other hosts spawn `lake` directly. */
-  requiresExtension: boolean;
-  /** The host adapter's roster at probe time, read through the Lean port. */
-  servers: readonly LeanServerInfo[];
-}
-
-/** Lean tools work through the extension in VS Code and through `lake` elsewhere. */
-function leanReady(prerequisites: Lean4Prerequisites): boolean {
-  return prerequisites.requiresExtension
-    ? prerequisites.extensionAvailable
-    : prerequisites.lakeAvailable;
-}
-
-/** The Lean plugin's server roster, from its own services while its layer
- *  is up; none before (a probe never brings the layer up). */
-const leanServers = Effect.map(
-  Effect.serviceOption(LeanLanguageServices),
-  Option.match({
-    onNone: (): readonly LeanServerInfo[] => [],
-    onSome: (lean) => lean.listServers(),
-  }),
-);
-
 /** The Lean 4 plugin's checks, reading the editor extension off the host's
  *  setup capabilities (VS Code's; none elsewhere). */
-export const lean4Availability = (setup: SetupPlatformShape) =>
-  prerequisitesChecks({
-    probe: Effect.fn('pluginAvailability.probe')(function* () {
-      const servers = yield* leanServers;
-      const extensionAvailable =
-        setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
-      const lakeAvailable = (yield* findCommand('lake')) !== null;
-      // Only a host that serves editor extensions (VS Code) drives Lean
-      // through one.
-      const requiresExtension = setup.extensions !== undefined;
-      return {
-        extensionAvailable,
-        lakeAvailable,
-        requiresExtension,
-        servers,
-      };
-    }),
-    fallback: () =>
-      Effect.map(leanServers, (servers) => ({
-        extensionAvailable: false,
-        lakeAvailable: false,
-        requiresExtension: false,
-        servers,
-      })),
-    check: leanReady,
-    statusLabel: (prerequisites) => {
-      if (!leanReady(prerequisites)) return 'Needs setup';
-      const activeCount =
-        prerequisites.servers.filter(isLeanServerActive).length;
-      return activeCount > 0
-        ? `${formatResultCount(activeCount, 'server')} active`
-        : undefined;
-    },
-    detailCheck: (prerequisites) =>
-      Effect.sync(() => {
-        const { extensionAvailable, lakeAvailable, requiresExtension } =
-          prerequisites;
-        const lines: string[] = [];
-        if (extensionAvailable) {
-          lines.push('VS Code Lean 4 extension installed.');
-        }
-        if (lakeAvailable && !requiresExtension) {
-          lines.push('Direct LSP mode available (`lake` on PATH).');
-        }
-        if (!leanReady(prerequisites)) {
-          lines.push(
-            requiresExtension
-              ? 'The VS Code build drives Lean through the leanprover.lean4 extension; install it to enable Lean tools. `lake` on PATH alone is not enough here.'
-              : 'No `lake` binary was detected. Install elan and make sure `lake` is on PATH to enable Lean tools.',
-          );
-        }
-        lines.push('');
-        lines.push(summarizeLeanServers(prerequisites.servers));
-        return lines.join('\n');
-      }),
-  });
+export const lean4Availability = (
+  setup: SetupPlatformShape,
+): ToolAvailabilityChecks => ({
+  check: Effect.fn('pluginAvailability.lean4')(function* () {
+    // A probe reads the plugin's roster while its layer is up; it never
+    // brings that layer up itself.
+    const lean = yield* Effect.serviceOption(LeanLanguageServices);
+    const servers = Option.isSome(lean) ? lean.value.listServers() : [];
+    const extensionAvailable =
+      setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
+    const lakeAvailable = (yield* findCommand('lake')) !== null;
+    const requiresExtension = setup.extensions !== undefined;
+    // VS Code drives Lean through its extension; other hosts spawn lake.
+    const available = requiresExtension ? extensionAvailable : lakeAvailable;
+    const activeCount = servers.filter(isLeanServerActive).length;
+    let statusLabel: string | undefined;
+    if (!available) statusLabel = 'Needs setup';
+    else if (activeCount > 0)
+      statusLabel = `${formatResultCount(activeCount, 'server')} active`;
+    const lines: string[] = [];
+    if (extensionAvailable) lines.push('VS Code Lean 4 extension installed.');
+    if (lakeAvailable && !requiresExtension)
+      lines.push('Direct LSP mode available (`lake` on PATH).');
+    if (!available)
+      lines.push(
+        requiresExtension
+          ? 'The VS Code build drives Lean through the leanprover.lean4 extension; install it to enable Lean tools. `lake` on PATH alone is not enough here.'
+          : 'No `lake` binary was detected. Install elan and make sure `lake` is on PATH to enable Lean tools.',
+      );
+    lines.push('', summarizeLeanServers(servers));
+    return {
+      available,
+      statusLabel,
+      statusDetail: lines.join('\n'),
+    };
+  }),
+});
 
-const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
-  function* (workspaceRoot: string | undefined) {
+export const GITHUB_AVAILABILITY: ToolAvailabilityChecks = {
+  // The token gates the tool, so a change re-probes every held workspace.
+  reprobeOnSecrets: [GITHUB_TOKEN_STORAGE_KEY],
+  check: Effect.fn('pluginAvailability.github')(function* ({ workspace }) {
     const secrets = yield* Secrets;
     // The token read and the git probe run at once. The probe reports "not a
     // repository" as `false` and never fails; interrupting a dashboard
-    // refresh kills its `git` process instead of abandoning it. An
-    // availability probe carries the workspace root and nothing else:
-    // `ToolAvailabilityChecks.probe` takes no setting slots.
+    // refresh kills its `git` process instead of abandoning it.
     const [token, inGitRepo] = yield* Effect.all(
-      [getGitHubToken(secrets), isGitRepository(workspaceRoot, undefined)],
+      [getGitHubToken(secrets), isGitRepository(workspace, undefined)],
       { concurrency: 'unbounded' },
     );
-    return { tokenPresent: token !== undefined, inGitRepo };
-  },
-);
-
-export const GITHUB_AVAILABILITY: ToolAvailabilityChecks = {
-  // The token gates the `github_subscription` tool group, so setting or
-  // clearing it re-probes the Tools tab and the next run's tool list.
-  reprobeOnSecrets: [GITHUB_TOKEN_STORAGE_KEY],
-  ...prerequisitesChecks({
-    probe: ({ workspace }) => getGitHubPRPrerequisites(workspace),
-    // Without a workspace to ask about, the token is still answerable.
-    fallback: () => getGitHubPRPrerequisites(undefined),
-    check: ({ tokenPresent, inGitRepo }) => tokenPresent && inGitRepo,
-    statusLabel: ({ tokenPresent, inGitRepo }) => {
-      if (tokenPresent && inGitRepo) return undefined;
-      if (tokenPresent && !inGitRepo) return 'Needs git repo';
-      if (!tokenPresent && inGitRepo) return 'Needs token';
-      return 'Needs setup';
-    },
-    detailCheck: ({ tokenPresent, inGitRepo }) =>
-      Effect.sync(() => {
-        if (tokenPresent && inGitRepo) {
-          return 'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.';
-        }
-        if (!tokenPresent && !inGitRepo) {
-          return 'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in /config → GitHub token or Settings → General.';
-        }
-        if (!tokenPresent) {
-          return 'This workspace is a git repo. Set a GitHub personal access token in /config → GitHub token or Settings → General to enable PR activity subscriptions.';
-        }
-        return 'GitHub token is set. Open a git-tracked folder, or run git init and add a github.com remote, to use PR activity subscriptions.';
-      }),
+    const tokenPresent = token !== undefined;
+    if (tokenPresent && inGitRepo)
+      return {
+        available: true,
+        statusDetail:
+          'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.',
+      };
+    if (!tokenPresent && !inGitRepo)
+      return {
+        available: false,
+        statusLabel: 'Needs setup',
+        statusDetail:
+          'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in /config → GitHub token or Settings → General.',
+      };
+    if (!tokenPresent)
+      return {
+        available: false,
+        statusLabel: 'Needs token',
+        statusDetail:
+          'This workspace is a git repo. Set a GitHub personal access token in /config → GitHub token or Settings → General to enable PR activity subscriptions.',
+      };
+    return {
+      available: false,
+      statusLabel: 'Needs git repo',
+      statusDetail:
+        'GitHub token is set. Open a git-tracked folder, or run git init and add a github.com remote, to use PR activity subscriptions.',
+    };
   }),
 };
 
@@ -233,32 +176,20 @@ const CLAUDE_CODE_SDK_PROBE = {
     'Install via: npm install -g @anthropic-ai/claude-code',
 };
 
-export const CODEX_AVAILABILITY = prerequisitesChecks<
-  SdkBinaryStatus,
-  ToolProbeServices
->({
-  probe: () => probeSdkBinaryStatus(CODEX_SDK_PROBE),
-  fallback: () => probeSdkBinaryStatus(CODEX_SDK_PROBE),
-  check: (status) => status.ok,
-  detailCheck: (status) =>
-    Effect.succeed(
-      status.ok
+export const CODEX_AVAILABILITY: ToolAvailabilityChecks = {
+  check: () =>
+    Effect.map(probeSdkBinaryStatus(CODEX_SDK_PROBE), (status) => ({
+      available: status.ok,
+      statusDetail: status.ok
         ? `Codex CLI ready. Binary: ${status.binaryPath}`
         : status.message,
-    ),
-});
+    })),
+};
 
-export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks<
-  SdkBinaryStatus,
-  ToolProbeServices
->({
-  probe: () => probeSdkBinaryStatus(CLAUDE_CODE_SDK_PROBE),
-  fallback: () => probeSdkBinaryStatus(CLAUDE_CODE_SDK_PROBE),
-  check: (status) => status.ok,
-  detailCheck: Effect.fn('pluginAvailability.claudeAgentDetail')(function* (
-    status: SdkBinaryStatus,
-  ) {
-    if (!status.ok) return status.message;
+export const CLAUDE_CODE_AVAILABILITY: ToolAvailabilityChecks = {
+  check: Effect.fn('pluginAvailability.claudeAgent')(function* () {
+    const status = yield* probeSdkBinaryStatus(CLAUDE_CODE_SDK_PROBE);
+    if (!status.ok) return { available: false, statusDetail: status.message };
     const claudePath = status.binaryPath;
 
     const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
@@ -273,6 +204,7 @@ export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks<
           `Reading the Anthropic API key failed: ${failure.message}`,
         ).pipe(
           withLogChannel(CHANNEL),
+          Effect.annotateLogs({ data: failure }),
           Effect.andThen(
             Config.String(anthropicApiKeyEnv).pipe(Config.option, Effect.orDie),
           ),
@@ -307,6 +239,9 @@ export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks<
     if (key.failure !== null)
       authNote = `${authBits.length > 0 ? authNote : 'No CLAUDE_CODE_OAUTH_TOKEN detected.'} The ${anthropicApiKeyEnv} in TeXRA Settings could not be read (${key.failure}).`;
 
-    return `Claude CLI ready. Binary: ${claudePath}. ${authNote}`;
+    return {
+      available: true,
+      statusDetail: `Claude CLI ready. Binary: ${claudePath}. ${authNote}`,
+    };
   }),
-});
+};

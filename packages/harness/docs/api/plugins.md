@@ -1698,34 +1698,26 @@ type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
 
 ## ToolAvailabilityChecks
 
-How a plugin with an external dependency answers "is it available": an
-optional shared `probe` whose result the availability layer caches and
-hands back to `check` (availability), `statusLabel` (dashboard badge) and
-`detailCheck` (the line below the description).
+How a plugin with an external dependency answers "is it available": one
+check returns availability and its dashboard explanation from the same
+observations. The availability layer owns caching, refresh and deadlines.
 
 ```ts
 interface ToolAvailabilityChecks<R = ToolProbeServices> {
   /**
-   * Optional shared probe result passed to check/status/detail callbacks.
-   * Takes the asking workspace as data: a probe may ask whether that folder
-   * is a git repository, or read a port out of that workspace's
-   * configuration.
+   * Check the asking workspace and return its availability with an optional
+   * short badge and explanation. A failed optional detail belongs here:
+   * log its cause and retain the availability already established.
    */
-  readonly probe?: (
-    inputs: ToolProbeInputs,
-  ) => Effect.Effect<unknown, ToolProbeError, R>;
-  /** Returns true if the external dependency is available. */
-  readonly check: (
-    probeResult?: unknown,
-  ) => Effect.Effect<boolean, ToolProbeError, R>;
-  /** Optional detailed status string resolved at check time (shown below description). */
-  readonly detailCheck?: (
-    probeResult?: unknown,
-  ) => Effect.Effect<string | undefined, ToolProbeError, R>;
-  /** Optional short status label for the dashboard badge. */
-  readonly statusLabel?: (
-    probeResult?: unknown,
-  ) => Effect.Effect<string | undefined, ToolProbeError, R>;
+  readonly check: (inputs: ToolProbeInputs) => Effect.Effect<
+    {
+      readonly available: boolean;
+      readonly statusLabel?: string;
+      readonly statusDetail?: string;
+    },
+    ToolProbeError,
+    R
+  >;
   /**
    * The secret-store keys this plugin's answer reads. A committed write to any
    * of them (`credentialChanged`) re-probes every open workspace, so a plugin

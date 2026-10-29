@@ -55,7 +55,7 @@ describe('external tool availability probes', () => {
       const spawner = scriptedSpawnerLayer(() => 'hang');
       const fiber = yield* Effect.forkChild(
         wolfram
-          .availability!.check()
+          .availability!.check(installedHost().roots)
           .pipe(
             Effect.provide(spawner.layer),
             Effect.provide(fakeProcessServices()),

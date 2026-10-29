@@ -992,7 +992,7 @@ interface ExternalToolCheckResult {
   readonly status: 'available' | 'not-found' | 'unknown';
   /** Short status label for the dashboard badge, when the default is too generic. */
   readonly statusLabel?: string;
-  /** Human-readable status detail from the group's `detailCheck`, if any. */
+  /** Human-readable explanation from the plugin's check, if any. */
   readonly statusDetail?: string;
 }
 ```
