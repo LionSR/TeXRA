@@ -32,7 +32,6 @@ import {
 } from '@shared/session/sessionEvents';
 import type { PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
-import { Resumes } from './ToolUseFollowUp';
 import { RunInput } from './RunInput';
 import { queuedRow, type FollowUpSenderInput } from './followUpMessages';
 
@@ -53,8 +52,9 @@ export interface InboxPort {
   readonly run: (
     runId: RunId,
   ) => Pick<RunView, 'parentId' | 'status'> | undefined;
-  /** Start resuming the run for its input (the resume tells the user what
-   *  it does not take) and give back the resume's end. */
+  /** Resume the run for its input, or join its resume in flight (the
+   *  resume tells the user what it does not take), and give back the
+   *  resume's end. */
   readonly resume: (runId: RunId) => Effect.Effect<Effect.Effect<void>>;
 }
 
@@ -102,8 +102,6 @@ export type InboxClosed =
 /** The session's follow-up inbox; see the module comment. */
 export class Inbox {
   private readonly readers = new Map<RunId, RunInput>();
-  /** The resumes in flight here: a sender that finds one joins it. */
-  readonly resumes = new Resumes();
   /** Each run's sends, admitted one at a time in call order. */
   readonly sendLanes = new Map<RunId, PerKeyLane>();
   private readonly observers = new Set<(closed: InboxClosed) => void>();
@@ -191,15 +189,14 @@ export class Inbox {
     );
   }
 
-  /** Start resuming the run if its input obliges one (`needsWake`) and no
-   *  reader or resume here takes it, once the publisher settled. False only
-   *  if the input could not be read; else the resume's end, for a caller to
-   *  wait on (at once if none started). */
+  /** Resume the run, or join its resume in flight here, if its input
+   *  obliges one (`needsWake`) and no reader here takes it, once the
+   *  publisher settled. False only if the input could not be read; else the
+   *  resume's end, for a caller to wait on (at once if none started). */
   wake(runId: RunId): Effect.Effect<false | Effect.Effect<void>> {
     return Effect.gen({ self: this }, function* () {
       yield* this.port.log.settled;
       if (this.disposed || this.readers.has(runId)) return Effect.void;
-      if (this.resumes.running.has(runId)) return this.resumes.settled(runId);
       const input = yield* this.read(runId);
       if (input.inputClosed || !needsWake(input, this.port.run))
         return Effect.void;

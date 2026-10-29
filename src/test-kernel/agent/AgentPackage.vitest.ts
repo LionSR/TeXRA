@@ -60,6 +60,7 @@ class FakeSession {
   readonly runs = {
     get: () => undefined,
     interrupt: () => false,
+    attemptOf: () => undefined,
     launch: ({ options }: { readonly options: RootLaunchOptions }) =>
       Effect.gen({ self: this }, function* () {
         yield* options.onAdmitted?.(RUN_ID, 0) ?? Effect.void;
@@ -160,7 +161,6 @@ const openPackageSession = (fake: FakeSession) =>
     const sessions = yield* makeSessions(
       { open: () => Effect.succeed(fake) } as never,
       yield* testRuntime().contextEffect,
-      yield* Effect.scope,
     );
     return yield* sessions.open({
       storage: '/storage',

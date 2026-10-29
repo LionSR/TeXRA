@@ -550,9 +550,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     childId = undefined;
     // Every resume a send started: the run owed one.
     resumedRuns = [];
-    const runs = session.runs;
-    const resume = runs.resume.bind(runs);
-    vi.spyOn(runs, 'resume').mockImplementation((runId, ...rest) => {
+    const { programs } = registryOf(session.runs);
+    const resume = programs.resume;
+    vi.spyOn(programs, 'resume').mockImplementation((runId, ...rest) => {
       resumedRuns.push(runId);
       return resume(runId, ...rest);
     });

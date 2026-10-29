@@ -10,6 +10,7 @@ import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
 import { getRunRecords } from '@agent/storage/runRecords';
+import { registryOf } from '@agent/runtime/runRegistry';
 
 import {
   RUN_OUTCOME,
@@ -165,7 +166,7 @@ describe('BashTool', () => {
     '#8093 regression: finalizes the background run before its wake step resolves, so a resumed parent never self-stalls waiting on it',
     () =>
       Effect.gen(function* () {
-        // Regression: waking a WAITING parent (`resumeOnSession`) can
+        // Regression: waking a WAITING parent (`wakeRun`) can
         // await the ENTIRE resumed parent turn. If that wake were awaited before
         // this run's own finalize (as it used to be, delivering via a
         // single wake-aware call before `finalizeBackground`), a resumed parent
@@ -189,20 +190,18 @@ describe('BashTool', () => {
         let runId = '' as RunId;
         const wakeReached = Deferred.makeUnsafe<void>();
         // The resume a wake starts is the run's one resume in flight.
-        const followUps = testDefaultSession().followUps;
-        const resumeOnce = followUps.resumes.once.bind(followUps.resumes);
-        vi.spyOn(followUps.resumes, 'once').mockImplementation(
-          (resumed, resume, fork) => {
-            const session = testDefaultSession();
-            skippedAtResumeTime ??= shouldSkipWait(
-              session,
-              SubscriptionRef.getUnsafe(session.view.ref),
-              runId,
-            );
-            Deferred.doneUnsafe(wakeReached, Effect.void);
-            return resumeOnce(resumed, resume, fork);
-          },
-        );
+        const { programs } = registryOf(testDefaultSession().runs);
+        const decide = programs.resume;
+        vi.spyOn(programs, 'resume').mockImplementation((...args) => {
+          const session = testDefaultSession();
+          skippedAtResumeTime ??= shouldSkipWait(
+            session,
+            SubscriptionRef.getUnsafe(session.view.ref),
+            runId,
+          );
+          Deferred.doneUnsafe(wakeReached, Effect.void);
+          return decide(...args);
+        });
         yield* Effect.promise(() => parkRunWaiting(parentRunId));
 
         yield* Effect.addFinalizer(() =>

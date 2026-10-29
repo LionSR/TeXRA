@@ -84,7 +84,7 @@ export interface ExecuteAgentOptions {
    * commit of the batch that opened this activation (a fresh run's opening,
    * a resume's `run.activate`). The run runs it as that batch commits,
    * which it holds: keep it short. A joiner of a resume runs it once the
-   * resume has the run, under the claim.
+   * resume has admitted the run.
    */
   readonly onAdmitted?: (
     runId: RunId,

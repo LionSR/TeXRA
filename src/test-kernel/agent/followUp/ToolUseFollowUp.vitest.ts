@@ -1,19 +1,24 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Semaphore } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Scheduler, Semaphore } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import * as resumability from '@agent/storage/resumability';
+import * as runLifecycle from '@agent/storage/runLifecycle';
 import { Inbox, type InboxPort } from '@agent/followUp/Inbox';
 import { RunInput } from '@agent/followUp/RunInput';
+import { submitFollowUp, wakeRun } from '@agent/followUp/ToolUseFollowUp';
+import { resumeRun, type ResumeAttempt } from '@agent/runtime/resumeRun';
 import {
-  startFollowUpWake,
-  submitFollowUp,
-} from '@agent/followUp/ToolUseFollowUp';
+  RunRegistry,
+  type RunPrograms,
+  type RunRegistryInit,
+} from '@agent/runtime/runRegistry';
 import type {
   SessionHandle,
   SessionTransaction,
 } from '@agent/runtime/SessionHandle';
 import {
+  type CommitOrdinal,
   qualifyAggregateId,
   type RunId,
   type SessionEvent,
@@ -33,7 +38,10 @@ const settle = Effect.promise(
   () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
 );
 
-type TryResume = (runId: RunId) => Effect.Effect<boolean, Error>;
+/** Whether the run took the resume, or the parent whose open call owns it. */
+type TryResume = (
+  runId: RunId,
+) => Effect.Effect<boolean | { readonly ownedBy: RunId }, Error>;
 
 /** The case's answer to the one resume a wake reaches: whether the run took
  *  it. The fake session's runs serve it as their resume. */
@@ -177,50 +185,68 @@ let recorded = recordedFollowUps();
  */
 type RunState = 'live' | 'idle';
 
-function fakeSession(state: RunState): SessionHandle {
+/** `deferFork`: the session's fork starts a fiber a tick after it returns
+ *  it, as a fork whose layer resolves first may. */
+function fakeSession(
+  state: RunState,
+  { deferFork = false } = {},
+): SessionHandle {
   if (state === 'idle')
     vi.spyOn(resumability, 'runRejection').mockReturnValue(
       Effect.succeed(null),
     );
   // The port's resume is the session's own wake, as the session layer wires it.
   recorded = recordedFollowUps({
-    resume: (runId) => startFollowUpWake(runId, session),
+    resume: (runId) => wakeRun(runId, session),
   });
   const { followUps, live } = recorded;
-  /** The session's resume, as `resumeRun` runs it: one in flight per run,
-   *  and a run that took it is live here from then on. */
-  const resume = (runId: RunId) =>
-    followUps.resumes
-      .once(
-        runId,
-        Effect.map(tryResume(runId), (resumed) => {
-          if (!resumed) return { failed: 'not_resumable' as const };
-          live.add(runId);
-          return {
-            started: true as const,
-            delivered: true,
-            completion: Effect.never,
-          };
-        }),
-        (attempt) => Effect.forkDetach(attempt, { startImmediately: true }),
-      )
-      .pipe(Effect.map(({ result }) => result));
+  /** The session's resume decision: a run that took it is live here from
+   *  then on. */
+  const resume = (
+    runId: RunId,
+    _options: unknown,
+    activated: (commit: CommitOrdinal) => Effect.Effect<unknown>,
+  ) =>
+    Effect.flatMap(
+      tryResume(runId),
+      (resumed): Effect.Effect<ResumeAttempt> => {
+        if (typeof resumed === 'object') return Effect.succeed(resumed);
+        if (!resumed)
+          return Effect.succeed({ failed: 'not_resumable' as const });
+        live.add(runId);
+        return Effect.as(activated(1 as CommitOrdinal), {
+          started: true as const,
+          delivered: true,
+          completion: Effect.never,
+        });
+      },
+    );
+  const registry = new RunRegistry({
+    session: () => session,
+    // cast: the fake decision reads no process service.
+    fork: ((effect: Effect.Effect<unknown, unknown>) =>
+      Effect.runFork(
+        deferFork ? Effect.andThen(Effect.yieldNow, effect) : effect,
+      )) as unknown as RunRegistryInit['fork'],
+    // cast: a wake reaches only the session's resume decision.
+    programs: { resume } as unknown as RunPrograms,
+    wake: () => {},
+  });
+  // The registry's records, but a generation `live` here as the case says.
+  const runs = Object.assign(Object.create(registry) as RunRegistry, {
+    get: (runId: RunId) =>
+      state === 'live' || live.has(runId)
+        ? { runId, live: true, readsMessages: true }
+        : registry.get(runId),
+  });
   const session = {
-    runs: {
-      resume,
-      get: (runId: RunId) =>
-        state === 'live' || live.has(runId)
-          ? { runId, live: true, readsMessages: true }
-          : undefined,
-      // The session's fork: the attempt outlives the fiber that asked.
-      fork: (program: Effect.Effect<unknown, unknown>) =>
-        Effect.forkDetach(program, { startImmediately: true }),
-    },
+    runs,
     view: { run: () => ({}) },
     interactions: { emit: () => Effect.void },
     log: {
       records: () => Effect.succeed([]),
       owner: () => Effect.succeed({ ownerId: null, liveness: null }),
+      hold: () => Effect.void,
     },
     followUps,
   } as unknown as SessionHandle;
@@ -235,37 +261,155 @@ const childResult = (deliveryId: string) => ({
   deliveryId,
 });
 
+describe('wakeRun', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.effect(
+    "a user's stop that lands before a resume's fiber runs ends the run cancelled, deciding nothing",
+    () =>
+      Effect.gen(function* () {
+        const runId = generateRunId();
+        const session = fakeSession('idle', { deferFork: true });
+        const decide = vi.fn(() => Effect.succeed(false));
+        const ended = vi
+          .spyOn(runLifecycle, 'finalizeRun')
+          .mockReturnValue(Effect.succeed({ recorded: true }));
+
+        const woken = yield* wakeRun(runId, session).pipe(
+          withResumePort(decide),
+        );
+        session.runs.stop(runId, { reason: 'user' });
+        yield* woken;
+
+        expect(decide).not.toHaveBeenCalled();
+        expect(ended).toHaveBeenCalledWith(session, {
+          runId,
+          outcome: 'cancelled',
+          ownerless: true,
+        });
+      }),
+  );
+});
+
+describe('wakeRun races', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.effect(
+    "a resume's only caller leaving before its fiber runs leaves it deciding nothing",
+    () =>
+      Effect.gen(function* () {
+        const runId = generateRunId();
+        const session = fakeSession('idle', { deferFork: true });
+        const decide = vi.fn(() => Effect.succeed(false));
+
+        const caller = yield* Effect.forkChild(
+          resumeRun(runId, { session }).pipe(withResumePort(decide)),
+          { startImmediately: true },
+        );
+        yield* Fiber.interrupt(caller);
+        yield* session.runs.get(runId)?.drained ?? Effect.void;
+
+        expect(decide).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    "a wake that joins a resume answering its owner follows it, though the resume's caller left",
+    () =>
+      Effect.gen(function* () {
+        const child = generateRunId();
+        const parent = generateRunId();
+        const session = fakeSession('idle');
+        const answered = createDeferred<void>();
+        const decide = vi.fn((runId: RunId) =>
+          runId === child
+            ? Effect.as(
+                Effect.promise(() => answered.promise),
+                {
+                  ownedBy: parent,
+                },
+              )
+            : Effect.succeed(false),
+        );
+
+        const caller = yield* Effect.forkChild(
+          resumeRun(child, { session }).pipe(withResumePort(decide)),
+          { startImmediately: true },
+        );
+        const woken = yield* wakeRun(child, session).pipe(
+          withResumePort(decide),
+        );
+        yield* Fiber.interrupt(caller);
+        answered.resolve();
+        yield* woken;
+
+        expect(decide.mock.calls.map(([runId]) => runId)).toEqual([
+          child,
+          parent,
+        ]);
+      }),
+  );
+
+  it.live(
+    'two wakes whose fibers interleave open one resume, the second joining it',
+    () =>
+      Effect.gen(function* () {
+        const runId = generateRunId();
+        const session = fakeSession('idle');
+        const barrier = createDeferred<boolean>();
+        const decide = vi.fn(() => Effect.promise(() => barrier.promise));
+
+        const wakes = [];
+        for (const _ of [1, 2])
+          wakes.push(
+            yield* Effect.forkChild(
+              wakeRun(runId, session).pipe(withResumePort(decide)),
+            ),
+          );
+        for (const wake of wakes) yield* Fiber.join(wake);
+        barrier.resolve(false);
+
+        expect(decide).toHaveBeenCalledTimes(1);
+      }).pipe(Effect.provideService(Scheduler.MaxOpsBeforeYield, 3)),
+  );
+});
+
 describe('submitFollowUp', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it.effect('wakes a run once and orders concurrent submissions', () =>
-    Effect.gen(function* () {
-      const runId = generateRunId();
-      const session = fakeSession('idle');
-      const barrier = createDeferred<boolean>();
-      const tryResumeRun = vi.fn(() => Effect.promise(() => barrier.promise));
+  it.live(
+    'wakes a run once and orders concurrent submissions, their fibers yielding every few steps',
+    () =>
+      Effect.gen(function* () {
+        const runId = generateRunId();
+        const session = fakeSession('idle');
+        const barrier = createDeferred<boolean>();
+        const tryResumeRun = vi.fn(() => Effect.promise(() => barrier.promise));
 
-      const fibers = [];
-      for (const text of ['one', 'two', 'three']) {
-        fibers.push(
-          yield* Effect.forkChild(
-            submitFollowUp(runId, user(text), { session }).pipe(
-              withResumePort(tryResumeRun),
+        const fibers = [];
+        for (const text of ['one', 'two', 'three']) {
+          fibers.push(
+            yield* Effect.forkChild(
+              submitFollowUp(runId, user(text), { session }).pipe(
+                withResumePort(tryResumeRun),
+              ),
             ),
-          ),
-        );
-      }
+          );
+        }
+        // A submission answers once its wake started or joined the resume.
+        for (const fiber of fibers)
+          expect(yield* Fiber.join(fiber)).toEqual({ status: 'queued' });
+        expect(recorded.queued(runId)).toEqual(['one', 'two', 'three']);
 
-      yield* settle;
-      expect(recorded.queued(runId)).toEqual(['one', 'two', 'three']);
-
-      barrier.resolve(true);
-      for (const fiber of fibers)
-        expect(yield* Fiber.join(fiber)).toEqual({ status: 'queued' });
-      expect(tryResumeRun).toHaveBeenCalledTimes(1);
-    }),
+        barrier.resolve(true);
+        expect(tryResumeRun).toHaveBeenCalledTimes(1);
+      }).pipe(Effect.provideService(Scheduler.MaxOpsBeforeYield, 3)),
   );
 
   it.effect(

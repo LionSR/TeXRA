@@ -15,14 +15,14 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 
 const mocks = vi.hoisted(() => ({
-  startFollowUpWake: vi.fn(),
+  wakeRun: vi.fn(),
 }));
 
 // A delivery commits with its settlement; the parent's wake after it is
 // what a fixture holds open or observes.
 vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@agent/followUp/ToolUseFollowUp')>()),
-  startFollowUpWake: mocks.startFollowUpWake,
+  wakeRun: mocks.wakeRun,
 }));
 
 import {
@@ -212,7 +212,7 @@ beforeEach(async () => {
   publishTestRunStart(session, PARENT_RUN_ID);
   await Effect.runPromise(session.log.settled);
   vi.clearAllMocks();
-  mocks.startFollowUpWake.mockReturnValue(Effect.succeed(Effect.void));
+  mocks.wakeRun.mockReturnValue(Effect.succeed(Effect.void));
 });
 
 afterEach(async () => {
@@ -304,7 +304,7 @@ describe('childRunLoop E2E fixtures', () => {
     () =>
       Effect.gen(function* () {
         // Regression: parent continuation submission can await the ENTIRE resumed
-        // turn (`resumeOnSession` → … → `executeAgent`).
+        // turn (`wakeRun` → … → `executeAgent`).
         // Before #8093, the loop awaited split enqueue/wake work inline in the
         // turn loop, and only finalized this child afterward in the outer
         // `finally` — so a resumed parent that
@@ -318,7 +318,7 @@ describe('childRunLoop E2E fixtures', () => {
         const wakeReached = yield* Deferred.make<void>();
         const releaseWake = yield* Deferred.make<void>();
         let skippedAtWakeTime = false;
-        mocks.startFollowUpWake.mockImplementation(() =>
+        mocks.wakeRun.mockImplementation(() =>
           Effect.gen(function* () {
             // Snapshot registry state the instant the wake step is reached. The
             // same moment a resumed parent's own turn would begin running.
@@ -356,7 +356,7 @@ describe('childRunLoop E2E fixtures', () => {
         const runId = loopRunId();
         const { strategy, resolveTurn, rejectTurn } = createFakeStrategy();
         const firstDelivered = yield* Deferred.make<void>();
-        mocks.startFollowUpWake.mockImplementation(() =>
+        mocks.wakeRun.mockImplementation(() =>
           Effect.as(Deferred.succeed(firstDelivered, undefined), Effect.void),
         );
 

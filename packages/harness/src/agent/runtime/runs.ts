@@ -10,7 +10,6 @@ import type { RunStopReason } from '@shared/session/runtimeRequest';
 import type { Effect, Scope } from 'effect';
 import type { RunEndResult } from './RunEndResult';
 import type { RootLaunchOptions, RootLaunchRequest } from './rootLaunch';
-import type { resumeRun } from './resumeRun';
 
 /** A root launch: what to run, and how its launch settles. */
 export interface RootLaunch {
@@ -43,8 +42,8 @@ export interface LiveRun {
   readonly controls: RunControls | undefined;
   /** A generation of it is live here: its fiber, a hold, or a launch. */
   readonly live: boolean;
-  /** A launch of it is in flight here, from the call that launched it (before
-   *  its fiber claims the lane) until the fiber exits: what a stop reaches. */
+  /** A launch or resume of it is in flight here, from the call (before its
+   *  fiber claims the lane) until its fiber exits: what a stop reaches. */
   readonly launched: boolean;
   /** Its attached parent: the view's edge, or for a child whose `run.start`
    *  the view has not folded yet, the parent its activation launched under;
@@ -56,16 +55,16 @@ export interface LiveRun {
    *  its launch said it takes. */
   readonly readsMessages: boolean;
   /** Why it was stopped here, while it unwinds from that stop. */
-  readonly stopReason: RunStopReason | undefined;
+  readonly stopReason: StopCause | undefined;
   /** Resolves once every owner of it here has left. */
   readonly drained: Effect.Effect<void>;
 }
 
 /**
  * A session's runs, as hosts and tools reach them: launch one (a root, or a
- * hold on a stopped one), resume one, stop one, and read what this process
- * holds of them. A root launch requires the composition root's
- * `SessionOwner`, which no tool is given.
+ * hold on a stopped one), stop one, and read what this process holds of
+ * them; a run resumes through `resumeRun`. A root launch requires the
+ * composition root's `SessionOwner`, which no tool is given.
  */
 export interface RunsShape {
   launch(spec: RootLaunch): Effect.Effect<RunEndResult, Error, SessionOwner>;
@@ -74,7 +73,6 @@ export interface RunsShape {
   launch(spec: {
     readonly hold: RunId;
   }): Effect.Effect<void, Error, Scope.Scope>;
-  readonly resume: typeof resumeRun;
   stop(runId: RunId, options: RunStopOptions): RunStop;
   get(runId: RunId): LiveRun | undefined;
   get(): readonly LiveRun[];
@@ -94,6 +92,13 @@ export interface RunStop {
    *  batch, or the terminal row of a stop that reached no live target. */
   readonly settlement: Effect.Effect<void, Error>;
 }
+
+/** Why a run here stops: a stop's reason, or `released`: its holder let go
+ *  of it (the last caller of a resume left before any took it, or a handle
+ *  or an in-band call interrupted it). Before admission a `released` stop,
+ *  like `shutdown`, writes no end and leaves the run resumable; an admitted
+ *  run that is interrupted ends `cancelled` through its lifecycle. */
+export type StopCause = RunStopReason | 'released';
 
 /** Child policy of a stop. An explicit value wins: the CLI's bare-Escape stop
  *  always detaches and shutdown always cascades. A `run.stop` request that

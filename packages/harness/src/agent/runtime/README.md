@@ -31,7 +31,8 @@ is the module map by concern. Run-loop rules are in
   runs: assigns the `runId`, registers, runs); `executeAgent` (the one
   run program, fresh or resumed); `AgentRunLifecycle`
   (completion side effects, error classification); `RunEndResult`;
-  `resumeRun` (the cross-host resume entry, root or recovered child);
+  `resumeRun` (the cross-host resume entry, root or recovered child: the
+  run's activation from the call, joined by a second resume);
   `forkRun` (a new root seeded from another run's view); `resumeBlocker` (a
   missing or untrusted agent).
 - **Registry**: `runRegistry` (one entry per run: fiber, loop controls,

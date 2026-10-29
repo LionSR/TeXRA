@@ -146,7 +146,6 @@ function sessionsLayer(
       return yield* makeSessions(
         yield* SessionOwner,
         yield* Effect.context<ProcessServices>(),
-        yield* Effect.scope,
       );
     }),
   ).pipe(

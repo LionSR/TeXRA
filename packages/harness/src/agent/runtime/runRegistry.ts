@@ -25,6 +25,7 @@ import {
 } from 'effect';
 
 import { finalizeRun } from '@agent/storage/runLifecycle';
+import type { RunAttempt } from '@agent/followUp/ToolUseFollowUp';
 import type { ProcessServices } from '@platform/processRuntime';
 import { grantsKept, type ApprovalGrants } from '@shared/approvalBypassKind';
 import {
@@ -45,9 +46,10 @@ import type {
   RunsShape,
   RunStop,
   RunStopOptions,
+  StopCause,
 } from './runs';
 import type { executeAgent } from './executeAgent';
-import type { resumeRun } from './resumeRun';
+import type { decideResume } from './resumeRun';
 
 /** A generation, a hold or a launch already has the run here: the one
  *  refusal for that fact. Hosts word it from `message`; a resume reads the tag
@@ -68,7 +70,7 @@ class RunAdmissionClosed extends Schema.TaggedError<RunAdmissionClosed>()(
 /**
  * What the session hands its runs. They read a run's phase from the
  * session's fold (`RunView.status`) and keep no phase of their own; a stop
- * in progress is its activation's `stopReason` until the fold shows the run
+ * in progress is its activation's `stop` until the fold shows the run
  * cancelled.
  */
 export interface RunRegistryInit {
@@ -87,11 +89,11 @@ export interface RunRegistryInit {
 }
 
 /** The run programs: a root launch, a run's program (fresh or resumed),
- *  and a whole resume. */
+ *  and a resume's decision. */
 export interface RunPrograms {
   readonly root: typeof rootRun;
   readonly executeAgent: typeof executeAgent;
-  readonly resume: typeof resumeRun;
+  readonly resume: typeof decideResume;
 }
 
 type AnyFiber = Fiber.Fiber<unknown, unknown>;
@@ -111,13 +113,17 @@ interface RunEntry {
      *  that commits before it is ({@link RunRegistry.bornDetached}), which
      *  no row carries; created detached, its rows then agree. */
     unbornParent: RunId | null;
-    /** The stop begun for it, recorded at the request, before the
-     *  interrupt, for its cleanup (a `user` reason outlives a later
-     *  `shutdown`) and for child admission ({@link RunRegistry.assertAdmitsChild}). */
-    stopReason?: RunStopReason;
-    /** A stop reached it: one its program had not started is interrupted
-     *  as it starts. */
-    stopped: boolean;
+    /** The stop begun for it and why, recorded by every stop at the
+     *  request, before the interrupt: a program not yet running is
+     *  interrupted as it starts, a resume decides nothing, its cleanup reads
+     *  why (a `user` stop outlives a later one), and a child is refused
+     *  under it ({@link RunRegistry.assertAdmitsChild}). */
+    stop?: StopCause;
+    /** A resume's, from its call until the activation closes with its fiber. */
+    attempt?: RunAttempt;
+    /** The resume's fiber while it decides, what a stop interrupts; once
+     *  launched, the generation holds the activation. */
+    deciding?: AnyFiber;
   };
   /** The run's hand-off chain while a fiber holds or waits on it. */
   lane?: PerKeyLane;
@@ -157,14 +163,11 @@ export class RunRegistry implements RunsShape {
 
   /** The run programs (`RunRegistryInit.programs`). */
   readonly programs: RunPrograms;
-  /** Resume one persisted run on this session (`resumeRun`). */
-  readonly resume: RunPrograms['resume'];
 
   private readonly init: RunRegistryInit;
   constructor(init: RunRegistryInit) {
     this.init = init;
     this.programs = init.programs;
-    this.resume = init.programs.resume;
   }
 
   // ---------------------------------------------------------------- entries
@@ -235,7 +238,7 @@ export class RunRegistry implements RunsShape {
       launched: this.isLaunched(runId),
       parent: this.attachedParent(runId),
       readsMessages,
-      stopReason: entry.activation?.stopReason,
+      stopReason: entry.activation?.stop,
       drained,
     };
   }
@@ -311,16 +314,13 @@ export class RunRegistry implements RunsShape {
       : launchParent;
     if (parentRunId === null) return;
     const stopping =
-      this.entries.get(parentRunId)?.activation?.stopReason !== undefined;
+      this.entries.get(parentRunId)?.activation?.stop !== undefined;
     if (stopping && this.isLaunched(childRunId)) return;
-    if (stopping || this.stopFolded(parentRunId))
+    const folded = this.init.session().view.run(parentRunId)?.status;
+    if (stopping || folded === RUN_PHASE.CANCELLED)
       throw new Error(
         `Cannot launch child run ${childRunId} under run ${parentRunId}: that run was stopped.`,
       );
-  }
-
-  private stopFolded(runId: RunId): boolean {
-    return this.init.session().view.run(runId)?.status === RUN_PHASE.CANCELLED;
   }
 
   /** A root launch (`programs.root`, awaited), or a hold on a stopped
@@ -334,11 +334,13 @@ export class RunRegistry implements RunsShape {
           session: this.init.session(),
         })) as RunsShape['launch'];
 
-  /** The one launch door: every run starts here, on the session's context
-   *  ({@link fork}), after earlier work on its lane. Its activation opens
-   *  at the call, so a stop finds it from then on, and closes with its
-   *  fiber; a child names the run that launched it, and is refused under
-   *  a stopped one. It refuses with `RunLive` as it claims. */
+  /** The one launch door: every run starts here, on the session's context,
+   *  after earlier work on its lane. Its activation opens at the call, so a
+   *  stop finds it from then on, and closes with its fiber; a child names
+   *  the run that launched it, and is refused under a stopped one. A run
+   *  already launched here refuses it with `RunLive`. An `attempt` opens a
+   *  resume (`resumeRun`): `program` decides, unadmitted, and hands the
+   *  activation to the generation it launches. */
   start<A, E, R extends AgentRunServices, B, E2>(
     runId: RunId,
     program: Effect.Effect<A, E, R>,
@@ -346,34 +348,44 @@ export class RunRegistry implements RunsShape {
       admitted: Effect.Effect<A, E | Error, R>,
     ) => Effect.Effect<B, E2, R>,
     launchParent: RunId | null = null,
+    attempt?: RunAttempt,
   ): Effect.Effect<Fiber.Fiber<B, E2>> {
-    return Effect.suspend(() => {
+    return Effect.sync(() => {
       if (launchParent !== null) this.assertAdmitsChild(launchParent, runId);
       const entry = this.entryFor(runId);
-      // A launch live here keeps its activation: this one is refused.
-      const own = entry.activation
-        ? undefined
-        : { unbornParent: launchParent, stopped: false };
+      const { activation } = entry;
+      // A deciding resume hands its activation to the next launch here (its
+      // generation, or a parent's reattach), never to a second resume; any
+      // other launch keeps it, refusing this one.
+      const own =
+        activation === undefined
+          ? { unbornParent: launchParent, attempt }
+          : (!attempt && activation.deciding && activation) || undefined;
+      if (own) own.deciding = undefined;
+      if (attempt && own) attempt.activation = own;
       entry.activation ??= own;
-      return Effect.tap(
-        this.fork(settle(this.admit(runId, program, false))),
-        (fiber) =>
-          Effect.sync(() =>
-            fiber.addObserver(() => {
-              if (own === undefined || entry.activation !== own) return;
-              entry.activation = undefined;
-              this.prune(runId, entry);
-            }),
-          ),
+      const body = attempt ? program : this.admit(runId, program, false);
+      const fiber = this.init.fork(
+        Effect.withFiber((self) => {
+          if (attempt && own) own.deciding = self;
+          return settle(own ? body : Effect.fail(new RunLive({ runId })));
+        }).pipe(Effect.provideService(Runs, this)),
       );
+      // A deciding resume leaves the activation to its generation.
+      fiber.addObserver(() => {
+        if (own === undefined || entry.activation !== own) return;
+        if (attempt !== undefined && own.deciding !== fiber) return;
+        entry.activation = undefined;
+        this.prune(runId, entry);
+      });
+      return fiber;
     });
   }
 
-  /** {@link start}'s fork, admitting no run: a resume attempt admits its own. */
-  readonly fork = <A, E>(program: Effect.Effect<A, E, AgentRunServices>) =>
-    Effect.sync(() =>
-      this.init.fork(program.pipe(Effect.provideService(Runs, this))),
-    );
+  /** The resume in flight on `runId`'s activation, if a resume opened it. */
+  attemptOf(runId: RunId): RunAttempt | undefined {
+    return this.entries.get(runId)?.activation?.attempt;
+  }
 
   /** Reserve an inactive run for deletion; never wait for a live owner. */
   withInactiveRunStep<A, E, R>(
@@ -441,7 +453,7 @@ export class RunRegistry implements RunsShape {
           { startImmediately: true },
         );
         // A stop that reached the launch before its program ran.
-        if (!inactiveStep && this.entries.get(runId)?.activation?.stopped)
+        if (!inactiveStep && this.entries.get(runId)?.activation?.stop)
           fiber.interruptUnsafe();
         // An interrupted join interrupts the fiber and awaits its cleanup.
         return yield* Fiber.join(fiber).pipe(
@@ -547,15 +559,16 @@ export class RunRegistry implements RunsShape {
   // ------------------------------------------------------------------ stop
 
   /** Stop the run's launch here by run id: synchronous, answered at once
-   *  from every host surface. The stop is recorded on its activation (a
-   *  program not yet running is interrupted as it starts) and its fiber
-   *  interrupted; a stop's reason is {@link markStopped}'s. The answer is read
-   *  before the interrupt, which can unwind the run and clear its entry. */
-  interrupt(runId: RunId): boolean {
+   *  from every host surface. The stop is recorded on its activation
+   *  ({@link markStopped}) and its fiber, or its resume's while it decides,
+   *  interrupted. The answer is read before the interrupt, which can unwind
+   *  the run and clear its entry. */
+  interrupt(runId: RunId, cause: StopCause = 'released'): boolean {
     const entry = this.entries.get(runId);
     const reached =
       entry?.activation !== undefined || entry?.fiber !== undefined;
-    if (entry?.activation) entry.activation.stopped = true;
+    this.markStopped(runId, cause);
+    entry?.activation?.deciding?.interruptUnsafe();
     entry?.fiber?.interruptUnsafe();
     return reached;
   }
@@ -574,7 +587,7 @@ export class RunRegistry implements RunsShape {
     // Marked at the request: from here a child is refused under the run
     // (`assertAdmitsChild`) and a user's message sent while the stop runs
     // waits for the run to drain (`submitFollowUp`); a failed stop unmarks.
-    const marked = entry?.activation?.stopReason;
+    const marked = entry?.activation?.stop;
     if (entry !== undefined) this.markStopped(runId, options.reason);
 
     const detach = options.detachActiveChildren === true;
@@ -621,7 +634,7 @@ export class RunRegistry implements RunsShape {
           Effect.sync(() => {
             const current = this.entries.get(runId);
             if (!reached && current?.activation)
-              current.activation.stopReason = marked;
+              current.activation.stop = marked;
           }),
         ),
       );
@@ -674,10 +687,9 @@ export class RunRegistry implements RunsShape {
 
   /** Record why `runId` stops, before it is interrupted, on its activation;
    *  only a run this process launched has one. */
-  private markStopped(runId: RunId, reason: RunStopReason | undefined): void {
+  private markStopped(runId: RunId, cause: StopCause): void {
     const activation = this.entries.get(runId)?.activation;
-    if (activation === undefined || reason === undefined) return;
-    if (activation.stopReason !== 'user') activation.stopReason = reason;
+    if (activation && activation.stop !== 'user') activation.stop = cause;
   }
 
   /** Stop `runId` here, its children first when `cascadeChildren`: each run
@@ -687,15 +699,14 @@ export class RunRegistry implements RunsShape {
     runId: RunId,
     visited: Set<string>,
     cascadeChildren: boolean,
-    reason: RunStopReason | undefined,
+    reason: RunStopReason,
   ): boolean {
     if (visited.has(runId)) return false;
     visited.add(runId);
     if (cascadeChildren)
       for (const child of this.childRunIds(runId))
         this.terminate(child, visited, true, reason);
-    this.markStopped(runId, reason);
-    return this.interrupt(runId);
+    return this.interrupt(runId, reason);
   }
 
   // ---------------------------------------------------------------- detach

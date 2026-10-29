@@ -283,14 +283,14 @@ const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
 ): Effect.fn.Return<Outcome, RequestError> {
   const { runId } = req;
   const unavailable = (reason: string) => new Unavailable({ runId, reason });
-  yield* deps.session().followUps.resumes.settled(runId);
-  const controls = deps.session().runs.get(runId)?.controls;
-  const noun = runNoun(deps.session(), runId);
+  const runs = registryOf(deps.session().runs);
+  yield* Effect.exit(runs.attemptOf(runId)?.answer ?? Effect.void);
+  const controls = runs.get(runId)?.controls;
   if (controls === undefined)
     return yield* unavailable(
       req.kind === 'run.compact'
-        ? `This ${noun} has no conversation to compact.`
-        : `Resume the ${noun} to switch its model.`,
+        ? `This ${runNoun(deps.session(), runId)} has no conversation to compact.`
+        : `Resume the ${runNoun(deps.session(), runId)} to switch its model.`,
     );
   const failed = Effect.mapError((error: Error) => unavailable(error.message));
   if (req.kind === 'run.model')

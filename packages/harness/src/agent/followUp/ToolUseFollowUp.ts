@@ -1,13 +1,24 @@
-import { Cause, Deferred, Effect, Fiber } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import { runRejection } from '@agent/storage/resumability';
-import type { ResumeAttempt, ResumeRunResult } from '@agent/runtime/resumeRun';
+import { finalizeRun } from '@agent/storage/runLifecycle';
+import type {
+  ResumeAttempt,
+  ResumeRunOptions,
+  ResumeRunResult,
+} from '@agent/runtime/resumeRun';
 import { registryOf } from '@agent/runtime/runRegistry';
+import type { StopCause } from '@agent/runtime/runs';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
-import { type ResumeRefusal, type RunId } from '@shared/schemas';
+import {
+  type CommitOrdinal,
+  type ResumeRefusal,
+  RUN_OUTCOME,
+  type RunId,
+} from '@shared/schemas';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { InboxItem } from './Inbox';
 
@@ -106,176 +117,182 @@ export function presentFollowUpResult(
 
 const CHANNEL = 'ToolUseFollowUp';
 
-/** A resume's result, and whether this caller joined one in flight. */
-export type Resumed = {
-  readonly result: ResumeAttempt;
-  readonly joined: boolean;
-};
+/** A resume's refusal of a run that cannot continue here. */
+export const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 
-/** The resumes in flight here, by run. */
-export class Resumes {
-  /** The resumes in flight here, by run; only `once` changes it. */
-  readonly running = new Map<
-    RunId,
-    { readonly done: Deferred.Deferred<ResumeAttempt, Error>; joiners: number }
-  >();
-
-  /** One resume of `runId` at a time, on the fiber `fork` starts it on (the
-   *  session's): a joiner (`onJoined`) hears its result, and the caller
-   *  that started it stops it when it stops waiting, unless one joined. */
-  once<R>(
-    runId: RunId,
-    resume: Effect.Effect<ResumeAttempt, Error, R>,
-    fork: (
-      resume: Effect.Effect<ResumeAttempt, Error, R>,
-    ) => Effect.Effect<Fiber.Fiber<ResumeAttempt, Error>>,
-    onJoined?: () => void,
-  ): Effect.Effect<Resumed, Error> {
-    return Effect.suspend((): Effect.Effect<Resumed, Error> => {
-      const running = this.running.get(runId);
-      if (running !== undefined) {
-        running.joiners += 1;
-        onJoined?.();
-        return Effect.map(Deferred.await(running.done), (result) => ({
-          result,
-          joined: true,
-        })).pipe(Effect.ensuring(Effect.sync(() => (running.joiners -= 1))));
-      }
-      const entry = {
-        done: Deferred.makeUnsafe<ResumeAttempt, Error>(),
-        joiners: 0,
-      };
-      this.running.set(runId, entry);
-      return Effect.flatMap(fork(resume), (fiber) => {
-        fiber.addObserver((exit) => {
-          this.running.delete(runId);
-          Deferred.doneUnsafe(entry.done, exit);
-        });
-        return Effect.map(Deferred.await(entry.done), (result) => ({
-          result,
-          joined: false,
-        })).pipe(
-          Effect.onInterrupt(() =>
-            entry.joiners > 0 ? Effect.void : Fiber.interrupt(fiber),
-          ),
-        );
-      });
-    });
-  }
-
-  /** Settles when `runId`'s resume in flight here ends; at once if none. */
-  settled(runId: RunId): Effect.Effect<void> {
-    const done = this.running.get(runId)?.done;
-    return done
-      ? Effect.asVoid(Effect.exit(Deferred.await(done)))
-      : Effect.void;
-  }
-
-  /** Whether a caller is joined to `runId`'s resume in flight. */
-  joined(runId: RunId): boolean {
-    return (this.running.get(runId)?.joiners ?? 0) > 0;
-  }
+/** A resume in flight here, on its run's activation. */
+export interface RunAttempt {
+  /** Its answer, which every caller hears. */
+  readonly answer: Effect.Effect<ResumeAttempt, Error>;
+  /** The commit of the `run.activate` it admitted the run at. */
+  readonly admitted: Deferred.Deferred<CommitOrdinal>;
+  /** The callers waiting on its answer. */
+  waiters: number;
+  /** A caller took its answer, or none holds it (a wake): only a stop or
+   *  the session's close ends the run now. */
+  handedOff: boolean;
+  /** The activation it opened (`RunRegistry.start` links it): the one
+   *  record of a stop's reason, which its generation's exit and its own
+   *  read, and which outlives the registry's entry. */
+  activation?: { readonly stop?: StopCause };
 }
-
-const RESUME_REFUSED: ResumeRunResult = { failed: 'not_resumable' };
 
 /**
- * The resume every automatic wake takes (a message's, a child's delivery, a
- * generation's end, an interrupted task's): the one resume (`resumeRun`) on
- * the session that holds the run, started on the fork
- * the session's launches run on, so the attempt belongs to the session and
- * outlives a caller that stops waiting. It reaches that resume through the
- * session's run programs (`RunRegistryInit.programs`), because a resumed
- * run's child loop wakes its parent through here in turn.
- *
- * What the run did not take is told to the user here, once: a refusal by its
- * reason, input it started for and did not read, a fault as a failure unless
- * the session's terminal-result presenter took it. A fault answers as a refusal, so the caller reads one fact:
- * whether the run took the resume. The resume gives back the recovery it
- * claimed and the run did not take. The attempt is cancelled for good once
- * the run has left the session's view: a run id deleted and re-created is
- * not the run it was admitted for.
+ * Resume `runId` for the input it holds (a wake, an interrupted task): its
+ * resume in flight here is joined, or one opened. No caller holds what it
+ * answers, so it is handed off at once, follows an owning parent itself and
+ * tells the user, once, what the run did not take; a generation live here
+ * that no resume launched reads that input itself, and a run gone from the
+ * view is not resumed. Gives back the resume's end, which never fails.
  */
-export function resumeOnSession(
+export const wakeRun = (
   runId: RunId,
   session: SessionHandle,
-): Effect.Effect<ResumeRunResult> {
-  return Effect.flatten(startResume(runId, session));
-}
+): Effect.Effect<Effect.Effect<void>> =>
+  Effect.gen(function* () {
+    if (session.view.run(runId) === undefined) return Effect.void;
+    const opened = yield* openResume(runId, { session }, true);
+    if (opened === undefined) return Effect.void;
+    const { attempt } = opened;
+    attempt.handedOff = true;
+    // Observation only: interruptible even where the caller is masked.
+    return Effect.asVoid(Effect.interruptible(Effect.exit(attempt.answer)));
+  });
 
-/** Start {@link resumeOnSession}'s attempt on the session's fork and give
- *  back its join, so a caller that only needs it started does not wait. */
-function startResume(
+/**
+ * Join `runId`'s resume in flight here, or open one as its activation,
+ * deciding on the session's fork. The registry opens one per activation
+ * (`RunRegistry.start`): a caller that lost the race joins the winner.
+ * Undefined while a launch that is no resume holds the run.
+ */
+export const openResume = (
   runId: RunId,
-  session: SessionHandle,
-): Effect.Effect<Effect.Effect<ResumeRunResult>> {
-  const attempt = Effect.suspend(() => {
-    // Cancelled for good once the run has left the view.
-    let runMissing = false;
-    const isCancellationRequested = (): boolean => {
-      runMissing ||= session.view.run(runId) === undefined;
-      return runMissing;
+  options: ResumeRunOptions,
+  wake: boolean,
+): Effect.Effect<
+  { readonly attempt: RunAttempt; readonly joined: boolean } | undefined
+> =>
+  // Uninterruptible: an attempt others can join always gets its answer.
+  Effect.uninterruptible(
+    Effect.gen(function* () {
+      const runs = registryOf(options.session.runs);
+      const found = runs.attemptOf(runId);
+      if (found) return { attempt: found, joined: true };
+      const here = runs.get(runId);
+      if (here?.live || here?.launched) return undefined;
+      const done = yield* Deferred.make<ResumeAttempt, Error>();
+      const attempt: RunAttempt = {
+        answer: Deferred.await(done),
+        admitted: yield* Deferred.make<CommitOrdinal>(),
+        waiters: 0,
+        handedOff: wake,
+      };
+      const { session } = options;
+      // A stop recorded before this fiber ran had no fiber to interrupt: the
+      // decision reads it first, under its exit's handler.
+      const decided = Effect.suspend(() =>
+        attempt.activation?.stop === undefined
+          ? runs.programs.resume(runId, options, (commit) =>
+              Deferred.succeed(attempt.admitted, commit),
+            )
+          : Effect.interrupt,
+      ).pipe(Effect.onExit(stoppedUnadmitted(session, runId, attempt)));
+      const fiber = yield* runs.start(
+        runId,
+        answered(runId, session, attempt, decided),
+        (decision) => decision,
+        null,
+        attempt,
+      );
+      // Another resume holds the activation: this one's launch is refused
+      // (`RunLive`), and it joins that one.
+      if (attempt.activation === undefined) {
+        yield* Effect.exit(Fiber.join(fiber));
+        return yield* openResume(runId, options, wake);
+      }
+      fiber.addObserver((exit) => Deferred.doneUnsafe(done, exit));
+      return { attempt, joined: false };
+    }),
+  );
+
+/** A user's stop that reached the resume before it admitted the run ends
+ *  the run cancelled, as a stop of a run nothing here drives does. */
+const stoppedUnadmitted =
+  (session: SessionHandle, runId: RunId, attempt: RunAttempt) =>
+  <A, E>(exit: Exit.Exit<A, E>): Effect.Effect<void> => {
+    if (
+      !Exit.hasInterrupts(exit) ||
+      Deferred.isDoneUnsafe(attempt.admitted) ||
+      attempt.activation?.stop !== 'user'
+    )
+      return Effect.void;
+    const cancelled = {
+      runId,
+      outcome: RUN_OUTCOME.CANCELLED,
+      ownerless: true,
     };
-    if (isCancellationRequested()) return Effect.succeed(RESUME_REFUSED);
-    return session.runs.resume(runId, { session }).pipe(
-      Effect.tap((result) => {
-        if (isCancellationRequested()) return Effect.void;
-        // A run that started and ended without reading what it was
-        // resumed for leaves that input queued.
-        let message: string | null = null;
-        if ('failed' in result)
-          message = describeFollowUpFailure(result.failed);
-        else if ('started' in result && !result.delivered)
-          message = FOLLOW_UP_WAKE_FAILED_MESSAGE;
-        return message === null
-          ? Effect.void
-          : session.interactions.emit(
-              'requestShowInstruction',
-              { key: 'resumeRefused', message, showSuppress: false },
-              { replayWhenAttached: true },
-            );
-      }),
-      Effect.catchCause((cause) => {
-        if (Cause.hasInterruptsOnly(cause) || isCancellationRequested())
-          return Effect.succeed(RESUME_REFUSED);
-        const error = Cause.squash(cause);
-        return Effect.logError(`Failed to resume run ${runId}`).pipe(
+    return session.log.hold(runId, { ends: true }).pipe(
+      Effect.andThen(finalizeRun(session, cancelled)),
+      Effect.scoped,
+      Effect.catch((error) =>
+        Effect.logWarning(`The stop of run ${runId} wrote no end`).pipe(
           Effect.annotateLogs({ data: error }),
           withLogChannel(CHANNEL),
-          Effect.andThen(
-            presentRunFailure(session.interactions, error, 'Resume failed: '),
-          ),
-          Effect.as(RESUME_REFUSED),
-        );
-      }),
+        ),
+      ),
     );
-  });
-  // The attempt is the session's from the fork on; the join is observation
-  // only, so it stays interruptible even where the caller is masked (a
-  // child's boundary settlement waits here for its parent's whole resumed
-  // turn, and a stop of that child must land before the parent parks).
-  return Effect.map(registryOf(session.runs).fork(attempt), (fiber) =>
-    Effect.interruptible(Fiber.join(fiber)),
-  );
-}
+  };
 
 /**
- * Start resuming a run whose follow-up row is already durable, for
- * `Inbox.wake`, and give back the resume's end: a generation already live
- * here reads the row at its next request or park, and its exit owes the
- * wake; otherwise the resume ({@link resumeOnSession}) starts on the
- * session's fork, and tells the user whatever the run did not take, once.
+ * What a resume's answer owes once no caller holds it (a wake took it,
+ * `handedOff`), whoever opened it: it follows an owning parent, and tells
+ * the user what the run did not take, or a fault. A caller that holds the
+ * answer acts on it itself.
  */
-export function startFollowUpWake(
+const answered = <R>(
   runId: RunId,
   session: SessionHandle,
-): Effect.Effect<Effect.Effect<void>> {
-  return Effect.suspend(() =>
-    session.runs.get(runId)?.live === true
-      ? Effect.succeed(Effect.void)
-      : Effect.map(startResume(runId, session), Effect.asVoid),
+  attempt: RunAttempt,
+  decided: Effect.Effect<ResumeAttempt, Error, R>,
+): Effect.Effect<ResumeAttempt, Error, R> => {
+  // Latched: a run id deleted and re-created is not the run this wake was for.
+  let missing = false;
+  const gone = () => (missing ||= session.view.run(runId) === undefined);
+  return decided.pipe(
+    Effect.tap((result) => {
+      if (!attempt.handedOff) return Effect.void;
+      // The parent's open call reattaches the run it owns.
+      if ('ownedBy' in result)
+        return Effect.flatten(wakeRun(result.ownedBy, session));
+      if (gone() || ('started' in result && result.delivered))
+        return Effect.void;
+      return session.interactions.emit(
+        'requestShowInstruction',
+        {
+          key: 'resumeRefused',
+          message:
+            'failed' in result
+              ? describeFollowUpFailure(result.failed)
+              : FOLLOW_UP_WAKE_FAILED_MESSAGE,
+          showSuppress: false,
+        },
+        { replayWhenAttached: true },
+      );
+    }),
+    Effect.tapCause((cause) => {
+      if (!attempt.handedOff || Cause.hasInterruptsOnly(cause) || gone())
+        return Effect.void;
+      const error = Cause.squash(cause);
+      return Effect.logError(`Failed to resume run ${runId}`).pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel(CHANNEL),
+        Effect.andThen(
+          presentRunFailure(session.interactions, error, 'Resume failed: '),
+        ),
+      );
+    }),
   );
-}
+};
 
 /**
  * The one admission of a message to a run: every host and tool sends

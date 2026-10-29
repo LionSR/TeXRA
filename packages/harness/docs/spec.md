@@ -235,7 +235,7 @@ refuses the store; a plugin kind whose plugin this build lacks is left out of
 reads and passes the gate (`controllers/session/rowCodec.ts:287`,
 `controllers/session/Database.ts:431-442`). A run whose rows do not decode
 cannot be opened or resumed (`shared/session/runHistory.ts:140-146`,
-`agent/runtime/resumeRun.ts:251-252`).
+`agent/runtime/resumeRun.ts:258-266`).
 
 ## 3. Row kinds
 
@@ -523,7 +523,7 @@ so the live path and the resume path are the same steps
 program, `runToolUse`, with `resume: true`, through the same run program as a
 fresh launch, `executeAgent` without a registration
 (`agent/runtime/executeAgent.ts:127-130`), reached from `resumeRun`
-(`agent/runtime/resumeRun.ts:310`).
+(`agent/runtime/resumeRun.ts:314`).
 
 A resume MUST be refused when the rows hold no opened run
 (`agent/runtime/loop/runProgram.ts:81-87`). A fresh launch MUST be refused when
@@ -658,19 +658,24 @@ writes no row (`controllers/session/Database.ts:464-465`, `:967-975`).
 
 A resume MUST hold the run's claim before it folds the run's history or decides
 who owns the run, and holds it until the launched run holds its own
-(`agent/runtime/resumeRun.ts:188-200`). Its earlier reads only refuse a run
+(`agent/runtime/resumeRun.ts:180-192`). Its earlier reads only refuse a run
 whose records are gone, and one deleted or whose input closed while they ran
-(`agent/runtime/resumeRun.ts:175-187`). A run another live process holds answers
-`owned_elsewhere` (`agent/runtime/resumeRun.ts:196`). A second resume of a run
-another resume in this process is already handling joins that resume and gets
-its result (`agent/runtime/resumeRun.ts:6`, `:130`); otherwise a run live in
-this process is refused (`agent/runtime/resumeRun.ts:174`). A child an open call
+(`agent/runtime/resumeRun.ts:168-179`). A run another live process holds answers
+`owned_elsewhere` (`agent/runtime/resumeRun.ts:192`). A resume is the run's
+activation from the call: a second resume of the run joins it and gets its
+result, a stop reaches it before it admits the run (a user's stop ends the run
+cancelled, and nothing is admitted after), and the last caller to leave before
+any took its answer stops it (`agent/runtime/resumeRun.ts`,
+`agent/followUp/ToolUseFollowUp.ts`); a run another launch holds in this
+process is refused. A child an open call
 of its parent owns resumes through that parent
-(`agent/runtime/resumeRun.ts:199-200`, `:104-114`).
+(`agent/runtime/resumeRun.ts:193-196`; a resume a wake took follows it
+itself, whoever opened it, `agent/followUp/ToolUseFollowUp.ts:262-263`, and
+the package's resume through `effect/sessionPrograms.ts:222`).
 
 The resume first takes the run's claim in its own transaction, before its
-ownership, admission and blocker checks (`agent/runtime/resumeRun.ts:158-166`,
-`:195`); a crash after it leaves the claim moved and no activation row. The
+ownership, admission and blocker checks (`agent/runtime/resumeRun.ts:184-192`,
+`:193-211`); a crash after it leaves the claim moved and no activation row. The
 activation is then one transaction: it verifies the claim the process holds,
 folds the stored rows, and commits the activation rows with a `request.decided`
 `cancel` for every request the previous owner left unbound
@@ -699,7 +704,7 @@ A process MUST NOT:
   (`controllers/session/Database.ts:615-627`)
 - answer a request of a run a live process holds (`NotOwner`)
   (`controllers/session/SessionRequests.ts:161-173`)
-- resume a run a live process holds (`agent/runtime/resumeRun.ts:195-196`)
+- resume a run a live process holds (`agent/runtime/resumeRun.ts:184-192`)
 - write rows to a store a newer build wrote (giving back its own claims is
   allowed) (`controllers/session/Database.ts:439-442`)
 
@@ -852,7 +857,7 @@ What survives at each commit point follows from sections 2 to 8:
 - `request.opened`: The request stays pending under the same id, or is cancelled
   if unbound (section 7.2).
 - `run.end` with `halted`: The lifecycle is over. A recipe task stays finished,
-  and a resume answers `finished` (`agent/runtime/resumeRun.ts:203-206`); a
+  and a resume answers `finished` (`agent/runtime/resumeRun.ts:200-201`); a
   loop-driven conversation continues on a resume in a new lifecycle, from the
   phase `halted` kept (`shared/session/runActions.ts:94-96`).
 
