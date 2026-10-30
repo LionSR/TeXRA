@@ -42,7 +42,7 @@ import {
   warn,
 } from './childTurnResult';
 import { formatDelivery } from './deliveryEnvelope';
-import { presentRunFailure } from './terminalResultToast';
+import { presentRunFailure } from './HostInteractions';
 import type { SessionHandle } from './SessionHandle';
 
 /**

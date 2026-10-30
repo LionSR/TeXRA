@@ -49,7 +49,7 @@ import { TestClock } from 'effect/testing';
 import * as Reactivity from 'effect/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
-import * as toast from '@agent/runtime/terminalResultToast';
+import * as toast from '@agent/runtime/HostInteractions';
 
 vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   ...(await importOriginal<

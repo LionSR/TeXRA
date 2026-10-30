@@ -1,8 +1,21 @@
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Predicate } from 'effect';
+import type { ResultEvent } from '@agent/trace';
+import {
+  agentErrorPresentation,
+  classifyAgentError,
+  primaryAgentError,
+} from '@common/errors/agentErrorClassification';
+import {
+  attachErrorPresentationClaimed,
+  hasErrorPresentationClaimed,
+} from '@common/errors/sdkError/errorMetadata';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import type { RunId } from '@shared/schemas';
+import { Rejected } from '@shared/session/runtimeRequest';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { HostPresentationFailed } from './runtimePresentationEvents';
+import type { SessionHandle } from './SessionHandle';
 import type {
   AgentRuntimeEmitOptions,
   HostPresentation,
@@ -261,4 +274,66 @@ export class SessionHostInteractions implements HostInteractions {
       }
     });
   }
+}
+
+/**
+ * Present a classified failure on a host: its instruction (a missing API key)
+ * or its error toast. An abort presents nothing. Replayed to a surface that
+ * attaches later, so no guidance is lost for want of an attached host.
+ */
+function presentAgentFailure(
+  interactions: Pick<SessionHostInteractions, 'emit'>,
+  error: Parameters<typeof agentErrorPresentation>[0],
+): Effect.Effect<void> {
+  const toast = agentErrorPresentation(error);
+  const options = { replayWhenAttached: true };
+  if (toast?.type === 'instruction')
+    return interactions.emit('requestShowInstruction', toast.payload, options);
+  if (toast?.type === 'error')
+    return interactions.emit('requestShowError', toast.payload, options);
+  return Effect.void;
+}
+
+/**
+ * The session's one terminal-result presenter, run for each `run.end` row the
+ * session authored once its view has folded: a root run's failure goes to the
+ * attached host or is replayed to the next one. A child's (its attached
+ * parent is the view's, which has the run's `run.start` once it ended) is
+ * its parent's to report.
+ */
+export function presentTerminalResult(
+  session: SessionHandle,
+  event: ResultEvent,
+): Effect.Effect<void> {
+  return !event.error || session.view.run(event.runId)?.parentId != null
+    ? Effect.void
+    : presentAgentFailure(session.interactions, event.error);
+}
+
+/**
+ * Present a failed run from its raw error: the primary failure, classified,
+ * worded as `prefix` plus its text (a `Rejected` request's reason), and
+ * replayed to a surface that attaches later, then marked presented. A
+ * failure already presented (here, by the terminal-result presenter, or
+ * through a targeted notice) presents nothing. A `Session` start's
+ * `RunFailure` is presented as the failure it carries.
+ */
+export function presentRunFailure(
+  interactions: Pick<SessionHostInteractions, 'emit'>,
+  error: unknown,
+  prefix = '',
+): Effect.Effect<void> {
+  if (hasErrorPresentationClaimed(error)) return Effect.void;
+  attachErrorPresentationClaimed(error);
+  const primary = primaryAgentError(
+    Predicate.isTagged(error, 'RunFailure') && 'cause' in error
+      ? error.cause
+      : error,
+  );
+  const text =
+    primary instanceof Rejected ? primary.reason : toErrorMessage(primary);
+  return presentAgentFailure(interactions, {
+    kind: classifyAgentError(primary),
+    message: `${prefix}${text}`,
+  });
 }

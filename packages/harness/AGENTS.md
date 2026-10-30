@@ -58,7 +58,7 @@ A run is one Effect program in `packages/harness/src/agent/runtime/loop/`, with 
 - **Write points are the contract**: a `model.message attempt` before a billed request leaves the process; the `response` row before any tool dispatches; `tool.intent` as each call's body starts (after hooks, guard and approval); `tool.result` before the loop continues; a `run.position` for every wait and halt. Every fact the loop branches on is a row field the run state reads; no row restates loop state.
 - **One retry loop**, `runInvocation` (`run/invocation.ts`), for every model call. `nextAttempt` (`shared/session/inFlight.ts`) decides from the invocation's rows: each failed attempt commits a `failed` row naming what follows (`retry`, `unchain`, `ask`, `stop`, `cancel`). Automatic resends run under the process's `ModelRetryGate` within a budget counted from the rows, so a crash does not refill it; past it, the `failed` row opens a retry request and the person's `request.decided` starts the next attempt. An approved attempt with no recorded outcome is asked about again, never resent. Provider SDK retries stay disabled. A compaction summary records its attempts (`purpose: 'summary'`); a helper call records none.
 - **Interruption is the fiber's.** A durable append is uninterruptible; there is no `AbortSignal` threading inside the loop.
-- **Lifecycle**: `executeAgent` / `AgentRunLifecycle` handle init and finalize; the loop only executes.
+- **Lifecycle**: `executeAgent` opens the run and runs the loop; `AgentRunLifecycle` ends it (`endRun`, `endActivation`); the loop only executes.
 
 ## Event channels and cards
 
