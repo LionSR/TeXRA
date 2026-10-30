@@ -67,7 +67,7 @@ import type { DatabaseNotOwner } from '@texra-ai/harness/schemas';
 import type { LocalSession, SessionOpenError } from '@texra-ai/harness';
 
 /** What a headless run starts: a host's whole configuration (the
- *  `StartInput` arm a host launches with), under the id the CLI minted. */
+ *  `StartInput` case a host launches with), under the id the CLI minted. */
 type CliRunRequest = Required<
   Pick<Extract<StartInput, { readonly config: unknown }>, 'config' | 'runId'>
 >;
@@ -220,7 +220,7 @@ export function executeCliConfig(
     }
     // The run id is decided before launch: a shutdown stops the launch
     // through the session's registry under it (`runs.stop`), which the
-    // launch tracks (or attaches to a parked predecessor) before the first
+    // launch tracks (or attaches to a waiting predecessor) before the first
     // resume lineage read, so this kill has a target from that first await on.
     const request: CliRunRequest = {
       config: parsed.success,
@@ -289,10 +289,10 @@ export function executeCliConfig(
     let admitted = false;
     let ended = false;
     const shutdownFinalizationDone = Deferred.makeUnsafe<void>();
-    /** The run's end as the view folds it: a level that holds the run (its
-     *  committed opening always folds) and shows it no longer live here, or
+    /** The run's end as the view shows it: a level that holds the run (its
+     *  committed opening always appears) and shows it no longer live here, or
      *  one without it once it was seen or once its rows are gone (it was
-     *  deleted). The wait also ends with the session's fold. */
+     *  deleted). The wait also ends with the session view. */
     const settledHere = (runId: RunId): Effect.Effect<void> =>
       Effect.suspend(() => {
         let seen = false;
@@ -304,7 +304,7 @@ export function executeCliConfig(
               return Effect.succeed(!run.ownedHere || !isLiveRun(run));
             }
             if (seen) return Effect.succeed(true);
-            // Not folded yet, or deleted before it was: its rows decide.
+            // Not in the view yet, or deleted before it was: its rows decide.
             return session
               .records(runId)
               .exists()

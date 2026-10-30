@@ -11,7 +11,7 @@ import { Deferred, Effect, Semaphore } from 'effect';
  * the barrier: it frees its permit before it wakes its waiters, so a fiber
  * that just released it and asks again barges ahead of a queued write. The
  * barrier therefore counts queued writes itself and waits on a `Deferred` the
- * last one settles; it depends on no scheduler wake ordering.
+ * last one finishes; it depends on no scheduler wake ordering.
  */
 export class SerializedWrites {
   private readonly permit = Semaphore.makeUnsafe(1);

@@ -68,7 +68,7 @@ export interface CliHistoryEntry {
   readonly model: string;
   readonly status: HistoryRunStatus;
   /** `records(id).readResumable()`'s answer, the one `texra resume` acts on.
-   *  Ownership and loadability are settled when the run is opened.
+   *  Ownership and loadability are decided when the run is opened.
    *  Independent of the frozen `status`: a failed run can be resumable. */
   readonly resumable: boolean;
   /** The listing's cause when the run cannot resume in this build (its rows
@@ -84,7 +84,7 @@ export interface CliHistoryEntry {
 interface CliHistoryDetails {
   readonly id: RunId;
   readonly status: HistoryRunStatus;
-  /** The run's launch facts as the session's fold holds them. */
+  /** The run's launch facts as the session view holds them. */
   readonly run: Pick<RunView, 'launchedAt' | 'parentId' | 'description'> | null;
   readonly config: AgentConfig | null;
   readonly result: RunResult | null;
@@ -204,7 +204,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       ],
       { concurrency: 8 },
     );
-    // The model the run is on, as the view folds it for the listing too.
+    // The model the run is on, as the view derives it for the listing too.
     const currentModel = config ? (run?.model ?? undefined) : undefined;
     // The same rule the listing applies, from the same facts: `status` is a
     // frozen contract, so `history show` must not answer it differently from
@@ -494,7 +494,7 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.agent,
-    // The model the run is on, as the listing folds it from the run's
+    // The model the run is on, as the listing derives it from the run's
     // snapshots; the record keeps the model it was launched with.
     model: entry.model ?? config.model,
     status,

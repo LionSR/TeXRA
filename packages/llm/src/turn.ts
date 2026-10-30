@@ -657,7 +657,7 @@ export interface Model {
   };
 }
 
-/** A foreground turn's completed result: the fold over `streamTurn`'s events. */
+/** A foreground turn's completed result: assembled from `streamTurn`'s events. */
 export const completedTurn = Effect.fn('llm.generateTurn')(function* (
   events: Stream.Stream<TurnEvent, ModelError>,
 ) {

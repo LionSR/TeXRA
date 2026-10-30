@@ -105,12 +105,12 @@ export function registerBuiltinSlashCommands(options: {
   onAgentSelect?: SelectHandler<string>;
   /** `/agent` → a team preset, by id. */
   onTeamSelect?: SelectHandler<string>;
-  /** After a sign-in, sign-out, preference, or key save settles: the chat
+  /** After a sign-in, sign-out, preference, or key save finishes: the chat
    *  re-checks whether a model can answer now. */
   onAccountChanged?: () => Effect.Effect<void, never, ProcessServices>;
   canSelectAgent?: () => boolean;
   getApprovalPolicy?: () => ApprovalPolicy;
-  /** `/approval`'s choice: the chat's own launch policy, settled once the
+  /** `/approval`'s choice: the chat's own launch policy, finished once the
    *  chat's run has recorded it. */
   onApprovalPolicySelect?: (policy: ApprovalPolicy) => Effect.Effect<void>;
   /** The project's policy `/config` wrote. Stays a plain callback: the

@@ -15,9 +15,9 @@ import type { RunStopReason } from '@texra-ai/harness';
 import type { Effect } from 'effect';
 
 /**
- * The claimed root run's settlement, as the slot holds it: the program that
+ * The claimed root run's end, as the slot holds it: the program that
  * completes when that run finishes, fails or is interrupted. It is the
- * `Deferred.await` of the deferred the claiming path settles, so the slot
+ * `Deferred.await` of the deferred the claiming path finishes, so the slot
  * stores a value every reader runs on its own fiber instead of a promise the
  * claim had to run a fiber to produce.
  */
@@ -26,7 +26,7 @@ export type RootRunSettled = Effect.Effect<void, Error>;
 /**
  * The root session's run claim: the run it claimed (cleared while a new run
  * is pending, unlike `rootRunId`, which stays put as the transcript anchor
- * across pending windows), that run's settlement, and whether it finished.
+ * across pending windows), that run's end, and whether it finished.
  * Held in a signal, not in `TuiSession` fields, so renders read the claim
  * reactively instead of calling impure session closures that memoized
  * renders would cache stale (#8273). Written only through `TuiSession`.
@@ -138,8 +138,8 @@ export class TuiSession {
   }
 
   /** The claim `runSettled` belongs to is over. A claim the slot no longer
-   *  holds is left alone: a chain that settles after the slot moved on (a
-   *  resume taken up before the run it replaced finished settling) must not
+   *  holds is left alone: a chain that finishes after the slot moved on (a
+   *  resume taken up before the run it replaced had ended) must not
    *  free the claim that replaced it. */
   markRunCompleted(runSettled: RootRunSettled): void {
     if (!this.holdsClaim(runSettled)) return;
@@ -169,12 +169,12 @@ export class TuiSession {
     return true;
   }
 
-  /** The claimed run's phase, as the session view folds it. */
+  /** The claimed run's phase, as the session view derives it. */
   status(): RunPhase | undefined {
     return runStopFacts.get().status;
   }
 
-  /** Whether the claimed run is live, as the session view folds it: what
+  /** Whether the claimed run is live, as the session view derives it: what
    *  a model switch reaches. */
   runLive(): boolean {
     const run = runViewOf(sessionView().get(), this.runId);

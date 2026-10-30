@@ -163,7 +163,7 @@ function runHistoryDelete(
   return Effect.gen(function* () {
     const stores = yield* initCliPlatform(context);
     // Both deletion paths read the same session: opened once here, in the
-    // one program the run arm runs.
+    // one program the run case runs.
     const session = yield* stores.session;
 
     // `--all` is destructive and unrecoverable. Refuse it unless the caller

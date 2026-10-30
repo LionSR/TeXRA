@@ -170,7 +170,7 @@ export async function runChat(
   const initialResume = init.initialResume;
   // The chat's hold on the background service, for its whole life.
   const chatScope = Scope.makeUnsafe();
-  // One startup program; an early exit is its `exitCode` arm.
+  // One startup program; an early exit is its `exitCode` case.
   const startup = await runtime.runPromise(
     Effect.gen(function* () {
       // Every chat is a client of the one service, so other terminals and
@@ -383,7 +383,7 @@ export async function runChat(
         ? [{ field: 'limit' as const, runId: run.id, limit: policy }]
         : []),
     ];
-    // Durable before the selection settles, so nothing the chat sends next
+    // Durable before the selection finishes, so nothing the chat sends next
     // runs under, or inherits, the grant just left.
     return Effect.forEach(
       changes,
@@ -421,12 +421,12 @@ export async function runChat(
   // and the exit drain awaits that close.
   const onChatClose = (release: () => void): void =>
     runtime.runSync(Scope.addFinalizer(chatScope, Effect.sync(release)));
-  // The one session state the TUI renders (PRD 10.1): the session's fold
+  // The one session state the TUI renders: the session view
   // bridged into a signal, its transcript tier subscribed for the runs this
   // terminal paints. Bound before anything reads the view: the terminal
   // title below derives its attention state from it on install.
   const session = new TuiSession(runsElsewhere);
-  // A dead fold (`view.changes` failing) is the end of this session: the
+  // A dead session view (`view.changes` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
   // failure on every exit path, since they all read `session.runExitCode`.
   const unbindSessionView = bindSessionView(runtime, runSession.view, {
@@ -739,7 +739,7 @@ export async function runChat(
     runtime.runFork(chatController.resume(initialResume.id));
   }
 
-  // The one "agent finished" notification: the claimed run's turn settles,
+  // The one "agent finished" notification: the claimed run's turn finishes,
   // at WAITING ("your turn", alongside the StatusBar pill) or at its outcome.
   // A run that ends after waiting was already announced, and a stop the user
   // asked for is not news.
@@ -764,7 +764,7 @@ export async function runChat(
   } finally {
     // The exit policy reads the view (a resumable idle root) after it has
     // released the store, so the bridge outlives the chat's scope. The
-    // teardown settles only on the graceful path, whose drain closes that
+    // teardown finishes only on the graceful path, whose drain closes that
     // scope first (a signal exit ends in process.exit and never returns
     // here), so nothing subscribed to the view outlives the bridge.
     await exitController.gracefulTeardown();

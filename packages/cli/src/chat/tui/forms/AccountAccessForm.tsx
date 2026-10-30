@@ -41,7 +41,7 @@ interface AccountAccessFormProps {
   /** The three setting slots the access overview reads its preferences from. */
   readonly stores: SettingsStores;
   /**
-   * The runtime that settles the access overview (its credentials come from
+   * The runtime that runs the access overview (its credentials come from
    * the runtime's `Secrets`): the overview is a program, and Ink components
    * own no runtime, so it arrives as a prop from the surface that opened
    * this form.

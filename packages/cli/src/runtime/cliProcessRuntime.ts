@@ -1,5 +1,5 @@
 /**
- * The CLI's install of the process Effect runtime (PRD 7.7).
+ * The CLI's install of the process Effect runtime.
  *
  * Several CLI entries need one, and any of them may be first: `initCliPlatform`,
  * which opens the workspace state and config stores as Effect programs before

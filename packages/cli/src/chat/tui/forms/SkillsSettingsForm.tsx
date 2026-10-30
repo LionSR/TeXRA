@@ -30,7 +30,7 @@ interface SkillsSettingsFormProps {
    *  slots their switches live in. */
   readonly roots: WorkspaceRoots;
   /**
-   * The process runtime the shared write path settles on. Ink components run
+   * The process runtime the shared write path runs on. Ink components run
    * no Effect of their own, so it arrives as a prop from `/config`.
    */
   readonly runtime: ProcessRuntime;

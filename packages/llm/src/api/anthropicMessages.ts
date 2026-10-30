@@ -391,7 +391,7 @@ function blockPart(
 /**
  * One response's Messages events as parts. The wire opens one block at a
  * time, in order; message_delta carries the stop and cumulative usage, and
- * message_stop settles them.
+ * message_stop finishes them.
  */
 function anthropicWire() {
   let started = false;
@@ -670,7 +670,7 @@ export function anthropicMessagesModel(
         return assembleTurn(
           chunks.pipe(
             Stream.mapEffect(wire.parts),
-            // message_stop settles the response; HTTP EOF is not an additional condition.
+            // message_stop finishes the response; HTTP EOF is not an additional condition.
             Stream.takeUntil(() => wire.stopped()),
           ),
           { origin, provider: 'Anthropic' },
