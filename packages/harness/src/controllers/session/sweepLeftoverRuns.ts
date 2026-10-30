@@ -54,18 +54,15 @@ const endInterrupted = Effect.fn('endInterrupted')(function* (
     to: parentId,
     end: 'failed',
   });
-  yield* Effect.scoped(
-    Effect.andThen(
-      session.log.hold(runId, { ends: true }),
-      finalizeRun(session, {
-        runId,
-        outcome: RUN_OUTCOME.FAILED,
-        ownerless: true,
-        lastTurn: turnResultPart(session, result, undefined),
-      }),
-    ),
-  );
-  return (yield* session.log.facts(runId))?.end != null;
+  // A crash, not a stop: the ownerless end takes the run's claim itself, and
+  // records none while the result waits for a parent another process holds.
+  const { end } = yield* finalizeRun(session, {
+    runId,
+    outcome: RUN_OUTCOME.FAILED,
+    ownerless: true,
+    lastTurn: () => Effect.succeed(turnResultPart(session, result, undefined)),
+  });
+  return end !== null;
 });
 
 /**
