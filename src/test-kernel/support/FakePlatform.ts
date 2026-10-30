@@ -28,7 +28,9 @@ import type { SecretsFailed } from '@texra-ai/llm';
  * One real temporary directory per worker process, holding both the fake
  * filesystem root and the shared global-storage directory. Cached on
  * `globalThis` so a suite that resets its module registry keeps the same
- * directories, and removed when the worker exits.
+ * directories. It sits in the run's temp folder, which the run's teardown
+ * removes (`testTempRoot.ts`): the pool ends a worker without its exit
+ * handlers.
  *
  * The realpath is resolved so the paths handed out are canonical: on macOS
  * `os.tmpdir()` traverses the `/tmp` to `/private/tmp` symlink and on Windows
@@ -43,7 +45,6 @@ function workerTempHome(): string {
       mkdtempSync(path.join(os.tmpdir(), 'texra-fake-')),
     );
     globals.__texraFakeHome__ = home;
-    process.on('exit', () => rmSync(home, { recursive: true, force: true }));
   }
   return globals.__texraFakeHome__;
 }
