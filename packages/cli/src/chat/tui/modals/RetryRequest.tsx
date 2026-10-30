@@ -29,7 +29,7 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   // The modal only names the answer. `y` retries on the credentials the run
   // already has; `approvalDecisionArm` turns a retry on personal credentials
   // into the host's `useOwnApiKey`, which asks for the key when none is
-  // stored and then settles the retry on it.
+  // stored and then runs the retry on it.
   const retryDecision: SurfaceDecision = { action: 'retry' };
   const switchDecision: SurfaceDecision = {
     action: 'retry',

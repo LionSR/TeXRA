@@ -63,7 +63,7 @@ export function nextWordCursor(value: string, cursor: number): number {
   return c + (/^\s*\S*/.exec(value.slice(c))?.[0].length ?? 0);
 }
 
-/** Delete the span [from, to) and park the caret at its start. */
+/** Delete the span [from, to) and leave the caret at its start. */
 function deleteSpan(value: string, from: number, to: number): TextEdit {
   return { value: value.slice(0, from) + value.slice(to), cursor: from };
 }

@@ -20,7 +20,7 @@ const CODEX_DEFAULT_INSTRUCTIONS = "Follow the user's instructions.";
  * The Responses route of a vendor serving OpenAI's format on its own
  * endpoint: stateless unless the vendor stores and chains, no background,
  * socket, files or token count, and only the request fields it documents.
- * `null` for OpenAI, Meta and xAI, which the Responses arm binds.
+ * `null` for OpenAI, Meta and xAI, which the Responses case binds.
  */
 function vendorResponses(facts: Facts): ResponsesConfiguration | null {
   const { base, config, controls, spec } = facts;
@@ -180,7 +180,7 @@ export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
   // control; a chained request reuses the stored instructions.
   const xai = config.provider === ModelProvider.XAI;
   // Background responses serve the GPT family only, as the
-  // `useBackgroundResponses` setting describes; another model on this arm
+  // `useBackgroundResponses` setting describes; another model on this case
   // (an o-series deep-research model, Meta's) streams in the foreground.
   const background =
     !xai && config.id.toLowerCase().startsWith('gpt')
@@ -205,7 +205,7 @@ export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
       maxOutputTokens: controls.maxOutputTokens,
       temperature: controls.temperature,
       // Stored server-side, which `previous_response_id` chaining and
-      // background submission read; the Codex arm above is stateless.
+      // background submission read; the Codex case above is stateless.
       store: true,
       parallelToolCalls: controls.parallelToolCalls,
       reasoning:

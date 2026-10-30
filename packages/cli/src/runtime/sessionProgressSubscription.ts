@@ -17,9 +17,9 @@ import { writeNdjsonStdout } from './logSinks';
 import type { LocalSession } from '@texra-ai/harness';
 
 /**
- * One live child on the `run.children` record, from the fold's own row. The
- * status is the fold's (`RunPhase`, or `ready` before the child's
- * `run.activate` folds), not a launcher's optimistic reading of it.
+ * One live child on the `run.children` record, from the session view's own row. The
+ * status is the session view's (`RunPhase`, or `ready` before the child's
+ * `run.activate` is applied), not a launcher's optimistic reading of it.
  */
 function childRow(child: RunView) {
   return {
@@ -37,26 +37,26 @@ function childRow(child: RunView) {
  * contract is a versioned projection of `SessionEvent`, not a second
  * vocabulary (`contract: 2`, stamped by the NDJSON sink).
  *
- * It reads `view.events(view.head())` directly (PRD 10.3): every event
+ * It reads `view.events(view.head())` directly: every event
  * above the store's head in commit order, never the view, so a
  * `stage.start` no surface subscribed to still becomes its line and two
  * same-type updates never collapse.
  *
  * The one record that is not an event is `run.children`, a parent's live
- * child list. It is derived from the fold — the parent's `childIds` and
- * each child's own `RunView` — on every level the fold publishes, and
+ * child list. It is derived from the session view — the parent's `childIds` and
+ * each child's own `RunView` — on every level the session view publishes, and
  * written only when that derivation changes, so it carries no channel of its
- * own. It is ordered against the lines by the fold's own cursor: a view that
- * has folded past the tail's last written row waits for the tail, so a
+ * own. It is ordered against the lines by the session view's own cursor: a view that
+ * has advanced past the tail's last written row waits for the tail, so a
  * child list never precedes a row it already reports. Like the tail, it is scoped
- * to the attach boundary: the child lists the fold holds at attach seed the
+ * to the attach boundary: the child lists the session view holds at attach seed the
  * comparison without being written, so a resumed session does not replay
  * its earlier parents.
  *
  * Detaching drains: the tail runs to the head captured at detach, so the
- * last line published before the run settled is on the wire before the
+ * last line published before the run finished is on the wire before the
  * caller writes its result record, and the child list is derived once more
- * from the drained fold. The drain waits on the tail's own coordinate
+ * from the drained view. The drain waits on the tail's own coordinate
  * (`view.events`'s `drained`), not on the events: a transcript row the
  * store no longer holds emits nothing, and the ordinal captured at detach may
  * be exactly that row's.
@@ -92,11 +92,11 @@ export const attachCliSessionProgressProjection = Effect.fn(
   /** The ordinal the projection attached at: the tail's own boundary. */
   const attachedAt = delivered;
   /** The child list last derived per parent, so an unchanged one writes no line.
-   *  A fold level at or below `attachedAt` only seeds it: a resumed session's
-   *  earlier parents, settled or not, are history the tail does not replay
+   *  A session view level at or below `attachedAt` only seeds it: a resumed session's
+   *  earlier parents, finished or not, are history the tail does not replay
    *  either, so only a child list a post-attach row changes is written. */
   const writtenChildren = new Map<RunId, string>();
-  /** A fold ahead of the tail: its child list waits for the lines that produced
+  /** A view level ahead of the tail: its child list waits for the lines that produced
    *  it, so a child list never precedes the row it reports. */
   let childrenPending = false;
   const emitChildren = (): void => {
@@ -121,13 +121,13 @@ export const attachCliSessionProgressProjection = Effect.fn(
         emit('run.children', { runId: parentRunId, children });
     }
   };
-  // Seed from the fold as it stands at attach, before any fiber can see a
-  // later level: the store's head bounds the fold, so this writes nothing.
+  // Seed from the session view as it stands at attach, before any fiber can see a
+  // later level: the store's head bounds the session view, so this writes nothing.
   emitChildren();
 
   const settleIfDrained = (): void => {
     if (stopAt === undefined || delivered < stopAt) return;
-    // `stopAt` is the store's head, which no fold can be past, so the
+    // `stopAt` is the store's head, which no view level can be past, so the
     // child list gate is open here and the last one goes out with the drain.
     emitChildren();
     Deferred.doneUnsafe(drained, Effect.void);
@@ -161,7 +161,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
         Effect.sync(() => passed(commit)),
       ),
     ),
-    // The child list's own source: the fold, whose every level is a candidate.
+    // The child list's own source: the session view, whose every level is a candidate.
     yield* fork(
       Stream.runForEach(session.view.changes, () => Effect.sync(emitChildren)),
     ),

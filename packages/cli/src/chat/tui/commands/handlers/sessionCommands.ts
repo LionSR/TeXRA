@@ -228,7 +228,7 @@ function renameCliTask(
 
 /**
  * `/fork`: a new task holding the focused conversation up to its latest
- * settled point, which this chat then continues; the original keeps its
+ * completed point, which this chat then continues; the original keeps its
  * history and stays in `/resume`. Its transcript starts empty, so a line
  * says where it came from.
  */

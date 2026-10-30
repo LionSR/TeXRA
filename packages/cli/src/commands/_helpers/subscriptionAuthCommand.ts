@@ -23,7 +23,7 @@ import { booleanArg, GLOBAL_ARGS } from './globalArgs';
 import { cliProgressWriter, emitCliResult } from './output';
 
 /**
- * Fold one network/auth call into a result the caller narrows with one
+ * Turn one network/auth call into a result the caller narrows with one
  * `if (!result.ok) return CliExitCode.ModelOrNetworkError;` line; a failure
  * (typed or defect) is already written to stderr. Scoped to just the call, so
  * success-path code such as payload emission still runs.

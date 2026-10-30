@@ -76,8 +76,8 @@ export function foregroundSurfaceKind({
  * Whether the pending request shows on the selected stream: a stream-less
  * request everywhere, a stream's own request on that stream and on every
  * ancestor. A descendant's decision is taken from the parent the user is on,
- * so presenting one never moves the selection (the fold's
- * `approval: 'descendant'`, PRD 5.2); a request outside the selected subtree
+ * so presenting one never moves the selection (the session view's
+ * `approval: 'descendant'`); a request outside the selected subtree
  * waits behind the status bar's count and the session list's marker until
  * the user goes to it.
  */

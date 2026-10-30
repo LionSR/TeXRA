@@ -16,7 +16,7 @@ interface EnabledModelsFormProps {
   readonly availableRows?: number;
   /**
    * The global state the enabled-model list reads and each toggle writes, with
-   * the runtime that settles that write: Ink components own no runtime, so both
+   * the runtime that runs that write: Ink components own no runtime, so both
    * arrive as props from the surface that opened the form.
    */
   readonly state: StateStore;
