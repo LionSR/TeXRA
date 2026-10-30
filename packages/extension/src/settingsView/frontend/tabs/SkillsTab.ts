@@ -1,6 +1,7 @@
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
+import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
@@ -20,6 +21,7 @@ import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
 import { catalogDetailStyles } from '../components/shared/catalogDetailStyles';
+import { settingSignal } from '../settingsState';
 import type { SettingsCatalogItem } from '../components/shared/SettingsCatalog';
 import '../components/shared/SettingsCatalog';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -33,7 +35,7 @@ const SOURCE_LABELS: Record<ActiveSkillSourceScope, string> = {
 };
 
 @customElement('skills-tab')
-export class SkillsTab extends LitElement {
+export class SkillsTab extends SignalWatcher(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -72,12 +74,19 @@ export class SkillsTab extends LitElement {
       }
     `,
   ];
-  @property({ type: Boolean }) masterEnabled = false;
-  @property({ attribute: false }) disabledSources: ActiveSkillSourceScope[] =
-    [];
   @property({ attribute: false }) skills: readonly SkillDisplayItem[] = [];
   @property({ attribute: false }) issues: readonly SkillDisplayIssue[] = [];
   @state() private selectedKey: string | null = null;
+
+  private get masterEnabled(): boolean {
+    return settingSignal<boolean>(AGENT_SKILLS_CONFIG_KEY).get();
+  }
+
+  private get disabledSources(): readonly string[] {
+    return settingSignal<readonly string[]>(
+      WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+    ).get();
+  }
 
   /** A delta, not the list: the host applies it to the list it holds, so a
    *  second switch before this one's snapshot returns cannot undo it. */
@@ -167,7 +176,7 @@ export class SkillsTab extends LitElement {
       this.skills[0];
     return html`
       <div class="settings-section">
-        ${renderStateSettingToggleRow({ key: AGENT_SKILLS_CONFIG_KEY, checked: this.masterEnabled })}
+        ${renderStateSettingToggleRow(AGENT_SKILLS_CONFIG_KEY)}
       </div>
       <settings-catalog
         label="Skills"

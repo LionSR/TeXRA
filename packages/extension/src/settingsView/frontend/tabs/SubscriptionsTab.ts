@@ -48,12 +48,8 @@ export class SubscriptionsTab extends LitElement {
     `,
   ];
 
-  /** Parent-owned acknowledgement generation for restoring rejected edits. */
-  @property({ attribute: false }) ackGeneration = 0;
   @property({ attribute: false }) subscriptionAuth: SubscriptionAuthStatuses =
     {};
-  @property({ attribute: false }) chatgptCodexContextWindow: number | null =
-    null;
   @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =
     null;
 
@@ -90,10 +86,8 @@ export class SubscriptionsTab extends LitElement {
           }),
         })}
         <subscription-section
-          .ackGeneration=${this.ackGeneration}
           .provider=${CHATGPT_SUBSCRIPTION_SECTION}
           .auth=${this.subscriptionAuth.chatgpt ?? null}
-          .contextWindow=${this.chatgptCodexContextWindow}
           .usage=${this.usage?.chatgpt ?? null}
           .now=${this._ticker.now}
         ></subscription-section>
