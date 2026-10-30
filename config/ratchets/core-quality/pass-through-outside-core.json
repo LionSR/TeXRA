@@ -26,7 +26,6 @@
   "packages/extension/src/commands.ts": 1,
   "packages/extension/src/commands/git/gitCommands.ts": 1,
   "packages/extension/src/frontend/hosts/VscodeUiHost.ts": 3,
-  "packages/extension/src/progressView/extensionHostRequests.ts": 1,
   "packages/extension/src/progressView/frontend/components/RunTabs.ts": 1,
   "packages/extension/src/progressView/frontend/components/SessionComposer.ts": 1,
   "packages/extension/src/progressView/frontend/progressWebview.ts": 1,
