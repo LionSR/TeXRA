@@ -247,7 +247,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                   run.fileService.locateSource(p),
                 ),
                 bound.config.capabilities,
-                logger,
                 run.session.roots.config,
               )
             : Effect.succeed({ parts: [], kinds: [] }),
@@ -550,22 +549,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   return yield* Effect.acquireUseRelease(enter, loopBody, (cell, exit) =>
     // However the run ends, a stop's interruption included, a finished
     // summary lands before the halt (its usage is the run's); one still
-    // running stops with the run.
-    Effect.andThen(
-      compaction
-        .settle(cell, 'the run stopped')
-        .pipe(
-          Effect.catch((error) =>
-            Effect.sync(() =>
-              logger.warn(
-                'A finished background compaction could not be recorded as the run stopped',
-                { data: error },
-              ),
-            ),
-          ),
-        ),
-      settleRun(cell, followUps)(exit),
-    ),
+    // running stops with the run. A summary the store refuses fails the
+    // run with the refusal, which its end records; the lease is released
+    // either way.
+    compaction
+      .settle(cell, 'the run stopped')
+      .pipe(Effect.asVoid, Effect.ensuring(settleRun(cell, followUps)(exit))),
   ).pipe(
     Effect.map((loop) => result(loop.outcome, loop.state)),
     Effect.catchCause(stoppedBy(logger, `Tool-use run ${runId}`)),

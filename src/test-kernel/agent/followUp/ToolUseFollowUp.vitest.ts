@@ -110,7 +110,13 @@ function recordedFollowUps(
         | ((tx: SessionTransaction) => Effect.Effect<A, E>),
     ) =>
       typeof work === 'function'
-        ? publisher.withPermits(1)(work({ append, claim: () => Effect.void }))
+        ? publisher.withPermits(1)(
+            work({
+              append,
+              claim: () => Effect.void,
+              release: () => Effect.void,
+            }),
+          )
         : publisher.withPermits(1)(runStateAppend(append)(work)),
     runRows: (id, read) =>
       Effect.sync(() => {

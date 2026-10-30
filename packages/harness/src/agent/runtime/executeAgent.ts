@@ -7,7 +7,7 @@
  * through `programs.executeAgent`; it runs on a fiber `RunRegistry.start`
  * forked, which provides the session's `Runs`.
  */
-import { Deferred, Effect, Exit, Fiber, Layer } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Layer, Scope } from 'effect';
 
 import { ModelProvider } from '@texra-ai/llm';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
@@ -119,11 +119,20 @@ const enterRun = Effect.fn('enterRun')(function* (
       .slice(0, carried)
       .flatMap((e) => runEventDraft(runId, e) ?? []);
   });
+  // A fresh run's claim is its birth's: held for the run's scope from the
+  // commit that created it, let go as the scope closes, after its end. A
+  // claim the run cannot hold fails it, like any refused write.
+  const scope = yield* Effect.scope;
   const entered: RunLaunch['entry']['entered'] = (state) =>
     Effect.sync(() => {
       for (const e of held?.slice(carried) ?? []) session.log.publish(runId, e);
       held = null;
     }).pipe(
+      Effect.andThen(
+        registration === null
+          ? Effect.void
+          : Scope.provide(session.log.hold(runId, { ends: true }), scope),
+      ),
       Effect.andThen(Deferred.succeed(opened, undefined)),
       Effect.andThen(options.onAdmitted?.(runId, state.commit) ?? Effect.void),
     );

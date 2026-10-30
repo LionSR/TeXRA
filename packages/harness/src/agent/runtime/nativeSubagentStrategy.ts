@@ -56,6 +56,8 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
         readonly definition: PreparedAgentDefinition;
         /** The child's registration, which its opening commits. */
         readonly registration: RegisterRunOptions;
+        /** Told the commit of the child's opening (`ExecuteAgentOptions`). */
+        readonly onAdmitted?: ExecuteAgentOptions['onAdmitted'];
         readonly resume?: never;
       }
     | {
@@ -142,6 +144,7 @@ export function createNativeSubagentStrategy(
           return yield* programs.executeAgent(params.definition, params.runId, {
             ...options,
             registration: { ...params.registration, seed: params.seed },
+            ...(params.onAdmitted && { onAdmitted: params.onAdmitted }),
           });
         }),
       ),

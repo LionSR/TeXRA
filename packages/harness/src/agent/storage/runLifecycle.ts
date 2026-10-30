@@ -7,7 +7,10 @@ import stableStringify from 'safe-stable-stringify';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import type { TransactionPart } from '@agent/runtime/childTurnResult';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type {
+  SessionHandle,
+  SessionTransaction,
+} from '@agent/runtime/SessionHandle';
 import { consumedRows, haltedPositionRow } from '@agent/runtime/loop/rows';
 import {
   RUN_OUTCOME,
@@ -19,7 +22,6 @@ import {
   type RunId,
   type RunOutcome,
 } from '@shared/schemas';
-import type { Append } from '@shared/session/sessionEvents';
 import { unloadable } from '@shared/session/runHistory';
 import {
   activationDrafts,
@@ -28,7 +30,11 @@ import {
   registrationDrafts,
   runEndDraft,
 } from '@shared/session/runFacts';
-import type { RunHistoryDraft, RunInputDraft } from '@shared/session/runState';
+import type {
+  RunHistoryDraft,
+  RunInputDraft,
+  RunState,
+} from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   getRunRecords,
@@ -160,14 +166,37 @@ const endOf = ({ outcome, error, output }: Omit<RunEnd, 'usage'>) =>
 
 type Ending = Omit<FinalizeRunInput, 'lastTurn'>;
 
-/** A run's end in `append`'s job (halt, unread input, closure, `run.end`,
- *  last turn); an unloadable run's, all but the halt, with a warning. */
+/** The cancellation of every request `state` leaves open: a run that ends
+ *  answers them, so no surface keeps offering one nobody waits on. */
+const cancelledRequests = (
+  runId: RunId,
+  state: RunState,
+): readonly RunHistoryDraft[] =>
+  Object.entries(state.requests).flatMap(([requestId, { decision }]) =>
+    decision === null
+      ? [
+          {
+            type: 'request.decided' as const,
+            aggregateId: qualifyAggregateId('run', runId),
+            requestId,
+            decision: { action: 'cancel' as const, cause: 'The run ended.' },
+          },
+        ]
+      : [],
+  );
+
+/** A run's end in `tx`'s job (the requests it leaves open, its halt, unread
+ *  input, closure, `run.end`, last turn); an unloadable run's, all but the
+ *  halt, with a warning. A last turn held for a parent another process has
+ *  open lets the run's claim go with it, so whoever delivers it ends the
+ *  run under a claim nobody holds. */
 export const endIn = Effect.fn('endIn')(function* (
   session: SessionHandle,
-  append: Append,
+  tx: Pick<SessionTransaction, 'append' | 'release'>,
   input: Ending,
   last?: TransactionPart,
 ) {
+  const { append } = tx;
   const { runId, outcome, error } = input;
   const facts = yield* session.log.facts(runId);
   // A run never created has nothing to end: its launch reports the failure.
@@ -213,11 +242,15 @@ export const endIn = Effect.fn('endIn')(function* (
   const cell = yield* Effect.result(
     session.runHistory.open(runId, { within: append }),
   );
-  if (Result.isSuccess(cell))
-    return yield* Effect.as(
-      cell.success.append(halt, Effect.succeed(beside)),
-      result,
-    );
+  if (Result.isSuccess(cell)) {
+    const cancels =
+      written === null
+        ? []
+        : cancelledRequests(runId, yield* cell.success.current);
+    yield* cell.success.append([...cancels, ...halt], Effect.succeed(beside));
+    if (lastTurn.held === true) yield* tx.release(runId);
+    return result;
+  }
   if (!unloadable(cell.failure)) return yield* cell.failure;
   yield* Effect.logWarning(
     `Run ${runId} ends unloaded: ${cell.failure.message}`,
@@ -265,7 +298,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   const end = (ending: Ending, lastTurn?: TransactionPart) =>
     Effect.exit(
       session.log.transact((tx) =>
-        endIn(session, tx.append, ending, lastTurn).pipe(Effect.scoped),
+        endIn(session, tx, ending, lastTurn).pipe(Effect.scoped),
       ),
     );
   const stood = yield* beforeEnd(session, runId, ownerless === true).pipe(

@@ -79,6 +79,10 @@ export interface SessionTransaction {
    *  or its own) and leave it for the run's driver; given back if the job
    *  fails, or if what it committed never reaches the view. */
   readonly claim: (runId: RunId) => Effect.Effect<void, ClaimError>;
+  /** Let `runId`'s claim go with this job's commit: a child whose last turn
+   *  waits for a parent another process holds, so whoever delivers it
+   *  takes the claim with no owner to prove dead. */
+  readonly release: (runId: RunId) => Effect.Effect<void, DatabaseWriteFailed>;
 }
 
 /**
@@ -313,7 +317,7 @@ export interface SessionRequests {
     runId: RunId,
     requestId: string,
     decision: RequestDecision,
-  ) => Effect.Effect<boolean, ClaimError>;
+  ) => Effect.Effect<boolean, DatabaseReadFailed | LogWriteError>;
   /** The `request.decided` row answering `requestId`, read from the tail
    *  above `from`: what a run blocked on a request waits for. Fails when the
    *  log closes first, which a waiting caller reads as a cancellation. */
