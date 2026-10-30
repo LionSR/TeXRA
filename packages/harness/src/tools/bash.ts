@@ -403,7 +403,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
   const result = yield* executeCommand(command, {
     cwd,
     // The call's own session roots: a `git commit` the agent runs
-    // carries this paper's configured identity.
+    // carries this project's configured identity.
     settings: toolCall.env.roots,
     buffer: false,
     timeout: timeoutMs,
@@ -532,6 +532,11 @@ export const BashTool = defineTool({
     'Execute shell commands directly in the workspace directory. Commands run from the project root automatically. Available environment variables: $PROJECT_DIR (workspace path), $PROJECT_NAME (project name). Returns stdout on success, throws error with stderr on failure. Use run_in_background for long-running commands.',
   schema: BashInputSchema,
   // The command this call runs; the loop gets it approved before the body.
-  guard: { bash: (input: BashInput) => Effect.succeed(input.command) },
+  guard: {
+    command: {
+      text: (input: BashInput) => Effect.succeed(input.command),
+      grant: 'bash',
+    },
+  },
   execute: executeBashTool,
 });

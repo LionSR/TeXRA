@@ -1,5 +1,5 @@
 /**
- * The trace viewer's host (PRD one-fold-three-renderers, 7.7): a page-local
+ * The trace viewer's host: a page-local
  * `HostBridgeApi` installed at module evaluation, before the progress bundle
  * resolves its bridge, so the unchanged webview runs against an exported
  * trace exactly as it runs against a live host. A `Subscribe` is answered

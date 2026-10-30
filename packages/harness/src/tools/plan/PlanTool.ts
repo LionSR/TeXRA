@@ -28,7 +28,6 @@ import {
   type ToolFact,
   type ToolResult,
 } from '@shared/schemas';
-import { refusalOf } from '@shared/session/approvalDecision';
 import { launchBackgroundScript } from '@tools/codemode/backgroundScript';
 import { defineTool } from '@tools/core/definition';
 import { errorResult, executed } from '@tools/core/result';
@@ -108,9 +107,10 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   const { session, runId } = call.run;
   // A plan call, by the response its result names (`RunFacts.calls`).
   const issued = (yield* session.runHistory.load(runId))?.calls ?? {};
-  const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
-    'tool.result',
-  ]);
+  const { results } = yield* session.log.runRows(
+    qualifyAggregateId('run', runId),
+    'results',
+  );
   const { runs } = SubscriptionRef.getUnsafe(session.view.ref);
   // A goal that ended still holds the conversation while work it started
   // (a round's background agent) runs on.
@@ -121,10 +121,9 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
       (run.durableOutcome === null || run.childIds.some(stillRunning))
     );
   };
-  const running = rows
-    .flatMap((row) => {
-      if (row.type !== 'tool.result') return [];
-      const { responseId, callId, result } = row.payload;
+  const running = results
+    .flatMap((payload) => {
+      const { responseId, callId, result } = payload;
       const launched =
         result.status === 'executed'
           ? Schema.decodeUnknownResult(LaunchedSchema)(result.value)
@@ -227,8 +226,6 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   // Tell a parent of this run that the proposal was withdrawn.
   call.run.callbacks.onProgress?.({ kind: 'plan', plan: null });
 
-  const refusal = refusalOf('planApproval', result);
-
   // 'cancelled' and 'policy' differ only in wording: a host cancel with an
   // optional cause vs a policy denial with its reason.
   const denialResult = (
@@ -250,13 +247,13 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
     );
   };
 
-  switch (refusal.action) {
+  switch (result.action) {
     case 'cancel':
-      return yield* denialResult('cancelled', refusal.cause ?? undefined);
+      return yield* denialResult('cancelled', result.cause ?? undefined);
     case 'deny':
-      return yield* denialResult('denied', refusal.reason);
+      return yield* denialResult('denied', result.reason);
     case 'reject': {
-      const feedback = refusal.feedback?.trim();
+      const feedback = result.feedback?.trim();
       const feedbackNote = feedback
         ? `\nUser feedback: ${feedback}`
         : '\nNo specific feedback was provided.';

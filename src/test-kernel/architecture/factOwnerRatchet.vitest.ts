@@ -51,6 +51,8 @@ const THIS_FILE = 'src/test-kernel/architecture/factOwnerRatchet.vitest.ts';
 const REDUCERS: Readonly<Record<string, string>> = {
   'packages/harness/src/shared/session/runRows.ts':
     'what applyRunRow folds onto RunState and RunView (runRows.ts)',
+  'packages/harness/src/shared/session/runRowReads.ts':
+    'RunRows, a row as its own record or a decision (runRowReads.ts)',
   'packages/harness/src/shared/session/runState.ts': 'RunState (runState.ts)',
   'packages/harness/src/shared/session/turnRowHandlers.ts':
     'RunState (runState.ts)',
@@ -70,7 +72,9 @@ const VOCABULARY = new Set([
 ]);
 
 const RUN_REGISTRY = 'packages/harness/src/agent/runtime/runRegistry.ts';
-const RUN_LIFECYCLE = 'packages/harness/src/agent/storage/runLifecycle.ts';
+/** The lifecycle rows, built beside the readers of their facts; the
+ *  transactions that commit them are `agent/storage/runLifecycle.ts`'s. */
+const LIFECYCLE_ROWS = 'packages/harness/src/shared/session/runFacts.ts';
 
 type Use = 'assigns' | 'constructs' | 'reads';
 
@@ -102,7 +106,7 @@ const OWNERS: readonly {
   },
   {
     fact: "a run's terminal row, written once per lifecycle",
-    owner: RUN_LIFECYCLE,
+    owner: LIFECYCLE_ROWS,
     use: 'constructs',
     name: 'run.end',
     also: {
@@ -112,7 +116,7 @@ const OWNERS: readonly {
   },
   {
     fact: "a run's activation",
-    owner: RUN_LIFECYCLE,
+    owner: LIFECYCLE_ROWS,
     use: 'constructs',
     name: 'run.activate',
   },

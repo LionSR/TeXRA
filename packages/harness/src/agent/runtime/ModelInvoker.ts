@@ -130,8 +130,6 @@ const PARTIAL_TEXT_TAIL_MAX = 4096;
 interface InvocationResponse {
   readonly kind: 'response';
   readonly state: RunState;
-  /** The assistant text of the turn, joined; empty when it produced none. */
-  readonly text: string;
 }
 
 /** A failure's error is the run state's `lastError`. */
@@ -371,7 +369,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           });
         }
         yield* reportUsage(usageLog, bound, usage, attribution, session.roots);
-        return { kind: 'response', state: next, text };
+        return { kind: 'response', state: next };
       });
 
       /**
@@ -391,74 +389,66 @@ export const modelInvokerLayer = (): Layer.Layer<
         FileSystem.FileSystem
       > {
         const state = yield* cell.current;
+        const mode = yield* bound.delivery;
+        yield* saveDebug(state.messages, 'messages', invocation, bound);
+        // The run's context size (`contextTokens`: the last response's
+        // provider-counted usage plus an estimate of what was added since).
+        // An input that alone exceeds the window is refused before it is
+        // billed; one leaving too little room for the binding's output limit
+        // asks for a smaller output rather than letting the provider reject it.
+        const { contextWindow } = bound.config;
+        let maxOutputTokens: number | undefined;
+        if (mode !== 'background' && contextWindow > 0) {
+          const inputTokens = contextTokens(state);
+          if (inputTokens > contextWindow) {
+            return yield* Effect.fail(
+              new ModelError({
+                kind: 'context-overflow',
+                message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${contextWindow} tokens.`,
+              }),
+            );
+          }
+          const limit = bound.maxOutputTokens;
+          if (limit !== null && inputTokens + limit > contextWindow) {
+            maxOutputTokens = reducedOutputBudget(
+              contextWindow - inputTokens,
+              bound.textOnly ? TOKEN_SAFETY_BUFFER : TOOL_USE_SAFETY_BUFFER,
+            );
+            logContextManagementEvent(
+              logger,
+              `Token count (${inputTokens}) + max output tokens (${limit}) exceeds context window (${contextWindow}). Reducing to ${maxOutputTokens}.`,
+              {
+                action: 'max_tokens_reduced',
+                tokensBefore: inputTokens,
+                contextWindow,
+                utilizationBefore: roundedUtilizationPercent(
+                  inputTokens,
+                  contextWindow,
+                ),
+                originalMaxTokens: limit,
+                reducedMaxTokens: maxOutputTokens,
+                details: 'tooluse',
+              },
+            );
+          }
+        }
         // The request an attempt admits: the folded history with its media
         // resolved (the one read of media bytes), the caller's system and
         // tools, the run as its cache key, and the last response's
         // continuation while the binding matches its whole origin. A resume
         // rebuilds it from the same inputs; no row copies history.
-        const turnRequest: TurnRequest = {
-          mode: yield* bound.delivery,
+        const resolved = yield* bound.model.prepareTurn({
+          mode,
           ...(request.system !== undefined ? { system: request.system } : {}),
           messages: yield* providerMessages(state.messages, session.log.blobs),
           ...(request.tools !== undefined ? { tools: request.tools } : {}),
           ...(request.toolChoice !== undefined
             ? { toolChoice: request.toolChoice }
             : {}),
+          ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
           ...chainedContinuation(state, bound.origin),
           cacheKey: run.runId,
-        };
-        let resolved = yield* bound.model.prepareTurn(turnRequest);
-        yield* saveDebug(state.messages, 'messages', invocation, bound);
-        // The run's context size (`contextTokens`: the last response's
-        // provider-counted usage plus an estimate of what was added since).
-        // An input that alone exceeds the window is refused before it is
-        // billed; one leaving too little room for the requested output
-        // shrinks that output rather than letting the provider reject it.
-        if (resolved.mode === 'foreground' && bound.config.contextWindow > 0) {
-          const inputTokens = contextTokens(state);
-          if (inputTokens > bound.config.contextWindow) {
-            return yield* Effect.fail(
-              new ModelError({
-                kind: 'context-overflow',
-                message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${bound.config.contextWindow} tokens.`,
-              }),
-            );
-          }
-          const { controls } = resolved;
-          const requested =
-            'maxOutputTokens' in controls ? controls.maxOutputTokens : null;
-          if (
-            requested !== null &&
-            inputTokens + requested > bound.config.contextWindow
-          ) {
-            const reduced = reducedOutputBudget(
-              bound.config.contextWindow - inputTokens,
-              bound.textOnly ? TOKEN_SAFETY_BUFFER : TOOL_USE_SAFETY_BUFFER,
-            );
-            logContextManagementEvent(
-              logger,
-              `Token count (${inputTokens}) + max output tokens (${requested}) exceeds context window (${bound.config.contextWindow}). Reducing to ${reduced}.`,
-              {
-                action: 'max_tokens_reduced',
-                tokensBefore: inputTokens,
-                contextWindow: bound.config.contextWindow,
-                utilizationBefore: roundedUtilizationPercent(
-                  inputTokens,
-                  bound.config.contextWindow,
-                ),
-                originalMaxTokens: requested,
-                reducedMaxTokens: reduced,
-                details: 'tooluse',
-              },
-            );
-            // The clamp is part of the request, so it is prepared again:
-            // execution never reapplies defaults over a resolved turn.
-            resolved = yield* bound.model.prepareTurn({
-              ...turnRequest,
-              maxOutputTokens: reduced,
-            });
-          }
-        }
+        });
         // The durable fact before the billed request, with the prepared
         // turn it sends, which the rows alone must rebuild.
         yield* cell.append((state) =>

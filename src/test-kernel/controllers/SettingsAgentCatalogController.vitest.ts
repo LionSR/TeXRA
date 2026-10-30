@@ -12,7 +12,7 @@ import {
   CUSTOM_TEAMS_KEY,
   type AgentModePreset,
 } from '@texra/shared/agentTeams';
-import { workspaceTeams } from '@texra/shared/agentTeams';
+import { teamMembers } from '@texra/shared/agentTeams';
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
 
 /** The catalog consumes the native agent list and the same entry lookup. */
@@ -67,7 +67,7 @@ function createController(customPresets: unknown) {
   const workspaceAgents = new WorkspaceAgentsController({
     repoState: workspaceState,
     globalState: new FakeStateStore(),
-    teams: workspaceTeams,
+    teamMembers,
     getAgents,
     resolveAgent: (identifier) =>
       AGENTS.find((entry) => agentMatchesIdentifier(entry, identifier)),

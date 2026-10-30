@@ -170,7 +170,7 @@ export async function runChat(
   const initialResume = init.initialResume;
   // The chat's hold on the background service, for its whole life.
   const chatScope = Scope.makeUnsafe();
-  // One startup program; an early exit is its `exitCode` arm.
+  // One startup program; an early exit is its `exitCode` case.
   const startup = await runtime.runPromise(
     Effect.gen(function* () {
       // Every chat is a client of the one service, so other terminals and
@@ -253,10 +253,6 @@ export async function runChat(
         writeTextStderr(agentEntry.message);
         return { exitCode: CliExitCode.Usage };
       }
-      // One API mode for the whole session: an explicit --api-mode/env
-      // override wins, otherwise the persisted account default. Model
-      // resolution, the no-models hints, and the header/status all read this
-      // same value so they can never disagree.
       const modelSelectionExit = yield* Effect.exit(
         credential.ready
           ? selectCliRunnableModel(
@@ -340,9 +336,17 @@ export async function runChat(
     ),
   );
   if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
-  const { services, runtimeSession, runSession, runsElsewhere, link } = startup;
-  const { defaults } = startup;
-  const { inputHistory, startupNotices, terminalCaps } = startup;
+  const {
+    services,
+    runtimeSession,
+    runSession,
+    runsElsewhere,
+    link,
+    defaults,
+    inputHistory,
+    startupNotices,
+    terminalCaps,
+  } = startup;
 
   // The policy this chat's launches ask for (`launchApproval`): its flag,
   // then each `/approval`.
@@ -383,7 +387,7 @@ export async function runChat(
         ? [{ field: 'limit' as const, runId: run.id, limit: policy }]
         : []),
     ];
-    // Durable before the selection settles, so nothing the chat sends next
+    // Durable before the selection finishes, so nothing the chat sends next
     // runs under, or inherits, the grant just left.
     return Effect.forEach(
       changes,
@@ -421,12 +425,12 @@ export async function runChat(
   // and the exit drain awaits that close.
   const onChatClose = (release: () => void): void =>
     runtime.runSync(Scope.addFinalizer(chatScope, Effect.sync(release)));
-  // The one session state the TUI renders (PRD 10.1): the session's fold
+  // The one session state the TUI renders: the session view
   // bridged into a signal, its transcript tier subscribed for the runs this
   // terminal paints. Bound before anything reads the view: the terminal
   // title below derives its attention state from it on install.
   const session = new TuiSession(runsElsewhere);
-  // A dead fold (`view.changes` failing) is the end of this session: the
+  // A dead session view (`view.changes` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
   // failure on every exit path, since they all read `session.runExitCode`.
   const unbindSessionView = bindSessionView(runtime, runSession.view, {
@@ -650,7 +654,6 @@ export async function runChat(
     },
   });
 
-  const stdoutColorEnabled = context.stdoutColorEnabled;
   const inkRef: { current?: InkInstance } = {};
   const viewportController = createTuiViewportController(inkRef);
   const ink = render(
@@ -671,7 +674,10 @@ export async function runChat(
       history={inputHistory}
     />,
     {
-      stdout: tuiOutputStreamForColor(process.stdout, stdoutColorEnabled),
+      stdout: tuiOutputStreamForColor(
+        process.stdout,
+        context.stdoutColorEnabled,
+      ),
       stderr: process.stderr,
       stdin: process.stdin,
       // Own Ctrl+C ourselves (App's unified useInput → exit()) instead of via
@@ -739,7 +745,7 @@ export async function runChat(
     runtime.runFork(chatController.resume(initialResume.id));
   }
 
-  // The one "agent finished" notification: the claimed run's turn settles,
+  // The one "agent finished" notification: the claimed run's turn finishes,
   // at WAITING ("your turn", alongside the StatusBar pill) or at its outcome.
   // A run that ends after waiting was already announced, and a stop the user
   // asked for is not news.
@@ -764,7 +770,7 @@ export async function runChat(
   } finally {
     // The exit policy reads the view (a resumable idle root) after it has
     // released the store, so the bridge outlives the chat's scope. The
-    // teardown settles only on the graceful path, whose drain closes that
+    // teardown finishes only on the graceful path, whose drain closes that
     // scope first (a signal exit ends in process.exit and never returns
     // here), so nothing subscribed to the view outlives the bridge.
     await exitController.gracefulTeardown();

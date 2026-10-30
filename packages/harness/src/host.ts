@@ -62,7 +62,6 @@ export {
   type WorkspaceAgentsControllerDeps,
   type WorkspaceAgentsEntry,
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
-export * from '@common/teams/TeamPlan';
 export type { AgentDelegationScope } from '@shared/schemas';
 export {
   AgentCustomizeRefused,
@@ -105,12 +104,12 @@ export {
 export {
   SessionHostInteractions,
   type HostInteractions,
+  presentRunFailure,
 } from '@agent/runtime/HostInteractions';
 // One program per pending request a host follows, while the view lists it.
 export { followPendingRequests } from './effect/requestAnswerer.js';
 export { buildDiffHunks, type DiffHunks } from '@utils/text/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
-export { presentRunFailure } from '@agent/runtime/terminalResultToast';
 // Which side of a trace event a run wrote.
 export type { TraceArm } from '@agent/trace';
 export type { AggregateId, SessionCloseReport } from '@shared/schemas';

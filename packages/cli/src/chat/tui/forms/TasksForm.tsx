@@ -229,10 +229,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
         ready
           .request({ kind: 'request.preview', runId: pending.runId, requestId })
           .pipe(
-            Effect.map((outcome) =>
-              outcome.kind === 'preview' ? outcome.preview : null,
-            ),
-            Effect.map((preview) =>
+            Effect.map(({ preview }) =>
               setPreviews((held) => new Map(held).set(requestId, preview)),
             ),
           ),
@@ -370,7 +367,6 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
                       })
                       .pipe(
                         Effect.map((outcome) => {
-                          if (outcome.kind !== 'followUp') return;
                           // Queued but not taken: the run did not wake, and
                           // waits for a resume before it reads the message.
                           const shown = presentFollowUpResult(outcome);

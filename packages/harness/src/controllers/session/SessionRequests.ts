@@ -30,6 +30,7 @@ import type {
 } from '@agent/runtime/SessionHandle';
 import { GlobalValues } from '@platform/processRuntime';
 import {
+  answerMismatch,
   qualifyAggregateId,
   requestParksItsCaller,
   type CommitOrdinal,
@@ -57,7 +58,7 @@ import type { ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runFiles, type RunFilesServices } from './deletionCleanup';
-import { answerToolEditRequest } from './SessionView';
+import { toolEditPreview } from './SessionView';
 
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
 type RequestServices = GlobalValues | RunFilesServices;
@@ -242,7 +243,7 @@ const decideRequest = (
     Effect.gen(function* () {
       const pending = pendingOf(deps, req.runId, req.requestId);
       if (pending === undefined) return yield* settled(req.runId);
-      // A request that parks its caller is answered by the fiber waiting on it,
+      // A request that blocks its caller is answered by the fiber waiting on it,
       // and that fiber died with the owner this decision takes over from:
       // recording a decision would clear the panel without doing what it says.
       // Resuming the run re-enters the call, which asks again and is answered then.
@@ -263,7 +264,13 @@ const decideRequest = (
       if (!(yield* write)) return yield* settled(req.runId);
       return done;
     });
-  const decided = decideUnderGrant(deps.session(), req, heldHere, answer);
+  // An answer its kind does not take is refused in the lane, before its grant.
+  const decided = Effect.suspend(() => {
+    const kind = pendingOf(deps, req.runId, req.requestId)?.payload.kind;
+    const reason = kind && answerMismatch(kind, req.decision, req.grant);
+    if (reason) return Effect.fail(new Rejected({ reason }));
+    return decideUnderGrant(deps.session(), req, heldHere, answer);
+  });
   return withPerKeyLane(
     deps.decisionLanes,
     `${req.runId}/${req.requestId}`,
@@ -380,7 +387,7 @@ const handle = (
     case 'run.rename':
       return rename(deps, req, heldHere);
     case 'run.files':
-      return runFiles(deps.session(), req);
+      return runFiles(deps.session(), registryOf(deps.session().runs), req);
     case 'run.fork':
       return forkRun(
         deps.session(),
@@ -393,11 +400,9 @@ const handle = (
     case 'request.decide':
       return decideRequest(deps, req, heldHere);
     case 'request.preview':
-    case 'request.edit':
-      return answerToolEditRequest(
-        deps.session().view,
-        req,
-        settled(req.runId),
+      return toolEditPreview(
+        deps.session().log,
+        pendingOf(deps, req.runId, req.requestId),
       );
     case 'policy.set':
       return withRunClaim(
@@ -448,7 +453,7 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
     }
     yield* requireRunAction(deps, req);
     const admitted = yield* admit(deps, req);
-    // This process holds the run's claim: a parked request has a fiber here.
+    // This process holds the run's claim: a blocked request has a fiber here.
     const heldHere =
       admitted.ownerId !== null &&
       SubscriptionRef.getUnsafe(deps.local).self.includes(admitted.ownerId);
@@ -472,10 +477,12 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
         reason: `The ${runNoun(deps.session(), runId)} changed after it was listed.`,
       });
     }
-    return yield* deleteAdmittedRun(deps, runId, admitted, mode);
+    yield* deleteAdmittedRun(deps, runId, admitted, mode);
   });
 
-  return { request, removeRun, ...deps.asks };
+  // cast: each case of `handle` answers with its own kind's outcome.
+  const perKind = request as SessionRequests['request'];
+  return { request: perKind, removeRun, ...deps.asks };
 }
 
 /** A decision for a request no longer pending: decided already, or never opened. */

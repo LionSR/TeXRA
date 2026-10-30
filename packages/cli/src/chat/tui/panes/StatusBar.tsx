@@ -51,7 +51,7 @@ interface StatusBarProps {
   /** The three setting slots the subscription route probe reads. */
   readonly stores: SettingsStores;
   /**
-   * The runtime that settles the quota and route programs (their credentials
+   * The runtime that runs the quota and route programs (their credentials
    * come from its `Secrets`), threaded from the chat surface that opened it —
    * this component owns no runtime of its own.
    */
@@ -71,8 +71,8 @@ interface StatusBarProps {
 /**
  * Poll `read` every `intervalMs` on the shared poll registry, and at once when
  * `key` changes. One rule governs staleness: a key already in flight is not
- * re-read, and only the latest request settles: a superseded read is
- * interrupted, as is the read in flight at unmount. The settled exit is
+ * re-read, and only the latest request finishes: a superseded read is
+ * interrupted, as is the read in flight at unmount. The finished exit is
  * returned only while its key is still current; an undefined key reads
  * nothing.
  */
@@ -186,7 +186,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ),
     CODEX_SUBSCRIPTION_REFRESH_MS,
   );
-  // Only a read of the current key settles here, so a probe that a newer key
+  // Only a read of the current key finishes here, so a probe that a newer key
   // overtook neither reports nor latches its failure.
   useEffect(() => {
     if (routeRead === undefined) return;
@@ -233,7 +233,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     : undefined;
   const now = useLiveNowMsSince([runStartedAt]);
 
-  // Every request awaiting the user: the fold's pending approvals, the
+  // Every request awaiting the user: the session view's pending approvals, the
   // same list the modal and the title read.
   const attention = useSignal(attentionRequestsSignal);
 

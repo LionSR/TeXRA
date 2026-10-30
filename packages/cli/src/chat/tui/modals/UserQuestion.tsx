@@ -464,7 +464,7 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
   if (question.allowFreeText && !question.multiSelect) {
     return <FreeTextQuestion {...variantProps} />;
   }
-  // Keyed by question index: the folded picker is now one element type across
+  // Keyed by question index: the merged picker is now one element type across
   // consecutive questions, so without a key React would reuse the instance and
   // carry the previous question's toggled set into the next one.
   return <ChoiceQuestion key={index} {...variantProps} />;

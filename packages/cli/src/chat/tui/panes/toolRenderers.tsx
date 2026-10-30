@@ -426,7 +426,7 @@ function buildStyledLines(
   ];
 }
 
-// Memoized per projected `ToolRow` object. The fold replaces a row object only
+// Memoized per projected `ToolRow` object. The session view replaces a row object only
 // when its source entry changed, so the derived lines (including diff hunks
 // for edit tools) can be shared by the live painter, the row estimator, the
 // bounded renderer, and static row counting instead of being recomputed for

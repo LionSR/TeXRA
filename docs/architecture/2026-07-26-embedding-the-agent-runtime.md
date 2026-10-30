@@ -74,7 +74,7 @@ to the files in `COMPOSITION_ROOT_FILES` (`eslint.config.mjs`).
 ### Feature-parity step — the `lean4` plugin's process layer
 
 TeXRA's Lean tools are the `lean4` plugin
-(`packages/texra/src/tools/integrationPlugins.ts`), and its process layer is
+(`packages/texra/src/tools/lean/plugin.ts`), and its process layer is
 the Lean language-server pool. By default that is the direct
 `lake env lean --server` pool (`directLeanLanguageServices`,
 `packages/texra/src/tools/lean/direct/directLspAdapter.ts`); a host passes its

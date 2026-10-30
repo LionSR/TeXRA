@@ -13,7 +13,6 @@ import {
   type ModelConfig,
   type ModelOrigin,
   type ReasoningRequest,
-  routeConfig,
 } from '@texra-ai/llm';
 import { bindModel as bindWireModel } from '@texra-ai/llm/node';
 
@@ -33,7 +32,7 @@ import type { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
 import type { ModelBackend } from '@shared/schemas';
 
-import { routeCredential, usageRouteOf } from './credentials';
+import { routeCredential } from './credentials';
 import { routePolicies, type CallFailure } from './failureInfo';
 import { ValidationModel, type RouteDecision } from './routeDecision';
 import type { BindRequest, BoundModel } from './ModelAccess';
@@ -58,7 +57,7 @@ export interface BindPlan {
 /**
  * How a turn on a binding is delivered: as background work when the binding
  * can, the turn is text-only and its provider's toggle is on. The toggles are
- * read live each turn, so a flip mid-run applies to the next one (#12710).
+ * read live each turn, so a flip mid-run applies to the next one.
  */
 function backgroundOn(
   toggles: BackgroundToggles,
@@ -123,10 +122,10 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
         message: `Model ${request.modelId} runs on the validation model, which this build does not carry.`,
       });
     }
-    const bound = canned.value.bind(requested);
     yield* reasoningOf(plan, requested);
     return {
       ...commonOf(plan),
+      ...canned.value.bind(requested),
       // The canned model reads text only.
       config: {
         ...requested,
@@ -137,12 +136,13 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
           supportsNativeAudio: false,
         },
       },
-      model: bound.model,
-      origin: bound.origin,
-      route: { kind: 'validation' },
-      forcedToolChoice: true,
+      billing: 'api-key',
+      maxOutputTokens: requested.maxOutputTokens,
+      background: false,
       persistentConnection: false,
-      billing: {},
+      serviceTier: null,
+      forcedToolChoice: true,
+      route: { kind: 'validation' },
       routes: routePolicies([requested.provider, 'validation'], requested.id),
       delivery: FOREGROUND,
     };
@@ -153,21 +153,25 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       message: `Model ${request.modelId} routes through ${route.kind}, which the run's ${backend} backend cannot bind.`,
     });
   }
-  const config = routeConfig(requested, route, facts);
+  if (route.kind === 'no-api-key') {
+    return yield* new RouteUnavailable({
+      reason: 'unavailable',
+      message: `Model "${requested.label}" has no direct API-key provider.`,
+    });
+  }
   const credential = yield* routeCredential(
     route,
-    config,
+    requested,
     facts,
     request.rejected,
   );
   const codex = credential.route === 'chatgpt-subscription';
-  const reasoning = yield* reasoningOf(plan, config);
+  const reasoning = yield* reasoningOf(plan, requested);
   const turn = { protocol, textOnly: request.textOnly };
   const bound = yield* bindWireModel({
-    protocol,
-    model: config,
+    model: requested,
+    route,
     endpoint: credential.endpoint,
-    credentialScope: `${credential.provider}:${credential.route}`,
     // A subscription token is the bearer where an API key would be; the
     // Codex session also names its account.
     credential: codex
@@ -177,13 +181,12 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
           accountId: credential.accountId,
         }
       : { kind: 'api-key', apiKey: credential.bearer },
-    billing: usageRouteOf(route),
     options: {
       maxOutputTokens: request.textOnly
-        ? config.maxOutputTokens
+        ? requested.maxOutputTokens
         : Math.max(
             1,
-            Math.floor(config.maxOutputTokens * TOOL_USE_MAX_OUTPUT_FACTOR),
+            Math.floor(requested.maxOutputTokens * TOOL_USE_MAX_OUTPUT_FACTOR),
           ),
       temperature: request.temperature,
       reasoning,
@@ -196,23 +199,16 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
   });
   return {
     ...commonOf(plan),
-    config,
-    model: bound.model,
-    origin: bound.origin,
+    ...bound,
     route,
-    forcedToolChoice: bound.forcedToolChoice,
-    persistentConnection: bound.persistentConnection,
     ...(credential.route === 'chatgpt-subscription' ||
     credential.route === 'xai-subscription'
       ? { subscriptionToken: credential.bearer }
       : {}),
-    billing: {
-      ...(bound.serviceTier === 'fast' && { serviceTier: 'fast' as const }),
-      ...(codex && credential.plan ? { plan: credential.plan } : {}),
-    },
+    ...(codex && credential.plan ? { plan: credential.plan } : {}),
     routes: routePolicies(
       [
-        config.provider,
+        bound.config.provider,
         credential.route,
         credential.endpoint,
         hash(
@@ -221,7 +217,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
           'base64url',
         ),
       ],
-      config.id,
+      bound.config.id,
     ),
     delivery: bound.background
       ? Effect.map(readBackgroundToggles(stores), (toggles) =>

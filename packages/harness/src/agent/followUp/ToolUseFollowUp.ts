@@ -5,9 +5,10 @@ import { runRejection } from '@agent/storage/resumability';
 import type { ResumeAttempt, ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { presentRunFailure } from '@agent/runtime/terminalResultToast';
+import { presentRunFailure } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import {
+  HARNESS_INSTRUCTION_KEY,
   type CommitOrdinal,
   type ResumeRefusal,
   type RunId,
@@ -82,7 +83,7 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
   not_parent:
     'This run is not a child of the sender: it was detached or launched by another run.',
   blocked:
-    "This task's agent, or the plugin it comes from, is missing, off or not trusted. It continues once that is fixed.",
+    "This task's agent, or the plugin it comes from, is missing, off or not trusted. It can continue once that is fixed.",
 };
 
 const FOLLOW_UP_WAKE_FAILED_MESSAGE =
@@ -169,8 +170,7 @@ export const openResume = (
       const runs = registryOf(options.session.runs);
       const found = runs.attemptOf(runId);
       if (found) return found;
-      const here = runs.get(runId);
-      if (here?.live || here?.launched) return undefined;
+      if (runs.get(runId) !== undefined) return undefined;
       const done = yield* Deferred.make<ResumeAttempt, Error>();
       const attempt: RunAttempt = {
         answer: Deferred.await(done),
@@ -228,7 +228,7 @@ const answered = <R>(
       return session.interactions.emit(
         'requestShowInstruction',
         {
-          key: 'resumeRefused',
+          key: HARNESS_INSTRUCTION_KEY.RESUME_REFUSED,
           message:
             'failed' in result
               ? describeFollowUpFailure(result.failed)
@@ -260,8 +260,8 @@ const answered = <R>(
  * row, this asks the inbox whether the run owes a resume (`Inbox.wake`) and
  * relays its answer.
  *
- * A generation live here decides for itself (`LiveRun.readsMessages`): a
- * one-shot loop ends after its turn and reads none. With no generation here,
+ * A launch in flight here decides for itself (`LiveRun.readsMessages`): a
+ * one-shot loop ends after its turn and reads none. With no launch here,
  * the persisted facts decide: the run's records whether it can continue
  * (a state that cannot be read cannot), and its input rows, in the send's
  * job, whether this message wakes it (`needsWake`).
@@ -277,7 +277,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   // resumes the run does not hold later sends for the resumed turn.
   const sent = yield* Effect.gen(function* () {
     const live = session.runs.get(runId);
-    if (live?.live === true) {
+    if (live !== undefined) {
       if (!live.readsMessages)
         return { status: 'failed', reason: 'one_shot' } as const;
     } else {
@@ -301,7 +301,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     return yield* session.followUps.send(
       runId,
       { ...item, ...media },
-      { hold, fromParent, wakesOnly: live?.live !== true },
+      { hold, fromParent, wakesOnly: live === undefined },
     );
   }).pipe(withPerKeyLane(session.followUps.sendLanes, runId));
   if ('status' in sent) return sent;

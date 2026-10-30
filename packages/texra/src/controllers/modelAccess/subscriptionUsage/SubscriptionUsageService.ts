@@ -87,7 +87,7 @@ interface SubscriptionUsageAdapter {
  * program: results are short-lived, coalesced per provider, and always
  * succeed with a snapshot rather than exposing provider transport failures to
  * extension or CLI consumers — the failure channel is `never`, so a caller
- * has no error arm to write.
+ * has no error case to write.
  */
 export class SubscriptionUsageService {
   private readonly stores: SettingsStores;
@@ -136,7 +136,7 @@ export class SubscriptionUsageService {
     Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
   > {
     // Each adapter fetch is already a program over the `HttpClient` service,
-    // so the client's own failure reaches the fold below unchanged.
+    // so the client's own failure reaches the handler below unchanged.
     // `REQUEST_TIMEOUT_MS` is the one deadline over the request and body read.
     return Object.freeze({
       chatgpt: {

@@ -22,6 +22,7 @@ import {
   type RequestDecision,
   type RunId,
 } from '@shared/schemas';
+import { isRequestDecision, recordOf } from '@shared/session/runRowReads';
 
 import type { TraceDocument } from './traceDocumentSchema';
 
@@ -91,14 +92,15 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
     trace: {
       runId,
       events: displayEvents.map((event) => {
-        if (event.type === 'run.start')
+        const { start } = recordOf(event);
+        if (start !== null)
           return {
-            ...event,
+            ...start,
             origin: null,
             parent: null,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           };
-        if (event.type === 'request.decided')
+        if (isRequestDecision(event))
           return {
             ...event,
             origin: null,

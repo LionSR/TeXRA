@@ -44,12 +44,11 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<ResumabilityDecision> {
   const read = yield* session.log.facts(runId).pipe(Effect.result);
-  // An earlier build's row: this build cannot open the run, and says so.
-  const refusal =
-    read._tag === 'Failure' ? earlierRefusal(read.failure) : undefined;
-  if (refusal !== undefined)
-    return { kind: 'earlier_build', cause: refusal.message };
   if (read._tag === 'Failure') {
+    // An earlier build's row: this build cannot open the run, and says so.
+    const refusal = earlierRefusal(read.failure);
+    if (refusal !== undefined)
+      return { kind: 'earlier_build', cause: refusal.message };
     const cause = `run state could not be read (${toErrorMessage(read.failure)})`;
     yield* Effect.logWarning(`Run ${runId}: ${cause}`).pipe(
       withLogChannel(CHANNEL),

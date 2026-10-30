@@ -30,7 +30,7 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   launch: HostRunActions['runValidated'],
 ) {
   // A configuration that does not parse fails the command, so its caller
-  // hears the refusal instead of a settled launch that never started.
+  // hears the refusal instead of a finished launch that never started.
   const { wrapped, config } = yield* Effect.try({
     try: () => {
       const wrapped =

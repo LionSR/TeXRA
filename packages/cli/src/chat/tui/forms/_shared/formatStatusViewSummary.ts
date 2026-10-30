@@ -1,4 +1,4 @@
-/** Shared status-view fold: before the status loads there is no label, so the
+/** Shared status-view summary: before the status loads there is no label, so the
  *  summary is the `checking` placeholder while loading (unless the load
  *  errored) and 'Status unavailable' otherwise; once loaded, an error or a
  *  refresh annotates the loaded label. */

@@ -24,6 +24,7 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   type RunId,
 } from '@shared/schemas';
+import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { Rejected } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { generateRunId } from '@utils/core';
@@ -89,13 +90,14 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
     );
   }
   // The cut is a position row: a turn boundary of the source, not any seq.
-  const parks = (yield* session.log.rows(aggregate, ['run.position'])).filter(
-    (row) =>
-      row.type === 'run.position' &&
-      (before === undefined
-        ? row.payload.at === 'waiting' || row.payload.at === 'halted'
-        : row.commit < before &&
-          ['waiting', 'halted', 'turn.begin'].includes(row.payload.at)),
+  const parks = (yield* session.log.runRows(
+    aggregate,
+    'positions',
+  )).positions.filter((row) =>
+    before === undefined
+      ? row.payload.at === 'waiting' || row.payload.at === 'halted'
+      : row.commit < before &&
+        ['waiting', 'halted', 'turn.begin'].includes(row.payload.at),
   );
   const settledAt = (seq: number) =>
     Effect.map(session.runHistory.load(from, seq), (state) =>
@@ -146,8 +148,8 @@ const viewRows = (
   messages: RunState['messages'],
 ): RunHistoryDraft[] => {
   const { input } = state;
-  const named = [input.system, input.instruction].flatMap((digest) =>
-    digest === undefined ? [] : [digest],
+  const named = [input.system, input.instruction].filter(
+    (digest) => digest !== undefined,
   );
   // The copied messages name their media by address: the fork's row links
   // the blobs, so deleting the source keeps them.
@@ -186,7 +188,6 @@ export const forkRun = Effect.fn('forkRun')(function* (
   from: { readonly id: RunId; readonly uid: string },
   at: number | null,
 ): Effect.fn.Return<RunId, Rejected | Error> {
-  // The title the source shows, with its authorship.
   const cutAt = yield* cutOf(session, from.id, at);
   const { seq: cut, state, start, title, record } = cutAt;
   const runId = generateRunId();
@@ -248,7 +249,10 @@ export const forkSeed = Effect.fn('forkSeed')(function* (
   /** The source's row the child is bound as of (`undefined`: its latest). */
   boundAt: number | undefined,
 ): Effect.fn.Return<
-  { readonly record: AgentConfig; readonly seed: RunHistoryDraft[] },
+  {
+    readonly record: AgentConfig;
+    readonly seed: NonNullable<RegisterRunOptions['seed']>;
+  },
   Rejected | Error
 > {
   const { state, record } = yield* cutOf(session, from, null, before);
@@ -270,15 +274,18 @@ export const forkSeed = Effect.fn('forkSeed')(function* (
   const model = bound.modelId ?? record.model;
   const binding =
     bound.backend === null
-      ? []
-      : [
-          configRow(runId, { ...record, model }, model, {
-            backend: bound.backend,
-            declinedRoutes: bound.declinedRoutes,
-          }),
-        ];
+      ? null
+      : { backend: bound.backend, declinedRoutes: bound.declinedRoutes };
   return {
     record: { ...record, model },
-    seed: [...viewRows(runId, state, messages), ...binding],
+    seed: {
+      rows: [
+        ...viewRows(runId, state, messages),
+        ...(binding === null
+          ? []
+          : [configRow(runId, { ...record, model }, model, binding)]),
+      ],
+      binding,
+    },
   };
 });

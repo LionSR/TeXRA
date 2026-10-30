@@ -41,7 +41,7 @@ export interface NodeWorkspaceRootsInit {
 /**
  * Build the `WorkspaceRoots` for one workspace folder: the canonical physical
  * root, the pinned storage path, and the config/state stores opened for it.
- * Every host (and the desktop, once per open paper) builds its roots here so
+ * Every host (and the desktop, once per open project) builds its roots here so
  * the config-provider choice cannot drift.
  */
 export function createNodeWorkspaceRoots(

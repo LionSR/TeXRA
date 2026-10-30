@@ -63,7 +63,7 @@ export interface CliConfigFormProps {
 export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   const { roots, runtime } = props;
   // The status reads are programs like the save and remove rows below them,
-  // so this surface settles all of them on the runtime it was handed.
+  // so this surface runs all of them on the runtime it was handed.
   const apiKeys = useAsyncResource({
     load: () => Effect.flatMap(Secrets, loadApiKeyStatusMap),
     runtime,
@@ -212,7 +212,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             statusView={apiKeyStatusView}
             runtime={runtime}
             // The save and the refresh that follows it are one program; the
-            // form settles it on the runtime this surface handed it.
+            // form runs it on the runtime this surface handed it.
             onSave={(provider, key) =>
               Effect.gen(function* () {
                 yield* commitCliProviderApiKey(roots, provider, key);

@@ -468,12 +468,14 @@ export const CodexTool = defineTool({
     return Result.isSuccess(input) ? codexCallCard(input.success) : undefined;
   },
   guard: {
-    bash: (input: CodexInput) =>
-      agentCliApprovalCommand(CODEX_AGENT_NAME, input.prompt, (stores) =>
-        codexSandboxMode(input, stores),
-      ),
-    // A resumed thread keeps its stored workspace: name none, not the wrong one.
-    cwd: 'unknown',
+    command: {
+      text: (input: CodexInput) =>
+        agentCliApprovalCommand(CODEX_AGENT_NAME, input.prompt, (stores) =>
+          codexSandboxMode(input, stores),
+        ),
+      // A resumed thread keeps its stored workspace: name none, not the wrong one.
+      cwd: 'unknown',
+    },
   },
   execute: runCodex,
 });

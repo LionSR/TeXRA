@@ -251,7 +251,7 @@ export function setCliHelperModel(
 /**
  * Bring the CLI platform up, as the program it is: every entry runs it on
  * the process runtime it installed or joined (`installCliProcessRuntime`), so
- * the init and the work it feeds settle on one fiber instead of a Promise the
+ * the init and the work it feeds run on one fiber instead of a Promise the
  * init resolves and a second run over the result.
  *
  * `installSignalHandlers` (default true) is the one behavioural choice here.
@@ -277,7 +277,7 @@ export function initCliPlatform(
     // handler below reads.
     setLogSink(silentLogSink, { trusted: true });
 
-    // The one Effect runtime of this process (PRD 7.7) comes first: the stores
+    // The one Effect runtime of this process comes first: the stores
     // below open as Effect programs, and the session graph and every
     // Promise-facing fiber run on it. Disposed after the default session has
     // released its graph. An entry that ran before any platform existed -- the
@@ -315,8 +315,7 @@ export function initCliPlatform(
       runtime,
       Effect.gen(function* () {
         const globalState = yield* AppState;
-        // The three setting slots this process answers a catalog row from:
-        // the roots an earlier init built.
+        // A later init finds the roots and session an earlier one built.
         if (installed) return { globalState, platform: installed };
         const sessions = yield* Sessions;
 
@@ -392,11 +391,11 @@ export function initCliPlatform(
 
           // The shutdown is this scope's close, its finalizers run in the
           // reverse of their registration: every session closes first (its
-          // runs stopped and settled, its artifacts flushed). That stops
+          // runs stopped and finished, its artifacts flushed). That stops
           // agent-spawned OS children before the process exits, as the
           // extension and desktop hosts do: a background `bash` run is its own
           // process group (see execUtils), which its lifeline kills only once
-          // `texra` is gone, and this close stops it first so its run settles.
+          // `texra` is gone, and this close stops it first so its run finishes.
           // Then the project scope with a final NDJSON flush, and the runtime
           // last, draining the usage log.
           const scope = Scope.makeUnsafe();

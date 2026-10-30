@@ -135,7 +135,7 @@ class DocumentTaskRefused extends Schema.TaggedError<DocumentTaskRefused>()(
 
 /**
  * `config` launched as its agent's document task. The agent resolves over a
- * settled catalog by the rule a launch's preparation uses
+ * resolved catalog by the rule a launch's preparation uses
  * (`AgentCatalog.forLaunch`; a miss rescans once), and its source is stamped
  * so the preparation pins the same entry. A catalog that never loaded, an
  * unknown agent and a chat agent each fail loudly; no outputs are guessed.

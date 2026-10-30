@@ -64,8 +64,6 @@ export const RunNoticeSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('resumeBlocked'),
     reason: ResumeBlockerSchema,
-    /** A resume was asked for: the run continues by itself once unblocked. */
-    retry: Schema.Boolean,
   }),
   Schema.Struct({ kind: Schema.Literal('interrupted') }),
   Schema.Struct({ kind: Schema.Literal('held'), pid: Schema.Int }),
@@ -76,8 +74,9 @@ export const RunNoticeSchema = Schema.Union([
  * Process-local liveness evidence: self, explicitly proved-dead owners, and
  * unreadable runs. A current claimant absent from these verdicts is
  * unprovable and remains held until a probe establishes otherwise. Beside
- * it, the runs a resume found blocked: `retry` when one was asked for, so
- * the run continues once what it needs is back.
+ * it, the runs a resume found blocked here, each with what it waits for;
+ * whether the run then continues by itself is the session follower's
+ * `resumeOnOpen` policy, not a fact of the run.
  */
 export const LocalRuntimeStateSchema = Schema.Struct({
   self: Schema.Array(OwnerIdSchema),
@@ -86,11 +85,7 @@ export const LocalRuntimeStateSchema = Schema.Struct({
     Schema.Struct({ runId: RunIdSchema, reason: RunUnreadableSchema }),
   ),
   resumeBlocked: Schema.Array(
-    Schema.Struct({
-      runId: RunIdSchema,
-      reason: ResumeBlockerSchema,
-      retry: Schema.Boolean,
-    }),
+    Schema.Struct({ runId: RunIdSchema, reason: ResumeBlockerSchema }),
   ),
 });
 export type LocalRuntimeState = typeof LocalRuntimeStateSchema.Type;

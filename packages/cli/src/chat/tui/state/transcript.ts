@@ -1,10 +1,9 @@
 /**
  * Local CLI rows: notices the TUI itself prints into a conversation (a model
  * fallback, a skill activation, a slash-command result). They are not
- * events and never fold; they are Surface (PRD one-fold-three-renderers,
- * 9), one list of `{ runId, afterSeq, row }`, and the conversation panes
- * merge them into the run's folded rows by `afterSeq` at render: a join
- * of two inputs ordered by the same transcript seq, so a row the fold's
+ * events and never part of the session view; they are one list of `{ runId, afterSeq, row }`, and the conversation panes
+ * merge them into the run's rows by `afterSeq` at render: a join
+ * of two inputs ordered by the same transcript seq, so a row the session view's
  * residency cap drops never shifts a notice.
  */
 import { computed, signal } from '@lit-labs/signals';
@@ -32,7 +31,7 @@ import type { RunView, RunId } from '@texra-ai/harness/schemas';
  * The runs whose transcript tier this terminal keeps resident: its
  * conversation, the runs it owns, and an open reader's run. The view also
  * lists every earlier run of the workspace, hydrated from the listing;
- * subscribing all of those folded every past transcript into memory for the
+ * subscribing all of those loaded every past transcript into memory for the
  * life of the TUI.
  */
 export const paintedRunIds = computed((): readonly RunId[] => {
@@ -42,12 +41,12 @@ export const paintedRunIds = computed((): readonly RunId[] => {
 
 export interface LocalNotice {
   readonly runId: RunId;
-  /** The settlement seq of the folded row the notice follows; 0 before any. */
+  /** The settlement seq of the row the notice follows; 0 before any. */
   readonly afterSeq: number;
   readonly row: TranscriptRow;
 }
 
-/** The transcript seq a folded row settles at, for the notice join. */
+/** The transcript seq a row finishes at, for the notice join. */
 function rowSeq(row: TranscriptRow | undefined): number {
   return row?.settlementSeqNo ?? row?.seqNo ?? 0;
 }
@@ -161,12 +160,12 @@ export function noticesFor(
 }
 
 /**
- * The run's folded rows with its notices inserted after the last row
+ * The run's rows with its notices inserted after the last row
  * whose seq is at or below their `afterSeq`, in notice order. A notice's
  * settlement key is its `afterSeq`: the pane re-sorts by that key with a
- * local-after-folded tiebreak, so the key alone keeps the notice after the
+ * local-after-source tiebreak, so the key alone keeps the notice after the
  * row it follows. A notice written before the run's first row keys at 0 and
- * sorts ahead of it. The merged `settledRows` is the folded prefix plus every
+ * sorts ahead of it. The merged `settledRows` is the finished prefix plus every
  * notice anchored inside it (a notice is immutable the moment it is written).
  */
 export function mergeLocalNotices(

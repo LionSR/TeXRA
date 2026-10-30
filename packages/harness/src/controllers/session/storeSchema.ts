@@ -46,7 +46,7 @@ const APPLICATION_ID = 0x54655852;
  * `AggregateId` to, the durable `uid`, its sequence counter, its claim, its
  * parent edge, and two lifecycle facts written by the transaction that
  * makes them: `start_commit` (the commit of seq 1) and `closed_by` (the
- * tombstone's commit, `NULL` while open). The foreign keys are the
+ * deletion marker's commit, `NULL` while open). The foreign keys are the
  * collection mechanism: deleting an aggregate cascades to its dependents,
  * its events, its projections and their projected rows.
  */

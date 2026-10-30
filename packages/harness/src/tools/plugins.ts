@@ -17,7 +17,7 @@
  */
 
 // Third-party imports
-import { Effect, type Layer, Result, Schema, Stream } from 'effect';
+import { Effect, type Layer, Result, Schema } from 'effect';
 
 // Local imports
 import type { SessionLog } from '@agent/runtime/SessionHandle';
@@ -26,11 +26,11 @@ import type {
   PluginToolServices,
   ToolServices,
 } from '@agent/runtime/ToolServices';
-import { AppSignals } from '@platform/appSignals';
+import { type AppSignals, emitAppSignal } from '@platform/appSignals';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
 import {
+  aggregateTarget,
   qualifyAggregateId,
-  type CommitOrdinal,
   type JsonValue,
   type RunId,
   type SessionEvent,
@@ -38,9 +38,9 @@ import {
   type ToolFact,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
+import { recordOf } from '@shared/session/runRowReads';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
-import type { SessionView } from '@shared/session/sessionView';
 import { decodeDisabledTools, GlobalStateKey } from '@shared/state/stateKeys';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
@@ -197,69 +197,34 @@ export function readDisabledTools(store: StateStore) {
 }
 
 /**
- * Announce the workspace files every run's facts say it wrote above `since`
- * (an arm's `writes`), once each and in commit order: a run that changes
- * the workspace past the editor's own write path records it as a fact on
- * its own rows, and every process that folds the run announces it, so a
- * window hears a background service task's change as it hears its own. The view
- * only says which runs to look at: a run whose announced fact differs from
- * the last level read, the first level included. The rows themselves are
- * read (`rows`), since the view keeps each kind's latest value only and its
- * tail coalesces wakes; a row at or below `since` (the history a reopened
- * session replays) is never announced. A failed read (a busy store) is
- * logged and retried on the next change, from where the last good read left
- * off: it never stops the announcer.
+ * Announce the workspace files a committed row says its run wrote past the
+ * editor's own write path (an arm's `writes`): a run records such a change
+ * as a fact on its own rows, and every process that reads the run's rows
+ * announces it (`workspaceFilesWritten`), so a window hears a background
+ * service task's change as it hears its own. Run over the session's folded
+ * tail, so each row is announced once, in commit order, and the history a
+ * reopened session replays never as news; a plugin's own aggregate
+ * announces nothing.
  */
-export function announceRunFacts(
-  changes: Stream.Stream<SessionView>,
-  rows: (runId: RunId) => Effect.Effect<readonly SessionEvent[], Error>,
-  since: CommitOrdinal,
+export const announceWrites = (
   arms: PluginArms,
-): Effect.Effect<void, never, AppSignals> {
-  return AppSignals.use((signals) => {
-    const writing = new Map(
-      Object.entries(arms).flatMap(([name, { writes }]) =>
-        writes === undefined ? [] : [[name, writes] as const],
-      ),
-    );
-    const seen = new Map<RunId, string>();
-    const announcedTo = new Map<RunId, CommitOrdinal>();
-    const announce = (runId: RunId) =>
-      rows(runId).pipe(
-        Effect.map((stored) => {
-          let last = announcedTo.get(runId) ?? since;
-          for (const row of stored) {
-            if (row.type !== 'plugin.fact' || row.commit <= last) continue;
-            const writes = writing.get(`${row.plugin}/${row.kind}`);
-            if (writes !== undefined)
-              signals.emit('workspaceFilesWritten', {
-                absolutePaths: [...writes(row.value)],
-              });
-            last = row.commit;
-          }
-          announcedTo.set(runId, last);
-        }),
-        Effect.catch((error) => {
-          seen.delete(runId);
-          return Effect.logWarning(
-            `Run ${runId}'s facts were not read; announcing them on the next change`,
-          ).pipe(Effect.annotateLogs({ data: error }));
-        }),
-      );
-    return Stream.runForEach(changes, (view) => {
-      const moved: RunId[] = [];
-      for (const run of view.runs.values()) {
-        const facts = [...writing.keys()].map((key) => run.facts[key]);
-        if (facts.every((fact) => fact === undefined)) continue;
-        const written = JSON.stringify(facts);
-        if (seen.get(run.id) === written) continue;
-        seen.set(run.id, written);
-        moved.push(run.id);
-      }
-      return Effect.forEach(moved, announce, { discard: true });
+): ((row: SessionEvent) => Effect.Effect<void, never, AppSignals>) => {
+  const writing = new Map(
+    Object.entries(arms).flatMap(([name, { writes }]) =>
+      writes === undefined ? [] : [[name, writes] as const],
+    ),
+  );
+  return (row) => {
+    if (aggregateTarget(row.aggregateId).kind !== 'run') return Effect.void;
+    const [fact] = Object.values(recordOf(row).facts);
+    if (fact === undefined) return Effect.void;
+    const writes = writing.get(`${fact.plugin}/${fact.kind}`);
+    if (writes === undefined) return Effect.void;
+    return emitAppSignal('workspaceFilesWritten', {
+      absolutePaths: [...writes(fact.value)],
     });
-  });
-}
+  };
+};
 
 /** The plugin arms a store reads, by `plugin/kind`. */
 export type PluginArms = Readonly<Record<string, PluginArm>>;
@@ -332,7 +297,7 @@ export function factRows(
   facts: readonly ToolFact[],
   runId: RunId,
   plugin: Plugin | undefined,
-  log: Pick<SessionLog, 'rows'>,
+  log: Pick<SessionLog, 'runRows'>,
 ): {
   readonly run: readonly RunHistoryDraft[];
   readonly alongside: Alongside<DatabaseWriteFailed>;
@@ -352,13 +317,10 @@ export function factRows(
     Effect.gen(function* () {
       const arm = plugin?.arms?.find((one) => one.kind === draft.kind);
       if (arm?.supersedes === undefined) return true;
-      const latest = (yield* log.rows(draft.aggregateId, [
-        'plugin.fact',
-      ])).findLast(
-        (row) => row.type === 'plugin.fact' && row.kind === draft.kind,
-      );
-      if (latest?.type !== 'plugin.fact' || !arm.supersedes(latest, draft))
-        return true;
+      const latest = (yield* log.runRows(draft.aggregateId, 'facts')).facts[
+        `${draft.plugin}/${draft.kind}`
+      ];
+      if (latest === undefined || !arm.supersedes(latest, draft)) return true;
       yield* Effect.logDebug(
         `${arm.plugin}/${arm.kind}: a later row of ${draft.aggregateId} supersedes the call's`,
       );

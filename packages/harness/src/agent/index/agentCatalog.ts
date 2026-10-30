@@ -124,7 +124,7 @@ export interface AgentCatalogShape {
     AgentEntry,
     AgentNotFound | AgentCatalogLoadError | StateReadFailed
   >;
-  /** The workspace's agent selection and team presets, over this catalog. */
+  /** The workspace's agent selection, over this catalog. */
   readonly workspaceAgents: (
     stores: WorkspaceAgentsStores,
   ) => WorkspaceAgentsController<AgentEntry>;
@@ -186,7 +186,7 @@ interface CatalogState {
   loadFailure: string | undefined;
   /** A source changed and its reload has not begun; cleared as a scan starts. */
   changePending: boolean;
-  readonly teams: AgentDirectories['Service']['teams'];
+  readonly teamMembers: AgentDirectories['Service']['teamMembers'];
 }
 
 /** Scan every agent source and publish the result into `state`. */
@@ -265,7 +265,7 @@ function catalogReads(state: CatalogState) {
     new WorkspaceAgentsController<AgentEntry>({
       repoState,
       globalState,
-      teams: state.teams,
+      teamMembers: state.teamMembers,
       getAgents: list,
       resolveAgent: get,
     });
@@ -327,7 +327,7 @@ export class AgentCatalog extends Context.Service<
         skippedFiles: Object.freeze([]),
         loadFailure: undefined,
         changePending: false,
-        teams: Context.get(services, AgentDirectories).teams,
+        teamMembers: Context.get(services, AgentDirectories).teamMembers,
       };
       // Every load enters one lane: a fiber that arrives while a load runs
       // waits for it, and a failed scan fails only its own caller.

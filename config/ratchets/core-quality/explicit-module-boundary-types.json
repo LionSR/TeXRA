@@ -7,7 +7,7 @@
   "packages/harness/src/agent/runtime/run/requestContext.ts": 1,
   "packages/harness/src/agent/runtime/sessionDescription.ts": 1,
   "packages/harness/src/agent/storage/runRecords.ts": 1,
-  "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 9,
+  "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 7,
   "packages/harness/src/agent/workspaceAgents/workspaceAgentsState.ts": 1,
   "packages/harness/src/controllers/session/Database.ts": 1,
   "packages/harness/src/controllers/session/projections.ts": 1,

@@ -33,7 +33,7 @@ import {
   TRACE_ROW_TYPES,
 } from '@shared/schemas';
 import { lastLifecycleRow, runEndFromEvents } from '@shared/session/runFacts';
-import { closesRunWindow } from '@shared/session/runRows';
+import { closesRunWindow, recordOf } from '@shared/session/runRowReads';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -191,7 +191,7 @@ export function makeRunTrace({
         row.status !== TOOL_CALL_STATUS.IN_PROGRESS
       )
         closes = (key) => key === `${runId}/${row.logId}`;
-      else if (row.type === 'run.removed' || closesRunWindow(row))
+      else if (recordOf(row).removed !== null || closesRunWindow(row))
         closes = (key) => key.startsWith(`${runId}/`);
       const dropping = closes;
       if (dropping === null) return Effect.void;
@@ -294,7 +294,7 @@ export function replayTrace<E>(
       seq = row.seq;
       // Its end, the next activation, or the run's removal ends the read.
       ended ||=
-        row.type === 'run.removed' ||
+        recordOf(row).removed !== null ||
         lastLifecycleRow([row], runId) !== undefined;
       if (!STORED_TRACE.has(row.type)) return [];
       // cast: a stored trace row is its trace event plus the envelope the store and `runEventDraft` add.

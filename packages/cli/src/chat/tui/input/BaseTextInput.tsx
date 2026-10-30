@@ -274,7 +274,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       }
       if (imagePasteQueue.hasDeferredAction) {
         // A visible Enter already committed this draft. Ignore later keystrokes
-        // until clipboard probes settle so the deferred submit is neither
+        // until clipboard probes finish so the deferred submit is neither
         // overwritten nor allowed to clear a newer draft.
         return;
       }
@@ -327,10 +327,10 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       }
       const imagePaste = props.onImagePaste;
       if (isCtrlInput(input, key, 'v') && imagePaste) {
-        // Insert the chip at whatever the caret is when the probe settles
+        // Insert the chip at whatever the caret is when the probe finishes
         // (read from a ref, not a keypress-time snapshot) so typing during
         // the probe isn't clobbered. The probe runs on the process runtime
-        // with an Effect timeout; `matchCause` settles every outcome. A draft
+        // with an Effect timeout; `matchCause` finishes every outcome. A draft
         // discard or runtime disposal interrupts the fiber, which is not a
         // paste failure to report.
         imagePasteQueue.add(

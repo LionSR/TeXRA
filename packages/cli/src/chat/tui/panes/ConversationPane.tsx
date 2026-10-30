@@ -35,7 +35,7 @@ interface ConversationPaneProps {
 
 /**
  * The live tail of the active conversation: the rows the scrollback has not
- * settled yet, read from the fold and joined with this TUI's local notices.
+ * finished yet, read from the session view and joined with this TUI's local notices.
  */
 export function ConversationPane(
   props: ConversationPaneProps = {},

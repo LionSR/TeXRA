@@ -25,7 +25,7 @@ const LAKE_PROCESS_MAX_BUFFER_CHARS = 100_000_000;
 /**
  * One exclusive lane per workspace root. `withPerKeyLane` owns the entries:
  * it drops a root's lane once the last invocation holding or waiting on it
- * settles, so the map does not grow with every root visited.
+ * finishes, so the map does not grow with every root visited.
  */
 const workspaceLanes = new Map<string, PerKeyLane>();
 

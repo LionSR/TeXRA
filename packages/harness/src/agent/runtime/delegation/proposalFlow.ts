@@ -15,9 +15,12 @@ import {
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
 import { RunCall, type RunToolCall } from '@agent/runtime/RunCall';
+import { recordedDecision } from '@agent/runtime/requestPolicy';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type {
   AgentProposal,
+  DecisionOf,
+  RefusalDecision,
   RequestDecision,
   ToolResult,
 } from '@shared/schemas';
@@ -27,7 +30,6 @@ import type {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import type { RunHistoryRefused } from '@shared/session/runHistory';
-import { refusalOf } from '@shared/session/approvalDecision';
 import { errorResult } from '@tools/core/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -81,17 +83,13 @@ function summarizeProposal(proposal: AgentProposal): string {
   return parts.join(', ');
 }
 
-/** Convert proposal result to ToolResult. Returns null if approved. */
-function proposalResultToToolResult(
-  result: RequestDecision,
-  agentName: string,
+/** A declined proposal, as the call's result. */
+function proposalRefusalResult(
+  refusal: RefusalDecision,
   proposal: AgentProposal,
-): ToolResult | null {
+): ToolResult {
+  const { agent: agentName } = proposal;
   const echo = summarizeProposal(proposal);
-
-  if (result.action === 'approve') return null;
-
-  const refusal = refusalOf('proposal', result);
   switch (refusal.action) {
     case 'cancel': {
       const cause = refusal.cause?.trim();
@@ -123,7 +121,7 @@ function proposalResultToToolResult(
 }
 
 interface DelegationProposalDecision {
-  readonly result: RequestDecision;
+  readonly result: DecisionOf<'proposal'>;
   /** How the child's own grants record this approval (see
    *  {@link DelegatedChildApproval}); `inherit` unless the run's proposal
    *  bypass supplied it. */
@@ -166,8 +164,11 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
       const childApproval = granted ? GRANTED_CHILD[granted] : 'inherit';
       return { result: { action: 'approve' }, childApproval };
     }
-    if (ask !== undefined)
-      return { result: yield* ask, childApproval: 'inherit' };
+    // The script's shared request may answer from its recorded row.
+    if (ask !== undefined) {
+      const result = yield* recordedDecision('proposal', yield* ask);
+      return { result, childApproval: 'inherit' };
+    }
 
     // A call made under a run opens its requests through the loop's door.
     const { requests } = parent;
@@ -188,7 +189,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
  *  and model: the instruction, the file lists and the plugin's options. */
 function formEdits(
   proposal: AgentProposal,
-  approval: Extract<RequestDecision, { action: 'approve' }>,
+  approval: Extract<DecisionOf<'proposal'>, { action: 'approve' }>,
 ): Partial<AgentProposal> {
   const changed = (
     edited: readonly string[] | null | undefined,
@@ -249,20 +250,9 @@ export const decideDelegation = Effect.fn('decideDelegation')(function* (
   }
 
   const { result } = decision;
+  if (result.action !== 'approve')
+    return proposalRefusalResult(result, proposal);
 
-  const nonApproveResult = proposalResultToToolResult(
-    result,
-    proposal.agent,
-    proposal,
-  );
-  if (nonApproveResult) return nonApproveResult;
-  if (result.action !== 'approve') {
-    return yield* Effect.die(
-      new Error('A proposal decision that is not an approve was not declined.'),
-    );
-  }
-
-  // Every non-approve action returned above, so this is the approved path.
   // Route an approved model override through the same availability gate the
   // initial delegation uses (selectAvailableDelegationModel), so an unavailable
   // model fails synchronously here instead of launching and then failing

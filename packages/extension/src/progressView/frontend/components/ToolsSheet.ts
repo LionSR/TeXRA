@@ -1,5 +1,5 @@
 /**
- * The Tools sheet (PRD 12.1): a bottom sheet titled LaTeXDiffs hosting the
+ * The Tools sheet: a bottom sheet titled LaTeXDiffs hosting the
  * real `<latexdiffs-section>` on properties. Reachable from any state
  * through the header overflow; `Surface.toolsSheetOpen` opens and closes
  * it. The section's selections ride in `Surface.launch` (base, edited,

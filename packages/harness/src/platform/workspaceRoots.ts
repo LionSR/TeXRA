@@ -1,6 +1,6 @@
 /**
  * Per-workspace roots: the four host services whose value depends on which
- * paper (workspace folder) a piece of code is working on. They live on the
+ * project (workspace folder) a piece of code is working on. They live on the
  * owning `SessionHandle` rather than on a process-wide object,
  * so one process can hold many sessions, each rooted in its own folder.
  *

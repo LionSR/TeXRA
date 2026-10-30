@@ -99,6 +99,7 @@ import {
   hostFailure,
   type HostCallFailed,
 } from '@texra/controllers/session/hostCallFailure';
+import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
   OwnHostRequest,
@@ -138,8 +139,15 @@ interface ExtensionHostRequestsOptions {
   showConnectModel(): Effect.Effect<void, Error, ProcessServices>;
   /** Reveal the task list (`texra.showProgressView`). */
   showProgressView(): Effect.Effect<void, Error>;
+  /** Reveal the task list for a run this window just started, or name the
+   *  run in a toast when it cannot (the run actions' `revealProgress`). */
+  readonly revealProgress: (config: AgentConfig) => Effect.Effect<void, Error>;
   /** Select a run this window just launched (the run actions' `launched`). */
   presentLaunchedRun(runId: RunId): void;
+  /** The window's launcher (`HostRunActions.runValidated`), which the setup
+   *  assistant's run starts through; bound once the window has opened, so
+   *  read as that run starts. */
+  launcher(): HostRunActions['runValidated'];
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
   showInSidebar(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
@@ -472,7 +480,7 @@ export const createExtensionHostRequests = Effect.fn(
           launchSetupAssistant(
             roots,
             runSession,
-            (runId) => Effect.sync(() => options.presentLaunchedRun(runId)),
+            options.launcher(),
             options.showConnectModel(),
             options.showProgressView(),
           ),
@@ -545,6 +553,7 @@ export const createExtensionHostRequests = Effect.fn(
     runs: {
       launched: (run: Run) =>
         Effect.sync(() => options.presentLaunchedRun(run.runId)),
+      revealProgress: options.revealProgress,
       openFinalOutput: (config: AgentConfig, result: RunEnd) =>
         withProcessServices(
           runtime,
@@ -585,7 +594,7 @@ export const createExtensionHostRequests = Effect.fn(
           'latexdiff',
           inViewScope(handleLatexdiff(roots, base, edited)),
         ),
-      openDirectory: (directory: string) => revealFileInOS(directory),
+      openDirectory: revealFileInOS,
     },
     export: {
       // A refusal to show the pick is worded into the export's tag.

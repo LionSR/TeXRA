@@ -16,14 +16,7 @@ import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
 import { render } from 'ink';
-import {
-  Context,
-  Effect,
-  Fiber,
-  HashMap,
-  Schema,
-  SubscriptionRef,
-} from 'effect';
+import { Context, Effect, Fiber, Schema, SubscriptionRef } from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
@@ -72,7 +65,8 @@ import {
   type UserQuestionPermission,
   aggregateTarget,
 } from '@shared/schemas';
-import type { StagedToolEdit } from '@shared/session/runtimeRequest';
+import type { DraftBlob } from '@shared/session/historyTurns';
+import type { ToolEditContent } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   isInFlightPhase,
@@ -93,6 +87,7 @@ import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+import { blobAddress } from '@utils/core/idHash';
 import { nodeFileServices } from '@utils/files/fsDurability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -1120,9 +1115,13 @@ function requestHarnessApproval(
   runId: RunId,
   payload: PermissionPayload,
   onSettled: (decision: RequestDecision) => void | Promise<void>,
+  /** What the payload names by address, stored with the request's row. */
+  blobs?: readonly DraftBlob[],
 ): void {
   void harnessRuntime
-    .runPromise(session().requests.ask(runId, payload))
+    .runPromise(
+      session().requests.ask(runId, payload, { ...(blobs && { blobs }) }),
+    )
     .then(onSettled)
     .catch((error: unknown) => {
       appendLocalErrorTranscript(
@@ -1359,13 +1358,20 @@ if (SHOW_PLAN) {
 if (SHOW_EDIT_APPROVAL) {
   const showApproval = () => {
     const request = makeEditApprovalRequest();
-    // The payload and the preview `requestToolEditApproval` builds, the
-    // preview held in the session's store as it holds it.
+    // The payload and the content `requestToolEditApproval` builds, the
+    // content stored with the request's row as it stores it.
     const { hunks } = buildDiffHunks(
       request.originalContent,
       request.proposedContent,
     );
     const lines = countLineChanges(hunks);
+    const content: ToolEditContent = {
+      originalContent: request.originalContent,
+      proposedContent: request.proposedContent,
+      hunks,
+      firstChangedLine: firstChangedLine(hunks, request.proposedContent),
+    };
+    const text = JSON.stringify(content);
     const permission = {
       requestId: 'harness-edit-approval',
       path: request.path,
@@ -1375,23 +1381,13 @@ if (SHOW_EDIT_APPROVAL) {
       runId: request.runId,
       addedLines: lines.added,
       removedLines: lines.removed,
+      content: blobAddress(text),
     };
-    harnessRuntime.runSync(
-      SubscriptionRef.update(
-        session().view.toolEdits,
-        HashMap.set<string, StagedToolEdit>(permission.requestId, {
-          originalContent: request.originalContent,
-          proposedContent: request.proposedContent,
-          hunks,
-          firstChangedLine: firstChangedLine(hunks, request.proposedContent),
-          edited: null,
-        }),
-      ),
-    );
     requestHarnessApproval(
       request.runId,
       { kind: 'toolEdit', data: permission },
       () => undefined,
+      [{ digest: permission.content, text }],
     );
   };
 
@@ -1857,7 +1853,6 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
               {
                 runId: interrupted,
                 reason: { kind: 'pluginOff', name: 'zotero' },
-                retry: false,
               },
             ]
           : [],

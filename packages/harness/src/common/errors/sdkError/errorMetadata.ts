@@ -36,7 +36,7 @@ const read = (err: unknown, key: symbol): unknown => {
  *  Attached when a targeted notification owns its presentation (its emit
  *  confirmed delivery, or no host was attached and it was retained for
  *  replay), when the session's presenter showed a run's failure from its
- *  `run.end` row (`presentRunFailure`, `receiveTerminalFailure`), and when
+ *  `run.end` row (`presentRunFailure`, the run's terminal `endRun`), and when
  *  another process (a service) showed it to this window. Never for a
  *  fire-and-forget or declined emit, so a host that could not render a
  *  targeted notification leaves the generic surface free to fire. */

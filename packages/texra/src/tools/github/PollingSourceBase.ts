@@ -209,7 +209,7 @@ export abstract class PollingSourceBase<
     state: S,
   ): Effect.Effect<void, Error, GitHubServices>;
 
-  /** Optional subclass hook that runs after all subscription polls settle. */
+  /** Optional subclass hook that runs after all subscription polls finish. */
   protected afterTick(
     _entries: ReadonlyArray<readonly [K, S]>,
     _now: number,

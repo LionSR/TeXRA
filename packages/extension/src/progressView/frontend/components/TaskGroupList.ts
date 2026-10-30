@@ -156,7 +156,7 @@ export class TaskGroupList extends LitElement {
   static override styles = [designTokens, ...logStyles, taskGroupListStyles];
 
   /**
-   * The stream's transcript slice. The fold appends rows and groups in
+   * The stream's transcript slice. The session view appends rows and groups in
    * place and replaces the slice on every change, so the slice, never one
    * of its arrays, is the property Lit compares.
    */
@@ -186,7 +186,7 @@ export class TaskGroupList extends LitElement {
   @property({ attribute: false }) runStatus: RunLifecycleStatus | undefined =
     undefined;
 
-  /** The fold's final outcome once no producer can close another group. */
+  /** The session view's final outcome once no producer can close another group. */
   @property({ attribute: false }) durableOutcome: RunOutcome | null = null;
 
   /** `Surface.groups` for this stream: true is expanded, false collapsed,
@@ -202,7 +202,7 @@ export class TaskGroupList extends LitElement {
 
   /** The transcript partitioned for render: rebuilt when `groups` or
    *  `rows` change; the rows arrive in wire order and the groups keyed, so
-   *  the partition is one pass (PRD 10.2). */
+   *  the partition is one pass. */
   private timeline: TimelineEntry[] = [];
 
   /** Number of recent top-level timeline entries currently rendered. */

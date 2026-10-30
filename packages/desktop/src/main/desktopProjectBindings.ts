@@ -1,4 +1,4 @@
-// One binding per open project for a window (PRD 8.1, 12.2): the session
+// One binding per open project for a window: the session
 // bridge the renderer subscribes to, the project's `host` snapshot, its
 // workspace transport and its presentation and launch path. Every open
 // project is bound, not only the shown one: the rail lists them all from

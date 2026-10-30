@@ -37,7 +37,7 @@ export interface OutputDependencies {
 
 /**
  * Build a live `rounds` map from the persisted array shape, keyed by each
- * entry's own `round` field (not array index) so a hydration source with
+ * entry's own `round` field (not array index) so an initial-load source with
  * gaps still lands on the right round.
  */
 export function roundsFromPersisted(

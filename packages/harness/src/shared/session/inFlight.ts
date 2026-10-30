@@ -45,13 +45,15 @@ export type Attempt = {
   } | null;
   /** Its `failed` row, or null while its outcome is unknown. */
   readonly failed: Failure | null;
+  /** A clean session close stopped it: cut, not lost, so it spends no retry. */
+  readonly closed: boolean;
 };
 
 /**
  * A model invocation: the attempt its rows last opened and how each earlier
  * one ended (`null`: no row recorded it, because the process died or its
- * run stopped while it ran). It closes with its response, or, once it
- * stopped, with the input of the next turn.
+ * run stopped while it ran), one a clean close stopped left out. It closes
+ * with its response, or, once it stopped, with the input of the next turn.
  */
 export type Invocation = {
   readonly current: Attempt;
@@ -76,14 +78,14 @@ const sameRef = (a: InvocationRef, b: InvocationRef): boolean =>
 
 /**
  * How each attempt of `invocation` before `ref` ended: its earlier ones,
- * and its current one unless `ref` is that one.
+ * and its current one unless `ref` is that one or a clean close stopped it.
  */
 export function failuresBefore(
   invocation: Invocation | null,
   ref: InvocationRef,
 ): readonly (Failure | null)[] {
   if (invocation === null) return [];
-  return sameRef(invocation.current.ref, ref)
+  return sameRef(invocation.current.ref, ref) || invocation.current.closed
     ? invocation.earlier
     : [...invocation.earlier, invocation.current.failed];
 }
@@ -124,6 +126,7 @@ function openedBy(
       providerResponseId: null,
       accepted: null,
       failed: p.kind === 'failed' ? { error: p.error, next: p.next } : null,
+      closed: false,
     },
     earlier: failuresBefore(invocation, p.invocation),
   };
@@ -202,9 +205,9 @@ const spentRetries = (failures: readonly (Failure | null)[]): number =>
 /**
  * What `invocation` does next (null: a new one), from its rows, the run's
  * `requests` and the driver's automatic `retries`. An attempt no row saw end
- * spends a retry; past them, a person is asked before it is resent, as they
- * are about any attempt once they allowed one of the invocation. An accepted
- * background operation is observed, never resubmitted.
+ * spends a retry (a `closed` one none); past them, a person is asked before
+ * it is resent, as they are about any attempt once they allowed one of the
+ * invocation. An accepted background operation is observed, never resubmitted.
  */
 export function nextAttempt(
   invocation: Invocation | null,

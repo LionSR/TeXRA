@@ -15,7 +15,6 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import { attemptOf } from '@shared/session/inFlight';
 import { unloadable } from '@shared/session/runHistory';
 import { applyRunRows, type RunState } from '@shared/session/runState';
-import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
 import { lastLifecycleRow, runEndFromEvents } from '@shared/session/runFacts';
 import {
@@ -40,8 +39,17 @@ export const readChildTurnState = (
   runId: RunId,
 ): Effect.Effect<RunRows['childTurn'], DatabaseReadFailed> =>
   session.log
-    .rows(qualifyAggregateId('run', runId), RUN_ROW_READS.turns)
-    .pipe(Effect.map((rows) => runRowsFrom(rows).childTurn));
+    .runRows(qualifyAggregateId('run', runId), 'turns')
+    .pipe(Effect.map((rows) => rows.childTurn));
+
+/** A run's lifecycle rows and its history, one read each. */
+const rowsOf = (session: SessionHandle, runId: RunId) => {
+  const id = qualifyAggregateId('run', runId);
+  return Effect.map(
+    Effect.all([session.log.runRows(id, 'lifecycle'), session.log.history(id)]),
+    ([rows, history]) => ({ lifecycles: rows.lifecycles, history }),
+  );
+};
 
 /**
  * A run's persisted parent (`run.start.parent`, less a `run.detach` or an
@@ -180,24 +188,26 @@ export type RunResult =
   | (Omit<RunEnd, 'outcome'> & { readonly outcome?: RunOutcome });
 
 /**
- * The terminal result of the lifecycle `rows` end with: its `run.end`'s
- * outcome, error and output, and the usage its activation spent, from its
- * own `run.activate` on (a recipe's with its children's then); none with
- * no end. An unreadable fold is logged and reads as no usage.
+ * The terminal result of the lifecycle the `lifecycles` rows end with: its
+ * `run.end`'s outcome, error and output, and the usage its activation
+ * spent, folded from the `history` rows from its own `run.activate` on (a
+ * recipe's with its children's then); none with no end. An unreadable fold
+ * is logged and reads as no usage.
  */
 const runEndOf = (
   session: SessionHandle,
   runId: RunId,
   held: RunRows,
-  rows: readonly SessionEvent[],
+  lifecycles: readonly SessionEvent[],
+  history: readonly SessionEvent[],
 ): Effect.Effect<RunEnd | null, DatabaseReadFailed> =>
   Effect.gen(function* () {
-    const end = runEndFromEvents(rows, runId);
+    const end = runEndFromEvents(lifecycles, runId);
     if (!end) return null;
     // The activation's own rows begin at the lifecycle row before its end
     // (its `run.activate`), or with the run.
     const start = lastLifecycleRow(
-      rows.filter((row) => row.seq < end.seq),
+      lifecycles.filter((row) => row.seq < end.seq),
       runId,
     );
     const from = start?.seq ?? -1;
@@ -205,7 +215,7 @@ const runEndOf = (
     // activation's totals: the state before the activation, its usage
     // zeroed, then the activation's rows.
     const folded = Result.flatMap(
-      runHistoryRows(rows.filter((row) => row.seq <= end.seq)),
+      runHistoryRows(history.filter((row) => row.seq <= end.seq)),
       (live) =>
         Result.flatMap(
           applyRunRows(
@@ -238,15 +248,15 @@ const runEndOf = (
                 const late = born > end.commit;
                 if (facts === null || born <= (start?.commit ?? -1) || late)
                   return Effect.succeed(null);
-                return Effect.flatMap(
-                  session.log.rows(qualifyAggregateId('run', child)),
-                  (rows) =>
-                    runEndOf(
-                      session,
-                      child,
-                      facts,
-                      rows.filter((row) => row.commit <= end.commit),
-                    ),
+                const asOf = (row: SessionEvent) => row.commit <= end.commit;
+                return Effect.flatMap(rowsOf(session, child), (rows) =>
+                  runEndOf(
+                    session,
+                    child,
+                    facts,
+                    rows.lifecycles.filter(asOf),
+                    rows.history.filter(asOf),
+                  ),
                 );
               }),
           )
@@ -268,16 +278,16 @@ const runEndOf = (
     } satisfies RunEnd;
   });
 
-/** Native access to named run metadata, with no file-backed read arm. */
+/** Reads of a run's named records from the session database. */
 export function getRunRecords(session: SessionHandle, runId: RunId) {
-  const id = qualifyAggregateId('run', runId);
   const facts = session.log.facts(runId);
-  /** The run's facts and every row of it, in one read; none for a run the
-   *  store does not hold open, which the record reads report as absent too. */
+  /** The run's facts, its lifecycle rows and its history; none for a run
+   *  the store does not hold open, which the record reads report as absent
+   *  too. */
   const whole = Effect.flatMap(facts, (held) =>
     held === null
       ? Effect.succeed(null)
-      : Effect.map(session.log.rows(id), (rows) => ({ held, rows })),
+      : Effect.map(rowsOf(session, runId), (rows) => ({ held, ...rows })),
   );
   const read = <A>(
     select: (facts: RunRows | null) => A,
@@ -337,18 +347,17 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     ): Effect.Effect<RunEnd | null, DatabaseReadFailed> =>
       Effect.flatMap(whole, (run) => {
         if (run === null) return Effect.succeed(null);
+        const { held, lifecycles, history } = run;
         if (after === undefined)
-          return runEndOf(session, runId, run.held, run.rows);
+          return runEndOf(session, runId, held, lifecycles, history);
         // Its end, or none if the next activation comes first.
-        const end = run.rows.findIndex(
-          (row) =>
-            row.commit > after && lastLifecycleRow([row], runId) !== undefined,
-        );
+        const end = lifecycles.findIndex((row) => row.commit > after);
         return runEndOf(
           session,
           runId,
-          run.held,
-          end < 0 ? [] : run.rows.slice(0, end + 1),
+          held,
+          end < 0 ? [] : lifecycles.slice(0, end + 1),
+          history,
         );
       }),
     /** The run's result: its producer record joined to its terminal result,
@@ -361,13 +370,14 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
         const run = yield* whole;
         const meta = run?.held.result ?? null;
         if (run === null || meta?.producer === 'backgroundBash') return meta;
+        const { held, lifecycles, history } = run;
         if (meta === null) {
-          const { config } = run.held;
+          const { config } = held;
           return config && isTaskConfig(config)
-            ? yield* runEndOf(session, runId, run.held, run.rows)
+            ? yield* runEndOf(session, runId, held, lifecycles, history)
             : null;
         }
-        const end = yield* runEndOf(session, runId, run.held, run.rows);
+        const end = yield* runEndOf(session, runId, held, lifecycles, history);
         return {
           ...(end ?? {}),
           output: { ...(end?.output ?? emptyRunEndOutput()), ...meta.output },

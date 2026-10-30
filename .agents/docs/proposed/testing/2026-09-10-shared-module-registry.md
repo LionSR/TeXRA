@@ -103,6 +103,14 @@ session has not been initialized`, unhandled `ExecutionLeaseLostError`
   `sessionGraphTestSetup.ts`), and a shared registry evaluates that once per
   worker, for the first file only.
 
+## Where the counts stand (2026-10-30)
+
+273 suites; 58 import `defaultSessionTestSetup` or `sessionGraphTestSetup`,
+27 call `vi.mock`, and the `kernel` project still runs `isolate: true`. The
+per-suite migration below is sliced as A3 to A6 in
+[the tech-debt target designs](../architecture/2026-10-27-tech-debt-target-designs.md)
+("Tests and ratchets"); this note keeps the measurements and the reasons.
+
 ## Proposal
 
 Move each kernel suite's per-file setup out of import-time side effects into

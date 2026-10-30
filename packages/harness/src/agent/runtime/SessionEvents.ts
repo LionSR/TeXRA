@@ -35,7 +35,7 @@ import {
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
-import { closesRunWindow } from '@shared/session/runRows';
+import { closesRunWindow, recordOf } from '@shared/session/runRowReads';
 import {
   afterCommit,
   committing,
@@ -84,7 +84,7 @@ function openWorkTracker(): {
   const aggregates: OpenWorkByAggregate = new Map();
   const track = (rows: readonly SessionEvent[]) => {
     for (const row of rows) {
-      if (row.type === 'run.removed') {
+      if (recordOf(row).removed !== null) {
         aggregates.delete(row.aggregateId);
         continue;
       }
