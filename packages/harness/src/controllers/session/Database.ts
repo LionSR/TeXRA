@@ -479,8 +479,8 @@ export const databaseLayer = (
       const pluginRows = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e.aggregate = ? AND e.type = 'plugin.fact' ORDER BY e.seq`;
       const readState = (ids: readonly AggregateId[]) =>
-        Effect.gen(function* () {
-          return (yield* exec(READ_STATE, aggregateLists(ids))).map((row) =>
+        Effect.map(exec(READ_STATE, aggregateLists(ids)), (rows) =>
+          rows.map((row) =>
             Schema.decodeUnknownSync(AggregateStateSchema)({
               ...row,
               aggregateId: aggregateOf(row.kind, row.logicalId),
@@ -489,8 +489,8 @@ export const databaseLayer = (
                   ? null
                   : aggregateOf(row.parentKind, row.parentLogicalId),
             }),
-          );
-        });
+          ),
+        );
       const readDependents = (id: AggregateId) =>
         Effect.gen(function* () {
           return yield* readState(
