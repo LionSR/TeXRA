@@ -51,9 +51,5 @@ export const forkRun = (
         ? error
         : new Unavailable({ runId, reason: 'The task could not be forked.' }),
     ),
-    Effect.flatMap((outcome) =>
-      outcome.kind === 'forked'
-        ? Effect.succeed(outcome.runId)
-        : Effect.die(new Error(`run.fork answered ${outcome.kind}`)),
-    ),
+    Effect.map((outcome) => outcome.runId),
   );

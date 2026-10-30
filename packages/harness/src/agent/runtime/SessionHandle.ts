@@ -18,6 +18,7 @@ import type { Inbox } from '@agent/followUp/Inbox';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   AggregateId,
+  DecisionOf,
   PermissionPayload,
   RequestDecision,
   CommitOrdinal,
@@ -48,7 +49,7 @@ import type {
 } from '@shared/session/runtimeRequest';
 import type { RunHistory } from '@shared/session/runHistory';
 import type { RunRows } from '@shared/session/runRowsShape';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { OutcomeOf, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Append, UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { SessionInputs } from '@shared/session/sessionInputs';
@@ -281,29 +282,28 @@ export interface AskOptions<E> {
  * requests independently.
  */
 export interface SessionRequests {
-  /** Answer one request a surface issued: exactly once, an {@link Outcome}
-   *  the host renders or a request error. */
-  readonly request: (
-    req: RuntimeRequest,
-  ) => Effect.Effect<Outcome, RequestError>;
+  /** Answer a surface's request once: its kind's {@link OutcomeOf}, or an error. */
+  readonly request: <R extends RuntimeRequest>(
+    req: R,
+  ) => Effect.Effect<OutcomeOf<R['kind']>, RequestError>;
   /** Internal deletion policies share the same admission and transaction as
    *  a user's `run.delete`. */
   readonly removeRun: (
     runId: RunId,
     mode: DeletionMode,
     expectedStartCommit: CommitOrdinal,
-  ) => Effect.Effect<Outcome, RequestError>;
+  ) => Effect.Effect<void, RequestError>;
   /**
-   * Ask a person: open the request on its run and wait for its decision.
-   * The one door for a request a tool raises. An interruption anywhere in
-   * the call closes the request as cancelled, so no pending request is left
-   * behind; a cancel for a request this call never opened writes nothing.
+   * Ask a person: open the request on its run and wait for a decision its
+   * kind takes; the one door for a request a tool raises. An interruption
+   * anywhere in the call closes the request as cancelled, so none is left
+   * pending; a cancel for a request this call never opened writes nothing.
    */
-  readonly ask: <E = never>(
+  readonly ask: <P extends PermissionPayload, E = never>(
     runId: RunId,
-    payload: PermissionPayload,
+    payload: P,
     options?: AskOptions<E>,
-  ) => Effect.Effect<RequestDecision, LogWriteError | E>;
+  ) => Effect.Effect<DecisionOf<P['kind']>, LogWriteError | E>;
   /**
    * Answer a request if it is still open: the one writer of a decision. The
    * check reads the committed rows and the `request.decided` lands in one

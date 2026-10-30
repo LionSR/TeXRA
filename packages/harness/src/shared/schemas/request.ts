@@ -15,8 +15,10 @@
  */
 import { Schema } from 'effect';
 
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import { JsonValueSchema } from './jsonValue';
 import { UserQuestionAnswersSchema } from './prompts';
+import type { PermissionPayload } from './progressView/data';
 
 export const RequestDecisionSchema = Schema.Union([
   /** A plain approval. A proposal's approve may carry what the person
@@ -81,3 +83,74 @@ export type RefusalDecision = Extract<
   RequestDecision,
   { action: 'reject' | 'deny' | 'cancel' }
 >;
+
+/** The actions each request kind takes besides the three refusals (reject,
+ *  deny, cancel), which any request takes. */
+const KIND_ANSWERS = {
+  toolEdit: ['approve'],
+  bash: ['approve'],
+  proposal: ['approve'],
+  planApproval: ['approve', 'approve_and_goal'],
+  retry: ['retry'],
+  userQuestion: ['submit', 'skip'],
+  externalInquiry: ['answer', 'skip'],
+} as const satisfies Record<
+  PermissionPayload['kind'],
+  readonly RequestDecision['action'][]
+>;
+
+/** The decisions a request of kind `K` takes: its own actions and the three
+ *  refusals. */
+export type DecisionOf<K extends PermissionPayload['kind']> =
+  | Extract<RequestDecision, { action: (typeof KIND_ANSWERS)[K][number] }>
+  | RefusalDecision;
+
+/** The request kinds each bypass approves; the delegated-work grant covers
+ *  all three. A question, an inquiry, a retry and a plan approval never
+ *  appear here: they need an answer, or carry their own credential
+ *  semantics. */
+const COVERED_KINDS: Readonly<
+  Record<ApprovalBypassKind, readonly PermissionPayload['kind'][]>
+> = {
+  bash: ['bash'],
+  toolEdit: ['toolEdit'],
+  superYolo: ['proposal', 'toolEdit', 'bash'],
+};
+
+/** Whether `bypass` approves requests of `kind`. */
+export const bypassCovers = (
+  bypass: ApprovalBypassKind,
+  kind: PermissionPayload['kind'],
+): boolean => COVERED_KINDS[bypass].includes(kind);
+
+/** Whether `decision` is one a request of `kind` takes ({@link DecisionOf}). */
+export function decisionFits<K extends PermissionPayload['kind']>(
+  kind: K,
+  decision: RequestDecision,
+): decision is DecisionOf<K> {
+  const answers: readonly RequestDecision['action'][] = KIND_ANSWERS[kind];
+  return (
+    decision.action === 'reject' ||
+    decision.action === 'deny' ||
+    decision.action === 'cancel' ||
+    answers.includes(decision.action)
+  );
+}
+
+/**
+ * Why a request of `kind` cannot take this answer, or null when it can: a
+ * decision its kind does not offer, or a session grant that is not an
+ * approval its kind's bypass covers.
+ */
+export function answerMismatch(
+  kind: PermissionPayload['kind'],
+  decision: RequestDecision,
+  grant?: ApprovalBypassKind | null,
+): string | null {
+  const { action } = decision;
+  if (!decisionFits(kind, decision))
+    return `A ${kind} request is not answered with "${action}".`;
+  if (grant != null && (action !== 'approve' || !bypassCovers(grant, kind)))
+    return `A ${kind} request's "${action}" cannot grant the ${grant} bypass.`;
+  return null;
+}

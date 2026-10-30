@@ -13,7 +13,7 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   DispatchFacts,
   PermissionPayload,
-  RequestDecision,
+  DecisionOf,
   RunId,
   ToolDefinition,
   ToolResult,
@@ -155,9 +155,9 @@ export interface CallRequests {
   readonly nextId: (kind: PermissionPayload['kind']) => string;
   /** Open the request (or re-enter the standing one) and wait for its
    *  decision, as `SessionRequests.ask` does. */
-  readonly open: (
-    payload: PermissionPayload,
-  ) => Effect.Effect<RequestDecision, DatabaseNotOwner | CellError>;
+  readonly open: <P extends PermissionPayload>(
+    payload: P,
+  ) => Effect.Effect<DecisionOf<P['kind']>, DatabaseNotOwner | CellError>;
 }
 
 /**

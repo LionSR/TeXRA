@@ -300,9 +300,9 @@ interface CallRequests {
   readonly nextId: (kind: PermissionPayload['kind']) => string;
   /** Open the request (or re-enter the standing one) and wait for its
    *  decision, as `SessionRequests.ask` does. */
-  readonly open: (
-    payload: PermissionPayload,
-  ) => Effect.Effect<RequestDecision, DatabaseNotOwner | CellError>;
+  readonly open: <P extends PermissionPayload>(
+    payload: P,
+  ) => Effect.Effect<DecisionOf<P['kind']>, DatabaseNotOwner | CellError>;
 }
 ```
 
@@ -508,6 +508,17 @@ sandbox the scripts run in.
 
 ```ts
 const codemode: Plugin
+```
+
+## DecisionOf
+
+The decisions a request of kind `K` takes: its own actions and the three
+refusals.
+
+```ts
+type DecisionOf<K extends PermissionPayload['kind']> =
+  | Extract<RequestDecision, { action: (typeof KIND_ANSWERS)[K][number] }>
+  | RefusalDecision;
 ```
 
 ## definePlugin
@@ -1242,19 +1253,6 @@ type RefusalDecision = Extract<
   RequestDecision,
   { action: 'reject' | 'deny' | 'cancel' }
 >;
-```
-
-## refusalOf
-
-A decision that is not one the caller accepts, read as the refusal it is
-or, for an arm the request's kind never offered (a surface defect), as a
-loud denial naming it: a run never proceeds on an answer it cannot read.
-
-```ts
-function refusalOf(
-  kind: PermissionPayload['kind'],
-  decision: RequestDecision,
-): RefusalDecision
 ```
 
 ## renderPrompt
