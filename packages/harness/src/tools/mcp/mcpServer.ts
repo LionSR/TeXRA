@@ -298,6 +298,12 @@ const connect = (config: McpServerConfig) =>
         ),
       onRequest: (method) =>
         method === 'ping' ? Effect.succeed({}) : undefined,
+      // A stopped run or a timed-out call stops the server's work too. The
+      // protocol forbids cancelling `initialize`.
+      cancel: (id, method) =>
+        method === 'initialize'
+          ? undefined
+          : ['notifications/cancelled', { requestId: id }],
     });
     // Once its output is read ('exit' can precede it), fail what waits on
     // the process with its exit code. Its stderr (which may hold credentials)

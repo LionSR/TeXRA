@@ -845,6 +845,9 @@ interface JsonRpcConnectionOptions {
     method: string,
     params: unknown,
   ) => Effect.Effect<unknown> | undefined;
+  /** The `[method, params]` notification telling the peer we stopped waiting
+   *  for unanswered request `id` (its caller was interrupted, a timeout too). */
+  cancel?(id: number, method: string): readonly [string, unknown] | undefined;
 }
 ```
 

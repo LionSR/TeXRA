@@ -2296,6 +2296,10 @@ view` on a sub-agent the parent waited for shows its report instead of
   heading, hash marks included, as its one-line summary in the terminal's
   plan panel and in the plan notice an orchestrator receives. A heading is
   used only when the plan has no other text, without its marks.
+- **An MCP server hears when TeXRA stops waiting.** When you stopped a run
+  during an MCP tool call, or the call hit its 60-second limit, the server
+  was never told and kept working on it. TeXRA now sends the protocol's
+  cancellation notice, so the server can stop.
 
 ### Extension (VS Code)
 

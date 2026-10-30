@@ -1,6 +1,12 @@
 import '@test/support/defaultSessionTestSetup';
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -38,7 +44,9 @@ import {
 /** The per-install key env values are digested under, fixed. */
 const TEST_REVISION_KEY = Effect.succeed('00'.repeat(32));
 
-/** A stdio MCP server listing one tool, `echo`, that answers one call. */
+/** A stdio MCP server listing one tool, `echo`, that answers one call. With
+ *  `FIXTURE_MODE=hang` it never answers a call: it writes the call's id
+ *  beside its pid file, and appends each cancellation it receives. */
 const FIXTURE_SERVER = `
 const fs = require('node:fs');
 fs.writeFileSync(process.argv[2], String(process.pid));
@@ -59,6 +67,10 @@ require('node:readline')
         description: 'Echo the text.',
         inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       }] } });
+    else if (method === 'tools/call' && process.env.FIXTURE_MODE === 'hang')
+      fs.writeFileSync(process.argv[2] + '.called', String(id));
+    else if (method === 'notifications/cancelled')
+      fs.appendFileSync(process.argv[2] + '.cancelled', JSON.stringify(params) + '\\n');
     else if (method === 'tools/call')
       send({ jsonrpc: '2.0', id, result: { content: [{
         type: 'text',
@@ -97,6 +109,13 @@ const tempDir = Effect.acquireRelease(
   Effect.sync(() => mkdtempSync(path.join(os.tmpdir(), 'texra-mcp-'))),
   (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
 );
+
+/** The text of `file` once the fixture server has written it. */
+const writtenText = (file: string) =>
+  Effect.gen(function* () {
+    while (!existsSync(file)) yield* Effect.sleep(Duration.millis(20));
+    return readFileSync(file, 'utf8');
+  }).pipe(Effect.timeout(Duration.seconds(5)));
 
 describe('MCP server plugins', () => {
   // it.live: a real child process answers over stdio, and the approval's
@@ -212,6 +231,47 @@ describe('MCP server plugins', () => {
             yield* Effect.sleep(Duration.millis(20));
         }).pipe(Effect.timeout(Duration.seconds(5)));
         expect([isAlive(pid), isAlive(editedPid)]).toEqual([false, false]);
+      }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
+    20_000,
+  );
+
+  // Failure mode: a call the run stops waiting for (a stop, or the call's
+  // timeout) is never cancelled, so the server keeps working on it.
+  it.live(
+    'tells the server when a call is abandoned',
+    () =>
+      Effect.gen(function* () {
+        const dir = yield* tempDir;
+        const pidFile = path.join(dir, 'pid');
+        writeFileSync(path.join(dir, 'server.cjs'), FIXTURE_SERVER);
+        writeFileSync(
+          path.join(dir, 'mcp.json'),
+          JSON.stringify({
+            mcpServers: {
+              fixture: {
+                command: process.execPath,
+                args: [path.join(dir, 'server.cjs'), pidFile],
+                env: { FIXTURE_MODE: 'hang' },
+              },
+            },
+          }),
+        );
+        const services = yield* Layer.build(mcpToolTableLayer(dir));
+        const resolved = yield* resolveTestStep({
+          tools: [{ name: 'mcp__fixture__*' }],
+          injectTools: false,
+          stores: installedHost().roots,
+          workspaceRoot: undefined,
+        }).pipe(Effect.provideContext(services));
+        const tool = resolved.registry.get('mcp__fixture__echo')!;
+
+        const call = yield* Effect.forkChild(tool.call({ text: 'hi' }));
+        const requestId = Number(yield* writtenText(`${pidFile}.called`));
+        yield* Fiber.interrupt(call);
+
+        expect(
+          JSON.parse(yield* writtenText(`${pidFile}.cancelled`)),
+        ).toStrictEqual({ requestId });
       }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
     20_000,
   );
