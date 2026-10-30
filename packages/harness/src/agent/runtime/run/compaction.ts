@@ -25,12 +25,12 @@ import {
   type RunId,
 } from '@shared/schemas';
 import type { CellError, RunCell } from '@shared/session/runHistory';
+import { turnText } from '@shared/session/runFacts';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { contextTokens, estimateMessageTokens } from './contextTokens';
-import { turnText } from './turnText';
 import type { ModelInvoker } from '../ModelInvoker';
 import type { CallResult } from './modelCall';
 

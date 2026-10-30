@@ -43,12 +43,24 @@ import {
 
 import { byId, isSharedRunRow } from './runRows';
 import { runRowsFrom } from './runRowReads';
+import type { TurnResult } from '@texra-ai/llm';
 import type { RunHistoryDraft, RunInputDraft } from './runState';
 import type { RunRows } from './runRowsShape';
 import type { Invocation, PendingResponse } from './inFlight';
 
+/** The text a completed model turn or assistant message contains, in order. */
+export const turnText = (turn: Pick<TurnResult, 'content'>): string =>
+  turn.content
+    .flatMap((part) =>
+      part.kind === 'message' ? part.content.map((piece) => piece.text) : [],
+    )
+    .join('');
+
 /** What a run answers and produced, as its rows record it. */
 export type RunFacts = {
+  /** The latest nonempty text from this turn's response rows. A new turn
+   *  clears it; tool-only responses, nudges and context edits keep it. */
+  readonly answer: string;
   /** The latest value of each field an `append` or a fork's edit recorded;
    *  an instruction absent is the launch's. */
   readonly input: Omit<RunInput, 'instruction'> & {
@@ -84,6 +96,7 @@ export type RunFacts = {
 
 /** A run's facts before any row. */
 export const NO_FACTS: RunFacts = {
+  answer: '',
   input: {},
   edited: [],
   toolCalls: 0,

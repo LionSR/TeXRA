@@ -299,6 +299,8 @@ const applySharedRow = (
       declinedRoutes: declinedBy(state, row),
     }),
     ...verdict.rows,
+    ...(row.type === 'run.position' &&
+      row.payload.at === 'turn.begin' && { answer: '' }),
     ...(row.type === 'run.position' && { resuming: false }),
     phase: phaseAfter(state.phase, verdict.rows.at),
     invocation: closed ? closedBy(state.invocation) : state.invocation,
