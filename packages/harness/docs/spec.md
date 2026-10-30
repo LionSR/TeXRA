@@ -62,7 +62,7 @@ its kind is its `type` column.
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row (`controllers/session/storeSchema.ts:54-65`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
-  `RunState` the loop continues from (`shared/session/runState.ts:530-543`).
+  `RunState` the loop continues from (`shared/session/runState.ts:504-517`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
   (`agent/runtime/SessionEvents.ts:219-370`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
@@ -151,7 +151,7 @@ The publisher offers these doors:
   (`agent/runtime/SessionEvents.ts:311-319`).
 - `drain`: End the inbox and run what it holds within the close deadline of
   5,000 ms (`agent/runtime/SessionEvents.ts:252-290`,
-  `agent/runtime/SessionHandle.ts:400`).
+  `agent/runtime/SessionHandle.ts:399`).
 
 A job MUST NOT wait on its own publisher; doing so is a defect
 (`agent/runtime/SessionEvents.ts:197-202`, `:299`). A job MAY run again whole
@@ -304,7 +304,7 @@ The `model.message` arms:
 `run.report` holds the run's report text, `run.result` its result metadata, and
 `followup.closed` marks its input closed until the run's next `run.activate`
 reopens it (`shared/schemas/sessionEvent.ts:402-409`,
-`shared/session/runRows.ts:301-307`, `agent/followUp/Inbox.ts:339-344`); taking the run's claim does not.
+`shared/session/runRowReads.ts` `recordFacts`, `agent/followUp/Inbox.ts:339-344`); taking the run's claim does not.
 
 ### 3.3 Display rows (session-authored and run-authored)
 
@@ -463,20 +463,20 @@ requests, and the offered tools and contents
 ### 5.2 Grammar
 
 `applyRunRows(state, rows)` folds rows in order
-(`shared/session/runState.ts:530-543`). It MUST refuse a row whose commit is not
-above the last folded one (`shared/session/runState.ts:493-497`). Each folded
+(`shared/session/runState.ts:504-517`). It MUST refuse a row whose commit is not
+above the last folded one (`shared/session/runState.ts:469-473`). Each folded
 kind has one handler in a table keyed by row type: the state it requires (any
 state, an existing one, or an opened run) and its move
-(`shared/session/runState.ts:292-309`, `:342-471`). A handler that requires an
+(`shared/session/runState.ts:257-275`, `:310-438`). A handler that requires an
 opened run refuses a row before the opening `run.position`
-(`shared/session/runState.ts:505-509`). Every other row kind is listed by name
-as one the fold skips, so a kind in neither list is refused as `unknown-run-row`
-and a new kind does not compile until it is placed
-(`shared/session/runState.ts:166-201`, `:495-498`). A refusal is a typed
+(`shared/session/runState.ts:481-485`). A row of any other kind is refused as
+`unknown-run-row`: its reader selects the kinds the fold reads
+(`RUN_STATE_ROW_TYPES`, `isRunStateRow`; `shared/session/runState.ts:440-452`,
+`:474`), so no display row reaches it. A refusal is a typed
 `RunHistoryInconsistent` with a reason: `out-of-order`, `orphan-settlement`,
 `unknown-run-row`, `mismatched-delivery` or `unreadable-turn`
 (`shared/session/runState.ts:75-86`). The fold never defaults a row it cannot
-apply (`shared/session/runState.ts:524-533`).
+apply (`shared/session/runState.ts:494-503`).
 
 A run is opened by its first `run.position`. Run history rows without an opening
 position MUST fail the load as `inconsistent`
@@ -809,7 +809,7 @@ The guarantees, numbered as in the package README:
 - **I5**: An owned child that ended cleanly answers its call; it is not launched
   again without a person's retry; no child is left without a terminal row,
   except one deliberately paused with a `child.park` `paused` row so it can be
-  called again (`agent/runtime/delegation/childRun.ts:156-165`). Asserted by
+  called again (`agent/runtime/delegation/childRun.ts:101-111`). Asserted by
   `src/test-kernel/support/crashConformance.ts:38-39`, `:867`.
 - **I6**: A child's result is delivered to its parent at most once and is not
   lost while the parent was held elsewhere; a result whose child was detached,

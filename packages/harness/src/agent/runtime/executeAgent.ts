@@ -100,11 +100,11 @@ const enterRun = Effect.fn('enterRun')(function* (
             ? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED
             : USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
         });
-  if (registered !== null && !registered.born)
+  if (registered !== null && registered.start === null)
     return yield* new AgentError({
       message: `Run ${runId} already exists; resume it.`,
     });
-  const registration = registered?.rows ?? null;
+  const registration = registered;
   let held: AgentEvent[] | null = [];
   const logger = new TraceEmitter((event) =>
     held === null ? session.log.publish(runId, event) : held.push(event),

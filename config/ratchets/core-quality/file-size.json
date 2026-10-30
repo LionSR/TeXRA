@@ -18,7 +18,7 @@
   "packages/harness/src/shared/schemas/runHistoryEvent.ts": 441,
   "packages/harness/src/shared/schemas/sessionEvent.ts": 566,
   "packages/harness/src/shared/session/database.ts": 409,
-  "packages/harness/src/shared/session/runState.ts": 546,
+  "packages/harness/src/shared/session/runState.ts": 525,
   "packages/harness/src/shared/session/sessionView.ts": 448,
   "packages/harness/src/shared/session/sessionViewUpdate.ts": 1162,
   "packages/harness/src/tools/bash.ts": 542,

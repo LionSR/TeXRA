@@ -316,12 +316,9 @@ function executeAsk(
         // rolled-back append: the committed rows decide, and a turn whose
         // request is durably open stays open with it.
         Effect.onError(() =>
-          runs.rows(runId, ['request.opened']).pipe(
-            Effect.flatMap((rows) =>
-              rows.some(
-                (row) =>
-                  row.type === 'request.opened' && row.requestId === requestId,
-              )
+          runs.requested(runId, requestId).pipe(
+            Effect.flatMap((landed) =>
+              landed
                 ? Effect.void
                 : Effect.asVoid(
                     records.markDropped({

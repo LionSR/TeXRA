@@ -1,15 +1,13 @@
-/**
- * One session's store-facing owners: the log (`SessionLog`, the one
- * transaction door with its reads and claims) and the trace sink
- * (`RunTrace`), over the root's publisher and database.
+/** One session's store-facing owners: the log (`SessionLog`, the one
+ *  transaction door with its reads and claims) and the trace sink
+ *  (`RunTrace`), over the root's publisher and database.
  *
- * "Published" means folded: a transaction returns once the session's tail
- * has delivered, and its view has folded, every commit it made, so a caller
- * that reads the view next sees what it wrote. The raw tail is delivered
- * here too ({@link SessionStore.deliver}): it drops the transient text a
- * committed row closes and hands a run's removal to the session. "Settled"
- * waits further, for the reader of the folded tail to run over a commit.
- */
+ *  "Published" means folded: a transaction returns once the session's tail
+ *  has delivered, and its view has folded, every commit it made, so a caller
+ *  that reads the view next sees what it wrote. The raw tail is delivered
+ *  here too ({@link SessionStore.deliver}): it drops the transient text a
+ *  committed row closes and hands a run's removal to the session. "Settled"
+ *  waits further, for the reader of the folded tail to run over a commit. */
 import {
   type Context,
   Deferred,
@@ -49,13 +47,16 @@ import {
   type SessionEventsShape,
   type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
-import { runRowsFrom } from '@shared/session/runRows';
+import {
+  recordOf,
+  RUN_ROW_READS,
+  runRowsFrom,
+} from '@shared/session/runRowReads';
+import { RUN_STATE_ROW_TYPES } from '@shared/session/runState';
 
 import { makeRunTrace } from './runTrace';
 import { SessionViewService } from './SessionView';
 import { TextChunkSource } from './sessionSources';
-
-const CHANNEL = 'sessionStore';
 
 /** What the session layer composes a session from, beside the handle. The
  *  store is the one owner of the session's publisher: nothing else reaches
@@ -72,24 +73,25 @@ export interface SessionStore {
    *  holds its state), for the session's one reader: `settled` waits until
    *  it has run over a commit, so it never waits on `settled` itself. */
   readonly folded: Stream.Stream<SessionEvent, DatabaseReadFailed>;
-  /**
-   * Deliver the raw tail from the store's opening commit for the caller's
-   * scope: each committed row drops the transient text it closes, a run's
-   * `run.removed` is handed to `removed`, and the position it reaches is
-   * what a transaction's settle waits for.
-   */
+  /** Deliver the raw tail from the store's opening commit for the caller's
+   *  scope: each committed row drops the transient text it closes, a run's
+   *  removal is handed to `removed`, and the position it reaches is what a
+   *  transaction's settle waits for. */
   readonly deliver: (
     removed: (runId: RunId) => void,
   ) => Effect.Effect<void, never, Scope.Scope>;
   /** Drain the publisher inside the close deadline, then shut the doors:
    *  from here on a trace row, a transcript subscription and an interrupted
-   *  request's cancellation write nothing, and the first late trace row
-   *  says so. */
+   *  request's cancellation write nothing; the first late trace row says so. */
   readonly close: Effect.Effect<void>;
   readonly closed: () => boolean;
 }
 
-type DatabaseShape = Context.Service.Shape<typeof Database>;
+const CHANNEL = 'sessionStore';
+
+/** Whether `row` is a run's deletion marker. */
+const isRemoval = (row: SessionEvent | undefined): boolean =>
+  row !== undefined && recordOf(row).removed !== null;
 
 /** Log a failure on this channel, with the failure attached as its `data`. */
 const logFailure =
@@ -97,11 +99,9 @@ const logFailure =
   (data: unknown) =>
     log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
 
-/**
- * The settled level: the lesser of what the tail delivered and what the
- * view folded. `to(commit)` waits until it (or `level`) reaches `commit`;
- * it dies with the tail or the level's end, so it never hangs.
- */
+/** The settled level: the lesser of what the tail delivered and what the
+ *  view folded. `to(commit)` waits until it (or `level`) reaches `commit`;
+ *  it dies with the tail or the level's end, so it never hangs. */
 function settlement(
   view: Context.Service.Shape<typeof SessionViewService>,
   delivered: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
@@ -142,17 +142,15 @@ function settlement(
   return { cursor, changes, to };
 }
 
-/**
- * This process's holds on run claims: one count per run, whoever holds (a
- * publisher job or not). Each holder is counted before it takes, in its own
- * transaction (a job's, inside it): the first proves any prior owner dead
- * and takes the claim, later ones find it this process's. Only the last to
- * go decides the claim (`Scope.addFinalizer` keeps no context: in its
- * closer's transaction): given back to how the holders found it, or
- * released when a hold `ends` it. The session's close decides whatever is
- * still held.
- */
-const claimHolds = (database: DatabaseShape) => {
+/** This process's holds on run claims: one count per run, whoever holds (a
+ *  publisher job or not). Each holder is counted before it takes, in its own
+ *  transaction (a job's, inside it): the first proves any prior owner dead
+ *  and takes the claim, later ones find it this process's. Only the last to
+ *  go decides the claim (`Scope.addFinalizer` keeps no context: in its
+ *  closer's transaction): given back to how the holders found it, or
+ *  released when a hold `ends` it. The session's close decides whatever is
+ *  still held. */
+const claimHolds = (database: Context.Service.Shape<typeof Database>) => {
   type Hold = { count: number; taken: boolean; ended: boolean };
   const holds = new Map<AggregateId, Hold>();
   const decide = (id: AggregateId, hold: Hold) =>
@@ -202,16 +200,14 @@ const claimHolds = (database: DatabaseShape) => {
   );
 };
 
-/**
- * One transaction on the publisher, settled against its own last commit,
- * never another job's: one that appended nothing returns at once. A run the
- * job claimed or gave birth to is given back if the job fails, or if what it
- * committed never reaches the view.
- */
+/** One transaction on the publisher, settled against its own last commit,
+ *  never another job's: one that appended nothing returns at once. A run the
+ *  job claimed or gave birth to is given back if the job fails, or if what
+ *  it committed never reaches the view. */
 const transaction =
   (
     events: SessionEventsShape,
-    database: DatabaseShape,
+    database: Context.Service.Shape<typeof Database>,
     settleTo: (commit: CommitOrdinal) => Effect.Effect<void>,
   ) =>
   <A, E>(
@@ -237,10 +233,9 @@ const transaction =
         append: (drafts) =>
           Effect.tap(append(drafts), (rows) =>
             Effect.sync(() => {
-              const last = rows.at(-1);
-              if (last !== undefined) committed = last.commit;
+              committed = rows.at(-1)?.commit ?? committed;
               for (const row of rows)
-                if (row.type === 'run.start') owned.push(row.aggregateId);
+                if (recordOf(row).start !== null) owned.push(row.aggregateId);
             }),
           ),
         claim: (runId) => {
@@ -329,16 +324,21 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       settled,
       afterCommit,
       now: () => SubscriptionRef.getUnsafe(database.observedCommit),
-      rows: (id, types) => database.readAggregate(id, 1, types),
+      history: (id) => database.readAggregate(id, 1, RUN_STATE_ROW_TYPES),
+      runRows: (id, read) =>
+        database
+          .readAggregate(id, 1, RUN_ROW_READS[read])
+          .pipe(Effect.map(runRowsFrom)),
       blobs: database.readBlobs,
       facts: (runId) =>
         database
           .readRunRecords(qualifyAggregateId('run', runId))
           .pipe(Effect.map((rows) => (rows[0] ? runRowsFrom(rows) : null))),
+      // A removed run's rows end with its deletion marker: none to show.
       display: (runId) =>
         Effect.map(
           database.readDisplayAggregate(qualifyAggregateId('run', runId), 1),
-          (rows) => (rows.at(-1)?.type === 'run.removed' ? [] : rows),
+          (rows) => (isRemoval(rows.at(-1)) ? [] : rows),
         ),
       tail: events.all,
       listing: events.listing,
@@ -371,8 +371,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
           Stream.runForEach((event) =>
             Effect.gen(function* () {
               const target = aggregateTarget(event.aggregateId);
-              if (event.type === 'run.removed' && target.kind === 'run')
-                removed(target.id);
+              if (target.kind === 'run' && isRemoval(event)) removed(target.id);
               yield* trace.committed(event);
               yield* SubscriptionRef.set(delivered, event.commit);
             }),

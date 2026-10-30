@@ -203,6 +203,9 @@ const ErrorToolResultSchema = Schema.Struct({
  *  output through: its settled result's `value` is the run's output. */
 export const STRUCTURED_OUTPUT_TOOL_NAME = 'submit_output';
 
+/** The tool that runs a named agent as a child of the calling run. */
+export const AGENT_TOOL_NAME = 'agent' as const;
+
 export const ToolResultSchema = Schema.Union([
   ExecutedToolResultSchema,
   ErrorToolResultSchema,

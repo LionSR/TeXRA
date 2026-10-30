@@ -23,7 +23,7 @@ import {
 } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { runStateAppend } from '@shared/session/runHistory';
-import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRows';
+import { isRequestDecision } from '@shared/session/runRowReads';
 
 import {
   resolveBypass,
@@ -50,7 +50,6 @@ import {
   type PermissionPayload,
   type RequestDecision,
   type RunId,
-  type SessionEvent,
 } from '@shared/schemas';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Append } from '@shared/session/sessionEvents';
@@ -188,11 +187,11 @@ export function liveToolGates({
   readonly policy: ApprovalPolicy;
 } {
   const view = SubscriptionRef.getUnsafe(session.view.ref);
-  const start = entry.registration?.[0];
+  const start = entry.registration?.start ?? null;
   const source =
-    start?.type === 'run.start'
-      ? withUnborn(view, runId, start.parent?.id ?? null, start.approvalPolicy)
-      : view;
+    start === null
+      ? view
+      : withUnborn(view, runId, start.parent?.id ?? null, start.approvalPolicy);
   const policy = runPolicy(session.approvals.policy(), source, runId);
   const bypassed = resolveBypass(source, runId, 'superYolo') !== null;
   return {
@@ -270,10 +269,10 @@ export function requestAsks({
 
   /** The `request.decided` row for `requestId`, if the request is still
    *  open: the body of one publisher transaction, whether a surface or an
-   *  interrupted {@link ask} decides it. It reads the run's
-   *  request rows alone, through the type index, so a decision costs the
-   *  same however long the run's history grows, and asks `runRowsFrom`
-   *  whether the request is open, as the run state does. */
+   *  interrupted {@link ask} decides it. It reads the run's request rows
+   *  alone (the `requests` read, through the type index), so a decision
+   *  costs the same however long the run's history grows, and asks their
+   *  `RunRows` whether the request is open, as the run state does. */
   const decisionRow = (
     runId: RunId,
     requestId: string,
@@ -282,12 +281,11 @@ export function requestAsks({
   ) =>
     Effect.gen(function* () {
       const aggregateId = qualifyAggregateId('run', runId);
-      const rows = yield* session().log.rows(
+      const { requests } = yield* session().log.runRows(
         aggregateId,
-        RUN_ROW_READS.requests,
+        'requests',
       );
-      if (runRowsFrom(rows).requests[requestId]?.decision !== null)
-        return false;
+      if (requests[requestId]?.decision !== null) return false;
       yield* runStateAppend(append)([
         { type: 'request.decided', aggregateId, requestId, decision },
       ]);
@@ -299,13 +297,10 @@ export function requestAsks({
     return session()
       .log.tail(from)
       .pipe(
+        Stream.filter(isRequestDecision),
         Stream.filter(
-          (
-            event,
-          ): event is Extract<SessionEvent, { type: 'request.decided' }> =>
-            event.type === 'request.decided' &&
-            event.aggregateId === aggregate &&
-            event.requestId === requestId,
+          (event) =>
+            event.aggregateId === aggregate && event.requestId === requestId,
         ),
         Stream.runHead,
         Effect.flatMap(

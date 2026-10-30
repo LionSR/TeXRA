@@ -17,12 +17,7 @@ import { runRelation } from '@shared/session/runRelation';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RunInputDraft } from '@shared/session/runState';
 import { consumedRow, needsWake } from '@shared/session/runFacts';
-import {
-  RUN_ROW_READS,
-  pendingMessages,
-  runRowsFrom,
-  type QueuedFollowUp,
-} from '@shared/session/runRows';
+import { pendingMessages, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
 import type { RunView } from '@shared/session/sessionView';
 import {
@@ -44,7 +39,7 @@ const CLOSED = Object.freeze({
 /** The session doors the inbox works through (the session layer wires them). */
 export interface InboxPort {
   /** The session's log: a send is one transaction under the run's claim. */
-  readonly log: Pick<SessionLog, 'transact' | 'rows' | 'hold' | 'settled'>;
+  readonly log: Pick<SessionLog, 'transact' | 'runRows' | 'hold' | 'settled'>;
   /** Enqueue a job on the session's publisher and return. */
   readonly detach: SessionEventsShape['detach'];
   /** The run as the session view holds it: its parent (`null` at top
@@ -345,8 +340,8 @@ export class Inbox {
   /** The run's input, lifecycle and parent as its committed rows say them. */
   read(runId: RunId): Effect.Effect<RunRows, DatabaseReadFailed> {
     return Effect.suspend(() =>
-      this.port.log.rows(qualifyAggregateId('run', runId), RUN_ROW_READS.input),
-    ).pipe(Effect.map(runRowsFrom));
+      this.port.log.runRows(qualifyAggregateId('run', runId), 'input'),
+    );
   }
 
   private notify(closed: InboxClosed): void {

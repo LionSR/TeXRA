@@ -1,4 +1,4 @@
-import { Context, Effect, type Scope } from 'effect';
+import { Context, Effect, Schema, type Scope } from 'effect';
 import type { ITool, ToolContext } from '@agent/core/tools/ToolTypes';
 import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -16,7 +16,6 @@ import {
   qualifyAggregateId,
   type RunEnd,
   type RunId,
-  type SessionEvent,
   type ToolResult,
 } from '@shared/schemas';
 
@@ -37,8 +36,9 @@ export type CallServices =
  * receipt for a background launch, within the issuing script's concurrency
  * budget) or an external process's (`launchProcess`: its run id, outside
  * the budget); a plugin's tool reaches no other launch. And it reaches a
- * run of the session by id: its input, live parent edge, records and
- * rows. Each needs the call's run; a standalone host call has none.
+ * run of the session by id: its input, live parent edge, records, whether
+ * it holds a request, and the plugin's own facts on it. Each needs the
+ * call's run; a standalone host call has none.
  */
 export interface ChildRunsShape {
   readonly launch: (
@@ -60,11 +60,22 @@ export interface ChildRunsShape {
     readonly exists: Effect.Effect<boolean, Error>;
     readonly end: Effect.Effect<RunEnd | null, Error>;
   };
-  /** Its committed rows, with `types` only those. */
-  readonly rows: (
+  /** The latest value of `arm`'s kind among the run's own facts, decoded
+   *  by the arm's schema; undefined while the run recorded none. */
+  readonly fact: <A>(
     runId: RunId,
-    types?: readonly SessionEvent['type'][],
-  ) => Effect.Effect<readonly SessionEvent[], Error>;
+    arm: {
+      readonly plugin: string;
+      readonly kind: string;
+      readonly schema: Schema.Codec<A, unknown>;
+    },
+  ) => Effect.Effect<A | undefined, Error>;
+  /** Whether the run holds the request `requestId`, open or decided: what
+   *  a tool that posted one reads after a failed post. */
+  readonly requested: (
+    runId: RunId,
+    requestId: string,
+  ) => Effect.Effect<boolean, Error>;
 }
 
 const noRun = Effect.fail(
@@ -79,7 +90,8 @@ const noRunChildRuns: ChildRunsShape = Object.freeze({
   inbox: () => noRun,
   parent: () => noRun,
   records: () => ({ exists: noRun, end: noRun }),
-  rows: () => noRun,
+  fact: () => noRun,
+  requested: () => noRun,
 });
 
 /** The door, as the run loop provides it beside each call ({@link childRuns});
@@ -111,7 +123,18 @@ export const childRuns = (
       exists: getRunRecords(session, id).exists(),
       end: getRunRecords(session, id).readRunEnd(),
     }),
-    rows: (id, types) => session.log.rows(qualifyAggregateId('run', id), types),
+    fact: (id, arm) =>
+      Effect.map(session.log.facts(id), (held) => {
+        const row = held?.facts[`${arm.plugin}/${arm.kind}`];
+        return row === undefined
+          ? undefined
+          : Schema.decodeUnknownSync(arm.schema)(row.value);
+      }),
+    requested: (id, requestId) =>
+      Effect.map(
+        session.log.runRows(qualifyAggregateId('run', id), 'requests'),
+        (rows) => rows.requests[requestId] !== undefined,
+      ),
   };
 };
 

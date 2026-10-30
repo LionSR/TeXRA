@@ -23,11 +23,10 @@ import type { Append } from '@shared/session/sessionEvents';
 import { unloadable } from '@shared/session/runHistory';
 import {
   activationDrafts,
-  lastLifecycleRow,
   type RegisterRunOptions,
+  type Registration,
   registrationDrafts,
   runEndDraft,
-  runEndFromEvents,
 } from '@shared/session/runFacts';
 import type { RunHistoryDraft, RunInputDraft } from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -89,26 +88,25 @@ export const registerRun = Effect.fn('registerRun')(function* (
   return yield* Effect.gen(function* () {
     const opens = yield* registrationRows(session, runId, record, options);
     const rows = Effect.succeed(opens.rows);
+    const born = opens.start !== null;
     const cell = yield* session.runHistory.open(
       runId,
-      opens.born ? { registration: rows } : { activation: () => rows },
+      born ? { registration: rows } : { activation: () => rows },
     );
-    if (opens.born) yield* cell.append([]);
+    if (born) yield* cell.append([]);
   }).pipe(defectAsFailure); // one that died wrote nothing: launch refused
 });
 
-/** The rows that register a run, uncommitted (`born`: they open it, with
- *  `run.start` first), which a caller commits with the run's first history
- *  in one batch, so no crash leaves it registered without that history. */
+/** The rows that register a run, uncommitted (with a `start`, they give
+ *  birth to it, `run.start` first), which a caller commits with the run's
+ *  first history in one batch, so no crash leaves it registered without
+ *  that history. */
 export const registrationRows = Effect.fn('registrationRows')(function* (
   session: SessionHandle,
   runId: RunId,
   record: RunRecord,
   options: RegisterRunOptions,
-): Effect.fn.Return<
-  { readonly born: boolean; readonly rows: readonly SessionEventDraft[] },
-  Error
-> {
+): Effect.fn.Return<Registration, Error> {
   return yield* Effect.gen(function* () {
     // A re-registration takes the existing run's claim over as it commits.
     const prior = yield* getRunRecords(session, runId).exists();
@@ -127,10 +125,7 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
       pinRunWorkingDirectory(record, session.roots.workspace),
     );
     const ended = prior ? yield* session.approvals.activationRows(runId) : [];
-    return {
-      born: !prior,
-      rows: registrationDrafts(runId, config, options, !prior, ended),
-    };
+    return registrationDrafts(runId, config, options, !prior, ended);
   }).pipe(defectAsFailure);
 });
 
@@ -290,19 +285,21 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   // with none, the end records the loss (a failed read: the backstop's).
   const read =
     Exit.isFailure(status) && lastTurn !== undefined
-      ? yield* Effect.result(session.log.rows(qualifyAggregateId('run', runId)))
+      ? yield* Effect.result(
+          session.log.runRows(qualifyAggregateId('run', runId), 'lifecycle'),
+        )
       : undefined;
   if (read?._tag === 'Success' && Exit.isFailure(status)) {
     const cause = ensureError(Cause.squash(status.cause)).message;
     yield* Effect.logWarning(
       `Run ${runId}: its end with its last turn: ${cause}`,
     );
-    const landed = runEndFromEvents(read.success, runId);
+    const landed = read.success.end;
     if (landed !== null) return { end: endOf(landed), wrote: !stood };
     // The parent's notice rides this end's append (both commit or neither),
     // one per lifecycle (its `run.activate`) so a later loss is no replay;
     // a parent that refuses it is the end's note, on the card.
-    const since = lastLifecycleRow(read.success, runId);
+    const since = read.success.activation;
     const deliveryId = lostResultId(runId, since?.commit);
     const text = `The result of run ${runId} was lost: ${cause}`;
     const notice = Effect.gen(function* () {

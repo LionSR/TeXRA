@@ -15,7 +15,6 @@ import {
   type ApprovalGrants,
 } from '@shared/approvalBypassKind';
 import {
-  type AggregateId,
   type DispatchFacts,
   emptyRunEndOutput,
   type FollowUpContent,
@@ -23,6 +22,7 @@ import {
   qualifyAggregateId,
   type RunEnd,
   type RunEndOutput,
+  type RunBinding,
   type RunId,
   type RunIdentity,
   type RunInput,
@@ -44,8 +44,8 @@ import {
   isStaleNotice,
   type QueuedFollowUp,
   type RunLookup,
-  runRowsFrom,
 } from './runRows';
+import { runRowsFrom } from './runRowReads';
 import type { RunHistoryDraft, RunInputDraft } from './runState';
 import type { RunRows } from './runRowsShape';
 import type { Invocation, PendingResponse } from './inFlight';
@@ -168,14 +168,12 @@ export const isInstruction = ({ from }: FollowUpContent): boolean =>
  *  a turn, at the turn's end, or while it waits for input. */
 export type InputPoint = 'request' | 'turn' | 'idle';
 
-/**
- * The pending messages a run reads at `at`, in commit order. A row held
- * until an instruction (a child's pause or stop notice) is read only beside
- * one. A row held until the turn ends, or one for a running generation only
- * (a progress notice, a host notification), is not read before a request
- * inside the turn. A notice from a child run that has ended is stale: it is
- * consumed unread (`staleNotices`).
- */
+/** The pending messages a run reads at `at`, in commit order. A row held
+ *  until an instruction (a child's pause or stop notice) is read only beside
+ *  one. A row held until the turn ends, or one for a running generation only
+ *  (a progress notice, a host notification), is not read before a request
+ *  inside the turn. A notice from a child run that has ended is stale: it is
+ *  consumed unread (`staleNotices`). */
 export function readableMessages(
   rows: readonly QueuedFollowUp[],
   at: InputPoint,
@@ -211,19 +209,18 @@ export const staleNotices = (
 export const consumedRow = (
   runId: RunId,
   followUpId: string,
-): {
-  readonly type: 'followup.consumed';
-  readonly aggregateId: AggregateId;
-  readonly followUpId: string;
-} => ({
+): Extract<RunInputDraft, { readonly type: 'followup.consumed' }> => ({
   type: 'followup.consumed',
   aggregateId: qualifyAggregateId('run', runId),
   followUpId,
 });
 
-/** Run `runId`'s rows among `rows`, folded for its lifecycle (a shared row
- *  left out, so a partial read folds too). */
-const lifecycleOf = (rows: readonly SessionEvent[], runId: RunId): RunRows => {
+/** Run `runId`'s rows among `rows`, folded (a shared row left out, so a
+ *  partial read, a listing's, folds too). */
+export const recordsOf = (
+  rows: readonly SessionEvent[],
+  runId: RunId,
+): RunRows => {
   const id = qualifyAggregateId('run', runId);
   return runRowsFrom(
     rows.filter((row) => row.aggregateId === id && !isSharedRunRow(row)),
@@ -237,7 +234,7 @@ export function lastLifecycleRow(
   rows: readonly SessionEvent[],
   runId: RunId,
 ): Extract<SessionEvent, { type: 'run.end' | 'run.activate' }> | undefined {
-  const { end, activation } = lifecycleOf(rows, runId);
+  const { end, activation } = recordsOf(rows, runId);
   return end ?? activation ?? undefined;
 }
 
@@ -247,7 +244,7 @@ export function runEndFromEvents(
   rows: readonly SessionEvent[],
   runId: RunId,
 ): Extract<SessionEvent, { type: 'run.end' }> | null {
-  return lifecycleOf(rows, runId).end;
+  return recordsOf(rows, runId).end;
 }
 
 /**
@@ -305,48 +302,55 @@ export interface RegisterRunOptions {
   readonly provenance?: RunProvenance; // a fork's source and cut
   readonly grants?: ApprovalGrants; // the grants it starts with
   /** A fork's history, which its opening commits in place of a prompt
-   *  (`forkSeed`): the run is born on it, not resumed onto it. */
-  readonly seed?: readonly RunHistoryDraft[];
+   *  (`forkSeed`): the run is born on it, not resumed onto it, bound as its
+   *  source was at the cut (`binding`: what its `run.config` row records). */
+  readonly seed?: {
+    readonly rows: readonly RunHistoryDraft[];
+    readonly binding: RunBinding | null;
+  };
 }
 
 type RunConfigRow = Extract<SessionEventDraft, { readonly type: 'run.config' }>;
 
-/**
- * The rows that register a run, in the order its batch commits them: a new
- * run's (`born`) `run.start` first, then its configuration, its
- * `run.activate` (a re-registration's with the grants it ends, `ended`),
- * and the description it is born with.
- */
+/** The rows that register a run, and the `run.start` among them of a run
+ *  they give birth to (null: the run exists, and they re-register it). */
+export interface Registration {
+  readonly rows: readonly SessionEventDraft[];
+  readonly start: Extract<SessionEventDraft, { type: 'run.start' }> | null;
+}
+
+/** The rows that register a run, in commit order: a new run's (`born`)
+ *  `run.start`, its configuration, its `run.activate` (a re-registration's
+ *  with the grants it ends, `ended`), and the description it is born with. */
 export function registrationDrafts(
   runId: RunId,
   config: RunConfigRow['config'],
   options: RegisterRunOptions,
   born: boolean,
   ended: readonly SessionEventDraft[],
-): SessionEventDraft[] {
+): Registration {
   const target = qualifyAggregateId('run', runId);
   const worktree = config.workingDirectory?.trim();
-  const rows: SessionEventDraft[] = [];
-  if (born)
-    rows.push({
-      type: 'run.start',
-      aggregateId: target,
-      identity: options.identity,
-      userFollowUpSupport:
-        options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-      worktree: worktree ? { workingDirectory: worktree } : undefined,
-      parent:
-        options.parentRunId === undefined
-          ? null
-          : { id: options.parentRunId, call: options.parentCall ?? null },
-      provenance: options.provenance ?? null,
-      approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
-    });
-  rows.push(
+  const start: NonNullable<Registration['start']> = {
+    type: 'run.start',
+    aggregateId: target,
+    identity: options.identity,
+    userFollowUpSupport:
+      options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+    worktree: worktree ? { workingDirectory: worktree } : undefined,
+    parent:
+      options.parentRunId === undefined
+        ? null
+        : { id: options.parentRunId, call: options.parentCall ?? null },
+    provenance: options.provenance ?? null,
+    approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
+  };
+  const rows: SessionEventDraft[] = [
+    ...(born ? [start] : []),
     { type: 'run.config', aggregateId: target, config },
     { type: 'run.activate', aggregateId: target },
-  );
-  if (!born) rows.push(...ended);
+    ...(born ? [] : ended),
+  ];
   if (options.description !== undefined)
     rows.push({
       type: 'run.description',
@@ -354,7 +358,7 @@ export function registrationDrafts(
       description: options.description,
       by: options.descriptionBy ?? 'model',
     });
-  return rows;
+  return { rows, start: born ? start : null };
 }
 
 /** A resume's activation rows: its `run.activate`, the grants it ends

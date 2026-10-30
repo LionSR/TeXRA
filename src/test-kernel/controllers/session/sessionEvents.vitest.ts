@@ -698,13 +698,16 @@ describe('Sessions owner', () => {
           ]);
           yield* session.log.settled;
           // The live run's `run.end` reaches the folded tail once the view
-          // has folded it, and a `waiting` step never does.
+          // has folded it, and a `waiting` step never does: of the rows the
+          // presenter saw, one is an end, the live run's.
           yield* Effect.promise(() =>
-            vi.waitFor(() => expect(presented).toHaveBeenCalledOnce()),
-          );
-          expect(presented).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({ runId: OLDER }),
+            vi.waitFor(() =>
+              expect(
+                presented.mock.calls.flatMap(([, row]) =>
+                  row.type === 'run.end' ? [row.aggregateId] : [],
+                ),
+              ).toEqual([qualifyAggregateId('run', OLDER)]),
+            ),
           );
         } finally {
           presented.mockRestore();
