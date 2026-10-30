@@ -177,36 +177,26 @@ const assertNoParentTraversal: (targetPath: string) => Effect<void, ToolError, n
 
 ## BoundModel
 
-One bound model: the llm `Model` and the facts of its binding the run
-reads. Everything else a binding needs (its credential, its reasoning
-choice, the toggles it was bound under) stays inside model access.
+One bound model: llm's `Binding` (or the validation model's) and the facts
+of the run the binding serves. Everything else a binding needs (its
+credential, its reasoning choice, the toggles it was bound under) stays
+inside model access.
 
 ```ts
-interface BoundModel {
+interface BoundModel extends Binding {
   /** The run's model string (`provider/id[@effort][+pro]`), as its rows name it. */
   readonly modelId: string;
   /** The backend its `run.config` records. */
   readonly backend: ModelBackend;
-  /**
-   * The config the model runs and bills with on its route: its window, its
-   * prices, and the media its route carries (`capabilities`).
-   */
-  readonly config: ModelConfig;
-  readonly model: Model;
-  readonly origin: ModelOrigin;
-  /** The route decision this binding carries out. */
-  readonly route: ModelRoute;
+  /** The route decision this binding carries out, or the validation model. */
+  readonly route: ModelRoute | { readonly kind: 'validation' };
   /** Automatic retries after a failed attempt, read with the binding. */
   readonly automaticRetries: number;
   /** Bound for a text-only persona, with the model's whole output budget; a
    *  rebinding keeps it. */
   readonly textOnly: boolean;
-  /** The route can be told to call one named tool. */
-  readonly forcedToolChoice: boolean;
-  /** One connection a failed turn invalidates (the Responses WebSocket). */
-  readonly persistentConnection: boolean;
-  /** The service tier and subscription plan pricing bills, where the route names them. */
-  readonly billing: { readonly serviceTier?: 'fast'; readonly plan?: string };
+  /** The ChatGPT plan the subscription's token names; display-only. */
+  readonly plan?: string;
   /** The retry gate's routes: the model on its wire route, then the wire route. */
   readonly routes: readonly [RoutePolicy, RoutePolicy];
   /** How the next turn is delivered, from the live toggles. */

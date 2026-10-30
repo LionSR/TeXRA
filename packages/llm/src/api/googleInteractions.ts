@@ -6,7 +6,6 @@ import { Effect, Ref, Result, Schema, Stream } from 'effect';
 import { prefixFingerprint } from './prefixFingerprint.js';
 import {
   completedTurn,
-  decodeModelConfiguration,
   TurnResultSchema,
   type GoogleInteractionsConfiguration,
   type Model,
@@ -555,14 +554,11 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
 
 /** Direct Gemini Interactions protocol; it owns neither history nor local tools. */
 export function googleInteractionsModel(
-  configuration: GoogleInteractionsConfiguration,
+  config: GoogleInteractionsConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
-  const config = decodeModelConfiguration(configuration);
-  if (config.protocol !== 'google-interactions' || !transport.apiKey) {
-    throw new TypeError(
-      'Google Interactions requires its configuration and an explicit API key.',
-    );
+  if (!transport.apiKey) {
+    throw new TypeError('Google Interactions requires an explicit API key.');
   }
   const origin = originOf(config);
   const client = new GoogleGenAI({

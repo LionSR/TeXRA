@@ -33,6 +33,15 @@ A bound model and the facts its configuration fixed.
 interface Binding {
   readonly model: Model;
   readonly origin: ModelOrigin;
+  /**
+   * The config the model runs and bills with on its route: its window, its
+   * prices, and the media its route carries (`capabilities`).
+   */
+  readonly config: ModelConfig;
+  /** The route the binding bills through. */
+  readonly billing: BillingRoute;
+  /** The output limit a turn takes unless it asks for less; null where the route takes none. */
+  readonly maxOutputTokens: number | null;
   /** Turns can run as background work (submit and observe). */
   readonly background: boolean;
   /** One connection a failed turn invalidates (the Responses WebSocket). */
@@ -56,36 +65,40 @@ const bindModel: (spec: BindSpec) => Effect<Binding, ModelError, Scope>
 
 ## BindSpec
 
-One model on one route, and what the caller asks of it.
+One model on one decided route, and what the caller asks of it. The
+protocol is the model's provider's, and the route fixes the config it runs
+(`routeConfig`), the credential scope stamped on its origin and the plan
+it bills.
 
 ```ts
 interface BindSpec {
-  readonly protocol: ModelOrigin['protocol'];
-  /** The llm-zoo entry after `routeConfig`. */
+  /** The llm-zoo entry, before its route's overrides. */
   readonly model: ModelConfig;
+  readonly route: Extract<
+    ModelRoute,
+    { kind: 'api-key' | 'chatgpt-subscription' | 'xai-subscription' }
+  >;
   readonly endpoint: string;
-  /** A non-secret name of the credential route, stamped on the origin. */
-  readonly credentialScope: string;
   readonly credential: ModelCredential;
-  /** The route the binding bills through. */
-  readonly billing: BillingRoute;
-  readonly options: {
-    /** The output ceiling, before the model's own rules. */
-    readonly maxOutputTokens: number;
-    /** The sampling temperature, applied where the model takes one. */
-    readonly temperature: number;
-    readonly reasoning: ReasoningChoice;
-    readonly parallelToolCalls: boolean;
+  /** Each option has a default; the booleans default to `false`. */
+  readonly options?: {
+    /** The output ceiling, before the model's own rules; the catalog's by default. */
+    readonly maxOutputTokens?: number;
+    /** The sampling temperature where the model takes one; the provider's own by default. */
+    readonly temperature?: number;
+    /** The model's default reasoning (`chooseReasoning`) unless given. */
+    readonly reasoning?: ReasoningChoice;
+    readonly parallelToolCalls?: boolean;
     /** GPT-5 sends a reasoning summary only when asked. */
-    readonly reasoningSummary: boolean;
+    readonly reasoningSummary?: boolean;
     /** Google keeps the conversation server-side. */
-    readonly serverState: boolean;
+    readonly serverState?: boolean;
     /** OpenAI's fast service tier, where the model offers it. */
-    readonly fastTier: boolean;
+    readonly fastTier?: boolean;
     /** The caller would serve Responses over its WebSocket. */
-    readonly webSocket: boolean;
+    readonly webSocket?: boolean;
     /** The caller would deliver turns as background work; it wins over the socket. */
-    readonly background: boolean;
+    readonly background?: boolean;
     /** The fetch every HTTP request goes through. */
     readonly fetch?: typeof fetch;
   };
