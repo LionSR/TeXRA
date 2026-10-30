@@ -387,7 +387,7 @@ const handle = (
     case 'run.rename':
       return rename(deps, req, heldHere);
     case 'run.files':
-      return runFiles(deps.session(), req);
+      return runFiles(deps.session(), registryOf(deps.session().runs), req);
     case 'run.fork':
       return forkRun(
         deps.session(),

@@ -132,7 +132,7 @@ describe('runRegistry', () => {
         );
         yield* Deferred.await(ended);
         registry.stopAll();
-        expect(registry.get(runId)?.live === true).toBe(true);
+        expect(registry.get(runId)).toBeDefined();
         const drain = yield* Effect.forkChild(
           registry
             .awaitDrained()
@@ -145,7 +145,7 @@ describe('runRegistry', () => {
         // The close stopped the generation: it ends interrupted.
         yield* Fiber.await(generation);
         yield* Fiber.join(drain);
-        expect(registry.get(runId)?.live === true).toBe(false);
+        expect(registry.get(runId)).toBeUndefined();
       }),
   );
 

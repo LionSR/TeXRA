@@ -348,7 +348,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         yield* Deferred.succeed(releaseWake, undefined);
         yield* Fiber.join(loop);
-        expect(session.runs.get(runId)?.live === true).toBe(false);
+        expect(session.runs.get(runId)).toBeUndefined();
       }),
   );
 

@@ -149,10 +149,10 @@ export const resumeRun = (
   );
 
 /**
- * One resume's decision, run as its run's activation (`resumeRun`), of a
- * run no generation here holds: refused, owned by an open call of its
- * parent, or launched with its queued input, `activated` told the commit
- * of its `run.activate`.
+ * One resume's decision, run as its run's activation (`resumeRun`), which
+ * refused every other launch of the run here: refused, owned by an open
+ * call of its parent, or launched with its queued input, `activated` told
+ * the commit of its `run.activate`.
  */
 export const decideResume = Effect.fn('decideResume')(function* (
   runId: RunId,
@@ -160,7 +160,6 @@ export const decideResume = Effect.fn('decideResume')(function* (
   activated: (commit: CommitOrdinal) => Effect.Effect<unknown>,
 ): Effect.fn.Return<ResumeAttempt, Error, AgentRunServices | Scope.Scope> {
   const session = options.session;
-  if (session.runs.get(runId)?.live === true) return REFUSED;
   const store = getRunRecords(session, runId);
   const [config, exists] = yield* Effect.all([
     store.readConfig(),
