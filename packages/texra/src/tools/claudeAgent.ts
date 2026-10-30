@@ -542,10 +542,12 @@ export const ClaudeAgentTool = defineTool({
     'Set fork_session to branch from that session while leaving the original unchanged. Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in its own workspace with independent file editing, search, and shell access, async and multi-turn like `agent`. codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
   schema: ClaudeAgentInputSchema,
   guard: {
-    bash: (input: ClaudeAgentInput) =>
-      agentCliApprovalCommand(CLAUDE_AGENT_NAME, input.prompt, (stores) =>
-        claudeAgentPermissionMode(input, stores),
-      ),
+    command: {
+      text: (input: ClaudeAgentInput) =>
+        agentCliApprovalCommand(CLAUDE_AGENT_NAME, input.prompt, (stores) =>
+          claudeAgentPermissionMode(input, stores),
+        ),
+    },
   },
   execute: run,
 });

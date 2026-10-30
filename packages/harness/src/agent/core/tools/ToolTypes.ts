@@ -37,22 +37,34 @@ export interface ToolGuard<T, R = never> {
    */
   readonly writes?: (input: T) => readonly string[];
   /**
-   * The command this call runs, spelled as the approval prompt shows it. The
-   * loop puts it through the session's bash approval before the body runs.
-   * Only the `bash` tool's commands take the run's command grant; any other
-   * tool's call is asked about per call.
-   * An Effect because the spelling can depend on settings the prompt must
-   * show (a Codex sandbox mode, a Claude permission mode).
+   * The command this call runs. Present: the loop puts it through the
+   * session's command approval before the body runs.
    */
-  readonly bash?: (input: T) => Effect.Effect<string, Error, R>;
-  /**
-   * Where the approved command actually runs, when that is not the call's own
-   * directory. Omitted: the call's working directory, else the workspace,
-   * which is what a shell-shaped tool uses. `'unknown'`: the executor cannot name one, so the
-   * prompt names none rather than a directory the command may not run in
-   * (`send_to_terminal` reuses a terminal whose shell has its own directory).
-   */
-  readonly cwd?: 'unknown';
+  readonly command?: {
+    /**
+     * The command as the approval prompt shows it. An Effect because the
+     * spelling can depend on settings the prompt must show (a Codex sandbox
+     * mode, a Claude permission mode).
+     */
+    readonly text: (input: T) => Effect.Effect<string, Error, R>;
+    /**
+     * The standing grant that answers this tool's commands. `'bash'`: the
+     * run's command grant ("approve all commands in this task"), which the
+     * shell declares. Omitted: each call is asked about and only the
+     * delegated-work grant covers it, so a tool whose prompt looks like a
+     * command (an MCP tool, codex) never inherits shell permission.
+     */
+    readonly grant?: 'bash';
+    /**
+     * Where the approved command actually runs, when that is not the call's
+     * own directory. Omitted: the call's working directory, else the
+     * workspace, which is what a shell-shaped tool uses. `'unknown'`: the
+     * executor cannot name one, so the prompt names none rather than a
+     * directory the command may not run in (`send_to_terminal` reuses a
+     * terminal whose shell has its own directory).
+     */
+    readonly cwd?: 'unknown';
+  };
 }
 
 /**
@@ -113,7 +125,7 @@ export interface ITool<E = Error, R = never> {
   readonly replay?: 'safe' | 'unsafe';
   /**
    * Whether a call needs a person's approval, and who asks. `true` (implied
-   * by `guard.bash`): the run loop, before the body runs. `'inBody'`: the
+   * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
    * body's own request (an edit's review, a plan, a delegation proposal, a
    * question, an external inquiry), which answers what the call's hooks
    * said. A run that cannot present a prompt is not offered such a tool

@@ -69,7 +69,7 @@ import { ToolRegistry } from '@tools/toolTable';
 export const asksApproval = <E, R>(
   tool: Pick<ToolDeclaration<E, R>, 'guard' | 'requiresApproval'>,
 ): boolean =>
-  tool.guard?.bash !== undefined || tool.requiresApproval !== undefined;
+  tool.guard?.command !== undefined || tool.requiresApproval !== undefined;
 /**
  * The host capabilities a session's host serves now (`ITool.hostCapability`
  * names one), by the session's storage root: what a plugin whose tools need
