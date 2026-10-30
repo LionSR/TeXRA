@@ -62,7 +62,7 @@ describe('workspace storage defaults', () => {
         const warnings: string[] = [];
 
         const stores = yield* openTexraConfigStores(
-          TEXRA_SETTINGS,
+          TEXRA_SETTINGS.catalog,
           root,
           workspacePath,
           (m: string) => warnings.push(m),

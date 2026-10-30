@@ -390,7 +390,7 @@ export function openDesktopProjectRegistry(
                     : stateStores.project(storage, root),
                   stateStores.repo(storage, root),
                   openTexraWorkspaceConfigStores(
-                    TEXRA_SETTINGS,
+                    TEXRA_SETTINGS.catalog,
                     storage,
                     root,
                     (message) => {
@@ -408,7 +408,7 @@ export function openDesktopProjectRegistry(
               config: {
                 ...workspaceConfigs,
                 global: options.globalConfigStore,
-                catalog: TEXRA_SETTINGS,
+                catalog: TEXRA_SETTINGS.catalog,
               },
               workspaceState,
               repoState,

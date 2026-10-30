@@ -13,7 +13,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 
 /**
  * A native configuration toggle surfaced in a provider's expanded settings:
- * one Models tab control (its rows are catalog rows, `stateSettings.ts`
+ * one Models tab control (a catalog row placed on the tab, `settingSurfaces.ts`
  * `surfaces.models`) with its runtime `value`.
  */
 const ProviderSettingSchema = Schema.Struct({

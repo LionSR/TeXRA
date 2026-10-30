@@ -6,12 +6,12 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   ensureError,
   toErrorMessage,
-  type SurfacedSettingEntry,
 } from '@texra-ai/harness/schemas';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
+import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
@@ -109,7 +109,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   // line (enforcement reads the config itself). `null` is the shared reset
   // convention (delete the key so the schema default reappears).
   const applyUpdate = (
-    entry: SurfacedSettingEntry,
+    entry: TexraSettingRow,
     value: unknown,
   ): Effect.Effect<void, Error> =>
     Effect.gen(function* () {

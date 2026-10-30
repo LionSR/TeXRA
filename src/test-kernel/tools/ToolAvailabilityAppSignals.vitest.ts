@@ -46,7 +46,7 @@ const probeInputs: ToolProbeInputs = {
     get: unreadConfig,
     update: unreadConfig,
     inspect: unreadConfig,
-    catalog: TEXRA_SETTINGS,
+    catalog: TEXRA_SETTINGS.catalog,
   } satisfies ConfigProvider,
 };
 

@@ -2,7 +2,7 @@
  * The settings the harness keeps over the llm provider catalog: the
  * custom-endpoint setting of each provider with an HTTP endpoint of its own, and the
  * China-region toggle of each provider with two platforms, with the toggle's
- * default and its Models tab control copy. The catalog (`@texra-ai/llm`)
+ * default and its row copy. The catalog (`@texra-ai/llm`)
  * owns the provider data; these rows are the host's, read into
  * `RouteFacts.endpoints` by `readModelSettings` and catalogued in
  * `stateSettings.ts`. These rows own the setting keys; readers name the
@@ -43,39 +43,25 @@ export const PROVIDER_REGION_SETTINGS = [
     provider: 'moonshot',
     key: 'moonshot.useChina',
     default: true,
-    control: {
-      label: 'Kimi/Moonshot China region',
-      description:
-        'Use the China endpoint (api.moonshot.cn) instead of international (api.moonshot.ai). Enabled by default. Keys are platform-specific — get international keys at platform.moonshot.ai.',
-      warning:
-        'A platform.moonshot.cn key does not work with the international endpoint, and vice versa.',
-      warningUrl: 'https://platform.moonshot.ai/console',
-      warningUrlLabel: 'International console',
-    },
+    title: 'Kimi/Moonshot China region',
+    description:
+      'Use the China endpoint (api.moonshot.cn) instead of international (api.moonshot.ai). Enabled by default. Keys are platform-specific — get international keys at platform.moonshot.ai.',
   },
   {
     provider: 'dashscope',
     key: 'dashscope.useChina',
     default: false,
-    control: {
-      label: 'Qwen China region (Bailian)',
-      description:
-        'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to "Bailian".',
-    },
+    title: 'Qwen China region (Bailian)',
+    description:
+      'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to "Bailian".',
   },
   {
     provider: 'minimax',
     key: 'minimax.useChina',
     default: false,
-    control: {
-      label: 'MiniMax China region',
-      description:
-        'Use the China region endpoint (api.minimax.cn) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region.',
-      warning:
-        'International keys do not work with the China endpoint, and vice versa. Coding Plan keys are also region-specific.',
-      warningUrl: 'https://platform.minimax.io/',
-      warningUrlLabel: 'Get API key',
-    },
+    title: 'MiniMax China region',
+    description:
+      'Use the China region endpoint (api.minimax.cn) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region.',
   },
   {
     // China is the default since bigmodel.cn is the primary platform; when
@@ -83,13 +69,9 @@ export const PROVIDER_REGION_SETTINGS = [
     provider: 'glm',
     key: 'glm.useChina',
     default: true,
-    control: {
-      label: 'GLM China region',
-      description:
-        'Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint.',
-      warningUrl: 'https://open.bigmodel.cn/',
-      warningUrlLabel: 'BigModel console',
-    },
+    title: 'GLM China region',
+    description:
+      'Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint.',
   },
 ] as const;
 

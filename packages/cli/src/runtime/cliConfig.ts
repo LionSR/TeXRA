@@ -212,7 +212,7 @@ function configFileWarnings(
   for (const { store, isProjectFile } of files) {
     const { filePath } = store;
     for (const key of store.keys()) {
-      const entry = TEXRA_SETTINGS.byStoredKey(key);
+      const entry = TEXRA_SETTINGS.catalog.byStoredKey(key);
       if (entry?.slot !== 'config') {
         if (isProjectFile) {
           warnings.push(`Ignoring unknown ${filePath} key "${key}".`);
@@ -255,7 +255,7 @@ export function loadCliStartupConfig(
       // (its approval policy, read at each decision) sees what another
       // window or terminal saves while it runs.
       const stores = yield* openTexraConfigStores(
-        TEXRA_SETTINGS,
+        TEXRA_SETTINGS.catalog,
         storageRoot,
         cwd,
         (message) => degradations.push(message),
@@ -274,7 +274,7 @@ export function loadCliStartupConfig(
       const withoutInvalid = (store: JsonStore): ConfigStore => ({
         get: <T>(key: string): T | undefined => {
           const value = store.get<T>(key);
-          const entry = TEXRA_SETTINGS.byStoredKey(key);
+          const entry = TEXRA_SETTINGS.catalog.byStoredKey(key);
           return value !== undefined &&
             entry &&
             Result.isFailure(Schema.decodeUnknownResult(entry.schema)(value))
@@ -288,7 +288,7 @@ export function loadCliStartupConfig(
           workspace: withoutInvalid(stores.workspace),
           global: withoutInvalid(stores.global),
           local: withoutInvalid(stores.local),
-          catalog: TEXRA_SETTINGS,
+          catalog: TEXRA_SETTINGS.catalog,
         }),
         warnings: [
           ...configFileWarnings([

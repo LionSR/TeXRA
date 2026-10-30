@@ -240,9 +240,9 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   // ── Catalog-backed settings rows ──
 
-  // Checked as a `Record`, so a new snapshot variant fails this literal's
-  // type check; read by a row's snapshot id, which the catalog types `string`.
-  const stateSnapshotPosters: Partial<Record<string, () => HostEffect>> = {
+  // One poster per snapshot, so a new snapshot variant fails this literal's
+  // type check.
+  const stateSnapshotPosters: Record<SettingsViewSnapshot, () => HostEffect> = {
     approval: () => postSnapshot('approval'),
     'git-author': () => postSnapshot('git-author'),
     latex: () => postSnapshot('latex'),
@@ -252,7 +252,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     profile: () => postProfile,
     skills: () => Effect.andThen(postSnapshot('skills'), postSkills),
     telemetry: () => postSnapshot('telemetry'),
-  } satisfies Record<SettingsViewSnapshot, () => HostEffect>;
+  };
   const updateStateSetting = (key: string, value: unknown) =>
     Effect.gen(function* () {
       const result = yield* applyStateSettingUpdate(key, value, {
@@ -271,11 +271,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
           `Open a workspace folder before changing the “${label}” setting.`,
         );
       }
-      const snapshot = result.entry.surfaces.settingsView;
-      const post = stateSnapshotPosters[snapshot];
-      yield* post === undefined
-        ? Effect.logWarning(`"${key}" names no settings snapshot: ${snapshot}`)
-        : post();
+      yield* stateSnapshotPosters[result.entry.surfaces.settingsView]();
       if (result.kind !== 'applied') return;
       if (result.entry.onWrite?.invalidatesModelOptions) {
         yield* refreshAfterCredentialChange();

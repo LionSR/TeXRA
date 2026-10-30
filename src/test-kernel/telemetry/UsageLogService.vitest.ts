@@ -101,7 +101,10 @@ describe('UsageLogService', () => {
     // is shared — and a stray `enabled: false` silently disables logging for
     // every suite that runs afterwards.
     // The real provider, so the project-file scope rule is the one tested.
-    setupPlatform({}, { config: new MemoryConfigProvider(TEXRA_SETTINGS) });
+    setupPlatform(
+      {},
+      { config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog) },
+    );
 
     // Optional entries must be discarded without a request.
     async function expectNoOptionalUsageSent(): Promise<void> {

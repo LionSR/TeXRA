@@ -166,7 +166,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     ManagedRuntime.make(
       processLayer({
         storageRoot: defaultNodeStorageRoot(),
-        settings: TEXRA_SETTINGS,
+        settings: TEXRA_SETTINGS.catalog,
         commandDirs: commandDirs,
         plugins: texraPlugins({
           name: 'vscode',
@@ -253,7 +253,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       // changes, so the configuration stores stay pinned for this process.
       const config = new JsonConfigProvider(
         yield* openTexraConfigStores(
-          TEXRA_SETTINGS,
+          TEXRA_SETTINGS.catalog,
           defaultNodeStorageRoot(),
           workspaceRoot,
           (message) => {

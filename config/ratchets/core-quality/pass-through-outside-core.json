@@ -33,7 +33,7 @@
   "packages/extension/src/settingsView/SettingsViewMessageHandler.ts": 2,
   "packages/extension/src/settingsView/SettingsViewProvider.ts": 1,
   "packages/harness/src/common/plugins/hookConfig.ts": 2,
-  "packages/harness/src/shared/state/stateSettings.ts": 3,
+  "packages/harness/src/shared/state/stateSettings.ts": 1,
   "packages/texra/src/controllers/approval/ToolEditApprovalController.ts": 1,
   "packages/texra/src/controllers/modelAccess/subscriptionProviders.ts": 11,
   "packages/texra/src/controllers/session/hostRunActions.ts": 2,
