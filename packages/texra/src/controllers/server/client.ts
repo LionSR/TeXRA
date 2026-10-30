@@ -26,7 +26,8 @@ import {
 import { lt as semverLt, valid as semverValid } from 'semver';
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
-import { ensureError } from '@texra-ai/harness/schemas';
+import { isOutcomeOf, Rejected } from '@texra-ai/harness';
+import { ensureError, type RuntimeRequest } from '@texra-ai/harness/schemas';
 import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   prepareServiceDirectories,
@@ -48,6 +49,26 @@ export type ServiceClient = RpcClient.FromGroup<
   typeof TexraRpcs,
   RpcClientError.RpcClientError
 >;
+
+/**
+ * `request` to the session of `workspace` the service holds: the outcome its
+ * kind is answered with. An answer of another kind (a service from another
+ * build) is `Rejected`.
+ */
+export const requestOnService = <R extends RuntimeRequest>(
+  client: ServiceClient,
+  workspace: string,
+  request: R,
+) =>
+  client['task.request']({ workspace, request }).pipe(
+    Effect.filterOrFail(
+      (outcome) => isOutcomeOf<R['kind']>(request.kind, outcome),
+      (outcome) =>
+        new Rejected({
+          reason: `The TeXRA service answered a ${request.kind} with ${outcome.kind}.`,
+        }),
+    ),
+  );
 
 /** A connected client and the service it reached. */
 export interface ServiceConnection {

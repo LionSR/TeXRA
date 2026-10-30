@@ -7,7 +7,7 @@ import {
   type ToolEditPermission,
   type ToolResult,
 } from '@shared/schemas';
-import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
+import { refusalCopy } from '@shared/session/approvalDecision';
 import type { StagedToolEdit } from '@shared/session/runtimeRequest';
 import { errorResult } from '@tools/core/result';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
@@ -125,7 +125,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
         requests.open({ kind: 'toolEdit', data: permission }).pipe(
           Effect.flatMap((decided): Effect.Effect<ToolEditApprovalResult> =>
             decided.action !== 'approve'
-              ? Effect.succeed(refusalOf('toolEdit', decided))
+              ? Effect.succeed(decided)
               : // An approval naming no content applies the user's edit
                 // of the proposal, when a surface sent one.
                 Effect.flatMap(SubscriptionRef.get(toolEdits), (held) =>

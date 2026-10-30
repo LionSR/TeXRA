@@ -5,7 +5,7 @@ import { Deferred, Effect, Exit, Fiber, Scope, Stream } from 'effect';
 
 import {
   RunFailure,
-  type Outcome,
+  type OutcomeOf,
   type Run,
   type LocalSession,
   type StartInput,
@@ -106,13 +106,15 @@ function runSessionFake(): LocalSession {
           interrupt: Effect.void,
         })),
       ),
-    request: (req: RuntimeRequest) =>
+    // cast: a stop answers `done`, as every other kind is answered by the
+    // real session.
+    request: ((req: RuntimeRequest) =>
       req.kind === 'run.stop'
         ? Effect.suspend(
-            (): Effect.Effect<Outcome, never> =>
+            (): Effect.Effect<OutcomeOf<'run.stop'>, never> =>
               mocks.stopRequest(req) ?? Effect.succeed({ kind: 'done' }),
           )
-        : session.request(req),
+        : session.request(req)) as LocalSession['request'],
   };
 }
 

@@ -2,7 +2,7 @@ import { Effect, Schema } from 'effect';
 
 import { defineTool } from '@texra-ai/harness';
 import { withLogChannel } from '@texra-ai/harness/host';
-import { requireRun, executed, refusalOf } from '@texra-ai/harness/plugins';
+import { requireRun, executed } from '@texra-ai/harness/plugins';
 import {
   UserQuestionAnswersSchema,
   UserQuestionPromptSchema,
@@ -59,33 +59,26 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
     data: permission,
   });
 
-  if (decision.action === 'skip') {
-    return executed(
-      withDetail('The user declined to answer', decision.feedback ?? undefined),
-    );
-  }
-  if (decision.action !== 'submit') {
-    const refusal = refusalOf('userQuestion', decision);
-    switch (refusal.action) {
-      case 'cancel':
-        return executed(
-          withDetail(
-            'The user question was cancelled',
-            refusal.cause ?? undefined,
-          ),
-        );
-      case 'deny':
-        return executed(
-          withDetail('The user question was denied', refusal.reason),
-        );
-      case 'reject':
-        return executed(
-          withDetail(
-            'The user declined to answer',
-            refusal.feedback ?? undefined,
-          ),
-        );
-    }
+  switch (decision.action) {
+    case 'skip':
+    case 'reject':
+      return executed(
+        withDetail(
+          'The user declined to answer',
+          decision.feedback ?? undefined,
+        ),
+      );
+    case 'cancel':
+      return executed(
+        withDetail(
+          'The user question was cancelled',
+          decision.cause ?? undefined,
+        ),
+      );
+    case 'deny':
+      return executed(
+        withDetail('The user question was denied', decision.reason),
+      );
   }
 
   const answers = Schema.decodeUnknownSync(UserQuestionAnswersSchema)(

@@ -54,6 +54,7 @@ import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer'
 import { attachWindowHost } from './windowHost';
 import {
   WINDOW_OUTDATED,
+  requestOnService,
   type ServiceClient,
   type ServiceLink,
 } from './client';
@@ -416,7 +417,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       link,
       (reason) => new Rejected({ reason }),
       (client) =>
-        client['task.request']({ workspace, request: runtimeRequest }).pipe(
+        requestOnService(client, workspace, runtimeRequest).pipe(
           // A transport failure is a refusal worded for the user; the
           // service's own refusal arrives as the class it failed with.
           Effect.mapError((error) =>

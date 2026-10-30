@@ -37,7 +37,7 @@ import type {
   SessionStoreMovedAside,
 } from '@shared/session/database';
 import type { RequestError } from '@shared/session/runtimeRequest';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { OutcomeOf, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type {
   PendingRequest,
   SessionView,
@@ -87,8 +87,8 @@ export interface Composition {
  * approval, a denial with its reason, or for a retry, `retry` or `cancel`.
  * The session records it as the request's `request.decided`, through the
  * same `request.decide` a {@link Session.request} sends. A handler that
- * fails, throws, or has not answered within ten minutes is a denial, with
- * the cause logged.
+ * fails, throws, answers with a decision the request's kind does not take,
+ * or has not answered within ten minutes is a denial, with the cause logged.
  */
 export type ApprovalHandler = (
   request: PendingRequest,
@@ -251,10 +251,12 @@ export interface Session {
   /** Everything else you ask of the session, as one typed request
    *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
    *  approval, stop, fork or delete a run, switch its model, and so on).
-   *  Answered exactly once, with an outcome or a {@link RequestError}. */
-  readonly request: (
-    request: RuntimeRequest,
-  ) => Effect.Effect<Outcome, RequestError>;
+   *  Answered exactly once, with the outcome its kind is answered with
+   *  (`OutcomeOf`) or a {@link RequestError}. A decision a request's kind
+   *  does not take is `Rejected`. */
+  readonly request: <R extends RuntimeRequest>(
+    request: R,
+  ) => Effect.Effect<OutcomeOf<R['kind']>, RequestError>;
   /** Attach `host` until the caller's scope closes: it shows notices, and
    *  its `approve` answers the runs' approval requests. A session has one
    *  host at a time; attaching a second while one is attached is a defect. */

@@ -30,6 +30,7 @@ import type {
 } from '@agent/runtime/SessionHandle';
 import { GlobalValues } from '@platform/processRuntime';
 import {
+  answerMismatch,
   qualifyAggregateId,
   requestParksItsCaller,
   type CommitOrdinal,
@@ -263,7 +264,13 @@ const decideRequest = (
       if (!(yield* write)) return yield* settled(req.runId);
       return done;
     });
-  const decided = decideUnderGrant(deps.session(), req, heldHere, answer);
+  // An answer its kind does not take is refused in the lane, before its grant.
+  const decided = Effect.suspend(() => {
+    const kind = pendingOf(deps, req.runId, req.requestId)?.payload.kind;
+    const reason = kind && answerMismatch(kind, req.decision, req.grant);
+    if (reason) return Effect.fail(new Rejected({ reason }));
+    return decideUnderGrant(deps.session(), req, heldHere, answer);
+  });
   return withPerKeyLane(
     deps.decisionLanes,
     `${req.runId}/${req.requestId}`,
@@ -472,10 +479,12 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
         reason: `The ${runNoun(deps.session(), runId)} changed after it was listed.`,
       });
     }
-    return yield* deleteAdmittedRun(deps, runId, admitted, mode);
+    yield* deleteAdmittedRun(deps, runId, admitted, mode);
   });
 
-  return { request, removeRun, ...deps.asks };
+  // cast: each case of `handle` answers with its own kind's outcome.
+  const perKind = request as SessionRequests['request'];
+  return { request: perKind, removeRun, ...deps.asks };
 }
 
 /** A decision for a request no longer pending: decided already, or never opened. */

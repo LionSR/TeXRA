@@ -250,6 +250,36 @@ export const OutcomeSchema = Schema.Union([
 /** What the runtime answers a request with. */
 export type Outcome = typeof OutcomeSchema.Type;
 
+/** The requests answered with something other than `done`, by kind. */
+const OUTCOME_KIND = {
+  'run.fork': 'forked',
+  'run.files': 'runFiles',
+  'followUp.send': 'followUp',
+  'request.preview': 'preview',
+} as const satisfies Partial<Record<RuntimeRequest['kind'], Outcome['kind']>>;
+
+/** What a request of kind `K` is answered with: `done` unless it is one of
+ *  the kinds above. */
+export type OutcomeOf<K extends RuntimeRequest['kind']> = Extract<
+  Outcome,
+  {
+    kind: K extends keyof typeof OUTCOME_KIND
+      ? (typeof OUTCOME_KIND)[K]
+      : 'done';
+  }
+>;
+
+/** Whether `outcome` answers a request of `kind`: how a client reads an
+ *  answer that crossed a process boundary. */
+export const isOutcomeOf = <K extends RuntimeRequest['kind']>(
+  kind: K,
+  outcome: Outcome,
+): outcome is OutcomeOf<K> => {
+  const kinds: Partial<Record<RuntimeRequest['kind'], Outcome['kind']>> =
+    OUTCOME_KIND;
+  return outcome.kind === (kinds[kind] ?? 'done');
+};
+
 // How a runtime request fails. Yieldable `Schema.TaggedError`s in the
 // runtime, carried over the RPC edge as themselves (`RequestErrorSchema`);
 // `Invalid` is the arm a bridge that parses requests answers with. A request

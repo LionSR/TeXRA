@@ -42,9 +42,11 @@ import {
   type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
+  decisionFits,
   qualifyAggregateId,
   isCredentialRetryFailure,
   type CommitOrdinal,
+  type DecisionOf,
   type PermissionPayload,
   type RequestDecision,
   type RunId,
@@ -240,6 +242,21 @@ export interface RequestAsksInit {
   readonly closed: () => boolean;
 }
 
+/** A recorded decision, as its request's kind takes it: a surface's answer
+ *  is checked before it is recorded and the runtime's own writers use only
+ *  actions the kind takes, so any other is a defect. */
+export const recordedDecision = <K extends PermissionPayload['kind']>(
+  kind: K,
+  decision: RequestDecision,
+): Effect.Effect<DecisionOf<K>> =>
+  decisionFits(kind, decision)
+    ? Effect.succeed(decision)
+    : Effect.die(
+        new Error(
+          `A ${kind} request was recorded as answered with "${decision.action}", which it does not take.`,
+        ),
+      );
+
 /** Build one session's {@link SessionRequests} `ask`, `decide` and
  *  `decision`. */
 export function requestAsks({
@@ -305,11 +322,11 @@ export function requestAsks({
       );
   };
 
-  const ask = <E = never>(
+  const ask = <P extends PermissionPayload, E = never>(
     runId: RunId,
-    payload: PermissionPayload,
+    payload: P,
     options: AskOptions<E> = {},
-  ): Effect.Effect<RequestDecision, LogWriteError | E> => {
+  ): Effect.Effect<DecisionOf<P['kind']>, LogWriteError | E> => {
     const requestId = payload.data.requestId;
     const aggregateId = qualifyAggregateId('run', runId);
     const open: (
@@ -335,7 +352,9 @@ export function requestAsks({
       ];
       const from = yield* open(rows);
       return yield* decision(runId, requestId, from).pipe(
-        Effect.map((row) => row.decision),
+        Effect.flatMap((row) =>
+          recordedDecision<P['kind']>(payload.kind, row.decision),
+        ),
         Effect.catch((cause) =>
           Effect.logWarning(
             `Request ${requestId} closed without a decision`,

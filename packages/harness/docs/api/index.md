@@ -120,8 +120,8 @@ A host's answer to each request a run of the session waits on: an
 approval, a denial with its reason, or for a retry, `retry` or `cancel`.
 The session records it as the request's `request.decided`, through the
 same `request.decide` a {@link Session.request} sends. A handler that
-fails, throws, or has not answered within ten minutes is a denial, with
-the cause logged.
+fails, throws, answers with a decision the request's kind does not take,
+or has not answered within ten minutes is a denial, with the cause logged.
 
 ```ts
 type ApprovalHandler = (
@@ -251,6 +251,15 @@ id); the surface hears that the request failed, never the text.
 class Internal extends Schema.TaggedError<Internal>()('Internal', {
   ref: Schema.String,
 })
+```
+
+## isOutcomeOf
+
+Whether `outcome` answers a request of `kind`: how a client reads an
+answer that crossed a process boundary.
+
+```ts
+const isOutcomeOf: <K extends RuntimeRequest["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly status: "sent" | "queued"; readonly wake?: "failed" | null | undefined; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; readonly edited: string | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
 ```
 
 ## isRequestRefusal
@@ -471,6 +480,22 @@ What the runtime answers a request with.
 
 ```ts
 type Outcome = typeof OutcomeSchema.Type;
+```
+
+## OutcomeOf
+
+What a request of kind `K` is answered with: `done` unless it is one of
+the kinds above.
+
+```ts
+type OutcomeOf<K extends RuntimeRequest['kind']> = Extract<
+  Outcome,
+  {
+    kind: K extends keyof typeof OUTCOME_KIND
+      ? (typeof OUTCOME_KIND)[K]
+      : 'done';
+  }
+>;
 ```
 
 ## Plugin
@@ -813,10 +838,12 @@ interface Session {
   /** Everything else you ask of the session, as one typed request
    *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
    *  approval, stop, fork or delete a run, switch its model, and so on).
-   *  Answered exactly once, with an outcome or a {@link RequestError}. */
-  readonly request: (
-    request: RuntimeRequest,
-  ) => Effect.Effect<Outcome, RequestError>;
+   *  Answered exactly once, with the outcome its kind is answered with
+   *  (`OutcomeOf`) or a {@link RequestError}. A decision a request's kind
+   *  does not take is `Rejected`. */
+  readonly request: <R extends RuntimeRequest>(
+    request: R,
+  ) => Effect.Effect<OutcomeOf<R['kind']>, RequestError>;
   /** Attach `host` until the caller's scope closes: it shows notices, and
    *  its `approve` answers the runs' approval requests. A session has one
    *  host at a time; attaching a second while one is attached is a defect. */

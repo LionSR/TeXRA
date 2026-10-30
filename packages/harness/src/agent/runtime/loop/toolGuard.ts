@@ -39,6 +39,7 @@ import {
 } from '@tools/approval/bashApproval';
 import { ensureError } from '@utils/errors/errorMessage';
 
+import { recordedDecision } from '../requestPolicy';
 import { RunCall, requireRun, sessionOf } from '../RunCall';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { SessionApprovals } from '../runApprovalQueue';
@@ -332,7 +333,10 @@ export const callRequests = (
         // Answered before this owner's loop reached the call: the answer
         // is the row's.
         if (reentered?.request.decision != null)
-          return Effect.succeed(reentered.request.decision);
+          return recordedDecision<(typeof payload)['kind']>(
+            payload.kind,
+            reentered.request.decision,
+          );
         return session.requests.ask(runId, payload, {
           open: (rows) => {
             if (reentered !== null) {

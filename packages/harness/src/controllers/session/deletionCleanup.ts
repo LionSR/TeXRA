@@ -24,7 +24,7 @@ import type { RunId } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
 import { Rejected, type RequestError } from '@shared/session/runtimeRequest';
 import type {
-  Outcome,
+  OutcomeOf,
   RunFilesResult,
   RuntimeRequest,
 } from '@shared/session/runtimeRequest';
@@ -166,7 +166,7 @@ export const runFiles = (
     };
   },
   req: Extract<RuntimeRequest, { kind: 'run.files' }>,
-): Effect.Effect<Outcome, RequestError, RunFilesServices> =>
+): Effect.Effect<OutcomeOf<'run.files'>, RequestError, RunFilesServices> =>
   session.runs.launch({ hold: req.runId }).pipe(
     Effect.mapError((cause) =>
       cause instanceof Rejected
@@ -196,7 +196,7 @@ export const runFiles = (
         ),
       ),
     ),
-    Effect.map((result): Outcome => ({ kind: 'runFiles', result })),
+    Effect.map((result) => ({ kind: 'runFiles', result }) as const),
     Effect.scoped,
     (program) => withSessionFs(session.roots, program),
     withLogChannel('runFiles'),

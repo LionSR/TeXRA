@@ -146,7 +146,7 @@ export function nativeToolTestLayer(
         // loop to bind them to.
         requests: {
           nextId: (prefix: string) => `${prefix}-${crypto.randomUUID()}`,
-          open: (payload: PermissionPayload) =>
+          open: <P extends PermissionPayload>(payload: P) =>
             toolRun.session.requests.ask(toolRun.runId, payload),
           post: (requestId: string, payload: PermissionPayload) =>
             toolRun.session.runHistory.open(toolRun.runId).pipe(

@@ -113,9 +113,9 @@ export {
   type JsonRpcConnectionOptions,
   type JsonRpcRequestError,
 } from '@tools/jsonRpc';
-// A request's answer the tool does not accept, read as the refusal it is.
-export { refusalOf } from '@shared/session/approvalDecision';
-export type { RefusalDecision } from '@shared/schemas';
+// What a request of each kind is answered with, and the three ways any
+// request is declined.
+export type { DecisionOf, RefusalDecision } from '@shared/schemas';
 export {
   ToolError,
   type EditRecord,
