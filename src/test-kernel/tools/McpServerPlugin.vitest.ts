@@ -45,12 +45,17 @@ import {
 const TEST_REVISION_KEY = Effect.succeed('00'.repeat(32));
 
 /** A stdio MCP server listing one tool, `echo`, that answers one call. With
- *  `FIXTURE_MODE=hang` it never answers a call: it writes the call's id
- *  beside its pid file, and appends each cancellation it receives. */
+ *  `FIXTURE_MODE=hang` it never answers a call: it records the call's id
+ *  beside its pid file, and the last cancellation it receives. */
 const FIXTURE_SERVER = `
 const fs = require('node:fs');
 fs.writeFileSync(process.argv[2], String(process.pid));
 const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n');
+// Written whole, then renamed into place: a reader never sees it partial.
+const record = (suffix, text) => {
+  fs.writeFileSync(process.argv[2] + suffix + '.tmp', text);
+  fs.renameSync(process.argv[2] + suffix + '.tmp', process.argv[2] + suffix);
+};
 require('node:readline')
   .createInterface({ input: process.stdin })
   .on('line', (line) => {
@@ -68,9 +73,9 @@ require('node:readline')
         inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       }] } });
     else if (method === 'tools/call' && process.env.FIXTURE_MODE === 'hang')
-      fs.writeFileSync(process.argv[2] + '.called', String(id));
+      record('.called', String(id));
     else if (method === 'notifications/cancelled')
-      fs.appendFileSync(process.argv[2] + '.cancelled', JSON.stringify(params) + '\\n');
+      record('.cancelled', JSON.stringify(params));
     else if (method === 'tools/call')
       send({ jsonrpc: '2.0', id, result: { content: [{
         type: 'text',
