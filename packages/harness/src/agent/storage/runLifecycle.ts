@@ -303,7 +303,7 @@ const beforeEnd = Effect.fn('beforeEnd')(function* (
   const facts = yield* session.log.facts(runId);
   if (cascade && facts !== null) yield* session.log.hold(runId, { ends: true });
   for (const child of yield* openOwnedChildren(session, runId)) {
-    if (!cascade || session.runs.get(child.runId)?.live === true)
+    if (!cascade || session.runs.get(child.runId) !== undefined)
       return yield* Effect.fail(
         new Error(
           `Run ${runId} cannot end while its open call ${child.callId} owns run ${child.runId}, which has not ended`,

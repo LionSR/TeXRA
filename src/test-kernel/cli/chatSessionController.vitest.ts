@@ -467,7 +467,7 @@ describe('createChatSessionController', () => {
         const rootRun = session.runId;
         if (!rootRun) throw new Error('startRootRun did not claim a run id');
         yield* Effect.promise(() =>
-          vi.waitFor(() => expect(runs.get(childRun)?.launched).toBe(true)),
+          vi.waitFor(() => expect(runs.get(childRun)).toBeDefined()),
         );
 
         // The launch's `run.start` rows are detached publishes: the stop

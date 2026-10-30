@@ -417,7 +417,7 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
     options.suppressAutoDeliveredSubagentReport === true &&
     run.identity.kind === 'agent' &&
     run.parentId === context.runId &&
-    (yield* Runs).get(runId)?.launched === true;
+    (yield* Runs).get(runId) !== undefined;
 
   lines.push(
     ...buildSummaryTailLines(
@@ -443,7 +443,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   }
 
   const runs = yield* Runs;
-  if (runs.get(runId)?.launched !== true) {
+  if (runs.get(runId) === undefined) {
     return yield* Effect.fail(
       new ToolError(`Run ${runId} not found or already completed.`),
     );

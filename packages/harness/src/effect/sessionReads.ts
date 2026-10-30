@@ -86,11 +86,10 @@ export interface RunRecords {
   readonly readTrace: () => Effect.Effect<AssembleTraceResult, Error>;
 }
 
-/** What this process holds of one run ({@link LocalSession.held}). */
+/** What this process holds of one run ({@link LocalSession.held}): a launch
+ *  of it in flight here; a run with none has no record. */
 export interface HeldRun {
   readonly runId: RunId;
-  /** A generation of it is live here: its fiber, a hold, or a launch. */
-  readonly live: boolean;
   /** Resolves once every owner of it here has left. */
   readonly drained: Effect.Effect<void>;
   /** Why its running loop would refuse to switch to `model`; undefined
@@ -118,7 +117,6 @@ let readerPorts = 0;
 
 const heldRun = (run: LiveRun): HeldRun => ({
   runId: run.runId,
-  live: run.live,
   drained: run.drained,
   modelSwitchDisabledReason: (model) =>
     run.controls?.modelSwitchDisabledReason(model) ?? Effect.succeed(undefined),
