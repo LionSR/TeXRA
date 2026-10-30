@@ -1,6 +1,8 @@
 // Validation harness: an embedder of `@texra-ai/harness` on the validation
 // model, which prints what it saw as JSON lines. Built with the validator's
-// bundle (`build-bundle.mjs --sdk-harness`), so the model's gate can open.
+// bundle (`build-bundle.mjs --sdk-harness`), which carries the model; the
+// program provides it beneath its sessions, as the CLI's runtime does, so
+// the model's gate can open. Without it a run binds the provider's route.
 //
 //   node sdk-harness.js <workspace> <storageDir> inline <instruction>
 //     Runs one inline persona (no agent file anywhere) on an in-memory
@@ -18,11 +20,12 @@
 import { appendFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { Effect, Option, Schema, Stream } from 'effect';
+import { Effect, Layer, Option, Schema, Stream } from 'effect';
 
 import { defineTool, Sessions, type ApprovalHandler } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
+import { validationModelLayer } from '../src/runtime/validationModel';
 import type { PendingRequest, RunId } from '@texra-ai/harness/schemas';
 
 const [workspace, storageDir, mode, argument] = process.argv.slice(2);
@@ -136,7 +139,11 @@ const program = Effect.gen(function* () {
   }
 }).pipe(
   Effect.scoped,
-  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
+  Effect.provide(
+    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
+      Layer.provide(validationModelLayer),
+    ),
+  ),
 );
 
 await Effect.runPromise(program);
