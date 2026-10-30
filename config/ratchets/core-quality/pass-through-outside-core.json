@@ -38,7 +38,6 @@
   "packages/texra/src/controllers/modelAccess/subscriptionProviders.ts": 11,
   "packages/texra/src/controllers/session/hostRunActions.ts": 2,
   "packages/texra/src/controllers/settingsView/LatexToolingController.ts": 1,
-  "packages/texra/src/controllers/settingsView/SettingsAgentCatalogController.ts": 1,
   "packages/texra/src/shared/highlighting/hljs.ts": 1,
   "packages/texra/src/shared/plugins/documentOutputs.ts": 1,
   "packages/texra/src/tools/agentCliShared.ts": 1,

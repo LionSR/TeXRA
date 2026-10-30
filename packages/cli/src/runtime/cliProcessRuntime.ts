@@ -58,7 +58,7 @@ import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { texraPlugins } from '@texra/tools/registry';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
-import { workspaceTeams } from '@texra/shared/agentTeams';
+import { teamMembers } from '@texra/shared/agentTeams';
 
 import { readCliVersion } from './cliContext';
 import { setCliLogRuntime } from './logSinks';
@@ -226,7 +226,7 @@ export function installCliProcessRuntime(
         new AgentDirectoryService({
           channel: 'cli',
           resourcesPath: options?.resourcesPath ?? '',
-          teams: workspaceTeams,
+          teamMembers,
           state,
         }),
     ),
