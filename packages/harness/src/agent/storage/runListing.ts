@@ -8,13 +8,13 @@ import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isAgentRunRecord } from '@agent/core/definition/RunRecord';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  aggregateTarget,
-  type SessionEvent,
+  qualifyAggregateId,
   type RunId,
   type RunIdentity,
   RUN_SUBSTATE,
   type RunLifecycleStatus,
 } from '@shared/schemas';
+import { recordsOf } from '@shared/session/runFacts';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { deriveResumability } from './resumability';
@@ -52,27 +52,11 @@ export interface AgentRunListingEntry {
   record: AgentConfig;
 }
 
-/** The latest `run.config` row of each run in one committed listing. */
-function recordRows(
-  rows: readonly SessionEvent[],
-): Map<RunId, Extract<SessionEvent, { type: 'run.config' }>> {
-  const records = new Map<
-    RunId,
-    Extract<SessionEvent, { type: 'run.config' }>
-  >();
-  for (const row of rows) {
-    if (row.type !== 'run.config') continue;
-    const target = aggregateTarget(row.aggregateId);
-    if (target.kind === 'run') records.set(target.id, row);
-  }
-  return records;
-}
-
 /**
  * The runs a user started, newest first, each with its private record: the
  * view rebuilt cold from the log (the same `RunView` a live session holds)
- * beside the same
- * listing's `run.config` rows, already decoded by the database read.
+ * beside the same listing's rows, already decoded by the database read and
+ * folded per run (`recordsOf`) for its configuration.
  */
 export const listRuns = Effect.fn('listRuns')(function* (
   session: SessionHandle,
@@ -81,7 +65,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
     session.view.read([]),
     Stream.runCollect(session.log.listing()),
   ]);
-  const records = recordRows(listing);
+  const rows = Map.groupBy(listing, (row) => row.aggregateId);
   const results = yield* Effect.forEach(
     [...view.runs.values()].filter(
       (run) => run.identity.kind === 'agent' && run.parentId === null,
@@ -89,7 +73,8 @@ export const listRuns = Effect.fn('listRuns')(function* (
     (run) =>
       Effect.gen(function* (): Effect.fn.Return<AgentRunListingEntry, Error> {
         const { id, identity } = run;
-        const record = records.get(id)?.config;
+        const own = rows.get(qualifyAggregateId('run', id)) ?? [];
+        const record = recordsOf(own, id).config;
         // Registration commits `run.config` in the `run.start` batch, so an
         // agent run without an AgentConfig is corrupt: skipped loudly below.
         if (identity.kind !== 'agent' || !record || !isAgentRunRecord(record))

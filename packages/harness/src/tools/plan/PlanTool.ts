@@ -107,9 +107,10 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   const { session, runId } = call.run;
   // A plan call, by the response its result names (`RunFacts.calls`).
   const issued = (yield* session.runHistory.load(runId))?.calls ?? {};
-  const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
-    'tool.result',
-  ]);
+  const { results } = yield* session.log.runRows(
+    qualifyAggregateId('run', runId),
+    'results',
+  );
   const { runs } = SubscriptionRef.getUnsafe(session.view.ref);
   // A goal that ended still holds the conversation while work it started
   // (a round's background agent) runs on.
@@ -120,10 +121,9 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
       (run.durableOutcome === null || run.childIds.some(stillRunning))
     );
   };
-  const running = rows
-    .flatMap((row) => {
-      if (row.type !== 'tool.result') return [];
-      const { responseId, callId, result } = row.payload;
+  const running = results
+    .flatMap((payload) => {
+      const { responseId, callId, result } = payload;
       const launched =
         result.status === 'executed'
           ? Schema.decodeUnknownResult(LaunchedSchema)(result.value)

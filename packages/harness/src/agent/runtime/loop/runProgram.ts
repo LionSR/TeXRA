@@ -36,10 +36,9 @@ import type { FollowUps } from '../FollowUps';
 const birthRows = (
   run: Pick<AgentRunShape, 'runId' | 'session' | 'entry'>,
 ): readonly SessionEventDraft[] => {
-  const rows = run.entry.registration ?? [];
-  const start = rows[0];
+  const { rows, start } = run.entry.registration ?? { rows: [], start: null };
   if (
-    start?.type !== 'run.start' ||
+    start === null ||
     start.parent === null ||
     !registryOf(run.session.runs).bornDetached(run.runId)
   )
@@ -51,8 +50,7 @@ const birthRows = (
     start.approvalPolicy ?? NO_APPROVAL_GRANTS,
   );
   return [
-    { ...start, parent: null },
-    ...rows.slice(1),
+    ...rows.map((row) => (row === start ? { ...start, parent: null } : row)),
     { type: 'approval.policy', aggregateId: start.aggregateId, snapshot },
   ];
 };

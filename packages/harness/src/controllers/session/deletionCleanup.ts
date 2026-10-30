@@ -23,6 +23,7 @@ import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
+import { recordOf } from '@shared/session/runRowReads';
 import { Rejected, type RequestError } from '@shared/session/runtimeRequest';
 import type {
   OutcomeOf,
@@ -121,13 +122,14 @@ export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
     const scope = yield* Effect.scope;
     const pass = Effect.gen(function* () {
       for (const event of yield* database.deletions.pending()) {
-        if (event.type !== 'run.removed') continue;
+        const marker = recordOf(event).removed;
+        if (marker === null) continue;
         yield* database.deletions
-          .collect(event, (ids) => removeRunDirectories(fs, storage, ids))
+          .collect(marker, (ids) => removeRunDirectories(fs, storage, ids))
           .pipe(
             Effect.catch((error) =>
               Effect.logWarning(
-                `Deletion cleanup remains pending for ${event.aggregateId}`,
+                `Deletion cleanup remains pending for ${marker.aggregateId}`,
               ).pipe(
                 Effect.annotateLogs({ data: error }),
                 withLogChannel(CHANNEL),

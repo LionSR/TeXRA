@@ -51,6 +51,8 @@ const THIS_FILE = 'src/test-kernel/architecture/factOwnerRatchet.vitest.ts';
 const REDUCERS: Readonly<Record<string, string>> = {
   'packages/harness/src/shared/session/runRows.ts':
     'what applyRunRow folds onto RunState and RunView (runRows.ts)',
+  'packages/harness/src/shared/session/runRowReads.ts':
+    'RunRows, a row as its own record or a decision (runRowReads.ts)',
   'packages/harness/src/shared/session/runState.ts': 'RunState (runState.ts)',
   'packages/harness/src/shared/session/turnRowHandlers.ts':
     'RunState (runState.ts)',

@@ -1,5 +1,4 @@
 import { Cause, Effect, Predicate } from 'effect';
-import type { ResultEvent } from '@agent/trace';
 import {
   agentErrorPresentation,
   classifyAgentError,
@@ -11,7 +10,13 @@ import {
 } from '@common/errors/sdkError/errorMetadata';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
-import type { RunId } from '@shared/schemas';
+import {
+  aggregateTarget,
+  type LocalRuntimeState,
+  type RunId,
+  type SessionEvent,
+} from '@shared/schemas';
+import { recordOf } from '@shared/session/runRowReads';
 import { Rejected } from '@shared/session/runtimeRequest';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { HostPresentationFailed } from './runtimePresentationEvents';
@@ -295,19 +300,24 @@ function presentAgentFailure(
 }
 
 /**
- * The session's one terminal-result presenter, run for each `run.end` row the
- * session authored once its view has folded: a root run's failure goes to the
- * attached host or is replayed to the next one. A child's (its attached
- * parent is the view's, which has the run's `run.start` once it ended) is
- * its parent's to report.
+ * The session's one terminal-result presenter, run over each folded row:
+ * a `run.end` this process (`self`) authored presents a root run's failure
+ * to the attached host, or replays it to the next one. A child's (its
+ * attached parent is the view's, which has the run's `run.start` once it
+ * ended) is its parent's to report; any other row presents nothing.
  */
 export function presentTerminalResult(
   session: SessionHandle,
-  event: ResultEvent,
+  row: SessionEvent,
+  self: LocalRuntimeState['self'],
 ): Effect.Effect<void> {
-  return !event.error || session.view.run(event.runId)?.parentId != null
+  const target = aggregateTarget(row.aggregateId);
+  const { end } = recordOf(row);
+  if (target.kind !== 'run' || end === null) return Effect.void;
+  if (end.origin == null || !self.includes(end.origin)) return Effect.void;
+  return !end.error || session.view.run(target.id)?.parentId != null
     ? Effect.void
-    : presentAgentFailure(session.interactions, event.error);
+    : presentAgentFailure(session.interactions, end.error);
 }
 
 /**

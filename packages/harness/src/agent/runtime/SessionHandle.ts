@@ -48,6 +48,7 @@ import type {
   StagedToolEdits,
 } from '@shared/session/runtimeRequest';
 import type { RunHistory } from '@shared/session/runHistory';
+import type { RunRowRead } from '@shared/session/runRowReads';
 import type { RunRows } from '@shared/session/runRowsShape';
 import type { OutcomeOf, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft } from '@shared/session/runState';
@@ -108,23 +109,27 @@ export interface SessionLog {
    *  detached row is heard by its writer. */
   readonly settled: Effect.Effect<void>;
   /** Run `action` once the job this fiber runs (inside {@link transact})
-   *  commits, never if it rolls back; outside a job, now. For what a job
-   *  changes in memory or logs, so nothing acts on rows never written. */
+   *  commits, never if it rolls back; outside a job, now. */
   afterCommit(action: Effect.Effect<void>): Effect.Effect<void>;
   /** The current commit ordinal: where a new reader starts its {@link tail}. */
   now(): CommitOrdinal;
-  /** Every committed row of one aggregate (with `types`, only those kinds). */
-  rows(
+  /** A run's history rows, the kinds its state reads, in seq order. */
+  history(
     id: AggregateId,
-    types?: readonly SessionEvent['type'][],
   ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+  /** The `RunRows` of the kinds one read names (`RUN_ROW_READS`), read
+   *  through the type index of a run's aggregate or a plugin's own. */
+  runRows(
+    id: AggregateId,
+    read: RunRowRead,
+  ): Effect.Effect<RunRows, DatabaseReadFailed>;
   /** The strings under `digests`: media bytes the history names by address. */
   blobs(
     digests: readonly string[],
   ): Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
   /** A run's facts, folded from its latest row of each record type (its
-   *  requests and pending input left out: `Inbox.read` reads those); null
-   *  while the store holds no open run under the id. */
+   *  requests and pending input left out: a `runRows` read holds those);
+   *  null while the store holds no open run under the id. */
   facts(runId: RunId): Effect.Effect<RunRows | null, DatabaseReadFailed>;
   /** A run's display rows, its priced `usage` rows among them; empty when
    *  the run never existed or was removed. */
@@ -140,12 +145,10 @@ export interface SessionLog {
   /** The cold listing: the latest row per aggregate and listing type, plus
    *  the outstanding approvals; completes. */
   listing(): Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
-  /**
-   * Hold `runId`'s claim for the caller's scope. Holds are counted: the
-   * first takes the claim (proving a prior owner dead), later ones share
-   * it, and the last to go returns it to how the first found it, unless a
-   * hold `ends` it (the run's driver), when it is released.
-   */
+  /** Hold `runId`'s claim for the caller's scope. Holds are counted: the
+   *  first takes the claim (proving a prior owner dead), later ones share
+   *  it, and the last to go returns it to how the first found it, unless a
+   *  hold `ends` it (the run's driver), when it is released. */
   hold(
     runId: RunId,
     options?: { readonly ends?: boolean },
@@ -357,17 +360,15 @@ export interface SessionHandle {
   readonly history: HistoryQuery;
 }
 
-/**
- * The process's session owner (the `SessionOwner` tag's shape): one session per workspace storage root,
- * served by `processLayer` over the `LayerMap` that owns every session's
- * lifetime. Every opener reaches it
- * from context: the hosts' default sessions, the desktop's projects, the
- * service's tasks and the SDK's `Sessions`.
+/** The process's session owner (the `SessionOwner` tag's shape): one session
+ *  per workspace storage root, served by `processLayer` over the `LayerMap`
+ *  that owns every session's lifetime. Every opener reaches it from context:
+ *  the hosts' default sessions, the desktop's projects, the service's tasks
+ *  and the SDK's `Sessions`.
  *
- * A handle `open` returns is borrowed access: holding it carries no
- * disposal obligation; `close` is how a session ends, and the process
- * layer's own release closes whatever is still open.
- */
+ *  A handle `open` returns is borrowed access: holding it carries no
+ *  disposal obligation; `close` is how a session ends, and the process
+ *  layer's own release closes whatever is still open. */
 export interface SessionOwnerShape {
   /** The session of `init.roots`' storage root: the one already open there,
    *  or built now over what `init` supplies. What `init` supplies beyond
@@ -390,11 +391,9 @@ export interface SessionOwnerShape {
   readonly closeAll: Effect.Effect<readonly SessionCloseReport[]>;
 }
 
-/**
- * The budget one session close spends waiting for its runs to end before it
- * reports the ones still live abandoned (`SessionOwner.close`). A hung run must
- * not wedge desktop quit, eat the extension's ~5s deactivate budget, or
- * stall a CLI SIGTERM indefinitely. The closes of a process's sessions start
- * together, so they finish under one deadline for the process, not one each.
- */
+/** The budget one session close spends waiting for its runs to end before it
+ *  reports the ones still live abandoned (`SessionOwner.close`). A hung run
+ *  must not wedge desktop quit, eat the extension's ~5s deactivate budget, or
+ *  stall a CLI SIGTERM indefinitely. The closes of a process's sessions start
+ *  together, so they finish under one deadline for the process, not one each. */
 export const SESSION_CLOSE_DEADLINE_MS = 5_000;

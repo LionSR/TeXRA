@@ -32,6 +32,7 @@ import {
   type DisplaySessionEvent,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
+import { recordOf } from '@shared/session/runRowReads';
 import type { SessionView } from '@shared/session/sessionView';
 
 import { HISTORY_QUERY_CHILD_SOURCE } from './childSource';
@@ -135,8 +136,9 @@ function storeOps(rows: readonly DisplaySessionEvent[]): HistoryWrite[] {
   for (const row of rows) {
     const target = aggregateTarget(row.aggregateId);
     if (target.kind !== 'run') continue;
-    if (row.type === 'run.removed') {
-      for (const id of new Set([target.id, ...row.runIds])) {
+    const { removed } = recordOf(row);
+    if (removed !== null) {
+      for (const id of new Set([target.id, ...removed.runIds])) {
         ops.push(['remove', id]);
       }
       continue;

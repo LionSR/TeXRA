@@ -434,8 +434,9 @@ its call's run: an agent's (`launch`: the child's settled result, or its
 receipt for a background launch, within the issuing script's concurrency
 budget) or an external process's (`launchProcess`: its run id, outside
 the budget); a plugin's tool reaches no other launch. And it reaches a
-run of the session by id: its input, live parent edge, records and
-rows. Each needs the call's run; a standalone host call has none.
+run of the session by id: its input, live parent edge, records, whether
+it holds a request, and the plugin's own facts on it. Each needs the
+call's run; a standalone host call has none.
 
 ```ts
 interface ChildRunsShape {
@@ -458,11 +459,22 @@ interface ChildRunsShape {
     readonly exists: Effect.Effect<boolean, Error>;
     readonly end: Effect.Effect<RunEnd | null, Error>;
   };
-  /** Its committed rows, with `types` only those. */
-  readonly rows: (
+  /** The latest value of `arm`'s kind among the run's own facts, decoded
+   *  by the arm's schema; undefined while the run recorded none. */
+  readonly fact: <A>(
     runId: RunId,
-    types?: readonly SessionEvent['type'][],
-  ) => Effect.Effect<readonly SessionEvent[], Error>;
+    arm: {
+      readonly plugin: string;
+      readonly kind: string;
+      readonly schema: Schema.Codec<A, unknown>;
+    },
+  ) => Effect.Effect<A | undefined, Error>;
+  /** Whether the run holds the request `requestId`, open or decided: what
+   *  a tool that posted one reads after a failed post. */
+  readonly requested: (
+    runId: RunId,
+    requestId: string,
+  ) => Effect.Effect<boolean, Error>;
 }
 ```
 

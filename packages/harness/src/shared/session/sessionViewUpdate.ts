@@ -64,9 +64,9 @@ import {
   freshRunRows,
   isSharedRunRow,
   pendingMessages,
-  phaseMoveOf,
   type SharedRunRow,
 } from './runRows';
+import { phaseMoveOf } from './runRowReads';
 import { applyTranscriptEvent } from './transcriptUpdate';
 import {
   applyLiveText,

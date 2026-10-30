@@ -1,6 +1,7 @@
 /**
- * What a run's rows say about it, as `runRows.ts` folds them: the position
- * the run state copies, and the `RunRows` every other reader holds.
+ * What a run's rows say about it, as `runRows.ts` and `runRowReads.ts` fold
+ * them: the position the run state copies, and the `RunRows` every other
+ * reader holds.
  */
 import type {
   PermissionPayload,
@@ -8,7 +9,9 @@ import type {
   RequestDecision,
   RunFamily,
   RunOutcome,
+  ScriptCallPayload,
   SessionEvent,
+  ToolResultPayload,
 } from '@shared/schemas';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import type { QueuedFollowUp } from './runRows';
@@ -62,12 +65,17 @@ export type RunRows = RunPosition & {
    *  began (null until it ends): a resumed run never carries an old end. */
   readonly activation: RowOf<'run.activate'> | null;
   readonly end: RowOf<'run.end'> | null;
+  /** Its deletion marker (`run.removed`), once one landed. */
+  readonly removed: RowOf<'run.removed'> | null;
   /** Its input is closed: the latest of `run.activate`, `followup.closed`
    *  and `run.removed` is not an activation. */
   readonly inputClosed: boolean;
   /** Its `child.park`s in a lifecycle not ended, each with the text of the
    *  latest `run.report` before it. */
   readonly heldParks: readonly { park: RowOf<'child.park'>; text: string }[];
+  /** Its latest `child.park`: the pause a process child's launch may
+   *  reactivate (`resumeId`). */
+  readonly park: RowOf<'child.park'> | null;
   /** Its latest `run.report`, `run.result`, `run.config` and `run.position`. */
   readonly report: string | null;
   readonly result: RowOf<'run.result'>['result'] | null;
@@ -78,6 +86,9 @@ export type RunRows = RunPosition & {
   /** Its own grants: the latest `approval.policy`, else the snapshot its
    *  `run.start` carried. */
   readonly grants: ApprovalGrants | null;
+  /** Each plugin row kind's latest row, by `plugin/kind` (`plugin.fact`):
+   *  read through its plugin's own reader. */
+  readonly facts: Readonly<Record<string, RowOf<'plugin.fact'>>>;
   /** Its child turns (`child.turn`), for the report and result slots: the
    *  turn running (or cut short before its delivery ran) and the latest
    *  delivered one, both null before the loop accepted a turn. */
@@ -85,6 +96,14 @@ export type RunRows = RunPosition & {
     readonly active: AttemptKey | null;
     readonly lastCompleted: AttemptKey | null;
   };
+  /** The rows a read keeps whole, in seq order, each empty unless the read
+   *  selected its kind (`RUN_ROW_READS`): its `run.activate` and `run.end`
+   *  rows, its positions, its calls' results, and the calls its scripts
+   *  issued. */
+  readonly lifecycles: readonly RowOf<'run.activate' | 'run.end'>[];
+  readonly positions: readonly RowOf<'run.position'>[];
+  readonly results: readonly ToolResultPayload[];
+  readonly scriptCalls: readonly ScriptCallPayload[];
 };
 
 /** One child turn's identity: `key` names the child-run attempt that
