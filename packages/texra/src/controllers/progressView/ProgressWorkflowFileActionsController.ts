@@ -24,10 +24,10 @@ const CHANNEL = 'ProgressWorkflowFileActions';
  * One file action. Its failure channel is the host's own vocabulary: every
  * host answers a request with a tag ({@link HostRequestFailure}), so a
  * refusal a host already worded — the desktop error notice is one — travels
- * as itself and no arm re-enters a runtime to settle this. It runs on the
+ * as itself and no case re-enters a runtime to finish this. It runs on the
  * process `FileSystem` its run-storage reads take, and an accept announces
  * its write on the process's signal hub; both hosts' request dispatchers
- * already carry them, so it is `yield*`ed there, not settled here.
+ * already carry them, so it is `yield*`ed there, not finished here.
  */
 type FileAction<A> = Effect.Effect<
   A,

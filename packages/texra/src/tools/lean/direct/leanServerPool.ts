@@ -436,7 +436,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
           });
         }
         // Every root gets its restart attempt: a failing respawn must not
-        // interrupt a sibling's. The first failure is reported once all settle.
+        // interrupt a sibling's. The first failure is reported once all finish.
         const restarts = yield* Effect.forEach(
           live,
           ([root, entry]) => Effect.result(restart(root, entry, runId)),

@@ -36,10 +36,9 @@ import type { FollowUps } from '../FollowUps';
 const birthRows = (
   run: Pick<AgentRunShape, 'runId' | 'session' | 'entry'>,
 ): readonly SessionEventDraft[] => {
-  const rows = run.entry.registration ?? [];
-  const start = rows[0];
+  const { rows, start } = run.entry.registration ?? { rows: [], start: null };
   if (
-    start?.type !== 'run.start' ||
+    start === null ||
     start.parent === null ||
     !registryOf(run.session.runs).bornDetached(run.runId)
   )
@@ -51,8 +50,7 @@ const birthRows = (
     start.approvalPolicy ?? NO_APPROVAL_GRANTS,
   );
   return [
-    { ...start, parent: null },
-    ...rows.slice(1),
+    ...rows.map((row) => (row === start ? { ...start, parent: null } : row)),
     { type: 'approval.policy', aggregateId: start.aggregateId, snapshot },
   ];
 };
@@ -66,7 +64,7 @@ const NOT_RESUMABLE_MESSAGE =
  * first append, its opening, so the run exists with its opening or not at
  * all. A resume takes the claim and commits its activation, in one batch,
  * and is refused when the rows hold nothing to continue from. A fresh
- * launch onto a run that already holds history state is refused (#11313).
+ * launch onto a run that already holds history state is refused.
  * The caller opens a cell whose state has no phase.
  */
 export const openRun = Effect.fn('runProgram.openRun')(function* (
@@ -112,7 +110,7 @@ export type RunExit = {
 };
 
 /**
- * The exit protocol, as the release arm of the run's acquireUseRelease:
+ * The exit protocol, as the release step of the run's acquireUseRelease:
  * the run's input lease, where it holds one. The halt is not written here:
  * it commits with the run's `run.end` (`finalizeRun`), so no reader ever
  * sees a stopped run without its end.
@@ -129,14 +127,14 @@ export const settleRun =
       onSuccess: (value) => value.outcome,
       onFailure: outcomeFromCause,
     });
-    return Effect.gen(function* () {
-      const runs = registryOf(yield* Runs);
+    return Effect.map(Runs, (service) =>
       lease.release(
-        outcome === RUN_OUTCOME.COMPLETED && !runs.hasActiveChildren(cell.runId)
+        outcome === RUN_OUTCOME.COMPLETED &&
+          !registryOf(service).hasActiveChildren(cell.runId)
           ? 'terminal'
           : 'recoverable',
-      );
-    });
+      ),
+    );
   };
 
 /**

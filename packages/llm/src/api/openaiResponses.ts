@@ -18,7 +18,6 @@ import OpenAI from 'openai';
 import {
   completedTurn,
   FILE_UPLOAD_LIFETIME_SECONDS,
-  decodeModelConfiguration,
   type BackgroundEvent,
   type Model,
   type OpenAIResponsesConfiguration,
@@ -58,19 +57,12 @@ import {
 
 /** Direct Responses operations, with no application model adapter. */
 export function openaiResponsesModel(
-  configuration: OpenAIResponsesConfiguration,
+  config: OpenAIResponsesConfiguration,
   transport: {
     readonly authentication: typeof ResponseAuthenticationSchema.Type;
     readonly fetch?: typeof fetch;
   },
 ): Model {
-  const config = decodeModelConfiguration(configuration);
-  if (config.protocol !== 'openai-responses') {
-    throw new ModelError({
-      kind: 'unsupported',
-      message: 'This model implements the Responses protocol.',
-    });
-  }
   const origin = originOf(config);
   const http = { kind: 'http' } as const;
   const authentication = responseAuthentication(transport.authentication);

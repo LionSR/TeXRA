@@ -41,7 +41,7 @@ export {
 } from '@tools/builtinPlugins';
 /** The name of the `multiAgent` plugin's tool, which runs a named agent as
  *  a child of the calling run: an agent whose tools name it orchestrates. */
-export { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
+export { AGENT_TOOL_NAME } from '@shared/schemas';
 export {
   definePlugin,
   type PluginArm,
@@ -113,9 +113,9 @@ export {
   type JsonRpcConnectionOptions,
   type JsonRpcRequestError,
 } from '@tools/jsonRpc';
-// A request's answer the tool does not accept, read as the refusal it is.
-export { refusalOf } from '@shared/session/approvalDecision';
-export type { RefusalDecision } from '@shared/schemas';
+// What a request of each kind is answered with, and the three ways any
+// request is declined.
+export type { DecisionOf, RefusalDecision } from '@shared/schemas';
 export {
   ToolError,
   type EditRecord,

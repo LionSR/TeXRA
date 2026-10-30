@@ -43,7 +43,6 @@ import {
   GitHubAuthError,
   GitHubPermanentError,
   GitHubRateLimitError,
-  type GitHubServices,
 } from './githubClient';
 import {
   fetchAllCheckRuns as fetchAllCheckRunsClient,
@@ -270,21 +269,7 @@ export class PRPollingSource extends PollingSourceBase<
     return formatSubscriptionError(state.slug, state.pr.pullNumber, detail);
   }
 
-  protected override afterTick(
-    entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
-    now: number,
-  ): Effect.Effect<void, PollHookRejected, PollServices> {
-    return this.drainAnnotationQueues(entries, now);
-  }
-
-  protected pollOne(
-    key: string,
-    state: PRSubscriptionState,
-  ): Effect.Effect<void, Error, GitHubServices> {
-    return this.pollPr(key, state);
-  }
-
-  private readonly pollPr = Effect.fn('PRPollingSource.pollPr')(function* (
+  protected readonly pollOne = Effect.fn('PRPollingSource.pollPr')(function* (
     this: PRPollingSource,
     key: string,
     state: PRSubscriptionState,
@@ -647,7 +632,7 @@ export class PRPollingSource extends PollingSourceBase<
     // on passing checks (lint suggestions, custom workflow advisories).
     // Enqueue here, drain in `afterTick` — the drain runs on every tick
     // (including 304) so excess candidates aren't stranded once check-runs
-    // settle.
+    // finish.
     this.enqueueAnnotationCandidates(state, runs);
   });
 
@@ -694,64 +679,64 @@ export class PRPollingSource extends PollingSourceBase<
     state.lastAnnotationKeys = newCurrentKeys;
   }
 
-  private readonly drainAnnotationQueues = Effect.fn(
-    'PRPollingSource.drainAnnotationQueues',
-  )(function* (
-    this: PRPollingSource,
+  protected override afterTick(
     entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
-    now?: number,
-  ) {
-    const at = now ?? (yield* Clock.currentTimeMillis);
-    const pendingEntries = this.orderAnnotationDrainEntries(entries, at);
-    if (pendingEntries.length === 0) return;
+    now: number,
+  ): Effect.Effect<void, PollHookRejected, PollServices> {
+    return Effect.gen({ self: this }, function* () {
+      const pendingEntries = this.orderAnnotationDrainEntries(entries, now);
+      if (pendingEntries.length === 0) return;
 
-    const claimsByKey = new Map<string, number>();
-    let madeProgress = true;
-    while (madeProgress) {
-      madeProgress = false;
-      for (const [key, state] of pendingEntries) {
-        if (!this.has(key)) continue;
-        if ((state.currentShaState?.pendingAnnotationRuns.length ?? 0) === 0) {
-          continue;
-        }
-        const claims = claimsByKey.get(key) ?? 0;
-        if (claims >= MAX_ANNOTATION_RUNS_PER_SUBSCRIPTION_TICK) continue;
-        // Only `drainNextAnnotationRun`'s own rate-limit re-raise is a
-        // typed failure here; a defect stays a defect and ends the round.
-        const drained = yield* this.drainNextAnnotationRun(state).pipe(
-          Effect.map((value) => ({ ok: true as const, value })),
-          Effect.catchCause((cause) => {
-            const reason = cause.reasons[0];
-            return cause.reasons.length === 1 && reason._tag === 'Fail'
-              ? Effect.succeed({ ok: false as const, failure: reason.error })
-              : Effect.failCause(cause);
-          }),
-        );
-        if (!drained.ok) {
-          // The failure time, not the round's start: draining can run a slow
-          // poll and several annotation pages, and timing the backoff from
-          // `at` would put skipPollUntilMs in the past and retry at once.
-          const failedAt = yield* Clock.currentTimeMillis;
-          yield* this.handleFailure(
-            key,
-            state,
-            drained.failure.cause,
-            failedAt,
+      const claimsByKey = new Map<string, number>();
+      let madeProgress = true;
+      while (madeProgress) {
+        madeProgress = false;
+        for (const [key, state] of pendingEntries) {
+          if (!this.has(key)) continue;
+          if (
+            (state.currentShaState?.pendingAnnotationRuns.length ?? 0) === 0
+          ) {
+            continue;
+          }
+          const claims = claimsByKey.get(key) ?? 0;
+          if (claims >= MAX_ANNOTATION_RUNS_PER_SUBSCRIPTION_TICK) continue;
+          // Only `drainNextAnnotationRun`'s own rate-limit re-raise is a
+          // typed failure here; a defect stays a defect and ends the round.
+          const drained = yield* this.drainNextAnnotationRun(state).pipe(
+            Effect.map((value) => ({ ok: true as const, value })),
+            Effect.catchCause((cause) => {
+              const reason = cause.reasons[0];
+              return cause.reasons.length === 1 && reason._tag === 'Fail'
+                ? Effect.succeed({ ok: false as const, failure: reason.error })
+                : Effect.failCause(cause);
+            }),
           );
-          if (drained.failure.cause instanceof GitHubRateLimitError) {
+          if (!drained.ok) {
+            // The failure time, not the round's start: draining can run a slow
+            // poll and several annotation pages, and timing the backoff from
+            // `now` would put skipPollUntilMs in the past and retry at once.
+            const failedAt = yield* Clock.currentTimeMillis;
+            yield* this.handleFailure(
+              key,
+              state,
+              drained.failure.cause,
+              failedAt,
+            );
+            if (drained.failure.cause instanceof GitHubRateLimitError) {
+              this.nextAnnotationDrainKey = key;
+              return;
+            }
+          } else if (!drained.value) {
             this.nextAnnotationDrainKey = key;
             return;
           }
-        } else if (!drained.value) {
-          this.nextAnnotationDrainKey = key;
-          return;
+          claimsByKey.set(key, claims + 1);
+          madeProgress = true;
         }
-        claimsByKey.set(key, claims + 1);
-        madeProgress = true;
       }
-    }
-    this.advanceAnnotationDrainStart(pendingEntries);
-  });
+      this.advanceAnnotationDrainStart(pendingEntries);
+    });
+  }
 
   private orderAnnotationDrainEntries(
     entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,

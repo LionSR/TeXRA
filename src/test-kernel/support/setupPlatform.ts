@@ -33,7 +33,7 @@ import { GlobalDatabase, type CurrentValues } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
 import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import { workspaceTeams } from '@texra/shared/agentTeams';
+import { teamMembers } from '@texra/shared/agentTeams';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import {
@@ -253,7 +253,7 @@ export const fakeHostAgentDirectories: AgentDirectoriesPort = {
   customConfigured: () =>
     installedHost().platform.agentDirectories.customConfigured(),
   builtIn: () => installedHost().platform.agentDirectories.builtIn(),
-  teams: workspaceTeams,
+  teamMembers,
 };
 
 /** The process services a fake host provides to a program, and the

@@ -29,7 +29,7 @@ export const NESTED_AGENT = {
   collapseAction: 'Collapse agents',
   /** The dispatch card's heading while any of them is still working. */
   workingSummary: (count: string) => `${count} working in the background`,
-  /** The same heading once all of them have settled. */
+  /** The same heading once all of them have finished. */
   settledSummary: (count: string) => `${count} in the background`,
 } as const;
 

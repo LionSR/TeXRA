@@ -123,7 +123,7 @@ export interface LeanServerOptions {
 export class LeanServer extends Context.Service<
   LeanServer,
   {
-    /** Settles once the scope has fully released the process. */
+    /** Finishes once the scope has fully released the process. */
     readonly closed: Deferred.Deferred<void>;
     /**
      * Run the shutdown protocol now, ahead of the scope's release (which
@@ -534,7 +534,7 @@ const make = ({
     /**
      * Wait until Lean reports the file's current version elaborated, and say
      * whether it did. A server that has reported no progress for the version
-     * settles on a diagnostics quiet window instead, and the overall wait
+     * finishes on a diagnostics quiet window instead, and the overall wait
      * bounds both; either of those ends the wait unelaborated (`false`).
      */
     const waitForElaboration = Effect.fn('LeanServer.waitForElaboration')(

@@ -89,7 +89,7 @@ const LoogleErrorSchema = Schema.StructWithRest(
 );
 
 // Not a tagged union: success/error bodies share no tagged key. Try the
-// error arm first so an `{ error }` body is never mis-read as an empty success.
+// error case first so an `{ error }` body is never mis-read as an empty success.
 const LoogleResponseSchema = Schema.Union([
   LoogleErrorSchema,
   LoogleSuccessSchema,

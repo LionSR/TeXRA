@@ -53,14 +53,10 @@ const program = Effect.gen(function* () {
   console.log('[05] run1 drafted:', Option.getOrThrow(drafted));
 
   // Fork the conversation at its settled point
-  const forkOutcome = yield* session.request({
+  const { runId: forkedRunId } = yield* session.request({
     kind: 'run.fork',
     runId: run1.runId,
   });
-  if (forkOutcome.kind !== 'forked') {
-    throw new Error(`Expected forked outcome, got ${forkOutcome.kind}`);
-  }
-  const forkedRunId = forkOutcome.runId;
   console.log(`[05] forked ${run1.runId} -> ${forkedRunId}`);
 
   // Stop the original run (`run.stop` awaits settlement)
@@ -77,7 +73,7 @@ const program = Effect.gen(function* () {
     runId: forkedRunId,
     text: 'Replace the sketch with Lemma 1 and a formal proof.',
   });
-  console.log('[05] fork followUp:', sendOutcome.kind);
+  console.log('[05] fork followUp:', sendOutcome.status);
 
   yield* Stream.runHead(
     Stream.filter(session.view.changes, (view) => {

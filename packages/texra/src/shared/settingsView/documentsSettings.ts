@@ -76,7 +76,7 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
       'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
     category: 'workflow',
     slot: 'workspaceState',
-    // Read by the documents plugin, but the emitted `requestOpenFile` has no
+    // Read by the documents plugin, but the emitted `openFile` notice has no
     // CLI handler (headless), so the CLI ignores it.
     surfaces: { settingsView: 'latex' },
   } satisfies SurfacedSettingEntry,

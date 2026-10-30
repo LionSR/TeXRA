@@ -99,4 +99,9 @@ export {
   type RequestError,
   type RequestRefusal,
 } from '@shared/session/runtimeRequest';
-export type { Outcome, RunStopReason } from '@shared/session/runtimeRequest';
+export {
+  isOutcomeOf,
+  type Outcome,
+  type OutcomeOf,
+  type RunStopReason,
+} from '@shared/session/runtimeRequest';

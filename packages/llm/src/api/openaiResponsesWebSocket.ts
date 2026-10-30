@@ -15,11 +15,7 @@ import {
 import { WebSocket, createWebSocketStream } from 'ws';
 
 // Local imports - canonical model contract
-import {
-  decodeModelConfiguration,
-  type Model,
-  type OpenAIResponsesConfiguration,
-} from '../turn.js';
+import { type Model, type OpenAIResponsesConfiguration } from '../turn.js';
 import { ModelError, authOrRejectionKind, fillModelError } from '../errors.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
 import { responseEvents } from './openaiResponsesCodec.js';
@@ -47,15 +43,9 @@ const decodeRejection = Schema.decodeUnknownResult(WebSocketErrorSchema);
 export const openaiResponsesWebSocketModel = Effect.fn(
   'llm.responses.webSocketModel',
 )(function* (
-  configuration: OpenAIResponsesConfiguration,
+  config: OpenAIResponsesConfiguration,
   authentication: typeof ResponseAuthenticationSchema.Type,
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
-  const config = decodeModelConfiguration(configuration);
-  if (config.protocol !== 'openai-responses')
-    return yield* new ModelError({
-      kind: 'unsupported',
-      message: 'This model implements the Responses protocol.',
-    });
   const origin = originOf(config);
   const selected = yield* Effect.try({
     try: () => responseAuthentication(authentication),

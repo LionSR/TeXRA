@@ -35,7 +35,7 @@ export abstract class BaseRunContent extends LitElement {
    *  (`ProgressApp.render`), so there is no null arm here. */
   @property({ attribute: false }) host!: HostSnapshot;
 
-  /** The pending requests this run has open, in the fold's request order:
+  /** The pending requests this run has open, in the session view's request order:
    *  oldest first, the newest last. */
   protected get runPermissions(): readonly PendingRequest['payload'][] {
     const run = this.run;
@@ -88,7 +88,7 @@ export abstract class BaseRunContent extends LitElement {
 
   /**
    * The line in the composer's place for a run that takes no follow-up:
-   * why (the fold's detail, else ended or no replies), then what the user
+   * why (the session view's detail, else ended or no replies), then what the user
    * can do. A run that resumes has its one Resume here, and a blocked one
    * the fix its detail names; a conversation forks into a new task holding
    * its history (there is no prefilled "new task from this": the composer

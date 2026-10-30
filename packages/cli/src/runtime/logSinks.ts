@@ -63,7 +63,7 @@ export function setCliLogRuntime(runtime: ProcessRuntime | null): void {
 }
 
 /** A synchronous throw from `write` (including `JSON.stringify` in the
- *  thunk) marks the stream closed and settles, never crashes the process. */
+ *  thunk) marks the stream closed and finishes, never crashes the process. */
 function bestEffortStreamWrite(write: () => void, onSyncThrow: () => void) {
   try {
     write();
@@ -164,7 +164,7 @@ export function cliErrorMessage(error: unknown): string {
 }
 
 /**
- * Write a caught error's human-readable message to stderr. Folds the
+ * Write a caught error's human-readable message to stderr. Replaces the
  * `writeTextStderr(cliErrorMessage(error))` pair every command's catch block
  * repeated so the error-formatting choice lives in one place.
  */
@@ -304,7 +304,7 @@ export class NdjsonStdoutSink {
     runtime.runFork(withPerKeyLane(sinkLanes, this)(this.writeLine(record)));
   }
 
-  /** Settles once every record queued before this call has landed: the FIFO
+  /** Finishes once every record queued before this call has landed: the FIFO
    *  lane runs this no-op only after them. */
   flush(): Effect.Effect<void> {
     return Effect.suspend(() => {

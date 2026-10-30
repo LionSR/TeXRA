@@ -1,25 +1,29 @@
-import { Array as Arr, Result } from 'effect';
+/**
+ * Team planning: finding a team in the workspace's catalog, which members
+ * resolve against the agent catalog and which of them leads, and applying a
+ * team to a workspace. The harness stores only the team reference a workspace
+ * runs (`WorkspaceAgentsController.setTeam`) and reads its members back
+ * through `AgentDirectoriesPort.teamMembers`; what a team is, is TeXRA's.
+ */
+
+// Third-party imports
+import { Array as Arr, Effect, Result } from 'effect';
+import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
 import {
   agentKeyOf,
   agentMatchesIdentifier,
   type AgentSource,
-} from '@shared/schemas';
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
+} from '@texra-ai/harness/schemas';
 
-/** A team preset: its members by name, and where it came from. The app
- *  supplies the catalog (`AgentDirectoriesPort.teams`). */
-export interface TeamPreset {
-  readonly id: string;
-  readonly name: string;
-  readonly description: string;
-  /** An icon name the host's icon set draws. */
-  readonly icon: string;
-  readonly agents: readonly string[];
-  readonly source: 'built-in' | 'custom';
-  /** The setup starter: an agent list a workspace can select, never a launch. */
-  readonly setupOnly?: true;
-}
+// Local imports
+import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
+import { workspaceTeams, type TeamPreset } from '@texra/shared/agentTeams';
+import type {
+  StateStore,
+  WorkspaceAgentsController,
+} from '@texra-ai/harness/host';
 
+/** The team `query` names by id, name or slug, if any. */
 export function findTeamPreset(
   presets: readonly TeamPreset[],
   query: string,
@@ -66,7 +70,7 @@ export interface TeamRunOptions<T extends TeamCatalogAgent> {
    * The agents a built-in team runs as its root, in preference order: the
    * first one among the team's delegating members leads it, and a built-in
    * team with none of them has no root. A custom team is led by its first
-   * delegating member. The app owns these names.
+   * delegating member.
    */
   readonly rootAgentNames: readonly string[];
   readonly agentOverride?: string;
@@ -123,3 +127,35 @@ function selectTeamRootAgent<T extends TeamCatalogAgent>(
   }
   return undefined;
 }
+
+/**
+ * Apply the team `query` names (by id, name or slug) to the workspace whose
+ * agents `workspaceAgents` controls, and plan it against the catalog
+ * (`resolveAgent`) as a launch would: the plan is evidence for the caller's
+ * message. The team reference is what gets stored, so a member missing today
+ * activates once it appears. `unknown` when no team matches.
+ */
+export const applyTeam = Effect.fn('applyTeam')(function* <
+  T extends TeamCatalogAgent,
+>(
+  query: string,
+  workspace: {
+    readonly workspaceAgents: WorkspaceAgentsController<T>;
+    readonly repoState: Pick<StateStore, 'get'>;
+    readonly resolveAgent: TeamRunOptions<T>['resolveAgent'];
+  },
+) {
+  const preset = findTeamPreset(
+    yield* workspaceTeams(workspace.repoState),
+    query,
+  );
+  if (!preset) return { status: 'unknown' as const };
+  yield* workspace.workspaceAgents.setTeam(preset.id);
+  return {
+    status: 'applied' as const,
+    plan: planTeamRun(preset, {
+      resolveAgent: workspace.resolveAgent,
+      rootAgentNames: BUILTIN_TEAM_ROOT_AGENT_NAMES,
+    }),
+  };
+});

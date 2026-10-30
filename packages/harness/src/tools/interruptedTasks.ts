@@ -14,7 +14,8 @@
  * Then it follows the agent catalog, which reloads when an agent file or a
  * plugin's switch or trust changes: each run a resume found blocked is
  * checked again, its reason cleared once nothing blocks it, and the run
- * resumed when a resume was asked for (`retry`).
+ * resumed under `auto`. The policy is read once, at open: what an earlier
+ * resume asked for is not kept, by this process or any other.
  */
 import { Deferred, Effect, Queue, type Scope } from 'effect';
 
@@ -45,15 +46,11 @@ const checkRun = (session: SessionHandle, runId: RunId, resume: boolean) =>
     if (config === null)
       return yield* session.view.markResumeBlocked(runId, null);
     const blocker = yield* resumeBlocker(session, config);
-    if (blocker !== null)
-      return yield* session.view.markResumeBlocked(runId, {
-        reason: blocker,
-        retry: resume,
-      });
-    // Nothing blocks it now. A resume that finds it blocked again records
+    // Nothing blocks it now: a resume that finds it blocked again records
     // that itself; one refused for any other reason leaves no stale block.
-    yield* session.view.markResumeBlocked(runId, null);
-    if (resume) yield* Effect.flatten(wakeRun(runId, session));
+    yield* session.view.markResumeBlocked(runId, blocker);
+    if (blocker === null && resume)
+      yield* Effect.flatten(wakeRun(runId, session));
   }).pipe(
     Effect.catch((error) =>
       Effect.logWarning(
@@ -81,6 +78,12 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
       ),
     );
     yield* Deferred.await(subscribed);
+    // What an unblocked run does: under `auto` it is resumed.
+    const policy = yield* Settings.get<ResumeOnOpen>(
+      session.roots,
+      RESUME_ON_OPEN_SETTING.configKey,
+    );
+    const resume = policy === 'auto';
 
     // One check of a run at a time: a resume runs until the run is idle,
     // and a change meanwhile must not resume it twice. A change that lands
@@ -89,7 +92,6 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
     const checking = new Map<RunId, { again: boolean }>();
     const check = (
       runId: RunId,
-      resume: boolean,
     ): Effect.Effect<
       void,
       never,
@@ -111,10 +113,8 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
                   checking.delete(runId);
                   const blocked = session.view
                     .resumeBlocks()
-                    .find((b) => b.runId === runId);
-                  return entry.again && blocked !== undefined
-                    ? check(runId, blocked.retry)
-                    : Effect.void;
+                    .some((b) => b.runId === runId);
+                  return entry.again && blocked ? check(runId) : Effect.void;
                 }),
               ),
             ),
@@ -122,10 +122,6 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
         );
       });
     if (offer) {
-      const policy = yield* Settings.get<ResumeOnOpen>(
-        session.roots,
-        RESUME_ON_OPEN_SETTING.configKey,
-      );
       const view = yield* session.view.read([]);
       const roots = [...view.runs.values()].filter(
         (run) =>
@@ -133,7 +129,7 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
           run.identity.kind === 'agent' &&
           !RESTING_SUBSTATES.has(run.substate) &&
           !isTerminalOutcomePhase(run.status) &&
-          session.runs.get(run.id)?.live !== true,
+          session.runs.get(run.id) === undefined,
       );
       // Interrupted: no live process holds it (the claim's owner is proved
       // dead, or there is none).
@@ -143,13 +139,13 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
           (claim) => claimStanding(claim).kind === 'free',
         ),
       );
-      for (const run of interrupted) yield* check(run.id, policy === 'auto');
+      for (const run of interrupted) yield* check(run.id);
     }
     return yield* Effect.forever(
       Effect.andThen(Queue.take(changed), () =>
         Effect.forEach(
           session.view.resumeBlocks(),
-          ({ runId, retry }) => check(runId, retry),
+          ({ runId }) => check(runId),
           { discard: true },
         ),
       ),

@@ -89,11 +89,6 @@ const PLATFORM_PACKAGES: Record<string, readonly string[]> = {
 const CLAUDE_BINARY_NAME =
   process.platform === 'win32' ? 'claude.exe' : 'claude';
 
-/** The platform binary sits directly in the platform-package directory. */
-function claudeBinaryInPlatformPackage(platformPkgDir: string) {
-  return binaryIfPresent(path.join(platformPkgDir, CLAUDE_BINARY_NAME));
-}
-
 /**
  * Locate the native Claude Code CLI binary. Results are cached for the session
  * (misses are always retried so mid-session installs are picked up).
@@ -109,7 +104,9 @@ export const findClaudeBinaryPath = createCachedBinaryResolver(() => {
 
   return {
     platformPackages,
-    binaryInPlatformPackage: claudeBinaryInPlatformPackage,
+    // The platform binary sits directly in the platform-package directory.
+    binaryInPlatformPackage: (platformPkgDir) =>
+      binaryIfPresent(path.join(platformPkgDir, CLAUDE_BINARY_NAME)),
     // The npm global prefix hosts the `@anthropic-ai/claude-agent-sdk`
     // package; the platform packages resolve relative to those roots.
     globalPrefixRoots: (prefix) => [

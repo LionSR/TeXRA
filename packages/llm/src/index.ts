@@ -135,7 +135,6 @@ export {
 } from './models/modelRoute.js';
 export type {
   ApiKeyUsageRoute,
-  HostRouteFacts,
   ModelRoute,
   RouteDecisionFacts,
   RouteFacts,

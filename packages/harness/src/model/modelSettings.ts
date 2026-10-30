@@ -9,10 +9,10 @@ import {
   type EndpointProviderId,
   findModelProviderPlugin,
   hasUsableApiKey,
-  type HostRouteFacts,
   MODEL_PROVIDER_PLUGINS,
   type ReasoningEffort,
   type RegionalProviderId,
+  type RouteFacts,
 } from '@texra-ai/llm';
 import { getCodexStatus, getXaiStatus } from '@texra-ai/llm/node';
 
@@ -68,7 +68,7 @@ type _RegionRowsCoverTheCatalog = AssertNever<
 /** The model-access settings, as one read found them. */
 export interface ModelSettings {
   /** The host half of the route facts, before a run declines any route. */
-  readonly route: HostRouteFacts & {
+  readonly route: RouteFacts & {
     /** A dashboard GLM endpoint, which outranks the Coding Plan's path. */
     readonly glmEndpoint: boolean;
   };
@@ -293,7 +293,7 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
 export function routeFactsFor(
   settings: Pick<ModelSettings, 'route'>,
   declined: readonly DeclinableUsageRoute[],
-): HostRouteFacts {
+): RouteFacts {
   const allowed = (route: DeclinableUsageRoute) => !declined.includes(route);
   const { glmEndpoint, ...route } = settings.route;
   return {

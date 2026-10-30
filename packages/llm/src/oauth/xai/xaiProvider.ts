@@ -12,7 +12,7 @@
  *
  * Sources (read from source, not blog posts):
  * - OpenCode: packages/opencode/src/plugin/xai.ts (anomalyco/opencode)
- * - hermes-agent PR #26534 (Grok-CLI client id registration notes in OpenCode)
+ * - hermes-agent pull request 26534 (Grok-CLI client id registration notes in OpenCode)
  */
 
 import { Effect, Option, Schema, SchemaGetter, Struct } from 'effect';

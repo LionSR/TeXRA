@@ -1,6 +1,5 @@
 /**
- * An exported trace answered through the live plane's own vocabulary (PRD
- * one-fold-three-renderers, 7.1): the document already IS the run aggregate's
+ * An exported trace answered through the live plane's own vocabulary: the document already IS the run aggregate's
  * display events, so this file only splits them into the two reads a
  * `Subscribe` is answered with — the cold listing, and the named aggregate's
  * history. No synthetic envelope and no reconstruction: the export authored
@@ -39,7 +38,7 @@ export function tracePositions(trace: TraceDocument): TracePosition[] {
 
 /** The run's display name: the same identity rule every host's run tab
  *  labels with, so the page title and the tab cannot disagree. A document
- *  with no creation row folds to nothing, so its id is all there is to name. */
+ *  with no creation row has no name, so its id is all there is to name. */
 export function traceDisplayName(trace: TraceDocument): string {
   const start = trace.events.find(
     (event): event is Extract<DisplaySessionEvent, { type: 'run.start' }> =>
@@ -49,7 +48,7 @@ export function traceDisplayName(trace: TraceDocument): string {
 }
 
 /**
- * The host snapshot of an exported trace (PRD 8.1): the run's display name
+ * The host snapshot of an exported trace: the run's display name
  * as the paper, no catalogs (a trace launches nothing), no banners. The
  * shell renders nothing until a host snapshot arrives, and a trace's one
  * frame is the only one it ever gets.
@@ -70,7 +69,7 @@ function traceHost(trace: TraceDocument): HostSnapshot {
  * `cut` is the scrubber's position: the index of the `run.position` the view is
  * read at, `null` for the whole document. A cut is a commit — the prefix the
  * live plane would have delivered at that moment — so the phase, the progress
- * counters and the transcript are all the fold's own reading at position k, with
+ * counters and the transcript are all the session view's own reading at position k, with
  * no separate rule per tier.
  *
  * Sending the listing facts on both reads mirrors the live reader

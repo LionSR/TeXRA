@@ -77,7 +77,7 @@ const present = (docs: Documents, locations: readonly FileLocation[]) =>
   Effect.forEach(
     locations,
     (location) =>
-      docs.requests.present('requestOpenFile', {
+      docs.requests.present('openFile', {
         location,
         preserveFocus: true,
       }),
@@ -229,8 +229,9 @@ const revisionContext = Effect.fn('documents.revisionContext')(function* (
       stageId,
     });
   // The critic's review of the last revision, after this one's request.
-  const prompt = critique?.trim()
-    ? `${revised.prompt}\n\nA reviewer read your last revision. Apply the corrections that hold, and the suggested improvement where it serves this request:\n<critique revision="${revision}">\n${critique.trim()}\n</critique>`
+  const review = critique?.trim();
+  const prompt = review
+    ? `${revised.prompt}\n\nA reviewer read your last revision. Apply the corrections that hold, and the suggested improvement where it serves this request:\n<critique revision="${revision}">\n${review}\n</critique>`
     : revised.prompt;
   return {
     ...executed(prompt, `Revision ${revision + 1} of ${revisions}`),

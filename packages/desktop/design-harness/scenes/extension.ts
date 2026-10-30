@@ -287,7 +287,6 @@ function interruptedTasksView(): SessionView {
         {
           runId: ABSTRACT_TASK,
           reason: { kind: 'pluginOff', name: 'zotero' },
-          retry: false,
         },
       ],
     }),

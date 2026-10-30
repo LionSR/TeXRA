@@ -12,7 +12,7 @@
  *
  * `SessionFrames` supplies one ordered queue for the current generation.
  * It collects a replay through its completion marker before releasing it
- * to the fold, then delivers each frame's events before its text chunks.
+ * to the view, then delivers each frame's events before its text chunks.
  * A new generation discards the superseded queue and incomplete replay.
  */
 import {
@@ -80,7 +80,7 @@ export const EventsFrameSchema = Schema.Struct({
   chunks: Schema.Array(TextChunkSchema),
   local: Schema.NullOr(LocalRuntimeStateSchema),
   host: Schema.NullOr(HostSnapshotSchema),
-  /** Fold policy sampled by the process reader for this replay. */
+  /** Update policy sampled by the process reader for this replay. */
   debug: Schema.NullOr(Schema.Boolean),
   /** True on the frame that ends the reads this `Subscribe` started. */
   replayComplete: Schema.Boolean,

@@ -96,11 +96,11 @@ export type SettingsViewSnapshot =
   DerivedSettingsSnapshot | 'models' | 'profile';
 
 /**
- * One snapshot's member of the outbound snapshot arm: its name plus one
+ * One snapshot's member of the outbound snapshot case: its name plus one
  * `values` object carrying every catalog row tagged for that snapshot, keyed
  * by its canonical `texra.*` key and validated by the row's own schema.
  *
- * An arm reads the one declared shape instead of restating its fields, so a row added to a snapshot reaches the wire, the
+ * A case reads the one declared shape instead of restating its fields, so a row added to a snapshot reaches the wire, the
  * backend read, and the webview apply step together. Keying by catalog key
  * also matches the inbound generic `UPDATE_STATE_SETTING` `{key, value}`
  * boundary, so both directions address a setting the same way.

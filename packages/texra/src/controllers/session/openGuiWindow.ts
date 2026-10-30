@@ -150,7 +150,7 @@ const isSharedHostRequest = (
 ): request is SharedHostRequest => sharedHostRequestKinds.has(request.kind);
 
 /** A verb a host binds: it runs on the fiber the window's dispatch owns, and
- *  its failure is the value the arm answers with. */
+ *  its failure is the value the case answers with. */
 type HostVerb<A> = Effect.Effect<
   A,
   HostRequestFailure,
@@ -229,7 +229,7 @@ interface GuiWindowHost extends Pick<
   readonly window: WindowHost;
   readonly runs: Pick<
     HostRunActionPorts,
-    'launched' | 'openFinalOutput' | 'promptForApiKey'
+    'launched' | 'openFinalOutput' | 'promptForApiKey' | 'revealProgress'
   >;
   readonly files: Omit<
     ConstructorParameters<
@@ -488,8 +488,8 @@ interface SharedParts extends GuiWindowParts {
 
 /**
  * One program per shared request, as a host's own arms are: it runs on the
- * fiber the window's dispatch already owns and settles nothing, so its
- * failure reaches the bridge's fold as the value the port carried.
+ * fiber the window's dispatch already owns and finishes nothing, so its
+ * failure reaches the bridge's view as the value the port carried.
  */
 function answerShared(
   request: SharedHostRequest,

@@ -65,6 +65,31 @@ export const FollowUpContentSchema = Schema.Struct({
 export type FollowUpContent = typeof FollowUpContentSchema.Type;
 
 /**
+ * Why a follow-up left the queue, stated by the writer of its
+ * `followup.consumed` row: it became part of the user message of turn
+ * `turn`; a child's prompt or delivery was answered by the report or tool
+ * result committed beside it; a control (`/compact`, `/model`) was applied
+ * by the edit or `run.config` beside it; or it was dropped unread and
+ * unapplied: a notice of a child that had ended (`stale`), a control that
+ * changed nothing (`noop`), the run's end (`ended`) or its input's close
+ * (`closed`). `followUpReceipt` reads these.
+ */
+export const FollowUpDispositionSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('turn'),
+    turn: Schema.Int.check(Schema.isGreaterThan(0)),
+  }),
+  Schema.Struct({ kind: Schema.Literal('answered') }),
+  Schema.Struct({ kind: Schema.Literal('applied') }),
+  Schema.Struct({
+    kind: Schema.Literal('dropped'),
+    reason: Schema.Literals(['stale', 'noop', 'ended', 'closed']),
+  }),
+]);
+/** A `followup.consumed` row's `disposition`. */
+export type FollowUpDisposition = typeof FollowUpDispositionSchema.Type;
+
+/**
  * Why a persisted run is not resumed here: `finished` (nothing left to
  * continue from), `owned_elsewhere` (another live process holds it),
  * `blocked` (an agent or plugin it needs is missing, off or not trusted

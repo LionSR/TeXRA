@@ -19,7 +19,7 @@ import type { RunId } from '@texra-ai/harness/schemas';
 /**
  * Resume `runId` on `session`: the run that continues (the one asked for,
  * or the parent that owns it), `'waiting'` when it waits for what blocks it
- * (its agent, a plugin) and continues once that is back, or the refusal
+ * (its agent, a plugin) to be back before it can continue, or the refusal
  * that says why it does not continue. A run that fails to start is a
  * `RunFailure`, not a refusal.
  */
@@ -51,9 +51,5 @@ export const forkRun = (
         ? error
         : new Unavailable({ runId, reason: 'The task could not be forked.' }),
     ),
-    Effect.flatMap((outcome) =>
-      outcome.kind === 'forked'
-        ? Effect.succeed(outcome.runId)
-        : Effect.die(new Error(`run.fork answered ${outcome.kind}`)),
-    ),
+    Effect.map((outcome) => outcome.runId),
   );

@@ -26,8 +26,8 @@ import {
   type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
 import {
+  bypassCovers,
   qualifyAggregateId,
-  type PermissionPayload,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -274,18 +274,6 @@ type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
 type Answer<A, R> = Effect.Effect<A, RequestError, R>;
 type BypassChange = Extract<PolicyChange, { field: 'bypass' }>;
 
-/** The request kinds each bypass covers. The delegated-work grant covers all
- *  three. A question, an inquiry, a retry and a plan approval never appear
- *  here: they need an answer, or carry their own credential semantics. */
-const COVERED_KINDS: Record<
-  ApprovalBypassKind,
-  readonly PermissionPayload['kind'][]
-> = {
-  bash: ['bash'],
-  toolEdit: ['toolEdit'],
-  superYolo: ['proposal', 'toolEdit', 'bash'],
-};
-
 /**
  * Approve the run's requests pending under a bypass just turned on. Each
  * decision re-reads the rows, so one decided meanwhile keeps its answer; one
@@ -296,12 +284,11 @@ function approvePendingUnderBypass(
   session: SessionHandle,
   { runId, bypass }: BypassChange,
 ): Effect.Effect<void, RequestError> {
-  const kinds = COVERED_KINDS[bypass];
   return Effect.forEach(
     SubscriptionRef.getUnsafe(session.view.ref).requests.filter(
       ({ runId: requestRunId, payload }) =>
         requestRunId === runId &&
-        kinds.includes(payload.kind) &&
+        bypassCovers(bypass, payload.kind) &&
         !('allowBypass' in payload.data && !payload.data.allowBypass),
     ),
     ({ requestId }) =>

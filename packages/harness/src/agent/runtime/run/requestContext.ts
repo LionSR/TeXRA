@@ -1,5 +1,5 @@
 /**
- * What the model saw, recorded (#13394): every model request is rebuilt
+ * What the model saw, recorded: every model request is rebuilt
  * from the run's durable rows alone. The content a request carries besides
  * its history (each tool declaration, the system text, the resolved agent
  * definition) is stored once per run as a `context.blob` row under the

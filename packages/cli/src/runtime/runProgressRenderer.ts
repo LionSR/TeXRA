@@ -1,6 +1,5 @@
 /**
- * The stderr status line of `texra run` (PRD one-fold-three-renderers,
- * 10.3). It reads the session view and derives nothing the fold already
+ * The stderr status line of `texra run`. It reads the session view and derives nothing the session view already
  * states; the renderer keeps only its own output state (what it last wrote).
  * The plain-text workflow lines are `scriptPlainOutput.ts`.
  */
@@ -38,7 +37,7 @@ interface RunProgressSession {
   readonly view: Pick<LocalSession['view'], 'changes'>;
 }
 
-/** The tool calls `run` has finished: its transcript's settled tool cards,
+/** The tool calls `run` has finished: its transcript's finished tool cards,
  *  which the view holds while some port subscribes the run (a launched
  *  run's own handle does, as does the chat for every run it lists). */
 export function finishedToolCalls(run: RunView): number {
@@ -252,7 +251,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   } {
     const root = this.root();
     if (!root) return { line: '', state: '' };
-    // The fold's turn; a run whose loop has not moved yet carries none.
+    // The session view's turn; a run whose loop has not moved yet carries none.
     // The agent as the cards name it (`runIdentityDisplayName`): a recipe
     // launch's `source:name` key reads as its name.
     const agentName = root.identity.kind === 'agent' ? root.label : undefined;
@@ -311,7 +310,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 }
 
-/** The fold's label (G4, one table) for every state but a running run,
+/** The session view's label (G4, one table) for every state but a running run,
  *  whose live task is its description once the AI one-liner has arrived. */
 function livePhaseText(root: RunView): string | undefined {
   if (root.status === 'ready') return undefined;

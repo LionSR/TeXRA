@@ -194,7 +194,7 @@ const searchArxiv = Effect.fn('ArxivSearchTool.execute')(function* (
 
   yield* awaitArxivSlot;
   // The client takes no AbortSignal: an interrupted or timed-out request is
-  // abandoned and settles in the background, which is safe for a read.
+  // abandoned and finishes in the background, which is safe for a read.
   const entries = yield* Effect.tryPromise({
     try: () => client.execute(),
     catch: (cause) =>

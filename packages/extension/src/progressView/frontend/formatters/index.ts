@@ -3,7 +3,7 @@
  * kind.
  *
  * Membership (which rows exist at all) is decided once by the transcript
- * fold's row builders (`@texra-ai/harness/transcript`). This map is exhaustive over
+ * row builders (`@texra-ai/harness/transcript`). This map is exhaustive over
  * `TranscriptRowKind`, so a new row kind is a compile error here rather than a
  * row that silently never paints.
  */

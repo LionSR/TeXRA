@@ -34,7 +34,7 @@ export interface ConfirmCardHintOptions<Extra extends KeyHint = KeyHint> {
   /**
    * What the approve key answers with, for a request a plain approve does not
    * answer: the retry card's `y` is `{ action: 'retry' }`, because a retry
-   * request reads its consent off that arm and nothing else. Defaults to a
+   * request reads its consent off that case and nothing else. Defaults to a
    * plain approve.
    */
   readonly approveDecision?: SurfaceDecision;

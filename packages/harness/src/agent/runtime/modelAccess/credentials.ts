@@ -9,11 +9,11 @@ import { Effect } from 'effect';
 import {
   type ApiKeyProviderId,
   exposeApiKey,
-  type HostRouteFacts,
   lookupApiKey,
   type ModelConfig,
   type ModelRoute,
   resolveRouteEndpoint,
+  type RouteFacts,
 } from '@texra-ai/llm';
 import {
   codexCoordinator,
@@ -26,39 +26,13 @@ import { readProviderEndpoint } from '@model/modelSettings';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
 import { SUBSCRIPTION_AUTH_NAMES } from '@shared/model/subscriptionAuth';
-import type { UsageRoute } from '@shared/schemas';
 import type { HttpClient } from 'effect/http';
 
 /** The routes that bill a credential. */
 type CredentialRoute = Extract<
   ModelRoute,
-  {
-    kind:
-      'api-key' | 'no-api-key' | 'chatgpt-subscription' | 'xai-subscription';
-  }
+  { kind: 'api-key' | 'chatgpt-subscription' | 'xai-subscription' }
 >;
-
-/**
- * What a route bills: the plan a direct key pays through, a subscription, or
- * the user's own key (the validation model). The one
- * owner of the fact: the binding sends it as the wire's billing and pricing
- * stamps it on each turn's usage.
- */
-export function usageRouteOf(route: ModelRoute): UsageRoute {
-  switch (route.kind) {
-    case 'api-key':
-      return route.usageRoute;
-    case 'chatgpt-subscription':
-    case 'xai-subscription':
-      return route.kind;
-    case 'validation':
-    case 'no-api-key':
-    case 'unserved': // never bound: the route decision refuses it
-      return 'api-key';
-    default:
-      return route satisfies never;
-  }
-}
 
 /** The credential and endpoint of one route, resolved together. */
 export type RouteCredential = {
@@ -106,8 +80,8 @@ function subscriptionUnavailable(
  */
 const routeEndpoint = (
   config: ModelConfig,
-  route: Exclude<CredentialRoute, { kind: 'no-api-key' }>,
-  facts: Pick<HostRouteFacts, 'endpoints'>,
+  route: CredentialRoute,
+  facts: Pick<RouteFacts, 'endpoints'>,
 ): Effect.Effect<string> => {
   const endpoint = resolveRouteEndpoint(config, route, facts);
   return endpoint === undefined
@@ -175,7 +149,7 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
 const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
   route: Extract<CredentialRoute, { kind: 'api-key' }>,
   config: ModelConfig,
-  facts: Pick<HostRouteFacts, 'endpoints'>,
+  facts: Pick<RouteFacts, 'endpoints'>,
 ): Effect.fn.Return<RouteCredential, RouteUnavailable, Secrets> {
   const { provider } = route;
   const key = yield* lookupApiKey(yield* Secrets, provider).pipe(
@@ -208,29 +182,18 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
 export function routeCredential(
   route: CredentialRoute,
   config: ModelConfig,
-  facts: Pick<HostRouteFacts, 'endpoints'>,
+  facts: Pick<RouteFacts, 'endpoints'>,
   rejected: string | undefined,
 ): Effect.Effect<
   RouteCredential,
   RouteUnavailable,
   HttpClient.HttpClient | Secrets
 > {
-  switch (route.kind) {
-    case 'chatgpt-subscription':
-    case 'xai-subscription':
-      return Effect.flatMap(routeEndpoint(config, route, facts), (endpoint) =>
+  return route.kind === 'api-key'
+    ? apiKeyCredential(route, config, facts)
+    : Effect.flatMap(routeEndpoint(config, route, facts), (endpoint) =>
         subscriptionCredential(route.kind, endpoint, rejected),
       );
-    case 'no-api-key':
-      return Effect.fail(
-        new RouteUnavailable({
-          reason: 'unavailable',
-          message: `Model "${config.label}" has no direct API-key provider.`,
-        }),
-      );
-    default:
-      return apiKeyCredential(route, config, facts);
-  }
 }
 
 /**

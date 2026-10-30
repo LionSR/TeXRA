@@ -45,8 +45,6 @@ import {
   type SlashCommandContext,
   type SlashCommandEffect,
 } from './slashContext';
-import type { LocalSession } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
 
 export function showCliSlashCommandHelp(): void {
   openInfoPane(
@@ -75,14 +73,6 @@ export function showCliWorkPlan(): void {
   }
 }
 
-/** The skills the run's latest step lists, read from its rows. */
-const activeSkillNamesFor = Effect.fn('activeSkillNamesFor')(function* (
-  session: LocalSession,
-  runId: RunId | undefined,
-) {
-  return runId === undefined ? [] : yield* session.records(runId).readSkills();
-});
-
 export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
   function* (context: SlashCommandContext) {
     const meta = sessionMeta.get();
@@ -97,10 +87,11 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         : run;
     const activeChildSessions = runningChildCount(view, countedParent);
     const model = run?.model ?? meta.model;
-    const activeSkills = yield* activeSkillNamesFor(
-      context.runtimeSession,
-      activeRunId,
-    );
+    // The skills the run's latest step lists, read from its rows.
+    const activeSkills =
+      activeRunId === undefined
+        ? []
+        : yield* context.runtimeSession.records(activeRunId).readSkills();
     const [option] = yield* readModelOptions(context.stores, [model]);
     appendLocalNotice(
       formatCliSessionStatus({
@@ -159,7 +150,7 @@ function requestCliSessionCompaction(runSession: Session): Effect.Effect<void> {
  * `/resume all`: the open-time notice's bulk answer. Each interrupted task
  * resumes on the session beside this chat, as `texra.resumeOnOpen: auto`
  * resumes them, and joins the agent list (Tab); one a resume finds blocked
- * continues once what it needs is back.
+ * is listed again once what it needs is back.
  */
 export function resumeInterruptedTasks(
   runSession: Session,
@@ -219,16 +210,17 @@ function renameCliTask(
       setTransientNotice('No task to rename.');
       return Effect.void;
     }
-    if (title.trim() === '') {
+    const trimmed = title.trim();
+    if (trimmed === '') {
       setTransientNotice('Usage: /rename <title>');
       return Effect.void;
     }
     return runSession
-      .request({ kind: 'run.rename', runId, title: title.trim() })
+      .request({ kind: 'run.rename', runId, title: trimmed })
       .pipe(
         Effect.match({
           onFailure: (error) => appendLocalRequestRefusal(error, runId),
-          onSuccess: () => setTransientNotice(`Renamed to ${title.trim()}.`),
+          onSuccess: () => setTransientNotice(`Renamed to ${trimmed}.`),
         }),
       );
   });
@@ -236,7 +228,7 @@ function renameCliTask(
 
 /**
  * `/fork`: a new task holding the focused conversation up to its latest
- * settled point, which this chat then continues; the original keeps its
+ * completed point, which this chat then continues; the original keeps its
  * history and stays in `/resume`. Its transcript starts empty, so a line
  * says where it came from.
  */

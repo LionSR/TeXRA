@@ -4,7 +4,7 @@ import { Result, Schema } from 'effect';
 /**
  * Handler for a registry-dispatched command.
  *
- * A handler's result is whatever its host settles at the native entry:
+ * A handler's result is whatever its host finishes at the native entry:
  * `TResult` defaults to `boolean | Promise<boolean>` (the desktop registry's
  * sync handlers), and a host whose actions are Effect programs instantiates
  * it with the program type and runs it once at its registration boundary.

@@ -36,10 +36,7 @@ const boundEndpoint = (
       ),
       declinedRoutes ?? [],
     );
-    const route = decideModelRoute(config, {
-      ...facts,
-      validation: false,
-    });
+    const route = decideModelRoute(config, facts);
     if (route.kind !== 'api-key') {
       throw new Error(`unexpected ${route.kind} route`);
     }

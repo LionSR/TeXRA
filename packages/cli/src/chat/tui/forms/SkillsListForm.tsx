@@ -24,7 +24,7 @@ interface SkillsListFormProps {
    *  slots that switch skills off. */
   readonly roots: WorkspaceRoots;
   /**
-   * The process runtime the discovery program settles on. Ink components run
+   * The process runtime the discovery program runs on. Ink components run
    * no Effect of their own, so it arrives as a prop from `/skills`.
    */
   readonly runtime: ProcessRuntime;

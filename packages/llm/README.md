@@ -44,7 +44,6 @@ passes a `fetch` that answers 401, so it needs no key.
 ```ts
 import { Effect } from 'effect';
 import {
-  chooseReasoning,
   completedTurn,
   decideModelRoute,
   OWN_KEY_ROUTE_FACTS,
@@ -64,25 +63,12 @@ if (endpoint === undefined) throw new Error('No endpoint for the provider.');
 
 const program = Effect.gen(function* () {
   const binding = yield* bindModel({
-    protocol: 'anthropic-messages',
     model: selected.config,
+    route,
     endpoint,
-    credentialScope: `${route.provider}:api-key`,
     credential: {
       kind: 'api-key',
       apiKey: process.env.ANTHROPIC_API_KEY ?? '',
-    },
-    billing: 'api-key',
-    options: {
-      maxOutputTokens: 1024,
-      temperature: 0,
-      reasoning: chooseReasoning(selected.config, selected.request),
-      parallelToolCalls: false,
-      reasoningSummary: false,
-      serverState: false,
-      fastTier: false,
-      webSocket: false,
-      background: false,
     },
   });
   const turn = yield* binding.model.prepareTurn({
@@ -102,9 +88,14 @@ const result = await Effect.runPromise(program);
 console.log(result.content);
 ```
 
-`bindModel` returns a `Binding`. It holds the `Model` and the facts its
-configuration fixed: the origin, background capability, service tier, and
-whether the route takes a forced tool choice. The connection, and any files
+`bindModel` binds the model on its provider's protocol and derives what the
+route fixes: the config it runs and bills with (`routeConfig`), the credential
+scope on its origin, and the plan it bills. Every option has a default (the
+catalog's output limit, the model's default reasoning, the provider's own
+temperature, every switch off). It returns a `Binding`, which holds the
+`Model` and the facts its configuration fixed: the origin, the routed config,
+the billing route, the output limit, background capability, service tier,
+and whether the route takes a forced tool choice. The connection, and any files
 the model uploads, live in the caller's `Scope`. Closing the scope releases
 them.
 

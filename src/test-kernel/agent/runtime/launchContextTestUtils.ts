@@ -20,8 +20,8 @@ interface TestLaunchContextInit {
 }
 
 /**
- * A minimal conversation `RunLaunch` for driving `runWithLifecycle`
- * without a real model handler or flow.
+ * A minimal conversation `RunLaunch` for driving the run's terminal
+ * (`endRun`) without a real model handler or flow.
  */
 export function createTestLaunchContext({
   runId,

@@ -1,5 +1,6 @@
 /** Memory management content for the settings view. */
 
+import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -16,7 +17,7 @@ import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 import '../components/memory/MemoryList';
 
 @customElement('memory-tab')
-export class MemoryTab extends LitElement {
+export class MemoryTab extends SignalWatcher(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -41,7 +42,6 @@ export class MemoryTab extends LitElement {
   ];
 
   @property({ attribute: false }) items: readonly MemoryViewItem[] = [];
-  @property({ attribute: false }) enabled = false;
 
   override render(): TemplateResult {
     return html`
@@ -67,10 +67,7 @@ export class MemoryTab extends LitElement {
               postMessage(SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER),
           })}
         </div>
-        ${renderStateSettingToggleRow({
-          key: GlobalStateKey.MEMORY_ENABLED,
-          checked: this.enabled,
-        })}
+        ${renderStateSettingToggleRow(GlobalStateKey.MEMORY_ENABLED)}
 
         <memory-list .items=${this.items}></memory-list>
       </div>

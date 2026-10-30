@@ -105,7 +105,7 @@ function runServe(context: CliContext, idleSeconds: number) {
         sessions,
       );
       // Finalizers run last-added first: the sessions close, their runs
-      // stopped and settled; then the stores their roots opened.
+      // stopped and finished; then the stores their roots opened.
       yield* Effect.addFinalizer(() => sessions.closeAll);
       return yield* serve({
         idleAfter: `${idleSeconds} seconds`,

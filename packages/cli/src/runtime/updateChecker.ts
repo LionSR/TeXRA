@@ -80,7 +80,7 @@ function detectInstallMethod(): InstallMethod | undefined {
 function currentModulePath(): string {
   // A bundled or otherwise non-file module has no `file:` URL to convert.
   // `fileURLToPath` can still fail on a `file:` URL with a non-local host
-  // or a malformed path; fold that into the entrypoint fallback so this
+  // or a malformed path; fall back to the entrypoint path for that so this
   // check stays best-effort and never blocks `chat` startup.
   if (!import.meta.url.startsWith('file:')) return readCliEntrypointPath();
   return Result.getOrElse(

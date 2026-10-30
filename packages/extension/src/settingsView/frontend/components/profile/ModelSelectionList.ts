@@ -1,5 +1,6 @@
 /** Checkbox list of models grouped by provider, with deprecated toggles and helper-model picker. */
 
+import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -10,6 +11,7 @@ import {
   MODEL_AVAILABILITY_STATUS,
 } from '@texra-ai/harness/schemas';
 import { pluralize } from '@texra-ai/harness/transcript';
+import { settingSignal } from '@settingsView/frontend/settingsState';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import {
@@ -71,7 +73,7 @@ function availabilityOf({ availability: kind }: ModelSelectionItem) {
 }
 
 @customElement('model-selection-list')
-export class ModelSelectionList extends LitElement {
+export class ModelSelectionList extends SignalWatcher(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -80,13 +82,9 @@ export class ModelSelectionList extends LitElement {
   ];
 
   @property({ attribute: false }) models: readonly ModelSelectionItem[] = [];
-  @property({ attribute: false }) helperModel = '';
   /** Null until the profile state arrives; a group then shows no key icon. */
   @property({ attribute: false }) providerKeyStatuses:
     readonly ProviderKeyStatus[] | null = null;
-
-  @property({ type: Boolean, attribute: 'prefer-short-model-names' })
-  preferShortModelNames = false;
 
   @state() private expandedProvider: string | null = null;
   @state() private expandedDeprecated: Set<string> = new Set();
@@ -345,15 +343,17 @@ export class ModelSelectionList extends LitElement {
   }
 
   private renderHelperModelDropdown(): TemplateResult {
+    const helperModel = settingSignal<string>(
+      GlobalStateKey.HELPER_MODEL,
+    ).get();
     const enabledModels = this.models.filter((m) => m.enabled);
     // The pinned default (`DEFAULT_HELPER_MODEL`) is valid even when it is
     // not an enabled picker row. Keep it selectable so wa-select is not blank.
     const selectedHelper =
-      this.helperModel !== '' &&
-      !enabledModels.some((m) => m.name === this.helperModel)
-        ? (this.models.find((m) => m.name === this.helperModel) ?? {
-            name: this.helperModel,
-            label: this.helperModel,
+      helperModel !== '' && !enabledModels.some((m) => m.name === helperModel)
+        ? (this.models.find((m) => m.name === helperModel) ?? {
+            name: helperModel,
+            label: helperModel,
           })
         : undefined;
     const helperOptions = selectedHelper
@@ -366,7 +366,7 @@ export class ModelSelectionList extends LitElement {
         <wa-select
           id="helper-model-select"
           class="helper-model-select form-control-fill"
-          .value=${this.helperModel}
+          .value=${helperModel}
           @change=${this.handleHelperModelChange}
         >
           <span slot="label" class="visually-hidden">Helper model</span>
@@ -402,7 +402,9 @@ export class ModelSelectionList extends LitElement {
         ${this.renderHelperModelDropdown()}
         <div class="short-names-toggle">
           <wa-switch
-            ?checked=${this.preferShortModelNames}
+            ?checked=${settingSignal<boolean>(
+              GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+            ).get()}
             @change=${(e: Event) => {
               const enabled = (e.target as WaSwitch).checked;
               postStateSetting(

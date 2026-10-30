@@ -185,7 +185,7 @@ export function normalizeStructuredOutputSchema(
 /**
  * Build a terminal tool from a normalized structured-output schema.
  *
- * The guarantee is the tool layer's own spine: `defineTool` validates
+ * The guarantee is the tool layer's own guarantee: `defineTool` validates
  * the model's call before `execute` runs, and an invalid call surfaces a
  * `SchemaError` the model self-corrects. `execute` then enforces the persisted
  * JSON-value contract and returns it as the result's `value`: the settled

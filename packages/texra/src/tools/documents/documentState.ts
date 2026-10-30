@@ -25,7 +25,6 @@ import {
 } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
-  qualifyAggregateId,
   fileLocationDisplayPath,
   type FileLocation,
   type ToolFact,
@@ -43,8 +42,8 @@ import {
   workflowOutputRoundDir,
 } from '@texra/shared/constants/workflowOutput';
 import {
+  DOCUMENTS_OUTPUT_ARM,
   documentsOutputFact,
-  latestDocumentRounds,
   documentTaskOptions,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
@@ -163,11 +162,9 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
         `Run ${runId} is not a document task: its agent '${config.agent}' has no task.`,
       ),
     );
-  const rows = yield* (yield* ChildRuns).rows(runId, ['plugin.fact']);
+  const output = yield* (yield* ChildRuns).fact(runId, DOCUMENTS_OUTPUT_ARM);
   const state: OutputState = {
-    rounds: roundsFromPersisted(
-      latestDocumentRounds(rows, qualifyAggregateId('run', runId)) ?? [],
-    ),
+    rounds: roundsFromPersisted(output?.rounds ?? []),
   };
   const sources: FileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles
@@ -328,8 +325,11 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
   const bound = yield* SynchronizedRef.get(run.model);
   // The launch's media, as absolute paths: the revision's agent run reads
   // them from wherever the launch named them.
-  const configured = run.config.mediaFiles.map(
-    (file) => deps.fileService.createLocation(file).absolutePath,
+  const configuredLocations = run.config.mediaFiles.map((file) =>
+    deps.fileService.createLocation(file),
+  );
+  const configured = configuredLocations.map(
+    (location) => location.absolutePath,
   );
   if (!bound.config.capabilities.supportsVision) return configured;
   const media = new LatexMediaManager(
@@ -349,9 +349,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
       return yield* media.processInputFiles(
         files,
         documentTaskOptions(run.config),
-        run.config.mediaFiles.map((file) =>
-          deps.fileService.createLocation(file),
-        ),
+        configuredLocations,
       );
     }),
   );

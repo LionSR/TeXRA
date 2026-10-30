@@ -130,14 +130,12 @@ const make = (editors: EditorHostShape) =>
       target(key, capability) !== undefined;
 
     /** Send a call that needs no answer. */
-    const tell = (window: Window | undefined, call: HostCall) =>
-      window === undefined
-        ? Effect.void
-        : Queue.offer(window.frames, {
-            kind: 'call',
-            id: randomUUID(),
-            call,
-          }).pipe(Effect.asVoid);
+    const tell = (window: Window, call: HostCall) =>
+      Queue.offer(window.frames, {
+        kind: 'call',
+        id: randomUUID(),
+        call,
+      }).pipe(Effect.asVoid);
 
     /** Send a call to the window `key`'s project routes it to and wait for
      *  its answer, decoded by `schema`. */
@@ -152,7 +150,7 @@ const make = (editors: EditorHostShape) =>
         const answered = Deferred.makeUnsafe<unknown, WindowCallFailed>();
         // Registered in the same step that checks the window is attached, so
         // a detach either finds this call or came before it.
-        if (window === undefined || !windows.has(window))
+        if (window === undefined)
           return yield* new WindowCallFailed({
             reason: 'detached',
             message: 'No TeXRA window of this project is attached.',

@@ -207,8 +207,10 @@ function mcpTool(
     // The call as the approval prompt shows it; the loop asks the session's
     // one approval authority before the body runs.
     guard: {
-      bash: (input: unknown) => Effect.succeed(describe(input)),
-      cwd: 'unknown',
+      command: {
+        text: (input: unknown) => Effect.succeed(describe(input)),
+        cwd: 'unknown',
+      },
     },
     call: (rawInput) => {
       if (!Schema.is(McpArgumentsSchema)(rawInput))

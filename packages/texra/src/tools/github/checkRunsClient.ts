@@ -99,7 +99,7 @@ interface FetchAllCheckRunsResult {
  * - We re-read `total_count` from every 200 response and use the LAST seen
  *   value (not the historical max). The server's `total_count` is its
  *   current authoritative count at the moment of that page-N fetch; if a
- *   transient mid-walk inflation later settles back down, taking the max
+ *   transient mid-walk inflation later drops back down, taking the max
  *   would strand the gate forever (`runs.length` can never reach an
  *   inflated, no-longer-true total).
  *
@@ -116,7 +116,7 @@ interface FetchAllCheckRunsResult {
  * - Single-page (`total_count <= 100`): unchanged fast path — the page-1
  *   ETag covers the whole result and a 304 short-circuits the entire call.
  * - Multi-page: each page is independently conditional. In steady state
- *   (no new push, all runs settled) every page returns 304 and we make
+ *   (no new push, all runs finished) every page returns 304 and we make
  *   N HEAD-cheap requests instead of N full-page GETs, keeping the polling
  *   cost bounded on large matrix builds.
  *
@@ -272,7 +272,7 @@ export const fetchAllCheckRuns = Effect.fn('fetchAllCheckRuns')(
 
       // Use the LATEST observed `total_count` (from this page's 200) as the
       // authoritative server view. Walk-length adapts to it whether it grew
-      // OR shrank: a transient inflation that has since settled back down
+      // OR shrank: a transient inflation that has since dropped back down
       // must be allowed to take effect, otherwise a max-style monotonic
       // tracker would strand the terminal gate forever.
       if (result.total !== undefined) {

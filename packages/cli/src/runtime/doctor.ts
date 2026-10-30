@@ -54,9 +54,6 @@ class DoctorProbeFailed extends Schema.TaggedError<DoctorProbeFailed>()(
   },
 ) {}
 
-const probeFailure = (cause: unknown): DoctorProbeFailed =>
-  new DoctorProbeFailed({ cause });
-
 /**
  * The probes only the CLI root can build: platform init either failed
  * (`degraded`, which skips the checks that need it) or produced the stores
@@ -326,7 +323,9 @@ function checkConfig(
 function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
   return deps.usageLoggingOptOut.pipe(
     // A config store that throws reports as this check's failure.
-    Effect.catchDefect((cause) => Effect.fail(probeFailure(cause))),
+    Effect.catchDefect((cause) =>
+      Effect.fail(new DoctorProbeFailed({ cause })),
+    ),
     Effect.map((optOut) => {
       if (optOut?.source === 'environment') {
         return skip(

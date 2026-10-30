@@ -62,7 +62,7 @@ its kind is its `type` column.
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row (`controllers/session/storeSchema.ts:54-65`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
-  `RunState` the loop continues from (`shared/session/runState.ts:530-543`).
+  `RunState` the loop continues from (`shared/session/runState.ts:504-517`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
   (`agent/runtime/SessionEvents.ts:219-370`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
@@ -151,7 +151,7 @@ The publisher offers these doors:
   (`agent/runtime/SessionEvents.ts:311-319`).
 - `drain`: End the inbox and run what it holds within the close deadline of
   5,000 ms (`agent/runtime/SessionEvents.ts:252-290`,
-  `agent/runtime/SessionHandle.ts:400`).
+  `agent/runtime/SessionHandle.ts:395`).
 
 A job MUST NOT wait on its own publisher; doing so is a defect
 (`agent/runtime/SessionEvents.ts:197-202`, `:299`). A job MAY run again whole
@@ -291,7 +291,7 @@ The `model.message` arms:
 - `cancelled`: A user stop the provider confirmed for an accepted operation.
 - `failed`: The attempt failed, or its outcome is unknown: a person-admitted
   attempt found with no outcome on resume is re-asked under a `failed` row
-  (`agent/runtime/ModelInvoker.ts:731-746`). Carries its error and the move
+  (`agent/runtime/ModelInvoker.ts:723-738`). Carries its error and the move
   after it (`retry`, `unchain`, `ask`, `stop`, `cancel`).
 - `response`: The completed turn, its dispatch facts per call, and its priced
   usage.
@@ -304,7 +304,7 @@ The `model.message` arms:
 `run.report` holds the run's report text, `run.result` its result metadata, and
 `followup.closed` marks its input closed until the run's next `run.activate`
 reopens it (`shared/schemas/sessionEvent.ts:402-409`,
-`shared/session/runRows.ts:301-307`, `agent/followUp/Inbox.ts:339-344`); taking the run's claim does not.
+`shared/session/runRowReads.ts` `recordFacts`, `agent/followUp/Inbox.ts:339-344`); taking the run's claim does not.
 
 ### 3.3 Display rows (session-authored and run-authored)
 
@@ -360,7 +360,7 @@ one batch per call (`agent/runtime/RunHistory.ts:386-397`). The loop's write
 points are normative:
 
 - **W1**, `model.message` `attempt`: for a turn or a summary, commits before the
-  billed request leaves the process (`agent/runtime/ModelInvoker.ts:477-499`;
+  billed request leaves the process (`agent/runtime/ModelInvoker.ts:469-491`;
   summary: `:783-795`).
 - **W2**, `model.message` `response`: commits, with `run.position`
   `response.ready`, before any tool call dispatches
@@ -372,14 +372,14 @@ points are normative:
   `agent/runtime/loop/toolGuard.ts:251-271`).
 - **W4**, `tool.result`: commits, with the call's card rows, before the delivery
   that lets the loop continue (`agent/runtime/loop/toolUseDispatch.ts:380-406`,
-  `:656-680`, `:1100-1103`).
+  `:656-680`, `:1019-1024`).
 - **W5**, `run.position`: commits at every loop-boundary wait and every halt; a
   request's wait keeps the position in force and writes `request.opened` instead
   (`agent/runtime/loop/toolUse.ts:245`, `:274-276`, `:443`, `:497-508`;
   `agent/storage/runLifecycle.ts:243-277`).
 - **W6**, `model.message` `failed`: for a turn or a summary, commits for every
   recorded failure, naming the next move
-  (`agent/runtime/ModelInvoker.ts:610-670`, `:702-704`;
+  (`agent/runtime/ModelInvoker.ts:602-662`, `:694-696`;
   `agent/runtime/run/invocation.ts:381-391`).
 - **W7**, `request.opened` / `request.decided`: the opening commits before any
   wait; a decision commits once (`agent/runtime/requestPolicy.ts:260-278`,
@@ -387,10 +387,10 @@ points are normative:
 
 **W1.** The invoker MUST commit the attempt's rows, the blobs of its request
 context and the `attempt` row, before it streams or submits the request
-(`agent/runtime/ModelInvoker.ts:477-499`,
+(`agent/runtime/ModelInvoker.ts:469-491`,
 `agent/runtime/run/requestContext.ts:138-166`). A compaction summary records its
 attempt the same way, with `purpose: 'summary'`
-(`agent/runtime/ModelInvoker.ts:766-813`). A helper call belongs to no run
+(`agent/runtime/ModelInvoker.ts:758-805`). A helper call belongs to no run
 history and records no row, its attempts and failures included
 (`agent/runtime/run/modelCall.ts:66-67`, `:142-144`, `:166`).
 
@@ -425,7 +425,7 @@ call skipped by a replan, a duplicate, a call after the turn ended) commits its
 card's close, and its open for a fast tool
 (`agent/runtime/loop/toolUseDispatch.ts:711-716`). The delivering `append` MUST
 commit only once every call of the response has settled, as one tool group bound
-to the response (`agent/runtime/loop/toolUseDispatch.ts:1102-1105`). A delivery
+to the response (`agent/runtime/loop/toolUseDispatch.ts:920-926`). A delivery
 its settlements do not match is a defect
 (`agent/runtime/RunHistory.ts:258-260`).
 
@@ -446,9 +446,9 @@ recording MUST commit a `failed` row whose `next` is the move after it; a
 renewed observation of an accepted operation repeats without one (section 6),
 and a helper call records none (`agent/runtime/run/modelCall.ts:166`)
 (`agent/runtime/run/invocation.ts:381-391`,
-`agent/runtime/ModelInvoker.ts:610-627`). A `failed` row that asks MUST be
+`agent/runtime/ModelInvoker.ts:602-619`). A `failed` row that asks MUST be
 preceded, in its batch, by the `request.opened` of its retry request
-(`agent/runtime/ModelInvoker.ts:658-669`, `shared/session/runHistory.ts:183`).
+(`agent/runtime/ModelInvoker.ts:650-661`, `shared/session/runHistory.ts:183`).
 
 ## 5. The fold
 
@@ -463,20 +463,20 @@ requests, and the offered tools and contents
 ### 5.2 Grammar
 
 `applyRunRows(state, rows)` folds rows in order
-(`shared/session/runState.ts:530-543`). It MUST refuse a row whose commit is not
-above the last folded one (`shared/session/runState.ts:493-497`). Each folded
+(`shared/session/runState.ts:504-517`). It MUST refuse a row whose commit is not
+above the last folded one (`shared/session/runState.ts:469-473`). Each folded
 kind has one handler in a table keyed by row type: the state it requires (any
 state, an existing one, or an opened run) and its move
-(`shared/session/runState.ts:292-309`, `:342-471`). A handler that requires an
+(`shared/session/runState.ts:257-275`, `:310-438`). A handler that requires an
 opened run refuses a row before the opening `run.position`
-(`shared/session/runState.ts:505-509`). Every other row kind is listed by name
-as one the fold skips, so a kind in neither list is refused as `unknown-run-row`
-and a new kind does not compile until it is placed
-(`shared/session/runState.ts:166-201`, `:495-498`). A refusal is a typed
+(`shared/session/runState.ts:481-485`). A row of any other kind is refused as
+`unknown-run-row`: its reader selects the kinds the fold reads
+(`RUN_STATE_ROW_TYPES`, `isRunStateRow`; `shared/session/runState.ts:440-452`,
+`:474`), so no display row reaches it. A refusal is a typed
 `RunHistoryInconsistent` with a reason: `out-of-order`, `orphan-settlement`,
 `unknown-run-row`, `mismatched-delivery` or `unreadable-turn`
 (`shared/session/runState.ts:75-86`). The fold never defaults a row it cannot
-apply (`shared/session/runState.ts:524-533`).
+apply (`shared/session/runState.ts:494-503`).
 
 A run is opened by its first `run.position`. Run history rows without an opening
 position MUST fail the load as `inconsistent`
@@ -532,7 +532,7 @@ the run already holds history state (`agent/runtime/loop/runProgram.ts:96-101`).
 
 Every model call the harness makes MUST go through one loop, `runInvocation`
 (`agent/runtime/run/invocation.ts:353-394`; callers
-`agent/runtime/ModelInvoker.ts:676`, `agent/runtime/run/modelCall.ts:123`). Its
+`agent/runtime/ModelInvoker.ts:668`, `agent/runtime/run/modelCall.ts:123`). Its
 next move is `nextAttempt(invocation, requests, retries)`, read off the
 invocation's rows before every move but the repeat of a renewed observation
 (`agent/runtime/run/invocation.ts:365-368`, `:383-386`,
@@ -545,6 +545,7 @@ invocation's rows before every move but the repeat of a renewed observation
 | open attempt, no outcome, an earlier `failed` row asked a person | ask again (`reask`)                         |
 | open attempt, no outcome, the automatic retries spent            | ask again (`reask`)                         |
 | open attempt, no outcome, otherwise                              | send the next attempt                       |
+| open attempt a clean close stopped (its halt says `closed`)      | as above; the stopped attempt spent nothing |
 | `failed` with `retry` or `unchain`                               | send the next attempt                       |
 | `failed` with `stop`                                             | end the invocation failed                   |
 | `failed` with `cancel`                                           | end the invocation cancelled                |
@@ -557,7 +558,7 @@ The move a `failed` row records is decided once, by `failedNext`
 (`shared/session/inFlight.ts:266-283`), except for two rows that name their move
 themselves: a renewed credential's resend, `retry`
 (`agent/runtime/run/invocation.ts:341-344`), and a re-ask, `ask` under a fresh
-request id (`agent/runtime/ModelInvoker.ts:732-748`):
+request id (`agent/runtime/ModelInvoker.ts:724-740`):
 
 - A `continuation-gone` failure of an attempt that sent a continuation answers
   `unchain`, once per invocation (`shared/session/inFlight.ts:272-277`,
@@ -568,7 +569,11 @@ request id (`agent/runtime/ModelInvoker.ts:732-748`):
   failure counts, whichever move followed it: one that a person's retry allowed
   spends the budget as an automatic resend does, and so does an attempt with no
   recorded outcome, which may have been billed, so a crash that recurs on every
-  open does not resend it every time. For a turn's invocation the budget is
+  open does not resend it every time. An attempt a clean session close stopped
+  is the exception: the halt its `run.end` commits with says `closed`
+  (`run.position` `reason`), its request was cut by the stop, not lost, and the
+  fold leaves it out of the count (`shared/session/inFlight.ts`, `closedBy`).
+  For a turn's invocation the budget is
   counted from rows, so a crash does not refill it. A compaction summary or a helper call holds its
   invocation in memory (`agent/runtime/run/modelCall.ts:107-123`); a summary's
   `attempt` and `failed` rows are an audit the run fold skips
@@ -601,7 +606,7 @@ which holds no accepted operation, MUST be asked about again and MUST NOT be
 resent unasked (`shared/session/inFlight.ts:211-217`); one that holds an
 accepted operation is observed (`shared/session/inFlight.ts:211-212`). The ask
 is a new `failed` row on that attempt, with `next: ask`
-(`agent/runtime/ModelInvoker.ts:731-747`). An attempt no person admitted, whose
+(`agent/runtime/ModelInvoker.ts:723-739`). An attempt no person admitted, whose
 outcome no row recorded, is resent (`shared/session/inFlight.ts:217`).
 
 A rejected subscription token MAY be renewed once per execution of
@@ -804,7 +809,7 @@ The guarantees, numbered as in the package README:
 - **I5**: An owned child that ended cleanly answers its call; it is not launched
   again without a person's retry; no child is left without a terminal row,
   except one deliberately paused with a `child.park` `paused` row so it can be
-  called again (`agent/runtime/delegation/childRun.ts:156-165`). Asserted by
+  called again (`agent/runtime/delegation/childRun.ts:101-111`). Asserted by
   `src/test-kernel/support/crashConformance.ts:38-39`, `:867`.
 - **I6**: A child's result is delivered to its parent at most once and is not
   lost while the parent was held elsewhere; a result whose child was detached,

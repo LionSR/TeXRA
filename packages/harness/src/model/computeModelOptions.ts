@@ -4,7 +4,6 @@ import {
   type ApiKeyProviderId,
   decideModelRoute,
   hasUsableApiKey,
-  type HostRouteFacts,
   isUnservedModel,
   MODEL_CONFIGS,
   modelConfig,
@@ -15,6 +14,7 @@ import {
   type ReasoningRequest,
   resolveModelSource,
   routeConfig,
+  type RouteFacts,
   selectModel,
 } from '@texra-ai/llm';
 import { StateWriteFailed } from '@platform/interfaces';
@@ -111,7 +111,7 @@ type ProviderKeyStatuses = Partial<Record<ApiKeyProviderId, KeyStatus>>;
  */
 interface ModelRouteContext {
   reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
-  facts: HostRouteFacts;
+  facts: RouteFacts;
 }
 
 /** The route facts plus the key statuses the batch read resolved for them. */
@@ -163,8 +163,6 @@ function resolveModelAvailability(
       return { kind: 'missing-key' };
     case 'unserved':
       return { kind: 'unserved' };
-    case 'validation':
-      return { kind: 'provider-key' };
   }
   const provider = route.provider;
   const usable = keyStatuses[provider];
@@ -248,12 +246,11 @@ function routeModels(
     const rawConfig = selected.config;
     const route = decideModelRoute(rawConfig, {
       ...ctx.facts,
-      validation: false,
       mode: selected.request.mode,
     });
     routed.set(model, {
       rawConfig,
-      config: routeConfig(rawConfig, route, ctx.facts),
+      config: routeConfig(rawConfig, route),
       request: selected.request,
       route,
     });
@@ -511,6 +508,7 @@ function optionOf(
     };
   }
   const { route, config } = decision;
+  const source = modelSource(route, config);
   const { kind, usageRoute } = resolveModelAvailability(
     model,
     decision,
@@ -522,10 +520,10 @@ function optionOf(
     ? undefined
     : UNAVAILABLE_REASON_BUILDERS[kind as UnavailableAvailabilityKind]({
         model,
-        source: modelSource(route, config),
+        source,
       });
   const savedEffort = reasoningLevels[config.ref];
-  const backend = servingBackend(config, route);
+  const backend = servingBackend(config);
   return {
     model,
     availability: kind,
@@ -534,7 +532,7 @@ function optionOf(
     published: decision.rawConfig,
     config,
     route,
-    source: modelSource(route, config),
+    source,
     savedEffort,
     // The bind's own decision over the bind's inputs (`binding.ts`
     // `reasoningOf`): the routed config, the model string's request, the
@@ -599,10 +597,7 @@ function visibleModelsForAccess(
     if (
       !isUnservedModel(config) &&
       !config.deprecated &&
-      decideModelRoute(config, {
-        ...facts,
-        validation: false,
-      }).kind === 'chatgpt-subscription'
+      decideModelRoute(config, facts).kind === 'chatgpt-subscription'
     ) {
       models.add(model);
     }

@@ -174,11 +174,11 @@ export function createHeadlessCliHostInteractions(
       const outcome = yield* Effect.result(
         session.request({ kind: 'request.preview', runId, requestId }),
       );
-      if (Result.isSuccess(outcome) && outcome.success.kind === 'preview') {
-        const { preview } = outcome.success;
-        if (preview !== null)
-          return buildToolEditApprovalContent({ ...payload.data, ...preview });
-      }
+      const preview = Result.isSuccess(outcome)
+        ? outcome.success.preview
+        : null;
+      if (preview !== null)
+        return buildToolEditApprovalContent({ ...payload.data, ...preview });
       yield* Effect.logWarning(
         `No preview is held for tool edit ${requestId}: prompting without the diff.`,
       ).pipe(withLogChannel(CHANNEL));
