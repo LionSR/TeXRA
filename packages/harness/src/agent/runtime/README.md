@@ -15,7 +15,7 @@ is the module map by concern. Run-loop rules are in
   `modelSwitch` (a host's model switch, applied at the next model call).
 - `run/`: the per-run services the loop takes from context. `AgentRun`,
   `invocation` (the one model-call retry loop), `modelCall`, `pricing`,
-  `compaction`, `contextTokens`, `mediaInput`, `tools`, `turnText`,
+  `compaction`, `contextTokens`, `mediaInput`, `tools`,
   `toolResultText`, `requestContext`, and `backgroundTurn`.
 - `modelAccess/`: the one path from settings to a bound llm `Model`
   (`ModelAccess`, `binding`, `credentials`, `routeDecision`, `failureInfo`).

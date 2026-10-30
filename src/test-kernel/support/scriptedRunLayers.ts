@@ -14,7 +14,6 @@ import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { positionRow } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
-import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
 import {
@@ -22,6 +21,7 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
+import { turnText } from '@shared/session/runFacts';
 import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { RunCell } from '@shared/session/runHistory';
 import {

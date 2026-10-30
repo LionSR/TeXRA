@@ -34,13 +34,13 @@ import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
+import { turnText } from '@shared/session/runFacts';
 import { sentDefinitions } from '@tools/catalogEntries';
 import { sha256 } from '@utils/core/idHash';
 
 import { AgentRun } from '../run/AgentRun';
 import { backgroundCompaction } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
-import { turnText } from '../run/turnText';
 import { claimFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { closeLeftoverChildren } from '../runLaunchGuard';
@@ -85,18 +85,10 @@ const nudge = (text: string) => ({
   content: [{ kind: 'text' as const, text }],
 });
 
-/** What the run answers with, read off its rows: a failed handed-down
- *  call's error, else the model's last text since the last user message
- *  (the turn's input, a nudge, a message delivered mid-turn): the same
- *  live, after a resume, and for a run that failed after saying it. */
-const turnResponse = (at: RunState): string => {
-  if (at.handedDown?.status === 'error') return at.handedDown.error;
-  const since = at.messages.findLastIndex((m) => m.role === 'user');
-  const last = at.messages
-    .slice(since + 1)
-    .findLast((m) => m.role === 'assistant');
-  return last === undefined ? '' : turnText(last);
-};
+/** A failed handed-down call answers with its error; otherwise the turn's
+ *  response rows supply its answer, including after a resume. */
+const turnResponse = (at: RunState): string =>
+  at.handedDown?.status === 'error' ? at.handedDown.error : at.answer;
 
 /** What a turn of the loop reads from its run's context. */
 type TurnServices =
