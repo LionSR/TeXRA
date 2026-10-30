@@ -554,10 +554,10 @@ describe('Sessions owner', () => {
         }));
         // A released claim is not held, even while the display still says so.
         expect(yield* requests.request(request)).toEqual({ kind: 'done' });
-        // A stop that leaves the child policy unset takes the session's
-        // configured "Keep subagents running".
+        // A stop that leaves the child policy unset leaves it to the stop,
+        // which reads the session's "Keep subagents running".
         expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, {
-          detachActiveChildren: true,
+          detachActiveChildren: undefined,
           reason: 'user',
         });
       }).pipe(withRequestServices),

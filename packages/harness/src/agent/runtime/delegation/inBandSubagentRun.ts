@@ -352,7 +352,9 @@ export const resumeSubagentInBand = (
   );
 
 /** Await one in-band child's program; interrupting the caller stops the
- *  child by its run id and waits for it to write its own record. */
+ *  child by its run id and waits for it to write its own record, unless the
+ *  caller's stop detached it (`RunRegistry.stop`): it runs on as a root, and
+ *  only this wait ends. */
 const awaitInBand = Effect.fn('inBandSubagentRun.awaitInBand')(function* (
   runId: RunId,
   program: Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices>,
@@ -361,16 +363,16 @@ const awaitInBand = Effect.fn('inBandSubagentRun.awaitInBand')(function* (
   const child = yield* Effect.forkChild(program, { startImmediately: true });
   return yield* Fiber.join(child).pipe(
     Effect.onInterrupt(() =>
-      Effect.suspend(() =>
-        runs.interrupt(runId)
-          ? Fiber.await(child)
-          : // No run to stop yet: a loop the launch's hand-off started
-            // meanwhile is stopped once it returns, and awaited to the end.
-            Fiber.interrupt(child).pipe(
-              Effect.andThen(Effect.sync(() => runs.interrupt(runId))),
-              Effect.andThen(runs.awaitDrained(runId)),
-            ),
-      ),
+      Effect.suspend(() => {
+        if (runs.get(runId)?.parent === null) return Effect.void;
+        if (runs.interrupt(runId)) return Fiber.await(child);
+        // No run to stop yet: a loop the launch's hand-off started meanwhile
+        // is stopped once it returns, and awaited to the end.
+        return Fiber.interrupt(child).pipe(
+          Effect.andThen(Effect.sync(() => runs.interrupt(runId))),
+          Effect.andThen(runs.awaitDrained(runId)),
+        );
+      }),
     ),
   );
 });

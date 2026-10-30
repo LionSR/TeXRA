@@ -393,7 +393,7 @@ export function createChatSessionController(
     const runId = session.runId;
     if (!runId) return;
     if (runId !== admitted && !runViewOf(currentView(), runId)) return;
-    // Ctrl-C leaves the child policy unset, so the session's request handler
+    // Ctrl-C leaves the child policy unset, so the stop itself (`Runs.stop`)
     // applies the configured "Keep agents running".
     const reason: RunStopReason = session.leaving ? 'shutdown' : 'user';
     runtime.runFork(request({ kind: 'run.stop', runId, reason }));

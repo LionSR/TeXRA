@@ -117,7 +117,10 @@ describe('runWithLifecycle', () => {
         // which is the window the stop below has to land in.
         yield* Deferred.await(parked.started);
 
-        const stop = testDefaultSession().runs.stop(runId, { reason: 'user' });
+        const stop = testDefaultSession().runs.stop(runId, {
+          reason: 'user',
+          detachActiveChildren: false,
+        });
         expect(stop.accepted()).toBe(true);
         yield* stop.settlement;
 
