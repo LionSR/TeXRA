@@ -270,7 +270,7 @@ type CliHistoryExportInputResult =
  * ChatExportInput} the markdown export formatter consumes (the HTML export path
  * uses `assembleTrace` instead — see `commands/history.ts`). Thin CLI-specific
  * wrapper around the shared {@link loadChatExportInput} loader, which also
- * backs the progress-view `ChatExportController.buildExportInput` — so the CLI
+ * backs the progress-view `writeTranscript` operation — so the CLI
  * and GUI render the same conversation identically.
  *
  * Distinguishes "this run id has no stored data at all" (`not_found`
