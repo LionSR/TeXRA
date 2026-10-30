@@ -172,7 +172,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
 
     // A call made under a run opens its requests through the loop's door.
     const { requests } = parent;
-    const result = yield* requests.open({
+    const { decision: result } = yield* requests.open({
       kind: 'proposal',
       data: {
         requestId: requests.nextId('proposal'),

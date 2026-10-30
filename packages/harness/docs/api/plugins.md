@@ -289,10 +289,19 @@ interface CallRequests {
    *  it opens. */
   readonly nextId: (kind: PermissionPayload['kind']) => string;
   /** Open the request (or re-enter the standing one) and wait for its
-   *  decision, as `SessionRequests.ask` does. */
+   *  decision. The returned payload is the request actually answered,
+   *  which on resume may differ from the proposal recomputed by the caller.
+   *  `blobs` are the strings the payload names by address, stored with its row. */
   readonly open: <P extends PermissionPayload>(
     payload: P,
-  ) => Effect.Effect<DecisionOf<P['kind']>, DatabaseNotOwner | CellError>;
+    blobs?: readonly DraftBlob[],
+  ) => Effect.Effect<
+    {
+      readonly payload: Extract<PermissionPayload, { kind: P['kind'] }>;
+      readonly decision: DecisionOf<P['kind']>;
+    },
+    DatabaseNotOwner | CellError
+  >;
 }
 ```
 
@@ -1022,8 +1031,8 @@ function parseWorkingDirectory(
 ## PluginArm
 
 One row kind a plugin owns (`plugin.fact`): the version it writes, the
-schema of that version's value, and the adjacent upcasters (`upcasters[i]`
-maps version `i + 1` to `i + 2`) the store reads an older value through.
+schema of that version's value, and adjacent upcasters from
+`version - upcasters.length` to `version`, oldest first.
 The store checks every row of the kind against its arm, and keeps a row
 whose arm the process's plugins lack (its plugin removed, or not listed
 here) without reading it. Arms live beside their readers, in modules
@@ -1297,12 +1306,13 @@ interface RequestDecisionHook {
 ## requestToolEditApproval
 
 Ask the person for an edit when `sessionPermission` (`loop/toolGuard.ts`),
-given what the call's hooks said, asks: a `request.opened` on the run with
-its content held in the session's
-tool-edit store, serialized behind the run's other prompts, answered by a
-surface's `request.decide`. An approve applies the file as the user left
-it: the decision's content, else the edit a surface recorded, else the
-proposal.
+given what the call's hooks said, asks: a `request.opened` on the run
+that names the proposal's content (the original and proposed text with
+their diff) by its address in the session's blob store, stored with the
+row, so every process the request reaches shows the same diff
+(`request.preview`); serialized behind the run's other prompts, answered
+by a surface's `request.decide`. An approve applies the file as the
+person left it: the decision's content, else the proposal.
 
 ```ts
 const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApprovalResult, Error, ToolContext>
@@ -1802,6 +1812,10 @@ type ToolEditApprovalResult =
   | {
       readonly action: 'apply';
       readonly appliedContent: string;
+      /** The reviewed base, used to reconcile changes made while waiting. */
+      readonly originalContent: string | null;
+      /** The reviewed proposal, before any edits made in the approval view. */
+      readonly proposedContent: string;
       readonly lineChanges?: {
         readonly added: number;
         readonly removed: number;
@@ -1820,7 +1834,8 @@ the permission every surface lists.
 ```ts
 interface ToolEditProposal {
   readonly path: string;
-  readonly originalContent: string;
+  /** Null when the file did not exist when this edit was proposed. */
+  readonly originalContent: string | null;
   readonly proposedContent: string;
   readonly sourceTool: string;
 }

@@ -1,9 +1,6 @@
 /**
- * `SessionRequests`: one handler for every request a surface issues to its
- * session's runtime, answered once with an `Outcome` or a request error.
- * Existence is read from the sequence table first: no row is `Unavailable`,
- * a foreign claim without a death proof `NotOwner`, a rejecting collaborator
- * a defect. A message is the exception: `submitFollowUp` admits it.
+ * Handle a surface's request once, with an `Outcome` or request error.
+ * Check sequence rows and ownership first; `submitFollowUp` checks messages.
  */
 import { Context, Effect, FileSystem, Path, SubscriptionRef } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -48,6 +45,7 @@ import {
   NotOwner,
   Rejected,
   Unavailable,
+  readToolEditContent,
   type RequestError,
 } from '@shared/session/runtimeRequest';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -58,7 +56,6 @@ import type { ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runFiles, type RunFilesServices } from './deletionCleanup';
-import { answerToolEditRequest } from './SessionView';
 
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
 type RequestServices = GlobalValues | RunFilesServices;
@@ -225,14 +222,10 @@ const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
   );
 
 /**
- * The one way in for a surface's decision: a pending request's
- * `request.decided` row, which the waiting run reads from the tail.
- * {@link decide} re-reads the committed rows in its transaction, so of two
- * surfaces deciding at once one records and the other hears `settled`. The
- * plugin owning the request's kind records its side first (an inquiry's
- * answer, on its cross-project thread), outside the run's transaction, so
- * the whole decision takes the request's lane. Its `grant` lands even when
- * the request no longer takes a decision ({@link decideUnderGrant}).
+ * Record a surface's decision. The transaction re-reads the request, so only
+ * one concurrent answer commits. The request's plugin records its own facts
+ * first, outside that transaction; the lane serializes both steps. A grant
+ * still applies when the request is already answered (`decideUnderGrant`).
  */
 const decideRequest = (
   deps: RequestDeps,
@@ -399,13 +392,20 @@ const handle = (
       );
     case 'request.decide':
       return decideRequest(deps, req, heldHere);
-    case 'request.preview':
-    case 'request.edit':
-      return answerToolEditRequest(
-        deps.session().view,
-        req,
-        settled(req.runId),
-      );
+    case 'request.preview': {
+      const payload = pendingOf(deps, req.runId, req.requestId)?.payload;
+      return payload?.kind === 'toolEdit'
+        ? readToolEditContent(
+            deps.session().log.blobs,
+            payload.data.content,
+          ).pipe(
+            Effect.map(({ originalContent, ...content }) => ({
+              kind: 'preview' as const,
+              preview: { ...content, originalContent: originalContent ?? '' },
+            })),
+          )
+        : Effect.succeed({ kind: 'preview', preview: null });
+    }
     case 'policy.set':
       return withRunClaim(
         deps,

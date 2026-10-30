@@ -15,10 +15,10 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import type { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
+import { turnText } from '@shared/session/runFacts';
 import type { UsageLog } from '@shared/usageLog';
 
 import { callModel } from './run/modelCall';
-import { turnText } from './run/turnText';
 import type { RouteRetries } from './run/invocation';
 import type { UsageAttribution } from './run/pricing';
 import type { HttpClient } from 'effect/http';

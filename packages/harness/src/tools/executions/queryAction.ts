@@ -14,10 +14,7 @@ import type {
   HistoryCell,
   HistoryPage,
 } from '@agent/runtime/historyQuery/HistoryQuery';
-import { ToolError } from '@shared/schemas';
-
-// Local file imports
-import { executed } from '../core/result';
+import { ToolError, type ToolResult } from '@shared/schemas';
 
 const CELL_CHARACTER_LIMIT = 2000;
 
@@ -61,8 +58,10 @@ export const queryHistory = Effect.fn('ExecutionsTool.query')(function* (
         ),
       ),
     );
-  return executed(
-    formatPage(page),
-    `${page.rows.length}${page.more ? '+' : ''} rows`,
-  );
+  return {
+    status: 'executed',
+    output: formatPage(page),
+    summary: `${page.rows.length}${page.more ? '+' : ''} rows`,
+    value: page,
+  } satisfies ToolResult;
 });

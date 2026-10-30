@@ -18,6 +18,7 @@ import {
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { sessionFsLayer } from '@platform/rootedFs';
 import type { SettingsStores } from '@shared/config/settings';
+import type { DraftBlob } from '@shared/session/historyTurns';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
@@ -146,8 +147,24 @@ export function nativeToolTestLayer(
         // loop to bind them to.
         requests: {
           nextId: (prefix: string) => `${prefix}-${crypto.randomUUID()}`,
-          open: <P extends PermissionPayload>(payload: P) =>
-            toolRun.session.requests.ask(toolRun.runId, payload),
+          open: <P extends PermissionPayload>(
+            payload: P,
+            blobs?: readonly DraftBlob[],
+          ) =>
+            toolRun.session.requests
+              .ask(toolRun.runId, payload, {
+                ...(blobs && { blobs }),
+              })
+              .pipe(
+                Effect.map((decision) => ({
+                  // The fixture always answers the supplied request's kind.
+                  payload: payload as Extract<
+                    PermissionPayload,
+                    { kind: P['kind'] }
+                  >,
+                  decision,
+                })),
+              ),
           post: (requestId: string, payload: PermissionPayload) =>
             toolRun.session.runHistory.open(toolRun.runId).pipe(
               Effect.flatMap((cell) =>

@@ -12,7 +12,7 @@
  * The union carries the arms the runtime answers today; a lane that routes
  * another retained command adds its arm with its handler.
  */
-import { type HashMap, Schema, Struct } from 'effect';
+import { type Context, Effect, Schema, Struct } from 'effect';
 
 import {
   APPROVAL_BYPASS_KINDS,
@@ -22,7 +22,32 @@ import {
   RequestDecisionSchema,
   RunIdSchema,
   StoredMediaSchema,
+  ToolEditContentSchema,
+  type ToolEditContent,
+  type ToolEditPermission,
 } from '@shared/schemas';
+import type { Database } from './database.js';
+
+// Null records a missing file; an empty string records an existing empty one.
+// The preview wire contract renders either as empty text.
+const StoredToolEditContentSchema = ToolEditContentSchema.mapFields(
+  Struct.assign({ originalContent: Schema.NullOr(Schema.String) }),
+);
+
+/** Read the proposal named by a durable edit request. A missing or malformed
+ *  blob is a corrupt store, never permission to use a recomputed proposal. */
+export const readToolEditContent = (
+  readBlobs: Context.Service.Shape<typeof Database>['readBlobs'],
+  address: ToolEditPermission['content'],
+): Effect.Effect<typeof StoredToolEditContentSchema.Type> =>
+  Effect.map(Effect.orDie(readBlobs([address])), (held) => {
+    const text = held.get(address);
+    if (text === undefined)
+      throw new Error(`The store holds no tool edit proposal at ${address}`);
+    return Schema.decodeUnknownSync(StoredToolEditContentSchema)(
+      JSON.parse(text),
+    );
+  });
 
 const runScoped = { runId: RunIdSchema };
 
@@ -123,21 +148,12 @@ export const RuntimeRequestSchema = Schema.Union([
       Schema.NullOr(Schema.Literals(APPROVAL_BYPASS_KINDS)),
     ),
   }),
-  /** A pending tool edit's preview, as the session staged it beside the
-   *  request: answered `preview`, null when none is staged. */
+  /** A pending tool edit's content, stored with its request: answered
+   *  `preview`, null once the request is no longer pending. */
   Schema.Struct({
     kind: Schema.Literal('request.preview'),
     ...runScoped,
     requestId: Schema.String.check(Schema.isMinLength(1)),
-  }),
-  /** The user's edit of a pending tool edit's proposed file: an approval
-   *  that names no content applies it. Refused once the request is no
-   *  longer pending. */
-  Schema.Struct({
-    kind: Schema.Literal('request.edit'),
-    ...runScoped,
-    requestId: Schema.String.check(Schema.isMinLength(1)),
-    content: Schema.String,
   }),
   /** The field-level mutation, not a snapshot: the authority applies it and
    *  publishes the resulting `approval.policy`. */
@@ -164,43 +180,6 @@ export const RuntimeRequestSchema = Schema.Union([
 ]);
 /** One request a surface issues to its session's runtime. */
 export type RuntimeRequest = typeof RuntimeRequestSchema.Type;
-
-/** One unified-diff hunk: the line ranges it spans on each side, and its
- *  lines, each marked ` `, `-` or `+` (`\` notes a missing final newline). */
-const DiffHunkSchema = Schema.Struct({
-  oldStart: Schema.Int,
-  oldLines: Schema.Int,
-  newStart: Schema.Int,
-  newLines: Schema.Int,
-  lines: Schema.Array(Schema.String),
-});
-
-/** What a pending tool edit would change: the original and proposed
- *  content a host shows beside the request's path and line counts, and
- *  the diff between them, computed once where the request is built: its
- *  hunks and the 0-based line of the proposed text a diff view reveals
- *  first (null when nothing changed). */
-const ToolEditContentSchema = Schema.Struct({
-  originalContent: Schema.String,
-  proposedContent: Schema.String,
-  hunks: Schema.Array(DiffHunkSchema),
-  firstChangedLine: Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-});
-/** A pending tool edit's staged content. */
-export type ToolEditContent = typeof ToolEditContentSchema.Type;
-
-/** A pending tool edit as the session holds it while the request waits
- *  (`request.preview`): its content, and the user's edit of the proposed
- *  file (`request.edit`), null until there is one. */
-const StagedToolEditSchema = ToolEditContentSchema.mapFields(
-  Struct.assign({ edited: Schema.NullOr(Schema.String) }),
-);
-/** A pending tool edit as the session holds it. */
-export type StagedToolEdit = typeof StagedToolEditSchema.Type;
-/** Every pending tool edit the session holds, by request id. */
-export type StagedToolEdits = HashMap.HashMap<string, StagedToolEdit>;
 
 /**
  * Hunks as unified-diff text lines, each preceded by its header. One header
@@ -240,7 +219,7 @@ export const OutcomeSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('forked'), runId: RunIdSchema }),
   Schema.Struct({
     kind: Schema.Literal('preview'),
-    preview: Schema.NullOr(StagedToolEditSchema),
+    preview: Schema.NullOr(ToolEditContentSchema),
   }),
   Schema.Struct({
     kind: Schema.Literal('runFiles'),

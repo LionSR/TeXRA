@@ -1,6 +1,6 @@
 ---
 created: 2026-10-30
-status: proposed
+status: implemented
 ---
 
 # The harness against pi-durable and DeepSeek Harness, by Ousterhout's criteria
@@ -12,9 +12,9 @@ Measured 2026-10-30 at TeXRA `808521a8ed`, pi `31ade0e0`
 `ce7073d5` (0.2.2-alpha.2). Three independent read-only passes, one per
 codebase, produced notes with file and line evidence against the same template;
 this note is the comparison and the design that follows from it. It builds on
-the [general-package design](./2026-10-21-harness-general-package-design.md)
+the [general-package design](../../proposed/architecture/2026-10-21-harness-general-package-design.md)
 (surface, layout, ports) and the
-[tech-debt target designs](./2026-10-27-tech-debt-target-designs.md) (one owner
+[tech-debt target designs](../../proposed/architecture/2026-10-27-tech-debt-target-designs.md) (one owner
 per run-lifecycle fact) and does not restate them. Two of the problems found
 here are already designed there; this note says which and designs the rest.
 Peer file paths are written with a `pi:` or `dsh:` prefix.
@@ -395,12 +395,12 @@ evidence. Reopening one needs the trigger its ruling names.
 - A flow engine, task scheduler, cursor or services bag in the run loop
   (`AGENTS.md`, "Agent system").
 - A stored run-state snapshot beside the rows (deleted in #13837; invariant 2 of
-  the [core concepts](../../implemented/architecture/2026-09-26-core-concepts.md)
+  the [core concepts](./2026-09-26-core-concepts.md)
   allows only a checkpoint that rows rebuild and that loses every conflict).
 - `defineDoc`-style plugin documents, a same-path edit queue, an effect class
   replacing `replay`, a second storage backend, in-process hooks as Effect
   values, a daemon for auto-continue
-  ([durable harness](../../implemented/architecture/2026-10-02-durable-harness.md),
+  ([durable harness](./2026-10-02-durable-harness.md),
   "Considered and dropped").
 - Effect's `McpClient`, `CircuitBreaker` for the retry gate, `Semaphore` for
   `withPerKeyLane`, `ConfigProvider` for settings
@@ -410,6 +410,8 @@ evidence. Reopening one needs the trigger its ruling names.
   D11).
 
 ## Owner decisions
+
+Answered 2026-10-30: yes to all five. Decision 2 landed with one qualification, recorded under "Landed": a pending edit is durable from Approve, and an edit in progress stays the editor's buffer.
 
 1. **M8.** Record a clean close as `run.position halted { reason: 'closed' }`,
    one optional field on an existing kind, before the storage freeze? _Recommend:
@@ -424,6 +426,27 @@ evidence. Reopening one needs the trigger its ruling names.
    `FiberMap` and the per-key lane? _Recommend: yes._
 5. **M5.** `resumeBlocked` stays process-local and loses `retry`? _Recommend:
    yes._
+
+## Landed (2026-10-30)
+
+All eight moves merged on 2026-10-30, each verified on the merged tree
+(typecheck, the crash-point suite, `test:changed`) before merging.
+
+| Move   | PR     | What landed                                                                                                                                                                                                                                                                                                                                                                                                       | Kernel lines       |
+| ------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| M3     | #14444 | The claim row is the one owner of liveness and the registry holding an activation is the one in-process predicate; `RunEntry.hold`, `launches`, `deciding`, `prune`, `drains`, `waiting`, `LiveRun.live` and `launched` deleted; `runRegistry.ts` 825 to 700 lines.                                                                                                                                               | −127               |
+| M7, M8 | #14445 | `run.position halted` gains `reason: 'closed'`, and an attempt cut by a clean close spends no retry. `closeLeftoverChildren` runs on every resume and resumes or reports every child a dead process left; `endInterrupted` and the shell sweep's per-kind branches deleted. The crash suite gained the failure mode and failed first.                                                                             | +88 (new behavior) |
+| M1     | #14446 | One per-call program, `finishCall`, shared by the response path and the script guest; a pure partition run with `Effect.forEach({ concurrency: 4 })` replaces `makeScheduler`; functions on the call path in the file 11 to 7.                                                                                                                                                                                    | −7                 |
+| M2     | #14450 | `executeAgent.ts` is the run program and `AgentRunLifecycle.ts` the end (`endRun`, `endActivation`, `finalizeRun`, `endIn`); the lifecycle rows sit beside their readers in `runFacts.ts`; `terminalResultToast.ts` deleted and the editor notice left the kernel; the ten modules 2,803 to 2,536 lines.                                                                                                          | −61                |
+| M4     | #14453 | `SessionLog.rows` became `history` and `runRows` over named reads; `IGNORED_ROW_TYPES` deleted; the row-readers baseline 43 to 14 (the store codec, the one writer's preconditions, the trace boundary and the trace viewer remain).                                                                                                                                                                              | −32                |
+| M5     | #14451 | The turn's `response` is derived from rows on both paths (`RunState.resuming` replaces `restoring`); the model identity is read from `run.config`; a tool-edit proposal is stored as a blob beside `request.opened` and the person's edit as `request.decided.content`; `toolEdits`, `request.edit`, the staged-edit store and the window hand-off deleted; `resumeBlocked` carries no `retry`.                   | −80                |
+| M6     | #14473 | Nine of the eleven sites became a row, a typed failure or a shape that cannot fail silently (a request the run leaves open is cancelled in its end batch; a held result's `child.park` releases the child's claim; a claim a run cannot hold fails it; skipped media is a text part of the stored message); two stay as review-checklist §15 exceptions (the follower's per-run fan-out, the store's busy probe). | −41                |
+
+The estimates in "What gets deleted" counted lines that moved as lines that
+vanished: M1 and M2 landed far below them, and M7 added behavior. The
+structural goals held: no closure nest, one run module, one owner of liveness,
+no row kind named outside its reducer, no memory twin, no warning over a lost
+durable fact.
 
 ## Verified
 

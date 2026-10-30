@@ -83,7 +83,7 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
   not_parent:
     'This run is not a child of the sender: it was detached or launched by another run.',
   blocked:
-    "This task's agent, or the plugin it comes from, is missing, off or not trusted. It continues once that is fixed.",
+    "This task's agent, or the plugin it comes from, is missing, off or not trusted. It can continue once that is fixed.",
 };
 
 const FOLLOW_UP_WAKE_FAILED_MESSAGE =

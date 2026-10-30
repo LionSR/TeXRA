@@ -44,7 +44,7 @@ import type { ModelConfig } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 
 import type { OpenStep } from '../loop/step';
-import type { SessionHandle } from '../SessionHandle';
+import type { ClaimError, SessionHandle } from '../SessionHandle';
 
 /**
  * How a launch enters its run's cell: a fresh run's `registration` rides
@@ -63,7 +63,8 @@ interface LaunchEntry {
   readonly registration: Registration | null;
   readonly seed?: RegisterRunOptions['seed'] | null;
   readonly opening: Alongside;
-  readonly entered: (state: RunState) => Effect.Effect<void>;
+  /** Fails when a fresh run's claim, its birth's, cannot be held. */
+  readonly entered: (state: RunState) => Effect.Effect<void, ClaimError>;
   readonly initialUserMessage: string | undefined;
 }
 
@@ -122,7 +123,13 @@ export interface AgentRunShape extends RunLaunch {
   readonly steps: SynchronizedRef.SynchronizedRef<OpenStep | null>;
   /** The synthetic terminal tool, when the config declares an output schema. */
   readonly finalToolName: string | null;
-  /** The run's live model binding; replaced only through `swapModel`. */
+  /**
+   * The binding in force, this activation's resource (its route, socket,
+   * ping fiber and uploads), replaced only through `swapModel`. The run's
+   * model is a row fact, its newest `run.config`, read from the run state;
+   * the binding says only what was bound for it, and is read for what the
+   * bound model can do.
+   */
   readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
   /**
    * Replace the binding: `next` binds into a scope of its own, forked from

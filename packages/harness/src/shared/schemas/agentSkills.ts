@@ -1,6 +1,6 @@
 import { Schema } from 'effect';
 
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 import { SkillNameSchema } from './skillName';
 
 export const AGENT_SKILLS_CONFIG_KEY = 'skills.enabled';

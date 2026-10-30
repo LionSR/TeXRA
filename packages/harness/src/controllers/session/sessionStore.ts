@@ -238,14 +238,15 @@ const transaction =
                 if (recordOf(row).start !== null) owned.push(row.aggregateId);
             }),
           ),
-        claim: (runId) => {
-          const id = qualifyAggregateId('run', runId);
+        claim: (runId) =>
           // Only what this call took: a claim the process already held is
           // not this transaction's to give back.
-          return Effect.tap(database.acquireClaims([id]), (taken) =>
-            Effect.sync(() => owned.push(...taken)),
-          );
-        },
+          Effect.tap(
+            database.acquireClaims([qualifyAggregateId('run', runId)]),
+            (taken) => Effect.sync(() => owned.push(...taken)),
+          ),
+        release: (runId) =>
+          database.releaseClaims([qualifyAggregateId('run', runId)]),
       });
       const value = yield* events
         .transact((append) => {

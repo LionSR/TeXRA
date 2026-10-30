@@ -64,6 +64,7 @@ import {
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { Attempt, RetryCredentials } from '@shared/session/inFlight';
+import { turnText } from '@shared/session/runFacts';
 import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
@@ -76,7 +77,6 @@ import { callModel, type CallResult } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
 import { contextTokens } from './run/contextTokens';
 import { priceTurnUsage, reportUsage } from './run/pricing';
-import { turnReasoning, turnText } from './run/turnText';
 import {
   admittedTurn,
   attemptRequest,
@@ -129,8 +129,6 @@ const PARTIAL_TEXT_TAIL_MAX = 4096;
 interface InvocationResponse {
   readonly kind: 'response';
   readonly state: RunState;
-  /** The assistant text of the turn, joined; empty when it produced none. */
-  readonly text: string;
 }
 
 /** A failure's error is the run state's `lastError`. */
@@ -349,7 +347,13 @@ export const modelInvokerLayer = (): Layer.Layer<
           );
         }
         const text = turnText(turn);
-        const reasoning = turnReasoning(turn);
+        const reasoning = turn.content
+          .flatMap((part) =>
+            part.kind === 'reasoning'
+              ? (part.content ?? part.summary).map((piece) => piece.text)
+              : [],
+          )
+          .join('\n');
         trace.thinking.finalize(reasoning === '' ? undefined : reasoning);
         trace.output.finalize(text);
         yield* saveDebug(turn, 'response', invocation, bound);
@@ -386,7 +390,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           });
         }
         yield* reportUsage(usageLog, bound, usage, attribution, session.roots);
-        return { kind: 'response', state: next, text };
+        return { kind: 'response', state: next };
       });
 
       /**
