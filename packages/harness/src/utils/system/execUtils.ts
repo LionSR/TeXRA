@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Duration, Effect, Fiber, Result, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
-import { quote as shellQuote } from 'shell-quote';
+import * as CommandLine from 'effect/process/CommandLine';
 
 import { withLogChannel } from '@logger/effectLog';
 import type { ExecResult } from '@shared/schemas';
@@ -239,8 +239,12 @@ function describeFailure(error: PlatformError): string {
   return toErrorMessage(error.reason.cause ?? error.reason._tag);
 }
 
+/** The command for a log or a message: argv quoted as this platform's
+ *  programs split a command line, with control characters escaped. */
 function displayCommand(command: string | string[]): string {
-  return Array.isArray(command) ? shellQuote(command) : command;
+  return Array.isArray(command)
+    ? CommandLine.display(command, { format: IS_WINDOWS ? 'windows' : 'posix' })
+    : command;
 }
 
 function resultFromOutcome(

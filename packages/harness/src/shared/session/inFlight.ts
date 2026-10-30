@@ -49,8 +49,8 @@ export type Attempt = {
 
 /**
  * A model invocation: the attempt its rows last opened and how each earlier
- * one ended (`null`: it never recorded an outcome, a crash or a refreshed
- * credential sent the next one). It closes with its response, or, once it
+ * one ended (`null`: no row recorded it, because the process died or its
+ * run stopped while it ran). It closes with its response, or, once it
  * stopped, with the input of the next turn.
  */
 export type Invocation = {
@@ -174,9 +174,9 @@ export type RetryCredentials = NonNullable<
 /**
  * What an invocation does next: `send` a new attempt (`retry`: after a
  * person's answer, which rebinds first), `observe` the accepted background
- * operation, ask again (`reask`) for an attempt a person allowed whose
- * outcome no row recorded, `await` the answer to the open retry request, or
- * end it (`fail`, `cancel`).
+ * operation, ask again (`reask`) about an attempt whose outcome no row
+ * recorded, `await` the answer to the open retry request, or end it
+ * (`fail`, `cancel`).
  */
 export type NextAttempt =
   | { readonly kind: 'send'; readonly retry: RetryCredentials | null }
@@ -193,16 +193,23 @@ export type NextAttempt =
 
 const SEND: NextAttempt = { kind: 'send', retry: null };
 
+/** The automatic retries `failures` spent: one per failure but a lost
+ *  chain's (resent once outside them), and one per attempt no row saw end,
+ *  which may have been billed: no crash loop resends it on every open. */
+const spentRetries = (failures: readonly (Failure | null)[]): number =>
+  failures.filter((failure) => failure?.next.kind !== 'unchain').length;
+
 /**
- * What `invocation` does next (null: a new one), from its rows and the
- * run's `requests` alone. An attempt with no recorded outcome is the one a
- * process never saw end: resent unasked, as any automatic attempt is, except
- * one a person allowed, which is asked again rather than resent, and an
- * accepted background operation, which is observed, never resubmitted.
+ * What `invocation` does next (null: a new one), from its rows, the run's
+ * `requests` and the driver's automatic `retries`. An attempt no row saw end
+ * spends a retry; past them, a person is asked before it is resent, as they
+ * are about any attempt once they allowed one of the invocation. An accepted
+ * background operation is observed, never resubmitted.
  */
 export function nextAttempt(
   invocation: Invocation | null,
   requests: RunPosition['requests'],
+  retries: number,
 ): NextAttempt {
   if (invocation === null) return SEND;
   const { current, earlier } = invocation;
@@ -212,7 +219,8 @@ export function nextAttempt(
       return { kind: 'observe', attempt: { ...current, accepted } };
     // A person allowed an attempt of this invocation: whatever ran since
     // was billed on their word, so they are asked before it is sent again.
-    return earlier.some((failure) => failure?.next.kind === 'ask')
+    const allowed = earlier.some((failure) => failure?.next.kind === 'ask');
+    return allowed || spentRetries(earlier) >= retries
       ? { kind: 'reask', attempt: current }
       : SEND;
   }
@@ -250,11 +258,10 @@ export interface FailureFacts {
 
 /**
  * What follows a failed attempt, recorded on its `failed` row, given how the
- * attempts before it ended (`failuresBefore`). `retries` automatic resends
- * per invocation, counted from its rows, so a resume keeps the budget a
- * crash interrupted; a lost chain is resent once outside it; past it, the
- * person is asked under `requestId`, or, where nobody can be asked (null),
- * it stops.
+ * attempts before it ended (`failuresBefore`): `retries` automatic resends
+ * per invocation, counted from its rows ({@link spentRetries}), and a lost
+ * chain's once outside them; past them, the person is asked under
+ * `requestId`, or, where nobody can be asked (null), it stops.
  */
 export function failedNext(
   before: readonly (Failure | null)[],
@@ -268,10 +275,8 @@ export function failedNext(
     !before.some((failure) => failure?.next.kind === 'unchain')
   )
     return { kind: 'unchain' };
-  const spent = before.filter(
-    (failure) => failure !== null && failure.next.kind !== 'unchain',
-  ).length;
-  if (facts.automatic && spent < retries) return { kind: 'retry' };
+  if (facts.automatic && spentRetries(before) < retries)
+    return { kind: 'retry' };
   return facts.offered && requestId !== null
     ? { kind: 'ask', requestId }
     : { kind: 'stop' };

@@ -1,4 +1,5 @@
-import { quote } from 'shell-quote';
+import { Result } from 'effect';
+import * as CommandLine from 'effect/process/CommandLine';
 
 import {
   CLI_COMPLETION_SHELLS,
@@ -17,6 +18,10 @@ interface FlagValueTokenEntry {
   readonly flag: CompletionFlag;
   readonly token: string;
 }
+
+/** A word of the script; the command tree's names hold no NUL to fail on. */
+const shellWord = (word: string): string =>
+  Result.getOrThrow(CommandLine.quote(word));
 
 function flagValueTokenEntries(
   commands: readonly CompletionCommand[],
@@ -52,7 +57,7 @@ function fixedFlagValueCases(commands: readonly CompletionCommand[]): string {
   return [...cases.entries()]
     .map(
       ([flag, values]) =>
-        `${flag}) COMPREPLY=( $(compgen -W ${quote([values.join(' ')])} -- "$cur") ); return ;;`,
+        `${flag}) COMPREPLY=( $(compgen -W ${shellWord(values.join(' '))} -- "$cur") ); return ;;`,
     )
     .join('\n    ');
 }
@@ -172,7 +177,7 @@ function commandCaseBlock(command: CompletionCommand): string {
   const key = commandKey(command.path);
   const subcommands = command.subcommands.join(' ');
   const flags = command.flags.flatMap(completionFlagTokens).join(' ');
-  return `${quote([key])}) subcommands=${quote([subcommands])}; flags=${quote([flags])} ;;`;
+  return `${shellWord(key)}) subcommands=${shellWord(subcommands)}; flags=${shellWord(flags)} ;;`;
 }
 
 export function bashCompletion(commands: readonly CompletionCommand[]): string {

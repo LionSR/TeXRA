@@ -562,6 +562,47 @@ describe('ModelInvoker retry', () => {
       }),
   );
 
+  // Failure mode: a response that kills the process while it is handled is
+  // sent again on every open, without bound, because the attempt it cut
+  // records no outcome.
+  it.effect('spends a retry on each attempt the process stopped during', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installPlatform({ config: { 'model.retry.maxAttempts': 1 } }),
+      );
+      const session = yield* sessionWithInteractions(undefined);
+      const requests = autoDecideRequests(session, () => ({
+        action: 'deny',
+        reason: 'Denied by the approval policy.',
+      }));
+      const stub = stubModel([
+        { hang: true },
+        { hang: true },
+        { ok: completedTurn('sent again') },
+      ]);
+      const kit = yield* openRun(session, stub.model);
+      yield* Effect.promise(() => seedActiveRun(session, kit.runId));
+      // Each open sends one attempt, and the process stops while it runs.
+      let cell = kit.cell;
+      for (const sent of [1, 2]) {
+        const fiber = yield* Effect.forkChild(invokeOn({ ...kit, cell }));
+        while (stub.attempts() < sent) yield* settle;
+        yield* Fiber.interrupt(fiber);
+        cell = yield* session.runHistory.open(kit.runId);
+      }
+      const resumed = yield* invokeOn({ ...kit, cell });
+
+      // The second open resent within the budget; the third asks before
+      // sending, and the denial ends the invocation with its failure.
+      expect(resumed.kind).toBe('failed');
+      expect(resumed.state.lastError).not.toBeNull();
+      expect(stub.attempts()).toBe(2);
+      expect(requests.opened).toHaveLength(1);
+      requests.detach();
+      yield* closeSessionOf(session);
+    }),
+  );
+
   // A denial does not retry and — crucially — is NOT a user cancel, so the
   // run resumes to RUNNING to let the failure terminalize (#7331); a
   // cancelled zero-output run would report COMPLETED. The session's policy

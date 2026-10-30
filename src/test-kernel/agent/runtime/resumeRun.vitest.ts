@@ -277,8 +277,10 @@ describe(
       'a run a live process elsewhere holds is refused before the host rearranges',
       () =>
         Effect.gen(function* () {
+          // A live pid (this process's parent) whose start identity was
+          // never read: no proof finds it dead.
           const { session, runId, storage } = yield* parkedRunAfterCrash({
-            owner: JSON.stringify(['other-host', 4321, 'start-1']),
+            owner: JSON.stringify(['other-host', process.ppid, null]),
           });
 
           expect(yield* resume(runId, { session })).toEqual({

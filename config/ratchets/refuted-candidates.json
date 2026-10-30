@@ -22,7 +22,7 @@
     {
       "id": "EFF-ADOPT-per-key-lane-semaphore",
       "candidate": "withPerKeyLane onto an Effect Semaphore",
-      "why": "Semaphore barges; the lane is FIFO and offers a synchronous refuse. The six lane maps are also self-pruning, so making them services is a pure net-add.",
+      "why": "Re-checked on Effect 4.1.0. Semaphore no longer barges (4.0.7), but take, takeScoped and withPermit are Effects that join its queue one evaluation after refuseClaim decides, and the fiber can yield in between (Scheduler.shouldYield at MaxOpsBeforeYield, 2048 by default), so a fiber that claimed later enters first: a one-permit Semaphore per lane did so at 2 of 2101 claim offsets at the default budget and in about half of 150 six-fiber runs at budgets 8 and 13, the Deferred chain never. The chain swaps its tail in the step that runs refuseClaim, which RunRegistry's admission relies on. An RcMap of semaphores would own the lane map each caller passes (RunRegistry keeps its lanes on its run entries, two callers key a WeakMap), needs a Scope to build, and answers get as an Effect, so refuseClaim could not read the occupant in the claim step. The lane maps prune themselves, so making them services is a pure net-add.",
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
@@ -37,6 +37,19 @@
       "candidate": "ModelRetryGate onto Schedule",
       "why": "The gate is a cross-fiber circuit breaker shared by every call on a route; Schedule is per-fiber.",
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/runtime/ModelRetryGate.ts",
+          "symbol": "ModelRetryGate",
+          "signature": "export class ModelRetryGate { static readonly make: Effect.Effect<ModelRetryGate, never, Scope.Scope> = Effect.gen(function* () {…}); private readonly routes = new Map<string, RouteState>(); private readonly scope: Scope.Scope; private constructor(scope: Scope.Scope) {…} withRoutes( routes: readonly [RoutePolicy, ...RoutePolicy[]], options: RouteOptions, ): <A, E, R>(attempt: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {…} private settle( acquired: readonly AcquiredRoute[], exit: Exit.Exit<unknown, unknown>, baseBackoffMs: number, ): Effect.Effect<void> {…} private acquireAll( routes: readonly RoutePolicy[], onWait: RouteOptions['onWait'], ): Effect.Effect<AcquiredRoute[]> {…} private isCurrentPermit(route: string, permit: RetryPermit): boolean {…} private close(): Effect.Effect<void> {…} private acquire( route: string, onWait: RouteOptions['onWait'], ): Effect.Effect<RetryPermit> {…} private leave(state: RouteState, waiter: Waiter): Effect.Effect<void> {…} private acquireHealthy(route: string): RetryPermit | undefined {…} private markRouteFailure( route: string, permit: RetryPermit, baseBackoffMs: number, failure: RouteFailure, ): Effect.Effect<void> {…} private markReachable( route: string, permit: RetryPermit, ): Effect.Effect<void> {…} private abandonAll(acquired: readonly AcquiredRoute[]): Effect.Effect<void> {…} private abandon(route: string, permit: RetryPermit): Effect.Effect<void> {…} private abandonRoute( state: RouteState, permit: RetryPermit, ): Effect.Effect<void> {…} private cancelProbe(state: RouteState): Effect.Effect<void> {…} private scheduleProbe(state: RouteState): Effect.Effect<void> {…} }"
+        }
+      ]
+    },
+    {
+      "id": "EFF-ADOPT-retry-gate-circuit-breaker",
+      "candidate": "ModelRetryGate onto the effect/persistence CircuitBreaker, with Effect.retry on its rejections behind the unchanged withRoutes",
+      "why": "The breaker cannot keep the gate's backoff rule. Its opening count survives a close and resets only by time, once the circuit has stayed closed as long as it was last open (node_modules/effect/src/persistence/CircuitBreaker.ts:15-16, :1143-1146, :1195, effect 4.1.0); a success while closed clears only the trip streak (:1204), and the next opening counts from the count the failing call started under (:480). The gate ends its streak on the first clean round-trip of a healthy route and never on a probe success (packages/harness/src/agent/runtime/ModelRetryGate.ts:165-168, :326-337, from #9078), so a released herd that fails at once grows the backoff while a route failing between successes stays at the base. Measured with one clean success between each recovery and the next failure: the gate cooled 1000 ms seven times; the breaker (jittered exponential from 1 s, capped at 5 min, midpoint jitter) opened for 1000, 2000, 4000, 8000, 16000, 32000 and 64000 ms. Every 5xx, 408 and 429 not scoped to the model cools the whole wire route (packages/llm/src/errors.ts:155-156), so an intermittently overloaded provider would stall every run on that credential toward the 5-minute cap; a constant openDuration brings back the herd re-failing at the base backoff that #9078 fixed. The breaker also never waits (CircuitBreaker.ts:18-21, :1149-1162) and withRoutes cannot add an error, so it would poll for as long as the probe runs, a whole billed turn (packages/harness/src/agent/runtime/run/invocation.ts:203-219), where the gate queues callers, hands the probe to the oldest (ModelRetryGate.ts:424) and releases the rest the moment it succeeds (:338-357). classify sees only the exit, not whether the call is the probe (CircuitBreaker.ts:570-585); openDuration is fixed per breaker (:452-457) where baseBackoffMs is per call; the module is @stability experimental (:121).",
+      "ruling": "packages/harness/src/agent/runtime/ModelRetryGate.ts#markReachable",
       "symbols": [
         {
           "file": "packages/harness/src/agent/runtime/ModelRetryGate.ts",
@@ -68,6 +81,19 @@
           "file": "packages/harness/src/utils/core/index.ts",
           "symbol": "jitteredExponentialBackoffMs",
           "signature": "export function jitteredExponentialBackoffMs( baseMs: number, failures: number, maxMs: number, unitRandom: number, ): number {…}"
+        }
+      ]
+    },
+    {
+      "id": "EFF-ADOPT-mcp-client",
+      "candidate": "The stdio MCP client (mcpServer.ts over jsonRpc.ts newline framing) onto effect/ai McpClient.stdio",
+      "why": "effect 4.1.0's McpClient (@stability experimental) speaks one protocol revision per client and fails any other answer: its ProtocolVersion is 2025-11-25 | 2026-07-28 (node_modules/effect/src/ai/McpClient.ts:66, :541-545), it sends initialize once (:283-290), and a server answering another revision fails with UnsupportedError (:305-308). A server that does not speak the requested revision answers with its own latest (@modelcontextprotocol/sdk 1.30.0 dist/esm/server/index.js:259-263), so every stdio server still on 2025-06-18, 2025-03-26 or 2024-11-05 would start with no tools; ours asks for 2025-06-18 and accepts whatever the server answers (packages/harness/src/tools/mcp/mcpServer.ts:50, :329-337). Its decoding also rejects shapes ours accepts: a null optional field or a tool without inputSchema.type fails the whole tools/list (ai/internal/mcpSchema/v2024_11_05.ts:23-31, v2025_06_18.ts:218-234), and an unknown content block fails the call (v2025_06_18.ts:243-248). Adoption would delete about 135 lines and bring notifications/cancelled on interrupt (McpClient.ts:655-661); mcpConfig.ts has no counterpart. Revisit when McpClient accepts an older revision in the server's answer.",
+      "ruling": "packages/harness/src/tools/mcp/mcpServer.ts#PROTOCOL_VERSION",
+      "symbols": [
+        {
+          "file": "packages/harness/src/tools/mcp/mcpServer.ts",
+          "symbol": "PROTOCOL_VERSION",
+          "signature": "const PROTOCOL_VERSION = '2025-06-18';"
         }
       ]
     },
