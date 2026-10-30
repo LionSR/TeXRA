@@ -98,7 +98,7 @@ Scores are 1 to 5 and are a reading aid; the evidence lines are the result.
 | Durability                 | five write points, one publisher, uninterruptible appends; stream chunks never rows                                                                                  | atomic commit, adopt before publish, deferred commits for partials, a failure latch; 15 storage transactions per turn with one tool                                       | synchronous emit into a 200 ms write-behind buffer, flushed fail-closed before every model call and tool body; fsync per batch, `link()` publication                 |
 | Ownership across processes | a claim per aggregate, liveness from pid plus process start, `PRAGMA data_version` wake, a resume refused as `owned_elsewhere` unless the owner is proved dead       | none: "One process owns a storage at a time; there is no cross-process locking" (pi `README.md:881`); a second opener rewrites `running` tasks as `pending` and runs them | a non-expiring `flock` on `session.lock`; readers never blocked; `SessionOwnershipLostError` declared, never thrown                                                  |
 | Extension unit             | `Plugin` (13 fields), `ITool` (11)                                                                                                                                   | `Extension` (6), `ToolRegistration` (12), `ToolExecutionApi` (23), 8 hooks                                                                                                | plugin contract with 17 touchable members; `ToolDefinition` (11); events                                                                                             |
-| One tool, for an author    | `defineTool` (11 lines), `attach({ approve })`, `tools` repeated on `resume`                                                                                         | 17 calls, 12 of them pi-durable's; a Chord `Context` on every call                                                                                                        | a 20-file package, about 29 files outside it, 130 snapshot files                                                                                                     |
+| One tool, for an author    | an 11-line `defineTool` call, `attach({ approve })`, `tools` repeated on `resume`                                                                                    | 17 calls, 12 of them pi-durable's; a Chord `Context` on every call                                                                                                        | a 20-file package, about 29 files outside it, 130 snapshot files                                                                                                     |
 | Crash recovery             | the same program over the rows; `nextAttempt` decides send, observe, reask, await, fail or cancel; a started call re-runs only when `replay` is `safe` on both sides | open rewrites `running` as `pending` with `restarts + 1`; a request found in flight is charged, not re-sent; tools re-run only when `replay` is `safe`                    | pure closers append a synthetic error `tool/result` per dangling call (`TOOL_NOT_STARTED` or `TOOL_OUTCOME_UNKNOWN`, with retry guidance) and `turn/end interrupted` |
 | Retry bound                | counted from rows across crashes; a process-wide gate per route                                                                                                      | `maxRetries`, `restartLimit` 5, a fault for a phase that made no durable progress                                                                                         | none in the loop; `llm-retry` (5) and two compaction listeners each may claim the retry, in registration order                                                       |
 | Churn                      | 372 harness commits in 30 days, 217 refactors; `rowVersions.ts` 34 edits                                                                                             | 9 releases in 20 days, 53 breaking entries; parking added in 1.4.0 and removed unreleased                                                                                 | 91 upgrade-guide entries over 11 pre-1.0 versions; 4 session-format bumps in 15 days                                                                                 |
@@ -144,10 +144,10 @@ each pays for it: pi's `pi.live` diverges from the task tree after an answer
 with `afterRun` hooks; dsh's turn counter and its `turnBoundary` projection both
 own "current turn"; TeXRA answers "who runs this run" from `RunRegistry.isLive`
 (`runRegistry.ts:251`), `SessionLog.owns` (`SessionHandle.ts:154`),
-`RunView.ownerId` with `LocalRuntimeState.dead`, and `ProcessIdentity.owners`,
-and `decideResume` asks three of them in turn (`resumeRun.ts:110-251`). The
-claim row already is the owner on disk; the other three are caches that can
-disagree.
+`RunView.ownerId` with `LocalRuntimeState.dead`, and `ProcessIdentity.owners`;
+`decideResume` (`resumeRun.ts:157-210`) asks the registry, then the claim,
+then the owning call, and the hosts read the view's pair. The claim row
+already is the owner on disk; the other three are caches that can disagree.
 
 ## What the peers show, and what is refused
 
@@ -350,7 +350,8 @@ value on an existing kind). `nextAttempt` reads it: an attempt cut by a close
 is not spent, an attempt cut by anything else is, as #14423 made it. The same
 field tells `closers` (M7) that owned work was stopped, not lost.
 
-Deletes: nothing. Adds one literal.
+Deletes: nothing. Adds one optional payload field (`reason`) to an existing
+kind.
 
 Risk: a close that overruns its deadline is interrupted and leaves no `halted`
 row, which then reads as a crash. That is the correct reading.
@@ -411,7 +412,7 @@ evidence. Reopening one needs the trigger its ruling names.
 ## Owner decisions
 
 1. **M8.** Record a clean close as `run.position halted { reason: 'closed' }`,
-   one literal on an existing kind, before the storage freeze? _Recommend:
+   one optional field on an existing kind, before the storage freeze? _Recommend:
    yes._
 2. **M5.** Store a proposal's content and the person's edit as a `context.blob`
    beside its `request.opened`, so a crash keeps the edit? The alternative keeps
@@ -426,9 +427,12 @@ evidence. Reopening one needs the trigger its ruling names.
 
 ## Verified
 
-- The three passes' notes, with file and line evidence, are in the session's
-  scratch folder (`design/pi-durable.md`, `design/deepseek.md`,
-  `design/texra.md`); each pass spot-checked its own anchors after drafting.
+- The three passes' notes, with file and line evidence, are committed beside
+  this note in
+  `.agents/docs/evidence/2026-10-30-harness-design-against-pi-durable-and-deepseek/`
+  (`pi-durable.md`, `deepseek.md`, `texra.md`); each pass spot-checked its own
+  anchors after drafting. The peer trees are not vendored: pi at `31ade0e0`
+  and dsh at `ce7073d5` are public repositories on GitHub.
 - Checked by the author against the tree at `808521a8ed`:
   `dispatchPendingResponse` starts at `toolUseDispatch.ts:304` and
   `makeScheduler` at 225 in a 1,107-line file; the ten lifecycle modules total
@@ -436,7 +440,8 @@ evidence. Reopening one needs the trigger its ruling names.
   `RunRegistry.isLive` at `runRegistry.ts:251` and `SessionLog.owns` at
   `SessionHandle.ts:154`; 15 `SubscriptionRef.getUnsafe(…view…)` sites in 14
   files; `row-readers-baseline.json` has 15 types, 43 entries, 6 outside the
-  harness; `git log --since=30.days`: 711 commits, 372 touching
+  harness; `git log --since=30.days`: 711 commits at the time of the count (a
+  day-boundary figure; the harness counts are exact), 372 touching
   `packages/harness`, 28 `fix(harness)`, 217 `refactor`, `rowVersions.ts`
   changed 34 times; the warn sites at `toolGuard.ts:305-315` and
   `runLaunchGuard.ts:217-226` read as described.
