@@ -134,6 +134,7 @@ export const TOOL_ICON_MAP: Record<string, IconName> = {
   memory: 'database',
 
   // Zotero
+  zotero_collections: 'book',
   zotero_add: 'book',
   zotero_search: 'book',
   zotero_export: 'book',
