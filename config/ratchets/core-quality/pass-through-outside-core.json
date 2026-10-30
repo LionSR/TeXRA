@@ -13,7 +13,6 @@
   "packages/cli/src/runtime/initPlatform.ts": 1,
   "packages/cli/src/runtime/logSinks.ts": 3,
   "packages/cli/src/runtime/terminalText.ts": 1,
-  "packages/desktop/src/main/desktopBrowserViews.ts": 1,
   "packages/desktop/src/main/desktopHostRequests.ts": 4,
   "packages/desktop/src/main/desktopProgressFileActions.ts": 2,
   "packages/desktop/src/main/desktopProjectBindings.ts": 1,
