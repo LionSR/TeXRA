@@ -25,8 +25,9 @@ type ResponsesTransport = Extract<
   { protocol: 'openai-responses'; mode: 'foreground' }
 >['transport'];
 
-/** Resolves controls before admission; the lowering refuses an unsupported
- *  output limit or storage request. No transport request is made here. */
+/** Resolves controls before admission; a route with no output limit
+ *  ignores the request's, and the lowering refuses an unsupported storage
+ *  request. No transport request is made here. */
 export const prepareResponsesTurn = (
   config: OpenAIResponsesConfiguration,
   origin: ResponseOrigin,
@@ -52,11 +53,11 @@ export const prepareResponsesTurn = (
         tools: author.tools ?? [],
         continuation: author.continuation,
         controls: {
-          temperature: config.supportsTemperature
-            ? config.defaults.temperature
-            : null,
+          temperature: config.defaults.temperature,
           maxOutputTokens:
-            author.maxOutputTokens ?? config.defaults.maxOutputTokens,
+            config.defaults.maxOutputTokens === null
+              ? null
+              : (author.maxOutputTokens ?? config.defaults.maxOutputTokens),
           store: author.store ?? config.defaults.store,
           parallelToolCalls: config.defaults.parallelToolCalls,
           toolChoice: author.toolChoice ?? 'auto',
@@ -94,8 +95,9 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
       });
     }
     if (
-      (!config.supportsTemperature && turn.controls.temperature !== null) ||
-      (!config.supportsMaxOutputTokens &&
+      (config.defaults.temperature === null &&
+        turn.controls.temperature !== null) ||
+      (config.defaults.maxOutputTokens === null &&
         turn.controls.maxOutputTokens !== null) ||
       (!config.supportsStorage &&
         (turn.controls.store || turn.continuation !== undefined)) ||

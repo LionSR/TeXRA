@@ -9,7 +9,6 @@ import {
   type ModelConfig,
   type ModelOrigin,
   ModelProvider,
-  type ModelRoute,
   type ReasoningChoice,
   ReasoningEffort,
   ReasoningEffortSchema,
@@ -72,14 +71,12 @@ type _EveryBackendProviderIsStored = AssertNever<
 >;
 
 /**
- * The backend a fresh run on `route` serves `config` from: the model's own
- * provider on a direct route (any credential), or the validation model.
+ * The backend a fresh run serves `config` from off the validation model: the
+ * model's own provider, whatever credential its route bills.
  */
 export function servingBackend(
   config: Pick<ModelConfig, 'provider'>,
-  route: { readonly kind: ModelRoute['kind'] },
 ): ModelBackend | undefined {
-  if (route.kind === 'validation') return 'validation';
   return Result.getOrUndefined(
     Schema.decodeUnknownResult(ModelBackendSchema)(config.provider),
   );
@@ -97,7 +94,7 @@ export interface ReasoningRoute {
  * it. The bind, a model switch and the model options all read it here.
  */
 export function reasoningRouteOf(
-  route: { readonly kind: ModelRoute['kind'] },
+  route: { readonly kind: string },
   backend: ModelBackend,
 ): ReasoningRoute {
   return {

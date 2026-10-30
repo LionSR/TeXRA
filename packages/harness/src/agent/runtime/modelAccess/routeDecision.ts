@@ -10,13 +10,13 @@ import { Context, Effect, Option } from 'effect';
 import {
   decideModelRoute,
   hasUsableApiKey,
-  type HostRouteFacts,
   type Model,
   type ModelConfig,
   type ModelOrigin,
   type ModelRoute,
   OWN_KEY_ROUTE_FACTS,
   type ReasoningMode,
+  type RouteFacts,
   type SelectedModel,
 } from '@texra-ai/llm';
 
@@ -50,14 +50,15 @@ export class ValidationModel extends Context.Service<
   }
 >()('@texra-ai/harness/ValidationModel') {}
 
-/** The routes a binding can take: the unserved one fails in the decision. */
-type BindableRoute = Exclude<ModelRoute, { kind: 'unserved' }>;
+/** A run's route: llm's decision, or the canned validation model. */
+type RunRoute = ModelRoute | { readonly kind: 'validation' };
 
 /** What one route decision found. */
 export interface RouteDecision {
-  readonly route: BindableRoute;
-  /** The facts it was decided over; the binding reads endpoints and windows off them. */
-  readonly facts: HostRouteFacts;
+  /** The unserved route fails in the decision. */
+  readonly route: Exclude<RunRoute, { kind: 'unserved' }>;
+  /** The facts it was decided over; the binding reads endpoints off them. */
+  readonly facts: RouteFacts;
   /** The backend the route serves the model from. */
   readonly backend: ModelBackend;
 }
@@ -76,10 +77,11 @@ const unavailable = (message: string) =>
   new RouteUnavailable({ reason: 'unavailable', message });
 
 /**
- * Decide the route `config` binds under. A resumed conversation's backend
- * constrains the facts: its validation choice is the backend's, and a
- * subscription serves it only from its own provider. The routes nothing
- * can bind fail as the user's instruction.
+ * Decide the route `config` binds under: the validation model when the build
+ * provides it and turns it on (a resumed run: when its backend is that model),
+ * else llm's decision. A resumed conversation's backend constrains the
+ * facts: a subscription serves it only from its own provider. The routes
+ * nothing can bind fail as the user's instruction.
  */
 export const decideRoute = Effect.fn('decideRoute')(function* (
   config: ModelConfig,
@@ -89,17 +91,23 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
   const host = routeFactsFor(settings, ask.declinedRoutes);
   const { backend, mode } = ask;
   const canned = yield* Effect.serviceOption(ValidationModel);
+  const validation =
+    backend === undefined
+      ? Option.isSome(canned) && (yield* canned.value.enabled)
+      : backend === 'validation';
+  if (validation) {
+    return {
+      route: { kind: 'validation' },
+      facts: host,
+      backend: 'validation',
+    };
+  }
   const decided = decideModelRoute(
     config,
     backend === undefined
-      ? {
-          ...host,
-          validation: Option.isSome(canned) && (yield* canned.value.enabled),
-          mode,
-        }
+      ? { ...host, mode }
       : {
           ...host,
-          validation: backend === 'validation',
           chatgptSubscription: host.chatgptSubscription && backend === 'openai',
           xaiSubscription: host.xaiSubscription && backend === 'xai',
           mode,
@@ -110,7 +118,7 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
       `${config.label} is served only through OpenRouter or GitHub Copilot, which this build no longer supports. Choose another model.`,
     );
   }
-  const served = servingBackend(config, decided);
+  const served = servingBackend(config);
   if (served === undefined) {
     return yield* unavailable(`Unsupported model provider: ${config.provider}`);
   }
@@ -179,7 +187,7 @@ const CODING_PLAN_ROUTES: readonly DeclinableUsageRoute[] = [
  * stay explicit, because moving them onto a key starts spending API credit.
  */
 export const credentialSwitch = Effect.fn('credentialSwitch')(function* (
-  failed: { readonly config: ModelConfig; readonly route: ModelRoute },
+  failed: { readonly config: ModelConfig; readonly route: RunRoute },
   recorded: Pick<ProviderError, 'classification'>,
   declinedRoutes: readonly DeclinableUsageRoute[],
 ): Effect.fn.Return<CredentialSwitch | null, never, Secrets> {

@@ -8,7 +8,6 @@
 import { Effect } from 'effect';
 import { turnCost, type TurnResult } from '@texra-ai/llm';
 
-import { usageRouteOf } from '@agent/runtime/modelAccess/credentials';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { NormalizedUsage, RunId } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
@@ -25,7 +24,7 @@ export function priceTurnUsage(
   responseTimeMs: number,
 ): NormalizedUsage | null {
   if (usage === null) return null;
-  const usageRoute = usageRouteOf(bound.route);
+  const usageRoute = bound.billing;
   const provider = usage.providerUsage;
   const inputTokens = usage.inputTokens ?? 0;
   const cached = usage.cachedInputTokens ?? undefined;
@@ -48,14 +47,12 @@ export function priceTurnUsage(
     outputTokens: usage.outputTokens ?? 0,
     cost: turnCost(bound.config, usage, {
       plan: usageRoute !== 'api-key',
-      tier: bound.billing.serviceTier,
+      tier: bound.serviceTier ?? undefined,
     }),
     responseTimeMs,
     provider: bound.origin.protocol,
     usageRoute,
-    ...(bound.billing.plan !== undefined
-      ? { usagePlan: bound.billing.plan }
-      : {}),
+    ...(bound.plan !== undefined ? { usagePlan: bound.plan } : {}),
     ...(cached !== undefined ? { cachedInputTokens: cached } : {}),
     ...(cached !== undefined && inputTokens >= cached
       ? { cacheMissInputTokens: inputTokens - cached }
@@ -107,7 +104,7 @@ export const reportUsage = Effect.fn('pricing.reportUsage')(function* (
         responseTimeMs: Math.round(usage.responseTimeMs),
         cachedInputTokens,
         reasoningTokens: usage.reasoningTokens ?? 0,
-        usageRoute: usageRouteOf(bound.route),
+        usageRoute: bound.billing,
         // The usage-log edge function's wire key, which stores the run id
         // in its `stream_id` column; a server-side rename, not ours.
         ...(attribution.runId === null ? {} : { streamId: attribution.runId }),
