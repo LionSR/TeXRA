@@ -413,24 +413,6 @@ const beginTurn = Effect.fn('childRunLoop.beginTurn')(function* <TTurn, R>(
   ]);
 });
 
-/** Who reads this turn's result: its parent, unless the child is
- *  persist-only. A detach is read from the child's rows in the job
- *  delivering it (`deliverIn`). */
-const deliveryTarget = <TTurn, R>(
-  loop: ChildLoop<TTurn, R>,
-  isError: boolean,
-): RunId | null => {
-  const { params } = loop;
-  const { parentRunId: target } = params;
-  if (
-    params.childRun === undefined &&
-    params.strategy.deliveryMode === 'persistOnly'
-  )
-    return null;
-  if (isError) loop.releaseOwnership();
-  return target;
-};
-
 /** One turn's result, and what an awaiting caller reads of it. */
 const buildTurnResult = Effect.fn('childRunLoop.buildTurnResult')(function* <
   TTurn,
@@ -445,6 +427,10 @@ const buildTurnResult = Effect.fn('childRunLoop.buildTurnResult')(function* <
   if (loop.turnIndex === 0) yield* beginTurn(loop, false);
   const wallTimeMs = (yield* Clock.currentTimeMillis) - loop.turnStart;
   const isError = err != null || turnIsError;
+  const native = params.childRun === undefined ? params.strategy : undefined;
+  // Persist-only: no parent reads the result. A detach is read from the
+  // child's rows in the job delivering it (`deliverIn`).
+  const persistOnly = native?.deliveryMode === 'persistOnly';
   const message =
     turn != null && !isError
       ? yield* strategy.formatDelivery(turn, wallTimeMs)
@@ -455,15 +441,15 @@ const buildTurnResult = Effect.fn('childRunLoop.buildTurnResult')(function* <
   const resultMeta = strategy.buildResultMeta
     ? yield* strategy.buildResultMeta(turn, isError, wallTimeMs)
     : undefined;
+  if (isError && !persistOnly) loop.releaseOwnership();
   const result = childTurnResult({
     runId,
     turn: { key: loop.attemptId, index: loop.turnIndex },
     message,
     resultMeta,
     consumed: loop.consumed,
-    deliveryId:
-      params.childRun === undefined ? params.strategy.deliveryId : undefined,
-    to: deliveryTarget(loop, isError),
+    deliveryId: native?.deliveryId,
+    to: persistOnly ? null : params.parentRunId,
     ...(last && { end: isError ? 'failed' : 'completed' }),
   });
   return {

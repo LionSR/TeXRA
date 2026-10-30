@@ -327,8 +327,8 @@ export const runWithLifecycle = Effect.fn('runWithLifecycle')(function* <R>(
   /**
    * The run's one terminal writer: every way the flow exits — a result, a
    * reported failure, an escaped exception, a stop — reaches this verdict
-   * exactly once, since it is the exit of one masked region rather than an
-   * arm per exit. Provider/runtime failures carry structured error metadata
+   * exactly once, since it is the exit of one masked region rather than a
+   * case per exit. Provider/runtime failures carry structured error metadata
    * and take the classified failure path; a domain failure may report
    * FAILED without it and finalizes as an outcome-only terminal result.
    */

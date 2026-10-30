@@ -146,8 +146,8 @@ const viewRows = (
   messages: RunState['messages'],
 ): RunHistoryDraft[] => {
   const { input } = state;
-  const named = [input.system, input.instruction].flatMap((digest) =>
-    digest === undefined ? [] : [digest],
+  const named = [input.system, input.instruction].filter(
+    (digest) => digest !== undefined,
   );
   // The copied messages name their media by address: the fork's row links
   // the blobs, so deleting the source keeps them.

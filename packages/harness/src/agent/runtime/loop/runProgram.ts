@@ -112,7 +112,7 @@ export type RunExit = {
 };
 
 /**
- * The exit protocol, as the release arm of the run's acquireUseRelease:
+ * The exit protocol, as the release step of the run's acquireUseRelease:
  * the run's input lease, where it holds one. The halt is not written here:
  * it commits with the run's `run.end` (`finalizeRun`), so no reader ever
  * sees a stopped run without its end.
@@ -129,14 +129,14 @@ export const settleRun =
       onSuccess: (value) => value.outcome,
       onFailure: outcomeFromCause,
     });
-    return Effect.gen(function* () {
-      const runs = registryOf(yield* Runs);
+    return Effect.map(Runs, (service) =>
       lease.release(
-        outcome === RUN_OUTCOME.COMPLETED && !runs.hasActiveChildren(cell.runId)
+        outcome === RUN_OUTCOME.COMPLETED &&
+          !registryOf(service).hasActiveChildren(cell.runId)
           ? 'terminal'
           : 'recoverable',
-      );
-    });
+      ),
+    );
   };
 
 /**

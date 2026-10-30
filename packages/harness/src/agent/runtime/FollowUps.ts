@@ -103,7 +103,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   run: AgentRunShape,
 ): Effect.fn.Return<FollowUps, never, Scope.Scope> {
   const { runId, session, logger } = run;
-  // Ended with the scope; the run's settleRun arm ends it first, saying
+  // Ended with the scope; the run's settleRun ends it first, saying
   // whether the run takes more input.
   const input = yield* session.followUps.open(runId);
 
