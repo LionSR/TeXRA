@@ -27,7 +27,10 @@ import { FetchHttpClient, HttpClient } from 'effect/http';
 import { Inbox } from '@agent/followUp/Inbox';
 import { wakeRun } from '@agent/followUp/ToolUseFollowUp';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
+import {
+  presentTerminalResult,
+  SessionHostInteractions,
+} from '@agent/runtime/HostInteractions';
 import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
@@ -44,7 +47,6 @@ import {
   type SessionHandle,
   type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
-import { presentTerminalResult } from '@agent/runtime/terminalResultToast';
 import { mcpConfigPathOf } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';

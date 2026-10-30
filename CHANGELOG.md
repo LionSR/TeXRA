@@ -1328,6 +1328,21 @@ show` print the same notice, and the new `texra agents customize`,
   process out of memory stopped every start. After three such starts, TeXRA
   no longer runs it and tells the model the call may be what stops the
   process.
+- **A background subagent or script a crash cut short continues when its
+  task resumes.** A task that sent work to the background (a subagent, a
+  script, a command) and whose process then died left that work as it was:
+  the task, told the result would arrive on its own, waited for it in vain,
+  and the subagent or script was never continued. When the task resumes it
+  now resumes each such child under its own id, and the result arrives as
+  it would have; one that cannot continue (a command, a document task) is
+  reported to the task as interrupted with its outcome unknown, once. The
+  same holds for children a clean close of the app or CLI stopped: they
+  continue when their task does.
+- **Closing TeXRA during a model request no longer costs the task a
+  retry.** A request the app or CLI closing cut off was counted like one a
+  crash cut, so a task resumed after a close had one automatic retry fewer
+  for that request. The close now records that it stopped the request, and
+  the resume sends it again without spending a retry; a crash still counts.
 - **Work a crash interrupted is reported or finished.** A background
   command that was running when the app or CLI stopped was deleted at the
   next start, and the task that launched it, told the result would arrive

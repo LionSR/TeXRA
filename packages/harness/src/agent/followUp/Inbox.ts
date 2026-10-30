@@ -16,7 +16,7 @@ import {
 import { runRelation } from '@shared/session/runRelation';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RunInputDraft } from '@shared/session/runState';
-import { consumedRow, needsWake } from '@shared/session/runFacts';
+import { consumedRow } from '@shared/session/runFacts';
 import {
   RUN_ROW_READS,
   pendingMessages,
@@ -32,7 +32,7 @@ import {
 } from '@shared/session/sessionEvents';
 import type { PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
-import { RunInput } from './RunInput';
+import { needsWake, RunInput } from './RunInput';
 import { queuedRow, type FollowUpSenderInput } from './followUpMessages';
 
 const CHANNEL = 'Inbox';

@@ -43,6 +43,7 @@ import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { turnText } from '../run/turnText';
 import { claimFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
+import { closeLeftoverChildren } from '../runLaunchGuard';
 import {
   appendRow,
   configRow,
@@ -414,6 +415,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   const loopBody = (cell: RunCell) =>
     Effect.gen(function* () {
+      // A resumed run first finishes what its children were left as.
+      if (start.resume) yield* closeLeftoverChildren(session, runId);
       let restoring = start.resume;
       for (;;) {
         let state = yield* cell.current;

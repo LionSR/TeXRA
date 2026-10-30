@@ -3,37 +3,48 @@
  * them: its input (system text, instruction, activated skills, memory
  * misses), the files its calls edited and how many ran, its structured
  * output, and where its turn policy stands (the final-tool nudge, the
- * finalized answer); and the rules for reading its pending input (the
- * `followup.queued` rows), stated once for the loop, the inbox and the view. The row handlers in `runState.ts` and
+ * finalized answer). The row handlers in `runState.ts` and
  * `turnRowHandlers.ts` set these fields, so the loop reads them off the
- * same state on the live path and on resume.
+ * same state on the live path and on resume. The consumed follow-up is here
+ * too, as its writers commit it and as a reader learns its receipt from
+ * `RunRows`; the rules for which pending rows a run reads are the reader's
+ * (`agent/followUp/RunInput.ts`). The lifecycle rows a run is registered,
+ * activated and ended with are built here, beside the readers of their
+ * facts; `agent/storage/runLifecycle.ts` commits them.
  */
+import {
+  NO_APPROVAL_GRANTS,
+  type ApprovalGrants,
+} from '@shared/approvalBypassKind';
 import {
   type AggregateId,
   type CommitOrdinal,
   type DispatchFacts,
+  emptyRunEndOutput,
   type FollowUpContent,
   type FollowUpDisposition,
   type JsonValue,
   qualifyAggregateId,
+  type RunEnd,
+  type RunEndOutput,
   type RunId,
+  type RunIdentity,
   type RunInput,
+  type RunOutcome,
+  type RunParent,
+  type RunProvenance,
   type SessionEvent,
+  type SessionEventDraft,
   STRUCTURED_OUTPUT_TOOL_NAME,
   type ToolResultPayload,
+  USER_FOLLOW_UP_SUPPORT,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 
-import {
-  byId,
-  isMessage,
-  isSharedRunRow,
-  isStaleNotice,
-  type QueuedFollowUp,
-  type RunLookup,
-  runRowsFrom,
-} from './runRows';
+import { byId, isSharedRunRow, runRowsFrom } from './runRows';
+import type { RunHistoryDraft, RunInputDraft } from './runState';
 import type { RunRows } from './runRowsShape';
-import type { PendingResponse } from './inFlight';
+import type { Invocation, PendingResponse } from './inFlight';
 
 /** What a run answers and produced, as its rows record it. */
 export type RunFacts = {
@@ -149,47 +160,7 @@ function outputOf(
 export const isInstruction = ({ from }: FollowUpContent): boolean =>
   from.kind === 'user' || (from.kind === 'run' && from.relation === 'parent');
 
-/** Where in its loop a run reads its input: before a model request inside
- *  a turn, at the turn's end, or while it waits for input. */
-export type InputPoint = 'request' | 'turn' | 'idle';
-
-/**
- * The pending messages a run reads at `at`, in commit order. A row held
- * until an instruction (a child's pause or stop notice) is read only beside
- * one. A row held until the turn ends, or one for a running generation only
- * (a progress notice, a host notification), is not read before a request
- * inside the turn. A notice from a child run that has ended is stale: it is
- * consumed unread (`staleNotices`).
- */
-export function readableMessages(
-  rows: readonly QueuedFollowUp[],
-  at: InputPoint,
-  run: RunLookup,
-): QueuedFollowUp[] {
-  const messages = rows.filter(isMessage);
-  const asked = messages.some(
-    (f) => f.holdUntil === undefined && isInstruction(f.content),
-  );
-  return messages.filter((f) => {
-    switch (f.holdUntil) {
-      case 'instruction':
-        return asked;
-      case 'turn':
-        return at !== 'request';
-      case 'generation':
-        return at !== 'request' && !isStaleNotice(f, run);
-      case undefined:
-        return true;
-    }
-  });
-}
-
-/** The stale notices among the pending rows: consumed unread by the next
- *  batch the run takes. */
-export const staleNotices = (
-  rows: readonly QueuedFollowUp[],
-  run: RunLookup,
-): QueuedFollowUp[] => rows.filter((f) => isStaleNotice(f, run));
+// ----------------------------------------------- the consumed follow-up
 
 /** The row that consumes one follow-up, committed beside the rows that took
  *  it; its writer states why (`disposition`). */
@@ -289,29 +260,119 @@ export function runEndFromEvents(
   return lifecycleOf(rows, runId).end;
 }
 
+/** `invocation` once a clean close stopped its open attempt (a `run.position`
+ *  halt with reason `closed`): none, or one whose outcome a row recorded, is
+ *  as it was. */
+export function closedBy(invocation: Invocation | null): Invocation | null {
+  if (invocation === null || invocation.current.failed !== null)
+    return invocation;
+  return { ...invocation, current: { ...invocation.current, closed: true } };
+}
+
+/** What a run is registered with: the facts its `run.start` carries. */
+export interface RegisterRunOptions {
+  /** The launching run: the whole parent edge, stamped on `run.start`. */
+  readonly parentRunId?: RunId;
+  /** The parent's call that launched it, which owns this run until it
+   *  detaches, and that call's tool card. */
+  readonly parentCall?: NonNullable<RunParent['call']>;
+  /** The run's identity, declared by the launch site — the durable authority. */
+  readonly identity: RunIdentity;
+  /** Runtime behavior declared by the launch source, not UI visibility. */
+  readonly userFollowUpSupport?: UserFollowUpSupport;
+  /** The run's `run.description`, durable at birth: a child's
+   *  task label; a root's summary comes later as a second row. */
+  readonly description?: string;
+  /** Who wrote it: the model, unless a fork copies its user's title. */
+  readonly descriptionBy?: 'model' | 'user';
+  readonly provenance?: RunProvenance; // a fork's source and cut
+  readonly grants?: ApprovalGrants; // the grants it starts with
+  /** A fork's history, which its opening commits in place of a prompt
+   *  (`forkSeed`): the run is born on it, not resumed onto it. */
+  readonly seed?: readonly RunHistoryDraft[];
+}
+
+type RunConfigRow = Extract<SessionEventDraft, { readonly type: 'run.config' }>;
+
 /**
- * Whether a run's pending input obliges a resume of it when no generation
- * holds it, from its input rows (`followup.queued`, `followup.consumed`,
- * `run.activate`, `run.end`), over the messages readable at idle. While the
- * run's current lifecycle has not ended (it waits on a child, or its
- * generation left without an end), any run's message wakes it, as the
- * user's does. Once it ended, only the user's message or a child's delivery
- * does, and after a user's Stop (that lifecycle's `run.end` is cancelled)
- * only the user's message committed after that end: a run's message never
- * revives a run that ended. A row for a running generation only (a progress
- * notice, a host notification) wakes nothing.
+ * The rows that register a run, in the order its batch commits them: a new
+ * run's (`born`) `run.start` first, then its configuration, its
+ * `run.activate` (a re-registration's with the grants it ends, `ended`),
+ * and the description it is born with.
  */
-export function needsWake(input: RunRows, run: RunLookup): boolean {
-  // A resumed run that crashed carries no end, so no earlier Stop of it
-  // holds a message back.
-  const end = input.end;
-  const stopped = end?.outcome === 'cancelled';
-  return readableMessages(input.followUps, 'idle', run).some(
-    ({ commit, holdUntil, content: { from } }) => {
-      if (holdUntil === 'generation') return false;
-      if (from.kind === 'user') return !stopped || commit > end.commit;
-      if (from.kind === 'run' && from.relation === 'child') return !stopped;
-      return end === null;
-    },
+export function registrationDrafts(
+  runId: RunId,
+  config: RunConfigRow['config'],
+  options: RegisterRunOptions,
+  born: boolean,
+  ended: readonly SessionEventDraft[],
+): SessionEventDraft[] {
+  const target = qualifyAggregateId('run', runId);
+  const worktree = config.workingDirectory?.trim();
+  const rows: SessionEventDraft[] = [];
+  if (born)
+    rows.push({
+      type: 'run.start',
+      aggregateId: target,
+      identity: options.identity,
+      userFollowUpSupport:
+        options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      worktree: worktree ? { workingDirectory: worktree } : undefined,
+      parent:
+        options.parentRunId === undefined
+          ? null
+          : { id: options.parentRunId, call: options.parentCall ?? null },
+      provenance: options.provenance ?? null,
+      approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
+    });
+  rows.push(
+    { type: 'run.config', aggregateId: target, config },
+    { type: 'run.activate', aggregateId: target },
   );
+  if (!born) rows.push(...ended);
+  if (options.description !== undefined)
+    rows.push({
+      type: 'run.description',
+      aggregateId: target,
+      description: options.description,
+      by: options.descriptionBy ?? 'model',
+    });
+  return rows;
+}
+
+/** A resume's activation rows: its `run.activate`, the grants it ends
+ *  (`ended`), and its configuration when that changed (`config`). */
+export function activationDrafts(
+  runId: RunId,
+  ended: readonly SessionEventDraft[],
+  config: RunConfigRow['config'] | null,
+): SessionEventDraft[] {
+  const target = qualifyAggregateId('run', runId);
+  const changed: RunConfigRow[] =
+    config === null
+      ? []
+      : [{ type: 'run.config', aggregateId: target, config }];
+  return [{ type: 'run.activate', aggregateId: target }, ...ended, ...changed];
+}
+
+/** The `run.end` row: the run's outcome, its error with the note of a last
+ *  turn whose delivery failed (`note`), and what it produced, or nothing. */
+export function runEndDraft(
+  runId: RunId,
+  end: {
+    readonly outcome: RunOutcome;
+    readonly error?: RunEnd['error'];
+    readonly note?: string;
+    readonly output?: RunEndOutput;
+  },
+): Extract<RunInputDraft, { readonly type: 'run.end' }> {
+  const { outcome, error, note } = end;
+  const message = error && [error.message, note].filter(Boolean).join('; ');
+  return {
+    type: 'run.end',
+    aggregateId: qualifyAggregateId('run', runId),
+    outcome,
+    ...(error && { error: { ...error, message } }),
+    output: end.output ?? emptyRunEndOutput(),
+  };
 }

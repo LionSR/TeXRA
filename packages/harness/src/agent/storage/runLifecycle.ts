@@ -1,5 +1,6 @@
-/** A run's registration, a resume's activation and a run's end: the rows
- *  its cell commits (record accessors: `runRecords.ts`). */
+/** A run's registration, a resume's activation and a run's end: the
+ *  transactions that commit the lifecycle rows (built beside their readers
+ *  in `shared/session/runFacts.ts`; record accessors: `runRecords.ts`). */
 
 import { Cause, Effect, Exit, Result, Schema, type Scope } from 'effect';
 import stableStringify from 'safe-stable-stringify';
@@ -9,29 +10,25 @@ import type { TransactionPart } from '@agent/runtime/childTurnResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { consumedRows, haltedPositionRow } from '@agent/runtime/loop/rows';
 import {
-  NO_APPROVAL_GRANTS,
-  type ApprovalGrants,
-} from '@shared/approvalBypassKind';
-
-import {
   RUN_OUTCOME,
   RunRecordFieldsSchema,
   qualifyAggregateId,
   type SessionEventDraft,
-  USER_FOLLOW_UP_SUPPORT,
-  emptyRunEndOutput,
   type RunEnd,
   type RunEndOutput,
   type RunId,
-  type RunIdentity,
   type RunOutcome,
-  type RunParent,
-  type RunProvenance,
-  type UserFollowUpSupport,
 } from '@shared/schemas';
 import type { Append } from '@shared/session/sessionEvents';
 import { unloadable } from '@shared/session/runHistory';
-import { lastLifecycleRow, runEndFromEvents } from '@shared/session/runFacts';
+import {
+  activationDrafts,
+  lastLifecycleRow,
+  type RegisterRunOptions,
+  registrationDrafts,
+  runEndDraft,
+  runEndFromEvents,
+} from '@shared/session/runFacts';
 import type { RunHistoryDraft, RunInputDraft } from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -41,21 +38,21 @@ import {
   persistedParentRunId,
 } from './runRecords';
 
-function pinRunWorkingDirectory(
-  record: RunRecord,
-  workspaceRoot: string | undefined,
-): RunRecord {
-  // First non-blank wins, untrimmed: trimming mangled paths (2e3197f92f).
-  const workingDirectory = [record.workingDirectory, workspaceRoot].find(
-    (dir) => dir?.trim(),
+function pinRunWorkingDirectory(record: RunRecord, root?: string): RunRecord {
+  // First non-blank wins, untrimmed: a trimmed path was once mangled.
+  const workingDirectory = [record.workingDirectory, root].find((dir) =>
+    dir?.trim(),
   );
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
 /** A defect is the path's failure, as a refusal is: its caller words it. */
-const defectAsFailure = Effect.catchDefect((defect) =>
-  Effect.fail(ensureError(defect)),
-);
+const defectAsFailure = Effect.catchDefect((d) => Effect.fail(ensureError(d)));
+
+/** The stop ending the run is the session's own clean close: its halt says so. */
+const closedBySession = (session: SessionHandle, input: Ending): boolean =>
+  input.stopped === true &&
+  session.runs.get(input.runId)?.stopReason === 'shutdown';
 
 /** A resume's activation: its `run.activate`, the grants it ends, and a
  *  `run.config` if its configuration changed (its model kept: only a
@@ -65,7 +62,6 @@ export const activationRows = Effect.fn('activationRows')(function* (
   runId: RunId,
   config: RunRecord,
 ): Effect.fn.Return<readonly SessionEventDraft[], Error> {
-  const target = qualifyAggregateId('run', runId);
   const stored = yield* getRunRecords(session, runId).readRunRecord();
   const next = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
     pinRunWorkingDirectory(
@@ -75,37 +71,12 @@ export const activationRows = Effect.fn('activationRows')(function* (
   );
   const changed =
     stored === null || stableStringify(stored) !== stableStringify(next);
-  return [
-    { type: 'run.activate', aggregateId: target },
-    ...(yield* session.approvals.activationRows(runId)),
-    ...(changed
-      ? [{ type: 'run.config' as const, aggregateId: target, config: next }]
-      : []),
-  ];
+  return activationDrafts(
+    runId,
+    yield* session.approvals.activationRows(runId),
+    changed ? next : null,
+  );
 });
-
-/** What a run is registered with: the facts its `run.start` carries. */
-export interface RegisterRunOptions {
-  /** The launching run: the whole parent edge, stamped on `run.start`. */
-  readonly parentRunId?: RunId;
-  /** The parent's call that launched it, which owns this run until it
-   *  detaches, and that call's tool card. */
-  readonly parentCall?: NonNullable<RunParent['call']>;
-  /** The run's identity, declared by the launch site — the durable authority. */
-  readonly identity: RunIdentity;
-  /** Runtime behavior declared by the launch source, not UI visibility. */
-  readonly userFollowUpSupport?: UserFollowUpSupport;
-  /** The run's `run.description`, durable at birth: a child's
-   *  task label; a root's summary comes later as a second row. */
-  readonly description?: string;
-  /** Who wrote it: the model, unless a fork copies its user's title. */
-  readonly descriptionBy?: 'model' | 'user';
-  readonly provenance?: RunProvenance; // a fork's source and cut
-  readonly grants?: ApprovalGrants; // the grants it starts with
-  /** A fork's history, which its opening commits in place of a prompt
-   *  (`forkSeed`): the run is born on it, not resumed onto it. */
-  readonly seed?: readonly RunHistoryDraft[];
-}
 
 /** Register a run whose loop is not this process's (an agent CLI, bash)
  *  alone; a run this process's loop drives registers with its opening. */
@@ -150,50 +121,20 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
           new Error(`Parent run ${options.parentRunId} is unavailable.`),
         );
     }
-    const pinned = pinRunWorkingDirectory(record, session.roots.workspace);
-    const target = qualifyAggregateId('run', runId);
     // Its configuration rides the batch that takes the claim, never
     // compared before it is held (a takeover skips nothing on a stale read).
-    const config = {
-      type: 'run.config',
-      aggregateId: target,
-      config: yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(pinned),
-    } satisfies SessionEventDraft;
-    const events: SessionEventDraft[] = [];
-    if (!prior) {
-      const worktreeCwd = pinned.workingDirectory?.trim();
-      events.push({
-        type: 'run.start',
-        aggregateId: target,
-        identity: options.identity,
-        userFollowUpSupport:
-          options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-        worktree: worktreeCwd ? { workingDirectory: worktreeCwd } : undefined,
-        parent:
-          options.parentRunId === undefined
-            ? null
-            : {
-                id: options.parentRunId,
-                call: options.parentCall ?? null,
-              },
-        provenance: options.provenance ?? null,
-        approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
-      });
-    }
-    events.push(config);
-    events.push({ type: 'run.activate', aggregateId: target });
-    if (prior) events.push(...(yield* session.approvals.activationRows(runId)));
-    if (options.description !== undefined)
-      events.push({
-        type: 'run.description',
-        aggregateId: target,
-        description: options.description,
-        by: options.descriptionBy ?? 'model',
-      });
-    return { born: !prior, rows: events };
+    const config = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
+      pinRunWorkingDirectory(record, session.roots.workspace),
+    );
+    const ended = prior ? yield* session.approvals.activationRows(runId) : [];
+    return {
+      born: !prior,
+      rows: registrationDrafts(runId, config, options, !prior, ended),
+    };
   }).pipe(defectAsFailure);
 });
 
+/** What ends a run: its outcome and the facts its `run.end` carries. */
 export interface FinalizeRunInput {
   readonly runId: RunId;
   readonly outcome: RunOutcome;
@@ -233,7 +174,6 @@ export const endIn = Effect.fn('endIn')(function* (
   last?: TransactionPart,
 ) {
   const { runId, outcome, error } = input;
-  const target = qualifyAggregateId('run', runId);
   const facts = yield* session.log.facts(runId);
   // A run never created has nothing to end: its launch reports the failure.
   if (facts === null) return { end: null, wrote: false };
@@ -252,23 +192,23 @@ export const endIn = Effect.fn('endIn')(function* (
   let halt: readonly RunHistoryDraft[] = [];
   let closing: readonly RunInputDraft[] = [];
   if (ended === undefined && lastTurn.held !== true) {
-    written = {
+    const end = runEndDraft(runId, {
       outcome: persisted,
-      ...(error && {
-        error: {
-          ...error,
-          message: [error.message, lastTurn.note].filter(Boolean).join('; '),
-        },
-      }),
-      output: input.output ?? emptyRunEndOutput(),
-    };
-    const { position } = facts;
-    halt = position === null ? [] : [haltedPositionRow(position, persisted)];
+      error,
+      note: lastTurn.note,
+      output: input.output,
+    });
+    written = endOf(end);
+    const closed = closedBySession(session, input);
+    halt =
+      facts.position === null
+        ? []
+        : [haltedPositionRow(facts.position, persisted, closed)];
     const unapplied = (yield* session.followUps.read(runId)).followUps;
     closing = [
       ...consumedRows(runId)(unapplied, { kind: 'dropped', reason: 'ended' }),
       ...session.trace.closure(runId, persisted),
-      { type: 'run.end' as const, aggregateId: target, ...written },
+      end,
     ];
   }
   // What the store holds once this commits.
@@ -302,7 +242,7 @@ const beforeEnd = Effect.fn('beforeEnd')(function* (
   const facts = yield* session.log.facts(runId);
   if (cascade && facts !== null) yield* session.log.hold(runId, { ends: true });
   for (const child of yield* openOwnedChildren(session, runId)) {
-    if (!cascade || session.runs.get(child.runId)?.live === true)
+    if (!cascade || session.runs.get(child.runId) !== undefined)
       return yield* Effect.fail(
         new Error(
           `Run ${runId} cannot end while its open call ${child.callId} owns run ${child.runId}, which has not ended`,

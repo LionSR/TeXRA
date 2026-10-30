@@ -24,10 +24,7 @@ import type { SessionHandle } from './SessionHandle';
  * `ExecuteAgentOptions` (and forwarded as-is) so the two option types can't
  * drift apart silently; see that interface for their docs.
  */
-export interface RootLaunchOptions extends Pick<
-  ExecuteAgentOptions,
-  'tools' | 'onRun'
-> {
+export interface RootLaunchOptions extends Pick<ExecuteAgentOptions, 'tools'> {
   /** Stop the run after one model/tool cycle instead of waiting for
    *  follow-up input. */
   stopAfterCycle?: boolean;

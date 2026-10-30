@@ -29,7 +29,7 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import { phaseAfter, type RunLoopPhase } from '@shared/runs/runStatus';
-import { NO_FACTS, withInput, type RunFacts } from './runFacts';
+import { closedBy, NO_FACTS, withInput, type RunFacts } from './runFacts';
 import {
   applyRunRow,
   type BatchCopies,
@@ -322,6 +322,7 @@ const applySharedRow = (
   if (verdict.kind === 'unresolved')
     return outOfOrder(`decision names no request ${verdict.requestId}`);
   if (verdict.kind === 'contradiction') return outOfOrder(verdict.detail);
+  const closed = row.type === 'run.position' && row.payload.reason === 'closed';
   return Result.succeed({
     ...state,
     ...(row.type === 'request.decided'
@@ -335,6 +336,7 @@ const applySharedRow = (
       : {}),
     ...verdict.rows,
     phase: phaseAfter(state.phase, verdict.rows.at),
+    invocation: closed ? closedBy(state.invocation) : state.invocation,
   });
 };
 

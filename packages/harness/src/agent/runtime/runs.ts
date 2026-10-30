@@ -7,7 +7,7 @@
 import type { SessionOwner } from '@platform/processRuntime';
 import type { CommitOrdinal, RunId } from '@shared/schemas';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
-import type { Effect, Scope } from 'effect';
+import type { Effect } from 'effect';
 import type { RootLaunchOptions, RootLaunchRequest } from './rootLaunch';
 
 /** A root launch: what to run, and with which options. */
@@ -34,16 +34,14 @@ export interface RunControls {
   switchModel(model: string): Effect.Effect<void, Error>;
 }
 
-/** What this process holds for one run, read when asked. */
+/** What this process holds for one run: a launch or resume of it in flight
+ *  here, from the call (before its fiber claims the lane) until its fiber
+ *  exits, which is what a stop reaches. Read when asked; a run with none
+ *  has no record (`RunsShape.get`). */
 export interface LiveRun {
   readonly runId: RunId;
   /** Its running loop's controls, while one runs here. */
   readonly controls: RunControls | undefined;
-  /** A generation of it is live here: its fiber, a hold, or a launch. */
-  readonly live: boolean;
-  /** A launch or resume of it is in flight here, from the call (before its
-   *  fiber claims the lane) until its fiber exits: what a stop reaches. */
-  readonly launched: boolean;
   /** Its attached parent: the view's edge, or for a child whose `run.start`
    *  the view has not folded yet, the parent its activation launched under;
    *  null for a root. */
@@ -60,20 +58,17 @@ export interface LiveRun {
 }
 
 /**
- * A session's runs, as hosts and tools reach them: launch one (a root, or a
- * hold on a stopped one), stop one, and read what this process holds of
- * them; a run resumes through `resumeRun`. A root launch requires the
- * composition root's `SessionOwner`, which no tool is given.
+ * A session's runs, as hosts and tools reach them: launch a root, stop one,
+ * and read what this process holds of them; a run resumes through
+ * `resumeRun`. A root launch requires the composition root's
+ * `SessionOwner`, which no tool is given.
  */
 export interface RunsShape {
   /** Launch a root run: the commit of its opening, once that commits. */
   launch(spec: RootLaunch): Effect.Effect<CommitOrdinal, Error, SessionOwner>;
-  /** Hold a stopped run for the caller's scope, its claim taken: refused
-   *  while it is live here or held elsewhere. */
-  launch(spec: {
-    readonly hold: RunId;
-  }): Effect.Effect<void, Error, Scope.Scope>;
   stop(runId: RunId, options: RunStopOptions): RunStop;
+  /** What this process holds for `runId`, or undefined while no launch of
+   *  it is in flight here. */
   get(runId: RunId): LiveRun | undefined;
   get(): readonly LiveRun[];
 }

@@ -372,7 +372,7 @@ points are normative:
   `agent/runtime/loop/toolGuard.ts:251-271`).
 - **W4**, `tool.result`: commits, with the call's card rows, before the delivery
   that lets the loop continue (`agent/runtime/loop/toolUseDispatch.ts:380-406`,
-  `:656-680`, `:1100-1103`).
+  `:656-680`, `:1019-1024`).
 - **W5**, `run.position`: commits at every loop-boundary wait and every halt; a
   request's wait keeps the position in force and writes `request.opened` instead
   (`agent/runtime/loop/toolUse.ts:245`, `:274-276`, `:443`, `:497-508`;
@@ -425,7 +425,7 @@ call skipped by a replan, a duplicate, a call after the turn ended) commits its
 card's close, and its open for a fast tool
 (`agent/runtime/loop/toolUseDispatch.ts:711-716`). The delivering `append` MUST
 commit only once every call of the response has settled, as one tool group bound
-to the response (`agent/runtime/loop/toolUseDispatch.ts:1102-1105`). A delivery
+to the response (`agent/runtime/loop/toolUseDispatch.ts:920-926`). A delivery
 its settlements do not match is a defect
 (`agent/runtime/RunHistory.ts:258-260`).
 
@@ -545,6 +545,7 @@ invocation's rows before every move but the repeat of a renewed observation
 | open attempt, no outcome, an earlier `failed` row asked a person | ask again (`reask`)                         |
 | open attempt, no outcome, the automatic retries spent            | ask again (`reask`)                         |
 | open attempt, no outcome, otherwise                              | send the next attempt                       |
+| open attempt a clean close stopped (its halt says `closed`)      | as above; the stopped attempt spent nothing |
 | `failed` with `retry` or `unchain`                               | send the next attempt                       |
 | `failed` with `stop`                                             | end the invocation failed                   |
 | `failed` with `cancel`                                           | end the invocation cancelled                |
@@ -568,7 +569,11 @@ request id (`agent/runtime/ModelInvoker.ts:732-748`):
   failure counts, whichever move followed it: one that a person's retry allowed
   spends the budget as an automatic resend does, and so does an attempt with no
   recorded outcome, which may have been billed, so a crash that recurs on every
-  open does not resend it every time. For a turn's invocation the budget is
+  open does not resend it every time. An attempt a clean session close stopped
+  is the exception: the halt its `run.end` commits with says `closed`
+  (`run.position` `reason`), its request was cut by the stop, not lost, and the
+  fold leaves it out of the count (`shared/session/inFlight.ts`, `closedBy`).
+  For a turn's invocation the budget is
   counted from rows, so a crash does not refill it. A compaction summary or a helper call holds its
   invocation in memory (`agent/runtime/run/modelCall.ts:107-123`); a summary's
   `attempt` and `failed` rows are an audit the run fold skips
