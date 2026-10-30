@@ -336,9 +336,6 @@ importers:
       semver:
         specifier: ^7.8.5
         version: 7.8.5
-      shell-quote:
-        specifier: 'catalog:'
-        version: 1.12.0
       slice-ansi:
         specifier: ^9.0.1
         version: 9.0.1
@@ -535,9 +532,6 @@ importers:
       safe-stable-stringify:
         specifier: 'catalog:'
         version: 3.0.0
-      shell-quote:
-        specifier: 'catalog:'
-        version: 1.12.0
       turndown:
         specifier: 'catalog:'
         version: 7.2.4

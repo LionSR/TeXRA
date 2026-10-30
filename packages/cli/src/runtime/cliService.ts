@@ -4,7 +4,6 @@
  * as the desktop opens its folders), the detached start a client asks for
  * when no service answers, and the connection the chat TUI holds.
  */
-import { hostname } from 'node:os';
 import * as path from 'node:path';
 
 import {
@@ -320,8 +319,8 @@ export function heldByService(
     if (yield* envFlag(NO_SERVICE)) return false;
     const info = yield* probeCliService;
     if (info === null) return false;
-    const { hostname: host, pid } = ownerIdentity(owner);
-    return pid === info.pid && host.toLowerCase() === hostname().toLowerCase();
+    // It answered on this machine's socket; a recorded hostname may be stale.
+    return ownerIdentity(owner).pid === info.pid;
   });
 }
 

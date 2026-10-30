@@ -318,7 +318,11 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
     );
     yield* Fiber.join(readers).pipe(
       Effect.timeoutOption(STDIO_GRACE),
-      Effect.ignore,
+      Effect.ignore({
+        log: 'Warn',
+        message:
+          "A hook's output could not be read to its end; the result keeps what was read",
+      }),
     );
     return { kind: 'exited' as const, exitCode, ...out };
   }).pipe(

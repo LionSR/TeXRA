@@ -74,8 +74,8 @@ interface Asker<E, R> {
   /** Wait for the answer to the open retry request; false when nobody
    *  will answer it (the session closed). */
   readonly await: (requestId: string) => Effect.Effect<boolean, E, R>;
-  /** Ask again about `attempt`, which a person admitted and whose outcome
-   *  no row records. */
+  /** Ask again about `attempt`, whose outcome no row records: one a person
+   *  allowed, or one past the automatic retries. */
   readonly reask: (attempt: Attempt) => Effect.Effect<void, E, R>;
   /** Mint the id of a retry request the next failure may open. */
   readonly requestId: () => string;
@@ -364,7 +364,8 @@ export const runInvocation = Effect.fn('ModelInvoker.invocation')(function* <
   let failedOn: BoundModel | null = null;
   for (;;) {
     const { invocation, requests } = yield* driver.read;
-    const move: NextAttempt = again ?? nextAttempt(invocation, requests);
+    const move: NextAttempt =
+      again ?? nextAttempt(invocation, requests, driver.retries);
     again = null;
     if (move.kind === 'fail' || move.kind === 'cancel') return ended(move);
     if (move.kind === 'await' || move.kind === 'reask') {

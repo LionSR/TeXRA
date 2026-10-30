@@ -531,18 +531,19 @@ the run already holds history state (`agent/runtime/loop/runProgram.ts:96-101`).
 ## 6. Retry
 
 Every model call the harness makes MUST go through one loop, `runInvocation`
-(`agent/runtime/run/invocation.ts:353-393`; callers
-`agent/runtime/ModelInvoker.ts:676`, `agent/runtime/run/modelCall.ts:119`). Its
-next move is `nextAttempt(invocation, requests)`, read off the invocation's rows
-before every move but the repeat of a renewed observation
-(`agent/runtime/run/invocation.ts:365-367`, `:382-385`,
-`shared/session/inFlight.ts:203-238`):
+(`agent/runtime/run/invocation.ts:353-394`; callers
+`agent/runtime/ModelInvoker.ts:676`, `agent/runtime/run/modelCall.ts:123`). Its
+next move is `nextAttempt(invocation, requests, retries)`, read off the
+invocation's rows before every move but the repeat of a renewed observation
+(`agent/runtime/run/invocation.ts:365-368`, `:383-386`,
+`shared/session/inFlight.ts:202-246`):
 
 | Rows show                                                        | Move                                        |
 | ---------------------------------------------------------------- | ------------------------------------------- |
 | no open invocation                                               | send attempt 1                              |
 | open attempt, no outcome, an accepted operation                  | observe it; never resubmit                  |
 | open attempt, no outcome, an earlier `failed` row asked a person | ask again (`reask`)                         |
+| open attempt, no outcome, the automatic retries spent            | ask again (`reask`)                         |
 | open attempt, no outcome, otherwise                              | send the next attempt                       |
 | `failed` with `retry` or `unchain`                               | send the next attempt                       |
 | `failed` with `stop`                                             | end the invocation failed                   |
@@ -553,21 +554,22 @@ before every move but the repeat of a renewed observation
 | `failed` with `ask`, any other decision                          | end the invocation cancelled                |
 
 The move a `failed` row records is decided once, by `failedNext`
-(`shared/session/inFlight.ts:259-278`), except for two rows that name their move
+(`shared/session/inFlight.ts:266-283`), except for two rows that name their move
 themselves: a renewed credential's resend, `retry`
 (`agent/runtime/run/invocation.ts:341-344`), and a re-ask, `ask` under a fresh
-request id (`agent/runtime/ModelInvoker.ts:731-747`):
+request id (`agent/runtime/ModelInvoker.ts:732-748`):
 
 - A `continuation-gone` failure of an attempt that sent a continuation answers
-  `unchain`, once per invocation (`shared/session/inFlight.ts:265-270`,
+  `unchain`, once per invocation (`shared/session/inFlight.ts:272-277`,
   `agent/runtime/run/invocation.ts:290-294`).
 - A retryable failure answers `retry` while the invocation's earlier failures,
   `unchain` ones excluded, are fewer than the budget
-  (`shared/session/inFlight.ts:81-89`, `:271-274`). Every earlier failure
-  counts, whichever move followed it: one that a person's retry admitted spends
-  the budget as an automatic resend does, and an attempt with no recorded
-  failure spends none. For a turn's invocation the budget is counted from rows,
-  so a crash does not refill it. A compaction summary or a helper call holds its
+  (`shared/session/inFlight.ts:81-89`, `:196-200`, `:278-279`). Every earlier
+  failure counts, whichever move followed it: one that a person's retry allowed
+  spends the budget as an automatic resend does, and so does an attempt with no
+  recorded outcome, which may have been billed, so a crash that recurs on every
+  open does not resend it every time. For a turn's invocation the budget is
+  counted from rows, so a crash does not refill it. A compaction summary or a helper call holds its
   invocation in memory (`agent/runtime/run/modelCall.ts:107-123`); a summary's
   `attempt` and `failed` rows are an audit the run fold skips
   (`shared/session/turnRowHandlers.ts:289-304`, `:278-280`), so a resumed
@@ -639,12 +641,11 @@ lock, and the transaction runs again with that verdict
 `DatabaseClaimRefused`, and so does an unprovable one on every other path
 (`controllers/session/storeAside.ts:79-83`).
 
-Liveness is proven from the owner identity alone, with no clock
-(`agent/storage/leaseOwnerLiveness.ts:42-90`):
+Liveness is proven from the owner's pid and start identity alone, with no clock
+and no hostname (`agent/storage/leaseOwnerLiveness.ts:40-90`):
 
 | Observed                                     | Verdict      |
 | -------------------------------------------- | ------------ |
-| owner recorded on another host               | `unprovable` |
 | `kill(pid, 0)` reports `ESRCH`               | `dead`       |
 | pid exists, start identity equals the record | `alive`      |
 | pid exists, start identity differs           | `dead`       |
