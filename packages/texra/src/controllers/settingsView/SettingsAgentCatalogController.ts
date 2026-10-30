@@ -184,7 +184,7 @@ export class SettingsAgentCatalogController {
 
   private toSelectionItem(
     entry: SettingsAgentCatalogEntry,
-    enabledKeys: string[] | undefined,
+    enabledKeys: readonly string[],
   ): AgentSelectionItem {
     return {
       name: entry.name,
@@ -194,11 +194,9 @@ export class SettingsAgentCatalogController {
       filePath: entry.path || undefined,
       tools: entry.tools,
       newerBuiltIn: this.deps.newerBuiltInOf(entry),
-      // undefined = never configured -> all enabled; [] = explicitly none enabled.
       // A stored list holds resolved `source:name` keys, but older workspaces
       // persisted bare names, which `agentMatchesIdentifier` still matches.
-      enabled:
-        enabledKeys?.some((key) => agentMatchesIdentifier(entry, key)) ?? true,
+      enabled: enabledKeys.some((key) => agentMatchesIdentifier(entry, key)),
     };
   }
 }

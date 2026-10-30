@@ -47,7 +47,7 @@ const RECORDINGS_DIR = 'recordings';
  * Where this session's recordings live. The roots arrive as data from the
  * caller that owns the session, so a recording writes under that session's
  * storage root without the module entering (or reading) an ambient roots
- * scope — the desktop holds one session per open paper.
+ * scope — the desktop holds one session per open project.
  */
 export function recordingsDir(roots: WorkspaceRoots): string {
   return path.join(roots.storage, RECORDINGS_DIR);

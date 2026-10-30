@@ -3,7 +3,7 @@
  * document task's documents are its latest `plugin.fact` of kind
  * `documents/output`, which carries every revision's outputs, and the files
  * a run last accepted into the workspace are its `documents/accepted`. Core
- * stores and folds the rows without reading them (`RunView.facts`); this
+ * stores and applies the rows without reading them (`RunView.facts`); this
  * module is their schemas and their one reader, which hosts, webviews and the
  * plugin's own tools share. It also holds the `task:` block of an agent
  * file the plugin owns (`DOCUMENT_TASK_BLOCK`), which the catalog scans
@@ -57,7 +57,7 @@ export const DOCUMENTS_OUTPUT_ARM = {
   upcasters: [],
 } as const;
 
-/** The key a run's documents fold under in `RunView.facts`. */
+/** The key a run's documents are kept under in `RunView.facts`. */
 export const DOCUMENTS_OUTPUT_KEY = `${DOCUMENTS_OUTPUT_ARM.plugin}/${DOCUMENTS_OUTPUT_ARM.kind}`;
 
 /** The fact that makes `rounds` (and, once proposed, the final `diffs`)
@@ -85,7 +85,7 @@ const DocumentsAcceptedSchema = Schema.Struct({
 });
 
 /** The files a run last accepted into the workspace, past the editor's own
- *  write path: what every process that folds the run announces
+ *  write path: what every process that applies the run announces
  *  (`workspaceFilesWritten`). */
 export const DOCUMENTS_ACCEPTED_ARM = {
   plugin: 'documents',
