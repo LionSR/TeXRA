@@ -222,7 +222,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
   > {
     const approval = yield* requestToolEditApproval({
       path,
-      originalContent,
+      originalContent: exists ? originalContent : null,
       proposedContent,
       sourceTool,
     });
@@ -232,7 +232,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
 
     const written = yield* writeApprovedContent(
       path,
-      exists ? originalContent : null,
+      approval.originalContent,
       approval.appliedContent,
     );
     // An agent written into the custom agents directory (the `creator`
@@ -256,7 +256,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
     const output = yield* appendApprovalDiffNote(
       presentation.output,
       displayPath,
-      proposedContent,
+      approval.proposedContent,
       written.appliedContent,
     );
 
