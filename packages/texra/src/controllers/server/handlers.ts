@@ -468,15 +468,8 @@ export const serviceHandlers = TexraRpcs.toLayer(
       'host.attach': ({ workspace, capabilities }) =>
         // The window's stream leases its project's session while it runs.
         Stream.unwrap(
-          Effect.map(
-            projects
-              .open(workspace)
-              .pipe(
-                Effect.mapError(
-                  (error) => new TaskFailed({ message: error.message }),
-                ),
-              ),
-            ({ session }) => hosts.attach(session, capabilities),
+          Effect.map(open(workspace), ({ session }) =>
+            hosts.attach(session, capabilities),
           ),
         ),
       // The project's state store, the service's own: a window opens none.

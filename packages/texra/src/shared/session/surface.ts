@@ -34,7 +34,6 @@ import {
 } from '@texra/shared/plugins/externalInquiry';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { markShownRunSeen } from './unseenRuns';
-import type { SessionView as ReadSessionView } from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from './hostSnapshot';
 
 /** Who runs a main-view request: a single agent or a team. */
@@ -157,7 +156,7 @@ type WorkbenchLayout = Readonly<Record<string, unknown>>;
 type SurfaceRejection = Exclude<RequestError, { _tag: 'Cancelled' }>;
 
 export interface Surface {
-  /** Which paper this surface is for; the layer key. Never persisted. */
+  /** Which project this surface is for; the layer key. Never persisted. */
   readonly session: string;
   /** The last failed request from this surface, or a failure one of its
    *  components reports on the same notice (`reportError`). Never persisted. */
@@ -301,7 +300,7 @@ export function persistSurface(surface: Surface): PersistedSurface {
 
 function retain<V>(
   map: ReadonlyMap<RunId, V>,
-  view: Pick<ReadSessionView, 'runs'>,
+  view: Pick<SessionView, 'runs'>,
 ): ReadonlyMap<RunId, V> {
   const retained = [...map].filter(([id]) => view.runs.has(id));
   return retained.length === map.size ? map : new Map(retained);
@@ -340,7 +339,7 @@ const PER_STREAM_MAPS = Object.keys(
 export type SelectionRule = (selected: RunId | null) => RunId | null;
 
 function projectSelection(
-  view: Pick<ReadSessionView, 'runs' | 'order'>,
+  view: Pick<SessionView, 'runs' | 'order'>,
 ): SelectionRule {
   return (selected) =>
     selected === null || view.runs.has(selected)
@@ -357,7 +356,7 @@ function projectSelection(
  */
 export function pruneSurface(
   surface: Surface,
-  view: ReadSessionView,
+  view: SessionView,
   select: SelectionRule = projectSelection(view),
 ): Surface {
   // `retain` only ever drops entries, never changes a value, so each pruned

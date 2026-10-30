@@ -193,10 +193,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
         ...(usageProvider ? [postUsage(false)] : []),
       ]);
     });
-  const refreshAfterProviderKeyChange = (provider: string) =>
-    refreshAfterCredentialChange(
-      CODING_PLAN_BY_API_PROVIDER.get(provider)?.usageProvider,
-    );
   /** Run a subscription mutation, report its failure, and repaint what the
    *  subscription feeds whatever the mutation did. */
   const subscriptionChange = <E>(
@@ -410,7 +406,9 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       const provider = apiProviderOfSecretName(key);
       return provider === undefined
         ? undefined
-        : refreshAfterProviderKeyChange(provider);
+        : refreshAfterCredentialChange(
+            CODING_PLAN_BY_API_PROVIDER.get(provider)?.usageProvider,
+          );
     },
   };
 

@@ -240,8 +240,10 @@ function executeExternalInquiryTool(input: InquiryInput) {
       case 'list':
         return yield* executeList(input, (yield* callerRun)?.runId);
     }
+  }).pipe(
     // The threads live on the process's global root.
-  }).pipe(Effect.provide(inquiryRecordsLayer));
+    Effect.provide(inquiryRecordsLayer),
+  );
 }
 
 function executeAsk(
