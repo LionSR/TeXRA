@@ -96,8 +96,18 @@ export function dispatchFactsFor(
 }
 
 /** What the model reads for a call that may have run and left no result. */
-export const SKIPPED_OUTCOME_UNKNOWN =
+const SKIPPED_OUTCOME_UNKNOWN =
   'The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.';
+/** How many times a call may start with no result before a resume stops
+ *  replaying it: the process stopping every time points at the call. */
+const REPLAY_ATTEMPTS = 3;
+/** What the model reads for a call that may have run and left no result,
+ *  which a resume would start at `attempt`; past {@link REPLAY_ATTEMPTS},
+ *  that every start was cut short, so it was not run again. */
+export const unknownOutcome = (attempt: number): string =>
+  attempt > REPLAY_ATTEMPTS
+    ? `This call started ${REPLAY_ATTEMPTS} times and was cut short each time before it finished, so it was not run again: it may be what stops the process. Its outcome is unknown. Do not call it again with the same arguments.`
+    : SKIPPED_OUTCOME_UNKNOWN;
 /** What the model reads for a call of a recovered response that never ran. */
 export const SKIPPED_NOT_STARTED =
   'The tool call was interrupted before the Harness recorded it as started. Retry it if it is still needed.';
@@ -113,19 +123,22 @@ export const skippedByScriptEnd = (started: boolean): string =>
     : "The script ended before this call started, so it never ran. Call it again if the script's result does not cover it.";
 
 /**
- * Whether an unfinished call re-runs unasked: the replay word its response
- * row (or `script.call`) saved and its tool's current one both say `safe`, and the stored
- * arguments still validate against the tool's schema (an object, for a tool
- * that carries only JSON Schema).
+ * Whether an unfinished call re-runs unasked at `attempt`: the replay word
+ * its response row (or `script.call`) saved and its tool's current one both
+ * say `safe`, the stored arguments still validate against the tool's schema
+ * (an object, for a tool that carries only JSON Schema), and it has not
+ * started {@link REPLAY_ATTEMPTS} times already.
  */
 export const replayable = Effect.fn('toolUse.replayable')(function* (
   fact: Pick<DispatchFacts, 'toolName' | 'replay'>,
   registry: RuntimeToolRegistry,
   input: unknown,
   logger: Pick<AgentTrace, 'warn'>,
+  attempt: number,
 ) {
   const tool = registry.get(fact.toolName);
   if (fact.replay !== 'safe' || tool?.replay !== 'safe') return false;
+  if (attempt > REPLAY_ATTEMPTS) return false;
   const schema = tool.definition.schema;
   if (schema === undefined) return Predicate.isObject(input);
   return yield* Schema.decodeUnknownEffect(schema)(input).pipe(

@@ -1322,6 +1322,12 @@ show` print the same notice, and the new `texra agents customize`,
   of the automatic retries; once they are spent, TeXRA asks before sending
   it again, and a run with nobody to answer, such as a headless one, ends
   there instead.
+- **A tool call that crashes TeXRA is not run on every start.** A tool call
+  that is safe to repeat (a file read, say), cut short by the process
+  stopping, was run again each time the task resumed, so a call that ran the
+  process out of memory stopped every start. After three such starts, TeXRA
+  no longer runs it and tells the model the call may be what stops the
+  process.
 - **Work a crash interrupted is reported or finished.** A background
   command that was running when the app or CLI stopped was deleted at the
   next start, and the task that launched it, told the result would arrive
