@@ -43,7 +43,10 @@ import type { LoadedPluginTools } from './mcpConfig';
 
 const CHANNEL = 'mcp';
 
-/** The protocol revision the harness speaks; a server answers its own. */
+/** The protocol revision the harness asks for. A server that does not speak
+ *  it answers with its own, which is accepted: effect/ai's McpClient fails
+ *  any answer but the revision it asked for, so a server on an older one
+ *  would start with no tools. */
 const PROTOCOL_VERSION = '2025-06-18';
 const START_TIMEOUT = Duration.seconds(30);
 const CALL_TIMEOUT = Duration.seconds(60);
