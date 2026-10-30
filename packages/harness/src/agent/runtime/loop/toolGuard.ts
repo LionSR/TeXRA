@@ -31,6 +31,7 @@ import {
 } from '@shared/schemas';
 import { callRequestId, type AttemptRequests } from '@shared/session/inFlight';
 import type { CellError, RunCell } from '@shared/session/runHistory';
+import { isRequestDecision } from '@shared/session/runRowReads';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import {
@@ -342,9 +343,7 @@ export const callRequests = (
             if (reentered !== null) {
               // Open already: only what the policy decides commits, and
               // the decision is read from where the resume read the run.
-              const decided = rows.filter(
-                (row) => row.type !== 'request.opened',
-              );
+              const decided = rows.filter(isRequestDecision);
               const from = cell.opened.commit;
               return decided.length === 0
                 ? Effect.succeed(from)

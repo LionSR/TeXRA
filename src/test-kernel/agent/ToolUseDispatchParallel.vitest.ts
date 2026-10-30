@@ -396,10 +396,10 @@ describe('tool-use dispatch', () => {
 
         // The results as the run history committed them, in commit order.
         yield* kit.session.log.settled;
-        const results = (yield* kit.session.log.rows(
+        const { results } = yield* kit.session.log.runRows(
           qualifyAggregateId('run', kit.runId),
-          ['tool.result'],
-        )).flatMap((row) => (row.type === 'tool.result' ? [row.payload] : []));
+          'results',
+        );
         const nested = results.findIndex((r) => r.callId === 'c1/0');
         const own = results.findIndex((r) => r.callId === 'c1');
         expect(results[nested]?.disposition).toBe('skipped');

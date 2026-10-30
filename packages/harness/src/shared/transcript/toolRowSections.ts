@@ -7,6 +7,7 @@
  */
 import { Predicate, Result, Schema } from 'effect';
 import {
+  AGENT_TOOL_NAME,
   McpToolOutputSchema,
   getProposalFileGroups,
   type ProposalFileGroup,
@@ -15,7 +16,6 @@ import {
   executionsWaitTimeoutSeconds,
   TOOL_RESULT_METADATA_FIELDS,
 } from '@shared/toolUse';
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { deliveredResponse } from '@shared/subagentFollowup';
 import { executionsAction } from '@shared/tools/executionsDisplay';
 import {

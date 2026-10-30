@@ -1,4 +1,4 @@
-import { Effect, Schema, Stream, SubscriptionRef } from 'effect';
+import { Effect, Schema, SubscriptionRef } from 'effect';
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
 
@@ -47,7 +47,7 @@ describe('canonical run records', () => {
     await run(seedReport(session, runId, 'private report'));
     expect(await run(records.readConfig())).toEqual(config);
     expect(await run(records.readReport())).toBe('private report');
-    const visible = await run(Stream.runCollect(session.log.listing()));
+    const visible = await run(session.log.display(runId));
     // The configuration is the run's one `run.config` display row; the
     // report stays private.
     expect(visible.map((event) => event.type)).toEqual([
@@ -112,10 +112,11 @@ describe('canonical run records', () => {
             records.readResultMeta(),
           ]),
         ).toEqual([false, null, null, [], null]);
-        const retained = yield* session.log.rows(
+        const retained = yield* session.log.runRows(
           qualifyAggregateId('run', runId),
+          'input',
         );
-        expect(retained.some((row) => row.type === 'run.removed')).toBe(true);
+        expect(retained.removed).not.toBeNull();
       }),
   );
 });

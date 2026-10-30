@@ -22,7 +22,10 @@ import { createTestLaunchContext } from './launchContextTestUtils';
 const runEnds = (session: SessionHandle, runId: RunId) =>
   Effect.andThen(
     session.log.settled,
-    session.log.rows(qualifyAggregateId('run', runId), ['run.end']),
+    Effect.map(
+      session.log.runRows(qualifyAggregateId('run', runId), 'lifecycle'),
+      (rows) => rows.lifecycles.filter((row) => row.type === 'run.end'),
+    ),
   );
 
 afterEach(() => {

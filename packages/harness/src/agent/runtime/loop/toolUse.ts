@@ -188,7 +188,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const { seed } = run.entry;
     if (seed != null) {
       const born = [
-        ...seed,
+        ...seed.rows,
         configRow(runId, run.config, bound.modelId, binding),
         positionRow(runId, opening, 'turn.ready'),
       ];

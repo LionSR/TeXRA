@@ -25,7 +25,6 @@ import {
 } from '@texra-ai/harness/plugins';
 import {
   toErrorMessage,
-  qualifyAggregateId,
   fileLocationDisplayPath,
   type FileLocation,
   type ToolFact,
@@ -43,8 +42,8 @@ import {
   workflowOutputRoundDir,
 } from '@texra/shared/constants/workflowOutput';
 import {
+  DOCUMENTS_OUTPUT_ARM,
   documentsOutputFact,
-  latestDocumentRounds,
   documentTaskOptions,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
@@ -163,11 +162,9 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
         `Run ${runId} is not a document task: its agent '${config.agent}' has no task.`,
       ),
     );
-  const rows = yield* (yield* ChildRuns).rows(runId, ['plugin.fact']);
+  const output = yield* (yield* ChildRuns).fact(runId, DOCUMENTS_OUTPUT_ARM);
   const state: OutputState = {
-    rounds: roundsFromPersisted(
-      latestDocumentRounds(rows, qualifyAggregateId('run', runId)) ?? [],
-    ),
+    rounds: roundsFromPersisted(output?.rounds ?? []),
   };
   const sources: FileLocation[] = (
     config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles

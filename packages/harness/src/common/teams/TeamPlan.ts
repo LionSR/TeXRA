@@ -1,10 +1,10 @@
 import { Array as Arr, Result } from 'effect';
 import {
+  AGENT_TOOL_NAME,
   agentKeyOf,
   agentMatchesIdentifier,
   type AgentSource,
 } from '@shared/schemas';
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 
 /** A team preset: its members by name, and where it came from. The app
  *  supplies the catalog (`AgentDirectoriesPort.teams`). */

@@ -30,6 +30,7 @@ import {
 } from '@shared/session/database';
 import type { Append } from '@shared/session/sessionEvents';
 import { runStateAppend } from '@shared/session/runHistory';
+import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRowReads';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { generateRunId } from '@utils/core';
 
@@ -111,14 +112,15 @@ function recordedFollowUps(
       typeof work === 'function'
         ? publisher.withPermits(1)(work({ append, claim: () => Effect.void }))
         : publisher.withPermits(1)(runStateAppend(append)(work)),
-    rows: (id, types) =>
-      Effect.sync(() =>
-        rows.filter(
-          (row) =>
-            row.aggregateId === id &&
-            (types === undefined || types.includes(row.type)),
-        ),
-      ),
+    runRows: (id, read) =>
+      Effect.sync(() => {
+        const kinds: readonly string[] = RUN_ROW_READS[read];
+        return runRowsFrom(
+          rows.filter(
+            (row) => row.aggregateId === id && kinds.includes(row.type),
+          ),
+        );
+      }),
     blobs: () => Effect.succeed(new Map<string, string>()),
     // A run's record rows: what a parent-only send reads its edge from.
     records: (runId: RunId) =>
