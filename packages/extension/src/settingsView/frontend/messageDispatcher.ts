@@ -90,8 +90,8 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   // Model selection.
   [SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION]: (data) => {
     modelSelectionItems.set(data.models);
-    settingSignal(GlobalStateKey.HELPER_MODEL).set(data.helperModel);
-    settingSignal(GlobalStateKey.PREFER_SHORT_MODEL_NAMES).set(
+    settingSignal<string>(GlobalStateKey.HELPER_MODEL).set(data.helperModel);
+    settingSignal<boolean>(GlobalStateKey.PREFER_SHORT_MODEL_NAMES).set(
       data.preferShortModelNames,
     );
   },
