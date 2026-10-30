@@ -220,10 +220,13 @@ bag, or a second writer of the run history. Every model call goes through
 `runtime/modelAccess/ModelAccess.ts`, and retries in the one loop in
 `runtime/run/invocation.ts`.
 
-Launch runs with `session.runs.launch({ request, options })` (requires the
-composition root's `SessionOwner`) and resume with `resumeRun`; call
-`executeAgent` only when you already own the `runId`. Run-loop rules, write
-points, and the event and card channels: `packages/harness/AGENTS.md`.
+Hosts and the app start a run with `session.start(...)` and continue a
+stored one with `session.resume(runId, ...)` on the `LocalSession`
+(`packages/harness/src/effect/sessions.ts`); everything else goes through
+`session.request`. Inside the harness, `Runs.launch` assigns the `runId` and
+requires the composition root's `SessionOwner`; call `executeAgent` only
+when you already own the `runId`. Run-loop rules, write points, and the
+event and card channels: `packages/harness/AGENTS.md`.
 
 Agents are flat persona YAML (`name`, `description`, `prompt`, `tools`,
 `temperature`) in `packages/extension/resources/agents/`, created with the
