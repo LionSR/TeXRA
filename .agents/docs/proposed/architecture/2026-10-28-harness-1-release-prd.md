@@ -394,6 +394,16 @@ TeXRA 强在耐久性（重试预算按行计、子结果与父投递同一事�
 
 [#14350](https://github.com/LionSR/TeXRA/pull/14350) 修复已有转换链的索引与首发版本检查，应按现有机制的正确性修复审查；它不构成继续增加迁移框架的理由，也不代表上述存储边界和 SQL 能力已经实现。
 
+### 2026-10-30 设计线 7、8、9 的方案对比结论（main @ b4e17e9393）
+
+三页只读对比（本会话 scratchpad：`app-vocabulary-out-of-harness-designs.md`、`session-handle-service-bag-designs.md`、`session-directory-layout-designs.md`），每页至少两个设计、按真实站点计数。上表的估算早于 #14444、#14450、#14453，三处都要修正。
+
+- **应用词汇移出 harness**：上表五项里三项已落地（团队启动代码 #14384、`SettingHost` 删除 #14387、选择器类型 #14388）。仍在 harness 的按信息隐藏问题分四组：团队词汇（`TeamPlan.ts` 125 行、`AgentDirectoriesPort.teams` 转发成员、7 个 `./host` 名、`icon`/`setupOnly` 两个 harness 从不读的 UI 字段）；按 TeXRA 屏幕命名的展示事件（`showAgentConfigBanner`；`requestEnsureProgressView` 与 `requestOpenFile` 在 harness 里零发送方）；失败文案与 `INSTRUCTION_ACTION` 在 harness 外被映射四次；设置位置（`SettingSurfaces`，26 行用未类型化的 `string` 点名 7 个 TeXRA 快照 id，约 136 行，九月以来 24 次提交，改动率最高）。没有一项是存储行，“存储冻结前”不约束它们。推荐 A：harness 只留自己读的，其余归应用，四片（团队移出；展示键 5 到 4 个中性事实 `showError`、带类型 `key` 的 `showInstruction`、`agentNotFound`、`openFile`，删 `requestEnsureProgressView` 与 `INSTRUCTION_ACTION`，应用一张文案表替四处映射；设置位置带类型快照 id 移到应用）。`./host` 少 7 个名、`./schemas` 少约 9 个，无格式变化，约 −220 行（主要在设置位置）。否决 B（`processLayer` 传表：决策点全留还加参数）与 C（方法端口：`SettingHost` 就是它，已删）。
+- **`SessionHandle` 服务包**：12 个字段、一处字面量构造（`sessionLayer.ts:188-234`）、`: SessionHandle` 参数 90 处/42 个 harness 文件、约 170 处实参、`sessionOf` 3 处、`registryOf` 14 处。五个延迟闭包里两个今天已不需要、一个是兄弟顺序造成、两个真有（`runs`、`requests` 拿整个 handle 往下传）；唯一真实的双向依赖是 `followUps` 与 `runs` 的唤醒。`Runs`、`RunHistory`、`SessionEvents`、视图服务已是标签且运行纤程已携带它们，handle 是到同一所有者的第二条路径；视图服务有两个。#14453 没改这 12 个字段。推荐 A：会话 Layer 直接提供各所有者的标签，删记录、`Session` 包装标签、`sessionOf`、`AgentRunShape.session` 与第二个视图服务；标签只给有行为的所有者，roots 作数据，`RunTrace` 并入 `SessionLog`（19 成员，宽记录上限 20 以内）。B（整个 handle 做一个 `Context.Service`）、C（窄 handle 加标签）否。诚实估算净 −60 到 −100 行，不是上表的 −300 到 −350；收益在结构：零延迟闭包、Effect 代码零 `session` 参数、构造顺序变成层依赖。`LocalSession` 与 API 报告不变。最大未知：`SessionRequests` 相对 `Runs` 的层序（运行纤程调 `requests.ask`/`decide`，它必须在 fork 之下，三处用注册表的地方改为调用方提供 `Runs`）。
+- **会话目录布局**：层序基线 251 个名/19 条边，其中向上 8 条/33 个名，双向对 7 对/95 个名。推荐 A：保留十个目录，移 10 个错位叶子，按所有者拆 `processRuntime.ts`，到零向上边，双向对随之消失，基线缩到 AGENTS.md 已写明的 `agent`/`tools`/`transcript` 环的 4 条边。顺序：A1 platform 切割（`SessionOwner` 到 `SessionHandle.ts`，`AgentCatalogServices` 到 `agentCatalog.ts`，`HostSkillOptions` 到 `skills/`，`AgentPlatform` 到 `platform/`，`ProcessRuntime`/`withProcessServices` 到 `effect/processLayer.ts`，`ProcessServices` 拆分、完整联合在组合处定义）；A2 配置/状态端口类型从 `platform/interfaces.ts` 下移 `shared/config/`；A3 `utils/` 的 9 个叶子归位。每一对必须在一个 PR 内关闭：半关的对在反向仍拒绝新名。B（`session/` 替 `controllers/`）一条边都不删，`controllers/` 今天没有在列的边，上表说的“零向上依赖”收益在 #14400 时已成立；22 个文件改名、33 处棘轮路径、27 处测试，1.0 不做。C 否。#14450 与 #14453 都没移文件、没动层序基线；S0 已由 #14400 做完。约束：`agent`/`tools`/`transcript` 环在基线里时，`tools/` 消费的模块不能移进 `agent/`，反之亦然。未跑类型检查。
+
+三条线都比上表小。先后顺序待定：三者与负责人另一会话正在改的区域（#14453 刚动 `sessionStore.ts`、`sessionLayer.ts`）重叠，`SessionHandle` 一片要动 42 个源文件与 36 个测试文件，并行会再撞冲突。
+
 ## 基线整合后的交付和删除要求
 
 | 阶段               | 代码范围与交付                                                                    | 需要删除或消除的内容                                                                                                                        | 完成门槛                                                                    |
