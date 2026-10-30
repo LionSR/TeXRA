@@ -118,12 +118,14 @@ All notable changes to this project will be documented in this file.
   address) in place of `mediaFiles`, and a user row's and an `InboxItem`'s
   `mediaFiles` is `media: { name, mimeType, digest }[]`.
 
-- **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.0.6 (peer
-  floor `^4.0.6`).** Their Effect peers (`effect`, plus
+- **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.1.0 (peer
+  floor `^4.1.0`).** Their Effect peers (`effect`, plus
   `@effect/platform-node` and `@effect/sql-sqlite-node` for the harness) now
-  start at `^4.0.6`. Effect 4.0.6 changed how a SQL transaction acquires its
-  connection, and the harness's session database follows the new contract,
-  which 4.0.5 lacks.
+  start at `^4.1.0`. Effect 4.0.6 changed how a SQL transaction acquires its
+  connection, and Effect 4.1.0 derives a file system's `glob` from a typed
+  directory listing; the harness's session database and its rooted file
+  systems (`WorkspaceFs`, `StorageFs`, `GlobalStorageFs`) follow both
+  contracts, which earlier versions lack.
 - **Goal mode is a script.** **Run as goal** on a plan now runs the goal
   template, a background script of the conversation whose rounds are the
   same agent again: each round continues the conversation as it stood when
