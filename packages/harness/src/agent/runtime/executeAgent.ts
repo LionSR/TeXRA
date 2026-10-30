@@ -140,11 +140,11 @@ export function executeAgent(
       onRun: options.onRun,
       finishLastTurn: options.turns?.finishLastTurn,
     };
-    if (resume) return yield* runWithLifecycle(launch, () => loop, lifecycle);
 
     // Start description generation concurrently with the run, and settle
     // it before the run ends (`settleDescriptionOnExit`), so the metadata
-    // write cannot recreate a run deleted by another host.
+    // write cannot recreate a run deleted by another host. A resumed run
+    // whose process died before its description was written gets one now.
     // A child of the run's fiber, so the run's stop interrupts it, as it
     // interrupts the run.
     const sessionDescription = yield* Effect.forkChild(
@@ -155,16 +155,14 @@ export function executeAgent(
             config,
             definition.agentEntry.description,
             session,
+            resume,
           ),
         ),
       ),
     );
-    // The backstop wait is `ensuring`, not a generator `finally`: the driver
-    // skips a `finally` after a failed `yield*`, ending the run early.
-    return yield* runWithLifecycle(
-      launch,
-      () =>
-        Effect.gen(function* () {
+    const flow = resume
+      ? loop
+      : Effect.gen(function* () {
           // The run directory is created by the first write into it.
           yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
             Effect.annotateLogs({
@@ -189,7 +187,12 @@ export function executeAgent(
             );
           }
           return yield* loop;
-        }).pipe(settleDescriptionOnExit(sessionDescription, opened)),
+        });
+    // The backstop wait is `ensuring`, not a generator `finally`: the driver
+    // skips a `finally` after a failed `yield*`, ending the run early.
+    return yield* runWithLifecycle(
+      launch,
+      () => flow.pipe(settleDescriptionOnExit(sessionDescription, opened)),
       lifecycle,
     ).pipe(Effect.ensuring(Fiber.await(sessionDescription)));
   }).pipe(

@@ -14,7 +14,7 @@ credentials through `CredentialStore`.
 ## Install
 
 Requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later. The
-package is ESM only. `effect` (^4.0.6) is a peer dependency, so your install
+package is ESM only. `effect` (^4.1.0) is a peer dependency, so your install
 supplies the one copy of it:
 
 ```bash

@@ -391,7 +391,8 @@ requests those tools would raise. Tools an embedder supplies in
 offered them, so a run-scoped tool that needs approval is left to the
 approval guard, which may deny the call, rather than removed. The tools that open
 `toolEdit`, `bash`, `proposal`, `planApproval`, `externalInquiry` and
-`userQuestion` requests all declare `requiresApproval: true`.
+`userQuestion` requests all declare `requiresApproval` or a command
+(`guard.bash`), which `asksApproval` reads.
 
 The headless CLI host answers it from its mode alone
 (`packages/cli/src/runtime/approvalAdapter.ts`); the session applies its

@@ -58,7 +58,7 @@ its kind is its `type` column.
 - **Request**: A decision that may wait on a person: a `request.opened` row,
   closed by one `request.decided` row; an approval policy that answers at once
   commits both in one batch (`shared/schemas/sessionEvent.ts:371-384`,
-  `agent/runtime/requestPolicy.ts:333-343`).
+  `agent/runtime/requestPolicy.ts:326-336`).
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row (`controllers/session/storeSchema.ts:54-65`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
@@ -173,7 +173,7 @@ until another process proves this one dead
 its own reaches the publisher through `SessionLog.publish`
 (`agent/runtime/SessionHandle.ts:97-100`); a call's card rows and a turn's
 closing rows commit inside the run's own batches instead
-(`agent/runtime/loop/toolUseDispatch.ts:544-547`,
+(`agent/runtime/loop/toolUseDispatch.ts:550-554`,
 `agent/runtime/loop/toolUse.ts:497-500`). `SessionLog.settled` is the barrier
 after every job enqueued before it
 (`controllers/session/sessionStore.ts:306-308`).
@@ -267,7 +267,7 @@ never sent to a renderer (`shared/schemas/sessionEvent.ts:410-438`).
 - `tool.intent` (folded: yes): The point after which a call's body may have run,
   at an attempt number; it commits just before the body starts, so it does not
   prove the body ran (`shared/schemas/runHistoryEvent.ts:375-382`,
-  `agent/runtime/loop/toolUseDispatch.ts:538-555`).
+  `agent/runtime/loop/toolUseDispatch.ts:545-557`).
 - `script.call` (folded: yes): A call a `script` guest issued, with its
   arguments (`shared/schemas/runHistoryEvent.ts:339-360`).
 - `tool.result` (folded: yes): A call's one settlement and its disposition
@@ -368,8 +368,8 @@ points are normative:
   `agent/runtime/loop/toolUse.ts:324-331`).
 - **W3**, `tool.intent`: commits after PreToolUse hooks and the guard, before
   the body runs, once per attempt
-  (`agent/runtime/loop/toolUseDispatch.ts:523-555`;
-  `agent/runtime/loop/toolGuard.ts:119-129`).
+  (`agent/runtime/loop/toolUseDispatch.ts:528-557`;
+  `agent/runtime/loop/toolGuard.ts:251-271`).
 - **W4**, `tool.result`: commits, with the call's card rows, before the delivery
   that lets the loop continue (`agent/runtime/loop/toolUseDispatch.ts:380-406`,
   `:656-680`, `:1100-1103`).
@@ -382,7 +382,7 @@ points are normative:
   (`agent/runtime/ModelInvoker.ts:610-670`, `:702-704`;
   `agent/runtime/run/invocation.ts:381-391`).
 - **W7**, `request.opened` / `request.decided`: the opening commits before any
-  wait; a decision commits once (`agent/runtime/requestPolicy.ts:267-285`,
+  wait; a decision commits once (`agent/runtime/requestPolicy.ts:260-278`,
   `:333-345`).
 
 **W1.** The invoker MUST commit the attempt's rows, the blobs of its request
@@ -406,13 +406,13 @@ does not cover a compaction summary, whose answer its caller lands as a
 `context.edit`, or a helper call, which records no row (W1).
 
 **W3.** A call's `tool.intent` MUST commit after its PreToolUse hooks and its
-guard, and before its body (`agent/runtime/loop/toolUseDispatch.ts:523-555`,
-`agent/runtime/loop/toolGuard.ts:119-129`). The guard asks for a command's
-approval (`agent/runtime/loop/toolGuard.ts:40-47`, `:103-113`). A slow tool's
+guard, and before its body (`agent/runtime/loop/toolUseDispatch.ts:528-557`,
+`agent/runtime/loop/toolGuard.ts:251-271`). The guard asks for a command's
+approval (`agent/runtime/loop/toolGuard.ts:163-167`, `:226-245`). A slow tool's
 `tool.start` card MUST commit in the intent's batch
-(`agent/runtime/loop/toolUseDispatch.ts:544-547`). An attempt whose intent is
+(`agent/runtime/loop/toolUseDispatch.ts:550-554`). An attempt whose intent is
 already committed MUST NOT commit another
-(`agent/runtime/loop/toolUseDispatch.ts:543`).
+(`agent/runtime/loop/toolUseDispatch.ts:550`).
 
 **W4.** A call that settles from its body MUST commit its `tool.result` with its
 whole card: a slow tool's `tool.end`, a fast tool's `tool.start` and `tool.end`
@@ -423,9 +423,9 @@ call skipped by a replan, a duplicate, a call after the turn ended) commits its
 `tool.result` with no card (`agent/runtime/loop/toolUseDispatch.ts:386`, `:702`,
 `:984-995`); one that settles a started call as outcome unknown commits its
 card's close, and its open for a fast tool
-(`agent/runtime/loop/toolUseDispatch.ts:709-714`). The delivering `append` MUST
+(`agent/runtime/loop/toolUseDispatch.ts:711-716`). The delivering `append` MUST
 commit only once every call of the response has settled, as one tool group bound
-to the response (`agent/runtime/loop/toolUseDispatch.ts:1100-1103`). A delivery
+to the response (`agent/runtime/loop/toolUseDispatch.ts:1102-1105`). A delivery
 its settlements do not match is a defect
 (`agent/runtime/RunHistory.ts:258-260`).
 
@@ -711,7 +711,7 @@ A run that loses its claim mid-run gets `RunHistoryRefused` `not-owner` from its
 next append, with nothing written (`agent/runtime/RunHistory.ts:167-181`,
 `:293-298`, `shared/session/runHistory.ts:101-127`). A tool call that meets a
 storage refusal fails the dispatch instead of settling
-(`agent/runtime/loop/toolUseDispatch.ts:594-596`).
+(`agent/runtime/loop/toolUseDispatch.ts:596-598`).
 
 ## 8. Requests
 
@@ -742,25 +742,25 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 
 ### 8.3 Protocol
 
-- A request's id is part of its payload (`agent/runtime/requestPolicy.ts:320`).
+- A request's id is part of its payload (`agent/runtime/requestPolicy.ts:313`).
   A tool call's request id is derived from the response, call, attempt and
   ordinal, so a resumed attempt rejoins the request it left standing
   (`shared/session/inFlight.ts:309-312`).
 - The opening and any decision the approval policy gives at once MUST commit in
   one batch, so no surface lists it pending
-  (`agent/runtime/requestPolicy.ts:333-343`).
+  (`agent/runtime/requestPolicy.ts:326-336`).
 - A decision MUST commit only if its request is open and undecided; the first
   decision wins, and a later one writes nothing
-  (`agent/runtime/requestPolicy.ts:267-285`).
+  (`agent/runtime/requestPolicy.ts:260-278`).
 - The asker waits on the committed `request.decided` row, read from the tail
-  (`agent/runtime/requestPolicy.ts:287-313`). If the session closes first, the
+  (`agent/runtime/requestPolicy.ts:280-306`). If the session closes first, the
   asker goes on as cancelled with no row written, and the request stays open
-  (`agent/runtime/requestPolicy.ts:344-357`).
+  (`agent/runtime/requestPolicy.ts:337-350`).
 - An interrupted asker decides its request `cancel` through the same door,
   unless the session is closed. This is best effort: a write the session refuses
   (it is draining, or the claim is gone) is logged and leaves the request open,
   for the next resume to cancel as unbound
-  (`agent/runtime/requestPolicy.ts:360-383`).
+  (`agent/runtime/requestPolicy.ts:353-376`).
 - A request is a row, so it outlives its process. A resume cancels the unbound
   ones (section 7.2) and re-enters the bound ones under the same id
   (`shared/session/inFlight.ts:347-371`). An open `externalInquiry` is neither:
@@ -847,10 +847,10 @@ What survives at each commit point follows from sections 2 to 8:
   rejoins that request under its id (`shared/session/inFlight.ts:347-370`).
   Otherwise it is re-run only if both the stored and the current tool declare
   `replay: 'safe'` and the stored arguments validate; else settled as outcome
-  unknown (`agent/runtime/loop/toolUseDispatch.ts:688-715`,
+  unknown (`agent/runtime/loop/toolUseDispatch.ts:690-717`,
   `agent/runtime/run/tools.ts:106-137`).
 - `tool.result`: The settlement is reused; the call is not run again
-  (`agent/runtime/loop/toolUseDispatch.ts:982-983`).
+  (`agent/runtime/loop/toolUseDispatch.ts:850-851`).
 - **delivery `append`**: The loop continues to the next step from
   `results.ready` (`shared/runs/runStatus.ts:92-100`).
 - `request.opened`: The request stays pending under the same id, or is cancelled
@@ -941,9 +941,10 @@ These existing suites check the sections above.
 
 1. `packages/harness/AGENTS.md` says `tool.intent` commits after a call's hooks,
    guard and approval. The guard asks only for tools with a declared command
-   guard or `requiresApproval`; a tool whose body opens its own request, such as
-   a file edit's approval (`tools/approval/toolEditApproval.ts:236`), asks after
-   its intent committed (`agent/runtime/loop/toolGuard.ts:45-47`). Resume
+   guard or `requiresApproval: true`, or when a `PreToolUse` hook asks; a tool
+   whose body opens its own request, such as a file edit's review
+   (`tools/approval/toolEditApproval.ts`), asks after its intent committed
+   (`agent/runtime/loop/toolGuard.ts`). Resume
    handles that case (`shared/session/inFlight.ts:347-371`), but the stated
    order is not universal.
 2. The durable-harness note says "The tests are the contract." This document

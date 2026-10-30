@@ -69,7 +69,7 @@ describe('human prompt progress events', () => {
       );
 
       const approval = yield* inToolContext(explicit.interactions, runId, () =>
-        requestBashApproval({ command: 'echo still asks', grant: 'shell' }),
+        requestBashApproval({ command: 'echo still asks', grant: 'bash' }),
       );
 
       expect(approval).toMatchObject({ action: 'approve' });
@@ -86,7 +86,7 @@ describe('human prompt progress events', () => {
       );
 
       const bypassed = yield* inToolContext(explicit.interactions, runId, () =>
-        requestBashApproval({ command: 'echo bypassed', grant: 'shell' }),
+        requestBashApproval({ command: 'echo bypassed', grant: 'bash' }),
       );
 
       expect(bypassed).toEqual({ action: 'approve' });
