@@ -1302,6 +1302,13 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **Work a crash interrupted is reported or finished.** A background
+  command that was running when the app or CLI stopped was deleted at the
+  next start, and the task that launched it, told the result would arrive
+  on its own, waited for it in vain. That task now receives a message that
+  a restart interrupted the command and its outcome is unknown. A task that
+  had not been given its title before the crash now gets one when it
+  resumes.
 - **One notice when a message cannot wake its task.** A message sent to a
   task whose agent or plugin is missing or off showed two notices, the
   second a generic "could not be resumed automatically" that suggested a
