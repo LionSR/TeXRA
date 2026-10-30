@@ -6,5 +6,5 @@
   "@texra-ai/harness/schemas": 67,
   "@texra-ai/harness/transcript": 98,
   "@texra-ai/llm": 14,
-  "@texra-ai/llm/node": 22
+  "@texra-ai/llm/node": 21
 }

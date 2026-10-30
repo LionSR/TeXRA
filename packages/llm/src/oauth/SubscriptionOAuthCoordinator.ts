@@ -26,7 +26,10 @@ import {
 import { authorizeRequest } from './pkce.js';
 import { SubscriptionOAuthError } from './subscriptionOAuthError.js';
 import type { OAuthRequestError } from './oauthRequest.js';
-import type { SecretsFailed } from '../providers/credentials.js';
+import type {
+  CredentialStore,
+  SecretsFailed,
+} from '../providers/credentials.js';
 import type {
   SubscriptionAuthorizeRequest,
   SubscriptionCoordinator,
@@ -36,15 +39,10 @@ import type {
 } from './subscriptionCoordinator.js';
 import type { HttpClient } from 'effect/http';
 
-/** Secret-backed persistence for one session bundle. */
-export interface SubscriptionSessionStorage {
-  get(): Effect.Effect<string | undefined, SecretsFailed>;
-  store(value: string): Effect.Effect<void, SecretsFailed>;
-  delete(): Effect.Effect<void, SecretsFailed>;
-}
-
 /** Provider-specific policy: every magic URL/claim out of the machine. */
 export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
+  /** The credential-store key that holds this provider's session. */
+  readonly secretKey: string;
   /** The persisted session bundle's schema. */
   readonly sessionSchema: Schema.Codec<S, unknown>;
   /** Form token endpoint the token grants go to. */
@@ -67,11 +65,6 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
     nowMs: number,
     previous?: S,
   ): S;
-}
-
-interface SubscriptionOAuthCoordinatorInit<S extends SubscriptionSession> {
-  storage: SubscriptionSessionStorage;
-  policy: SubscriptionOAuthPolicy<S>;
 }
 
 type MachineFailure = SubscriptionOAuthError | SecretsFailed;
@@ -103,15 +96,40 @@ function grantFailure(error: OAuthRequestError): SubscriptionOAuthError {
 export class SubscriptionOAuthCoordinator<
   S extends SubscriptionSession,
 > implements SubscriptionCoordinator<S> {
-  private readonly storage: SubscriptionSessionStorage;
+  /**
+   * One coordinator per credential store for this provider. Refresh tokens
+   * may rotate on use, so callers sharing a store must share the same refresh
+   * attempt and write queue. Replacing the store starts an independent one.
+   */
+  static forProvider<S extends SubscriptionSession>(
+    policy: SubscriptionOAuthPolicy<S>,
+  ): (secrets: CredentialStore) => SubscriptionCoordinator<S> {
+    const coordinators = new WeakMap<
+      CredentialStore,
+      SubscriptionCoordinator<S>
+    >();
+    return (secrets) => {
+      let coordinator = coordinators.get(secrets);
+      if (coordinator === undefined) {
+        coordinator = new SubscriptionOAuthCoordinator(secrets, policy);
+        coordinators.set(secrets, coordinator);
+      }
+      return coordinator;
+    };
+  }
+
+  private readonly secrets: CredentialStore;
   private readonly policy: SubscriptionOAuthPolicy<S>;
   private readonly refreshes = new SharedAttempt<S, MachineFailure>();
   private readonly sessionMutations = new SerializedWrites();
   private sessionGeneration = 0;
 
-  constructor(init: SubscriptionOAuthCoordinatorInit<S>) {
-    this.storage = init.storage;
-    this.policy = init.policy;
+  private constructor(
+    secrets: CredentialStore,
+    policy: SubscriptionOAuthPolicy<S>,
+  ) {
+    this.secrets = secrets;
+    this.policy = policy;
   }
 
   /**
@@ -123,7 +141,7 @@ export class SubscriptionOAuthCoordinator<
     function* (
       this: SubscriptionOAuthCoordinator<S>,
     ): Effect.fn.Return<S | null, SecretsFailed | SubscriptionOAuthError> {
-      const raw = yield* this.storage.get();
+      const raw = yield* this.secrets.get(this.policy.secretKey);
       if (!raw) return null;
       const parsed = Schema.decodeUnknownResult(
         Schema.fromJsonString(this.policy.sessionSchema),
@@ -178,7 +196,7 @@ export class SubscriptionOAuthCoordinator<
   }
 
   private store(session: S): Effect.Effect<void, SecretsFailed> {
-    return this.storage.store(JSON.stringify(session));
+    return this.secrets.set(this.policy.secretKey, JSON.stringify(session));
   }
 
   private buildSession(
@@ -263,7 +281,7 @@ export class SubscriptionOAuthCoordinator<
   readonly signOut = Effect.fn('SubscriptionOAuthCoordinator.signOut')(
     function* (this: SubscriptionOAuthCoordinator<S>) {
       yield* this.sessionMutations.run(
-        this.storage.delete(),
+        this.secrets.delete(this.policy.secretKey),
         this.supersedeInFlightRefresh,
       );
     },
@@ -350,7 +368,7 @@ export class SubscriptionOAuthCoordinator<
                 stored?.refreshToken !== previous.refreshToken ||
                 generation !== this.sessionGeneration
                   ? Effect.void
-                  : this.storage.delete(),
+                  : this.secrets.delete(this.policy.secretKey),
               ),
             )
           : Effect.void,
