@@ -1304,6 +1304,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A model request cut off by a crash counts against its retries.** When
+  the process died while a model request was running (for example, a
+  response that ran it out of memory), every reopen sent the request again
+  without asking, and with **Interrupted tasks** set to continue them all
+  it could be billed again on every start. Each such attempt now uses one
+  of the automatic retries; once they are spent, TeXRA asks before sending
+  it again, and a run with nobody to answer, such as a headless one, ends
+  there instead.
 - **Work a crash interrupted is reported or finished.** A background
   command that was running when the app or CLI stopped was deleted at the
   next start, and the task that launched it, told the result would arrive
