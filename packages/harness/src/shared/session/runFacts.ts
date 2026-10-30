@@ -10,8 +10,10 @@
  */
 import {
   type AggregateId,
+  type CommitOrdinal,
   type DispatchFacts,
   type FollowUpContent,
+  type FollowUpDisposition,
   type JsonValue,
   qualifyAggregateId,
   type RunId,
@@ -189,20 +191,74 @@ export const staleNotices = (
   run: RunLookup,
 ): QueuedFollowUp[] => rows.filter((f) => isStaleNotice(f, run));
 
-/** The row that consumes one follow-up: committed with the message it became,
- *  or with the end of a run that never read it. */
+/** The row that consumes one follow-up, committed beside the rows that took
+ *  it; its writer states why (`disposition`). */
 export const consumedRow = (
   runId: RunId,
   followUpId: string,
+  disposition: FollowUpDisposition,
 ): {
   readonly type: 'followup.consumed';
   readonly aggregateId: AggregateId;
   readonly followUpId: string;
+  readonly disposition: FollowUpDisposition;
 } => ({
   type: 'followup.consumed',
   aggregateId: qualifyAggregateId('run', runId),
   followUpId,
+  disposition,
 });
+
+/**
+ * Where one follow-up stands: `accepted` while queued; `incorporated` once
+ * it is part of a turn's message and that turn has not ended; `terminal`
+ * once something answered it (`answer`: the commit of the rows that did, a
+ * child's report, a control's edit or config, or the turn's own rows) or
+ * nothing will (`answer` null, `reason`: a dropped row's, or the error or
+ * outcome that ended the run before its turn finished). Every message of
+ * one turn shares that turn's answer.
+ */
+type FollowUpReceipt =
+  | { readonly state: 'accepted' }
+  | { readonly state: 'incorporated'; readonly turn: number }
+  | {
+      readonly state: 'terminal';
+      readonly answer: CommitOrdinal | null;
+      readonly reason?: string;
+    };
+
+/** The receipt of `followUpId` as `rows` say it; an id no row named has
+ *  left no receipt. A turn ends when the loop rests at it or moves past
+ *  it, or the run ends. */
+export function followUpReceipt(
+  rows: RunRows,
+  followUpId: string,
+): FollowUpReceipt | undefined {
+  if (rows.followUps.some((f) => f.followUpId === followUpId))
+    return { state: 'accepted' };
+  const taken = rows.taken.get(followUpId);
+  if (taken === undefined) return undefined;
+  const { disposition, commit } = taken;
+  switch (disposition.kind) {
+    case 'answered':
+    case 'applied':
+      return { state: 'terminal', answer: commit };
+    case 'dropped':
+      return { state: 'terminal', answer: null, reason: disposition.reason };
+    case 'turn': {
+      const { turn } = disposition;
+      if (rows.turn > turn || (rows.turn === turn && rows.at === 'waiting'))
+        return { state: 'terminal', answer: commit };
+      if (rows.end === null) return { state: 'incorporated', turn };
+      const { error, outcome } = rows.end;
+      return {
+        state: 'terminal',
+        answer: null,
+        reason: error?.message ?? outcome,
+      };
+    }
+  }
+}
 
 /** Run `runId`'s rows among `rows`, folded for its lifecycle (a shared row
  *  left out, so a partial read folds too). */

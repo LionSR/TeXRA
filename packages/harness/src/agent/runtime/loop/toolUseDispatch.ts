@@ -676,7 +676,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       (state) => [
         ...cards(state),
         ...post,
-        ...answered.map((followUpId) => consumedRow(runId, followUpId)),
+        ...answered.map((id) => consumedRow(runId, id, { kind: 'answered' })),
         ...facts.run,
       ],
       facts.alongside,

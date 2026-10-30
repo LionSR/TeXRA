@@ -262,12 +262,11 @@ export const endIn = Effect.fn('endIn')(function* (
       }),
       output: input.output ?? emptyRunEndOutput(),
     };
-    halt =
-      facts.position === null
-        ? []
-        : [haltedPositionRow(facts.position, persisted)];
+    const { position } = facts;
+    halt = position === null ? [] : [haltedPositionRow(position, persisted)];
+    const unapplied = (yield* session.followUps.read(runId)).followUps;
     closing = [
-      ...consumedRows(runId, (yield* session.followUps.read(runId)).followUps),
+      ...consumedRows(runId)(unapplied, { kind: 'dropped', reason: 'ended' }),
       ...session.trace.closure(runId, persisted),
       { type: 'run.end' as const, aggregateId: target, ...written },
     ];

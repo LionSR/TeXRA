@@ -103,7 +103,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v3: attached media by blob address (`media`), no `mediaFiles` paths (no
   // upcaster: a v2 row's paths would be read as no media).
   'followup.queued': { version: 3, upcast: [] },
-  'followup.consumed': V1,
+  // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
+  // it and fails to decode (no upcaster, as `run.config`).
+  'followup.consumed': { version: 2, upcast: [] },
   // v2: a task proposal carries its plugin's `options`, not `toolConfig`
   // (no upcaster, as `run.config`).
   // v3: a retry's credential switch names no OpenRouter key (no upcaster,

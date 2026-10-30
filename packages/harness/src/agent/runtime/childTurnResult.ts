@@ -151,7 +151,7 @@ export function childTurnResult(params: {
             },
           ]),
       ...params.consumed.map((followUp) =>
-        consumedRow(runId, followUp.followUpId),
+        consumedRow(runId, followUp.followUpId, { kind: 'answered' }),
       ),
       {
         type: 'child.turn',

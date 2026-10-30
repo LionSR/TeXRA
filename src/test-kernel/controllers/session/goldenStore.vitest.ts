@@ -261,18 +261,16 @@ describe('the golden 1.0 store', () => {
           ),
         ]).toEqual(['openai/gpt-5.6-sol', 'google/gemini-3.8-flash@medium']);
         // Each request is a queued control, consumed in the batch that applies
-        // it: the switch's `run.config` (no edit), then the compaction's edit,
-        // right after its consumption.
+        // it, and its consumption says so: the switch's (`run.config`) and
+        // the compaction's (its edit).
         const applied = raw(storage, (db) =>
           db
             .prepare(
               `SELECT json_extract(q.data, '$.control.kind') AS kind,
-               (SELECT json_extract(x.data, '$.payload.trigger') FROM event c
-                JOIN event x ON x.aggregate = c.aggregate AND x.seq = c.seq + 1
-                  AND x.type = 'context.edit'
+               (SELECT json_extract(c.data, '$.disposition.kind') FROM event c
                 WHERE c.type = 'followup.consumed' AND c.aggregate = q.aggregate
                   AND json_extract(c.data, '$.followUpId')
-                    = json_extract(q.data, '$.followUpId')) AS trigger
+                    = json_extract(q.data, '$.followUpId')) AS disposition
              FROM event q JOIN event_sequence s ON s.id = q.aggregate
              WHERE s.logical_id = ? AND q.type = 'followup.queued'
                AND json_extract(q.data, '$.control') IS NOT NULL
@@ -281,8 +279,8 @@ describe('the golden 1.0 store', () => {
             .all(CHAT),
         );
         expect(applied).toEqual([
-          { kind: 'model', trigger: null },
-          { kind: 'compact', trigger: 'user' },
+          { kind: 'model', disposition: 'applied' },
+          { kind: 'compact', disposition: 'applied' },
         ]);
         // The durable harness's row shapes: a fork's start names its
         // source, and its first history row seeds the source's view; an

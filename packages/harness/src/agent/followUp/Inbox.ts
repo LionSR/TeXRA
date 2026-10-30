@@ -224,10 +224,14 @@ export class Inbox {
           yield* this.port.log.hold(runId);
           const input = yield* this.read(runId);
           if (queued(input, this.port.run)) return;
-          // A request the run never applied closes with its input.
+          // A request the run never applied, and a notice of an ended
+          // child, close with its input.
           yield* tx.append([
             ...input.followUps.map(({ followUpId }) =>
-              consumedRow(runId, followUpId),
+              consumedRow(runId, followUpId, {
+                kind: 'dropped',
+                reason: 'closed',
+              }),
             ),
             { type: 'followup.closed', aggregateId: run },
           ]);
@@ -311,7 +315,10 @@ export class Inbox {
       const row = queuedRow(item, options.hold, (sender) =>
         runRelation(sender, runId, this.parentOf),
       );
-      if (!input.followUpIds.has(row.followUpId)) {
+      const queuedStill = input.followUps.some(
+        (f) => f.followUpId === row.followUpId,
+      );
+      if (!queuedStill && !input.taken.has(row.followUpId)) {
         // The row commits after every row read here.
         const followUps = [...input.followUps, { ...row, commit: Infinity }];
         if (
@@ -326,7 +333,7 @@ export class Inbox {
           sent: yield* landed(false),
         };
       }
-      return input.followUps.some((f) => f.followUpId === row.followUpId)
+      return queuedStill
         ? { rows: [], sent: yield* landed(true) }
         : only({ kind: 'duplicate' });
     }).pipe(
