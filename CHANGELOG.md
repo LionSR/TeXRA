@@ -125,7 +125,11 @@ All notable changes to this project will be documented in this file.
   connection, and Effect 4.1.0 derives a file system's `glob` from a typed
   directory listing; the harness's session database and its rooted file
   systems (`WorkspaceFs`, `StorageFs`, `GlobalStorageFs`) follow both
-  contracts, which earlier versions lack.
+  contracts, which earlier versions lack. A `glob` on those file systems now
+  reads Effect's pattern syntax: its wildcards match case-sensitively on every
+  platform (they ignored case on macOS and Windows), `\` escapes the next
+  character instead of separating paths, and extended globs such as `@(a|b)`
+  are not interpreted.
 - **Goal mode is a script.** **Run as goal** on a plan now runs the goal
   template, a background script of the conversation whose rounds are the
   same agent again: each round continues the conversation as it stood when
@@ -2558,6 +2562,10 @@ view` on a sub-agent the parent waited for shows its report instead of
   opens where the new text differs from the old. The card's title names the
   file relative to the workspace instead of wrapping its absolute path over
   several lines.
+- **The resume command printed on Windows pastes into PowerShell** — its
+  `--cwd` and `--source` paths are quoted the way PowerShell reads them, so a
+  path holding an apostrophe pastes as written instead of with every
+  backslash doubled.
 
 ## [0.40.10] - 2026-09-06
 
