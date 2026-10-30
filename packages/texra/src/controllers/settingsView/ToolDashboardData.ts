@@ -124,7 +124,9 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         id: card.id,
         name: card.name,
         description: card.description,
-        tools: Object.keys(plugin.tools ?? {}).map((name) => ({ name })),
+        tools: (plugin.tools ?? []).map(({ definition: { name } }) => ({
+          name,
+        })),
         status: 'available' as const,
         installActions: [],
         requiresSetup: false,

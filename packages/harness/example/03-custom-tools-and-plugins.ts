@@ -47,7 +47,7 @@ const countEquationsTool = defineTool({
 
 const latexMetricsPlugin = definePlugin({
   id: 'latex-metrics',
-  tools: { count_equations: countEquationsTool },
+  tools: [countEquationsTool],
 });
 
 const { platform, requests } = await makeExampleWorkspace([

@@ -153,7 +153,10 @@ describe('plugin boundaries (invariants 1 and 6)', () => {
 
 /** Each plugin of a list, with the tools it offers the model, in order. */
 const roster = (plugins: readonly Plugin[]) =>
-  plugins.map(({ id, tools }) => [id, Object.keys(tools ?? {})]);
+  plugins.map(({ id, tools }) => [
+    id,
+    (tools ?? []).map((tool) => tool.definition.name),
+  ]);
 
 /**
  * One case pins each list a host or embedder composes the
@@ -274,7 +277,7 @@ describe('plugin rosters', () => {
   // `plugins` entry does not export it (the deep-import ratchet holds the
   // rest).
   it('refuses a plugin tool that requires the session runs', () => {
-    type PluginTool = NonNullable<Plugin['tools']>[string];
+    type PluginTool = NonNullable<Plugin['tools']>[number];
     const requiring = <R>(service: R): RuntimeTool<Error, R> => ({
       definition: { name: 'probe' },
       call: () => Effect.die(service),
@@ -292,7 +295,7 @@ describe('plugin rosters', () => {
   // A root launch requires the composition root's `SessionOwner`, which no
   // tool is served: the compiler refuses it.
   it('refuses a plugin tool that launches a root run', () => {
-    type PluginTool = NonNullable<Plugin['tools']>[string];
+    type PluginTool = NonNullable<Plugin['tools']>[number];
     const calling = <R>(
       call: () => Effect.Effect<ToolResult, Error, R>,
     ): RuntimeTool<Error, R> => ({ definition: { name: 'probe' }, call });

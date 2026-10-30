@@ -233,7 +233,7 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
           id,
           new Map(
             held.flatMap(({ tools, revision }) => [
-              ...entriesOf(id, tools, { revision }),
+              ...entriesOf(id, tools.values(), { revision }),
             ]),
           ),
         ] as const,
@@ -322,7 +322,7 @@ export const sessionTools = Effect.fnUntraced(function* (
         loaded: new Map(held.map(({ id, failure }) => [id, failure])),
         entries: new Map(
           held.flatMap(({ id, tools, revision }) => [
-            ...entriesOf(id, tools, { revision }),
+            ...entriesOf(id, tools.values(), { revision }),
           ]),
         ),
       })),
