@@ -11,7 +11,7 @@
  * session, reached through the session itself (`SessionHandle.approvals`),
  * never from context.
  */
-import { Effect, Schema, Struct, SubscriptionRef } from 'effect';
+import { Effect, SubscriptionRef } from 'effect';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
@@ -28,8 +28,6 @@ import {
 import {
   bypassCovers,
   qualifyAggregateId,
-  ToolEditContentSchema,
-  type ToolEditPermission,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -51,28 +49,7 @@ import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { Settings } from '@shared/config/settings';
 import type { RunRows } from '@shared/session/runRowsShape';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import type { SessionHandle, SessionLog } from './SessionHandle';
-
-// Null records a missing file; an empty string records an existing empty one.
-// The preview wire contract renders either as empty text.
-const StoredToolEditContentSchema = ToolEditContentSchema.mapFields(
-  Struct.assign({ originalContent: Schema.NullOr(Schema.String) }),
-);
-
-/** Read the proposal named by a durable edit request. A missing or malformed
- *  blob is a corrupt store, never permission to use a recomputed proposal. */
-export const readToolEditContent = (
-  log: Pick<SessionLog, 'blobs'>,
-  address: ToolEditPermission['content'],
-): Effect.Effect<typeof StoredToolEditContentSchema.Type> =>
-  Effect.map(Effect.orDie(log.blobs([address])), (held) => {
-    const text = held.get(address);
-    if (text === undefined)
-      throw new Error(`The store holds no tool edit proposal at ${address}`);
-    return Schema.decodeUnknownSync(StoredToolEditContentSchema)(
-      JSON.parse(text),
-    );
-  });
+import type { SessionHandle } from './SessionHandle';
 
 /**
  * One queued approval. A request can wait behind another prompt for long:

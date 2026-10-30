@@ -12,7 +12,7 @@
  * The union carries the arms the runtime answers today; a lane that routes
  * another retained command adds its arm with its handler.
  */
-import { Schema } from 'effect';
+import { type Context, Effect, Schema, Struct } from 'effect';
 
 import {
   APPROVAL_BYPASS_KINDS,
@@ -24,7 +24,30 @@ import {
   StoredMediaSchema,
   ToolEditContentSchema,
   type ToolEditContent,
+  type ToolEditPermission,
 } from '@shared/schemas';
+import type { Database } from './database.js';
+
+// Null records a missing file; an empty string records an existing empty one.
+// The preview wire contract renders either as empty text.
+const StoredToolEditContentSchema = ToolEditContentSchema.mapFields(
+  Struct.assign({ originalContent: Schema.NullOr(Schema.String) }),
+);
+
+/** Read the proposal named by a durable edit request. A missing or malformed
+ *  blob is a corrupt store, never permission to use a recomputed proposal. */
+export const readToolEditContent = (
+  readBlobs: Context.Service.Shape<typeof Database>['readBlobs'],
+  address: ToolEditPermission['content'],
+): Effect.Effect<typeof StoredToolEditContentSchema.Type> =>
+  Effect.map(Effect.orDie(readBlobs([address])), (held) => {
+    const text = held.get(address);
+    if (text === undefined)
+      throw new Error(`The store holds no tool edit proposal at ${address}`);
+    return Schema.decodeUnknownSync(StoredToolEditContentSchema)(
+      JSON.parse(text),
+    );
+  });
 
 const runScoped = { runId: RunIdSchema };
 
