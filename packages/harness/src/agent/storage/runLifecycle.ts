@@ -12,7 +12,6 @@ import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
 } from '@shared/approvalBypassKind';
-
 import {
   RUN_OUTCOME,
   RunRecordFieldsSchema,
@@ -41,21 +40,21 @@ import {
   persistedParentRunId,
 } from './runRecords';
 
-function pinRunWorkingDirectory(
-  record: RunRecord,
-  workspaceRoot: string | undefined,
-): RunRecord {
-  // First non-blank wins, untrimmed: trimming mangled paths (2e3197f92f).
-  const workingDirectory = [record.workingDirectory, workspaceRoot].find(
-    (dir) => dir?.trim(),
+function pinRunWorkingDirectory(record: RunRecord, root?: string): RunRecord {
+  // First non-blank wins, untrimmed: a trimmed path was once mangled.
+  const workingDirectory = [record.workingDirectory, root].find((dir) =>
+    dir?.trim(),
   );
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
 
 /** A defect is the path's failure, as a refusal is: its caller words it. */
-const defectAsFailure = Effect.catchDefect((defect) =>
-  Effect.fail(ensureError(defect)),
-);
+const defectAsFailure = Effect.catchDefect((d) => Effect.fail(ensureError(d)));
+
+/** The stop ending the run is the session's own clean close: its halt says so. */
+const closedBySession = (session: SessionHandle, input: Ending): boolean =>
+  input.stopped === true &&
+  session.runs.get(input.runId)?.stopReason === 'shutdown';
 
 /** A resume's activation: its `run.activate`, the grants it ends, and a
  *  `run.config` if its configuration changed (its model kept: only a
@@ -262,10 +261,11 @@ export const endIn = Effect.fn('endIn')(function* (
       }),
       output: input.output ?? emptyRunEndOutput(),
     };
+    const closed = closedBySession(session, input);
     halt =
       facts.position === null
         ? []
-        : [haltedPositionRow(facts.position, persisted)];
+        : [haltedPositionRow(facts.position, persisted, closed)];
     closing = [
       ...consumedRows(runId, (yield* session.followUps.read(runId)).followUps),
       ...session.trace.closure(runId, persisted),

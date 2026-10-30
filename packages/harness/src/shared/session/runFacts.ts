@@ -31,7 +31,7 @@ import {
   runRowsFrom,
 } from './runRows';
 import type { RunRows } from './runRowsShape';
-import type { PendingResponse } from './inFlight';
+import type { Invocation, PendingResponse } from './inFlight';
 
 /** What a run answers and produced, as its rows record it. */
 export type RunFacts = {
@@ -258,4 +258,13 @@ export function needsWake(input: RunRows, run: RunLookup): boolean {
       return end === null;
     },
   );
+}
+
+/** `invocation` once a clean close stopped its open attempt (a `run.position`
+ *  halt with reason `closed`): none, or one whose outcome a row recorded, is
+ *  as it was. */
+export function closedBy(invocation: Invocation | null): Invocation | null {
+  if (invocation === null || invocation.current.failed !== null)
+    return invocation;
+  return { ...invocation, current: { ...invocation.current, closed: true } };
 }
