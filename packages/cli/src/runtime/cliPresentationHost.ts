@@ -94,9 +94,10 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         runProgress?.preserve();
         const actions = instructionActions(payload.key);
         const hint = ndjson ? '' : formatInstructionActionHint(actions);
+        // A notice with nothing to offer carries no `actions` field, as before.
         present('info', `${payload.message}${hint}`, {
           key: payload.key,
-          actions,
+          ...(actions.length > 0 ? { actions } : {}),
           showSuppress: payload.showSuppress,
         });
         return true;

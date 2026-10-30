@@ -61,9 +61,9 @@ function warnOnFailure<E>(
 }
 
 /**
- * Maps the host-agnostic action tokens the agent core emits to the button
- * label and the program this host runs for it. Keeping this table here — not
- * in the agent core — is what lets the core stay free of host actions.
+ * The button label and the program this host runs for each action token the
+ * app offers beside an instruction (`instructionActions`): the binding to
+ * VS Code commands is the extension's alone.
  */
 const INSTRUCTION_ACTION_VIEW: Record<
   InstructionAction,
