@@ -46,7 +46,10 @@ function abandoned(tmp: string): string[] {
       try {
         owner = readFileSync(path.join(dir, OWNER), 'utf8');
       } catch {
-        // A run between creating its folder and naming itself in it.
+        // Unreadable: a run between creating its folder and naming itself
+        // in it, another user's run (mkdtemp makes the folder private), or a
+        // file that shares the prefix. Each is left alone, so the worst case
+        // is a folder kept, never a live run's folder removed.
         return false;
       }
       const pid = Number.parseInt(owner, 10);
@@ -67,6 +70,9 @@ export default function setup(): () => void {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
-    rmSync(root, { recursive: true, force: true });
+    // Vitest runs this before it waits for its last workers to exit, and a
+    // dying worker can still hold a file (Windows refuses to remove it) or
+    // write one (the folder is not yet empty): retry until they are gone.
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   };
 }
