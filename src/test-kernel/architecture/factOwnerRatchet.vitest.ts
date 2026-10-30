@@ -69,6 +69,18 @@ const VOCABULARY = new Set([
   'packages/harness/src/shared/schemas/rowVersions.ts',
 ]);
 
+/** The store layer: the codec, the row reader, the publisher and the
+ *  history query dispatch on a row's type to encode, decode, version and
+ *  index it. They decide no fact; the reducers above do. Exempt by name
+ *  (owner, 2026-10-30), so the baseline lists application readers only. */
+const STORE_LAYER = new Set([
+  'packages/harness/src/agent/runtime/SessionEvents.ts',
+  'packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts',
+  'packages/harness/src/controllers/session/Database.ts',
+  'packages/harness/src/controllers/session/rowCodec.ts',
+  'packages/harness/src/controllers/session/rowReader.ts',
+]);
+
 const RUN_REGISTRY = 'packages/harness/src/agent/runtime/runRegistry.ts';
 const RUN_LIFECYCLE = 'packages/harness/src/agent/storage/runLifecycle.ts';
 
@@ -290,7 +302,7 @@ function usesAs(found: FileUses | undefined, use: Use, name: string): boolean {
 }
 
 const ROW_SEMANTICS =
-  "For each session row type (a durable arm of packages/harness/src/shared/schemas/sessionEvent.ts), the production files that read it, by comparing, switching on or listing the type literal, outside its reducers and the row vocabulary (REDUCERS and VOCABULARY in src/test-kernel/architecture/factOwnerRatchet.vitest.ts). Each such file decides the row's fact on its own. Shrink-only: a file not listed fails (read the state the reducer builds instead); a listed file that stopped reading fails until the list is rewritten with `npx vitest run src/test-kernel/architecture/factOwnerRatchet.vitest.ts -u`, which only drops entries. A type absent from the list has no reader outside its reducers.";
+  "For each session row type (a durable arm of packages/harness/src/shared/schemas/sessionEvent.ts), the production files that read it, by comparing, switching on or listing the type literal, outside its reducers, the row vocabulary and the store layer (REDUCERS, VOCABULARY and STORE_LAYER in src/test-kernel/architecture/factOwnerRatchet.vitest.ts). Each such file decides the row's fact on its own. Shrink-only: a file not listed fails (read the state the reducer builds instead); a listed file that stopped reading fails until the list is rewritten with `npx vitest run src/test-kernel/architecture/factOwnerRatchet.vitest.ts -u`, which only drops entries. A type absent from the list has no reader outside its reducers.";
 
 describe('one owner per fact', () => {
   // Scanned once: the cases read the same snapshot.
@@ -307,6 +319,7 @@ describe('one owner per fact', () => {
   const readers = new Map<string, string[]>();
   for (const [file, { rows }] of uses) {
     if (REDUCERS[file] !== undefined || VOCABULARY.has(file)) continue;
+    if (STORE_LAYER.has(file)) continue;
     for (const [type, kinds] of rows)
       if (kinds.has('reads') || kinds.has('listed'))
         readers.set(type, [...(readers.get(type) ?? []), file]);

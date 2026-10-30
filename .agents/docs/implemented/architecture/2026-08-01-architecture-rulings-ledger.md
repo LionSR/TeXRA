@@ -886,3 +886,22 @@ The owner does not want a model-chosen, candidate-file document workflow
 replacing the fixed document workflow (today the documents plugin's recipe,
 `packages/texra/src/agent/output/documentRecipe.ts`). Do not re-propose it as
 specified.
+
+## Ratchet scope: base-relative counts and the store layer (ruled 2026-10-30)
+
+Two decisions from the tech-debt target designs
+(`.agents/docs/proposed/architecture/2026-10-27-tech-debt-target-designs.md`,
+D6 and D9), approved by the owner on 2026-10-30:
+
+- **Core-quality counts are measured against the merge base, not committed.**
+  A rule held at zero stays a lint error or a `ZERO_RULES` entry with no
+  file (already in force). For the numeric rules the baseline becomes the
+  count on `origin/main`'s tree: a PR fails a file whose count rose and
+  carries no JSON edit when a count fell. The committed count files,
+  `--update` and `--move` go with that change (slices R3 and R4), after the
+  test-kernel work. File-size caps keep their stepped rounding.
+- **The store layer is exempt from the row-reader baseline.** `Database.ts`,
+  `rowCodec.ts`, `rowReader.ts`, `SessionEvents.ts` and `HistoryQuery.ts`
+  dispatch on a row's type to encode, decode, version and index it, and
+  decide no fact. `STORE_LAYER` in `factOwnerRatchet.vitest.ts` names them;
+  the baseline lists application readers only.
