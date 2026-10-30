@@ -847,9 +847,10 @@ What survives at each commit point follows from sections 2 to 8:
   one decided since this process activated the run, the call runs again and
   rejoins that request under its id (`shared/session/inFlight.ts:347-370`).
   Otherwise it is re-run only if both the stored and the current tool declare
-  `replay: 'safe'` and the stored arguments validate; else settled as outcome
-  unknown (`agent/runtime/loop/toolUseDispatch.ts:690-717`,
-  `agent/runtime/run/tools.ts:106-137`).
+  `replay: 'safe'`, the stored arguments validate, and it has not started three
+  times already; else settled as outcome unknown, naming spent starts as the
+  reason (`agent/runtime/loop/toolUseDispatch.ts:690-711`,
+  `agent/runtime/run/tools.ts:98-158`).
 - `tool.result`: The settlement is reused; the call is not run again
   (`agent/runtime/loop/toolUseDispatch.ts:850-851`).
 - **delivery `append`**: The loop continues to the next step from

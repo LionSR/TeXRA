@@ -2,7 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer } from 'effect';
+import { Deferred, Effect, Fiber, Layer, Queue } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -215,6 +215,57 @@ describe('tool dispatch interrupted mid-turn', () => {
       );
       expect(resumed.outcome).toBe('completed');
       expect(toolB.call).toHaveBeenCalledTimes(1);
+    }),
+  );
+
+  /**
+   * Failure mode: a replay-safe call that stops the process (running it out
+   * of memory, say) starts again on every resume, so every start stops.
+   */
+  it.effect('stops replaying a call cut short at each of its attempts', () =>
+    Effect.gen(function* () {
+      const session = yield* sessionWithInteractions({ emit: () => {} });
+      const runId = generateRunId();
+      publishTestRunStart(session, runId);
+      const starts = yield* Queue.unbounded<void>();
+      // The first three starts never finish; a fourth would.
+      let started = 0;
+      const call = vi.fn(() => {
+        started += 1;
+        return started <= 3
+          ? Queue.offer(starts, undefined).pipe(Effect.andThen(Effect.never))
+          : Effect.succeed({ status: 'executed' as const, output: 'ran' });
+      });
+      const tools = {
+        toolB: { call, definition: { name: 'toolB' }, replay: 'safe' } as ITool,
+      };
+      const run = (resume: boolean, turns: readonly TurnResult[]) =>
+        runToolUse({ resume }).pipe(
+          Effect.provide(
+            loopLayer({ runId, session, tools, turns, stopAfterCycle: true }),
+          ),
+        );
+      const issued = [toolCallTurn([{ id: 'call-b', name: 'toolB' }])];
+      for (const resume of [false, true, true]) {
+        const fiber = yield* Effect.forkDetach(
+          run(resume, resume ? [] : issued),
+        );
+        yield* Queue.take(starts);
+        yield* Fiber.interrupt(fiber);
+      }
+
+      const resumed = yield* run(true, [textTurn('It was not run again.')]);
+      expect(resumed.outcome).toBe('completed');
+      expect(call).toHaveBeenCalledTimes(3);
+      const delivered = yield* session.runHistory
+        .load(runId)
+        .pipe(Effect.orDie);
+      const group = delivered?.messages.find(
+        (message) => message.role === 'tool',
+      );
+      expect(
+        group?.role === 'tool' ? JSON.stringify(group.results[0]) : '',
+      ).toContain('so it was not run again');
     }),
   );
 });

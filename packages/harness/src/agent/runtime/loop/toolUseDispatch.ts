@@ -103,8 +103,8 @@ import {
   replayable,
   SKIPPED_AFTER_END_TURN,
   SKIPPED_NOT_STARTED,
-  SKIPPED_OUTCOME_UNKNOWN,
   skippedByScriptEnd,
+  unknownOutcome,
 } from '../run/tools';
 import {
   formatAttachmentSummary,
@@ -704,10 +704,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       yield* skipCall(fact, input, status, SKIPPED_NOT_STARTED);
     else if (
       !entered.mayHaveRun ||
-      (yield* replayable(fact, step.registry, input, logger))
+      (yield* replayable(fact, step.registry, input, logger, entered.attempt))
     )
       yield* execute(fact, input, entered, place);
-    else yield* skipCall(fact, input, status, SKIPPED_OUTCOME_UNKNOWN);
+    else yield* skipCall(fact, input, status, unknownOutcome(entered.attempt));
   });
 
   /** The door a `script` call's guest issues calls through: the same per-call
