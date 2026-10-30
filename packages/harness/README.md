@@ -32,11 +32,11 @@ patch while `@effect/*` packages float.
 ```jsonc
 {
   "dependencies": {
-    "@effect/platform-node": "^4.0.6",
-    "@effect/sql-sqlite-node": "^4.0.6",
+    "@effect/platform-node": "^4.1.0",
+    "@effect/sql-sqlite-node": "^4.1.0",
     "@texra-ai/harness": "^0.1.0",
     "@texra-ai/llm": "^0.1.0",
-    "effect": "^4.0.6",
+    "effect": "^4.1.0",
   },
 }
 ```

@@ -1,9 +1,10 @@
 /**
  * Session description generation.
  *
- * When a run starts, generates a short AI summary describing what it aims to
- * accomplish, published as the run's `run.description` row so the stream tab,
- * history view, and future agents can quickly understand each session.
+ * When a run starts, or resumes without one, generates a short AI summary
+ * describing what it aims to accomplish, published as the run's
+ * `run.description` row so the stream tab, history view, and future agents
+ * can quickly understand each session.
  */
 
 import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
@@ -91,6 +92,9 @@ const DESCRIPTION_DEADLINE = '20 seconds';
  *
  * Every run qualifies, the children a script's `agent()` calls create
  * included: without one they are labelled by their agent name alone.
+ * A resumed run (`resumed`) is described only while it has no
+ * `run.description` row, as when its process died before the helper
+ * answered, so no run is described twice.
  * Uses the configured helper model for a one-shot, non-streaming call.
  * On success, commits the run's `run.description` row, which the meta fold
  * and every renderer read.
@@ -105,6 +109,7 @@ export const generateSessionDescription = Effect.fn(
   config: AgentConfig,
   agentDescription: string | undefined,
   session: SessionHandle,
+  resumed: boolean,
 ): Effect.fn.Return<
   void,
   never,
@@ -113,6 +118,11 @@ export const generateSessionDescription = Effect.fn(
   const instruction = getDisplayedInstruction(config);
   if (!instruction) return;
   yield* Effect.gen(function* () {
+    if (resumed) {
+      // A run already described, or one gone, keeps what it has.
+      const facts = yield* session.log.facts(runId);
+      if (facts === null || facts.title !== null) return;
+    }
     const text = yield* helperCall(
       session.roots,
       {

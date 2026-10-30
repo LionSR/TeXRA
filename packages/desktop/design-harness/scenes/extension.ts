@@ -552,6 +552,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
         kind: 'proposal',
         data: {
           requestId: 'req-task',
+          allowBypass: true,
           runId: CHILD,
           task: true,
           agent: 'correct',
