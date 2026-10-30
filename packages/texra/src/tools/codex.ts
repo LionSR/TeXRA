@@ -452,7 +452,6 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
 
 export const CodexTool = defineTool({
   name: 'codex',
-  requiresApproval: true,
   description:
     'Spin off an OpenAI Codex agent to perform code analysis, generation, or research in a sandboxed environment. ' +
     'The agent runs the Codex CLI locally and can read files, run commands, and make edits within its sandbox. ' +

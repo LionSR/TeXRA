@@ -136,7 +136,6 @@ describe('desktop tool edit approval', () => {
               originalContent: 'alpha\n',
               proposedContent: 'beta\n',
               sourceTool: 'write_file',
-              runId,
             }).pipe(
               Effect.provide(
                 nativeToolTestLayer({

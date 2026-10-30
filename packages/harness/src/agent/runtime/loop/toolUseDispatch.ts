@@ -525,15 +525,15 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       standing,
       'The resumed call no longer asks it.',
     );
-    // Its step's PreToolUse hooks, recorded before the approval and the body.
+    // Its step's PreToolUse hooks, recorded before the chain decides.
     const pre =
       tool &&
       (yield* preToolUse(run, cell, step, fact, responseId, parsedInput));
     if (pre && pre.rows.length > 0) yield* commit(fact, pre.rows);
     let result: ToolResult;
-    if (pre && pre.denied !== null) {
-      result = pre.denied;
-    } else if (!tool || !pre) {
+    // What the body ran on, which the cards show; the issued input is recorded.
+    let ran = parsedInput;
+    if (!tool || !pre) {
       result = {
         status: 'error',
         error: unsent
@@ -544,15 +544,17 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     } else {
       // From here the call may have run: its intent commits now, with a slow
       // tool's card, unless this attempt's body already started (a re-entry).
-      const bodyStarts = Effect.gen(function* () {
-        if (!startedAt(yield* cell.current, fact.callId, attempt))
-          yield* commit(fact, [
-            intentRow(fact, attempt),
-            ...(tool.slow ? [cardStart(fact, parsedInput, attempt)] : []),
-          ]);
-        accepting = tool.slow === true;
-        yield* pre.bodyStarts;
-      });
+      const bodyStarts = (input: unknown) =>
+        Effect.gen(function* () {
+          ran = input;
+          if (!startedAt(yield* cell.current, fact.callId, attempt))
+            yield* commit(fact, [
+              intentRow(fact, attempt),
+              ...(tool.slow ? [cardStart(fact, input, attempt)] : []),
+            ]);
+          accepting = tool.slow === true;
+          yield* pre.bodyStarts;
+        });
       // This call's place in its run, and the child door over exactly it.
       const runCall: RunCallShape = {
         run,
@@ -562,11 +564,11 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         logId: fact.logId,
         ...place,
       };
-      // Guard first, under the step's roots and plugin services: a refused
-      // path or unapproved command settles the call without the body running.
+      // The chain first, under the step's roots and plugin services: a call
+      // it stops ends with an error result before the body runs.
       const invoked = yield* Effect.exit(
         Effect.scoped(
-          guardedToolCall(tool, parsedInput, bodyStarts).pipe(
+          guardedToolCall(tool, parsedInput, pre, bodyStarts).pipe(
             Effect.provideService(ToolContext, {
               callId: fact.callId,
               env: {
@@ -649,7 +651,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       extracted.sanitizedResult.status === 'error' ? 'failed' : 'completed';
     // The card commits with the result (a slow tool's closes, a fast tool's
     // opens and closes here); outside the batch recovery could see it undone.
-    const cards = resultCards(fact, parsedInput, status, attempt, editedFiles);
+    const cards = resultCards(fact, ran, status, attempt, editedFiles);
     // An executed call's PostToolUse rows, the follow-ups its result answers
     // and its facts (the run's, and its plugin's own aggregates') commit too.
     const post = pre ? yield* pre.after(extracted.sanitizedResult) : [];
