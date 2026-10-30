@@ -2,6 +2,7 @@
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { Schema } from 'effect';
+import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -29,6 +30,7 @@ import {
   postStateSetting,
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
+import { settingSignal } from '../settingsState';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 /** The identity agent commits use while a field is blank: its row's default. */
@@ -48,7 +50,7 @@ const DEFAULT_GIT_AUTHOR_EMAIL = defaultIdentity(
 );
 
 @customElement('git-tab')
-export class GitTab extends LitElement {
+export class GitTab extends SignalWatcher(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -173,9 +175,6 @@ export class GitTab extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) markCommits = false;
-  @property({ attribute: false }) authorName = DEFAULT_GIT_AUTHOR_NAME;
-  @property({ attribute: false }) authorEmail = DEFAULT_GIT_AUTHOR_EMAIL;
   @property({ attribute: false }) toggleDisabled = true;
   @property({ attribute: false }) githubTokenStatus: 'secret' | 'env' | 'none' =
     'none';
@@ -381,13 +380,11 @@ export class GitTab extends LitElement {
               'Keep agent-authored commits distinguishable from your personal Git identity.',
             icon: 'circle-dot',
           })}
-          ${renderStateSettingToggleRow({
-            key: WorkspaceStateKey.GIT_MARK_COMMITS,
-            checked: this.markCommits,
+          ${renderStateSettingToggleRow(WorkspaceStateKey.GIT_MARK_COMMITS, {
             disabled: this.toggleDisabled,
           })}
           ${
-            this.markCommits
+            settingSignal<boolean>(WorkspaceStateKey.GIT_MARK_COMMITS).get()
               ? html`
                   <div class="identity-fields">
                     <div class="input-row">
@@ -398,7 +395,9 @@ export class GitTab extends LitElement {
                         name="git-author-name"
                         autocomplete="name"
                         spellcheck="false"
-                        .value=${this.authorName}
+                        .value=${settingSignal<string>(
+                          WorkspaceStateKey.GIT_AUTHOR_NAME,
+                        ).get()}
                         placeholder=${DEFAULT_GIT_AUTHOR_NAME}
                         @change=${(event: Event) =>
                           this.handleIdentityInputChange(
@@ -419,7 +418,9 @@ export class GitTab extends LitElement {
                         autocapitalize="off"
                         spellcheck="false"
                         dir="ltr"
-                        .value=${this.authorEmail}
+                        .value=${settingSignal<string>(
+                          WorkspaceStateKey.GIT_AUTHOR_EMAIL,
+                        ).get()}
                         placeholder=${DEFAULT_GIT_AUTHOR_EMAIL}
                         @change=${(event: Event) =>
                           this.handleIdentityInputChange(

@@ -1,7 +1,7 @@
 import { Schema, Struct } from 'effect';
 
 import { RetryErrorInfoSchema } from './errors';
-import { RunSelectionSchema, RunIdSchema } from './identifiers';
+import { RunSelectionSchema, RunIdSchema, Sha256Schema } from './identifiers';
 import {
   ExternalInquiryTurnRecordSchema,
   InquirySessionLinksSchema,
@@ -29,9 +29,43 @@ export const ToolEditPermissionSchema = PermissionBaseSchema.mapFields(
     sourceTool: Schema.String,
     addedLines: LineCountSchema,
     removedLines: LineCountSchema,
+    /** The address of the proposal's content (`ToolEditContent`: the
+     *  original and proposed text with their diff) in the session's blob
+     *  store, stored with the request's row; `request.preview` reads it.
+     *  Absent only on a row an earlier build wrote, which has no content to
+     *  show. */
+    content: Schema.optional(Sha256Schema),
   }),
 );
 export type ToolEditPermission = typeof ToolEditPermissionSchema.Type;
+
+/** One unified-diff hunk: the line ranges it spans on each side, and its
+ *  lines, each marked ` `, `-` or `+` (`\` notes a missing final newline). */
+const DiffHunkSchema = Schema.Struct({
+  oldStart: Schema.Int,
+  oldLines: Schema.Int,
+  newStart: Schema.Int,
+  newLines: Schema.Int,
+  lines: Schema.Array(Schema.String),
+});
+
+/** What a pending tool edit would change: the original and proposed
+ *  content a host shows beside the request's path and line counts, and
+ *  the diff between them, computed once where the request is built: its
+ *  hunks and the 0-based line of the proposed text a diff view reveals
+ *  first (null when nothing changed). Stored as JSON in the session's blob
+ *  store under the address the request's payload names
+ *  (`ToolEditPermission.content`), and answered to `request.preview`. */
+export const ToolEditContentSchema = Schema.Struct({
+  originalContent: Schema.String,
+  proposedContent: Schema.String,
+  hunks: Schema.Array(DiffHunkSchema),
+  firstChangedLine: Schema.NullOr(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  ),
+});
+/** A pending tool edit's content. */
+export type ToolEditContent = typeof ToolEditContentSchema.Type;
 
 export const BashPermissionSchema = PermissionBaseSchema.mapFields(
   Struct.assign({
@@ -152,8 +186,8 @@ const ExternalInquiryHydrationFieldsSchema = Schema.Struct({
 /**
  * One shape for every inquiry turn. First and follow-up dispatches carry the
  * identical field set — the panel tells them apart from `transcript` — so
- * there is no discriminator to narrow on. Hydration fields are always
- * present (nullish on a fresh thread that has nothing to hydrate).
+ * there is no discriminator to narrow on. Initial-load fields are always
+ * present (nullish on a fresh thread that has nothing to load).
  */
 export const ExternalInquiryPermissionSchema = PermissionBaseSchema.mapFields(
   Struct.assign(CommonExternalInquiryFieldsSchema.fields),

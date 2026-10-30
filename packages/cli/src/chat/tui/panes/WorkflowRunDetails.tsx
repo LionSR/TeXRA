@@ -1,6 +1,6 @@
 // Focused, read-only workflow run details.
 //
-// Task-group lifecycle comes from the transcript fold; generated files and warnings
+// Task-group lifecycle comes from the transcript; generated files and warnings
 // come from the canonical round-indexed artifact facts. This component only
 // joins and renders those facts—it does not infer or mutate workflow state.
 
@@ -46,7 +46,7 @@ interface WorkflowRunDetailLine {
 
 type WorkflowRunFacts = {
   readonly taskGroups: readonly TaskGroup[];
-  /** The outcome the run durably settled on — terminal with no producer left
+  /** The outcome the run durably finished on — terminal with no producer left
    *  anywhere — so a group it never closed paints as that outcome instead of
    *  running forever. `undefined` paints each group as the transcript
    *  recorded it. */

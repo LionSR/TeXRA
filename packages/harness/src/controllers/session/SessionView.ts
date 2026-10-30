@@ -22,33 +22,33 @@ import {
   Effect,
   Exit,
   Fiber,
-  HashMap,
   Layer,
   Option,
+  Schema,
   type Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
 
-import type { SessionViewAccess } from '@agent/runtime/SessionHandle';
-import type { AppSignals } from '@platform/appSignals';
+import type {
+  SessionLog,
+  SessionViewAccess,
+} from '@agent/runtime/SessionHandle';
 import {
   qualifyAggregateId,
+  ToolEditContentSchema,
   type LocalRuntimeState,
   type TranscriptSubscription,
 } from '@shared/schemas';
-import { Database, type DatabaseReadFailed } from '@shared/session/database';
-import type { SessionView as ReadonlySessionView } from '@shared/session/readonlyViews';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import type {
-  Outcome,
-  RuntimeRequest,
-  StagedToolEdits,
-} from '@shared/session/runtimeRequest';
+  PendingRequest,
+  SessionView as ReadonlySessionView,
+} from '@shared/session/readonlyViews';
+import type { Outcome } from '@shared/session/runtimeRequest';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { SessionView } from '@shared/session/sessionView';
-import { announceRunFacts, armsOf } from '@tools/plugins';
-import { ToolRegistry } from '@tools/toolTable';
 import { LocalRuntimeSource, TranscriptSubscriptions } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
@@ -186,8 +186,6 @@ export class RemoteSessionView extends Context.Service<
  * current view, the replay it is built from, the transcript subscriptions
  * that decide which transcripts it holds, and the local runtime state it
  * applies beside the rows.
- * For the session's scope it announces what its runs' facts tell this
- * process (`announceRunFacts`).
  * `closed` is the session's: once its doors shut, a subscription or a mark
  * writes nothing.
  */
@@ -200,38 +198,15 @@ export const makeSessionViewAccess = Effect.fn(
   SessionViewAccess,
   DatabaseReadFailed,
   | Scope.Scope
-  | Database
   | SessionViewService
   | SessionInputs
   | TranscriptSubscriptions
   | LocalRuntimeSource
-  | ToolRegistry
-  | AppSignals
 > {
   const { ref, changes } = yield* SessionViewService;
   const inputs = yield* SessionInputs;
   const subscriptions = yield* TranscriptSubscriptions;
   const local = yield* LocalRuntimeSource;
-  // What the session's runs announce from here on, to this process's
-  // listeners, for the session's life: rows above the commit the store
-  // holds now, so a reopened session never replays history as news.
-  const database = yield* Database;
-  yield* announceRunFacts(
-    changes,
-    (runId) =>
-      database.readAggregate(qualifyAggregateId('run', runId), 1, [
-        'plugin.fact',
-      ]),
-    yield* database.currentCommit,
-    armsOf((yield* ToolRegistry).entries.values()),
-  ).pipe(
-    Effect.catchCause((cause) =>
-      Effect.logWarning(
-        `Session ${storage} stopped announcing its runs' facts`,
-      ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
-    ),
-    Effect.forkScoped,
-  );
   /** Update the local truth unless the session has closed. */
   const updateLocal = (
     next: (state: LocalRuntimeState) => LocalRuntimeState,
@@ -273,63 +248,53 @@ export const makeSessionViewAccess = Effect.fn(
       ),
     markResumeBlocked: (runId, blocked) =>
       updateLocal((state) => {
-        const rest = state.resumeBlocked.filter((b) => b.runId !== runId);
-        if (blocked === null && rest.length === state.resumeBlocked.length)
-          return state;
-        // The same block again leaves the state, and the view, as it is.
         const held = state.resumeBlocked.find((b) => b.runId === runId);
-        if (
-          blocked !== null &&
-          held !== undefined &&
-          held.retry === blocked.retry &&
-          held.reason.kind === blocked.reason.kind &&
-          held.reason.name === blocked.reason.name
-        )
-          return state;
+        // The same block again, or none again, leaves the state, and the
+        // view, as it is.
+        const same =
+          blocked === null
+            ? held === undefined
+            : held !== undefined &&
+              held.reason.kind === blocked.kind &&
+              held.reason.name === blocked.name;
+        if (same) return state;
+        const rest = state.resumeBlocked.filter((b) => b.runId !== runId);
         return {
           ...state,
           resumeBlocked:
-            blocked === null ? rest : [...rest, { runId, ...blocked }],
+            blocked === null ? rest : [...rest, { runId, reason: blocked }],
         };
       }),
     resumeBlocks: () => SubscriptionRef.getUnsafe(local.ref).resumeBlocked,
-    toolEdits: yield* SubscriptionRef.make<StagedToolEdits>(HashMap.empty()),
   };
 });
 
 /**
- * Answer a surface's `request.preview` or `request.edit` from the session's
- * tool-edit store, for a request the view lists on the run the surface
- * named: another run's staged content is not that caller's. An edit fails
- * with `refusal` once the request no longer waits.
+ * A surface's `request.preview` of `pending`: the content its row names,
+ * read back from the store under that address. Null for a request the view
+ * no longer lists (none given), one of another kind, or one an earlier
+ * build wrote, which has no content to show: the card answers from its
+ * payload.
  */
-export function answerToolEditRequest<E>(
-  view: Pick<SessionViewAccess, 'ref' | 'toolEdits'>,
-  req: Extract<RuntimeRequest, { kind: 'request.preview' | 'request.edit' }>,
-  refusal: E,
-): Effect.Effect<Outcome, E> {
-  const pending = SubscriptionRef.getUnsafe(view.ref).requests.some(
-    (row) => row.runId === req.runId && row.requestId === req.requestId,
-  );
-  if (req.kind === 'request.preview')
-    return Effect.map(SubscriptionRef.get(view.toolEdits), (held) => ({
-      kind: 'preview',
-      preview: pending
-        ? Option.getOrNull(HashMap.get(held, req.requestId))
-        : null,
-    }));
-  // The host read these bytes itself, so they may be CRLF.
-  const edited = req.content.replaceAll('\r\n', '\n');
-  return SubscriptionRef.modify(view.toolEdits, (held) => {
-    const entry = HashMap.get(held, req.requestId);
-    return pending && Option.isSome(entry)
-      ? [true, HashMap.set(held, req.requestId, { ...entry.value, edited })]
-      : [false, held];
-  }).pipe(
-    Effect.filterOrFail(
-      (stored) => stored,
-      () => refusal,
-    ),
-    Effect.as({ kind: 'done' }),
-  );
-}
+export const toolEditPreview = (
+  log: Pick<SessionLog, 'blobs'>,
+  pending: PendingRequest | undefined,
+): Effect.Effect<Extract<Outcome, { kind: 'preview' }>> => {
+  const address =
+    pending?.payload.kind === 'toolEdit'
+      ? pending.payload.data.content
+      : undefined;
+  if (address === undefined)
+    return Effect.succeed({ kind: 'preview', preview: null });
+  // The row links the blob, which the store keeps while the row lives: a
+  // read that fails or finds nothing is a corrupt store.
+  return Effect.map(Effect.orDie(log.blobs([address])), (held) => {
+    const text = held.get(address);
+    if (text === undefined)
+      throw new Error(`The store holds no tool edit proposal at ${address}`);
+    const preview = Schema.decodeUnknownSync(ToolEditContentSchema)(
+      JSON.parse(text),
+    );
+    return { kind: 'preview', preview };
+  });
+};

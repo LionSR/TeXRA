@@ -1,9 +1,12 @@
 # Target designs for the ten costliest tech debts
 
 Date: 2026-10-27
-Status: proposed — designs and PR slices; owner decisions listed below are open.
+Status: proposed — designs and PR slices; most slices have landed, and the open ones
+are listed under "Progress (2026-10-30)".
 Baseline: `main` at `d8a4f66`; `60967d2` adds only dependency bumps.
-Survey: [the ten costliest tech debts](../simplification/2026-10-27-top-ten-tech-debts.md).
+Survey: the 2026-10-27 "ten costliest tech debts" note, deleted as superseded by this
+one on 2026-10-30; read it with
+`git show 8fcd0a3391:.agents/docs/proposed/simplification/2026-10-27-top-ten-tech-debts.md`.
 
 Seven read-only design passes, one per root cause, each checked against
 the rulings ledger. Each target meets the two owner rules below. Line
@@ -587,6 +590,45 @@ Open: #14367, #14369 and #14372.
   names on `./host` and `./schemas`, the forgotten-exports rule keeps all but
   six; the remaining surface cuts are moves of app vocabulary and narrower
   root signatures.
+
+## Progress (2026-10-30)
+
+Checked against `main` at `808521a8ed`. Landed since the 2026-10-28 entry:
+
+- **§1.** L3: no `new AbortController` remains under `packages/harness/src`;
+  the ESLint rule still names the ruling's one resident. The run lifecycle
+  moved on with #14382, #14389, #14395, #14396, #14411, #14412, #14414 and
+  #14416. The harness 1.0 release PRD (#14352, open) owns what is left of §1.
+- **§2.** S0: `GOLDEN_SCRIPT_SOURCE` runs its calls in sequence; the `--twice`
+  check was not added. S2: `run.start` carries `parent.call` and no top-level
+  `parentCard`; D4 and D5 are done. S6: #14367. `row-readers-baseline.json`
+  fell from 88 entries in 45 files to 43 entries over 15 row types. D9 is
+  still open.
+- **§3.** H1 to H5 are in: `followPendingRequests`, `runActionPolicy.ts` and
+  `openGuiWindow.ts` exist, and `ToolEditApprovalController.ts` is 365 lines.
+- **§5.** V1 to V8 are in (#14347 made `AppSignals` a process service and
+  #14313 is closed). V9 continues as surface cuts (#14371, #14384, #14388).
+- **§6.** M1 to M5: `enrichModelError` is gone, `api/background.ts` and
+  `turnInput.ts` exist, `backgroundOn` no longer checks the model name, and
+  no file outside `packages/llm` imports llm-zoo.
+- **§7.** T2 and T5: `settleAbandoned` is gone.
+
+Still open:
+
+| Slice      | State                                                                                                                                                                                                                             |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1, A2     | Not started. 167 of 273 suites import harness internals through aliases, and `harness-deep-import-baseline.json` has no `src/test-kernel` row.                                                                                    |
+| A3 to A6   | Not started. `support/testKernel.ts` does not exist, the four setup modules remain, 58 suites import `defaultSessionTestSetup` or `sessionGraphTestSetup`, and the `kernel` project runs `isolate: true`.                         |
+| R1 to R4   | R1 in part: eight top-level ratchet files remain and `host-agent-mock-baseline.json` is gone; 21 core-quality baselines stay. R2 is less urgent: `file-size.json` changed in 5 of the last 50 commits, down from 16. R3, R4 open. |
+| M6 to M8   | Not started. No `test-live/cassette.ts`.                                                                                                                                                                                          |
+| T1, T3, T4 | Open. `toolUseDispatch.ts` is 1107 lines, its stage rows still go through `log.publish`, and it keeps two type-assertion entries.                                                                                                 |
+| D2, D6, D9 | Owner decisions, still open.                                                                                                                                                                                                      |
+
+The durable-harness residue note (2026-10-03) was deleted the same day: its
+`parentCard` item landed with S2, its `descriptionBy` item was refuted (the
+field has a reader, `forkRun.ts`), its duplicated error string is gone, and
+the two interrupted-roots readers (the open-time follower on the claim, the
+notice list on the view's `interrupted` group) are the liveness row of §1.
 
 ## Order of work
 

@@ -1,5 +1,5 @@
 /**
- * The CLI's install of the process Effect runtime (PRD 7.7).
+ * The CLI's install of the process Effect runtime.
  *
  * Several CLI entries need one, and any of them may be first: `initCliPlatform`,
  * which opens the workspace state and config stores as Effect programs before
@@ -58,7 +58,7 @@ import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { texraPlugins } from '@texra/tools/registry';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
-import { workspaceTeams } from '@texra/shared/agentTeams';
+import { teamMembers } from '@texra/shared/agentTeams';
 
 import { readCliVersion } from './cliContext';
 import { setCliLogRuntime } from './logSinks';
@@ -207,10 +207,6 @@ export function installCliProcessRuntime(
   options?: CliProcessRuntimeInstall,
 ): CliProcessRuntime {
   if (installed) return installed;
-  // The global root resolves here, at install, with the pure calculator:
-  // the directory is the state store's and the global database's to create
-  // when they open below, and clone — whose storage root may be read-only,
-  // and which runs no records operation — must not create it at all.
   // The editor registry this install's plugins read, which the windows
   // served beside the process services answer for.
   const editors = makeEditorHost();
@@ -230,7 +226,7 @@ export function installCliProcessRuntime(
         new AgentDirectoryService({
           channel: 'cli',
           resourcesPath: options?.resourcesPath ?? '',
-          teams: workspaceTeams,
+          teamMembers,
           state,
         }),
     ),
@@ -242,7 +238,7 @@ export function installCliProcessRuntime(
         processLayer({
           storageRoot,
           settings: TEXRA_SETTINGS,
-          commandDirs: commandDirs,
+          commandDirs,
           plugins: texraPlugins({ name: 'cli', editors }),
           ...(options?.resourcesPath !== undefined && {
             skills: {
@@ -284,10 +280,9 @@ export function installCliProcessRuntime(
 }
 
 /**
- * Dispose this process's runtime, if one is installed: the CLI's own end of
- * the lifecycle this module owns the start of: the runtime the install above
- * built. The output plane is handed back the no-runtime state
- * after the disposal settles, so a write racing the teardown still reaches
+ * Dispose this process's runtime, if one is installed: the end of the
+ * lifecycle {@link installCliProcessRuntime} starts. The output plane is
+ * handed back the no-runtime state after the disposal finishes, so a write racing the teardown still reaches
  * the runtime that is unwinding, exactly as it did before the shutdown began.
  *
  * Registered by `initCliPlatform` as the last shutdown step, and run by the

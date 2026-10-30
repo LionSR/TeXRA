@@ -144,7 +144,7 @@ export const terminalParts = Effect.fn('llm.responses.terminalParts')(
     // An incomplete response cannot leave a dispatchable call.
     if (response.status === 'incomplete' && calls) return yield* rejected();
     // A completed response states no reason, and its snapshot may list
-    // only part of what streamed: the settled content decides.
+    // only part of what streamed: the final content decides.
     let finishReason: TurnResult['finishReason'] | null = null;
     if (response.status === 'incomplete')
       finishReason =
@@ -348,7 +348,7 @@ const FRAMING_EVENTS = new Set([
   'response.metadata',
 ]);
 
-/** One decoded Responses event: its sequence, its parts, whether it settles. */
+/** One decoded Responses event: its sequence, its parts, whether it finishes. */
 interface ResponseEventParts {
   readonly sequence: number;
   readonly parts: readonly PartEvent[];
@@ -436,7 +436,7 @@ export const responseEvents = (
     assembleTurn(
       chunks.pipe(
         Stream.mapEffect(responsesWire(-1)),
-        // The terminal snapshot settles the response; HTTP EOF is not a condition.
+        // The terminal snapshot finishes the response; HTTP EOF is not a condition.
         Stream.takeUntil((event) => event.terminal),
         Stream.map((event) => event.parts),
       ),

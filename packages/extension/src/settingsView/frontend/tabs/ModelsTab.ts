@@ -38,8 +38,6 @@ export class ModelsTab extends LitElement {
     readonly ProviderKeyStatus[] | null = null;
   @property({ attribute: false })
   modelSelectionItems: readonly ModelSelectionItem[] = [];
-  @property({ attribute: false }) helperModel = '';
-  @property({ type: Boolean }) preferShortModelNames = false;
   @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =
     null;
 
@@ -55,9 +53,7 @@ export class ModelsTab extends LitElement {
       case 'models':
         return html`<model-selection-list
           .models=${this.modelSelectionItems}
-          .helperModel=${this.helperModel}
           .providerKeyStatuses=${this.providerKeyStatuses}
-          .preferShortModelNames=${this.preferShortModelNames}
         ></model-selection-list>`;
     }
   }

@@ -1,6 +1,6 @@
 /**
  * What a surface does with one decision on a pending request: the
- * `request.decide` or `host.request` arm it names. Both surfaces that
+ * `request.decide` or `host.request` case it names. Both surfaces that
  * present requests, the progress view's request panels and the TUI's
  * approval modal, map through here, so one decision means one thing on both.
  *
@@ -49,10 +49,10 @@ export type SurfaceDecision =
   | { readonly action: ToolEditPreviewAction };
 
 /**
- * The wire arm a decision names: a request to the run's runtime, or a
+ * The wire case a decision names: a request to the run's runtime, or a
  * capability only the host can perform. A tool edit's verbs act on the
  * preview the host staged and a retry's own-key switch stores a credential,
- * so those two kinds are the only ones that name a host arm.
+ * so those two kinds are the only ones that name a host case.
  */
 type ApprovalArm =
   { readonly runtime: RuntimeRequest } | { readonly host: HostRequest };
@@ -66,7 +66,7 @@ const BYPASS_OF_KIND: Partial<
 };
 
 /**
- * The arm one decision names: a session-wide approval is the approval with
+ * The case one decision names: a session-wide approval is the approval with
  * its bypass `grant`; a tool-edit preview verb is a host capability that
  * leaves the request pending; a retry on the user's own key is the host's
  * `useOwnApiKey`, which stores the key and then decides the retry itself.

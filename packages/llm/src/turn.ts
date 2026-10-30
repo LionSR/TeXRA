@@ -105,6 +105,8 @@ export const TurnRequestSchema = Schema.Struct({
   messages: PreparedHistorySchema,
   tools: Schema.optional(ToolDefinitionsSchema),
   toolChoice: Schema.optional(ToolChoiceSchema),
+  /** This turn's output ceiling in place of the binding's; a route that
+   *  takes no output limit ignores it. */
   maxOutputTokens: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
   store: Schema.optional(Schema.Boolean),
   continuation: Schema.optional(ContinuationSchema),
@@ -144,23 +146,11 @@ const AnthropicControlsSchema = Schema.Struct({
   cache: CacheSchema,
   stopSequences: Schema.Array(Schema.String),
 });
-/** Schema check: a route without temperature support must default to null. */
-function validateTemperatureDefault(configuration: {
-  readonly supportsTemperature: boolean;
-  readonly defaults: { readonly temperature: number | null };
-}): Schema.FilterIssue[] {
-  return !configuration.supportsTemperature &&
-    configuration.defaults.temperature !== null
-    ? [
-        {
-          path: ['defaults', 'temperature'],
-          issue: 'A model without temperature support requires a null default.',
-        },
-      ]
-    : [];
-}
-
-/** A protocol binding and its defaults, as `bindModel` builds it. */
+/**
+ * A protocol binding and its defaults, as `bindModel` builds it; never
+ * decoded, so it states the shape only. A null default `temperature` or
+ * `maxOutputTokens` is a route that takes none.
+ */
 const ModelConfigurationSchema = Schema.Union([
   BindingSchema.mapFields(
     Struct.assign({
@@ -173,8 +163,6 @@ const ModelConfigurationSchema = Schema.Union([
     Struct.assign({
       protocol: Schema.Literal('openai-responses'),
       background: BackgroundCapabilitySchema,
-      supportsTemperature: Schema.Boolean,
-      supportsMaxOutputTokens: Schema.Boolean,
       supportsStorage: Schema.Boolean,
       /** The route takes input files; a document is refused locally otherwise. */
       supportsDocumentInput: Schema.Boolean,
@@ -184,11 +172,7 @@ const ModelConfigurationSchema = Schema.Union([
         Schema.Struct({ kind: Schema.Literal('optional') }),
         Schema.Struct({
           kind: Schema.Literal('required'),
-          fallback: Schema.String.check(
-            Schema.makeFilter((value) => value.trim().length > 0, {
-              message: 'Required instructions need a nonblank fallback.',
-            }),
-          ),
+          fallback: Schema.String,
         }),
       ]),
       /**
@@ -213,37 +197,6 @@ const ModelConfigurationSchema = Schema.Union([
         Struct.omit(['toolChoice', 'promptCacheKey']),
       ),
     }),
-  ).check(
-    Schema.makeFilter((configuration) => {
-      const issues = validateTemperatureDefault(configuration);
-      if (
-        !configuration.supportsMaxOutputTokens &&
-        configuration.defaults.maxOutputTokens !== null
-      ) {
-        issues.push({
-          path: ['defaults', 'maxOutputTokens'],
-          issue:
-            'A protocol without output-limit support requires a null default.',
-        });
-      }
-      if (!configuration.supportsStorage && configuration.defaults.store) {
-        issues.push({
-          path: ['defaults', 'store'],
-          issue: 'A protocol without persistent storage requires store:false.',
-        });
-      }
-      const effort = configuration.defaults.reasoning?.effort;
-      if (
-        effort != null &&
-        !configuration.allowedReasoningEfforts.includes(effort)
-      ) {
-        issues.push({
-          path: ['defaults', 'reasoning', 'effort'],
-          issue: 'The default reasoning effort must be allowed by the route.',
-        });
-      }
-      return issues;
-    }),
   ),
   BindingSchema.mapFields(
     Struct.assign({
@@ -255,10 +208,6 @@ const ModelConfigurationSchema = Schema.Union([
   ),
 ]);
 export type ModelConfiguration = typeof ModelConfigurationSchema.Type;
-/** The configuration a binding was built with; a mismatch is a programming defect. */
-export const decodeModelConfiguration = Schema.decodeUnknownSync(
-  ModelConfigurationSchema,
-);
 type ConfigurationOf<P> = Extract<ModelConfiguration, { protocol: P }>;
 export type GoogleInteractionsConfiguration =
   ConfigurationOf<'google-interactions'>;
@@ -657,7 +606,7 @@ export interface Model {
   };
 }
 
-/** A foreground turn's completed result: the fold over `streamTurn`'s events. */
+/** A foreground turn's completed result: assembled from `streamTurn`'s events. */
 export const completedTurn = Effect.fn('llm.generateTurn')(function* (
   events: Stream.Stream<TurnEvent, ModelError>,
 ) {

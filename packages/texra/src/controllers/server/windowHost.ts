@@ -130,12 +130,12 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* <
   host: WindowHost,
   focused: Stream.Stream<void> = Stream.empty,
 ): Effect.fn.Return<void, never, Scope.Scope> {
-  // Settled once the first service holds the attachment, or once it
+  // Finished once the first service holds the attachment, or once it
   // refused or ended it: the caller goes on either way, and the logs say
   // which.
   const attached = yield* Deferred.make<void>();
   const attachment = yield* FiberHandle.make<void, never>();
-  // A newer TeXRA's service that refused this window settles the wait (no
+  // A newer TeXRA's service that refused this window finishes the wait (no
   // attachment comes) and is said once per refusal and link, in the first
   // window that hears it (a reconnect resets `refusalTold`, so a later
   // refusal is said again): every call it makes says it too.

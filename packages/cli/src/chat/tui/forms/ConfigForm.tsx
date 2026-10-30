@@ -153,7 +153,7 @@ interface ConfigFormProps {
   readonly resetValue: (
     entry: SurfacedSettingEntry,
   ) => Effect.Effect<void, Error>;
-  /** The runtime the writes above settle on, from the surface that mounted
+  /** The runtime the writes above run on, from the surface that mounted
    *  this form — Ink components run no Effect of their own. */
   readonly runtime: ProcessRuntime;
   readonly formLinks?: readonly {

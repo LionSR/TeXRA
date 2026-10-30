@@ -58,8 +58,6 @@ import type { AppendedMessage } from './storedTurn';
  *  activates). `delivered` logs them once durable. */
 interface BatchRows {
   readonly rows: readonly RunHistoryDraft[];
-  /** Whether the rows carry a message a turn answers. */
-  readonly turn: boolean;
   readonly delivered: () => void;
 }
 
@@ -103,7 +101,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   run: AgentRunShape,
 ): Effect.fn.Return<FollowUps, never, Scope.Scope> {
   const { runId, session, logger } = run;
-  // Ended with the scope; the run's settleRun arm ends it first, saying
+  // Ended with the scope; the run's settleRun ends it first, saying
   // whether the run takes more input.
   const input = yield* session.followUps.open(runId);
 
@@ -176,6 +174,9 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   const batchRows = Effect.fn('FollowUps.batchRows')(function* (
     state: RunState,
     batch: FollowUpBatch,
+    /** The turn the batch's message becomes part of; null for a batch with
+     *  no message (only notices of ended children). */
+    turn: number | null,
   ): Effect.fn.Return<
     BatchRows,
     Error,
@@ -183,7 +184,6 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   > {
     const followUps = batch.kind === 'followUps' ? batch.followUps : [];
     const stale = batch.kind === 'followUps' ? batch.stale : [];
-    const turn = batch.kind === 'synthetic' || followUps.length > 0;
     const built =
       batch.kind === 'synthetic'
         ? {
@@ -250,16 +250,25 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       ...(activated !== undefined && { activated }),
     };
     return {
-      turn,
       rows: [
-        ...blobRows(runId, state, [
-          ...(instruction === undefined ? [] : [instruction]),
-        ]),
-        ...[...followUps, ...stale].map((followUp) =>
-          consumedRow(runId, followUp.followUpId),
+        ...blobRows(
+          runId,
+          state,
+          instruction === undefined ? [] : [instruction],
+        ),
+        ...(turn === null
+          ? []
+          : followUps.map((followUp) =>
+              consumedRow(runId, followUp.followUpId, { kind: 'turn', turn }),
+            )),
+        ...stale.map((followUp) =>
+          consumedRow(runId, followUp.followUpId, {
+            kind: 'dropped',
+            reason: 'stale',
+          }),
         ),
         ...hooked.rows,
-        ...(turn ? [appendRow(runId, [message], { input })] : []),
+        ...(turn === null ? [] : [appendRow(runId, [message], { input })]),
       ],
       // The user's rows are durable; the transcript shows what was asked.
       delivered: () => logFollowUps(followUps, built.kinds),
@@ -277,15 +286,21 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     FileSystem.FileSystem | ChildProcessSpawner
   > {
     const state = yield* cell.current;
-    const built = yield* batchRows(state, batch);
+    // A batch with a message opens the next turn, or joins the one running.
+    const turn = batch.kind === 'synthetic' || batch.followUps.length > 0;
+    const opens = turn && options.position !== false;
+    const built = yield* batchRows(
+      state,
+      batch,
+      turn ? state.turn + (opens ? 1 : 0) : null,
+    );
     const rows = [...(options.rows ?? []), ...built.rows];
-    const opens = built.turn && options.position !== false;
     const committed = yield* cell.append(
       opens ? [...rows, positionRow(runId, state, 'turn.ready')] : rows,
       options.alongside,
     );
     built.delivered();
-    return { state: committed, turn: built.turn };
+    return { state: committed, turn };
   });
 
   return {

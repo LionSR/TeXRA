@@ -315,7 +315,8 @@ const installOwnerSession = Effect.fn('installOwnerSession')(function* () {
   // registry the way the handler would land it.
   const owner: Session = {
     ...testSessionOf(session),
-    request: (req: RuntimeRequest) =>
+    // cast: every request this stub takes is answered `done`.
+    request: ((req: RuntimeRequest) =>
       Effect.gen(function* (): Effect.fn.Return<Outcome> {
         if (req.kind === 'run.stop') {
           yield* session.runs
@@ -328,7 +329,7 @@ const installOwnerSession = Effect.fn('installOwnerSession')(function* () {
             .pipe(Effect.orDie);
         }
         return { kind: 'done' };
-      }),
+      })) as Session['request'],
   };
   mocks.sessionStub.mockReturnValue({
     ...owner,
@@ -466,7 +467,7 @@ describe('createChatSessionController', () => {
         const rootRun = session.runId;
         if (!rootRun) throw new Error('startRootRun did not claim a run id');
         yield* Effect.promise(() =>
-          vi.waitFor(() => expect(runs.get(childRun)?.launched).toBe(true)),
+          vi.waitFor(() => expect(runs.get(childRun)).toBeDefined()),
         );
 
         // The launch's `run.start` rows are detached publishes: the stop

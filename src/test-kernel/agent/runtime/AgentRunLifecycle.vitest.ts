@@ -1,11 +1,10 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Exit, Fiber } from 'effect';
 
 import { afterEach, describe, expect, vi } from 'vitest';
-import { Runs } from '@agent/runtime/runRegistry';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
+import { endRun } from '@agent/runtime/AgentRunLifecycle';
 import { type RunReport } from '@agent/runtime/runReport';
 import type { RunLaunch } from '@agent/runtime/run/AgentRun';
 import { setLogSink } from '@logger/logSink';
@@ -14,17 +13,19 @@ import type { RunId } from '@shared/schemas';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { fakeProcessServices } from '@test/support/setupPlatform';
 
 import { eventsOfType, recordSessionEvents } from '../progressTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 /** The run's committed `run.end` rows, once the session's writes settled:
- *  what the lifecycle's one terminal writer (`finalizeRun`) said. */
+ *  what the run's one terminal writer (`finalizeRun`) said. */
 const runEnds = (session: SessionHandle, runId: RunId) =>
   Effect.andThen(
     session.log.settled,
-    session.log.rows(qualifyAggregateId('run', runId), ['run.end']),
+    Effect.map(
+      session.log.runRows(qualifyAggregateId('run', runId), 'lifecycle'),
+      (rows) => rows.lifecycles.filter((row) => row.type === 'run.end'),
+    ),
   );
 
 afterEach(() => {
@@ -74,27 +75,15 @@ const parkTerminal = (ctx: RunLaunch) =>
     return { started, release };
   });
 
-/**
- * The lifecycle program over the fake host's process services. The suite runs
- * it on the default runtime rather than a process runtime, so the services it
- * requires are provided here.
- */
-function runLifecycle(...args: Parameters<typeof runWithLifecycle<never>>) {
-  return runWithLifecycle(...args).pipe(
-    Effect.provide(fakeProcessServices()),
-    Effect.provideService(Runs, args[0].session.runs),
-  );
-}
-
-describe('runWithLifecycle', () => {
+describe('endRun', () => {
   it.effect(
     'does not let a stop abandon a run that completes without suspending',
     () =>
       Effect.gen(function* () {
         // The window a stop could once fall into: the run has returned, its live
         // interrupt context is detached, and its own finalize is parked at the
-        // persist await. The terminal is masked, so the stop its launch takes
-        // lands after the end the run reported.
+        // persist await. The terminal is uninterruptible, so the stop its
+        // launch takes lands after the end the run reported.
         const { runId, ctx } = lifecycleFixture();
         const parked = yield* parkTerminal(ctx);
 
@@ -102,14 +91,13 @@ describe('runWithLifecycle', () => {
           startAwaited(
             ctx.session.runs,
             runId,
-            runLifecycle(
+            endRun(
               { ...ctx, entry: { ...ctx.entry, parent: PARENT_RUN_ID } },
-              () =>
-                Effect.succeed({
-                  outcome: RUN_OUTCOME.COMPLETED,
-                  runId,
-                  output: { response: '', files: [] },
-                } satisfies RunReport),
+              Exit.succeed({
+                outcome: RUN_OUTCOME.COMPLETED,
+                runId,
+                output: { response: '', files: [] },
+              } satisfies RunReport),
             ),
           ),
         );
@@ -144,8 +132,9 @@ describe('runWithLifecycle', () => {
           aggregateId: qualifyAggregateId('run', runId),
         });
 
-        yield* runLifecycle(ctx, () =>
-          Effect.fail(new DOMException('Request aborted', 'AbortError')),
+        yield* endRun(
+          ctx,
+          Exit.fail(new DOMException('Request aborted', 'AbortError')),
         );
         yield* ctx.session.log.settled;
         // A run that never ran a turn writes no step of its own: `run.end` is

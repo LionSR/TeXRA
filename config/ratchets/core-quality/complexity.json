@@ -6,7 +6,7 @@
   "packages/harness/src/agent/runtime/loop/step.ts": 2,
   "packages/harness/src/agent/runtime/loop/toolGuard.ts": 1,
   "packages/harness/src/agent/runtime/loop/toolUse.ts": 2,
-  "packages/harness/src/agent/runtime/loop/toolUseDispatch.ts": 2,
+  "packages/harness/src/agent/runtime/loop/toolUseDispatch.ts": 1,
   "packages/harness/src/agent/runtime/run/AgentRun.ts": 1,
   "packages/harness/src/agent/runtime/run/pricing.ts": 1,
   "packages/harness/src/agent/runtime/RunHistory.ts": 1,

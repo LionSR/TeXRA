@@ -1,11 +1,5 @@
 import { Effect, Schema } from 'effect';
 
-import {
-  findTeamPreset,
-  planTeamRun,
-  type TeamPreset,
-  type TeamRunPlan,
-} from '@common/teams/TeamPlan';
 import type {
   AgentDirectoriesPort,
   StateStore,
@@ -26,7 +20,6 @@ import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   forgetHiddenAgent,
   readWorkspaceAgentsSelection,
-  selectedIdentifiers,
   recordCustomChoices,
   serializeWorkspaceWrite,
   unlistedCustomAgents,
@@ -51,8 +44,8 @@ export interface WorkspaceAgentsControllerDeps<
 > {
   readonly repoState: StateStore;
   readonly globalState: StateStore;
-  /** The app's team presets (`AgentDirectoriesPort.teams`). */
-  readonly teams: AgentDirectoriesPort['teams'];
+  /** The app's team membership read (`AgentDirectoriesPort.teamMembers`). */
+  readonly teamMembers: AgentDirectoriesPort['teamMembers'];
   readonly getAgents: () => Entry[];
   /**
    * Resolve one stored identifier without collapsing exact source identity.
@@ -64,26 +57,24 @@ export interface WorkspaceAgentsControllerDeps<
   readonly resolveAgent: (identifier: string) => Entry | undefined;
 }
 
+/** A stored selection read once: what the workspace effectively runs, the
+ *  identifiers it lists (absent for every agent), and the id of a team it
+ *  names that the workspace no longer has. */
+interface ResolvedSelection {
+  readonly effectiveSelection: Exclude<
+    WorkspaceAgentsSelection,
+    { readonly kind: 'inherit' }
+  >;
+  readonly identifiers?: readonly string[];
+  readonly missingTeamId?: string;
+}
+
 export class WorkspaceAgentsController<
   Entry extends WorkspaceAgentsEntry = WorkspaceAgentsEntry,
 > {
   private readonly deps: WorkspaceAgentsControllerDeps<Entry>;
   constructor(deps: WorkspaceAgentsControllerDeps<Entry>) {
     this.deps = deps;
-  }
-
-  /**
-   * Every selectable team preset, the app's for this workspace. The one list
-   * agent pickers render and every preset lookup reads — a form composing its
-   * own preset list can drift from what {@link setTeam} accepts.
-   */
-  allPresets(): Effect.Effect<readonly TeamPreset[], StateReadFailed> {
-    return this.deps.teams?.(this.deps.repoState) ?? Effect.succeed([]);
-  }
-
-  /** Resolve one stored identifier by the workspace agents' identity rule. */
-  resolveAgent(identifier: string) {
-    return this.deps.resolveAgent(identifier);
   }
 
   private getSelection() {
@@ -94,28 +85,35 @@ export class WorkspaceAgentsController<
     return Settings.state(this.deps.globalState, DEFAULT_TEAM, TeamIdSchema);
   }
 
-  private getEffectiveSelection() {
-    return Effect.gen({ self: this }, function* () {
-      return (yield* this.resolveEffectiveSelection(yield* this.getSelection()))
-        .effectiveSelection;
-    });
+  /** The members of team `teamId`, or `undefined` for a team the workspace
+   *  has none of; without the app's teams, every id is unknown. */
+  private teamMembers(
+    teamId: string,
+  ): Effect.Effect<readonly string[] | undefined, StateReadFailed> {
+    return (
+      this.deps.teamMembers?.(this.deps.repoState, teamId) ??
+      Effect.succeed(undefined)
+    );
+  }
+
+  private resolveStoredSelection() {
+    return Effect.flatMap(this.getSelection(), (selection) =>
+      this.resolveSelection(selection),
+    );
   }
 
   /** The team this workspace effectively runs, or null when it runs no team. */
   getActiveTeamId() {
-    return Effect.gen({ self: this }, function* () {
-      const effective = yield* this.getEffectiveSelection();
-      return effective.kind === 'team' ? effective.teamId : null;
-    });
+    return Effect.map(
+      this.resolveStoredSelection(),
+      ({ effectiveSelection }) =>
+        effectiveSelection.kind === 'team' ? effectiveSelection.teamId : null,
+    );
   }
 
   getVisibleAgents() {
     return Effect.gen({ self: this }, function* () {
-      const effective = yield* this.getEffectiveSelection();
-      const identifiers = selectedIdentifiers(
-        effective,
-        yield* this.allPresets(),
-      );
+      const { identifiers } = yield* this.resolveStoredSelection();
       if (identifiers === undefined) {
         return yield* visibleAgents(this.deps.repoState, this.deps.getAgents());
       }
@@ -133,20 +131,16 @@ export class WorkspaceAgentsController<
 
   /** Return the effective stored identifiers, including unavailable members. */
   getEnabledAgentKeys() {
-    return Effect.gen({ self: this }, function* () {
-      return yield* this.selectionKeys(yield* this.getEffectiveSelection());
-    });
+    return Effect.flatMap(this.resolveStoredSelection(), (resolved) =>
+      this.selectionKeys(resolved),
+    );
   }
 
   snapshot() {
     return Effect.gen({ self: this }, function* () {
       const selection = yield* this.getSelection();
-      const { effectiveSelection, missingTeamId } =
-        yield* this.resolveEffectiveSelection(selection);
-      const identifiers = selectedIdentifiers(
-        effectiveSelection,
-        yield* this.allPresets(),
-      );
+      const { effectiveSelection, identifiers, missingTeamId } =
+        yield* this.resolveSelection(selection);
       const unresolvedNames =
         identifiers === undefined
           ? []
@@ -161,19 +155,16 @@ export class WorkspaceAgentsController<
     });
   }
 
-  private selectionKeys(
-    selection: Exclude<WorkspaceAgentsSelection, { readonly kind: 'inherit' }>,
-  ) {
+  private selectionKeys({
+    effectiveSelection,
+    identifiers,
+  }: ResolvedSelection) {
     return Effect.gen({ self: this }, function* () {
-      const identifiers = selectedIdentifiers(
-        selection,
-        yield* this.allPresets(),
-      );
       if (identifiers === undefined) return undefined;
       // A custom selection already stores keys, so only an `all`/team selection
       // has names left to resolve; the kind is the same for every identifier.
       const keys =
-        selection.kind === 'custom'
+        effectiveSelection.kind === 'custom'
           ? [...new Set(identifiers)]
           : this.resolveIdentifiers(identifiers).keys;
       const unlisted = yield* unlistedCustomAgents(
@@ -210,34 +201,34 @@ export class WorkspaceAgentsController<
   }
 
   /**
-   * Resolve a selection once, answering both questions the snapshot asks of
-   * it: what the workspace effectively runs, and — when the selection names a
-   * team preset that no longer exists — which team id went missing.
+   * Resolve a selection once (see {@link ResolvedSelection}). A team is read
+   * through the app's membership port: one the workspace no longer has reads
+   * as every agent, with its id reported.
    */
-  private resolveEffectiveSelection(selection: WorkspaceAgentsSelection) {
+  private resolveSelection(
+    selection: WorkspaceAgentsSelection,
+  ): Effect.Effect<ResolvedSelection, StateReadFailed> {
     return Effect.gen({ self: this }, function* () {
+      if (selection.kind === 'all') return { effectiveSelection: selection };
+      if (selection.kind === 'custom') {
+        return {
+          effectiveSelection: selection,
+          identifiers: selection.agentKeys,
+        };
+      }
       // The team a selection names, following inherit to the default.
-      let teamId: string | undefined;
-      if (selection.kind === 'inherit') teamId = yield* this.getDefaultTeamId();
-      else if (selection.kind === 'team') teamId = selection.teamId;
-      if (
-        teamId &&
-        !(yield* this.allPresets()).some((preset) => preset.id === teamId)
-      ) {
-        return {
-          effectiveSelection: { kind: 'all' as const },
-          missingTeamId: teamId,
-        };
-      }
-      if (selection.kind === 'inherit') {
-        return {
-          effectiveSelection: teamId
-            ? { kind: 'team' as const, teamId }
-            : { kind: 'all' as const },
-          missingTeamId: undefined,
-        };
-      }
-      return { effectiveSelection: selection, missingTeamId: undefined };
+      const teamId =
+        selection.kind === 'team'
+          ? selection.teamId
+          : yield* this.getDefaultTeamId();
+      if (teamId === undefined) return { effectiveSelection: { kind: 'all' } };
+      const members = yield* this.teamMembers(teamId);
+      return members === undefined
+        ? { effectiveSelection: { kind: 'all' }, missingTeamId: teamId }
+        : {
+            effectiveSelection: { kind: 'team', teamId },
+            identifiers: members,
+          };
     });
   }
 
@@ -259,39 +250,27 @@ export class WorkspaceAgentsController<
     );
   }
 
-  /** {@link applyTeam} refusing an unknown team; matches id, name or slug. */
+  /**
+   * Store that this workspace runs team `teamId`. Only the reference is
+   * stored and the team's members re-resolve on every read, so a member
+   * missing today activates once it appears. A team the workspace has none of
+   * is refused.
+   */
   setTeam(teamId: string) {
-    return this.applyTeam(teamId).pipe(
-      Effect.filterOrFail(
-        (result) => result.status === 'applied',
-        () =>
-          new InvalidAgentTeamError({
-            message: `Unknown agent team: ${teamId}`,
-          }),
-      ),
-      Effect.asVoid,
+    return Effect.andThen(
+      this.requireTeam(teamId),
+      this.setSelection({ kind: 'team', teamId }),
     );
   }
 
-  /**
-   * Store the team `presetId` names and report how its members resolve now.
-   * Only the team reference is stored and `preset.agents` re-resolves on read,
-   * so a member missing today activates once it appears; `resolution` is
-   * evidence for the caller's message. A launch picks the team's root, so
-   * none is planned here.
-   */
-  applyTeam(presetId: string) {
-    return Effect.gen({ self: this }, function* () {
-      const preset = findTeamPreset(yield* this.allPresets(), presetId);
-      if (!preset) return { status: 'unknown' as const };
-      yield* this.setSelection({ kind: 'team', teamId: preset.id });
-      const resolution: Pick<TeamRunPlan, 'agentKeys' | 'missingAgents'> =
-        planTeamRun(preset, {
-          resolveAgent: (identifier) => this.deps.resolveAgent(identifier),
-          rootAgentNames: [],
-        });
-      return { status: 'applied' as const, preset, resolution };
-    });
+  /** Fails for a team the workspace has none of. */
+  private requireTeam(teamId: string) {
+    return Effect.filterOrFail(
+      this.teamMembers(teamId),
+      (members) => members !== undefined,
+      () =>
+        new InvalidAgentTeamError({ message: `Unknown agent team: ${teamId}` }),
+    );
   }
 
   /** Exactly the agents `agentKeys` names, in that order. */
@@ -370,6 +349,10 @@ export class WorkspaceAgentsController<
     );
   }
 
+  /**
+   * Remove team `teamId` with `removePreset`, in the selection's write lane:
+   * a workspace running it keeps its current members as a custom selection.
+   */
   removeTeamPreset(
     teamId: string,
     removePreset: () => Effect.Effect<void, StateWriteFailed | StateReadFailed>,
@@ -378,31 +361,28 @@ export class WorkspaceAgentsController<
       this.deps.repoState,
       Effect.gen({ self: this }, function* () {
         const selection = yield* this.getSelection();
-        const clearSelection =
-          selection.kind === 'team' && selection.teamId === teamId
-            ? Effect.flatMap(this.selectionKeys(selection), (keys) =>
-                this.writeSelection(
-                  keys === undefined
-                    ? { kind: 'all' }
-                    : { kind: 'custom', agentKeys: keys },
-                ),
-              )
-            : Effect.void;
-        return yield* Effect.andThen(clearSelection, removePreset());
+        if (selection.kind === 'team' && selection.teamId === teamId) {
+          const keys = yield* this.selectionKeys(
+            yield* this.resolveSelection(selection),
+          );
+          yield* this.writeSelection(
+            keys === undefined
+              ? { kind: 'all' }
+              : { kind: 'custom', agentKeys: keys },
+          );
+        }
+        return yield* removePreset();
       }),
     );
   }
 
+  /** The team an inheriting workspace runs; a team the workspace has none of
+   *  is refused. The app decides which teams may be a default. */
   setDefaultTeam(teamId: string) {
-    return Effect.gen({ self: this }, function* () {
-      const presets = yield* this.allPresets();
-      if (!presets.some((p) => p.id === teamId && p.source === 'built-in')) {
-        return yield* new InvalidAgentTeamError({
-          message: `Only a built-in team can be the user default: ${teamId}`,
-        });
-      }
-      yield* this.deps.globalState.update(DEFAULT_TEAM, teamId);
-    });
+    return Effect.andThen(
+      this.requireTeam(teamId),
+      this.deps.globalState.update(DEFAULT_TEAM, teamId),
+    );
   }
 
   clearDefaultTeam(): Effect.Effect<void, StateWriteFailed> {

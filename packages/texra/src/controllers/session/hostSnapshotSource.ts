@@ -283,7 +283,7 @@ export function createHostSnapshotSource(
    *  refresh asked for is the last to publish. */
   const refreshLanes = new Map<'refresh', PerKeyLane>();
 
-  /** Each producer settles on its own: one that fails is reported and keeps
+  /** Each producer finishes on its own: one that fails is reported and keeps
    *  its last value, and the snapshot still publishes what the others read,
    *  so a single unavailable source never leaves the shell blank. */
   const guarded = <R>(

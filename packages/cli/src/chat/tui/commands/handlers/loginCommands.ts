@@ -97,7 +97,7 @@ export const loginFromChat = Effect.fn('loginFromChat')(function* (
 /**
  * The sign-out lines for one sign-out target. Every leg reports its failure
  * as a line instead of throwing, so one failed provider never hides the
- * others' outcomes — the fold happens where each call settles, on the typed
+ * others' outcomes — each failure becomes a line where its call finishes, on the typed
  * channel.
  */
 const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (

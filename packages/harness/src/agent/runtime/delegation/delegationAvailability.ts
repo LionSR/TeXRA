@@ -24,11 +24,11 @@ import { withLogChannel } from '@logger/effectLog';
 import { readModelOptions, type ModelOption } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import {
+  AGENT_TOOL_NAME,
   MODEL_AVAILABILITY_STATUS,
   type AgentDelegationScope,
   type DelegationTargets,
 } from '@shared/schemas';
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 import { Settings } from '@shared/config/settings';

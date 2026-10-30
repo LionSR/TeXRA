@@ -124,6 +124,10 @@ export interface HostRunActionPorts {
   >;
   /** Where a failure before a run opens is presented. */
   readonly present: Pick<SessionHostInteractions, 'emit'>;
+  /** Bring the host's progress surface into view for a run this window just
+   *  started, or name the run in a notice when it cannot. Absent on a host
+   *  whose surface is always on screen. */
+  readonly revealProgress?: (config: AgentConfig) => Effect.Effect<void, Error>;
   /** Where this window's run actions land: its own session, or the
    *  background service's. Run state is read from its view. */
   readonly session: Session;
@@ -284,6 +288,20 @@ export const createHostRunActions = Effect.fn(
     session.start({ config, ...options, interactive: true }).pipe(
       // A failure before the run opens has no row to show it.
       Effect.tapError((error) => presentRunFailure(ports.present, error)),
+      // The reveal, and the toast it falls back to, outlive the launch
+      // request: nothing waits on a person dismissing a notice, and a failed
+      // reveal is a diagnostic for a run already started.
+      Effect.tap(() =>
+        Effect.forkIn(
+          (ports.revealProgress?.(config) ?? Effect.void).pipe(
+            Effect.ignore({
+              log: 'Warn',
+              message: 'Revealing the progress view',
+            }),
+          ),
+          ports.scope,
+        ),
+      ),
       Effect.tap(ports.launched),
       // Presentation reacts to the outcome the run committed; it never
       // runs inside the run, so it cannot change that outcome.
@@ -446,7 +464,6 @@ export const createHostRunActions = Effect.fn(
         .request({ kind: 'followUp.send', runId, text })
         .pipe(
           Effect.flatMap((outcome) => {
-            if (outcome.kind !== 'followUp') return Effect.void;
             const shown = presentFollowUpResult(outcome);
             return shown.severity === 'none'
               ? Effect.void
@@ -573,10 +590,6 @@ export const createHostRunActions = Effect.fn(
                 }),
               ),
             ),
-          );
-        if (outcome.kind !== 'runFiles')
-          return yield* Effect.die(
-            new Error(`run.files answered ${outcome.kind}`),
           );
         const { result } = outcome;
         return {

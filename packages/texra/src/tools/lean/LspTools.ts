@@ -377,7 +377,7 @@ function executeLeanInspectTool(
     });
 
   // Each dispatch composes one program, run once below: a failed
-  // language-server request settles as this run's Exit and becomes the
+  // language-server request finishes as this run's Exit and becomes the
   // ToolError carrying the summary that names which inspection failed.
   let program: Effect.Effect<
     ToolResult,

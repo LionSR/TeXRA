@@ -24,31 +24,9 @@
 
 import { Schema } from 'effect';
 
-import {
-  GlobalStateKey,
-  WorkspaceStateKey,
-  AGENT_SKILLS_CONFIG_KEY,
-  BASH_APPROVAL_CONFIG_KEY,
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
-  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-  GOAL_MAX_COST_SETTING,
-  RESUME_ON_OPEN_SETTING,
-  MODEL_COMPACTION_THRESHOLD_SETTING,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
-  type SkillDisplayIssue,
-  type SkillDisplayItem,
-  type AgentScanIssue,
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
-} from '@texra-ai/harness/schemas';
 import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionAuth';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
-import {
-  TELEMETRY_ENABLED_KEY,
-  TEXRA_SETTINGS,
-  TexraStateKey,
-} from '@texra/shared/settingsView/texraSettings';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type AgentSelectionItem,
@@ -56,7 +34,6 @@ import {
   type PRSubscriptionEntry,
   type SettingsTeamPreset,
   type SettingsViewOutboundMessage,
-  type SettingsViewSnapshot,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import type { ProviderKeyStatus } from '@texra/shared/settingsView/profileViewMessages';
 import type {
@@ -64,9 +41,13 @@ import type {
   SettingsTabPanelName,
 } from '@texra/shared/settingsView/settingsTarget';
 import { createTrackedSignalRegistry } from '@texra/shared/signals';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import type {
+  AgentScanIssue,
+  MemoryViewItem,
+  SkillDisplayIssue,
+  SkillDisplayItem,
+} from '@texra-ai/harness/schemas';
 import type { Signal } from '@lit-labs/signals';
-import type { MemoryViewItem } from '@texra-ai/harness/schemas';
 
 // ---------------------------------------------------------------------------
 // Reset registry — populated by `trackedSignal` as each signal below is
@@ -88,12 +69,12 @@ const CATALOG_SIGNALS = new Map<string, Signal.State<unknown>>();
  * signal on every later call.
  *
  * The row already owns the default (decoding `undefined` yields its
- * `withDecodingDefault` value), so a declaration here restates neither the
- * default nor the wire field name; it names the key and the value type the
- * tabs render. Being keyed is what lets {@link applySettingsSnapshot} apply a
- * whole catalog-derived snapshot without a per-setting `.set()` line in a
- * slice, and lets a tab render rows it only knows by key (a tool card's
- * inline settings).
+ * `withDecodingDefault` value), so a caller restates neither the default nor
+ * the wire field name; it names the key and the value type it renders. Being
+ * keyed is what lets {@link applySettingsSnapshot} apply a whole
+ * catalog-derived snapshot without a per-setting `.set()` line, and lets the
+ * row renderers (`stateSettingRows.ts`) and tabs read a setting by key alone,
+ * with no per-setting declaration or property passed down to them.
  *
  * Throws on a key with no settings-view catalog row: a signal that no snapshot
  * can ever reach would silently render its default forever.
@@ -163,9 +144,6 @@ export function selectSettingsPage(
 // Memory state
 // ---------------------------------------------------------------------------
 export const memoryItems = trackedSignal<readonly MemoryViewItem[]>(() => []);
-export const memoryEnabled = settingSignal<boolean>(
-  GlobalStateKey.MEMORY_ENABLED,
-);
 
 // ---------------------------------------------------------------------------
 // Profile state
@@ -180,10 +158,6 @@ export const providerKeyStatuses = trackedSignal<
 // ---------------------------------------------------------------------------
 export const modelSelectionItems = trackedSignal<readonly ModelSelectionItem[]>(
   () => [],
-);
-export const helperModel = settingSignal<string>(GlobalStateKey.HELPER_MODEL);
-export const preferShortModelNames = settingSignal<boolean>(
-  GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
 );
 
 // ---------------------------------------------------------------------------
@@ -208,69 +182,24 @@ export const orchestratorAgents = trackedSignal<readonly string[]>(() => []);
 /** Team the workspace agents resolve to; null when they run no team. */
 export const activePresetId = trackedSignal<string | null>(() => null);
 
-// ---------------------------------------------------------------------------
-// Agents page settings state
-// ---------------------------------------------------------------------------
-export const compactionThresholdPercent = settingSignal<number>(
-  MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
-);
-export const chatgptCodexContextWindow = settingSignal<number | null>(
-  CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.configKey,
-);
-export const modelRetryMaxAttempts = settingSignal<number>(
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
-);
-export const allowOrchestratorKill = settingSignal<boolean>(
-  GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-);
-export const detachSubagentsOnStop = settingSignal<boolean>(
-  GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-);
-export const childRunConcurrencyBudget = settingSignal<number>(
-  CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-);
-export const resumeOnOpen = settingSignal<string>(
-  RESUME_ON_OPEN_SETTING.configKey,
-);
 /**
- * Each catalog snapshot's acknowledgement generation, bumped on every
- * snapshot message of that kind, including a rebroadcast that carries the
- * same values after a rejected or failed write, so a number row riding it
- * repaints the acknowledged value over the edit (`ackGeneration`).
+ * Each catalog snapshot's acknowledgement generation, keyed by snapshot name
+ * and bumped on every snapshot message of that kind, including a rebroadcast
+ * that carries the same values after a rejected or failed write, so a number
+ * row on that snapshot repaints the acknowledged value over the edit
+ * (`ackGeneration`).
  */
 export const settingsSnapshotRevisions = trackedSignal<
-  Readonly<Partial<Record<SettingsViewSnapshot, number>>>
+  Readonly<Partial<Record<string, number>>>
 >(() => ({}));
 
 // ---------------------------------------------------------------------------
-// Approval and tool-safety settings state
+// Skills state
 // ---------------------------------------------------------------------------
-export const bashApprovalEnabled = settingSignal<boolean>(
-  BASH_APPROVAL_CONFIG_KEY,
-);
-export const editApprovalEnabled = settingSignal<boolean>(
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
-);
-export const approvalPolicy = settingSignal<ApprovalPolicy>(
-  APPROVAL_POLICY_CONFIG_KEY,
-);
-export const goalMaxCostUsd = settingSignal<number>(
-  GOAL_MAX_COST_SETTING.configKey,
-);
-export const toolPathProtectionEnabled = settingSignal<boolean>(
-  WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-);
-export const agentSkillsEnabled = settingSignal<boolean>(
-  AGENT_SKILLS_CONFIG_KEY,
-);
-export const disabledSkillSources = settingSignal<string[]>(
-  WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-);
 export const skillsList = trackedSignal<readonly SkillDisplayItem[]>(() => []);
 export const skillLoadIssues = trackedSignal<readonly SkillDisplayIssue[]>(
   () => [],
 );
-export const telemetryEnabled = settingSignal<boolean>(TELEMETRY_ENABLED_KEY);
 
 // ---------------------------------------------------------------------------
 // Plugins page state: null until the first rows arrive
@@ -284,18 +213,6 @@ export const pluginsPage = trackedSignal<PluginsPageData | null>(() => null);
 // ---------------------------------------------------------------------------
 // Git author settings state
 // ---------------------------------------------------------------------------
-export const gitMarkCommits = settingSignal<boolean>(
-  WorkspaceStateKey.GIT_MARK_COMMITS,
-);
-export const gitAuthorName = settingSignal<string>(
-  WorkspaceStateKey.GIT_AUTHOR_NAME,
-);
-export const gitAuthorEmail = settingSignal<string>(
-  WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-);
-export const gitWorktreeSupport = settingSignal<boolean>(
-  WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-);
 export const gitSettingsLoaded = trackedSignal(() => false);
 export const githubTokenStatus = trackedSignal<'secret' | 'env' | 'none'>(
   () => 'none',
@@ -321,30 +238,6 @@ export const latexSettingsStatus = trackedSignal(() => ({
   ...DEFAULT_LATEX_SETTINGS_STATUS,
 }));
 export const latexSettingsLoaded = trackedSignal(() => false);
-export const workflowAutoCompile = settingSignal<boolean>(
-  DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
-);
-export const workflowAutoOpenPdf = settingSignal<boolean>(
-  DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
-);
-export const workflowRejectOnCompileFailure = settingSignal<boolean>(
-  DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-);
-export const latexdiffBetweenRounds = settingSignal<boolean>(
-  DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-);
-export const latexdiffChangesOnly = settingSignal<boolean>(
-  DocumentsStateKey.LATEXDIFF_CHANGES_ONLY,
-);
-export const latexdiffMathMarkup = settingSignal<string>(
-  DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
-);
-export const latexFormatter = settingSignal<string>(
-  TexraStateKey.LATEX_FORMATTER,
-);
-export const inlineCriticismEnabled = settingSignal<boolean>(
-  TexraStateKey.INLINE_CRITICISM_ENABLED,
-);
 
 // ---------------------------------------------------------------------------
 // Reset — module-level state is shared across remounts in the same JS context

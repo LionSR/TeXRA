@@ -100,7 +100,7 @@ const program = Effect.gen(function* () {
     runId: run.runId,
     text: 'Tag release v1.',
   });
-  console.log('[04] followUp outcome:', followUpOutcome.kind);
+  console.log('[04] followUp status:', followUpOutcome.status);
 
   // Wait for the second cycle to consume the follow-up and return to waiting
   yield* Stream.runHead(

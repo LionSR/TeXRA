@@ -43,7 +43,7 @@ interface Take {
   readonly descriptor: Recording;
   /** Start's answer: the transcription, or why the take ended without one. */
   readonly result: Deferred.Deferred<HostOutcome, Rejected | Cancelled>;
-  /** Settled by the first Stop or Cancel. The take fiber waits on it once
+  /** Finished by the first Stop or Cancel. The take fiber waits on it once
    *  the microphone is up, then reads `cancelled` to decide what to do. */
   readonly settled: Deferred.Deferred<void>;
   stopping: boolean;
@@ -79,7 +79,7 @@ export class HostDraftRequests {
     );
   }
 
-  /** Every open paper observes the same recorder and its destination. */
+  /** Every open project observes the same recorder and its destination. */
   subscribe(listener: (recording: Recording | null) => void): () => void {
     this.listeners.add(listener);
     listener(this.recording());
@@ -184,7 +184,7 @@ export class HostDraftRequests {
   });
 
   /** The take from microphone startup to its answer. Completion belongs to
-   *  Start, even when another paper or view stops the recorder. */
+   *  Start, even when another project or view stops the recorder. */
   private readonly runTake = Effect.fn('HostDraftRequests.take')(function* (
     this: HostDraftRequests,
     take: Take,

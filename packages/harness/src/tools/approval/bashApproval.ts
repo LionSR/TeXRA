@@ -3,11 +3,11 @@ import { Effect } from 'effect';
 import { requireRun, sessionOf } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
-  type RequestDecision,
+  type DecisionOf,
   type RefusalDecision,
   type ToolResult,
 } from '@shared/schemas';
-import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
+import { refusalCopy } from '@shared/session/approvalDecision';
 import { errorResult } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
 
@@ -27,10 +27,6 @@ export interface BashApprovalRequest {
   readonly grant: 'bash' | 'call' | null;
 }
 
-/** What a bash approval settles to: the approval, or one of the refusals. */
-export type BashDecision =
-  Extract<RequestDecision, { action: 'approve' }> | RefusalDecision;
-
 /**
  * Ask the person about a call that `sessionPermission` (`loop/toolGuard.ts`)
  * said to ask about: a `request.opened` on the run, serialized behind the
@@ -38,7 +34,7 @@ export type BashDecision =
  */
 export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   request: BashApprovalRequest,
-): Effect.fn.Return<BashDecision, Error, ToolContext> {
+): Effect.fn.Return<DecisionOf<'bash'>, Error, ToolContext> {
   const { run, requests } = yield* requireRun('A bash approval');
   const { runId } = run;
   const session = sessionOf(run);
@@ -52,27 +48,23 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   // The payload every host lists: a blank directory is dropped, so no
   // renderer decides what an empty `cwd` means.
   const cwd = request.cwd?.trim();
-  const prompt = requests
-    .open({
-      kind: 'bash',
-      data: {
-        requestId: requests.nextId('bash'),
-        command: request.command,
-        ...(cwd && { cwd }),
-        allowBypass: request.grant === 'bash' && !granted(),
-        runId,
-      },
-    })
-    .pipe(
-      Effect.map((decided): BashDecision =>
-        decided.action === 'approve' ? decided : refusalOf('bash', decided),
-      ),
-    );
+  const prompt = requests.open({
+    kind: 'bash',
+    data: {
+      requestId: requests.nextId('bash'),
+      command: request.command,
+      ...(cwd && { cwd }),
+      allowBypass: request.grant === 'bash' && !granted(),
+      runId,
+    },
+  });
   // The call's own grant is read again when it reaches the head of the
   // run's lane, so a command grant turned on while another tool's call
   // waited does not answer it.
   const atDispatch = Effect.suspend(() =>
-    granted() ? Effect.succeed<BashDecision>({ action: 'approve' }) : prompt,
+    granted()
+      ? Effect.succeed<DecisionOf<'bash'>>({ action: 'approve' })
+      : prompt,
   );
   return yield* session.approvals.enqueue('bash', runId, {
     prompt: atDispatch,

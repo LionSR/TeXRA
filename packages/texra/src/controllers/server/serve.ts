@@ -96,12 +96,12 @@ interface ServeOptions {
   readonly idleAfter: Duration.Input;
   /** The host's own stop (a signal): ends the run as a `stop` would. */
   readonly shutdown: Deferred.Deferred<void>;
-  /** Stop and settle every task, run once the service is ending and while
+  /** Stop and finish every task, run once the service is ending and while
    *  its clients are still connected, so they see each task's last rows. */
   readonly settle: Effect.Effect<void>;
 }
 
-/** How long the watch streams get to carry the settled tasks' last rows
+/** How long the watch streams get to carry the finished tasks' last rows
  *  (their framers cut every 16 ms) before the socket closes. */
 const FRAME_FLUSH = '250 millis';
 

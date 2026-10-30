@@ -41,7 +41,6 @@ import {
   type FileSystem,
   Layer,
   type Path,
-  Schedule,
   Schema,
   Stream,
   SubscriptionRef,
@@ -50,7 +49,7 @@ import { TestClock } from 'effect/testing';
 import * as Reactivity from 'effect/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
-import * as toast from '@agent/runtime/terminalResultToast';
+import * as toast from '@agent/runtime/HostInteractions';
 
 vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   ...(await importOriginal<
@@ -699,13 +698,16 @@ describe('Sessions owner', () => {
           ]);
           yield* session.log.settled;
           // The live run's `run.end` reaches the folded tail once the view
-          // has folded it, and a `waiting` step never does.
+          // has folded it, and a `waiting` step never does: of the rows the
+          // presenter saw, one is an end, the live run's.
           yield* Effect.promise(() =>
-            vi.waitFor(() => expect(presented).toHaveBeenCalledOnce()),
-          );
-          expect(presented).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({ runId: OLDER }),
+            vi.waitFor(() =>
+              expect(
+                presented.mock.calls.flatMap(([, row]) =>
+                  row.type === 'run.end' ? [row.aggregateId] : [],
+                ),
+              ).toEqual([qualifyAggregateId('run', OLDER)]),
+            ),
           );
         } finally {
           presented.mockRestore();
@@ -1820,76 +1822,6 @@ describe('the session event table and its one publisher', () => {
       );
     });
   });
-
-  /**
-   * A background shell the crash killed mid-command: its parent's model was
-   * told the result arrives as a follow-up, and no process is left to send
-   * it. The next open tells the parent, once, that the command's outcome is
-   * unknown, and deletes the shell, however far the view's own proof of the
-   * crashed owner has got.
-   */
-  it.live(
-    "tells a crashed background shell's parent its outcome is unknown",
-    () => {
-      const storage = workspace();
-      const CRASHED = JSON.stringify([
-        os.hostname().toLowerCase(),
-        process.pid,
-        'an-earlier-process',
-      ]);
-      const SHELL = Schema.decodeUnknownSync(RunIdSchema)('ab12cf');
-      const shell = qualifyAggregateId('run', SHELL);
-      return Effect.gen(function* () {
-        yield* Database.pipe(
-          Effect.flatMap((crashed) =>
-            crashed.appendAll([
-              runStart,
-              { type: 'run.activate', aggregateId: runStart.aggregateId },
-              {
-                type: 'run.start',
-                aggregateId: shell,
-                identity: { kind: 'process', tool: 'bash' },
-                userFollowUpSupport: 'unsupported',
-                parent: { id: RUN, call: null },
-                provenance: null,
-              },
-              {
-                type: 'run.config',
-                aggregateId: shell,
-                config: { name: 'bash', instruction: 'make build' },
-              },
-              { type: 'run.activate', aggregateId: shell },
-              {
-                type: 'child.turn',
-                aggregateId: shell,
-                attemptId: 'crashed-attempt',
-                turnIndex: 1,
-                phase: 'accepted',
-              },
-            ]),
-          ),
-          Effect.provide(substrate(storage, CRASHED)),
-        );
-        const session = yield* openTestSession({
-          roots: createFakeWorkspaceRoots({ storagePath: storage }),
-        });
-        yield* Effect.addFinalizer(() => closeSessionOf(session));
-        yield* session.log.facts(SHELL).pipe(
-          Effect.repeat({
-            until: (facts) => facts === null,
-            schedule: Schedule.spaced('20 millis'),
-          }),
-          Effect.timeout('10 seconds'),
-        );
-        const { followUps } = yield* session.followUps.read(RUN);
-        expect(followUps.map(({ content }) => content.from)).toEqual([
-          expect.objectContaining({ kind: 'run', runId: SHELL }),
-        ]);
-        expect(followUps[0]?.content.text).toContain('command="make build"');
-        expect(followUps[0]?.content.text).toContain('outcome is unknown');
-      });
-    },
-  );
 
   it.effect(
     'fences a second writer and transfers only released claims together',

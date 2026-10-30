@@ -19,7 +19,6 @@ import {
 
 // Local imports - canonical model contract
 import {
-  decodeModelConfiguration,
   FILE_UPLOAD_LIFETIME_SECONDS,
   type AnthropicMessagesConfiguration,
   type Model,
@@ -391,7 +390,7 @@ function blockPart(
 /**
  * One response's Messages events as parts. The wire opens one block at a
  * time, in order; message_delta carries the stop and cumulative usage, and
- * message_stop settles them.
+ * message_stop finishes them.
  */
 function anthropicWire() {
   let started = false;
@@ -575,15 +574,13 @@ function anthropicWire() {
 
 /** Stable Messages protocol, without a transcript owner, uploads or SDK emitters. */
 export function anthropicMessagesModel(
-  configuration: AnthropicMessagesConfiguration,
+  config: AnthropicMessagesConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
-  const config = decodeModelConfiguration(configuration);
-  if (config.protocol !== 'anthropic-messages' || !transport.apiKey) {
+  if (!transport.apiKey) {
     throw new ModelError({
       kind: 'invalid-request',
-      message:
-        'Anthropic Messages requires its selected configuration and an explicit API key.',
+      message: 'Anthropic Messages requires an explicit API key.',
     });
   }
   // The SDK otherwise lets these ambient headers override selected credentials and protocol.
@@ -670,7 +667,7 @@ export function anthropicMessagesModel(
         return assembleTurn(
           chunks.pipe(
             Stream.mapEffect(wire.parts),
-            // message_stop settles the response; HTTP EOF is not an additional condition.
+            // message_stop finishes the response; HTTP EOF is not an additional condition.
             Stream.takeUntil(() => wire.stopped()),
           ),
           { origin, provider: 'Anthropic' },

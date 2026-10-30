@@ -244,7 +244,8 @@ type ChildEnd =
 /**
  * One child loop's state, passed through the functions below: its setup,
  * its turn, and `end`, its last turn's result. A stop is its run fiber's
- * interruption, its reason the registry activation's.
+ * interruption, its reason the registry activation's. The activation mints
+ * its turn keys (`attemptId`, `turnIndex`), which the `child.turn` rows record.
  */
 class ChildLoop<TTurn, R> {
   readonly attemptId = randomUUID();
@@ -389,7 +390,7 @@ const progressNotify =
   };
 
 /**
- * Accept the next turn: its `child.turn accepted` row (#9531), the fact the
+ * Accept the next turn: its `child.turn accepted` row, the fact the
  * report/result slots are attributed from, with the `resumed` row that ends
  * the wait. Not best-effort: a refused append is the turn's failure, and
  * `not-owner` stops the loop rather than run under a lost claim.
@@ -784,7 +785,7 @@ const endChildLoop = <TTurn, R>(
           error instanceof DatabaseNotOwner ||
           (error instanceof RunHistoryRefused && error.reason === 'not-owner');
       }
-      // Debug-only driver diagnostic (#9531): how the loop ended.
+      // Debug-only driver diagnostic: how the loop ended.
       yield* loop.log('debug', 'childRunLoop loop.terminated', {
         runId: loop.params.runId,
         stopped,

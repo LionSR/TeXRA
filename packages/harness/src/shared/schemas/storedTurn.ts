@@ -16,7 +16,7 @@
 import { Schema } from 'effect';
 
 import { JsonValueSchema } from './jsonValue';
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 
 /** Provider bytes, kept verbatim and never interpreted by storage. */
 const ProviderEvidenceSchema = Schema.Struct({

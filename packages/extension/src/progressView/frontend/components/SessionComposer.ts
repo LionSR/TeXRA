@@ -1,5 +1,5 @@
 /**
- * The composer, one component in two states (PRD 12.1). Expanded, it is the
+ * The composer, one component in two states. Expanded, it is the
  * new-task launcher: the instruction, chips for agent and model (and the
  * working directory, only with two or more roots), and the polish,
  * dictation, attach, and send controls. The agent menu lists each agent

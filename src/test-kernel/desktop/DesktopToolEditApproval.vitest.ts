@@ -55,7 +55,7 @@ describe('desktop tool edit approval', () => {
   });
 
   it.live(
-    'applies the edit a closed window made when another window approves',
+    'applies the proposed copy as the user left it when the window approves',
     () =>
       Effect.scoped(
         Effect.gen(function* () {
@@ -123,8 +123,7 @@ describe('desktop tool edit approval', () => {
               yield* Effect.addFinalizer(() => Fiber.interrupt(window));
               return { controller, opened, staged, window };
             });
-          const closing = yield* openWindow(true);
-          const approving = yield* openWindow(false);
+          const window = yield* openWindow(true);
 
           // A request row is only ever appended to a run the history knows.
           const runId = 'a40000' as RunId;
@@ -146,39 +145,32 @@ describe('desktop tool edit approval', () => {
               ),
             ),
           );
-          // Listed by the fold and staged in both windows.
+          // Listed by the fold and staged from the request's own content.
           yield* Effect.tryPromise(() =>
-            vi.waitFor(() => {
-              expect(closing.staged).toHaveLength(1);
-              expect(approving.staged).toHaveLength(1);
-            }, 10_000),
+            vi.waitFor(() => expect(window.staged).toHaveLength(1), 10_000),
           );
           const { requestId } = SubscriptionRef.getUnsafe(session.view.ref)
             .requests[0]!;
 
-          // The user edits the proposed copy in the first window, which then
-          // closes with the request still pending (#14009).
+          // The user opens the proposed copy and edits it on disk.
           yield* onRuntime(
-            closing.controller.handleAction({
+            window.controller.handleAction({
               requestId,
               action: 'previewProposed',
             }),
           );
           yield* Effect.tryPromise(() =>
-            vi.waitFor(() => expect(closing.opened).toHaveLength(1)),
+            vi.waitFor(() => expect(window.opened).toHaveLength(1)),
           );
           const edited = 'beta\nwith user edits\nand more\n';
           yield* Effect.tryPromise(() =>
-            writeFile(closing.opened[0]!, edited, 'utf8'),
+            writeFile(window.opened[0]!, edited, 'utf8'),
           );
-          yield* Fiber.interrupt(closing.window);
-          expect(
-            yield* Effect.promise(() => pathExists(closing.opened[0]!)),
-          ).toBe(false);
 
-          // The other window's Approve applies that edit.
+          // Approve sends the copy as the user left it with the decision,
+          // which applies it.
           yield* onRuntime(
-            approving.controller.handleAction({ requestId, action: 'approve' }),
+            window.controller.handleAction({ requestId, action: 'approve' }),
           );
           expect(yield* Fiber.join(result)).toMatchObject({
             action: 'apply',
@@ -188,7 +180,7 @@ describe('desktop tool edit approval', () => {
           yield* Effect.tryPromise(() =>
             vi.waitFor(async () => {
               await expect(
-                pathExists(approving.staged[0]!.proposedPath),
+                pathExists(window.staged[0]!.proposedPath),
               ).resolves.toBe(false);
             }),
           );

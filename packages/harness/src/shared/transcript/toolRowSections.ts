@@ -3,10 +3,11 @@
  * of independent matchers that turn a normalized tool call into the
  * structured sections a host paints. Split out of `toolRowModel.ts`, which
  * keeps the section type definitions, the header preview, output suppression,
- * and the fold itself — the dispatch table is the only seam between them.
+ * and the fold itself — the dispatch table is the only boundary between them.
  */
 import { Predicate, Result, Schema } from 'effect';
 import {
+  AGENT_TOOL_NAME,
   McpToolOutputSchema,
   getProposalFileGroups,
   type ProposalFileGroup,
@@ -15,7 +16,6 @@ import {
   executionsWaitTimeoutSeconds,
   TOOL_RESULT_METADATA_FIELDS,
 } from '@shared/toolUse';
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { deliveredResponse } from '@shared/subagentFollowup';
 import { executionsAction } from '@shared/tools/executionsDisplay';
 import {

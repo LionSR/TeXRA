@@ -1,7 +1,7 @@
 /**
  * The unseen record every host's run list reads: a top-level run that
  * finished after the surface last showed it. The surface keeps, per
- * top-level run, the `lastTimestamp` it showed (`Surface.seen`); the fold
+ * top-level run, the `lastTimestamp` it showed (`Surface.seen`); the view
  * says when the run last changed.
  */
 import type { RunId, SessionView } from '@texra-ai/harness/schemas';

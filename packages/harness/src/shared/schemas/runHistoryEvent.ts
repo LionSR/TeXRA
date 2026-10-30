@@ -18,7 +18,7 @@ import { Schema } from 'effect';
 
 import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 import { RunOutcomeSchema } from './run';
 import { NormalizedUsageSchema, RunInputSchema } from './runFacts';
 import {
@@ -106,6 +106,8 @@ export const RunPositionPayloadSchema = Schema.Struct({
   /** The loop's own terminal word. The canonical terminal fact stays
    *  `run.end`, which also covers failures before the runtime starts. */
   outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
+  /** `closed`: a clean session close forced the halt (`haltedPositionRow`). */
+  reason: Schema.optional(Schema.Literal('closed')),
 }).check(
   Schema.makeFilter((p) => (p.at === 'halted') === (p.outcome != null), {
     message:
@@ -115,11 +117,9 @@ export const RunPositionPayloadSchema = Schema.Struct({
 
 /* ---------------------------------------------------------- model.message */
 
-/**
- * Per-call dispatch facts, stamped at append time so the fold and the resume
- * rule stay data-only and need no tool registry. One entry per local-call
- * part of the response, in content order.
- */
+/** Per-call dispatch facts, stamped at append time so the fold and the resume
+ *  rule stay data-only and need no tool registry. One entry per local-call
+ *  part of the response, in content order. */
 const DispatchFactsSchema = Schema.Struct({
   callId: CallIdSchema,
   toolName: Schema.String.check(Schema.isMinLength(1)),
@@ -372,9 +372,8 @@ const ToolIntentOriginSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('script'), scriptCallId: CallIdSchema }),
 ]);
 
-/** One call's body starts: committed after its PreToolUse hooks, its guard
- *  and its approval, so before it nothing of the attempt has run and after
- *  it the body may have. */
+/** One call's body starts: committed after its PreToolUse hooks, guard and
+ *  approval, so before it nothing of the attempt ran and after it the body may. */
 export const ToolIntentPayloadSchema = Schema.Struct({
   origin: ToolIntentOriginSchema,
   callId: CallIdSchema,

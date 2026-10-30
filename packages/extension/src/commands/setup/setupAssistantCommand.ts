@@ -1,15 +1,19 @@
 // Third-party imports
-import { withLogChannel } from '@texra-ai/harness/host';
+import {
+  hasErrorPresentationClaimed,
+  withLogChannel,
+} from '@texra-ai/harness/host';
 import { Cause, Effect } from 'effect';
 
 // Local imports
-import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   announce,
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { launchSetup } from '@texra/controllers/onboarding/setupLaunch';
+import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
@@ -19,7 +23,7 @@ const CHANNEL = SETUP_ASSISTANT_CHANNEL;
 
 /**
  * The launch program the command surface runs on the process runtime: it
- * folds every failure — a failed host call, a failed model resolution, a
+ * turns every failure — a failed host call, a failed model resolution, a
  * failed root launch — into one error report and a `not-started` result,
  * which is the contract its host caller relies on. An interrupted launch is
  * not a failure: the cause is re-raised so a runtime disposal stays a
@@ -28,8 +32,10 @@ const CHANNEL = SETUP_ASSISTANT_CHANNEL;
 export function launchSetupAssistant(
   roots: WorkspaceRoots,
   /** Where the setup conversation runs: here, or in the service. */
-  runSession: Session,
-  onAdmitted: (runId: RunId) => Effect.Effect<void, Error>,
+  runSession: Pick<Session, 'view'>,
+  /** The window's launcher: the run is the window's to reveal and select,
+   *  and a failure before it opens is presented there. */
+  start: HostRunActions['runValidated'],
   /** Bring the panel's "Connect a model" card into view: the one credential
    *  prompt, which the setup card follows once a credential lands. */
   connectModel: Effect.Effect<void, Error, ProcessServices>,
@@ -40,14 +46,7 @@ export function launchSetupAssistant(
     // Every setup entry point funnels through here (command, status pill,
     // walkthrough, onboarding setup card). The launcher's manual Execute
     // path is deliberately not gated: an explicit user action wins.
-    const outcome = yield* launchSetup({
-      session: runSession,
-      roots,
-      start: (request) =>
-        runSession
-          .start({ config: request.config, interactive: true })
-          .pipe(Effect.tap((run) => onAdmitted(run.runId))),
-    });
+    const outcome = yield* launchSetup({ session: runSession, roots, start });
     if (outcome === 'already-running') {
       yield* Effect.forkDetach(
         showLoggedInfoMessage(
@@ -73,19 +72,23 @@ export function launchSetupAssistant(
       // error notification appears during teardown.
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
       const error = Cause.squash(cause);
+      // A launch failure the window's launcher presented is not shown
+      // again; one before the launch (no model, a request refused) is.
       return Effect.logError('Setup assistant failed to launch.').pipe(
         Effect.annotateLogs({ data: error }),
         withLogChannel(CHANNEL),
         Effect.andThen(
-          Effect.forkDetach(
-            announce(
-              CHANNEL,
-              vscodeUi.showErrorMessage(
-                `Failed to launch setup assistant: ${toErrorMessage(error)}`,
+          hasErrorPresentationClaimed(error)
+            ? Effect.void
+            : Effect.forkDetach(
+                announce(
+                  CHANNEL,
+                  vscodeUi.showErrorMessage(
+                    `Failed to launch setup assistant: ${toErrorMessage(error)}`,
+                  ),
+                  undefined,
+                ),
               ),
-              undefined,
-            ),
-          ),
         ),
         Effect.as('not-started' as const),
       );

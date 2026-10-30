@@ -5,8 +5,8 @@
  *
  * Each (runId, key) pair holds one disposable from the polling source.
  * Event callbacks submit a `live_notification` follow-up so events land in
- * the same inbox user-typed messages use; the agent reads them at its next
- * park. When a run takes no more input (it ended for good, its input closed,
+ * the same inbox user-typed messages use; the agent reads them the next
+ * time it waits. When a run takes no more input (it ended for good, its input closed,
  * the user deleted it) or its session's inbox closes, the subscriptions
  * bound through that input are auto-disposed.
  */

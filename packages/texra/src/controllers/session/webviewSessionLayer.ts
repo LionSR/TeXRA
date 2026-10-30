@@ -2,9 +2,9 @@
  * The webview's Effect graphs:
  * one per session key, in a `LayerMap`, built on the one `ManagedRuntime`
  * a webview entry makes with `installWebviewRuntime`. SessionInputs is fed
- * directly by the ordered frames; the harness's `RemoteSessionView` folds
+ * directly by the ordered frames; the harness's `RemoteSessionView` applies
  * them in the sidebar, editor tab, and Electron renderer. SessionFrames
- * carries the host snapshot separately from the fold.
+ * carries the host snapshot separately from the view.
  *
  * The shell opens a session with `WebviewSessions.open(key)`, begins a
  * generation on its frames right before it posts the `Subscribe` up, and
@@ -52,7 +52,7 @@ interface WebviewSession {
 
 export class WebviewSessions extends LayerMap.Service<WebviewSessions>()(
   '@texra/session/WebviewSessions',
-  { lookup: (key: string) => webviewSessionLayer(key) },
+  { lookup: webviewSessionLayer },
 ) {
   /** The session of a key, built on first open and shared until the last
    *  scope holding it closes. */

@@ -2,7 +2,7 @@
  * A host attached to one session of `@texra-ai/harness`: its presentation
  * surface, and its approval handler at work, which requests it is asked
  * (once each) and what is recorded when it does not answer. A request is
- * never left parked on a handler that failed, threw, or went quiet: that is
+ * never left waiting on a handler that failed, threw, or went quiet: that is
  * a denial, with the cause logged.
  */
 import {
@@ -20,7 +20,11 @@ import {
 import type { HostInteractions } from '@agent/runtime/HostInteractions';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import { requestParksItsCaller, type RequestDecision } from '@shared/schemas';
+import {
+  answerMismatch,
+  requestParksItsCaller,
+  type RequestDecision,
+} from '@shared/schemas';
 import type {
   PendingRequest,
   SessionView,
@@ -40,26 +44,33 @@ const APPROVAL_HANDLER_TIMEOUT = Duration.minutes(10);
 const DECIDE_RETRY = Schedule.exponential('100 millis').pipe(Schedule.jittered);
 
 /** The handler's decision on `pending`, or a denial naming why it gave
- *  none: a failure, a throw, or no answer in time. A withdrawal (the
- *  prompt interrupted) stays one: it is no decision at all. */
+ *  none it can use: a failure, a throw, no answer in time, or a decision the
+ *  request's kind does not take. A withdrawal (the prompt interrupted) stays
+ *  one: it is no decision at all. */
 const decisionOf = (
   host: AnsweringHost,
   pending: PendingRequest,
 ): Effect.Effect<RequestDecision> =>
   // Called on the host itself: a class-based host keeps its receiver.
   Effect.suspend(() => host.approve(pending)).pipe(
+    Effect.flatMap((decision) => {
+      const mismatch = answerMismatch(pending.payload.kind, decision);
+      return mismatch === null
+        ? Effect.succeed(decision)
+        : Effect.fail(new Error(mismatch));
+    }),
     Effect.timeout(APPROVAL_HANDLER_TIMEOUT),
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
         : Effect.logWarning(
-            `The approval handler gave no decision on request ${pending.requestId}; it is denied`,
+            `The approval handler gave no usable decision on request ${pending.requestId}; it is denied`,
           ).pipe(
             Effect.annotateLogs({ data: cause }),
             withLogChannel(CHANNEL),
             Effect.as<RequestDecision>({
               action: 'deny',
-              reason: `The approval handler gave no decision: ${toErrorMessage(Cause.squash(cause))}`,
+              reason: `The approval handler gave no usable decision: ${toErrorMessage(Cause.squash(cause))}`,
             }),
           ),
     ),
@@ -107,7 +118,7 @@ export const followPendingRequests = <P extends PendingRequest, R>(
 
 /**
  * Answer the runs' requests of `session` with the host's `approve`, until
- * interrupted: every request a parked run waits on here (the attention rule
+ * interrupted: every request a waiting run waits on here (the attention rule
  * every host reads), once, through the session's one `request.decide`. A
  * decision the session refuses to record is tried again briefly, then
  * logged and its request offered again on the next view; a handler still

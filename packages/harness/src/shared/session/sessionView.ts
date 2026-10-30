@@ -50,7 +50,7 @@ import type {
   SessionView as ReadSessionView,
 } from './readonlyViews';
 
-/** Which session (paper) a view is of: the session's storage root. */
+/** Which session (project) a view is of: the session's storage root. */
 const SessionKeySchema = Schema.String.check(Schema.isMinLength(1));
 
 /** The integer fields' shapes: `Count` from zero, `Positive` from one. */
@@ -329,7 +329,7 @@ export const SessionViewSchema = Schema.Struct({
    *  when the aggregate enters the subscription set, deleted with its
    *  transcript when it leaves; never a commit ordinal. */
   transcriptSeq: Schema.ReadonlyMap(AggregateIdSchema, Count),
-  /** Paper-level aggregate; a rail badge reads it and derives nothing. */
+  /** Project-level aggregate; a rail badge reads it and derives nothing. */
   rollup: Schema.Struct({ running: Count, waiting: Count, interrupted: Count }),
   requests: Schema.Array(PendingRequestSchema),
   /** Latest snapshot per run. */
@@ -386,7 +386,7 @@ export function isWorkingRun(run: ReadRunView): boolean {
 /** How busy a session reads in a title: idle, running, or awaiting approval. */
 export type SessionTitleState = 'idle' | 'running' | 'approval';
 /**
- * The paper-level activity every title and status pill shows, read from the
+ * The project-level activity every title and status pill shows, read from the
  * view and nothing else: a request this window can answer outranks a run
  * working right now; a conversation waiting on its user is idle.
  */

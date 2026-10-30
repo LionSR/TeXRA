@@ -112,7 +112,7 @@ export class ServiceControl extends Context.Service<
 >()('@texra/server/ServiceControl') {}
 
 /** The tasks the service runs now, across its open projects: what its
- *  registry holds live, which an admitted run is before the view folds it.
+ *  registry holds live, which an admitted run is before the view applies it.
  *  With `parked` false, only those at work, not a conversation the view
  *  shows waiting for its next message. */
 export const runningTasks = Effect.fn('server.runningTasks')(function* (
@@ -122,9 +122,8 @@ export const runningTasks = Effect.fn('server.runningTasks')(function* (
   let running = 0;
   for (const session of (yield* projects.opened).values()) {
     const { runs } = session.view.current();
-    for (const { runId, live } of session.held())
-      if (live && (parked || runs.get(runId)?.status !== RUN_PHASE.WAITING))
-        running += 1;
+    for (const { runId } of session.held())
+      if (parked || runs.get(runId)?.status !== RUN_PHASE.WAITING) running += 1;
   }
   return running;
 });
@@ -135,7 +134,7 @@ export const runningTasks = Effect.fn('server.runningTasks')(function* (
  *  `ownedHere`, which a fork's rows also take). */
 function liveRoot(session: LocalSession, runId: RunId): RunId | null {
   const view: SessionView = session.view.current();
-  const live = (id: RunId) => session.held(id)?.live === true;
+  const live = (id: RunId) => session.held(id) !== undefined;
   if (!live(runId)) return null;
   let root = runId;
   for (
@@ -177,7 +176,7 @@ const internal = Effect.fn('handlers.internal')(function* (
 /**
  * What `runId` ends with in `session`: once every owner of the run here has
  * left, its `run.end` as the run's records hold it, and `at`, the cursor of
- * the first level that shows the run no longer live, or gone: a fold at or
+ * the first level that shows the run no longer live, or gone: a view at or
  * past it holds the run's end, or its removal. A run that ended with no
  * `run.end` (deleted) ends with the outcome its view shows, without output;
  * a store that cannot be read fails the answer, never reads as an empty end.
@@ -330,7 +329,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
               }),
           ),
           // Whether the run exists, from the log rather than the live
-          // fold: a session the open just (re)built has folded nothing yet.
+          // view: a session the open just (re)built has applied nothing yet.
           Effect.flatMap(({ session }) =>
             Effect.flatMap(session.view.read([runId]), (level) =>
               level.runs.has(runId)
@@ -468,15 +467,8 @@ export const serviceHandlers = TexraRpcs.toLayer(
       'host.attach': ({ workspace, capabilities }) =>
         // The window's stream leases its project's session while it runs.
         Stream.unwrap(
-          Effect.map(
-            projects
-              .open(workspace)
-              .pipe(
-                Effect.mapError(
-                  (error) => new TaskFailed({ message: error.message }),
-                ),
-              ),
-            ({ session }) => hosts.attach(session, capabilities),
+          Effect.map(open(workspace), ({ session }) =>
+            hosts.attach(session, capabilities),
           ),
         ),
       // The project's state store, the service's own: a window opens none.

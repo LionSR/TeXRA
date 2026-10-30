@@ -20,7 +20,7 @@ const CODEX_DEFAULT_INSTRUCTIONS = "Follow the user's instructions.";
  * The Responses route of a vendor serving OpenAI's format on its own
  * endpoint: stateless unless the vendor stores and chains, no background,
  * socket, files or token count, and only the request fields it documents.
- * `null` for OpenAI, Meta and xAI, which the Responses arm binds.
+ * `null` for OpenAI, Meta and xAI, which the Responses case binds.
  */
 function vendorResponses(facts: Facts): ResponsesConfiguration | null {
   const { base, config, controls, spec } = facts;
@@ -29,9 +29,7 @@ function vendorResponses(facts: Facts): ResponsesConfiguration | null {
   const route = (
     fields: Pick<
       ResponsesConfiguration,
-      | 'supportsTemperature'
-      | 'supportsForcedToolChoice'
-      | 'allowedReasoningEfforts'
+      'supportsForcedToolChoice' | 'allowedReasoningEfforts'
     > & {
       readonly stores: boolean;
       readonly temperature: number | null;
@@ -41,8 +39,6 @@ function vendorResponses(facts: Facts): ResponsesConfiguration | null {
     ...base,
     protocol: 'openai-responses',
     background: 'unsupported',
-    supportsTemperature: fields.supportsTemperature,
-    supportsMaxOutputTokens: true,
     supportsStorage: fields.stores,
     supportsDocumentInput: false,
     webSocketStreamParameter: 'implicit',
@@ -68,7 +64,6 @@ function vendorResponses(facts: Facts): ResponsesConfiguration | null {
     case ModelProvider.DEEPSEEK:
       // `none` turns thinking off; thinking refuses a temperature.
       return route({
-        supportsTemperature: facts.supportsTemperature,
         supportsForcedToolChoice: true,
         allowedReasoningEfforts: facts.acceptedEfforts,
         stores: false,
@@ -79,7 +74,6 @@ function vendorResponses(facts: Facts): ResponsesConfiguration | null {
       // Kimi fixes its sampling. Its `thinking` switch is not part of this
       // request shape, so `@none` is refused by the reasoning choice.
       return route({
-        supportsTemperature: false,
         supportsForcedToolChoice: false,
         allowedReasoningEfforts: config.reasoning?.efforts ?? [],
         stores: false,
@@ -89,7 +83,6 @@ function vendorResponses(facts: Facts): ResponsesConfiguration | null {
     case ModelProvider.GLM:
       // Zhipu stores for seven days; `none` turns thinking off.
       return route({
-        supportsTemperature: facts.supportsTemperature,
         supportsForcedToolChoice: false,
         allowedReasoningEfforts: facts.acceptedEfforts,
         stores: true,
@@ -102,7 +95,6 @@ function vendorResponses(facts: Facts): ResponsesConfiguration | null {
     case ModelProvider.DASHSCOPE:
       // DashScope stores by default; Qwen keeps its own thinking default.
       return route({
-        supportsTemperature: facts.supportsTemperature,
         supportsForcedToolChoice: false,
         allowedReasoningEfforts: [],
         stores: true,
@@ -110,16 +102,18 @@ function vendorResponses(facts: Facts): ResponsesConfiguration | null {
         reasoning: null,
       });
     case ModelProvider.MINIMAX:
-      // M3 reasons only when asked; its temperature range is (0, 1].
+      // MiniMax reasons only when asked; its temperature range is (0, 1].
       return route({
-        supportsTemperature: true,
         supportsForcedToolChoice: false,
         allowedReasoningEfforts: ['high'],
         stores: false,
-        temperature: Num.clamp(spec.options.temperature, {
-          minimum: 0.01,
-          maximum: 1,
-        }),
+        temperature:
+          spec.options.temperature === undefined
+            ? null
+            : Num.clamp(spec.options.temperature, {
+                minimum: 0.01,
+                maximum: 1,
+              }),
         reasoning: choice.thinking ? reasoning('high') : null,
       });
     default:
@@ -134,7 +128,7 @@ function vendorResponses(facts: Facts): ResponsesConfiguration | null {
 export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
   const vendor = vendorResponses(facts);
   if (vendor !== null) return vendor;
-  const { base, config, controls, spec, supportsTemperature } = facts;
+  const { base, config, controls, spec } = facts;
   const { credential, options } = spec;
   const choice = options.reasoning;
   const effort = wireEffort(config, choice);
@@ -152,8 +146,6 @@ export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
       requestedModel: codexBackendModelId(config),
       protocol: 'openai-responses',
       background: 'unsupported',
-      supportsTemperature,
-      supportsMaxOutputTokens: false,
       supportsStorage: false,
       supportsDocumentInput: config.capabilities.supportsNativePdf,
       webSocketStreamParameter: 'required',
@@ -167,6 +159,7 @@ export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
       openaiEndpoint: true,
       requestDialect: 'openai',
       defaults: {
+        // The Codex backend takes no output limit.
         maxOutputTokens: null,
         temperature: controls.temperature,
         store: false,
@@ -180,7 +173,7 @@ export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
   // control; a chained request reuses the stored instructions.
   const xai = config.provider === ModelProvider.XAI;
   // Background responses serve the GPT family only, as the
-  // `useBackgroundResponses` setting describes; another model on this arm
+  // `useBackgroundResponses` setting describes; another model on this case
   // (an o-series deep-research model, Meta's) streams in the foreground.
   const background =
     !xai && config.id.toLowerCase().startsWith('gpt')
@@ -190,8 +183,6 @@ export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
     ...base,
     protocol: 'openai-responses',
     background,
-    supportsTemperature,
-    supportsMaxOutputTokens: true,
     supportsStorage: true,
     supportsDocumentInput: config.capabilities.supportsNativePdf,
     webSocketStreamParameter: 'implicit',
@@ -205,7 +196,7 @@ export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
       maxOutputTokens: controls.maxOutputTokens,
       temperature: controls.temperature,
       // Stored server-side, which `previous_response_id` chaining and
-      // background submission read; the Codex arm above is stateless.
+      // background submission read; the Codex case above is stateless.
       store: true,
       parallelToolCalls: controls.parallelToolCalls,
       reasoning:

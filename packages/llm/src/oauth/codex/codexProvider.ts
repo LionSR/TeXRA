@@ -168,7 +168,7 @@ export const CodexDeviceTokenSchema = Schema.Struct({
 // (`catchDecoding`) so a single malformed field degrades to `undefined` rather
 // than dropping the whole payload — preserving the old per-location probing
 // where a valid account id survives garbage in a sibling claim. The same
-// schema folds the three locations into the canonical `{ accountId, email }`
+// schema maps the three locations into the canonical `{ accountId, email }`
 // shape.
 
 /** Account id, email, and plan distilled from a JWT (each may be absent). */

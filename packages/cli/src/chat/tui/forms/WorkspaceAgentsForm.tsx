@@ -5,7 +5,6 @@ import { useState } from 'react';
 import {
   AgentCatalog,
   type AgentEntry,
-  type TeamPreset,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
 import { agentKeyOf } from '@texra-ai/harness/schemas';
@@ -19,6 +18,7 @@ import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import type { SelectItem } from '@cli/tui/ui/Select';
 
+import { workspaceTeams, type TeamPreset } from '@texra/shared/agentTeams';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
@@ -105,9 +105,7 @@ export function WorkspaceAgentsForm(
         Effect.map(
           Effect.all({
             record: readCliWorkspaceAgents(roots),
-            presets: Effect.flatMap(workspaceAgentsOf(roots), (agents) =>
-              agents.allPresets(),
-            ),
+            presets: workspaceTeams(roots.repoState),
             catalog: AgentCatalog,
           }),
           ({ record, presets, catalog }): WorkspaceAgentsData => ({
@@ -259,7 +257,8 @@ export function WorkspaceAgentsForm(
           label: 'No default team',
           description: 'Inherited workspaces show all agents',
         },
-        // Only a built-in team can be the user default (`setDefaultTeam`).
+        // Only a built-in team can be the user default: a saved team belongs
+        // to one workspace.
         ...data.presets
           .filter((preset) => preset.source === 'built-in')
           .map((preset) => ({
