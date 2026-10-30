@@ -47,7 +47,7 @@ import {
  * from its `HostSkillOptions` and its plugins. Only data is fixed here:
  * project and interop sources live under the workspace folder, so they are
  * resolved per call from the calling session's workspace, and a desktop with
- * several papers open discovers each run's project skills in that run's own
+ * several projects open discovers each run's project skills in that run's own
  * folder. The default is no contributions.
  */
 export const HostSkillSources = Context.Reference<{

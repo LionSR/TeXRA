@@ -403,7 +403,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
   const result = yield* executeCommand(command, {
     cwd,
     // The call's own session roots: a `git commit` the agent runs
-    // carries this paper's configured identity.
+    // carries this project's configured identity.
     settings: toolCall.env.roots,
     buffer: false,
     timeout: timeoutMs,
