@@ -95,12 +95,15 @@ describe('session isolation', () => {
             persistent: true,
           });
           const ends = (runId: string) =>
-            reopened.log.rows(
-              qualifyAggregateId(
-                'run',
-                Schema.decodeUnknownSync(RunIdSchema)(runId),
+            Effect.map(
+              reopened.log.runRows(
+                qualifyAggregateId(
+                  'run',
+                  Schema.decodeUnknownSync(RunIdSchema)(runId),
+                ),
+                'lifecycle',
               ),
-              ['run.end'],
+              (rows) => rows.lifecycles.filter((row) => row.type === 'run.end'),
             );
           expect(yield* ends(own)).toMatchObject([
             { outcome: RUN_OUTCOME.CANCELLED },

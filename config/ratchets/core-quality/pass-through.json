@@ -1,7 +1,6 @@
 {
   "packages/harness/src/agent/storage/runRecords.ts": 1,
   "packages/harness/src/agent/trace/index.ts": 1,
-  "packages/harness/src/agent/workspaceAgents/WorkspaceAgentsController.ts": 2,
   "packages/harness/src/controllers/session/Database.ts": 1,
   "packages/harness/src/host.ts": 1,
   "packages/harness/src/index.ts": 1,

@@ -200,8 +200,9 @@ const startNativeLoop = (
 
 /** The run's `run.end` rows, in order. */
 const runEnds = (runId: RunId) =>
-  Effect.map(session.log.rows(qualifyAggregateId('run', runId)), (rows) =>
-    rows.filter((row) => row.type === 'run.end'),
+  Effect.map(
+    session.log.runRows(qualifyAggregateId('run', runId), 'lifecycle'),
+    (rows) => rows.lifecycles.filter((row) => row.type === 'run.end'),
   );
 
 /** The next `run.end` the store is asked to commit is refused, for the

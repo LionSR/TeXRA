@@ -177,36 +177,26 @@ const assertNoParentTraversal: (targetPath: string) => Effect<void, ToolError, n
 
 ## BoundModel
 
-One bound model: the llm `Model` and the facts of its binding the run
-reads. Everything else a binding needs (its credential, its reasoning
-choice, the toggles it was bound under) stays inside model access.
+One bound model: llm's `Binding` (or the validation model's) and the facts
+of the run the binding serves. Everything else a binding needs (its
+credential, its reasoning choice, the toggles it was bound under) stays
+inside model access.
 
 ```ts
-interface BoundModel {
+interface BoundModel extends Binding {
   /** The run's model string (`provider/id[@effort][+pro]`), as its rows name it. */
   readonly modelId: string;
   /** The backend its `run.config` records. */
   readonly backend: ModelBackend;
-  /**
-   * The config the model runs and bills with on its route: its window, its
-   * prices, and the media its route carries (`capabilities`).
-   */
-  readonly config: ModelConfig;
-  readonly model: Model;
-  readonly origin: ModelOrigin;
-  /** The route decision this binding carries out. */
-  readonly route: ModelRoute;
+  /** The route decision this binding carries out, or the validation model. */
+  readonly route: ModelRoute | { readonly kind: 'validation' };
   /** Automatic retries after a failed attempt, read with the binding. */
   readonly automaticRetries: number;
   /** Bound for a text-only persona, with the model's whole output budget; a
    *  rebinding keeps it. */
   readonly textOnly: boolean;
-  /** The route can be told to call one named tool. */
-  readonly forcedToolChoice: boolean;
-  /** One connection a failed turn invalidates (the Responses WebSocket). */
-  readonly persistentConnection: boolean;
-  /** The service tier and subscription plan pricing bills, where the route names them. */
-  readonly billing: { readonly serviceTier?: 'fast'; readonly plan?: string };
+  /** The ChatGPT plan the subscription's token names; display-only. */
+  readonly plan?: string;
   /** The retry gate's routes: the model on its wire route, then the wire route. */
   readonly routes: readonly [RoutePolicy, RoutePolicy];
   /** How the next turn is delivered, from the live toggles. */
@@ -434,8 +424,9 @@ its call's run: an agent's (`launch`: the child's settled result, or its
 receipt for a background launch, within the issuing script's concurrency
 budget) or an external process's (`launchProcess`: its run id, outside
 the budget); a plugin's tool reaches no other launch. And it reaches a
-run of the session by id: its input, live parent edge, records and
-rows. Each needs the call's run; a standalone host call has none.
+run of the session by id: its input, live parent edge, records, whether
+it holds a request, and the plugin's own facts on it. Each needs the
+call's run; a standalone host call has none.
 
 ```ts
 interface ChildRunsShape {
@@ -458,11 +449,22 @@ interface ChildRunsShape {
     readonly exists: Effect.Effect<boolean, Error>;
     readonly end: Effect.Effect<RunEnd | null, Error>;
   };
-  /** Its committed rows, with `types` only those. */
-  readonly rows: (
+  /** The latest value of `arm`'s kind among the run's own facts, decoded
+   *  by the arm's schema; undefined while the run recorded none. */
+  readonly fact: <A>(
     runId: RunId,
-    types?: readonly SessionEvent['type'][],
-  ) => Effect.Effect<readonly SessionEvent[], Error>;
+    arm: {
+      readonly plugin: string;
+      readonly kind: string;
+      readonly schema: Schema.Codec<A, unknown>;
+    },
+  ) => Effect.Effect<A | undefined, Error>;
+  /** Whether the run holds the request `requestId`, open or decided: what
+   *  a tool that posted one reads after a failed post. */
+  readonly requested: (
+    runId: RunId,
+    requestId: string,
+  ) => Effect.Effect<boolean, Error>;
 }
 ```
 
@@ -1872,22 +1874,34 @@ interface ToolGuard<T, R = never> {
    */
   readonly writes?: (input: T) => readonly string[];
   /**
-   * The command this call runs, spelled as the approval prompt shows it. The
-   * loop puts it through the session's bash approval before the body runs.
-   * Only the `bash` tool's commands take the run's command grant; any other
-   * tool's call is asked about per call.
-   * An Effect because the spelling can depend on settings the prompt must
-   * show (a Codex sandbox mode, a Claude permission mode).
+   * The command this call runs. Present: the loop puts it through the
+   * session's command approval before the body runs.
    */
-  readonly bash?: (input: T) => Effect.Effect<string, Error, R>;
-  /**
-   * Where the approved command actually runs, when that is not the call's own
-   * directory. Omitted: the call's working directory, else the workspace,
-   * which is what a shell-shaped tool uses. `'unknown'`: the executor cannot name one, so the
-   * prompt names none rather than a directory the command may not run in
-   * (`send_to_terminal` reuses a terminal whose shell has its own directory).
-   */
-  readonly cwd?: 'unknown';
+  readonly command?: {
+    /**
+     * The command as the approval prompt shows it. An Effect because the
+     * spelling can depend on settings the prompt must show (a Codex sandbox
+     * mode, a Claude permission mode).
+     */
+    readonly text: (input: T) => Effect.Effect<string, Error, R>;
+    /**
+     * The standing grant that answers this tool's commands. `'bash'`: the
+     * run's command grant ("approve all commands in this task"), which the
+     * shell declares. Omitted: each call is asked about and only the
+     * delegated-work grant covers it, so a tool whose prompt looks like a
+     * command (an MCP tool, codex) never inherits shell permission.
+     */
+    readonly grant?: 'bash';
+    /**
+     * Where the approved command actually runs, when that is not the call's
+     * own directory. Omitted: the call's working directory, else the
+     * workspace, which is what a shell-shaped tool uses. `'unknown'`: the
+     * executor cannot name one, so the prompt names none rather than a
+     * directory the command may not run in (`send_to_terminal` reuses a
+     * terminal whose shell has its own directory).
+     */
+    readonly cwd?: 'unknown';
+  };
 }
 ```
 

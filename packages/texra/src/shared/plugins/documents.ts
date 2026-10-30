@@ -11,11 +11,7 @@
  */
 import { Effect, Result, Schema, Struct } from 'effect';
 
-import {
-  type FileLocation,
-  type SessionEvent,
-  type ToolFact,
-} from '@texra-ai/harness/schemas';
+import { type FileLocation, type ToolFact } from '@texra-ai/harness/schemas';
 import {
   DocumentDiffsSchema,
   DocumentsResultSchema,
@@ -31,7 +27,6 @@ import {
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { AgentOptionDataSchema } from '@texra/shared/pickerOptions';
-import type { AggregateId } from '@texra-ai/harness/host';
 import type { RunView, AgentConfig } from '@texra-ai/harness/schemas';
 import type { AgentBlock } from '@texra-ai/harness/plugins';
 
@@ -119,21 +114,6 @@ export function documentRoundsOf(value: unknown): readonly RoundOutput[] {
   return value === undefined
     ? []
     : Schema.decodeUnknownSync(DocumentsOutputSchema)(value).rounds;
-}
-
-/** The rounds of the latest documents row of `aggregate` among `rows`;
- *  undefined when it wrote none. */
-export function latestDocumentRounds(
-  rows: readonly SessionEvent[],
-  aggregate: AggregateId,
-): readonly RoundOutput[] | undefined {
-  const row = rows.findLast(
-    (event) =>
-      event.aggregateId === aggregate &&
-      event.type === 'plugin.fact' &&
-      `${event.plugin}/${event.kind}` === DOCUMENTS_OUTPUT_KEY,
-  );
-  return row?.type === 'plugin.fact' ? documentRoundsOf(row.value) : undefined;
 }
 
 /** The documents a run's end reports of its documents fact: every

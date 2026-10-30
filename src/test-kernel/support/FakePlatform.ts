@@ -20,7 +20,7 @@ import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import { workspaceTeams } from '@texra/shared/agentTeams';
+import { teamMembers } from '@texra/shared/agentTeams';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import type { SecretsFailed } from '@texra-ai/llm';
 
@@ -289,7 +289,7 @@ const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
   custom: () => Effect.sync(() => fakePath('workspace/.texra/agents')),
   customConfigured: () => Effect.succeed(false),
   builtIn: () => Effect.sync(() => fakePath('workspace/resources/agents')),
-  teams: workspaceTeams,
+  teamMembers,
 };
 
 export function createFakePlatform(

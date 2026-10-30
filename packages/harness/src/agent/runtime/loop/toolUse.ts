@@ -188,7 +188,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const { seed } = run.entry;
     if (seed != null) {
       const born = [
-        ...seed,
+        ...seed.rows,
         configRow(runId, run.config, bound.modelId, binding),
         positionRow(runId, opening, 'turn.ready'),
       ];
@@ -352,9 +352,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // One round: the compaction the history may need, the `/compact`s
         // it answers, the invocation. An open attempt's history is fixed.
         if (state.invocation === null) {
-          // A `/compact`: consumed by the edit answering it, else admitted here.
+          // A `/compact`: the edit answering it applies it, else it is a no-op.
+          const compacts = consumedRows(runId, 'compact');
           const controls = yield* followUps.input.controls;
-          const requests = consumedRows(runId, controls, 'compact');
+          const requests = compacts(controls, { kind: 'applied' });
           state = yield* compaction.atBoundary(cell, bound, requests);
           // A compaction dropped the context updates: a new step renders them.
           if (state.offeredContext === null) {
@@ -365,8 +366,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const unanswered = (yield* followUps.input.controls).filter((f) =>
             requests.some(({ followUpId }) => followUpId === f.followUpId),
           );
-          const admitted = consumedRows(runId, unanswered, 'compact');
-          if (admitted.length > 0) state = yield* cell.append(admitted);
+          const noops = compacts(unanswered, {
+            kind: 'dropped',
+            reason: 'noop',
+          });
+          if (noops.length > 0) state = yield* cell.append(noops);
         }
         const toolChoice =
           state.forceFinalTool &&

@@ -31,6 +31,7 @@ import {
 } from '@shared/schemas';
 import { callRequestId, type AttemptRequests } from '@shared/session/inFlight';
 import type { CellError, RunCell } from '@shared/session/runHistory';
+import { isRequestDecision } from '@shared/session/runRowReads';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import {
@@ -49,13 +50,10 @@ import type { preToolUse } from './hooks';
 
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 
-/** The tool whose calls the run's command grant answers. */
-const SHELL_TOOL = 'bash';
-
 /** Each operation a run asks permission for: the grant that answers it, the
  *  setting that says whether it is asked (none: always), and what a denial
- *  is told as. A call of any tool but the shell takes the run's
- *  delegated-work grant, so a command grant never approves it. */
+ *  is told as. A call of a tool that declares no `guard.grant` takes the
+ *  run's delegated-work grant, so a command grant never approves it. */
 const OPERATIONS = {
   bash: ['bash', BASH_APPROVAL_CONFIG_KEY, 'executable'],
   call: ['superYolo', BASH_APPROVAL_CONFIG_KEY, 'executable'],
@@ -162,7 +160,7 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   // a hook asked about. A tool whose body opens its own request (`'inBody'`)
   // answers the hook there, from `RunCall.hook`.
   const asks =
-    guard?.bash !== undefined ||
+    guard?.command !== undefined ||
     tool.requiresApproval === true ||
     (hook === 'ask' && tool.requiresApproval === undefined);
   if (!guard?.writes && !asks && !rewritten) return undefined;
@@ -209,8 +207,8 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   if (!asks) return undefined;
   // The call as the prompt shows it: the guard's spelling, else the tool's
   // name and its final input.
-  const command = guard?.bash
-    ? yield* guard.bash(decoded)
+  const command = guard?.command
+    ? yield* guard.command.text(decoded)
     : `${definition.name} ${JSON.stringify(decoded)}`;
   // The directory the approved command runs in, as the tool declared it.
   // `'unknown'`: the executor can name none, so the prompt names none rather
@@ -220,12 +218,11 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   // one and the workspace otherwise, which is what a shell-shaped tool runs
   // in.
   const cwd =
-    guard?.bash && guard.cwd !== 'unknown'
+    guard?.command && guard.command.cwd !== 'unknown'
       ? (call.env.workingDirectory ?? call.env.roots.workspace)
       : undefined;
 
-  const operation =
-    definition.name === SHELL_TOOL && guard?.bash ? 'bash' : 'call';
+  const operation = guard?.command?.grant ?? 'call';
   const { run } = yield* requireRun('A call the loop asks about');
   const answer = sessionOf(run).approvals.permission(
     run.runId,
@@ -342,9 +339,7 @@ export const callRequests = (
             if (reentered !== null) {
               // Open already: only what the policy decides commits, and
               // the decision is read from where the resume read the run.
-              const decided = rows.filter(
-                (row) => row.type !== 'request.opened',
-              );
+              const decided = rows.filter(isRequestDecision);
               const from = cell.opened.commit;
               return decided.length === 0
                 ? Effect.succeed(from)

@@ -13,8 +13,6 @@ import {
   type StateStore,
   type WorkspaceAgentsController,
 } from '@texra-ai/harness/host';
-import { planTeamRun } from '@texra-ai/harness/host';
-import { findTeamPreset, type TeamPreset } from '@texra-ai/harness/host';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
@@ -75,43 +73,6 @@ export class SettingsAgentCatalogController {
       if (agent.tools?.includes(AGENT_TOOL_NAME)) names.add(agent.name);
     }
     return [...names].sort();
-  }
-
-  /**
-   * Preview the team root for a preset's member list. Mirrors launch
-   * semantics: the preview plans with the preset's own members only, so a
-   * custom team with no delegating members previews no root — the same state
-   * the launcher disables with "no runnable team root".
-   *
-   * When `presetId` resolves to a launchable preset, the preview reuses that
-   * preset's provenance and member lists so a built-in team plans with
-   * built-in root semantics (search only BUILTIN_TEAM_ROOT_AGENT_NAMES, no
-   * preset-order-first or first-delegating-member fallback) — the same root
-   * `planTeamRun` picks for that team at launch. Ad-hoc member lists without
-   * a resolvable id keep custom-preset semantics.
-   */
-  getPresetRoot(members: readonly string[], presetId?: string) {
-    return Effect.gen({ self: this }, function* () {
-      const knownPreset = presetId
-        ? findTeamPreset(
-            yield* this.deps.workspaceAgents.allPresets(),
-            presetId,
-          )
-        : undefined;
-      const preset: TeamPreset = knownPreset ?? {
-        id: 'settings-preview',
-        name: 'Settings preview',
-        description: '',
-        icon: 'bookmark',
-        agents: members,
-        source: 'custom',
-      };
-      return planTeamRun(preset, {
-        resolveAgent: (identifier) =>
-          this.deps.workspaceAgents.resolveAgent(identifier),
-        rootAgentNames: BUILTIN_TEAM_ROOT_AGENT_NAMES,
-      }).rootAgent?.name;
-    });
   }
 
   saveCurrentPreset(name: string) {

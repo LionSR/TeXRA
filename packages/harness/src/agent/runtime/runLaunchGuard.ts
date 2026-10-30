@@ -27,7 +27,7 @@ import {
   outcomeFromCause,
 } from '@shared/runs/runStatus';
 import { heldElsewhereBy } from '@shared/session/database';
-import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRows';
+import { recordOf } from '@shared/session/runRowReads';
 import type { RunRows } from '@shared/session/runRowsShape';
 import type { Append } from '@shared/session/sessionEvents';
 import type { RunView } from '@shared/session/sessionView';
@@ -42,7 +42,7 @@ import {
   warn,
 } from './childTurnResult';
 import { formatDelivery } from './deliveryEnvelope';
-import { presentRunFailure } from './terminalResultToast';
+import { presentRunFailure } from './HostInteractions';
 import type { SessionHandle } from './SessionHandle';
 
 /**
@@ -128,12 +128,11 @@ export const deliverHeld = Effect.fn('runLaunchGuard.deliverHeld')(function* (
 });
 
 /** The child's parks in its current lifecycle (`RunRows.heldParks`), each
- *  with the report its turn settled with just before it; none once it
- *  ended. */
+ *  with the report its turn settled with before it; none once it ended. */
 const heldParks = (session: SessionHandle, child: RunId) =>
   Effect.map(
-    session.log.rows(qualifyAggregateId('run', child), RUN_ROW_READS.parks),
-    (rows) => runRowsFrom(rows).heldParks,
+    session.log.runRows(qualifyAggregateId('run', child), 'parks'),
+    (rows) => rows.heldParks,
   );
 
 /** Every result a child holds for `parent` since its lifecycle began, and
@@ -216,14 +215,15 @@ export const onHeldResult = (
 ): Effect.Effect<unknown> => {
   const target = aggregateTarget(event.aggregateId);
   if (target.kind !== 'run') return Effect.void;
-  if (event.type === 'followup.queued' && event.content.from.kind === 'run') {
-    const child = event.content.from.runId;
+  const record = recordOf(event);
+  const sent = record.followUps[0];
+  if (sent?.content.from.kind === 'run') {
+    const child = sent.content.from.runId;
     if (session.view.run(child)?.substate !== RUN_SUBSTATE.RESULT_WAITING)
       return Effect.void;
-    return Effect.forkIn(clearHeld(session, child, event.followUpId), scope);
+    return Effect.forkIn(clearHeld(session, child, sent.followUpId), scope);
   }
-  if (event.type !== 'child.park' || event.heldFor === undefined)
-    return Effect.void;
+  if (record.heldParks[0]?.park.heldFor === undefined) return Effect.void;
   const parent = session.view.run(target.id)?.parentId;
   if (parent == null) return Effect.void;
   return Effect.gen(function* () {

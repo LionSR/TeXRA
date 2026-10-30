@@ -408,14 +408,6 @@ Combines context window size and pricing info.
 declare function hint(model: ModelConfig | string): string;
 ```
 
-## HostRouteFacts
-
-The host half of {@link RouteFacts}, shared by every model.
-
-```ts
-type HostRouteFacts = Omit<RouteFacts, 'validation'>;
-```
-
 ## isApiProvider
 
 Runtime-checked narrowing for provider strings.
@@ -835,10 +827,9 @@ The route a model's next request takes, decided by {@link decideModelRoute}.
 
 ```ts
 type ModelRoute =
-  | { readonly kind: 'validation' }
   | {
       readonly kind: 'chatgpt-subscription';
-      /** The input window the Codex backend grants this model. */
+      /** The input window: the user's override, else what the Codex backend grants. */
       readonly contextWindow: number;
     }
   | { readonly kind: 'xai-subscription' }
@@ -1115,7 +1106,6 @@ route itself names the credential and endpoint (`./routeEndpoint.ts`).
 function routeConfig(
   config: ModelConfig,
   route: ModelRoute,
-  facts: Pick<RouteFacts, 'chatgptContextWindow'>,
 ): ModelConfig
 ```
 
@@ -1124,10 +1114,7 @@ function routeConfig(
 The facts {@link decideModelRoute} reads.
 
 ```ts
-type RouteDecisionFacts = Omit<
-  RouteFacts,
-  'chatgptContextWindow' | 'endpoints'
->;
+type RouteDecisionFacts = Omit<RouteFacts, 'endpoints'>;
 ```
 
 ## RouteFacts
@@ -1136,8 +1123,6 @@ The facts a route reads, and nothing else.
 
 ```ts
 interface RouteFacts {
-  /** A guarded package-validation run: every model binds the validation model. */
-  readonly validation: boolean;
   /** The provider reasoning mode the request asks for (OpenAI `pro`), if any. */
   readonly mode?: ReasoningMode;
   /** ChatGPT subscription preferred, signed in, and not declined. */

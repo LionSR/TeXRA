@@ -5,7 +5,7 @@
  * the plugin (`@agent/runtime/loop/step`), so it follows the tool switched
  * on or off mid-conversation, and the recorded offered set rebuilds it.
  */
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { AGENT_TOOL_NAME } from '@shared/schemas';
 import type { PromptSection } from '@tools/toolTable';
 
 /** Base memory instructions for all agents with memory enabled. */

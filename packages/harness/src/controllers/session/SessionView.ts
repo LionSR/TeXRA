@@ -31,13 +31,12 @@ import {
 } from 'effect';
 
 import type { SessionViewAccess } from '@agent/runtime/SessionHandle';
-import type { AppSignals } from '@platform/appSignals';
 import {
   qualifyAggregateId,
   type LocalRuntimeState,
   type TranscriptSubscription,
 } from '@shared/schemas';
-import { Database, type DatabaseReadFailed } from '@shared/session/database';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import type { SessionView as ReadonlySessionView } from '@shared/session/readonlyViews';
 import type {
   Outcome,
@@ -47,8 +46,6 @@ import type {
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { SessionView } from '@shared/session/sessionView';
-import { announceRunFacts, armsOf } from '@tools/plugins';
-import { ToolRegistry } from '@tools/toolTable';
 import { LocalRuntimeSource, TranscriptSubscriptions } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
@@ -186,8 +183,6 @@ export class RemoteSessionView extends Context.Service<
  * current view, the replay it is built from, the transcript subscriptions
  * that decide which transcripts it holds, and the local runtime state it
  * applies beside the rows.
- * For the session's scope it announces what its runs' facts tell this
- * process (`announceRunFacts`).
  * `closed` is the session's: once its doors shut, a subscription or a mark
  * writes nothing.
  */
@@ -200,38 +195,15 @@ export const makeSessionViewAccess = Effect.fn(
   SessionViewAccess,
   DatabaseReadFailed,
   | Scope.Scope
-  | Database
   | SessionViewService
   | SessionInputs
   | TranscriptSubscriptions
   | LocalRuntimeSource
-  | ToolRegistry
-  | AppSignals
 > {
   const { ref, changes } = yield* SessionViewService;
   const inputs = yield* SessionInputs;
   const subscriptions = yield* TranscriptSubscriptions;
   const local = yield* LocalRuntimeSource;
-  // What the session's runs announce from here on, to this process's
-  // listeners, for the session's life: rows above the commit the store
-  // holds now, so a reopened session never replays history as news.
-  const database = yield* Database;
-  yield* announceRunFacts(
-    changes,
-    (runId) =>
-      database.readAggregate(qualifyAggregateId('run', runId), 1, [
-        'plugin.fact',
-      ]),
-    yield* database.currentCommit,
-    armsOf((yield* ToolRegistry).entries.values()),
-  ).pipe(
-    Effect.catchCause((cause) =>
-      Effect.logWarning(
-        `Session ${storage} stopped announcing its runs' facts`,
-      ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
-    ),
-    Effect.forkScoped,
-  );
   /** Update the local truth unless the session has closed. */
   const updateLocal = (
     next: (state: LocalRuntimeState) => LocalRuntimeState,

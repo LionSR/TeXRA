@@ -19,7 +19,6 @@ import {
 
 // Local imports - canonical model contract
 import {
-  decodeModelConfiguration,
   FILE_UPLOAD_LIFETIME_SECONDS,
   type AnthropicMessagesConfiguration,
   type Model,
@@ -575,15 +574,13 @@ function anthropicWire() {
 
 /** Stable Messages protocol, without a transcript owner, uploads or SDK emitters. */
 export function anthropicMessagesModel(
-  configuration: AnthropicMessagesConfiguration,
+  config: AnthropicMessagesConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
-  const config = decodeModelConfiguration(configuration);
-  if (config.protocol !== 'anthropic-messages' || !transport.apiKey) {
+  if (!transport.apiKey) {
     throw new ModelError({
       kind: 'invalid-request',
-      message:
-        'Anthropic Messages requires its selected configuration and an explicit API key.',
+      message: 'Anthropic Messages requires an explicit API key.',
     });
   }
   // The SDK otherwise lets these ambient headers override selected credentials and protocol.

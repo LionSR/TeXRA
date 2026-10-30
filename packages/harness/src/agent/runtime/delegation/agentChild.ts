@@ -298,14 +298,12 @@ export const reusable = Effect.fn('agent.reusable')(function* (
   if (claimed !== undefined && claimed !== callId) return duplicate;
   siblings.set(key, callId);
   const { log } = call.run.session;
-  const rows = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
-    log.rows(qualifyAggregateId('run', runId), ['tool.result']),
-  )).flat();
-  const found = rows.flatMap((row) =>
-    row.type === 'tool.result' &&
-    row.payload.result.status === 'executed' &&
-    row.payload.result.reuseKey === key
-      ? [{ ...row.payload, result: row.payload.result }]
+  const results = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
+    log.runRows(qualifyAggregateId('run', runId), 'results'),
+  )).flatMap((run) => run.results);
+  const found = results.flatMap((payload) =>
+    payload.result.status === 'executed' && payload.result.reuseKey === key
+      ? [{ ...payload, result: payload.result }]
       : [],
   );
   const mine = `${script.callId}/`;

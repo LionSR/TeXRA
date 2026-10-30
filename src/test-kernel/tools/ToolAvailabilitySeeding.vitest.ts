@@ -13,7 +13,7 @@ import {
   installedHost,
   installPlatform,
 } from '@test/support/setupPlatform';
-import { wolfram } from '@texra/tools/integrationPlugins';
+import { wolfram } from '@texra/tools/wolframPlugin';
 import { texraPlugins } from '@texra/tools/registry';
 
 describe('seedDisabledToolDefaults', () => {

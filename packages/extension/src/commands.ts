@@ -87,8 +87,7 @@ export function registerCommands(
       launchSetupAssistant(
         roots,
         runSession,
-        (runId) =>
-          Effect.sync(() => progressViewProvider.presentLaunchedRun(runId)),
+        progressViewProvider.runValidated,
         progressViewProvider.showConnectModel(),
         progressViewProvider.showProgressView(),
       ).pipe(

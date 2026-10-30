@@ -24,9 +24,13 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
 import type { Secrets } from '@platform/secrets';
-import type { Persona, SessionEventDraft } from '@shared/schemas';
+import type { Persona } from '@shared/schemas';
+import type {
+  RegisterRunOptions,
+  Registration,
+} from '@shared/session/runFacts';
 import { RunHistory } from '@shared/session/runHistory';
-import type { RunHistoryDraft, RunState } from '@shared/session/runState';
+import type { RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import {
   AGENT_SOURCE,
@@ -56,8 +60,8 @@ interface LaunchEntry {
    *  fresh run's launch, else its rows' edge): a child detached mid-run
    *  keeps child behaviour until its next activation. */
   readonly parent: RunId | null;
-  readonly registration: readonly SessionEventDraft[] | null;
-  readonly seed?: readonly RunHistoryDraft[] | null;
+  readonly registration: Registration | null;
+  readonly seed?: RegisterRunOptions['seed'] | null;
   readonly opening: Alongside;
   readonly entered: (state: RunState) => Effect.Effect<void>;
   readonly initialUserMessage: string | undefined;
@@ -259,11 +263,8 @@ export const agentRunLayer = (
         workspaceRoot: session.roots.workspace,
         held,
       };
-      // A fork binds as its source was bound at the cut (its seed's row).
-      const seeded = launch.entry.seed?.findLast(
-        (row) => row.type === 'run.config',
-      );
-      const fromSeed = seeded?.type === 'run.config' ? seeded.binding : null;
+      // A fork binds as its source was bound at the cut (its seed's binding).
+      const fromSeed = launch.entry.seed?.binding ?? null;
       const persisted = folded?.backend != null ? folded : fromSeed;
       const backend = persisted?.backend ?? undefined;
       const modelId = config.model;

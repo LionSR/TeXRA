@@ -27,7 +27,10 @@ import { FetchHttpClient, HttpClient } from 'effect/http';
 import { Inbox } from '@agent/followUp/Inbox';
 import { wakeRun } from '@agent/followUp/ToolUseFollowUp';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { SessionHostInteractions } from '@agent/runtime/HostInteractions';
+import {
+  presentTerminalResult,
+  SessionHostInteractions,
+} from '@agent/runtime/HostInteractions';
 import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
@@ -44,7 +47,6 @@ import {
   type SessionHandle,
   type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
-import { presentTerminalResult } from '@agent/runtime/terminalResultToast';
 import { mcpConfigPathOf } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
@@ -73,7 +75,7 @@ import {
   workspaceEnvironmentLayer,
 } from '@platform/defaults/nodePlatform';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
-import { aggregateTarget, type SessionCloseReport } from '@shared/schemas';
+import type { SessionCloseReport } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   Database,
@@ -88,7 +90,7 @@ import type { SettingsCatalog } from '@shared/state/stateSettings';
 import { UsageLog } from '@shared/usageLog';
 import { ToolCatalogOwner } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
-import type { Plugin } from '@tools/plugins';
+import { announceWrites, armsOf, type Plugin } from '@tools/plugins';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
@@ -247,23 +249,20 @@ const sessionHandleLayer = (key: SessionKey) =>
       // The registry's phase notification rides the fold-gated tail: its
       // waiters read `RunView.status` once the view holds a row's state.
       // Host notices go to the author. `log.settled` waits for this reader.
+      const announce = announceWrites(armsOf(plugins.entries.values()));
       yield* Stream.runForEach(store.folded, (event) =>
         Effect.gen(function* () {
-          const target = aggregateTarget(event.aggregateId);
           yield* onHeldResult(session, event, consumerScope);
-          if (target.kind !== 'run' || event.type !== 'run.end') return;
+          yield* announce(event);
+          if (store.closed()) return;
           const { self } = yield* SubscriptionRef.get(local.ref);
-          if (event.origin == null || !self.includes(event.origin)) return;
-          if (!store.closed())
-            yield* Effect.suspend(() =>
-              presentTerminalResult(session, { ...event, runId: target.id }),
-            ).pipe(
-              Effect.catchCause((cause) =>
-                logFailure('Terminal result presentation threw')(
-                  Cause.squash(cause),
-                ),
+          yield* presentTerminalResult(session, event, self).pipe(
+            Effect.catchCause((cause) =>
+              logFailure('Terminal result presentation threw')(
+                Cause.squash(cause),
               ),
-            );
+            ),
+          );
         }),
       ).pipe(
         Effect.catch(

@@ -68,7 +68,7 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { LocalRuntimeStateSchema } from '@texra-ai/harness/transcript';
-import * as toast from '@agent/runtime/terminalResultToast';
+import * as toast from '@agent/runtime/HostInteractions';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
@@ -698,13 +698,16 @@ describe('Sessions owner', () => {
           ]);
           yield* session.log.settled;
           // The live run's `run.end` reaches the folded tail once the view
-          // has folded it, and a `waiting` step never does.
+          // has folded it, and a `waiting` step never does: of the rows the
+          // presenter saw, one is an end, the live run's.
           yield* Effect.promise(() =>
-            vi.waitFor(() => expect(presented).toHaveBeenCalledOnce()),
-          );
-          expect(presented).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({ runId: OLDER }),
+            vi.waitFor(() =>
+              expect(
+                presented.mock.calls.flatMap(([, row]) =>
+                  row.type === 'run.end' ? [row.aggregateId] : [],
+                ),
+              ).toEqual([qualifyAggregateId('run', OLDER)]),
+            ),
           );
         } finally {
           presented.mockRestore();

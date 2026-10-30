@@ -34,8 +34,6 @@ const DETACHED_FORK = /\b(?:forkDetach|FiberMap\.run|FiberSet\.run)\s*\(/g;
 const DETACHED_FORK_ALLOWLIST: Readonly<Record<string, number>> = {
   // A host presentation notice, reported rather than awaited.
   'packages/harness/src/agent/runtime/HostInteractions.ts': 1,
-  // The host's `onRun` observer, which may last as long as the run.
-  'packages/harness/src/agent/runtime/AgentRunLifecycle.ts': 1,
   // A late child-loop failure's diagnosis, joined on the launched fiber.
   'packages/harness/src/agent/runtime/delegation/detachedChildRun.ts': 1,
   // A guest script's issued calls, in the script's own scoped set: each runs

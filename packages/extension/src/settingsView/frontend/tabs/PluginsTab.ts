@@ -6,6 +6,7 @@
  * are listed read-only, edited in the file "Open mcp.json" opens.
  */
 
+import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -34,14 +35,14 @@ import {
   postStateSetting,
 } from '../components/shared/stateSettingRows';
 import { catalogDetailStyles } from '../components/shared/catalogDetailStyles';
-import type { PluginsPageData } from '../settingsState';
+import { settingSignal, type PluginsPageData } from '../settingsState';
 
 import '../components/plugins/PluginCard';
 import '../components/shared/SettingsCatalog';
 import type { SettingsCatalogItem } from '../components/shared/SettingsCatalog';
 
 @customElement('plugins-tab')
-export class PluginsTab extends LitElement {
+export class PluginsTab extends SignalWatcher(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -69,11 +70,6 @@ export class PluginsTab extends LitElement {
 
   /** Null until the host's first rows arrive. */
   @property({ attribute: false }) page: PluginsPageData | null = null;
-  /** Current value of every inline setting the rows declare, by catalog
-   *  key; `SettingsApp` reads them from the keyed setting signals. */
-  @property({ attribute: false }) settingValues: Readonly<
-    Record<string, string>
-  > = {};
 
   /**
    * One catalog-backed select row: the allowed values, their labels, and the
@@ -82,11 +78,7 @@ export class PluginsTab extends LitElement {
    * inside a plugin card it reads bare ('Reasoning effort') where the
    * catalog title has to disambiguate in a flat list.
    */
-  private renderSelectRow(
-    label: string,
-    key: string,
-    value: string,
-  ): TemplateResult {
+  private renderSelectRow(label: string, key: string): TemplateResult {
     const entry = TEXRA_SETTINGS.settingsViewByKey(key);
     if (!entry) {
       throw new Error(`No settings-view catalog row for setting "${key}"`);
@@ -106,7 +98,7 @@ export class PluginsTab extends LitElement {
           <wa-select
             class="setting-select"
             id=${controlId}
-            .value=${value}
+            .value=${settingSignal<string>(key).get()}
             @change=${(e: Event) => {
               const selected = readSelectValue(e);
               if (selected) postStateSetting(key, selected);
@@ -128,7 +120,7 @@ export class PluginsTab extends LitElement {
     return html`
       <div slot="details" class="settings-section">
         ${row.item.settings.map(([key, label]) =>
-          this.renderSelectRow(label, key, this.settingValues[key]),
+          this.renderSelectRow(label, key),
         )}
       </div>
     `;

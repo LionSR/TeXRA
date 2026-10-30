@@ -126,14 +126,9 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
     const html = injectStandaloneTrace(template, trace);
     const filename = generateExportFilename(
       {
-        // The assembler guarantees a non-empty document; the creation
-        // row, when present, supplies the original launch time.
-        timestamp: new Date(
-          (
-            trace.events.find((event) => event.type === 'run.start') ??
-            trace.events[0]!
-          ).at,
-        ).toISOString(),
+        // The assembler guarantees a non-empty document whose first row,
+        // the creation row when the run has one, carries the launch time.
+        timestamp: new Date(trace.events[0]!.at).toISOString(),
         config: record,
       },
       'html',

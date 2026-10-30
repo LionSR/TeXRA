@@ -15,7 +15,6 @@ import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
-import { TEXRA_PLUGIN_CARDS } from '@texra/tools/pluginCards';
 import { texraPlugins } from '@texra/tools/registry';
 import { armsOf } from '@tools/plugins';
 import {
@@ -65,7 +64,7 @@ const PLUGIN_SERVICES: readonly {
   {
     tag: 'GitHubSubscriptions',
     users:
-      /^packages\/texra\/src\/(?:tools\/(?:github\/|integrationPlugins\.ts$)|controllers\/settingsView\/githubSubscriptions\.ts$)/,
+      /^packages\/texra\/src\/(?:tools\/github\/|controllers\/settingsView\/githubSubscriptions\.ts$)/,
   },
   { tag: 'CodexThreads', users: /^packages\/texra\/src\/tools\/codex\.ts$/ },
   {
@@ -92,7 +91,8 @@ const PLUGIN_SERVICES: readonly {
 /** Where the services are declared, typed and built. */
 const SERVICE_HOMES = new Set([
   'packages/texra/src/tools/agentCliSessionStores.ts',
-  'packages/texra/src/tools/integrationPlugins.ts',
+  'packages/texra/src/tools/claudeAgentPlugin.ts',
+  'packages/texra/src/tools/codexPlugin.ts',
   'packages/texra/src/tools/registry.ts',
   'packages/harness/src/platform/processRuntime.ts',
 ]);
@@ -232,17 +232,15 @@ describe('plugin rosters', () => {
     ]);
   });
 
-  it('gives every switchable plugin a dashboard card, and every card a plugin', () => {
+  it('gives every switchable plugin a dashboard card', () => {
     // A switch with no card would be off with nothing to turn it on.
-    const plugins = texraPlugins({ name: 'vscode' });
-    const carded = new Set(TEXRA_PLUGIN_CARDS.map(({ id }) => id));
-    const listed = new Set(plugins.map(({ id }) => id));
-    expect({
-      switchedWithoutCard: plugins
-        .filter(({ id, toggle }) => toggle !== undefined && !carded.has(id))
+    expect(
+      texraPlugins({ name: 'vscode' })
+        .filter(
+          ({ toggle, card }) => toggle !== undefined && card === undefined,
+        )
         .map(({ id }) => id),
-      cardWithoutPlugin: [...carded].filter((id) => !listed.has(id)),
-    }).toEqual({ switchedWithoutCard: [], cardWithoutPlugin: [] });
+    ).toEqual([]);
   });
 
   it('pins the row kinds plugins write', () => {

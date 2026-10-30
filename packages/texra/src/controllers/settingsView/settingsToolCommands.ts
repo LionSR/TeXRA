@@ -148,16 +148,18 @@ export function settingsToolCommands(ports: {
       ),
     // The command is looked up from the plugin's card, never taken from
     // the webview.
-    runToolCommand: ({ toolId, kind }) => {
-      const action = planToolTerminalAction({ toolId, commandKind: kind });
-      return action.kind === 'none'
-        ? Effect.fail(
-            new Error(
-              `No ${kind} command for tool "${toolId}" (${action.reason})`,
-            ),
-          )
-        : bindings.runInTerminal(action.name, action.command);
-    },
+    runToolCommand: ({ toolId, kind }) =>
+      Effect.flatMap(
+        planToolTerminalAction({ toolId, commandKind: kind }),
+        (action) =>
+          action.kind === 'none'
+            ? Effect.fail(
+                new Error(
+                  `No ${kind} command for tool "${toolId}" (${action.reason})`,
+                ),
+              )
+            : bindings.runInTerminal(action.name, action.command),
+      ),
     runInstallCommand: ({ installCommand }) =>
       isAllowedLatexInstallCommand(installCommand)
         ? bindings.runInTerminal('TeXRA Install', installCommand)

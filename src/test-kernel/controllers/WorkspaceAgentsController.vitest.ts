@@ -8,7 +8,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { FakeStateStore } from '@test/support/FakePlatform';
-import { workspaceTeams } from '@texra/shared/agentTeams';
+import { teamMembers } from '@texra/shared/agentTeams';
 import type {
   StateStore,
   WorkspaceAgentsControllerDeps,
@@ -30,7 +30,7 @@ function controller(
   return new WorkspaceAgentsController({
     repoState: workspaceState,
     globalState: new FakeStateStore(),
-    teams: workspaceTeams,
+    teamMembers,
     getAgents,
     resolveAgent: (identifier) =>
       getAgents().find((entry) => agentMatchesIdentifier(entry, identifier)),

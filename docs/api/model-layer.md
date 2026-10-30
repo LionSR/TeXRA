@@ -25,7 +25,6 @@ From [`packages/harness/example/01-llm-turn.ts`](https://github.com/LionSR/TeXRA
 ```ts
 import { Effect } from 'effect';
 import {
-  chooseReasoning,
   completedTurn,
   decideModelRoute,
   OWN_KEY_ROUTE_FACTS,
@@ -47,26 +46,15 @@ const endpoint = resolveRouteEndpoint(selected.config, route, {
 if (!endpoint) throw new Error('No endpoint for the provider.');
 
 const program = Effect.gen(function* () {
+  // The provider's protocol, the route's config, credential scope and
+  // billing, and every option default from the model and its route.
   const binding = yield* bindModel({
-    protocol: 'anthropic-messages',
     model: selected.config,
+    route,
     endpoint,
-    credentialScope: `${route.provider}:api-key`,
     credential: {
       kind: 'api-key',
       apiKey: process.env.ANTHROPIC_API_KEY ?? '',
-    },
-    billing: 'api-key',
-    options: {
-      maxOutputTokens: 1024,
-      temperature: 0,
-      reasoning: chooseReasoning(selected.config, selected.request),
-      parallelToolCalls: false,
-      reasoningSummary: false,
-      serverState: false,
-      fastTier: false,
-      webSocket: false,
-      background: false,
     },
   });
 
@@ -82,7 +70,7 @@ const program = Effect.gen(function* () {
 
   const result = yield* completedTurn(binding.model.streamTurn(turn));
   const cost = result.usage
-    ? turnCost(selected.config, result.usage, { plan: false })
+    ? turnCost(binding.config, result.usage, { plan: false })
     : null;
   return { result, cost };
 }).pipe(Effect.scoped);

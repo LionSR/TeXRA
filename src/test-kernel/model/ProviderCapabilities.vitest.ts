@@ -28,14 +28,13 @@ const chatgptConfig = (config: ModelConfig) =>
     Effect.provideService(Secrets, fakeHostSecrets),
     Effect.map((settings) => routeFactsFor(settings, [])),
     Effect.map((facts) =>
-      routeConfig(
-        config,
-        {
-          kind: 'chatgpt-subscription',
-          contextWindow: config.codexSubscription?.contextWindow ?? Number.NaN,
-        },
-        facts,
-      ),
+      routeConfig(config, {
+        kind: 'chatgpt-subscription',
+        contextWindow:
+          facts.chatgptContextWindow ??
+          config.codexSubscription?.contextWindow ??
+          Number.NaN,
+      }),
     ),
   );
 

@@ -108,7 +108,7 @@ interface AgentCatalogShape {
     AgentEntry,
     AgentNotFound | AgentCatalogLoadError | StateReadFailed
   >;
-  /** The workspace's agent selection and team presets, over this catalog. */
+  /** The workspace's agent selection, over this catalog. */
   readonly workspaceAgents: (
     stores: WorkspaceAgentsStores,
   ) => WorkspaceAgentsController<AgentEntry>;
@@ -231,11 +231,16 @@ interface AgentDirectoriesPort {
     FileSystem.FileSystem
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
-  /** The team presets a workspace offers, built-in and its own, read from its
-   *  repository state; absent, the app has no teams. */
-  readonly teams?: (
+  /**
+   * The member names of the workspace's team `teamId`, read from its
+   * repository state; `undefined` for a team the workspace has none of. The
+   * app owns what a team is; the harness only stores a selection naming one
+   * by id. Absent, the app has no teams.
+   */
+  readonly teamMembers?: (
     repoState: StateStore,
-  ) => Effect.Effect<readonly TeamPreset[], StateReadFailed>;
+    teamId: string,
+  ) => Effect.Effect<readonly string[] | undefined, StateReadFailed>;
   /**
    * The packaged resources root a host ships its bundled agents under,
    * the tool plugins' agent directories among them. Absent where none ships:
@@ -266,8 +271,8 @@ interface AgentDirectoryServiceOptions {
   resourcesPath: string;
   /** Where the configured custom agent directory is read from. */
   state: Pick<StateStore, 'get'>;
-  /** The app's team presets (`AgentDirectoriesPort.teams`). */
-  teams?: AgentDirectoriesPort['teams'];
+  /** The app's team membership read (`AgentDirectoriesPort.teamMembers`). */
+  teamMembers?: AgentDirectoriesPort['teamMembers'];
   /** Defaults to logging the issue at `warn`; hosts with an interactive
    * notification surface (e.g. the VS Code extension) can override it. */
   issueReporter?: {
@@ -604,7 +609,7 @@ handler on the same call stack, a host's own fallback) shows it again.
 Attached when a targeted notification owns its presentation (its emit
 confirmed delivery, or no host was attached and it was retained for
 replay), when the session's presenter showed a run's failure from its
-`run.end` row (`presentRunFailure`, `receiveTerminalFailure`), and when
+`run.end` row (`presentRunFailure`, the run's terminal `endRun`), and when
 another process (a service) showed it to this window. Never for a
 fire-and-forget or declined emit, so a host that could not render a
 targeted notification leaves the generic surface free to fire.
@@ -995,15 +1000,6 @@ interface ExternalToolCheckResult {
   /** Human-readable status detail from the group's `detailCheck`, if any. */
   readonly statusDetail?: string;
 }
-```
-
-## findTeamPreset
-
-```ts
-function findTeamPreset(
-  presets: readonly TeamPreset[],
-  query: string,
-): TeamPreset | undefined
 ```
 
 ## followPendingRequests
@@ -1535,15 +1531,6 @@ interface PerKeyLanes<Key> {
   set(key: Key, lane: PerKeyLane): unknown;
   delete(key: Key): unknown;
 }
-```
-
-## planTeamRun
-
-```ts
-function planTeamRun<T extends TeamCatalogAgent>(
-  preset: TeamPreset,
-  options: TeamRunOptions<T>,
-): TeamRunPlan<T>
 ```
 
 ## PlatformSecrets
@@ -2278,8 +2265,8 @@ type SentReasoning =
 ## SESSION_CLOSE_DEADLINE_MS
 
 The budget one session close spends waiting for its runs to end before it
-reports the ones still live abandoned (`SessionOwner.close`). A hung run must
-not wedge desktop quit, eat the extension's ~5s deactivate budget, or
+reports the ones still live abandoned (`SessionOwner.close`). A hung run
+must not wedge desktop quit, eat the extension's ~5s deactivate budget, or
 stall a CLI SIGTERM indefinitely. The closes of a process's sessions start
 together, so they finish under one deadline for the process, not one each.
 
@@ -2576,68 +2563,6 @@ its write in the scope that controls it (`set`).
 
 ```ts
 const SubscriptionPreference: Readonly<{ get: (provider: "chatgpt" | "grok", stores: SettingsStores) => boolean; set: (provider: "chatgpt" | "grok", stores: SettingsStores, enabled: boolean) => Effect<void, Error | ConfigWriteFailed, never>; }>
-```
-
-## TeamCatalogAgent
-
-```ts
-interface TeamCatalogAgent {
-  readonly name: string;
-  readonly source: AgentSource;
-  readonly tools?: string[];
-}
-```
-
-## TeamPreset
-
-A team preset: its members by name, and where it came from. The app
-supplies the catalog (`AgentDirectoriesPort.teams`).
-
-```ts
-interface TeamPreset {
-  readonly id: string;
-  readonly name: string;
-  readonly description: string;
-  /** An icon name the host's icon set draws. */
-  readonly icon: string;
-  readonly agents: readonly string[];
-  readonly source: 'built-in' | 'custom';
-  /** The setup starter: an agent list a workspace can select, never a launch. */
-  readonly setupOnly?: true;
-}
-```
-
-## TeamRunOptions
-
-```ts
-interface TeamRunOptions<T extends TeamCatalogAgent> {
-  /**
-   * The workspace agents' member identity rule (`AgentCatalog.get` in
-   * production): a bare name matches by name, a `source:name` key exactly.
-   */
-  readonly resolveAgent: (identifier: string) => T | undefined;
-  /**
-   * The agents a built-in team runs as its root, in preference order: the
-   * first one among the team's delegating members leads it, and a built-in
-   * team with none of them has no root. A custom team is led by its first
-   * delegating member. The app owns these names.
-   */
-  readonly rootAgentNames: readonly string[];
-  readonly agentOverride?: string;
-}
-```
-
-## TeamRunPlan
-
-```ts
-interface TeamRunPlan<T extends TeamCatalogAgent = TeamCatalogAgent> {
-  readonly preset: TeamPreset;
-  readonly rootAgent?: T;
-  readonly missingAgentOverride?: string;
-  readonly agentKeys: readonly string[];
-  /** Members that did not resolve, in preset-declaration order. */
-  readonly missingAgents: readonly string[];
-}
 ```
 
 ## ToolAvailability
@@ -2949,8 +2874,8 @@ interface WorkspaceAgentsControllerDeps<
 > {
   readonly repoState: StateStore;
   readonly globalState: StateStore;
-  /** The app's team presets (`AgentDirectoriesPort.teams`). */
-  readonly teams: AgentDirectoriesPort['teams'];
+  /** The app's team membership read (`AgentDirectoriesPort.teamMembers`). */
+  readonly teamMembers: AgentDirectoriesPort['teamMembers'];
   readonly getAgents: () => Entry[];
   /**
    * Resolve one stored identifier without collapsing exact source identity.
