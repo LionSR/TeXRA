@@ -118,6 +118,9 @@ export default defineConfig({
   test: {
     testTimeout: kernelTimeoutMs,
     hookTimeout: kernelTimeoutMs,
+    // One temp folder per run, which every worker's temp files go under and
+    // the run's teardown removes: a worker the pool ends never cleans up.
+    globalSetup: ['src/test-kernel/support/testTempRoot.ts'],
     // A local run shares the machine with the editor and with a second run
     // (another worktree, a watcher), so it takes half the cores: two runs fill
     // the machine and no more. CI owns its runner and keeps Vitest's default.
