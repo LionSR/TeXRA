@@ -1,12 +1,12 @@
 /**
  * `host.request`: a capability
  * the host performs on the surface's behalf, mapped onto the process
- * services and the `@hosts/*` ports. Components dispatch one arm as the detail of a
+ * services and the `@hosts/*` ports. Components dispatch one case as the detail of a
  * `host-request` event (`uiEvents.ts`); the root forwards it over the
  * bridge under a `session` and a `requestId`, answered by 8.4.
  *
  * Only the arms the shell components dispatch are declared; each new
- * component adds its arm here with its first dispatch.
+ * component adds its case here with its first dispatch.
  */
 import { Schema } from 'effect';
 
@@ -44,14 +44,14 @@ export const HostRequestSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('openLabel'), label: Schema.String }),
   Schema.Struct({ kind: Schema.Literal('openRunStorage'), ...runScoped }),
   Schema.Struct({ kind: Schema.Literal('exportTranscript'), ...runScoped }),
-  /** Relaunch a settled run: a workflow through the host's launcher with
+  /** Relaunch a finished run: a workflow through the host's launcher with
    *  its run id, a tool-use run through the resume port. */
   Schema.Struct({ kind: Schema.Literal('resume'), ...runScoped }),
-  /** The launch form, opened on a settled run's setup (Run again…). */
+  /** The launch form, opened on a finished run's setup (Run again…). */
   Schema.Struct({ kind: Schema.Literal('runAgain'), ...runScoped }),
   /**
    * Fork: a new task holding this conversation up to `at` (its latest
-   * settled point when absent), continued and shown; with `draft` (Fork
+   * finished point when absent), continued and shown; with `draft` (Fork
    * from here), the message it was cut before waits in its composer, with
    * the media it attached (`media`, by address).
    */
@@ -66,7 +66,7 @@ export const HostRequestSchema = Schema.Union([
   }),
   /** The latexFixer follow-up over a workflow run's compile failures. */
   Schema.Struct({ kind: Schema.Literal('runCompileFixer'), ...runScoped }),
-  /** A retry on the user's own API key: the host stores one, then settles
+  /** A retry on the user's own API key: the host stores one, then finishes
    *  the pending retry on personal credentials. `credentialSwitch` is the
    *  move the retry request carried, as the run decided it. */
   Schema.Struct({

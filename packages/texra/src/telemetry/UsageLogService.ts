@@ -159,8 +159,8 @@ export const usageLoggingOptOut = Effect.fnUntraced(function* (
  * A queued entry with the configuration of the workspace it was recorded in.
  * The flush runs on a timer or at shutdown, outside any run: re-reading
  * consent from the ambient roots there would consult the process roots (on
- * the desktop, the no-workspace session) instead of the paper that produced
- * the entry, and miss that paper's opt-out.
+ * the desktop, the no-workspace session) instead of the project that produced
+ * the entry, and miss that project's opt-out.
  */
 interface QueuedUsageEntry {
   readonly entry: UsageLogEntry;
@@ -380,7 +380,7 @@ class UsageLogServiceImpl {
     ),
   );
 
-  /** Settle the next batch: sent, discarded, or failed with it kept. */
+  /** Finish the next batch: sent, discarded, or failed with it kept. */
   private readonly sendNextBatch = Effect.fn('UsageLogService.sendNextBatch')(
     function* (this: UsageLogServiceImpl) {
       let batch = this.retryBatch;

@@ -365,7 +365,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     output: detailedOutput(summary),
     edits,
     // The files it wrote, as a fact on this run, committed as the call
-    // settles: every process that folds the run (a window over a service
+    // finishes: every process that applies the run (a window over a service
     // task among them) badges and refreshes them.
     ...(accepted > 0 && {
       facts: [

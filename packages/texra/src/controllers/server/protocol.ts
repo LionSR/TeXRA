@@ -220,8 +220,8 @@ export const TexraRpcs = RpcGroup.make(
     error: TaskFailed,
   }),
   /** What a task's current activation ends with, once it ends: its
-   *  stored end; and `at`, the service's fold position where it saw the
-   *  end, so a window's fold at or past it shows the end (or the run's
+   *  stored end; and `at`, the service's view position where it saw the
+   *  end, so a window's view at or past it shows the end (or the run's
    *  removal) too. */
   Rpc.make('task.ended', {
     payload: { workspace, runId: RunIdSchema },

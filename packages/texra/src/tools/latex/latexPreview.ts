@@ -33,7 +33,7 @@ const CHANNEL = 'latexPreview';
 /**
  * The host's build-and-show display, as the program it is: the preview
  * programs below yield it, and the approval controller forks it so a build
- * outlives the preview whose settle race interrupts it.
+ * outlives the preview whose completion race interrupts it.
  */
 export type BuildDisplayFn = (
   location: FileLocation,
@@ -60,11 +60,11 @@ export interface LatexPreviewEntry {
   proposedContent: string;
   isSettled: () => boolean;
   /**
-   * Filled when the request settles. A preview still running then is
+   * Filled when the request finishes. A preview still running then is
    * interrupted, which stops its latexdiff subprocess.
    */
   settled: Deferred.Deferred<void>;
-  /** Removals of the temp files the previews wrote, run when the request settles. */
+  /** Removals of the temp files the previews wrote, run when the request finishes. */
   workspaceTempCleanup: Array<
     Effect.Effect<void, never, FileSystem.FileSystem>
   >;
@@ -141,7 +141,7 @@ const deleteWithAuxFiles = Effect.fn('latexPreview.deleteWithAuxFiles')(
   },
 );
 
-/** Register cleanup with the entry, or run it now if the entry already settled */
+/** Register cleanup with the entry, or run it now if the entry already finished */
 const registerCleanup = (
   entry: LatexPreviewEntry,
   cleanup: Effect.Effect<void, never, FileSystem.FileSystem>,
@@ -154,7 +154,7 @@ const registerCleanup = (
 
 /**
  * Run a LaTeX operation with standard error handling and progress tracking.
- * The operation ends early, interrupted, when the request settles under it.
+ * The operation ends early, interrupted, when the request finishes under it.
  */
 const withLatexOperation = (
   entry: LatexPreviewEntry,
@@ -185,7 +185,7 @@ const withLatexOperation = (
 
 /** Read file content with fallback to provided default. The disk read exists
  *  to pick up the user's saved hand edits to the approval temp file; a
- *  missing file (entry settled/cleaned up racing the preview) is genuinely
+ *  missing file (entry finished/cleaned up racing the preview) is genuinely
  *  benign, so only that case falls back silently. Any other failure still
  *  falls back — the held in-memory content keeps the preview usable — but
  *  warns, because the preview would silently drop the user's saved edits. */
@@ -247,7 +247,7 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
           );
     const tempPath = path.join(tempDir, tempFileName);
 
-    // Writing the file and registering its removal are one step: a settled
+    // Writing the file and registering its removal are one step: a finished
     // request interrupting between them would leave a file nothing deletes.
     // The removal is registered however the write ends, since a failed write
     // can still leave a partial file behind.
@@ -363,7 +363,7 @@ export const runLatexdiff = (
 
       // The diff lands beside the original copy under the proposed copy's
       // stem. Its removal is registered before latexdiff starts, so a
-      // request settling mid-diff, which interrupts the diff after its
+      // request finishing mid-diff, which interrupts the diff after its
       // output may already be written, still has it deleted.
       const outputDirectory = path.dirname(originalPath);
       yield* registerCleanup(

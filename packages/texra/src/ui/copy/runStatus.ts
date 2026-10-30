@@ -1,6 +1,6 @@
 /**
  * How a run's place reads in every renderer: its loop position, and the
- * sections a run list is grouped into. English copy over the fold's facts
+ * sections a run list is grouped into. English copy over the view's facts
  * (`RunView.turn`, `RunView.group`), so the dock, the TUI and the trace
  * viewer cannot word one thing two ways.
  */
@@ -16,7 +16,7 @@ export function formatLoopPositionLabel(
 }
 
 /**
- * One section per `group` arm, and the order the sections are painted in.
+ * One section per `group` case, and the order the sections are painted in.
  * Both surfaces that group a run list — the webview tab strip and the
  * TUI's run tree — read this table rather than spelling the four labels
  * again, so a renamed section cannot say one thing in the dock and another
@@ -85,7 +85,7 @@ function resumeBlockedText({
 
 /**
  * The banner a run's notice (`RunView.statusNotice`) reads as, in every
- * host: its banner, tooltip and copied diagnostics. Null when the fold
+ * host: its banner, tooltip and copied diagnostics. Null when the view
  * gave it none.
  */
 export function runNoticeText(notice: RunNotice | null): string | null {

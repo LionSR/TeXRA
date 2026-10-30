@@ -403,7 +403,7 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
       ZOTERO_CONNECTOR_TIMEOUT_MS,
       Effect.gen(function* () {
         // The request scope stays open through the body read, after the
-        // header request has already settled.
+        // header request has already finished.
         const client = yield* scopedClient;
         const response = yield* client.post(
           zoteroUrl(port, `/connector/${endpoint}`),

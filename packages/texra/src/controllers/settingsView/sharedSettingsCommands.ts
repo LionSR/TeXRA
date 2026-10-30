@@ -1,7 +1,7 @@
 /**
  * The settings view's body, once for both GUI hosts. The extension and the
  * desktop each answered the same commands with the same controllers, the same
- * refresh tails and the same error sentences, drifting apart one arm at a
+ * refresh tails and the same error sentences, drifting apart one case at a
  * time; the body lives here and a host binds a table of what it performs its
  * own way: how a message reaches its view, how it asks and tells the user,
  * how it opens a file or picks a folder, and how its launchers reload.
@@ -176,7 +176,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   /**
    * Every surface a credential feeds: the probes outside this view first,
-   * since model availability reads the key state they settle, then the
+   * since model availability reads the key state they produce, then the
    * launchers' catalogs, the profile, the Models page and, when the
    * credential is a coding plan's, its usage.
    */
@@ -412,7 +412,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     },
   };
 
-  // ── The boundary every settings program settles on ──
+  // ── The boundary every settings program finishes on ──
 
   const settle = <E>(
     work: Effect.Effect<void, E, ProcessServices | StorageFs>,
@@ -429,7 +429,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   return {
     handlers,
-    /** Settle the program one message the host already parsed selects. */
+    /** Finish the program one message the host already parsed selects. */
     handleMessage(
       message: SettingsViewInboundMessage,
       registry: SettingsArms,
@@ -448,7 +448,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
      * workspace's tool availability (the Plugins page) and each app signal
      * `repaintOn` names. Every follower is a child fiber started at once,
      * so it is subscribed by the end of the turn that forks this. `start`
-     * is how the host runs a repaint nobody awaits; each is settled and
+     * is how the host runs a repaint nobody awaits; each is finished and
      * reported as a message's would be.
      */
     followRepaints: (

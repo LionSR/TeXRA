@@ -647,7 +647,7 @@ export class PRPollingSource extends PollingSourceBase<
     // on passing checks (lint suggestions, custom workflow advisories).
     // Enqueue here, drain in `afterTick` — the drain runs on every tick
     // (including 304) so excess candidates aren't stranded once check-runs
-    // settle.
+    // finish.
     this.enqueueAnnotationCandidates(state, runs);
   });
 

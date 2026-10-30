@@ -122,7 +122,7 @@ export function settingsToolCommands(ports: {
    * Repaint the rows whenever this workspace's results change, whoever
    * probed: a session opening, the Re-check button, a credential write, an
    * editor extension installed. Runs until interrupted; the host holds it
-   * for the view's life and settles each repaint.
+   * for the view's life and finishes each repaint.
    */
   const followToolAvailability = <E, R>(
     repaint: (post: typeof postPlugins) => Effect.Effect<void, E, R>,

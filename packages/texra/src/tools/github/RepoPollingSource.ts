@@ -385,7 +385,7 @@ export class RepoPollingSource extends PollingSourceBase<
     // Pulls list is already sorted by updated_at desc, so slicing yields
     // the freshest candidates when the per-tick cap bites.
     const probes = candidates.slice(0, MAX_MERGEABLE_PROBES_PER_TICK);
-    // Each probe settles on its own: one PR's failed GET must not drop the
+    // Each probe finishes on its own: one PR's failed GET must not drop the
     // readings of the others, which is what `Promise.allSettled` gave here.
     const probeResults = yield* Effect.forEach(
       probes,

@@ -14,7 +14,7 @@
  * `packages/texra/src/controllers/progressView/ChatExportController.ts`).
  *
  * The conversation comes from the completed-run archive facade
- * (`readCompletedRunConversation`): the canonical transcript fold owns completed-run
+ * (`readCompletedRunConversation`): the canonical transcript view owns completed-run
  * display/export per #7246 Decision 1.
  *
  */
@@ -45,7 +45,7 @@ export class ChatExportInputUnreadable extends Schema.TaggedError<ChatExportInpu
 ) {}
 
 /**
- * Facts read from the run store and the session's fold, plus the assembled
+ * Facts read from the run store and the session's view, plus the assembled
  * {@link ChatExportInput} when both `config` and a non-empty `conversation`
  * are present. `exportInput` is `null` whenever there is nothing (or not
  * enough) to export; callers distinguish "nothing at all" from "something is

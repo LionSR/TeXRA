@@ -29,7 +29,7 @@ import type {
   SettingsPresentation,
 } from './settingsHostBindings';
 
-/** The installed-plugin arm of the settings body. */
+/** The installed-plugin case of the settings body. */
 export function settingsPluginCommands(ports: {
   readonly roots: PluginEnv & {
     readonly workspace: string | undefined;
@@ -37,7 +37,7 @@ export function settingsPluginCommands(ports: {
   };
   readonly bindings: SettingsHostBindings;
   readonly present: SettingsPresentation;
-  /** Repaint the Plugins page, whose rows this arm's changes feed. */
+  /** Repaint the Plugins page, whose rows this case's changes feed. */
   readonly repaint: Effect.Effect<void, Error, ProcessServices>;
 }) {
   const { roots, bindings, present } = ports;

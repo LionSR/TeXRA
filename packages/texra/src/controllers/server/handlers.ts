@@ -112,7 +112,7 @@ export class ServiceControl extends Context.Service<
 >()('@texra/server/ServiceControl') {}
 
 /** The tasks the service runs now, across its open projects: what its
- *  registry holds live, which an admitted run is before the view folds it.
+ *  registry holds live, which an admitted run is before the view applies it.
  *  With `parked` false, only those at work, not a conversation the view
  *  shows waiting for its next message. */
 export const runningTasks = Effect.fn('server.runningTasks')(function* (
@@ -177,7 +177,7 @@ const internal = Effect.fn('handlers.internal')(function* (
 /**
  * What `runId` ends with in `session`: once every owner of the run here has
  * left, its `run.end` as the run's records hold it, and `at`, the cursor of
- * the first level that shows the run no longer live, or gone: a fold at or
+ * the first level that shows the run no longer live, or gone: a view at or
  * past it holds the run's end, or its removal. A run that ended with no
  * `run.end` (deleted) ends with the outcome its view shows, without output;
  * a store that cannot be read fails the answer, never reads as an empty end.
@@ -330,7 +330,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
               }),
           ),
           // Whether the run exists, from the log rather than the live
-          // fold: a session the open just (re)built has folded nothing yet.
+          // view: a session the open just (re)built has applied nothing yet.
           Effect.flatMap(({ session }) =>
             Effect.flatMap(session.view.read([runId]), (level) =>
               level.runs.has(runId)
