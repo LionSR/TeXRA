@@ -8,7 +8,6 @@
 import {
   elideText,
   transcriptText,
-  type StatItem,
   type TranscriptText,
 } from '@texra-ai/harness/transcript';
 import { safeTerminalText } from '@cli/runtime/terminalText';
@@ -70,10 +69,6 @@ function cornerBlock(lines: readonly string[]): string[] {
   );
 }
 
-function statItemLines(items: readonly StatItem[]): string[] {
-  return items.map((item) => `${item.label}: ${item.value}`);
-}
-
 function fileListLines(row: Extract<TranscriptRow, { kind: 'fileList' }>) {
   const mediaByPath = new Map(row.media.map((ref) => [ref.path, ref.media]));
   return row.files.map((file) => {
@@ -107,7 +102,7 @@ export function transcriptRowBodyLines(
       case 'fileList':
         return fileListLines(row);
       case 'contextManagement':
-        return statItemLines(row.items);
+        return row.items.map((item) => `${item.label}: ${item.value}`);
       case 'progressStatus':
         return row.detail ? elidedTextLines(row.detail, elide) : [];
       case 'assistant':
