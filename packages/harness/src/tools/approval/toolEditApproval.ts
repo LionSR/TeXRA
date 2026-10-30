@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import { RunCall, requireRun, sessionOf } from '@agent/runtime/RunCall';
-import { readToolEditContent } from '@agent/runtime/runApprovalQueue';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   type RefusalDecision,
@@ -9,6 +8,7 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy } from '@shared/session/approvalDecision';
+import { readToolEditContent } from '@shared/session/runtimeRequest';
 import { errorResult } from '@tools/core/result';
 import { blobAddress } from '@utils/core/idHash';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
@@ -127,7 +127,10 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
           ({ payload, decision }): Effect.Effect<ToolEditApprovalResult> =>
             decision.action !== 'approve'
               ? Effect.succeed(decision)
-              : readToolEditContent(session.log, payload.data.content).pipe(
+              : readToolEditContent(
+                  session.log.blobs,
+                  payload.data.content,
+                ).pipe(
                   Effect.flatMap((reviewed) =>
                     // A host's edited bytes may be CRLF. The base and proposal
                     // are the request's stored ones, including after a resume.

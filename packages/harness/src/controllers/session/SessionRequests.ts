@@ -17,7 +17,6 @@ import {
   decideUnderGrant,
   setPolicy,
   writeRejection,
-  readToolEditContent,
 } from '@agent/runtime/runApprovalQueue';
 import { forkRun, runNoun } from '@agent/runtime/forkRun';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';
@@ -46,6 +45,7 @@ import {
   NotOwner,
   Rejected,
   Unavailable,
+  readToolEditContent,
   type RequestError,
 } from '@shared/session/runtimeRequest';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -395,13 +395,13 @@ const handle = (
     case 'request.preview': {
       const payload = pendingOf(deps, req.runId, req.requestId)?.payload;
       return payload?.kind === 'toolEdit'
-        ? readToolEditContent(deps.session().log, payload.data.content).pipe(
-            Effect.map((content) => ({
+        ? readToolEditContent(
+            deps.session().log.blobs,
+            payload.data.content,
+          ).pipe(
+            Effect.map(({ originalContent, ...content }) => ({
               kind: 'preview' as const,
-              preview: {
-                ...content,
-                originalContent: content.originalContent ?? '',
-              },
+              preview: { ...content, originalContent: originalContent ?? '' },
             })),
           )
         : Effect.succeed({ kind: 'preview', preview: null });
