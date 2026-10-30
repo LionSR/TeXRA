@@ -531,7 +531,7 @@ interface Plugin {
 
 The plugin list cannot be composed, for a defect `toolTable` refuses: an
 id that is not lowercase letters, digits and dashes, an id or tool name
-listed twice, a second plugin continuing parked runs or recording one
+listed twice, a second plugin continuing waiting runs or recording one
 request kind's decisions, or a switch on a plugin with no availability
 probe.
 

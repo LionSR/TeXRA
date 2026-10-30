@@ -2,7 +2,7 @@
  * A host attached to one session of `@texra-ai/harness`: its presentation
  * surface, and its approval handler at work, which requests it is asked
  * (once each) and what is recorded when it does not answer. A request is
- * never left parked on a handler that failed, threw, or went quiet: that is
+ * never left waiting on a handler that failed, threw, or went quiet: that is
  * a denial, with the cause logged.
  */
 import {
@@ -107,7 +107,7 @@ export const followPendingRequests = <P extends PendingRequest, R>(
 
 /**
  * Answer the runs' requests of `session` with the host's `approve`, until
- * interrupted: every request a parked run waits on here (the attention rule
+ * interrupted: every request a waiting run waits on here (the attention rule
  * every host reads), once, through the session's one `request.decide`. A
  * decision the session refuses to record is tried again briefly, then
  * logged and its request offered again on the next view; a handler still

@@ -169,7 +169,7 @@ const sessionHandleLayer = (key: SessionKey) =>
         (scope, exit) => Scope.close(scope, exit),
       );
       const store = yield* makeSessionStore(key.storage);
-      // A pass over the pending tombstones, at open and after each removal.
+      // A pass over the pending deletion markers, at open and after each removal.
       const collectDeletions = yield* deletionCollector(database, key.storage);
       const view = yield* makeSessionViewAccess(key.storage, store.closed);
       // Capture the startup cohort before callers can publish new launches.

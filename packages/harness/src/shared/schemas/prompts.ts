@@ -152,8 +152,8 @@ const ExternalInquiryHydrationFieldsSchema = Schema.Struct({
 /**
  * One shape for every inquiry turn. First and follow-up dispatches carry the
  * identical field set — the panel tells them apart from `transcript` — so
- * there is no discriminator to narrow on. Hydration fields are always
- * present (nullish on a fresh thread that has nothing to hydrate).
+ * there is no discriminator to narrow on. Initial-load fields are always
+ * present (nullish on a fresh thread that has nothing to load).
  */
 export const ExternalInquiryPermissionSchema = PermissionBaseSchema.mapFields(
   Struct.assign(CommonExternalInquiryFieldsSchema.fields),

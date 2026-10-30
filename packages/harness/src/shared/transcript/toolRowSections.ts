@@ -3,7 +3,7 @@
  * of independent matchers that turn a normalized tool call into the
  * structured sections a host paints. Split out of `toolRowModel.ts`, which
  * keeps the section type definitions, the header preview, output suppression,
- * and the fold itself — the dispatch table is the only seam between them.
+ * and the fold itself — the dispatch table is the only boundary between them.
  */
 import { Predicate, Result, Schema } from 'effect';
 import {

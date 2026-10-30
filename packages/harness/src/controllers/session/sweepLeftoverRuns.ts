@@ -89,7 +89,7 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
   cohort: Iterable<RunView>,
 ) {
   for (const shell of cohort) {
-    // A shell parked holding its result for its parent stays until that
+    // A shell waiting, holding its result for its parent stays until that
     // result is delivered.
     if (
       shell.identity.kind !== 'process' ||

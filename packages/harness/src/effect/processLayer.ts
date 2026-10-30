@@ -62,7 +62,7 @@ export class Sessions extends Context.Service<
    * this layer's lifetime; the layer's release closes every session still
    * open. A plugin list the harness cannot compose (the defects `toolTable`
    * refuses: an id that is not lowercase letters, digits and dashes, an id
-   * or tool name listed twice, a second plugin continuing parked runs or
+   * or tool name listed twice, a second plugin continuing waiting runs or
    * recording one request kind's decisions, a switch on a plugin with no
    * availability probe) fails with {@link PluginsRefused}, before anything
    * is built.

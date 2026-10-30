@@ -108,7 +108,7 @@ export const RuntimeRequestSchema = Schema.Union([
    * The one answer to a `request.opened` (one run model, section 3.7): the
    * decision lands as that run's `request.decided` row, which is what the
    * waiting run, the recovery bindings, and every surface read. A decision
-   * for a request its run is not parked on is delivered as a follow-up.
+   * for a request its run is not blocked on is delivered as a follow-up.
    * `useOwnApiKey` is the host command that ends in
    * `{ action: 'retry', credentials: 'personal' }` here. `grant` approves
    * for the session: the run's bypass of that kind turns on with the

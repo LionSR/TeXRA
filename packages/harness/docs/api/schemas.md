@@ -1107,9 +1107,9 @@ const LineCountSchema: Int
 The listing types the fold keys `latest` by: every durable arm
 but the transcript tier. The request pair shares one entry because it
 folds to one set, the follow-up pair likewise, and the lifecycle pair (`run.start`, `run.removed`)
-shares one because it folds to one existence: a tombstone's commit then
+shares one because it folds to one existence: a deletion marker's commit then
 outranks a replayed `run.start` below it, which is what makes the
-tombstone final under every read. `run.position` is a
+deletion marker final under every read. `run.position` is a
 listing key of its own: the phase is folded from it, so a cold listing
 that dropped it would paint every parked run as ready. `stage.start` is
 transcript tier alone: its display arm is a no-op and only the transcript
@@ -1685,9 +1685,9 @@ interface RequestOpenFilePayload {
 
 ## requestParksItsCaller
 
-Whether a request parks the tool that opened it. Every kind does but the
+Whether a request blocks the tool that opened it. Every kind does but the
 external inquiry: its tool returns `dispatched` at once and the run carries
-on, so the answer arrives as a follow-up instead of releasing a parked
+on, so the answer arrives as a follow-up instead of releasing a blocked
 fiber. Both folds read the distinction off this one predicate - the run
 fold to decide which open requests a snapshot may leave unbound, the
 session fold to decide which ones make a run wait on its user.
@@ -2057,7 +2057,7 @@ function serializeFilteredConfig(
 
 ## sessionActivity
 
-The paper-level activity every title and status pill shows, read from the
+The project-level activity every title and status pill shows, read from the
 view and nothing else: a request this window can answer outranks a run
 working right now; a conversation waiting on its user is idle.
 

@@ -317,7 +317,7 @@ export const databaseLayer = (
         INDEXED BY event_aggregate_type ${EVENT_JOINS}
         WHERE s.kind = ? AND s.logical_id = ? AND e.seq >= ?
           AND e.type IN (SELECT value FROM json_each(?)) ORDER BY e.seq`;
-      // A tombstone closes its run and stays its last row until collected.
+      // A deletion marker closes its run and stays its last row until collected.
       const pendingDeletions = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e.type = 'run.removed' ORDER BY e."commit"`;
       // One aggregate's display rows, its projected rows among them.
@@ -690,7 +690,7 @@ export const databaseLayer = (
                   : null,
             };
           }
-          // A tombstone names only run directories this lifecycle owns,
+          // A deletion marker names only run directories this lifecycle owns,
           // derived under the closure's permit and transaction, not a caller.
           const committedDraft = yield* Effect.gen(function* () {
             if (draft.type === 'run.removed') {
@@ -749,7 +749,7 @@ export const databaseLayer = (
           }
           if (edges.closes) {
             // Closing an aggregate requires every open dependent claim, held
-            // in the tombstone's transaction, so no claimant can change between.
+            // in the deletion marker's transaction, so no claimant can change between.
             const unowned = yield* execOne(unownedDependent, [
               ...columns,
               identity.ownerId,
@@ -774,7 +774,7 @@ export const databaseLayer = (
         level,
         currentCommit: query(currentCommit),
         readDisplay: (fromCommit) => {
-          // Pages are separate snapshots: a tombstone seen stays in view.
+          // Pages are separate snapshots: a deletion marker seen stays in view.
           const tombstones = new Map<number, SessionEvent>();
           return Stream.paginate(fromCommit, (from) =>
             projected(
