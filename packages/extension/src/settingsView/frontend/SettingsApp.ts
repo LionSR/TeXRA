@@ -45,61 +45,29 @@ import './tabs/LaTeXTab';
 import { settingsViewHandlers } from './messageDispatcher';
 import {
   activePresetId,
-  agentSkillsEnabled,
-  allowOrchestratorKill,
-  approvalPolicy,
-  bashApprovalEnabled,
-  chatgptCodexContextWindow,
-  childRunConcurrencyBudget,
-  resumeOnOpen,
-  compactionThresholdPercent,
   customAgentDir,
   customAgentDirIsDefault,
   customAgentScanIssues,
-  detachSubagentsOnStop,
-  disabledSkillSources,
-  settingsSnapshotRevisions,
-  editApprovalEnabled,
-  gitAuthorEmail,
-  gitAuthorName,
   githubTokenStatus,
-  gitMarkCommits,
   gitSettingsLoaded,
-  gitWorktreeSupport,
-  goalMaxCostUsd,
-  helperModel,
-  inlineCriticismEnabled,
-  latexdiffBetweenRounds,
-  latexdiffChangesOnly,
-  latexdiffMathMarkup,
-  latexFormatter,
   latexSettingsLoaded,
   latexSettingsStatus,
-  memoryEnabled,
   memoryItems,
-  modelRetryMaxAttempts,
   modelSelectionItems,
   orchestratorAgents,
-  preferShortModelNames,
   prSubscriptions,
   providerKeyStatuses,
   resetSettingsState,
   selectedPanel,
   selectedSections,
   selectSettingsPage,
-  settingSignal,
   skillLoadIssues,
   skillsList,
   subscriptionAuth,
   subscriptionUsage,
-  telemetryEnabled,
   teamPresets,
   pluginsPage,
-  toolPathProtectionEnabled,
   agentSelectionItems,
-  workflowAutoCompile,
-  workflowAutoOpenPdf,
-  workflowRejectOnCompileFailure,
 } from './settingsState';
 
 registerTeXRAWebAwesomeIcons();
@@ -297,38 +265,23 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .section=${section}
             .providerKeyStatuses=${providerKeyStatuses.get()}
             .modelSelectionItems=${modelSelectionItems.get()}
-            .helperModel=${helperModel.get()}
-            .preferShortModelNames=${preferShortModelNames.get()}
             .usage=${subscriptionUsage.get()}
           >
             <subscriptions-tab
               slot="subscriptions"
-              .ackGeneration=${settingsSnapshotRevisions.get().agents ?? 0}
-              .chatgptCodexContextWindow=${chatgptCodexContextWindow.get()}
               .subscriptionAuth=${subscriptionAuth.get()}
               .usage=${subscriptionUsage.get()}
             ></subscriptions-tab>
           </models-tab>
         `;
-      case 'agents': {
-        // The acknowledgement generation lets a same-value rebroadcast after
-        // a rejected/failed write restore the committed number-row value:
-        // the Advanced rows ride the agents snapshot.
-        const ackGeneration = settingsSnapshotRevisions.get().agents ?? 0;
+      case 'agents':
         return html`
           <agents-tab
             .section=${section}
-            .ackGeneration=${ackGeneration}
             .agents=${agentSelectionItems.get()}
             .customAgentDir=${customAgentDir.get()}
             .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
             .customAgentScanIssues=${customAgentScanIssues.get()}
-            .compactionThresholdPercent=${compactionThresholdPercent.get()}
-            .modelRetryMaxAttempts=${modelRetryMaxAttempts.get()}
-            .allowOrchestratorKill=${allowOrchestratorKill.get()}
-            .detachSubagentsOnStop=${detachSubagentsOnStop.get()}
-            .childRunConcurrencyBudget=${childRunConcurrencyBudget.get()}
-            .worktreeSupport=${gitWorktreeSupport.get()}
           >
             <teams-tab
               slot="teams"
@@ -338,32 +291,13 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             ></teams-tab>
             <skills-tab
               slot="skills"
-              .masterEnabled=${agentSkillsEnabled.get()}
-              .disabledSources=${disabledSkillSources.get()}
               .skills=${skillsList.get()}
               .issues=${skillLoadIssues.get()}
             ></skills-tab>
           </agents-tab>
         `;
-      }
-      case 'plugins': {
-        const page = pluginsPage.get();
-        // Read here, inside this watcher's render, so a snapshot that changes
-        // one of the rows' inline settings re-renders the page.
-        const settingValues = Object.fromEntries(
-          (page?.rows ?? [])
-            .flatMap((row) =>
-              row.kind === 'texra' ? (row.item.settings ?? []) : [],
-            )
-            .map(([key]) => [key, settingSignal<string>(key).get()]),
-        );
-        return html`
-          <plugins-tab
-            .page=${page}
-            .settingValues=${settingValues}
-          ></plugins-tab>
-        `;
-      }
+      case 'plugins':
+        return html`<plugins-tab .page=${pluginsPage.get()}></plugins-tab>`;
       case 'latex':
         return html`
           <latex-tab
@@ -371,54 +305,23 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .settings=${latexSettingsStatus.get()}
             .loaded=${latexSettingsLoaded.get()}
             .desktopHost=${desktopHost}
-            .autoCompile=${workflowAutoCompile.get()}
-            .autoOpenPdf=${workflowAutoOpenPdf.get()}
-            .rejectOnCompileFailure=${workflowRejectOnCompileFailure.get()}
-            .diffBetweenRounds=${latexdiffBetweenRounds.get()}
-            .diffChangesOnly=${latexdiffChangesOnly.get()}
-            .diffMathMarkup=${latexdiffMathMarkup.get()}
-            .formatter=${latexFormatter.get()}
-            .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
           ></latex-tab>
         `;
       case 'memory':
-        return html`
-          <memory-tab
-            .items=${memoryItems.get()}
-            .enabled=${memoryEnabled.get()}
-          ></memory-tab>
-        `;
+        return html`<memory-tab .items=${memoryItems.get()}></memory-tab>`;
       case 'general':
         if (desktopHost && section === 'appearance')
           return html`<slot name="appearance"></slot>`;
-        if (section === 'approval')
-          return html`
-            <approval-tab
-              .approvalPolicy=${approvalPolicy.get()}
-              .bashApprovalEnabled=${bashApprovalEnabled.get()}
-              .editApprovalEnabled=${editApprovalEnabled.get()}
-              .goalMaxCostUsd=${goalMaxCostUsd.get()}
-              .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
-              .resumeOnOpen=${resumeOnOpen.get()}
-              .ackGeneration=${settingsSnapshotRevisions.get().approval ?? 0}
-            ></approval-tab>
-          `;
+        if (section === 'approval') return html`<approval-tab></approval-tab>`;
         return section === 'git'
           ? html`
               <git-tab
-                .markCommits=${gitMarkCommits.get()}
-                .authorName=${gitAuthorName.get()}
-                .authorEmail=${gitAuthorEmail.get()}
                 .toggleDisabled=${!gitSettingsLoaded.get()}
                 .githubTokenStatus=${githubTokenStatus.get()}
                 .prSubscriptions=${prSubscriptions.get()}
               ></git-tab>
             `
-          : html`
-              <privacy-tab
-                .telemetryEnabled=${telemetryEnabled.get()}
-              ></privacy-tab>
-            `;
+          : html`<privacy-tab></privacy-tab>`;
     }
     // Exhaustiveness guard: `activePanel` is a `SettingsTabPanelName`, so every
     // entry in `SETTINGS_TAB_ORDER` must have a case above. A tab appended to

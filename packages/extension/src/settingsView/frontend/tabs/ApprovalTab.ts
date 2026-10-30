@@ -7,8 +7,9 @@
 
 import '@awesome.me/webawesome/dist/components/radio/radio.js';
 import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
+import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement } from 'lit/decorators.js';
 
 import {
   WorkspaceStateKey,
@@ -31,9 +32,10 @@ import {
   renderStateSettingSelectRow,
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
+import { settingSignal } from '../settingsState';
 
 @customElement('approval-tab')
-export class ApprovalTab extends LitElement {
+export class ApprovalTab extends SignalWatcher(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -48,24 +50,15 @@ export class ApprovalTab extends LitElement {
     `,
   ];
 
-  @property({ type: String }) approvalPolicy: ApprovalPolicy = 'ask';
-  @property({ type: Boolean }) bashApprovalEnabled = true;
-  @property({ type: Boolean }) editApprovalEnabled = true;
-  @property({ type: Boolean }) toolPathProtectionEnabled = true;
-  @property({ type: Number }) goalMaxCostUsd =
-    GOAL_MAX_COST_SETTING.defaultValue;
-  /** The approval snapshot's acknowledgement generation (see
-   *  `settingsSnapshotRevisions`). */
-  @property({ attribute: false }) ackGeneration = 0;
-  @property({ type: String }) resumeOnOpen: string =
-    RESUME_ON_OPEN_SETTING.defaultValue;
-
   private handleApprovalPolicyChange = (e: Event): void => {
     const policy = parseApprovalPolicy(readSelectValue(e));
     if (policy) postStateSetting(APPROVAL_POLICY_CONFIG_KEY, policy);
   };
 
   override render(): TemplateResult {
+    const policy = settingSignal<ApprovalPolicy>(
+      APPROVAL_POLICY_CONFIG_KEY,
+    ).get();
     return html`
       <div class="tab-content-container">
         <div class="category-section">
@@ -82,7 +75,7 @@ export class ApprovalTab extends LitElement {
                 id="texra-approval-policy"
                 label="Approval policy"
                 orientation="horizontal"
-                value=${this.approvalPolicy}
+                value=${policy}
                 @change=${this.handleApprovalPolicyChange}
               >
                 ${APPROVAL_POLICY_OPTIONS.map(
@@ -96,7 +89,7 @@ export class ApprovalTab extends LitElement {
               <p class="settings-row-help">
                 ${
                   APPROVAL_POLICY_OPTIONS.find(
-                    (option) => option.value === this.approvalPolicy,
+                    (option) => option.value === policy,
                   )?.description
                 }
               </p>
@@ -104,35 +97,22 @@ export class ApprovalTab extends LitElement {
             ${
               // The two switches refine Ask only (decideApproval ignores
               // them under Never and Auto-approve), so they show only then.
-              this.approvalPolicy === 'ask'
+              policy === 'ask'
                 ? html`
-                    ${renderStateSettingToggleRow({
-                      key: TOOL_EDIT_APPROVAL_CONFIG_KEY,
-                      checked: this.editApprovalEnabled,
-                    })}
-                    ${renderStateSettingToggleRow({
-                      key: BASH_APPROVAL_CONFIG_KEY,
-                      checked: this.bashApprovalEnabled,
-                    })}
+                    ${renderStateSettingToggleRow(TOOL_EDIT_APPROVAL_CONFIG_KEY)}
+                    ${renderStateSettingToggleRow(BASH_APPROVAL_CONFIG_KEY)}
                   `
                 : nothing
             }
-            ${renderStateSettingToggleRow({
-              key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-              checked: this.toolPathProtectionEnabled,
-            })}
-            ${renderStateSettingNumberRow({
-              key: GOAL_MAX_COST_SETTING.configKey,
-              value: this.goalMaxCostUsd,
+            ${renderStateSettingToggleRow(
+              WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+            )}
+            ${renderStateSettingNumberRow(GOAL_MAX_COST_SETTING.configKey, {
               min: GOAL_MAX_COST_SETTING.min,
               max: GOAL_MAX_COST_SETTING.max,
               step: 0.5,
-              ackGeneration: this.ackGeneration,
             })}
-            ${renderStateSettingSelectRow({
-              key: RESUME_ON_OPEN_SETTING.configKey,
-              value: this.resumeOnOpen,
-            })}
+            ${renderStateSettingSelectRow(RESUME_ON_OPEN_SETTING.configKey)}
           </div>
         </div>
       </div>

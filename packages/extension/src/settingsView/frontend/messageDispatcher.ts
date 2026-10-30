@@ -8,6 +8,7 @@
  * missing or unknown command is a compile error. Handlers mutate the
  * module-level signals in `settingsState.ts` directly.
  */
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@texra/shared/settingsView/settingsViewMessages';
 import type {
@@ -24,17 +25,16 @@ import {
   customAgentScanIssues,
   githubTokenStatus,
   gitSettingsLoaded,
-  helperModel,
   latexSettingsLoaded,
   latexSettingsStatus,
   memoryItems,
   modelSelectionItems,
   settingsSnapshotRevisions,
   orchestratorAgents,
-  preferShortModelNames,
   prSubscriptions,
   providerKeyStatuses,
   selectSettingsPage,
+  settingSignal,
   skillLoadIssues,
   skillsList,
   subscriptionAuth,
@@ -90,8 +90,10 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   // Model selection.
   [SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION]: (data) => {
     modelSelectionItems.set(data.models);
-    helperModel.set(data.helperModel);
-    preferShortModelNames.set(data.preferShortModelNames);
+    settingSignal(GlobalStateKey.HELPER_MODEL).set(data.helperModel);
+    settingSignal(GlobalStateKey.PREFER_SHORT_MODEL_NAMES).set(
+      data.preferShortModelNames,
+    );
   },
 
   // Agent selection.

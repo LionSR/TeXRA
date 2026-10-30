@@ -8,6 +8,7 @@ import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -50,7 +51,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 @customElement('agents-tab')
-export class AgentsTab extends LitElement {
+export class AgentsTab extends SignalWatcher(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -102,18 +103,6 @@ export class AgentsTab extends LitElement {
   customAgentScanIssues: readonly AgentScanIssue[] = [];
   @property({ attribute: false }) section: SettingsSectionName<'agents'> =
     'library';
-  @property({ attribute: false }) compactionThresholdPercent =
-    MODEL_COMPACTION_THRESHOLD_SETTING.defaultValue;
-  /** Parent-owned acknowledgement generation; a change repaints the number
-   *  rows' saved values even when all field values are unchanged. */
-  @property({ attribute: false }) ackGeneration = 0;
-  @property({ attribute: false }) modelRetryMaxAttempts =
-    MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue;
-  @property({ attribute: false }) allowOrchestratorKill = true;
-  @property({ attribute: false }) detachSubagentsOnStop = false;
-  @property({ attribute: false }) worktreeSupport = false;
-  @property({ attribute: false }) childRunConcurrencyBudget =
-    CHILD_RUN_CONCURRENCY_BUDGET_SETTING.defaultValue;
 
   private handleOpenFolder(): void {
     postMessage(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER);
@@ -255,45 +244,33 @@ export class AgentsTab extends LitElement {
   private renderAdvanced(): TemplateResult {
     return html`
       <div class="settings-section">
-        ${renderStateSettingNumberRow({
-          key: MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
-          value: this.compactionThresholdPercent,
-          min: MODEL_COMPACTION_THRESHOLD_SETTING.min,
-          max: MODEL_COMPACTION_THRESHOLD_SETTING.max,
-          unit: '%',
-          ackGeneration: this.ackGeneration,
-          // Clearing the field commits 0, which is the documented way to
-          // disable compaction — not a no-op edit to be reverted.
-          revertOnEmpty: false,
-        })}
-        ${renderStateSettingNumberRow({
-          key: MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
-          value: this.modelRetryMaxAttempts,
-          min: MODEL_RETRY_MAX_ATTEMPTS_SETTING.min,
-          max: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
-          step: 1,
-          ackGeneration: this.ackGeneration,
-          revertOnEmpty: false,
-        })}
-        ${renderStateSettingToggleRow({
-          key: GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-          checked: this.allowOrchestratorKill,
-        })}
-        ${renderStateSettingToggleRow({
-          key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-          checked: this.detachSubagentsOnStop,
-        })}
-        ${renderStateSettingToggleRow({
-          key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-          checked: this.worktreeSupport,
-        })}
-        ${renderStateSettingNumberRow({
-          key: CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
-          value: this.childRunConcurrencyBudget,
+        ${renderStateSettingNumberRow(
+          MODEL_COMPACTION_THRESHOLD_SETTING.configKey,
+          {
+            min: MODEL_COMPACTION_THRESHOLD_SETTING.min,
+            max: MODEL_COMPACTION_THRESHOLD_SETTING.max,
+            unit: '%',
+            // Clearing the field commits 0, which is the documented way to
+            // disable compaction — not a no-op edit to be reverted.
+            revertOnEmpty: false,
+          },
+        )}
+        ${renderStateSettingNumberRow(
+          MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
+          {
+            min: MODEL_RETRY_MAX_ATTEMPTS_SETTING.min,
+            max: MODEL_RETRY_MAX_ATTEMPTS_SETTING.max,
+            step: 1,
+            revertOnEmpty: false,
+          },
+        )}
+        ${renderStateSettingToggleRow(GlobalStateKey.ALLOW_ORCHESTRATOR_KILL)}
+        ${renderStateSettingToggleRow(GlobalStateKey.DETACH_SUBAGENTS_ON_STOP)}
+        ${renderStateSettingToggleRow(WorkspaceStateKey.GIT_WORKTREE_SUPPORT)}
+        ${renderStateSettingNumberRow(CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY, {
           min: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.min,
           max: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.max,
           step: 1,
-          ackGeneration: this.ackGeneration,
         })}
       </div>
     `;
