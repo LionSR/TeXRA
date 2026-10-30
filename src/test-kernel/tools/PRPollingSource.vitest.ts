@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Clock, Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - tools
@@ -33,13 +33,13 @@ vi.mock('@texra/tools/github/checkRunsClient', async (importOriginal) => ({
 
 /**
  * The private drain surface these tests must still reach: there is no public
- * seam for draining annotation queues on demand or reading a subscription's
- * state.
+ * boundary for running the per-tick annotation drain (`afterTick`) or
+ * reading a subscription's state.
  */
 interface AnnotationDrainAccess {
-  drainAnnotationQueues(
+  afterTick(
     entries: ReadonlyArray<readonly [string, PRSubscriptionState]>,
-    now?: number,
+    now: number,
   ): Effect.Effect<void, PollHookRejected>;
 }
 
@@ -89,9 +89,10 @@ describe('PRPollingSource annotation drain', () => {
         const rateLimit = new GitHubRateLimitError({ resetAt: 1_800_000_000 });
         mocks.fetchAnnotations.mockReturnValue(Effect.fail(rateLimit));
 
-        yield* drainAccess(source).drainAnnotationQueues([
-          ['owner/repo#7', state],
-        ]);
+        yield* drainAccess(source).afterTick(
+          [['owner/repo#7', state]],
+          yield* Clock.currentTimeMillis,
+        );
 
         expect(state.currentShaState?.pendingAnnotationRuns).toEqual([run]);
         expect(state.skipPollUntilMs).toBe(1_800_000_000_000);
