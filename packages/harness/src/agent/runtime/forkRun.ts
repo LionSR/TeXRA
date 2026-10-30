@@ -146,8 +146,8 @@ const viewRows = (
   messages: RunState['messages'],
 ): RunHistoryDraft[] => {
   const { input } = state;
-  const named = [input.system, input.instruction].flatMap((digest) =>
-    digest === undefined ? [] : [digest],
+  const named = [input.system, input.instruction].filter(
+    (digest) => digest !== undefined,
   );
   // The copied messages name their media by address: the fork's row links
   // the blobs, so deleting the source keeps them.
@@ -186,7 +186,6 @@ export const forkRun = Effect.fn('forkRun')(function* (
   from: { readonly id: RunId; readonly uid: string },
   at: number | null,
 ): Effect.fn.Return<RunId, Rejected | Error> {
-  // The title the source shows, with its authorship.
   const cutAt = yield* cutOf(session, from.id, at);
   const { seq: cut, state, start, title, record } = cutAt;
   const runId = generateRunId();

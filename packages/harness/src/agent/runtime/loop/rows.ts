@@ -121,7 +121,7 @@ export function configRow(
   };
 }
 
-/** Each arm of a draft union keeps its own required fields. */
+/** Each case of a draft union keeps its own required fields. */
 type Unqualified<T> = T extends unknown ? Omit<T, 'aggregateId'> : never;
 
 /** A display row the loop commits atomically with a run history row: the card a

@@ -268,7 +268,7 @@ const runEndOf = (
     } satisfies RunEnd;
   });
 
-/** Native access to named run metadata, with no file-backed read arm. */
+/** Reads of a run's named records from the session database. */
 export function getRunRecords(session: SessionHandle, runId: RunId) {
   const id = qualifyAggregateId('run', runId);
   const facts = session.log.facts(runId);
