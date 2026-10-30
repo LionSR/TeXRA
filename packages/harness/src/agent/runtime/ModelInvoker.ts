@@ -407,6 +407,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       > {
         const state = yield* cell.current;
         const mode = yield* bound.delivery;
+        yield* saveDebug(state.messages, 'messages', invocation, bound);
         // The run's context size (`contextTokens`: the last response's
         // provider-counted usage plus an estimate of what was added since).
         // An input that alone exceeds the window is refused before it is
@@ -465,7 +466,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           ...chainedContinuation(state, bound.origin),
           cacheKey: run.runId,
         });
-        yield* saveDebug(state.messages, 'messages', invocation, bound);
         // The durable fact before the billed request, with the prepared
         // turn it sends, which the rows alone must rebuild.
         yield* cell.append((state) =>

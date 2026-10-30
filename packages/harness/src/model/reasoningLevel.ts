@@ -9,6 +9,7 @@ import {
   type ModelConfig,
   type ModelOrigin,
   ModelProvider,
+  type ModelRoute,
   type ReasoningChoice,
   ReasoningEffort,
   ReasoningEffortSchema,
@@ -94,7 +95,7 @@ export interface ReasoningRoute {
  * it. The bind, a model switch and the model options all read it here.
  */
 export function reasoningRouteOf(
-  route: { readonly kind: string },
+  route: { readonly kind: ModelRoute['kind'] | 'validation' },
   backend: ModelBackend,
 ): ReasoningRoute {
   return {
