@@ -25,7 +25,9 @@ import {
   BASH_APPROVAL_CONFIG_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
   qualifyAggregateId,
+  type DecisionOf,
   type HookOutcomePayload,
+  type PermissionPayload,
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
@@ -329,29 +331,41 @@ export const callRequests = (
           opened += 1;
         // Answered before this owner's loop reached the call: the answer
         // is the row's.
+        // `nextId` rejoins only the same kind. Return the durable payload,
+        // not the recomputation whose blobs are discarded on re-entry.
+        const answered = (decision: DecisionOf<(typeof payload)['kind']>) => ({
+          // cast: the derived request id rejoins only this payload's kind.
+          payload: (reentered?.request.payload ?? payload) as Extract<
+            PermissionPayload,
+            { kind: (typeof payload)['kind'] }
+          >,
+          decision,
+        });
         if (reentered?.request.decision != null)
           return recordedDecision<(typeof payload)['kind']>(
             payload.kind,
             reentered.request.decision,
-          );
-        return session.requests.ask(runId, payload, {
-          ...(blobs && { blobs }),
-          open: (rows) => {
-            if (reentered !== null) {
-              // Open already: only what the policy decides commits, and
-              // the decision is read from where the resume read the run.
-              const decided = rows.filter(isRequestDecision);
-              const from = cell.opened.commit;
-              return decided.length === 0
-                ? Effect.succeed(from)
-                : commit(decided).pipe(Effect.as(from));
-            }
-            return retireStanding.pipe(
-              Effect.andThen(Effect.sync(() => session.log.now())),
-              Effect.flatMap((from) => commit(rows).pipe(Effect.as(from))),
-            );
-          },
-        });
+          ).pipe(Effect.map(answered));
+        return session.requests
+          .ask(runId, payload, {
+            ...(blobs && { blobs }),
+            open: (rows) => {
+              if (reentered !== null) {
+                // Open already: only what the policy decides commits, and
+                // the decision is read from where the resume read the run.
+                const decided = rows.filter(isRequestDecision);
+                const from = cell.opened.commit;
+                return decided.length === 0
+                  ? Effect.succeed(from)
+                  : commit(decided).pipe(Effect.as(from));
+              }
+              return retireStanding.pipe(
+                Effect.andThen(Effect.sync(() => session.log.now())),
+                Effect.flatMap((from) => commit(rows).pipe(Effect.as(from))),
+              );
+            },
+          })
+          .pipe(Effect.map(answered));
       }),
     post: (requestId, payload) =>
       Effect.asVoid(

@@ -187,7 +187,7 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
     withLogChannel(CHANNEL),
   );
 
-  const result = yield* call.requests.open({
+  const { decision: result } = yield* call.requests.open({
     kind: 'planApproval',
     // The tool is offered only while the goal plugin is on, so the user can
     // always run an approved plan as a goal.

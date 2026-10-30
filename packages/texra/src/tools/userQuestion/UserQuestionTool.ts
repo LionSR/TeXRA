@@ -54,7 +54,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
     allowBypass: false,
     runId,
   };
-  const decision = yield* requests.open({
+  const { decision } = yield* requests.open({
     kind: 'userQuestion',
     data: permission,
   });

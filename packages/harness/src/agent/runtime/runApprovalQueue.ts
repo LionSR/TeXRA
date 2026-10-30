@@ -11,7 +11,7 @@
  * session, reached through the session itself (`SessionHandle.approvals`),
  * never from context.
  */
-import { Effect, SubscriptionRef } from 'effect';
+import { Effect, Schema, Struct, SubscriptionRef } from 'effect';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
@@ -28,6 +28,8 @@ import {
 import {
   bypassCovers,
   qualifyAggregateId,
+  ToolEditContentSchema,
+  type ToolEditPermission,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -49,7 +51,28 @@ import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { Settings } from '@shared/config/settings';
 import type { RunRows } from '@shared/session/runRowsShape';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import type { SessionHandle } from './SessionHandle';
+import type { SessionHandle, SessionLog } from './SessionHandle';
+
+// Null records a missing file; an empty string records an existing empty one.
+// The preview wire contract renders either as empty text.
+const StoredToolEditContentSchema = ToolEditContentSchema.mapFields(
+  Struct.assign({ originalContent: Schema.NullOr(Schema.String) }),
+);
+
+/** Read the proposal named by a durable edit request. A missing or malformed
+ *  blob is a corrupt store, never permission to use a recomputed proposal. */
+export const readToolEditContent = (
+  log: Pick<SessionLog, 'blobs'>,
+  address: ToolEditPermission['content'],
+): Effect.Effect<typeof StoredToolEditContentSchema.Type> =>
+  Effect.map(Effect.orDie(log.blobs([address])), (held) => {
+    const text = held.get(address);
+    if (text === undefined)
+      throw new Error(`The store holds no tool edit proposal at ${address}`);
+    return Schema.decodeUnknownSync(StoredToolEditContentSchema)(
+      JSON.parse(text),
+    );
+  });
 
 /**
  * One queued approval. A request can wait behind another prompt for long:
@@ -107,11 +130,7 @@ const policyRow = (runId: RunId, snapshot: ApprovalGrants) => ({
  * reads {@link bypass}; every change goes through {@link change}.
  */
 export interface SessionApprovals {
-  /**
-   * Serialize one prompt at a time per run and kind, re-reading the run's
-   * bypass when the prompt reaches the head of its lane rather than at
-   * enqueue.
-   */
+  /** Serialize prompts per run and kind, checking bypass when each starts. */
   enqueue<A, E, R>(
     kind: QueuedKind,
     runId: RunId | undefined,
@@ -119,14 +138,9 @@ export interface SessionApprovals {
   ): Effect.Effect<A, E, R>;
   /** Who bypasses one kind's prompts for a run, read from the view. */
   bypass(runId: RunId, kind: ApprovalBypassKind): 'goal' | 'human' | null;
-  /**
-   * Commit a run's next grants, `edit` applied to what its rows hold, and
-   * return once they are durable and folded; an edit that changes nothing
-   * writes nothing. Read and append are one job of the publisher, so two
-   * changes of one run never lose each other's kind. `rows` commit in
-   * the same transaction (a goal's row beside the grant it implies), and is
-   * written even when the grants stand. The caller holds the run's claim.
-   */
+  /** Update grants in one transaction, returning once durable and folded.
+   *  An unchanged grant writes nothing. Additional `rows` always commit in
+   *  that transaction. The caller holds the run's claim. */
   change(
     runId: RunId,
     edit: (grants: ApprovalGrants) => ApprovalGrants,
@@ -135,11 +149,8 @@ export interface SessionApprovals {
     void,
     DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   >;
-  /**
-   * The grants row a run's activation commits beside its `run.activate`, if
-   * any (`afterActivation`), read from the rows of the run and its ancestry,
-   * never from a view that may not have folded them yet.
-   */
+  /** Grants committed beside `run.activate`, read from the run's and its
+   *  ancestors' rows, never from a view that may lag. */
   activationRows(
     runId: RunId,
   ): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed>;
