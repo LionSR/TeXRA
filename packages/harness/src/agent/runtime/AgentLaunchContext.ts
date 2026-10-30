@@ -6,7 +6,7 @@
  * registered for a launch that cannot run. The run program takes the
  * result (`executeAgent`).
  */
-import { Effect } from 'effect';
+import { Deferred, Effect } from 'effect';
 
 import { selectModel } from '@texra-ai/llm';
 import { AgentCatalog } from '@agent/index/agentCatalog';
@@ -16,7 +16,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentError } from '@common/errors/agentErrors';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { attachErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
-import { HARNESS_INSTRUCTION_KEY } from '@shared/schemas';
+import { HARNESS_INSTRUCTION_KEY, type CommitOrdinal } from '@shared/schemas';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { ToolRegistry } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -75,6 +75,19 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
     );
   },
 );
+
+/** The commit `opened` holds, once a launch's or resume's program is over:
+ *  with none, its run's activation never committed and nothing entered the
+ *  session. What a launch that waits for its run's opening answers with
+ *  when the program ends first (`rootRun`, `launchDetachedSubagent`). */
+export const activationIfOpened = (
+  opened: Deferred.Deferred<CommitOrdinal>,
+): Effect.Effect<CommitOrdinal, Error> =>
+  Effect.suspend(() =>
+    Deferred.isDoneUnsafe(opened)
+      ? Deferred.await(opened)
+      : Effect.fail(new Error('The run ended without entering the session.')),
+  );
 
 /**
  * Resolve what a launch runs: the agent entry (an inline persona, or the

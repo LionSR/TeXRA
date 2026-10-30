@@ -6,8 +6,11 @@
  */
 
 // Third-party imports
-import { Clock, Effect, Schema } from 'effect';
-import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
+import { Clock, Deferred, Effect, Fiber, Schema } from 'effect';
+import {
+  activationIfOpened,
+  prepareAgentDefinition,
+} from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
@@ -19,6 +22,7 @@ import {
 } from '@shared/approvalBypassKind';
 import {
   AgentConfigSchema,
+  type CommitOrdinal,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -89,7 +93,10 @@ export interface ApprovalMeta {
 
 /**
  * Launch one detached child under `runId` and return the receipt the model
- * reads: the child's result arrives later as a follow-up.
+ * reads: the child's result arrives later as a follow-up. The receipt names
+ * a child that exists: the call waits for the child's opening to commit,
+ * and a launch that fails before it fails the call, which the parent reads
+ * as the call's result.
  */
 export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
   function* (
@@ -112,7 +119,8 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
       session: parentSession,
     });
     const { config } = definition;
-    yield* startDetachedChildRunLoop({
+    const opened = yield* Deferred.make<CommitOrdinal>();
+    const { fiber } = yield* startDetachedChildRunLoop({
       session: parentSession,
       runId,
       parentRunId,
@@ -130,8 +138,13 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
         session: parentSession,
         startedAt,
         workingDirectory,
+        onAdmitted: (_, commit) => Deferred.succeed(opened, commit),
       }),
     });
+    yield* Effect.raceFirst(
+      Deferred.await(opened),
+      Fiber.join(fiber).pipe(Effect.andThen(activationIfOpened(opened))),
+    );
 
     const meta = launch.approvalMeta;
     const metaLines: string[] = [];

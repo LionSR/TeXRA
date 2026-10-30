@@ -3,16 +3,17 @@
  * base64 input parts, gated by what the bound model accepts. The package
  * models media in the request; this is the one place file bytes are read.
  *
- * Failure policy: a file the model cannot take is skipped with a transcript
- * warning; a file that cannot be read or classified fails the read. The
- * caller decides what a failed read means for its message: the run loop
- * fails the opening message loudly (a task's revision included), and a
- * follow-up's send is refused (`attachedMedia`: its media is read once, as
- * it is sent, and stored by address). Nothing drops an attachment silently.
+ * Failure policy: a file the model cannot take is a text part of the message
+ * it was attached to, saying so ({@link skippedMediaPart}): the model is
+ * told, in the row that carries the message. A file that cannot be read or
+ * classified fails the read. The caller decides what a failed read means for
+ * its message: the run loop fails the opening message loudly (a task's
+ * revision included), and a follow-up's send is refused (`attachedMedia`:
+ * its media is read once, as it is sent, and stored by address). Nothing
+ * drops an attachment silently.
  */
 import { Cause, Effect, Exit, FileSystem } from 'effect';
 
-import type { AgentTrace } from '@agent/trace';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -54,11 +55,18 @@ interface MediaInputParts {
   readonly kinds: readonly MediaAttachmentKind[];
 }
 
-/** A PDF as page images, for a model that takes images but no PDF. */
+/** What the model is told, in the message's own row, of a file it was
+ *  attached but not sent: the file's name and why. */
+export const skippedMediaPart = (name: string, why: string): InputPart => ({
+  kind: 'text',
+  text: `[Attachment ${name} was not sent: ${why}]`,
+});
+
+/** A PDF as page images, for a model that takes images but no PDF; pages
+ *  past what the image tool renders are told as a text part after them. */
 const pdfPageParts = Effect.fn('mediaInput.pdfPages')(function* (
   path: string,
   display: string,
-  logger: AgentTrace,
 ) {
   const { pages, pageCount } = yield* processPdf2Png(path).pipe(
     Effect.mapError(
@@ -69,16 +77,17 @@ const pdfPageParts = Effect.fn('mediaInput.pdfPages')(function* (
         ),
     ),
   );
-  if (pages.length < pageCount) {
-    logger.warn(
-      `Attached only pages 1-${pages.length} of ${pageCount} from ${display}`,
-    );
-  }
-  return pages.map((base64): InputPart => ({
+  const parts: InputPart[] = pages.map((base64) => ({
     kind: 'image',
     mimeType: 'image/png',
     base64,
   }));
+  if (pages.length < pageCount)
+    parts.push({
+      kind: 'text',
+      text: `[Attachment ${display}: only pages 1-${pages.length} of ${pageCount} were sent]`,
+    });
+  return parts;
 });
 
 /**
@@ -88,24 +97,22 @@ const pdfPageParts = Effect.fn('mediaInput.pdfPages')(function* (
 export const storedPdfPages = Effect.fn('mediaInput.storedPdfPages')(function* (
   name: string,
   base64: string,
-  logger: AgentTrace,
 ) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* fs.makeTempFileScoped({ suffix: '.pdf' });
   yield* fs.writeFile(path, Buffer.from(base64, 'base64'));
-  return yield* pdfPageParts(path, name, logger);
+  return yield* pdfPageParts(path, name);
 }, Effect.scoped);
 
 /**
  * Read one media file into input parts. A PDF is a native document when the
  * model accepts one, page images otherwise; audio only where the model takes
- * it natively. A file the model cannot take is skipped with a transcript
- * warning, never silently.
+ * it natively. A file the model cannot take is a text part saying so, never
+ * silently dropped.
  */
 const partsForFile = Effect.fn('mediaInput.file')(function* (
   location: FileLocation,
   capabilities: MediaCapabilities,
-  logger: AgentTrace,
   config: ConfigProvider,
 ): Effect.fn.Return<
   MediaInputParts,
@@ -116,11 +123,12 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
   const display = fileLocationDisplayPath(location);
   const mimeType = getMimeType(path);
   const ext = getExtensionLowercase(path);
+  const skipped = (what: string): MediaInputParts => ({
+    parts: [skippedMediaPart(display, `the model does not accept ${what}`)],
+    kinds: [],
+  });
   if (ext === '.pdf') {
-    if (!capabilities.supportsVision) {
-      logger.warn(`Skipping ${display}: the model does not accept documents.`);
-      return { parts: [], kinds: [] };
-    }
+    if (!capabilities.supportsVision) return skipped('documents');
     // A model that takes a PDF natively is handed the file's bytes as they
     // are, so the local page count is only needed to rasterize: it is read
     // after this branch, never before, so a PDF the image tool cannot read still
@@ -132,16 +140,10 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
         kinds: ['document'],
       };
     }
-    return {
-      parts: yield* pdfPageParts(path, display, logger),
-      kinds: ['document'],
-    };
+    return { parts: yield* pdfPageParts(path, display), kinds: ['document'] };
   }
   if (mimeType !== null && mimeType.startsWith('audio/')) {
-    if (!capabilities.supportsNativeAudio) {
-      logger.warn(`Skipping ${display}: the model does not accept audio.`);
-      return { parts: [], kinds: [] };
-    }
+    if (!capabilities.supportsNativeAudio) return skipped('audio');
     const base64 = yield* getBase64EncodedMedia(path, config);
     return { parts: [{ kind: 'audio', mimeType, base64 }], kinds: [] };
   }
@@ -152,10 +154,7 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
       ),
     );
   }
-  if (!capabilities.supportsVision) {
-    logger.warn(`Skipping ${display}: the model does not accept images.`);
-    return { parts: [], kinds: [] };
-  }
+  if (!capabilities.supportsVision) return skipped('images');
   const base64 = yield* getBase64EncodedMedia(path, config);
   return { parts: [{ kind: 'image', mimeType, base64 }], kinds: ['image'] };
 });
@@ -168,7 +167,6 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
 export const mediaInputParts = Effect.fn('mediaInput')(function* (
   locations: readonly FileLocation[],
   capabilities: MediaCapabilities,
-  logger: AgentTrace,
   config: ConfigProvider,
 ): Effect.fn.Return<
   MediaInputParts,
@@ -178,7 +176,7 @@ export const mediaInputParts = Effect.fn('mediaInput')(function* (
   // Files load at once; the parts keep the attachment order.
   const loaded = yield* Effect.forEach(
     locations,
-    (location) => partsForFile(location, capabilities, logger, config),
+    (location) => partsForFile(location, capabilities, config),
     { concurrency: 4 },
   );
   return {

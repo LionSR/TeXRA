@@ -762,11 +762,10 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   (`agent/runtime/requestPolicy.ts:280-306`). If the session closes first, the
   asker goes on as cancelled with no row written, and the request stays open
   (`agent/runtime/requestPolicy.ts:337-350`).
-- An interrupted asker decides its request `cancel` through the same door,
-  unless the session is closed. This is best effort: a write the session refuses
-  (it is draining, or the claim is gone) is logged and leaves the request open,
-  for the next resume to cancel as unbound
-  (`agent/runtime/requestPolicy.ts:353-376`).
+- An interrupted asker writes nothing: the request a stopped or failed run
+  leaves open is cancelled with the run's end, in the end's batch, so no
+  surface keeps offering it (`agent/storage/runLifecycle.ts:170-187`); one a
+  dead process left is the next resume's to cancel as unbound.
 - A request is a row, so it outlives its process. A resume cancels the unbound
   ones (section 7.2) and re-enters the bound ones under the same id
   (`shared/session/inFlight.ts:347-371`). An open `externalInquiry` is neither:
