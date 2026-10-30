@@ -46,7 +46,7 @@ import { parseArgs } from 'node:util';
 
 import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { GENERATED_DIRS, apiReports } from './core-quality-api-report.mjs';
-import { MEASURED_ONLY, RULES, measure } from './core-quality-measure.mjs';
+import { RULES, measure } from './core-quality-measure.mjs';
 import { ZERO_RULES } from './ratchet-zero-rules.mjs';
 
 const rootDir = path.resolve(
@@ -307,7 +307,6 @@ const main = async () => {
   // would widen leaves every baseline as it was, and all are reported.
   const writes = [];
   for (const [rule, actual] of byRule) {
-    if (MEASURED_ONLY.has(rule)) continue;
     if (heldAtZero(rule)) {
       problems.push(...checkRule(rule, {}, actual));
       continue;
