@@ -122,7 +122,13 @@ export interface AgentRunShape extends RunLaunch {
   readonly steps: SynchronizedRef.SynchronizedRef<OpenStep | null>;
   /** The synthetic terminal tool, when the config declares an output schema. */
   readonly finalToolName: string | null;
-  /** The run's live model binding; replaced only through `swapModel`. */
+  /**
+   * The binding in force, this activation's resource (its route, socket,
+   * ping fiber and uploads), replaced only through `swapModel`. The run's
+   * model is a row fact, its newest `run.config`, read from the run state;
+   * the binding says only what was bound for it, and is read for what the
+   * bound model can do.
+   */
   readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
   /**
    * Replace the binding: `next` binds into a scope of its own, forked from

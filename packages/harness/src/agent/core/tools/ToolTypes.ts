@@ -19,6 +19,7 @@ import type {
   ToolResult,
 } from '@shared/schemas';
 import type { DatabaseNotOwner } from '@shared/session/database';
+import type { DraftBlob } from '@shared/session/historyTurns';
 import type { CellError } from '@shared/session/runHistory';
 import type { StepRoot } from '@utils/files/externalRoots';
 
@@ -166,9 +167,11 @@ export interface CallRequests {
    *  it opens. */
   readonly nextId: (kind: PermissionPayload['kind']) => string;
   /** Open the request (or re-enter the standing one) and wait for its
-   *  decision, as `SessionRequests.ask` does. */
+   *  decision, as `SessionRequests.ask` does. `blobs` are the strings the
+   *  payload names by address, stored with the request's row. */
   readonly open: <P extends PermissionPayload>(
     payload: P,
+    blobs?: readonly DraftBlob[],
   ) => Effect.Effect<DecisionOf<P['kind']>, DatabaseNotOwner | CellError>;
 }
 

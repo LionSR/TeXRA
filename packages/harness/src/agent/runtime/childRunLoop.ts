@@ -244,7 +244,8 @@ type ChildEnd =
 /**
  * One child loop's state, passed through the functions below: its setup,
  * its turn, and `end`, its last turn's result. A stop is its run fiber's
- * interruption, its reason the registry activation's.
+ * interruption, its reason the registry activation's. The activation mints
+ * its turn keys (`attemptId`, `turnIndex`), which the `child.turn` rows record.
  */
 class ChildLoop<TTurn, R> {
   readonly attemptId = randomUUID();

@@ -58,7 +58,7 @@ import type { ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runFiles, type RunFilesServices } from './deletionCleanup';
-import { answerToolEditRequest } from './SessionView';
+import { toolEditPreview } from './SessionView';
 
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
 type RequestServices = GlobalValues | RunFilesServices;
@@ -400,11 +400,9 @@ const handle = (
     case 'request.decide':
       return decideRequest(deps, req, heldHere);
     case 'request.preview':
-    case 'request.edit':
-      return answerToolEditRequest(
-        deps.session().view,
-        req,
-        settled(req.runId),
+      return toolEditPreview(
+        deps.session().log,
+        pendingOf(deps, req.runId, req.requestId),
       );
     case 'policy.set':
       return withRunClaim(
