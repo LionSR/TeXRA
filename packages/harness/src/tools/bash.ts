@@ -527,7 +527,6 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
 
 export const BashTool = defineTool({
   name: 'bash',
-  requiresApproval: true,
   slow: true,
   description:
     'Execute shell commands directly in the workspace directory. Commands run from the project root automatically. Available environment variables: $PROJECT_DIR (workspace path), $PROJECT_NAME (project name). Returns stdout on success, throws error with stderr on failure. Use run_in_background for long-running commands.',

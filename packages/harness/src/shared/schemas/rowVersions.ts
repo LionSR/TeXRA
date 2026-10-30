@@ -108,7 +108,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // (no upcaster, as `run.config`).
   // v3: a retry's credential switch names no OpenRouter key (no upcaster,
   // as `run.config`).
-  'request.opened': { version: 3, upcast: [] },
+  // v4: a task proposal records whether approving it may bypass later
+  // prompts (`allowBypass`); a v3 proposal lacks the field and fails to
+  // decode (no upcaster, as `run.config`).
+  'request.opened': { version: 4, upcast: [] },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options (no upcaster, as `run.config`).
   'request.decided': { version: 2, upcast: [] },

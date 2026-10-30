@@ -8,10 +8,8 @@
  * recorded as the `request.decided` row beside the request's own
  * `request.opened`, in the same batch, so no surface ever lists it pending.
  *
- * A command or edit reaches the session's door already decided by its tool,
- * which alone holds the approvals setting and the run's scoped bypass, and a
- * delegation proposal by its flow (`proposalFlow.ts`, `yolo` included); those
- * present.
+ * A command, an edit and a delegation proposal reach the door already
+ * decided by `sessionPermission` (`loop/toolGuard.ts`), so they present.
  */
 
 import {
@@ -37,7 +35,6 @@ import {
   decideRetryApproval,
   decideApproval,
   isApprovalDenied,
-  approvalPolicyDenialMessage,
   humanInputDenialMessage,
   retryDenialMessage,
   type ApprovalPolicyDecision,
@@ -58,6 +55,7 @@ import type { Append } from '@shared/session/sessionEvents';
 import type { ToolStep } from '@tools/sessionTools';
 
 import { HostCapabilities, type StepToolInputs } from './agentToolResolution';
+import { RunCall } from './RunCall';
 import type { AgentRunShape } from './run/AgentRun';
 import type {
   AskOptions,
@@ -72,9 +70,9 @@ import type {
 const canPresent = (session: SessionHandle): boolean =>
   !session.interactions.approvalPromptsUnavailable;
 
-/** The policy's answer for an executable request (a plan, or any
- *  approval-gated tool) under what the host can answer: one reading for
- *  every run, which a plugin hook's `permission_mode` shares. */
+/** The policy's answer for a run's approval-gated tools under what the
+ *  host can answer: whether a step withholds them, and the `permission_mode`
+ *  a plugin hook is told. */
 export const executableDecision = (
   session: SessionHandle,
   runId: RunId,
@@ -98,6 +96,7 @@ function answerFor(
   session: SessionHandle,
   runId: RunId,
   payload: PermissionPayload,
+  hook: 'allow' | 'ask' | undefined,
 ):
   | {
       readonly decision: RequestDecision;
@@ -107,16 +106,9 @@ function answerFor(
   const policy = session.approvals.policy(runId);
   switch (payload.kind) {
     case 'planApproval': {
-      const decision = executableDecision(session, runId);
-      if (decision === 'present') return undefined;
-      if (decision === 'allow') return { decision: { action: 'approve' } };
-      return {
-        decision: {
-          action: 'deny',
-          reason: approvalPolicyDenialMessage(decision),
-        },
-        denial: { kind: 'plan', policy },
-      };
+      const answer = session.approvals.permission(runId, 'plan', hook);
+      if (answer === 'ask') return undefined;
+      return { decision: answer === 'allow' ? { action: 'approve' } : answer };
     }
     case 'userQuestion': {
       const decision = decideHumanInputRequest({
@@ -166,8 +158,9 @@ export function policyDecidedRows(
   session: SessionHandle,
   runId: RunId,
   payload: PermissionPayload,
+  hook?: 'allow' | 'ask',
 ): Extract<RunHistoryDraft, { type: 'request.decided' }>[] {
-  const answer = answerFor(session, runId, payload);
+  const answer = answerFor(session, runId, payload, hook);
   if (answer === undefined) return [];
   if (answer.denial) session.interactions.approvalDenied(answer.denial, runId);
   return [
@@ -338,7 +331,7 @@ export function requestAsks({
           requestId,
           payload,
         },
-        ...policyDecidedRows(session(), runId, payload),
+        ...policyDecidedRows(session(), runId, payload, (yield* RunCall)?.hook),
       ];
       const from = yield* open(rows);
       return yield* decision(runId, requestId, from).pipe(

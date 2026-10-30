@@ -31,16 +31,44 @@ in `packages/harness/src/common/plugins/hookConfig.ts`; the process runner is
 | ------------------ | --------------------------------------------------------------- | ------------------------------------- |
 | `SessionStart`     | a root run's opening, `source: "startup"`                       | add context to the first user message |
 | `UserPromptSubmit` | a root run's opening and each user follow-up that starts a turn | add context beside the prompt         |
-| `PreToolUse`       | before a call's approval and body                               | deny with a reason, or add context    |
+| `PreToolUse`       | before a call's approval and body                               | deny, ask, allow, rewrite the input   |
 | `PostToolUse`      | after a call that executed without error                        | add feedback beside the tool result   |
 | `Stop`             | a root run's completed turn                                     | block the stop once (see below)       |
 | `SubagentStop`     | a child run's completed turn                                    | block the stop once (see below)       |
 
-`PreToolUse` never approves. `allow` is read as "no objection", and so are `ask`
-and `defer`: the run's approval policy decides as it would without the hook.
-`deny`, the deprecated `decision: "block"`, and exit code 2 deny the call. The
-model reads the reason as the call's error result. When several hooks answer,
-one deny is enough.
+`PreToolUse` takes part in one decision about the call
+(`agent/runtime/loop/toolGuard.ts`), in this order, so that a permission covers
+the operation that actually runs:
+
+1. The hooks run over the input the model sent. `deny`, the deprecated
+   `decision: "block"`, and exit code 2 deny the call, and the model reads the
+   reason as the call's error result. When several hooks answer, one deny is
+   enough.
+2. An `updatedInput` replaces the input (a Claude Code tool's fields are read
+   back as the harness tool's). The hook sees the input as the tool decodes
+   it (a line range sent as an array is that range), and a rewrite keeps every
+   decoded field the hook never saw, such as `grep`'s `literal`. Two different rewrites deny the call, and so
+   does a rewrite the tool's schema refuses. The path checks, the prompt and
+   the body all use the final input; the call as the model issued it stays
+   recorded, so a script's replay still matches it.
+3. The session's approval policy decides over the final input
+   (`sessionPermission` in `toolGuard.ts`). `never`, or an ask with nobody to answer
+   it, denies whatever a hook said. Otherwise a hook's `ask` makes the call ask
+   a person, and its `allow` answers what the policy would have asked: a
+   plugin runs hooks only after its trust digest is accepted, so this is the
+   user's grant to the plugin. An `allow` about an input another hook rewrote
+   is about a different operation and counts as no answer. `defer`, like no
+   answer, leaves the call to the policy.
+4. An ask is a request on the run, as every approval is; no hook waits for a
+   person. A tool whose body opens its own request is asked about there, after
+   its proposal exists, with what the hooks said: an edit's review before the
+   edit is applied, a plan, a delegation proposal. A hook's `ask` forces that
+   review, and no grant turned on while it waits answers it; only a person
+   does. A question the body asks the user is not a permission check, so a
+   hook adds no prompt to it.
+
+A resumed run reads the hooks' answers and the rewrite from their
+`hook.outcome` rows and never runs them again.
 
 Context (`additionalContext`, and plain stdout on `SessionStart` and
 `UserPromptSubmit`) reaches the model as a text part labelled with the event and
@@ -59,7 +87,7 @@ is recorded as ignored. That bounds the loop with no setting. A script run ends
 with its script, so its stop always sends `stop_hook_active: true`.
 
 Fields that v1 parses but does not act on are recorded as ignored and logged as
-a warning: `updatedInput`, `updatedToolOutput`, `continue: false`, blocking a
+a warning: `updatedToolOutput`, `continue: false`, blocking a
 prompt, a second block in a row, and `initialUserMessage`. `systemMessage` is
 logged for the user. Every other event name in the reference is parsed and
 ignored. Handler types other than `command` (`http`, `mcp_tool`, `prompt`,
@@ -222,7 +250,8 @@ the run's one writer (`RunCell.append`). The row carries:
 - `status`: `ok`, `blocked` (exit 2), `failed` (other non-zero), `timeout`,
   `malformed`, or `unstartable`;
 - `exitCode`;
-- the effect: `deny` reason, `context` text, and what was `ignored`;
+- the effect: `decision` with its `reason`, `updatedInput`, `context` text,
+  and what was `ignored`;
 - the first 2,000 characters of stderr, on failure only.
 
 The run fold keeps the outcomes by point. Before running the hooks of a point,
@@ -240,9 +269,8 @@ recorded in full or not at all.
 
 The row kind is versioned like every other (`'hook.outcome'` in
 `rowVersions.ts`). Its v2 records a `PreToolUse` hook's answer as `decision`
-(`allow`, `deny` or `ask`) with its `reason` and any `updatedInput`, so a later
-build can act on them without running the hook again; this build acts on
-`deny` alone.
+(`allow`, `deny` or `ask`) with its `reason` and any `updatedInput`, so a
+resume acts on them without running the hook again.
 
 ## Refused or deferred in v1
 
@@ -252,8 +280,7 @@ build can act on them without running the hook again; this build acts on
 - The `http`, `mcp_tool`, `prompt` and `agent` handler types.
 - `async` and `asyncRewake` hooks.
 - PowerShell hooks.
-- Input rewriting (`updatedInput`), output rewriting (`updatedToolOutput`), and
-  prompt blocking.
+- Output rewriting (`updatedToolOutput`) and prompt blocking.
 - `SessionStart` with `source: "resume"`. The opening context is already in the
   recorded history.
 - `transcript_path`: TeXRA keeps no transcript file, so the field is not sent.

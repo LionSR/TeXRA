@@ -14,7 +14,7 @@ import {
   findAgentByIdentifier,
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
-import { type RunToolCall } from '@agent/runtime/RunCall';
+import { RunCall, type RunToolCall } from '@agent/runtime/RunCall';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type {
   AgentProposal,
@@ -27,10 +27,6 @@ import type {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import type { RunHistoryRefused } from '@shared/session/runHistory';
-import {
-  decideProposalApproval,
-  approvalPolicyDenialMessage,
-} from '@shared/approvalPolicy';
 import { refusalOf } from '@shared/session/approvalDecision';
 import { errorResult } from '@tools/core/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -140,6 +136,12 @@ type ProposalRequestError =
   | DatabaseWriteFailed
   | RunHistoryRefused;
 
+/** How a child records an approval the run's delegated-work grant gave. */
+const GRANTED_CHILD = {
+  goal: 'goal-approved',
+  human: 'auto-approved',
+} as const;
+
 /** Request the shared proposal decision, honoring the run's bypass policy.
  *  `ask` presents it in place of this call's own proposal request: the
  *  calls of one script share one request (`agent`). */
@@ -150,41 +152,19 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
   ): Effect.fn.Return<DelegationProposalDecision, ProposalRequestError> {
     const { session, runId, config } = parent.run;
-    if (isTrustedScript(config))
+    const hook = (yield* RunCall)?.hook;
+    // A trusted recipe's delegation is approved unless a hook asked for it.
+    if (isTrustedScript(config) && hook !== 'ask')
       return { result: { action: 'approve' }, childApproval: 'inherit' };
-    const policy = session.approvals.policy(runId);
-    const decision = decideProposalApproval({
-      policy,
-      scopedBypass: session.approvals.bypass(runId, 'superYolo') !== null,
-      canPresent: !session.interactions.approvalPromptsUnavailable,
-    });
-    switch (decision) {
-      case 'deny-policy':
-        session.interactions.approvalDenied(
-          { kind: 'proposal', policy },
-          runId,
-        );
-        return {
-          result: {
-            action: 'deny',
-            reason: approvalPolicyDenialMessage(decision),
-          },
-          childApproval: 'inherit',
-        };
-      case 'bypass':
-        return {
-          result: { action: 'approve' },
-          childApproval:
-            session.approvals.bypass(runId, 'superYolo') === 'goal'
-              ? 'goal-approved'
-              : 'auto-approved',
-        };
-      case 'unattended':
-        // `inherit` keeps the child on inherited per-kind approval state,
-        // so its bash and edits still gate.
-        return { result: { action: 'approve' }, childApproval: 'inherit' };
-      case 'present':
-        break;
+    const answer = session.approvals.permission(runId, 'proposal', hook);
+    if (answer !== 'allow' && answer !== 'ask')
+      return { result: answer, childApproval: 'inherit' };
+    if (answer === 'allow') {
+      // Under `yolo` alone the child inherits, so its bash and edits still
+      // gate; the run's delegated-work grant approves them too.
+      const granted = session.approvals.bypass(runId, 'superYolo');
+      const childApproval = granted ? GRANTED_CHILD[granted] : 'inherit';
+      return { result: { action: 'approve' }, childApproval };
     }
     if (ask !== undefined)
       return { result: yield* ask, childApproval: 'inherit' };
@@ -193,7 +173,12 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     const { requests } = parent;
     const result = yield* requests.open({
       kind: 'proposal',
-      data: { requestId: requests.nextId('proposal'), runId, ...proposal },
+      data: {
+        requestId: requests.nextId('proposal'),
+        allowBypass: hook !== 'ask',
+        runId,
+        ...proposal,
+      },
     });
     return { result, childApproval: 'inherit' };
   },

@@ -164,34 +164,51 @@ export function matchesHook(
 /** A tool input, field by field. */
 type Fields = Readonly<Record<string, unknown>>;
 
-/** The fields of `keys` the input carries, under the same names. */
-const same =
-  (...keys: readonly string[]) =>
-  (input: Fields): Fields =>
-    Object.fromEntries(keys.map((key) => [key, input[key]]));
-
 /** A file path made absolute against the workspace; absent stays absent. */
 type Absolute = (path: unknown) => unknown;
+
+/** A harness tool's input both ways: `input` is what a hook sees; `back`
+ *  reads a hook's rewrite as the harness tool's, keeping every issued field
+ *  the hook never saw. */
+interface Translation {
+  readonly input: (input: Fields, abs: Absolute) => Fields;
+  readonly back: (rewritten: Fields, issued: Fields) => Fields;
+}
+
+/** Fields renamed, harness name to counterpart name, `path` absolute. */
+const renamed = (fields: Readonly<Record<string, string>>): Translation => ({
+  input: (input, abs) =>
+    Object.fromEntries(
+      Object.entries(fields).map(([ours, theirs]) => [
+        theirs,
+        ours === 'path' ? abs(input[ours]) : input[ours],
+      ]),
+    ),
+  back: (rewritten, issued) => ({
+    ...issued,
+    ...Object.fromEntries(
+      Object.entries(fields).map(([ours, theirs]) => [ours, rewritten[theirs]]),
+    ),
+  }),
+});
+
+/** The translation of fields that keep their names. */
+const same = (...keys: readonly string[]): Translation =>
+  renamed(Object.fromEntries(keys.map((key) => [key, key])));
 
 /**
  * The harness's tools that have a Claude Code counterpart, by harness name:
  * the name a plugin's matcher and `tool_name` see, and the call's input under
  * the field names and meanings the Claude Code hooks reference documents for
  * that tool, file paths absolute. A harness-only field (`literal`,
- * `max_results`) has no counterpart and is not sent.
+ * `max_results`) has no counterpart: it is not sent, and a rewrite keeps it.
  */
 const CLAUDE_TOOLS: Readonly<
-  Record<
-    string,
-    {
-      readonly name: string;
-      readonly input: (i: Fields, abs: Absolute) => Fields;
-    }
-  >
+  Record<string, Translation & { readonly name: string }>
 > = {
   bash: {
     name: 'Bash',
-    input: same('command', 'description', 'timeout', 'run_in_background'),
+    ...same('command', 'description', 'timeout', 'run_in_background'),
   },
   read_file: {
     name: 'Read',
@@ -208,39 +225,41 @@ const CLAUDE_TOOLS: Readonly<
             : undefined,
       };
     },
+    back: ({ file_path, offset, limit }, issued) => ({
+      ...issued,
+      path: file_path,
+      range:
+        typeof offset === 'number'
+          ? {
+              start: offset,
+              end: typeof limit === 'number' ? offset + limit - 1 : null,
+            }
+          : null,
+    }),
   },
   write_file: {
     name: 'Write',
-    input: (input, abs) => ({
-      file_path: abs(input.path),
-      content: input.content,
-    }),
+    ...renamed({ path: 'file_path', content: 'content' }),
   },
   edit_file: {
     name: 'Edit',
-    input: (input, abs) => ({
-      file_path: abs(input.path),
-      old_string: input.old_str,
-      new_string: input.new_str,
-      replace_all: input.replace_all,
+    ...renamed({
+      path: 'file_path',
+      old_str: 'old_string',
+      new_str: 'new_string',
+      replace_all: 'replace_all',
     }),
   },
-  glob: {
-    name: 'Glob',
-    input: (input, abs) => ({ pattern: input.pattern, path: abs(input.path) }),
-  },
+  glob: { name: 'Glob', ...same('pattern', 'path') },
   grep: {
     name: 'Grep',
-    input: (input, abs) => ({
-      ...same(
-        ...['pattern', 'glob', 'output_mode', '-A', '-B', '-C', '-n', '-i'],
-        ...['type', 'head_limit', 'offset', 'multiline'],
-      )(input),
-      path: abs(input.path),
-    }),
+    ...same(
+      ...['pattern', 'glob', 'output_mode', '-A', '-B', '-C', '-n', '-i'],
+      ...['type', 'head_limit', 'offset', 'multiline', 'path'],
+    ),
   },
-  web_fetch: { name: 'WebFetch', input: same('url', 'prompt') },
-  web_search: { name: 'WebSearch', input: same('query') },
+  web_fetch: { name: 'WebFetch', ...same('url', 'prompt') },
+  web_search: { name: 'WebSearch', ...same('query') },
 };
 
 const TEXRA_TOOL_OF_CLAUDE_TOOL = new Map<string, string>([
@@ -264,22 +283,31 @@ export const CLAUDE_COUNTERPART_TOOLS: readonly string[] = Object.freeze(
  * A call as a Claude Code hook sees it: for a tool with a Claude Code
  * counterpart, that tool's name and its input translated (absent fields
  * dropped); any other tool, or an input that is not an object, keeps its
- * harness name and input unchanged.
+ * harness name and input unchanged. `fromHook` reads an input a hook
+ * rewrote, in the shape the hook saw, as the harness tool's.
  */
 export function claudeToolCall(
   name: string,
   input: unknown,
   abs: Absolute,
-): { readonly toolName: string; readonly toolInput: unknown } {
+): {
+  readonly toolName: string;
+  readonly toolInput: unknown;
+  readonly fromHook: (rewritten: Fields) => Fields;
+} {
   const tool = CLAUDE_TOOLS[name];
+  // The hook saw the harness's own input, so its rewrite is one.
   if (tool === undefined || typeof input !== 'object' || input === null)
-    return { toolName: name, toolInput: input };
+    return { toolName: name, toolInput: input, fromHook: (input) => input };
+  // cast: an object, as checked above.
+  const issued = input as Fields;
   return {
     toolName: tool.name,
     toolInput: Object.fromEntries(
-      Object.entries(tool.input(input as Fields, abs)).filter(
+      Object.entries(tool.input(issued, abs)).filter(
         ([, value]) => value != null,
       ),
     ),
+    fromHook: (rewritten) => tool.back(rewritten, issued),
   };
 }

@@ -366,6 +366,7 @@ export function buildScenario({ proposal = false } = {}) {
         kind: 'proposal',
         data: {
           requestId: 'req-plan',
+          allowBypass: true,
           runId: ROOT,
           task: true,
           agent: 'review',

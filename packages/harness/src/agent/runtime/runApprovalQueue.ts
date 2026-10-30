@@ -288,9 +288,9 @@ const COVERED_KINDS: Record<
 
 /**
  * Approve the run's requests pending under a bypass just turned on. Each
- * decision re-reads the committed rows, so one decided meanwhile keeps its
- * answer; another tool's bash call offers no bypass; a tool edit's approval
- * applies the user's edit; a request still being opened stays pending.
+ * decision re-reads the rows, so one decided meanwhile keeps its answer; one
+ * offering no grant (another tool's call, a hook's ask) waits for a person;
+ * an edit's approval applies the user's edit; one still opening stays.
  */
 function approvePendingUnderBypass(
   session: SessionHandle,
@@ -302,7 +302,7 @@ function approvePendingUnderBypass(
       ({ runId: requestRunId, payload }) =>
         requestRunId === runId &&
         kinds.includes(payload.kind) &&
-        !(payload.kind === 'bash' && !payload.data.allowBypass),
+        !('allowBypass' in payload.data && !payload.data.allowBypass),
     ),
     ({ requestId }) =>
       session.requests.decide(runId, requestId, { action: 'approve' }),

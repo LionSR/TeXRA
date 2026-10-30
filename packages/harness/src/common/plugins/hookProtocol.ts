@@ -260,11 +260,10 @@ function effectOf(asked: HookAsked, output: HookOutput) {
           (decision === 'deny' ? 'Denied by a PreToolUse hook.' : null),
         updatedInput: hso?.updatedInput ?? null,
       };
-      if (said === 'ask' || said === 'defer')
+      if (said === 'defer')
         ignored.push(
-          `permissionDecision: "${said}" (the approval policy decides)`,
+          'permissionDecision: "defer" (the approval policy decides)',
         );
-      if (hso?.updatedInput !== undefined) ignored.push('updatedInput');
       context = joined([hso?.additionalContext]);
       break;
     }
