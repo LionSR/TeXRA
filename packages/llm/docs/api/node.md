@@ -248,7 +248,7 @@ caller joining it, until the work gives up by itself.
 The check, the claim and the fork run under one uninterruptible mask and
 share one synchronous segment, so a second caller can never mint a second
 attempt and an interrupt can never land between claiming the slot and
-starting the fiber that settles it.
+starting the fiber that finishes it.
 
 ```ts
 class SharedAttempt<A, E>

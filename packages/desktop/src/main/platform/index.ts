@@ -95,7 +95,7 @@ export const initializeElectronPlatform = Effect.fn(
       return { mainDir, resourcesPath, configStores };
     },
   ).pipe(Effect.provide(nodeFileServices));
-  // The one Effect runtime of this process (PRD 7.7), over the stores it
+  // The one Effect runtime of this process, over the stores it
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeEffect`), after run
   // settlement and the projects' release of their graphs.

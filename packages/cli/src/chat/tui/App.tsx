@@ -132,7 +132,7 @@ export function App(props: AppProps): React.JSX.Element {
   const view = useSignal(sessionView());
   const pending = useSignal(currentApproval);
   // The selection and the reader arrive already resolved against the view
-  // (their signals own that rule), so render derives from settled values.
+  // (their signals own that rule), so render derives from finished values.
   const activeRunId = useSignal(selectedRunIdSignal);
   const sessionViewFailure = useSignal(sessionViewFailureSignal);
   const foregroundForm = useSignal(activeForm);
@@ -279,7 +279,7 @@ export function App(props: AppProps): React.JSX.Element {
       dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
     }
   }, [childListValues]);
-  // Kill, skip and retry; a refusal (a settled call) reads into the transcript.
+  // Kill, skip and retry; a refusal (a finished call) reads into the transcript.
   const request = (req: RuntimeRequest): void => {
     props.runtime.runFork(
       Effect.catch(requests.request(req), (error) =>

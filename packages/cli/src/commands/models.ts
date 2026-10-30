@@ -36,7 +36,7 @@ import type { CliContext } from '../runtime/cliContext';
  * The report every model command gives when its platform cannot come up: one
  * stderr line and `ModelOrNetworkError`. Each command hands it to
  * `defineCliCommand` as its `catchExitCode`, so a failure of the process
- * runtime install — which happens before any program below can fold it —
+ * runtime install — which happens before any program below can handle it —
  * reads the same way an init failure inside one does.
  */
 function reportModelPlatformFailure(cause: unknown): number {
@@ -90,7 +90,7 @@ function listModels(context: CliContext, options: CliModelListOptions) {
 
 function showModel(context: CliContext, id: string) {
   // One program for the init and the entry lookup: the lookup loads the
-  // access list itself, so `show` settles neither the init nor the list into
+  // access list itself, so `show` finishes neither the init nor the list into
   // a Promise only to hand it straight back to a second run.
   return Effect.gen(function* () {
     const outcome = yield* Effect.exit(

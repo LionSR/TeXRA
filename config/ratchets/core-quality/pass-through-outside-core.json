@@ -1,6 +1,5 @@
 {
   "packages/cli/src/chat/tui/App.tsx": 1,
-  "packages/cli/src/chat/tui/commands/registerBuiltins.tsx": 2,
   "packages/cli/src/chat/tui/forms/_shared/useAsyncListForm.ts": 1,
   "packages/cli/src/chat/tui/forms/AgentListForm.tsx": 1,
   "packages/cli/src/chat/tui/forms/CliConfigForm.tsx": 1,
@@ -13,7 +12,6 @@
   "packages/cli/src/runtime/initPlatform.ts": 1,
   "packages/cli/src/runtime/logSinks.ts": 3,
   "packages/cli/src/runtime/terminalText.ts": 1,
-  "packages/desktop/src/main/desktopBrowserViews.ts": 1,
   "packages/desktop/src/main/desktopHostRequests.ts": 4,
   "packages/desktop/src/main/desktopProgressFileActions.ts": 2,
   "packages/desktop/src/main/desktopProjectBindings.ts": 1,
@@ -39,7 +37,6 @@
   "packages/texra/src/controllers/approval/ToolEditApprovalController.ts": 1,
   "packages/texra/src/controllers/modelAccess/subscriptionProviders.ts": 11,
   "packages/texra/src/controllers/session/hostRunActions.ts": 2,
-  "packages/texra/src/controllers/session/webviewSessionLayer.ts": 1,
   "packages/texra/src/controllers/settingsView/LatexToolingController.ts": 1,
   "packages/texra/src/controllers/settingsView/SettingsAgentCatalogController.ts": 1,
   "packages/texra/src/shared/highlighting/hljs.ts": 1,
@@ -48,8 +45,6 @@
   "packages/texra/src/tools/arxiv/ArxivSearchTool.ts": 1,
   "packages/texra/src/tools/codexConfig.ts": 2,
   "packages/texra/src/tools/github/PollingSourceBase.ts": 2,
-  "packages/texra/src/tools/github/PRPollingSource.ts": 2,
-  "packages/texra/src/ui/copy/format.ts": 1,
   "packages/texra/src/ui/styles/index.ts": 1,
   "packages/texra/src/ui/wa/actionButtons.ts": 4
 }

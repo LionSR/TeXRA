@@ -81,7 +81,7 @@ interface GitHubTokenFormProps {
   /** The credential writes as programs; this form owns their one run. */
   readonly onSave: (token: string) => Effect.Effect<void, Error, Secrets>;
   readonly onRemove: () => Effect.Effect<void, Error, Secrets>;
-  /** The runtime those programs settle on, from the surface that mounted this
+  /** The runtime those programs run on, from the surface that mounted this
    *  form — Ink components run no Effect of their own. */
   readonly runtime: ProcessRuntime;
   readonly onDone: () => void;

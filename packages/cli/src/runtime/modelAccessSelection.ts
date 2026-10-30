@@ -50,7 +50,7 @@ class ModelAccessPreferenceFailed extends Schema.TaggedError<ModelAccessPreferen
 
 /**
  * A program: each coding plan's key status is a credential read that types its
- * own failure, so the surface that wants this status yields it or settles it
+ * own failure, so the surface that wants this status yields it or runs it
  * on the runtime it holds.
  */
 export const readCliModelAccessStatus = Effect.fn(

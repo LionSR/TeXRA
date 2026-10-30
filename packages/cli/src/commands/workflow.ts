@@ -345,7 +345,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const outputDir = resumeWorkflowOutputDirectory(config);
     const recoveryProcessCwd = tryReadCliCwd();
     const { recoveryInputIsDurable } = options;
-    // Not a run a model failure stopped (its folded `lastError`): read from
+    // Not a run a model failure stopped (its `lastError` in the view): read from
     // the rows, so no verdict held in memory can be missed by an interrupt.
     const canAdvertiseInterruptedRun: CheckpointRefinement = (runId) =>
       Effect.map(session.records(runId).readModelFailed(), (failed) => !failed);

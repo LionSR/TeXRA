@@ -79,9 +79,9 @@ const workflowRecoveryInputsAreDurable = Effect.fn(
  * Continue a stored session through the session's resume: a tool-use
  * session reopens the interactive chat TUI (so a usable terminal is
  * required), whose `/resume` calls it; a workflow run resumes headless under
- * its persisted run id, in the same run skeleton as `texra run`. The chat arm names the session with its persisted
+ * its persisted run id, in the same run skeleton as `texra run`. The chat case names the session with its persisted
  * record rather than mounting the TUI itself: `defineCliCommand` mounts it
- * once this program has settled. This entry never suppresses the platform's
+ * once this program has finished. This entry never suppresses the platform's
  * own signal handlers: the window below (the ownership gate, the resume)
  * still needs a graceful handler, and `runChat` hands ownership over once Ink
  * mounts.
@@ -90,7 +90,7 @@ export function runResumeCommand(
   context: CliContext,
   id: RunId,
   /** `--fork`: continue a new task holding the conversation as it stood at
-   *  its latest settled point. */
+   *  its latest completed point. */
   fork = false,
 ) {
   return Effect.gen(function* () {

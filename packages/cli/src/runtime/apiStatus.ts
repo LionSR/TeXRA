@@ -36,7 +36,7 @@ interface CliModelAccessOverview {
 /**
  * Read the subscription sessions and the effective model-access route. A program,
  * because the coding-plan key status underneath it is one: the chat surface
- * yields it, and a Promise-facing caller settles it on its own runtime.
+ * yields it, and a Promise-facing caller runs it on its own runtime.
  */
 export const loadCliModelAccessOverview = Effect.fn(
   'apiStatus.loadCliModelAccessOverview',

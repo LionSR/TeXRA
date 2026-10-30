@@ -1,8 +1,7 @@
 /**
- * The TUI's read of the one session state (PRD one-fold-three-renderers,
- * 10.1): `Session.view` bridged into a Lit signal, so every Ink
- * component reads the fold with `useSignal(sessionView())` and derives
- * nothing the fold already states.
+ * The TUI's read of the one session state: `Session.view` bridged into a Lit signal, so every Ink
+ * component reads the session view with `useSignal(sessionView())` and derives
+ * nothing the session view already states.
  *
  * Bound once per chat session by `runChat` from the runtime session's
  * `view`; a component rendered before that is a programming error, not a
@@ -36,13 +35,13 @@ const bound = signal<StreamSignal<SessionView> | undefined>(undefined);
 
 /**
  * Bridge a session's view level into the TUI's signal; returns the unbind.
- * The only meeting point between Effect and the components (PRD 7.5): the
+ * The only meeting point between Effect and the components: the
  * view's change run bridged onto `runtime` by `toSignal` — the process
  * runtime the chat entry point holds, since the bridge lives as long as the
  * session it binds.
  *
- * A session's `view.changes` is the level stream that fails when the fold
- * dies, so a TUI never freezes on a dead fold with nothing to say.
+ * A session's `view.changes` is the level stream that fails when the session view
+ * dies, so a TUI never freezes on a dead session view with nothing to say.
  * `onFailure` is that word, as the one error the cause squashes to, so the
  * entry that binds needs no Effect vocabulary.
  */
@@ -107,12 +106,12 @@ export function resumableRunId(run: RunView | undefined): RunId | undefined {
 }
 
 /** The name a run goes by on this surface: `main` for a root, the
- *  fold's label below it. */
+ *  session view's label below it. */
 export function runLabelOf(run: RunView): string {
   return run.parentId === null ? 'main' : run.label;
 }
 
-/** The run's phase: undefined before the first `status` folds. */
+/** The run's phase: undefined before its first `status` is applied. */
 export function runPhaseOf(run: RunView | undefined): RunPhase | undefined {
   return run === undefined || run.status === RUN_LIFECYCLE_READY
     ? undefined
@@ -120,7 +119,7 @@ export function runPhaseOf(run: RunView | undefined): RunPhase | undefined {
 }
 
 /**
- * The direct children in the RUNNING phase. The fold's `rollup.running`
+ * The direct children in the RUNNING phase. The session view's `rollup.running`
  * counts every descendant still working a turn, a child waiting on the user
  * included; the TUI's "active" is direct children in the RUNNING phase, so
  * it reads each child's status fact rather than the rollup.

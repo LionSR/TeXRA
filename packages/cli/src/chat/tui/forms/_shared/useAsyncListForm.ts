@@ -47,7 +47,7 @@ interface AsyncListFormState<T> extends AsyncResource<T> {
 interface UseAsyncListFormOptions<T> {
   /** Loads the form's data once on mount, as a program the hook runs. */
   readonly load: () => Effect.Effect<T, Error, ProcessServices>;
-  /** The runtime the load and every write settle on. */
+  /** The runtime the load and every write run on. */
   readonly runtime: ProcessRuntime;
   /** Close handler invoked when `Esc` is pressed in a non-actionable state. */
   readonly onClose: () => void;
@@ -108,7 +108,7 @@ function shouldBufferAsyncListFormInput(args: {
 }
 
 /**
- * Settle a form's write program on the surface's runtime. Every form write runs
+ * Run a form's write program on the surface's runtime. Every form write runs
  * through here as a `runFork`, not a fire-and-forget `runPromise`: shutdown
  * interrupts a write still in flight, and the process runtime's fork reporting
  * keeps that interrupts-only exit silent where a dropped promise would reject

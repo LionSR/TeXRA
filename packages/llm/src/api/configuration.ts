@@ -20,7 +20,7 @@ export type ConfigurationOf<P extends HttpProtocol> = Extract<
   { protocol: P }
 >;
 
-/** What every protocol arm reads, computed once per bind. */
+/** What every protocol case reads, computed once per bind. */
 export interface Facts {
   readonly spec: BindSpec;
   readonly config: ModelConfig;
@@ -34,8 +34,8 @@ export interface Facts {
   };
   /**
    * The three request controls every OpenAI-descended route defaults from, in
-   * the package's own order. An arm that clamps or fixes one overrides it
-   * after the spread; an arm whose route takes only some of the three names
+   * the package's own order. A case that clamps or fixes one overrides it
+   * after the spread; a case whose route takes only some of the three names
    * those, because a spread is not excess-property-checked and the package
    * parses its configuration strictly.
    */

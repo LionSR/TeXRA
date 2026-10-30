@@ -138,7 +138,7 @@ export class FileList extends LitElement {
   @property({ attribute: false }) repliesByRound: Record<string, FileLocation> =
     {};
 
-  /** The surface owns the hint's dismissal (PRD 9). */
+  /** The surface owns the hint's dismissal. */
   @property({ attribute: false }) surface: Surface | null = null;
 
   // Flattened from failuresByRound to avoid O(rounds) scan per file item in render.

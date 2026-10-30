@@ -151,8 +151,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   });
 
   /**
-   * This host's half of the shared funnel loop (PRD: agent-native
-   * onboarding): its credential sources, its user-scoped flag store, and the
+   * This host's half of the shared funnel loop: its credential sources, its user-scoped flag store, and the
    * two things it does with a recomputed funnel — paint it into the host
    * snapshot, and on entering State 1 select the setup agent on the launcher.
    * It never auto-starts setup; the user launches it from the setup card.
@@ -401,7 +400,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.watchWorkspace();
   }
 
-  /** The completion chime (PRD 12.4), one per process and never a renderer
+  /** The completion chime, one per process and never a renderer
    *  transition hook every subscriber would replay: a document task (its
    *  run holds the documents fact, which only its recipe records)
    *  completing, here or in the service. A failed or cancelled run does not

@@ -1,11 +1,11 @@
-// The TUI's request Surface (PRD one-fold-three-renderers, 9 and 10.1).
+// The TUI's request surface.
 //
-// Which requests are pending is a fold fact: `view.requests` holds every
+// Which requests are pending is a session view fact: `view.requests` holds every
 // `request.opened` no `request.decided` has answered. This module owns only
-// what the fold cannot: the presentation a host stages beside the fact (a
+// what the session view cannot: the presentation a host stages beside the fact (a
 // tool edit's before and after text, a retry's personal-key lookup), the
-// "decided here, not yet folded there" gap, and the jump-to-waiting order.
-// A decision leaves as the arm `approvalDecisionArm` names: the run's
+// "decided here, not yet applied there" gap, and the jump-to-waiting order.
+// A decision leaves as the case `approvalDecisionArm` names: the run's
 // `request.decide` (with the bypass a session-wide approval grants), or the
 // host capability a retry on the user's own key needs.
 
@@ -115,7 +115,7 @@ export const pendingApprovalKindsByRun = computed(
     ),
 );
 
-/** One request the user's attention is on: a fold fact, read once. */
+/** One request the user's attention is on: a session view fact, read once. */
 interface AttentionRequest {
   readonly requestId: string;
   readonly runId: RunId;
@@ -134,7 +134,7 @@ const stagedPresentations = signal<ReadonlyMap<string, ApprovalPayload>>(
   new Map(),
 );
 
-/** Decided on this surface; hidden until the fold drops the fact. */
+/** Decided on this surface; hidden until the session view drops the fact. */
 const decided = signal<ReadonlySet<string>>(new Set());
 
 /** Jump-to-waiting: the focused stream's requests lead the order. */
@@ -173,7 +173,7 @@ export function pruneToLive(
 }
 
 /**
- * Every request awaiting the user, from the fold: the outstanding requests
+ * Every request awaiting the user, from the session view: the outstanding requests
  * in commit order, from the runs this chat owns. The promoted stream's requests lead; nothing is decided
  * or re-notified by a promotion. The status bar, the title, and the modal
  * all read this one list.
@@ -181,7 +181,7 @@ export function pruneToLive(
 export const attentionRequests = computed((): readonly AttentionRequest[] => {
   const included = sessionRunIds.get();
   const view = sessionView().get();
-  // The fold lists every kind, including an `externalInquiry` a persisted
+  // The session view lists every kind, including an `externalInquiry` a persisted
   // session carries from another host; this surface renders none of those,
   // so the narrowing is a filter rather than an assertion. It renders only
   // what this window can answer (`attentionOf`, the rule every host reads):
@@ -220,7 +220,7 @@ function presentedPayload(
     case 'toolEdit':
     case 'retry':
       // Presentable only once the host stages it: a tool edit with its
-      // preview, a retry once the CLI policy has not settled it.
+      // preview, a retry once the CLI policy has not finished it.
       return undefined;
   }
   absurd(payload);
@@ -229,7 +229,7 @@ function presentedPayload(
 /** The order requests became presentable: a request that only became
  *  showable now (a staged tool edit or retry) joins behind the modal the
  *  user is already answering rather than displacing it. The stamp is a
- *  monotonic counter, not the map's size: settled entries are pruned, and a
+ *  monotonic counter, not the map's size: finished entries are pruned, and a
  *  size-based stamp would hand a later request the index of one on screen. */
 const presentedOrder = new Map<string, number>();
 let nextPresentedOrder = 0;
@@ -324,7 +324,7 @@ export function reopenRequest(requestId: string): void {
  * durable request it answered is still pending and nobody else will re-ask.
  * `onRefused` is the same undo for a caller keeping its own "already acted"
  * guard beside this one (the TUI host's automatic answers): a guard left set
- * over a refused decision parks the run on a request nobody answers again.
+ * over a refused decision leaves the run waiting on a request nobody answers again.
  */
 function issue(
   requests: SessionRequests,
@@ -365,7 +365,7 @@ function issue(
 }
 
 /**
- * Apply one decision: the arm the shared vocabulary names (PRD 8.2), the
+ * Apply one decision: the case the shared vocabulary names, the
  * `request.decide`, or the host capability a retry on the user's own key
  * needs instead of a decision, since that host lands the decision itself
  * once the credential is in place.
@@ -416,7 +416,7 @@ export function landRequestDecision(
 }
 
 /** Forget every staged presentation and local decision: the Surface reset
- *  (`/clear`). The pending requests themselves are the fold's, closed by the
+ *  (`/clear`). The pending requests themselves are the session view's, closed by the
  *  runs they belong to. */
 function resetApprovalSurface(): void {
   stagedPresentations.set(new Map());

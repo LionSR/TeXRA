@@ -6,7 +6,7 @@
  * {@link SubscriptionOAuthPolicy}; this class owns single-flight refresh,
  * generation supersede, and serialized storage writes.
  *
- * Every method is an Effect program the caller yields or settles at its own
+ * Every method is an Effect program the caller yields or runs at its own
  * edge. A program fails with {@link SubscriptionOAuthError} or with the
  * secret store's own {@link SecretsFailed}.
  */

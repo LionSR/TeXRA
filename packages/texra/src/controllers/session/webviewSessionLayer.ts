@@ -52,7 +52,7 @@ interface WebviewSession {
 
 export class WebviewSessions extends LayerMap.Service<WebviewSessions>()(
   '@texra/session/WebviewSessions',
-  { lookup: (key: string) => webviewSessionLayer(key) },
+  { lookup: webviewSessionLayer },
 ) {
   /** The session of a key, built on first open and shared until the last
    *  scope holding it closes. */

@@ -28,7 +28,7 @@ export const runTabStyles = css`
     overflow: hidden;
   }
 
-  /* The fold spells the tone (G4); the row only maps it to a hue. */
+  /* The session view spells the tone; the row only maps it to a hue. */
   .tab-container.tone-running {
     --run-status-color: var(--color-success);
   }
@@ -219,7 +219,7 @@ export const runTabStyles = css`
     white-space: nowrap;
   }
 
-  /* The fold's banner copy: the unreadable detail or the interrupted notice. */
+  /* The session view's banner copy: the unreadable detail or the interrupted notice. */
   .tab-detail {
     display: var(--run-tab-detail-display, block);
     width: 100%;

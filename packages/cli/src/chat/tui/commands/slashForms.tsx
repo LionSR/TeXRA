@@ -50,7 +50,7 @@ function copyToClipboard(text: string): void {
   child.stdin?.end(text);
 }
 
-/** Submit-side busy/settled surface for the active registered form. */
+/** Submit-side busy/finished surface for the active registered form. */
 function FormBusyFrame(props: {
   readonly progress: FormProgress;
   readonly availableRows?: number;
