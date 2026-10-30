@@ -29,7 +29,9 @@ type RequestState = {
  */
 export type RunPosition = {
   readonly family: RunFamily | null;
-  readonly at: PositionAt | null;
+  /** Where the loop stands, or stood when it halted: a halt row changes
+   *  `outcome`, not this. */
+  readonly at: Exclude<PositionAt, 'halted'> | null;
   readonly outcome: RunOutcome | null;
   readonly turn: number;
   /** By request id, in the order the rows opened them. */

@@ -203,9 +203,10 @@ export function applyRunRow(
           detail: `turn ${p.turn} is below ${rows.turn}`,
         };
       }
+      // A halt records its outcome where the loop stood; `at` keeps that spot.
       return applied({
         family: p.family,
-        at: p.at,
+        at: p.at === 'halted' ? rows.at : p.at,
         turn: p.turn ?? rows.turn,
         outcome: p.at === 'halted' ? (p.outcome ?? null) : rows.outcome,
       });

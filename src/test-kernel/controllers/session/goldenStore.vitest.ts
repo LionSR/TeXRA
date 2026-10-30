@@ -450,8 +450,9 @@ describe('the golden 1.0 store', () => {
           messages: state?.messages.map((message) => message.role),
           openAttempt: state?.invocation != null,
         }));
+      // The stop kept where the loop stood: a halt records only the outcome.
       expect(yield* stateOf(PARENT)).toEqual({
-        at: 'halted',
+        at: 'waiting',
         phase: 'waiting',
         modelId: 'openai/gpt-5.6-sol',
         messages: [
