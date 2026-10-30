@@ -312,7 +312,7 @@ export class RepoPollingSource extends PollingSourceBase<
         () => {},
         state.reviewComments,
         (c) => {
-          const prNumber = parsePRNumberFromReviewCommentUrl(c.html_url);
+          const prNumber = matchPositiveInt(PR_NUMBER_RE, c.html_url);
           if (prNumber === undefined) return Effect.void;
           return this.emit(
             state,
@@ -545,6 +545,3 @@ function parseTargetNumberFromIssueUrl(c: GhIssueComment): number | undefined {
  * `html_url` is `…/pull/{number}#discussion_r…`.
  */
 const PR_NUMBER_RE = /\/pull\/(\d+)(?:[?#/]|$)/;
-function parsePRNumberFromReviewCommentUrl(url: string): number | undefined {
-  return matchPositiveInt(PR_NUMBER_RE, url);
-}

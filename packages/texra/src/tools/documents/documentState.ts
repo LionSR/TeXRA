@@ -328,8 +328,11 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
   const bound = yield* SynchronizedRef.get(run.model);
   // The launch's media, as absolute paths: the revision's agent run reads
   // them from wherever the launch named them.
-  const configured = run.config.mediaFiles.map(
-    (file) => deps.fileService.createLocation(file).absolutePath,
+  const configuredLocations = run.config.mediaFiles.map((file) =>
+    deps.fileService.createLocation(file),
+  );
+  const configured = configuredLocations.map(
+    (location) => location.absolutePath,
   );
   if (!bound.config.capabilities.supportsVision) return configured;
   const media = new LatexMediaManager(
@@ -349,9 +352,7 @@ const revisionMedia = Effect.fn('documents.revisionMedia')(function* (
       return yield* media.processInputFiles(
         files,
         documentTaskOptions(run.config),
-        run.config.mediaFiles.map((file) =>
-          deps.fileService.createLocation(file),
-        ),
+        configuredLocations,
       );
     }),
   );

@@ -40,7 +40,6 @@
   "packages/texra/src/controllers/approval/ToolEditApprovalController.ts": 1,
   "packages/texra/src/controllers/modelAccess/subscriptionProviders.ts": 11,
   "packages/texra/src/controllers/session/hostRunActions.ts": 2,
-  "packages/texra/src/controllers/session/webviewSessionLayer.ts": 1,
   "packages/texra/src/controllers/settingsView/LatexToolingController.ts": 1,
   "packages/texra/src/controllers/settingsView/SettingsAgentCatalogController.ts": 1,
   "packages/texra/src/shared/highlighting/hljs.ts": 1,
@@ -49,8 +48,6 @@
   "packages/texra/src/tools/arxiv/ArxivSearchTool.ts": 1,
   "packages/texra/src/tools/codexConfig.ts": 2,
   "packages/texra/src/tools/github/PollingSourceBase.ts": 2,
-  "packages/texra/src/tools/github/PRPollingSource.ts": 2,
-  "packages/texra/src/ui/copy/format.ts": 1,
   "packages/texra/src/ui/styles/index.ts": 1,
   "packages/texra/src/ui/wa/actionButtons.ts": 4
 }

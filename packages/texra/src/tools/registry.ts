@@ -179,16 +179,17 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
     // The editor's PDF viewer; the host's Comments UI, for the one host
     // that has one, where `inline_comment` is offered.
     processLayer: {
-      layer:
-        provider === undefined
-          ? Layer.succeed(EditorHost)(editors)
-          : Layer.mergeAll(
-              Layer.succeed(EditorHost)(editors),
+      layer: Layer.mergeAll(
+        Layer.succeed(EditorHost)(editors),
+        ...(provider === undefined
+          ? []
+          : [
               Layer.succeed(InlineComments)(provider),
               serves(() => [
                 'inline-comments' satisfies InlineCommentCapability,
               ]),
-            ),
+            ]),
+      ),
     },
   });
 
