@@ -183,11 +183,12 @@ export const consumedRow = (
 /**
  * Where one follow-up stands: `accepted` while queued; `incorporated` once
  * it is part of a turn's message and that turn has not ended; `terminal`
- * once something answered it (`answer`: the commit of the rows that did, a
- * child's report, a control's edit or config, or the turn's own rows) or
- * nothing will (`answer` null, `reason`: a dropped row's, or the error or
- * outcome that ended the run before its turn finished). Every message of
- * one turn shares that turn's answer.
+ * once something answered it (`answer`: the commit of the row that took it,
+ * written in the transaction that answered it: a child's report, a
+ * control's edit or config, or the turn's own rows) or nothing will
+ * (`answer` null, `reason`: a dropped row's, or the error or outcome that
+ * ended the run before its turn finished). Every message of one turn
+ * shares that turn's answer.
  */
 type FollowUpReceipt =
   | { readonly state: 'accepted' }
@@ -199,8 +200,9 @@ type FollowUpReceipt =
     };
 
 /** The receipt of `followUpId` as `rows` say it; an id no row named has
- *  left no receipt. A turn ends when the loop rests at it or moves past
- *  it, or the run ends. */
+ *  left no receipt. A turn ends when the loop rests at it (`waiting`, or
+ *  `turn.ready` once the next input is taken at the same turn number),
+ *  moves past it, or the run ends. */
 export function followUpReceipt(
   rows: RunRows,
   followUpId: string,
@@ -218,7 +220,8 @@ export function followUpReceipt(
       return { state: 'terminal', answer: null, reason: disposition.reason };
     case 'turn': {
       const { turn } = disposition;
-      if (rows.turn > turn || (rows.turn === turn && rows.at === 'waiting'))
+      const rested = rows.at === 'waiting' || rows.at === 'turn.ready';
+      if (rows.turn > turn || (rows.turn === turn && rested))
         return { state: 'terminal', answer: commit };
       if (rows.end === null) return { state: 'incorporated', turn };
       const { error, outcome } = rows.end;
