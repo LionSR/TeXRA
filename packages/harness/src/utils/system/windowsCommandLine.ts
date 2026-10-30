@@ -20,12 +20,15 @@ function escapeCmdArgument(arg: string): string {
  * Node's spawn does no PATHEXT resolution and, since CVE-2024-27980, refuses
  * a `.cmd`/`.bat` without a shell. An `.exe`/`.com` hit is spawned by its
  * resolved path; a shim becomes one escaped `cmd.exe` line; a miss is spawned
- * as named and fails to start.
+ * as named and fails to start. The environment is plain text, since `which`
+ * reads the child's PATH from it.
  */
 export function toWindowsCommand(
   argv0: string,
   args: readonly string[],
-  options: ChildProcess.CommandOptions,
+  options: Omit<ChildProcess.CommandOptions, 'env'> & {
+    readonly env?: Record<string, string | undefined>;
+  },
 ): ChildProcess.StandardCommand {
   // On the PATH the child is handed (`Path` on Windows), extended already.
   const resolved = which.sync(argv0, {
