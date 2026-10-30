@@ -5,6 +5,10 @@ session store guarantees, what a run writes and when, how a run continues from
 its rows, and what survives a crash. It describes the code as it is. It does not
 describe planned behavior.
 
+For a walkthrough with code, read the Durable Protocol guide first
+([`docs/api/durable-protocol.md`](../../../docs/api/durable-protocol.md), published
+at [texra.ai/api/durable-protocol](https://texra.ai/api/durable-protocol)).
+
 ## Conventions
 
 The key words MUST, MUST NOT, SHALL, SHALL NOT and MAY are used as in RFC 2119,

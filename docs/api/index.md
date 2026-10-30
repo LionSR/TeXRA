@@ -39,6 +39,12 @@ Service tags hold capabilities fixed for their scope; per-run values (`runId`, a
 
 Every run executes on the same loop. [`codemode`](./plugins-and-codemode#codemode-script-and-tool-discovery) provides the `script` tool—a QuickJS worker that calls the run's tools (`await tools.read_file(...)`, `await agent(...)`, `await self(...)`) with deterministic replay across crashes—and [`Plugin`](./harness/#plugin)s contribute tools, prompt sections, Effect layers, versioned durable rows (`PluginArm`), and custom YAML blocks (`AgentBlock`).
 
+The harness's own tools are six plugins of that same type ([`harnessBuiltins`](./plugins-and-codemode#built-in-plugins-harnessbuiltins)). The TeXRA app passes the same six (with `file-ops` given TeXRA's write filter) plus thirteen of its own, among them LaTeX, arXiv, Zotero, Lean and document tasks. An embedder passes its own list to `Sessions.layer({ platform, plugins })`, and a built-in left out of the list offers no tools. Switching a plugin off withdraws its tools, prompt section and layers at the run's next step; the rows it wrote stay in the store.
+
+Third-party plugins load as data, not code. The harness reads the Claude Code and Codex plugin layouts (`skills/`, `commands/`, `agents/`, `.mcp.json`), connects to MCP servers, and runs hooks as separate processes, and each installed plugin needs a trust decision before it loads.
+
+The loop, the store and its single writer, requests, retries and model access are not plugins. They implement rules 1 to 3, so a plugin can add a tool but cannot change when the tool's result is recorded or whether a crashed run resumes.
+
 ## Handles: `Sessions`, `Session`, and `Run`
 
 | Handle                                                                          | Scope                  | Operations                                                                                                                                                                                                                                   |

@@ -102,17 +102,20 @@ Each aggregate has an ownership row holding the active writer's [`ProcessIdentit
 
 ## Write points (`W1`–`W7`)
 
-The run loop commits rows at seven boundaries (`packages/harness/docs/spec.md`) and reads its next step from the reducer output:
+The run loop commits a row before each step that depends on it. These are the
+seven write points of the [spec](https://github.com/LionSR/TeXRA/blob/main/packages/harness/docs/spec.md)
+(section 4), with what a resume does if the process stops right after each
+one (section 9):
 
-| Write point                   | Committed row(s)                                                                             | Recovery behavior if the process crashes immediately after                                                                                     |
-| ----------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **W1 — Run admission**        | `run.start`, `run.config`, initial `approval.policy`, initial `user` message                 | Replays the initial configuration and starts step 1.                                                                                           |
-| **W2 — Step & model attempt** | `tools.offered` (when tools/prompt/hooks changed) + `model.message` (`attempt`)              | Counts the interrupted attempt against the invocation's retry budget and either resends under the retry gate or opens a human `retry` request. |
-| **W3 — Model response**       | `model.message` (`response`) with assistant content, tool calls, and token usage             | Reuses the committed assistant response (never re-invokes the model for that turn) and proceeds to tool dispatch.                              |
-| **W4 — Tool intent**          | `tool.intent` (after pre-call hooks, workspace path guards, and human approvals succeed)     | Re-runs the tool if `replay: 'safe'`; records an `"outcome unknown"` tool result for the model if `replay: 'unsafe'`.                          |
-| **W5 — Tool result**          | `tool.result` (plus any `plugin.fact` rows emitted by the call)                              | Reuses the committed `tool.result` without re-executing the tool and advances to the next pending call or next model turn.                     |
-| **W6 — Human request / wait** | `request.opened`, `request.decided`, or `run.position` (`waiting`)                           | Re-presents any open `request.opened` (without a matching `request.decided`) to the attached `approve` handler.                                |
-| **W7 — Terminal outcome**     | `run.end` (`completed`, `failed`, `cancelled`, `budget_exceeded`, `max_iterations_exceeded`) | Run is finished; `session.resume` fails with [`ResumeRefused`](./harness/#resumerefused).                                                      |
+| Write point                         | Committed row(s)                                                   | What a resume does                                                                                                                                                                                                                                                                              |
+| ----------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **W1 — Model attempt**              | `model.message` (`attempt`), before the request leaves the process | The attempt has no outcome, so it is sent again, or, if a person approved a retry of that call, the person is asked again. An operation the provider accepted is observed, not resubmitted.                                                                                                     |
+| **W2 — Model response**             | `model.message` (`response`) with `run.position` `response.ready`  | Reuses the committed response; the model is not called again for it.                                                                                                                                                                                                                            |
+| **W3 — Tool intent**                | `tool.intent`, after pre-call hooks and the guard, before the body | If the call's approval request still stands, or was decided since the run resumed, the call rejoins it. Otherwise it is re-run only if the tool declares `replay: 'safe'`, its stored arguments still validate, and it has not already started three times; else it settles as outcome unknown. |
+| **W4 — Tool result**                | `tool.result` with the call's card rows                            | Reuses the result; the tool is not run again.                                                                                                                                                                                                                                                   |
+| **W5 — Position**                   | `run.position` at every wait and every halt                        | Continues from the recorded position. A `halted` position commits with `run.end`: a recipe task stays finished (`resume` answers `finished`), and a conversation continues in a new lifecycle.                                                                                                  |
+| **W6 — Failed attempt**             | `model.message` (`failed`), naming the next action                 | Follows the recorded action: send the next attempt (`retry`, `unchain`), wait for a person (`ask`), or end the call (`stop`, `cancel`).                                                                                                                                                         |
+| **W7 — Request opened and decided** | `request.opened`, then one `request.decided`                       | An open request stays pending under the same id and is presented again to the attached `approve` handler.                                                                                                                                                                                       |
 
 ### Model retries and durable permits
 
@@ -127,7 +130,7 @@ The run loop commits rows at seven boundaries (`packages/harness/docs/spec.md`) 
 
 ## Crash-conformance invariants (`I1`–`I9`)
 
-`src/test-kernel/runtime/crashConformance.vitest.ts` runs a multi-step agent workflow against SQLite, truncates the store at every commit `1..N`, reopens the session, resumes the run, and asserts nine invariants:
+`src/test-kernel/support/crashConformance.ts` runs a multi-step agent workflow against SQLite, truncates the store at every commit `1..N`, reopens the session, resumes the run, and asserts nine invariants:
 
 | ID     | Invariant                                                                                                                                                                    |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
