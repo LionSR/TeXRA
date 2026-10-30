@@ -6,11 +6,11 @@ import type { FileLocation } from './output';
  */
 
 /**
- * The instruction keys the harness itself emits ({@link
- * RequestShowInstructionPayload.key}). A key names the notice for the host's
- * "never remind again" state; an embedder decides what each of these offers
- * beside the message (TeXRA: the buttons that set a key or open a guide).
- * An embedder's own notices use keys of their own.
+ * The instruction keys the harness itself emits as
+ * {@link RequestShowInstructionPayload.key}. A key names the notice for the
+ * host's "never remind again" state; an embedder decides what each of these
+ * offers beside the message (TeXRA: the buttons that set a key or open a
+ * guide). An embedder's own notices use keys of their own.
  */
 export const HARNESS_INSTRUCTION_KEY = {
   MISSING_API_KEY: 'missingApiKey',

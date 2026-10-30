@@ -288,13 +288,18 @@ export const createHostRunActions = Effect.fn(
     session.start({ config, ...options, interactive: true }).pipe(
       // A failure before the run opens has no row to show it.
       Effect.tapError((error) => presentRunFailure(ports.present, error)),
-      // A failed reveal is a diagnostic: the run is already started.
+      // The reveal, and the toast it falls back to, outlive the launch
+      // request: nothing waits on a person dismissing a notice, and a failed
+      // reveal is a diagnostic for a run already started.
       Effect.tap(() =>
-        (ports.revealProgress?.(config) ?? Effect.void).pipe(
-          Effect.ignore({
-            log: 'Warn',
-            message: 'Revealing the progress view',
-          }),
+        Effect.forkIn(
+          (ports.revealProgress?.(config) ?? Effect.void).pipe(
+            Effect.ignore({
+              log: 'Warn',
+              message: 'Revealing the progress view',
+            }),
+          ),
+          ports.scope,
         ),
       ),
       Effect.tap(ports.launched),
