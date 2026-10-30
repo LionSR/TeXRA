@@ -61,8 +61,8 @@ export interface PluginRow {
 
 /**
  * One row kind a plugin owns (`plugin.fact`): the version it writes, the
- * schema of that version's value, and the adjacent upcasters (`upcasters[i]`
- * maps version `i + 1` to `i + 2`) the store reads an older value through.
+ * schema of that version's value, and adjacent upcasters from
+ * `version - upcasters.length` to `version`, oldest first.
  * The store checks every row of the kind against its arm, and keeps a row
  * whose arm the process's plugins lack (its plugin removed, or not listed
  * here) without reading it. Arms live beside their readers, in modules
