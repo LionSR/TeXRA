@@ -201,15 +201,15 @@ const spentRetries = (failures: readonly (Failure | null)[]): number =>
 
 /**
  * What `invocation` does next (null: a new one), from its rows, the run's
- * `requests` and the driver's `budget`. An attempt no row saw end spends a
- * retry; past the budget, a person is asked before it is resent, or, where
- * nobody `asks`, it fails. One a person allowed is asked about whatever the
- * budget; an accepted background operation is observed, never resubmitted.
+ * `requests` and the driver's automatic `retries`. An attempt no row saw end
+ * spends a retry; past them, a person is asked before it is resent, as they
+ * are about any attempt once they allowed one of the invocation. An accepted
+ * background operation is observed, never resubmitted.
  */
 export function nextAttempt(
   invocation: Invocation | null,
   requests: RunPosition['requests'],
-  budget: { readonly retries: number; readonly asks: boolean },
+  retries: number,
 ): NextAttempt {
   if (invocation === null) return SEND;
   const { current, earlier } = invocation;
@@ -220,11 +220,9 @@ export function nextAttempt(
     // A person allowed an attempt of this invocation: whatever ran since
     // was billed on their word, so they are asked before it is sent again.
     const allowed = earlier.some((failure) => failure?.next.kind === 'ask');
-    if (!allowed && spentRetries(earlier) < budget.retries) return SEND;
-    if (budget.asks) return { kind: 'reask', attempt: current };
-    const message =
-      'The process stopped while the model request was running, so it may have been billed without an answer, and its automatic retries are spent.';
-    return { kind: 'fail', error: { message, userRetryable: false } };
+    return allowed || spentRetries(earlier) >= retries
+      ? { kind: 'reask', attempt: current }
+      : SEND;
   }
   switch (failed.next.kind) {
     case 'retry':
