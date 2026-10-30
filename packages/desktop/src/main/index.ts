@@ -70,7 +70,7 @@ function installContentSecurityPolicy(): void {
 }
 
 // The desktop entry: one program from Electron's `whenReady` to the wired
-// window. Its fatal report is the one fold, and it runs on the default
+// window. Its fatal report is the one handler, and it runs on the default
 // runner because it is what builds the process runtime.
 void Effect.runPromise(
   Effect.gen(function* () {

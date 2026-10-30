@@ -42,7 +42,7 @@ import { formatRelativeTime } from '@ui/copy/format';
 import { runTabStyles } from './RunTab.styles';
 import type { RunView } from '@texra-ai/harness/schemas';
 
-/** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
+/** Shape cue per tone (the session view spells the tone, the host the glyph). */
 const TONE_ICONS: Record<RunView['tone'], IconName> = {
   running: 'circle',
   success: 'circle-check',
@@ -99,7 +99,7 @@ function runDecorator(run: RunView) {
 
 /**
  * One run row. Re-renders only when its own `.run` ref or a flag
- * changes; the fold replaces a run's value only when that run changes,
+ * changes; the session view replaces a run's value only when that run changes,
  * so rows of untouched runs skip rendering on every update.
  */
 @customElement('run-tab')

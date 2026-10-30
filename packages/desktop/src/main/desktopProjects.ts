@@ -51,7 +51,7 @@ import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 interface DesktopProjectFacts {
-  /** The session key: the storage root the fold's `SessionView.key`
+  /** The session key: the storage root the session view's `SessionView.key`
    *  carries, and the project's name on every renderer message. */
   readonly key: string;
   /** Canonical folder path, or undefined for the no-workspace session. */

@@ -22,10 +22,10 @@ interface StatusBarSessionEventOptions {
  * scope).
  *
  * The one input is the session's view as a level stream
- * (`Session.view.changes`, PRD 7.2): the fold's own state, so it carries
+ * (`Session.view.changes`): the session view's own state, so it carries
  * both the durable rows and the local facts no row records — an owner proved
  * dead reclassifies its runs as interrupted with nothing committed, and the
- * fold-gated event tail would never wake this listener for it. Nothing is
+ * view-gated event tail would never wake this listener for it. Nothing is
  * mirrored here: each view is read back through the tracker, and a view that
  * leaves both projections where they were paints nothing.
  */
