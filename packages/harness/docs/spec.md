@@ -545,6 +545,7 @@ invocation's rows before every move but the repeat of a renewed observation
 | open attempt, no outcome, an earlier `failed` row asked a person | ask again (`reask`)                         |
 | open attempt, no outcome, the automatic retries spent            | ask again (`reask`)                         |
 | open attempt, no outcome, otherwise                              | send the next attempt                       |
+| open attempt a clean close stopped (its halt says `closed`)      | as above; the stopped attempt spent nothing |
 | `failed` with `retry` or `unchain`                               | send the next attempt                       |
 | `failed` with `stop`                                             | end the invocation failed                   |
 | `failed` with `cancel`                                           | end the invocation cancelled                |
@@ -568,7 +569,11 @@ request id (`agent/runtime/ModelInvoker.ts:732-748`):
   failure counts, whichever move followed it: one that a person's retry allowed
   spends the budget as an automatic resend does, and so does an attempt with no
   recorded outcome, which may have been billed, so a crash that recurs on every
-  open does not resend it every time. For a turn's invocation the budget is
+  open does not resend it every time. An attempt a clean session close stopped
+  is the exception: the halt its `run.end` commits with says `closed`
+  (`run.position` `reason`), its request was cut by the stop, not lost, and the
+  fold leaves it out of the count (`shared/session/inFlight.ts`, `closedBy`).
+  For a turn's invocation the budget is
   counted from rows, so a crash does not refill it. A compaction summary or a helper call holds its
   invocation in memory (`agent/runtime/run/modelCall.ts:107-123`); a summary's
   `attempt` and `failed` rows are an audit the run fold skips
