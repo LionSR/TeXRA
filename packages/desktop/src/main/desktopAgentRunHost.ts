@@ -6,7 +6,7 @@ import type {
 import type { TranscriptExportFormat } from '@texra/controllers/progressView/exportTranscript';
 import type { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
-import type { InstructionAction } from '@texra-ai/harness/schemas';
+import type { InstructionAction } from '@ui/copy/instructionActions';
 import type { Effect } from 'effect';
 
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
@@ -22,7 +22,7 @@ export interface DesktopAgentRunHost extends MessageHost {
    */
   showInstructionDialog(
     message: string,
-    actions: readonly InstructionAction[] | undefined,
+    actions: readonly InstructionAction[],
   ): Effect.Effect<void>;
   /**
    * Presents a failure dialog. A `docsPage` (from a refusing request's

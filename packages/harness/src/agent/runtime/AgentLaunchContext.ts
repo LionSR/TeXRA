@@ -16,7 +16,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentError } from '@common/errors/agentErrors';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { attachErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
-import { INSTRUCTION_ACTION } from '@shared/schemas';
+import { HARNESS_INSTRUCTION_KEY } from '@shared/schemas';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { ToolRegistry } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -68,9 +68,8 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
       new AgentError({ message: `Model ${modelName} is not registered` }),
       'requestShowInstruction',
       {
-        key: 'modelNotRecognized',
+        key: HARNESS_INSTRUCTION_KEY.MODEL_NOT_RECOGNIZED,
         message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-        actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
         showSuppress: false,
       },
     );
@@ -109,7 +108,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
                 presentLaunchError(
                   interactions,
                   new AgentError({ message: missed.message }),
-                  'showAgentConfigBanner',
+                  'agentNotFound',
                   { agentName: fullConfig.agent },
                 ),
               ),

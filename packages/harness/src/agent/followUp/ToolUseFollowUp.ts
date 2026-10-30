@@ -8,6 +8,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import {
+  HARNESS_INSTRUCTION_KEY,
   type CommitOrdinal,
   type ResumeRefusal,
   type RunId,
@@ -227,7 +228,7 @@ const answered = <R>(
       return session.interactions.emit(
         'requestShowInstruction',
         {
-          key: 'resumeRefused',
+          key: HARNESS_INSTRUCTION_KEY.RESUME_REFUSED,
           message:
             'failed' in result
               ? describeFollowUpFailure(result.failed)

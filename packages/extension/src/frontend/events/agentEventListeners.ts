@@ -9,6 +9,8 @@
  * presentation plane forks it and reports its failure, so nothing here runs
  * a fiber of its own.
  */
+import { basename } from 'node:path';
+
 import { Cause, Effect, Scope } from 'effect';
 
 import {
@@ -23,9 +25,7 @@ import {
 } from '@texra-ai/harness/host';
 import {
   toErrorMessage,
-  INSTRUCTION_ACTION,
-  type InstructionAction,
-  type RequestEnsureProgressViewPayload,
+  type AgentConfig,
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
 } from '@texra-ai/harness/schemas';
@@ -35,6 +35,11 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import {
+  INSTRUCTION_ACTION,
+  instructionActions,
+  type InstructionAction,
+} from '@ui/copy/instructionActions';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { StateStore } from '@texra-ai/harness/host';
 
@@ -112,7 +117,7 @@ function handleRequestShowInstruction(
   runtime: ProcessRuntime,
   payload: RequestShowInstructionPayload,
 ): Effect.Effect<void, Error> {
-  const actions = (payload.actions ?? []).map((token) => {
+  const actions = instructionActions(payload.key).map((token) => {
     const view = INSTRUCTION_ACTION_VIEW[token];
     return {
       title: view.title,
@@ -148,9 +153,32 @@ function handleRequestShowInstruction(
   );
 }
 
-function handleRequestEnsureProgressView(
-  payload: RequestEnsureProgressViewPayload,
-  progressViewProvider: ProgressViewProvider,
+/** The toast that names a run when its progress view cannot be revealed:
+ *  the run's agent, model and files. */
+function launchNotice(config: AgentConfig): string {
+  const primaryInput = config.inputFiles[0];
+  const inputName = primaryInput ? basename(primaryInput) : 'selected input';
+  const { outputFiles } = config;
+  let outputPart = '';
+  if (outputFiles.length > 1) {
+    outputPart = ` (to ${outputFiles.length} files)`;
+  } else if (outputFiles[0]) {
+    outputPart = ` (to ${basename(outputFiles[0])})`;
+  }
+  return `"${config.agent}" is processing ${inputName} with ${config.model}${outputPart}.`;
+}
+
+/**
+ * Bring the progress view into view for a run this window just started
+ * (`HostRunActionPorts.revealProgress`), or name the run in a toast when it
+ * cannot be made visible.
+ */
+export function revealProgressView(
+  config: AgentConfig,
+  progressViewProvider: Pick<
+    ProgressViewProvider,
+    'isViewVisible' | 'showProgressView'
+  >,
 ): Effect.Effect<void, Error> {
   return Effect.gen(function* () {
     if (progressViewProvider.isViewVisible()) return;
@@ -167,24 +195,15 @@ function handleRequestEnsureProgressView(
     // presented.
     if (progressViewProvider.isViewVisible()) return;
 
-    const fb = payload.fallbackNotification;
-    if (!fb) return;
-
-    // If the view is still not visible after attempting to open it and a
-    // fallback notification was provided, show a toast as a last resort.
-    // The toast itself is the delivered surface when the view cannot be made
-    // visible: a successful handoff means the event was presented even if
-    // the user dismisses it without retrying the reveal.
-    const outputPart = fb.outputInfo ? ` (${fb.outputInfo})` : '';
-    const selection = yield* vscodeUi.info(
-      `"${fb.agentName}" is processing ${fb.inputName} with ${fb.modelName}${outputPart}.`,
-      {
-        modal: false,
-        detail:
-          'TeXRA agents run in the background; track them under Tasks in the TeXRA panel.',
-        items: ['Show Tasks'],
-      },
-    );
+    // The toast is the delivered surface when the view cannot be made
+    // visible: a successful handoff means the run was presented even if the
+    // user dismisses it without retrying the reveal.
+    const selection = yield* vscodeUi.info(launchNotice(config), {
+      modal: false,
+      detail:
+        'TeXRA agents run in the background; track them under Tasks in the TeXRA panel.',
+      items: ['Show Tasks'],
+    });
     if (!selection) return;
     // The toast handoff already established delivery; a failed retry is
     // a diagnostic, not non-delivery, so it must not downgrade the event.
@@ -198,15 +217,10 @@ function handleRequestEnsureProgressView(
 /**
  * Builds the extension's presentation host over its handler map. Every
  * `RuntimePresentationEvent` key is required by
- * `PresentationEventHandlers<RuntimePresentationEventPayloads, HostPresentation>`
- * — omitting one here is a compile error rather than a silently dropped event
- * (AGENTS.md, silent degradation), replacing the previous `switch`'s
- * `never`-typed `default` guard. The five presentation events handled here are
- * the extension's own dispatch, replacing a previous per-host
- * presentation-event bus and its static router (a duplicate replay mechanism —
- * see #9251). `SessionHostInteractions` (the runtime) owns replaying an event
- * emitted before this host attaches, via
- * `AgentRuntimeEmitOptions.replayWhenAttached`.
+ * `PresentationEventHandlers<RuntimePresentationEventPayloads, HostPresentation>`:
+ * omitting one here is a compile error rather than a silently dropped event.
+ * `SessionHostInteractions` (the runtime) owns replaying an event emitted
+ * before this host attaches, via `AgentRuntimeEmitOptions.replayWhenAttached`.
  */
 export function createAgentPresentationHost(
   progressViewProvider: ProgressViewProvider,
@@ -223,7 +237,7 @@ export function createAgentPresentationHost(
     // The open-and-build program takes this window's file services from the
     // runtime's context, which the session that forks it does not carry, and
     // schedules the PDF viewer in the view's scope.
-    requestOpenFile: (payload) =>
+    openFile: (payload) =>
       withProcessServices(
         runtime,
         openBuildDisplayIfTex(roots, payload.location, {
@@ -232,11 +246,9 @@ export function createAgentPresentationHost(
       ).pipe(Effect.asVoid),
     requestShowInstruction: (payload) =>
       handleRequestShowInstruction(globalState, roots, runtime, payload),
-    showAgentConfigBanner: (payload) =>
+    agentNotFound: (payload) =>
       progressViewProvider.showAgentConfigBanner(payload.agentName),
     requestShowError: handleRequestShowError,
-    requestEnsureProgressView: (payload) =>
-      handleRequestEnsureProgressView(payload, progressViewProvider),
   };
   return {
     emit<K extends RuntimePresentationEvent>(
