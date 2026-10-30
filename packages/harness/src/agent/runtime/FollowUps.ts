@@ -252,9 +252,11 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     return {
       turn,
       rows: [
-        ...blobRows(runId, state, [
-          ...(instruction === undefined ? [] : [instruction]),
-        ]),
+        ...blobRows(
+          runId,
+          state,
+          instruction === undefined ? [] : [instruction],
+        ),
         ...[...followUps, ...stale].map((followUp) =>
           consumedRow(runId, followUp.followUpId),
         ),

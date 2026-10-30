@@ -186,7 +186,6 @@ export const forkRun = Effect.fn('forkRun')(function* (
   from: { readonly id: RunId; readonly uid: string },
   at: number | null,
 ): Effect.fn.Return<RunId, Rejected | Error> {
-  // The title the source shows, with its authorship.
   const cutAt = yield* cutOf(session, from.id, at);
   const { seq: cut, state, start, title, record } = cutAt;
   const runId = generateRunId();
