@@ -6,17 +6,16 @@
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
-import {
-  INSTRUCTION_ACTION,
-  type InstructionAction,
-  ensureError,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import {
   ExternalOpenFailed,
   type NotificationFailed,
 } from '@texra/hosts/uiHosts';
+import {
+  INSTRUCTION_ACTION,
+  type InstructionAction,
+} from '@ui/copy/instructionActions';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import { createDesktopDialogs } from './desktopDialogs.js';

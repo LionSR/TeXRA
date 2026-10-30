@@ -149,6 +149,16 @@ identifier itself when it names no source ("paper:review", or a URL).
 function agentName(key: string): string
 ```
 
+## AgentNotFoundPayload
+
+The agent a launch named is not in the catalog.
+
+```ts
+interface AgentNotFoundPayload {
+  agentName: string;
+}
+```
+
 ## AgentProposal
 
 ```ts
@@ -854,6 +864,25 @@ range.
 const GOAL_MAX_COST_SETTING: Readonly<{ readonly configKey: "goal.maxCostUsd"; readonly defaultValue: 5; readonly min: 0; readonly max: 10000; readonly description: "Spend in US dollars, across its rounds, at which an autonomous goal pauses instead of starting another round. Raise it, then run the goal again to continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key)."; }>
 ```
 
+## HARNESS_INSTRUCTION_KEY
+
+The instruction keys the harness itself emits as
+{@link RequestShowInstructionPayload.key}. A key names the notice for the
+host's "never remind again" state; an embedder decides what each of these
+offers beside the message (TeXRA: the buttons that set a key or open a
+guide). An embedder's own notices use keys of their own.
+
+```ts
+const HARNESS_INSTRUCTION_KEY: { readonly MISSING_API_KEY: "missingApiKey"; readonly MODEL_NOT_RECOGNIZED: "modelNotRecognized"; readonly RESUME_REFUSED: "resumeRefused"; }
+```
+
+## HarnessInstructionKey
+
+```ts
+type HarnessInstructionKey =
+  (typeof HARNESS_INSTRUCTION_KEY)[keyof typeof HARNESS_INSTRUCTION_KEY];
+```
+
 ## HookEvent
 
 ```ts
@@ -927,25 +956,6 @@ plugin is referenced in place and has none.
 
 ```ts
 const InstalledPluginSchema: Struct<{ readonly name: decodeTo<String, String, never, never>; readonly source: String; readonly ref: optional<String>; readonly commit: optional<String>; readonly path: String; readonly skills: $Array<String>; readonly version: optional<String>; readonly description: optional<String>; readonly enabled: Boolean; readonly trust: optional<Struct<{ readonly version: NullOr<String>; readonly digest: String; }>>; }>
-```
-
-## INSTRUCTION_ACTION
-
-Host-agnostic action tokens for {@link RequestShowInstructionPayload}.
-The agent core emits a token; each host maps it to its own UI affordance
-(the VS Code extension to a command + button title, other hosts as they see
-fit). This keeps host-specific command IDs and labels out of the VS Code-free
-agent core.
-
-```ts
-const INSTRUCTION_ACTION: { readonly SET_API_KEY: "set-api-key"; readonly OPEN_CONFIGURATION_GUIDE: "open-configuration-guide"; readonly OPEN_MODELS_DOC: "open-models-doc"; }
-```
-
-## InstructionAction
-
-```ts
-type InstructionAction =
-  (typeof INSTRUCTION_ACTION)[keyof typeof INSTRUCTION_ACTION];
 ```
 
 ## Invalid
@@ -1308,6 +1318,18 @@ Used by AgentConfig where `editedFile` may be null.
 const NullableFileFieldsSchema: Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; }>
 ```
 
+## OpenFilePayload
+
+Open a file for the person, beside what they are looking at, and build
+and show it if the host can.
+
+```ts
+interface OpenFilePayload {
+  location: FileLocation;
+  preserveFocus: boolean;
+}
+```
+
 ## OpenInquiryTurn
 
 ```ts
@@ -1639,23 +1661,6 @@ type RequestAnswerability = 'answerable' | 'readOnly' | 'resume';
 type RequestDecision = typeof RequestDecisionSchema.Type;
 ```
 
-## RequestEnsureProgressViewPayload
-
-Request the frontend to ensure the progress view is visible.
-If the view cannot be opened and a fallback notification is provided,
-show a toast notification as a last resort.
-
-```ts
-interface RequestEnsureProgressViewPayload {
-  fallbackNotification?: {
-    agentName: string;
-    modelName: string;
-    inputName: string;
-    outputInfo: string;
-  };
-}
-```
-
 ## RequestError
 
 How a runtime request fails: one of the tagged errors above.
@@ -1670,17 +1675,6 @@ The wire form of a request's failure: the classes themselves.
 
 ```ts
 const RequestErrorSchema: Union<readonly [typeof NotOwner, typeof Unavailable, typeof Cancelled, typeof Rejected, typeof Invalid, typeof Internal]>
-```
-
-## RequestOpenFilePayload
-
-Request the frontend to open a file, and build and show it if it can.
-
-```ts
-interface RequestOpenFilePayload {
-  location: FileLocation;
-  preserveFocus: boolean;
-}
 ```
 
 ## requestParksItsCaller
@@ -1700,7 +1694,7 @@ function requestParksItsCaller(
 
 ## RequestShowErrorPayload
 
-Request the frontend to show an error message via a host notification.
+Show an error message via a host notification.
 
 ```ts
 interface RequestShowErrorPayload {
@@ -1713,17 +1707,14 @@ interface RequestShowErrorPayload {
 
 ## RequestShowInstructionPayload
 
-Request the frontend to show a suppressible instruction message.
+Show a suppressible instruction message.
 
 ```ts
 interface RequestShowInstructionPayload {
+  /** Names the notice: the host's suppression state, and what an embedder
+   *  offers beside it ({@link HARNESS_INSTRUCTION_KEY} for the harness's). */
   key: string;
   message: string;
-  /**
-   * Host-agnostic action tokens rendered as buttons. The host maps each
-   * token to its own UI affordance (see {@link INSTRUCTION_ACTION}).
-   */
-  actions?: readonly InstructionAction[];
   showSuppress?: boolean;
 }
 ```
@@ -2226,17 +2217,6 @@ interface SettingWriteEffects {
    * hosts must recompute their cached model options.
    */
   readonly invalidatesModelOptions?: true;
-}
-```
-
-## ShowAgentConfigBannerPayload
-
-Request the frontend to show the agent-config banner in the main webview,
-for the agent that could not launch.
-
-```ts
-interface ShowAgentConfigBannerPayload {
-  agentName: string;
 }
 ```
 

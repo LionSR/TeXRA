@@ -2185,21 +2185,19 @@ type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
 
 ## RuntimePresentationEventPayloads
 
-Host-presentation requests emitted by agent/runtime code.
-
-These are not progress facts and do not belong to the frozen host progress
-compatibility vocabulary. Hosts may render them, ignore them, or route them
-to their own presentation channel without changing the agent loop.
-Presentation is fire-and-forget: a host that cannot render an event logs
-the cause itself.
+The notices the runtime and an embedder's tools show a person through the
+session's host, each named for what it says, never for a screen of one
+application. They are not progress facts and are not stored. Hosts may
+render them, ignore them, or route them to their own presentation channel
+without changing the agent loop. Presentation is fire-and-forget: a host
+that cannot render an event logs the cause itself.
 
 ```ts
 interface RuntimePresentationEventPayloads {
-  requestOpenFile: RequestOpenFilePayload;
+  openFile: OpenFilePayload;
   requestShowInstruction: RequestShowInstructionPayload;
-  showAgentConfigBanner: ShowAgentConfigBannerPayload;
+  agentNotFound: AgentNotFoundPayload;
   requestShowError: RequestShowErrorPayload;
-  requestEnsureProgressView: RequestEnsureProgressViewPayload;
 }
 ```
 

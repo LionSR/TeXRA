@@ -139,6 +139,9 @@ interface ExtensionHostRequestsOptions {
   showConnectModel(): Effect.Effect<void, Error, ProcessServices>;
   /** Reveal the task list (`texra.showProgressView`). */
   showProgressView(): Effect.Effect<void, Error>;
+  /** Reveal the task list for a run this window just started, or name the
+   *  run in a toast when it cannot (the run actions' `revealProgress`). */
+  readonly revealProgress: (config: AgentConfig) => Effect.Effect<void, Error>;
   /** Select a run this window just launched (the run actions' `launched`). */
   presentLaunchedRun(runId: RunId): void;
   /** The window's launcher (`HostRunActions.runValidated`), which the setup
@@ -550,6 +553,7 @@ export const createExtensionHostRequests = Effect.fn(
     runs: {
       launched: (run: Run) =>
         Effect.sync(() => options.presentLaunchedRun(run.runId)),
+      revealProgress: options.revealProgress,
       openFinalOutput: (config: AgentConfig, result: RunEnd) =>
         withProcessServices(
           runtime,
