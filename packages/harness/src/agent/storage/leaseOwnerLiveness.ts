@@ -51,14 +51,16 @@ const pidProvablyDead = (pid: number): Effect.Effect<boolean> =>
  * local filesystem (`localDatabasePath`), so an owner it records ran on
  * this machine or on one whose disk, or a copy of it, this machine now
  * holds; a process of the second kind has no pid here, or its pid names
- * another process, and reads dead. A hostname does not identify the
- * machine anyway: macOS renames it with the network it joins, so comparing
- * one would hold a crashed process's runs on every other network. Pids
- * compare only within one pid namespace, so a process inside a container
- * that bind-mounts the store and one outside it read each other dead while
- * both run. A claim taken across that boundary moves in one write
- * transaction, and the process it was taken from has its next append
- * refused as `DatabaseNotOwner`, nothing written.
+ * another process, and reads dead. The one exception is on macOS and the
+ * BSDs, whose start identity is a time to the second: a process here with
+ * the same pid that started in the same second reads alive. A hostname does
+ * not identify the machine anyway: macOS renames it with the network it
+ * joins, so comparing one would hold a crashed process's runs on every
+ * other network. Pids compare only within one pid namespace, so a process
+ * inside a container that bind-mounts the store and one outside it read
+ * each other dead while both run. A claim taken across that boundary moves
+ * in one write transaction, and the process it was taken from has its next
+ * append refused as `DatabaseNotOwner`, nothing written.
  *
  * The verdict is total: `nodeProcesses.identity` reports an unreadable
  * identity as undefined rather than rejecting, and the `kill(pid, 0)` beside
