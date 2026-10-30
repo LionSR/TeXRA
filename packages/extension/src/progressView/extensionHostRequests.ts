@@ -585,7 +585,7 @@ export const createExtensionHostRequests = Effect.fn(
           'latexdiff',
           inViewScope(handleLatexdiff(roots, base, edited)),
         ),
-      openDirectory: (directory: string) => revealFileInOS(directory),
+      openDirectory: revealFileInOS,
     },
     export: {
       // A refusal to show the pick is worded into the export's tag.
