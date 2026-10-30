@@ -1,19 +1,34 @@
 /**
- * The loop side of the guard a tool declares (`ToolGuard`): the paths a call
- * writes are resolved and refused before anything is written, and the command
- * it runs goes through the session's one approval queue before the body runs.
- *
- * Both used to be calls inside the bodies, which put approval in as many homes
- * as there were shell-shaped tools and made a tool's roots its own business.
- * Here the run loop asks once, through the same `requestBashApproval` the
- * session's approval queue and its `request.opened` rows already serve, so no
- * tool opens a prompt and no tool writes a card. What a body itself asks a
- * person goes through its call's requests (`callRequests`), on the same run.
+ * Whether one call proceeds, decided once, in an order that makes a
+ * permission cover the operation that actually runs: what the call's
+ * `PreToolUse` hooks said and how they rewrote it (recorded by `preToolUse`,
+ * so a resume reads them back), the final input decoded again, the paths it
+ * writes checked, then the policy's one reading ({@link sessionPermission})
+ * over that input, whose ask opens the call's request through the run's
+ * lane. A tool whose body opens its own request (an edit's review, a plan,
+ * a delegation proposal) is decided there, after its proposal exists, with
+ * the hooks' answer on `RunCall.hook`; a question it asks is no permission.
+ * A body's own requests go through `callRequests`.
  */
+import { isDeepStrictEqual } from 'node:util';
+
 import { Effect, Result, Schema } from 'effect';
 
 import { ToolContext, type CallRequests } from '@agent/core/tools/ToolTypes';
-import { qualifyAggregateId, type ToolResult } from '@shared/schemas';
+import {
+  approvalPolicyDenialMessage,
+  decideApproval,
+  isApprovalDenied,
+} from '@shared/approvalPolicy';
+import { Settings } from '@shared/config/settings';
+import {
+  BASH_APPROVAL_CONFIG_KEY,
+  TOOL_EDIT_APPROVAL_CONFIG_KEY,
+  qualifyAggregateId,
+  type HookOutcomePayload,
+  type RunId,
+  type ToolResult,
+} from '@shared/schemas';
 import { callRequestId, type AttemptRequests } from '@shared/session/inFlight';
 import type { CellError, RunCell } from '@shared/session/runHistory';
 import type { RunHistoryDraft } from '@shared/session/runState';
@@ -24,53 +39,165 @@ import {
 } from '@tools/approval/bashApproval';
 import { ensureError } from '@utils/errors/errorMessage';
 
+import { RunCall, requireRun, sessionOf } from '../RunCall';
 import type { AgentRunShape } from '../run/AgentRun';
+import type { SessionApprovals } from '../runApprovalQueue';
+import type { SessionHandle } from '../SessionHandle';
 import type { RuntimeTool, ToolServices } from '../ToolServices';
+import type { preToolUse } from './hooks';
 
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 
-/** The tool whose calls the run's command bypass answers. */
+/** The tool whose calls the run's command grant answers. */
 const SHELL_TOOL = 'bash';
 
+/** Each operation a run asks permission for: the grant that answers it, the
+ *  setting that says whether it is asked (none: always), and what a denial
+ *  is told as. A call of any tool but the shell takes the run's
+ *  delegated-work grant, so a command grant never approves it. */
+const OPERATIONS = {
+  bash: ['bash', BASH_APPROVAL_CONFIG_KEY, 'executable'],
+  call: ['superYolo', BASH_APPROVAL_CONFIG_KEY, 'executable'],
+  toolEdit: ['toolEdit', TOOL_EDIT_APPROVAL_CONFIG_KEY, 'executable'],
+  plan: ['superYolo', null, 'plan'],
+  proposal: ['superYolo', null, 'proposal'],
+} as const;
+
+type HookAnswer = 'allow' | 'ask' | undefined;
+
+/** The session's approvals, with the one reading of the policy
+ *  ({@link sessionPermission}). */
+export type ApprovalsWithPermission = SessionApprovals & {
+  readonly permission: (
+    runId: RunId,
+    operation: keyof typeof OPERATIONS,
+    hook: HookAnswer,
+  ) => 'allow' | 'ask' | { readonly action: 'deny'; readonly reason: string };
+};
+
 /**
- * Apply the tool's declared guard, answering the result that replaces the
- * call when the guard refuses it and `undefined` when the body may run.
+ * The one reading of the policy for an operation of a run, with what the
+ * call's `PreToolUse` hooks said: `never`, or an ask nobody can answer,
+ * denies whatever a hook said (and is told to the host); else a hook's
+ * `ask` asks and its `allow` answers what the policy would ask.
  */
-const guardRefusal = Effect.fn('toolUse.guard')(function* (
+export const sessionPermission =
+  (
+    session: () => Pick<SessionHandle, 'approvals' | 'interactions' | 'roots'>,
+  ): ApprovalsWithPermission['permission'] =>
+  (runId, operation, hook) => {
+    const [grant, setting, kind] = OPERATIONS[operation];
+    const { approvals, interactions, roots } = session();
+    const canPresent = !interactions.approvalPromptsUnavailable;
+    const policy = approvals.policy(runId);
+    const decision = decideApproval({
+      policy,
+      promptRequired:
+        setting === null || Settings.getConfig<boolean>(roots.config, setting),
+      scopedBypass: approvals.bypass(runId, grant) !== null,
+      canPresent,
+    });
+    const denied = isApprovalDenied(decision)
+      ? decision
+      : hook === 'ask' && !canPresent && 'deny-unpresentable';
+    if (denied) {
+      interactions.approvalDenied({ kind, policy }, runId);
+      return { action: 'deny', reason: approvalPolicyDenialMessage(denied) };
+    }
+    return hook ?? (decision === 'allow' ? 'allow' : 'ask');
+  };
+
+/** A call's recorded `PreToolUse` outcomes, and how a rewrite reads. */
+type CallHooks = Pick<
+  Effect.Success<ReturnType<typeof preToolUse>>,
+  'outcomes' | 'fromHook'
+>;
+
+/** What a call's `PreToolUse` hooks said together, `deny` over `ask` over
+ *  `allow`, and the input they rewrote it to. Two different rewrites deny:
+ *  the hooks disagree about what would run. */
+const answerOf = (outcomes: readonly HookOutcomePayload[]) => {
+  const rewritten = outcomes.find((o) => o.updatedInput)?.updatedInput ?? null;
+  const denials = outcomes.flatMap(({ plugin, decision, reason }) =>
+    decision === 'deny' ? [`${reason} (hook of ${plugin})`] : [],
+  );
+  // Compared as script replay compares a call: key order is not a
+  // different operation.
+  if (
+    outcomes.some(
+      (o) => o.updatedInput && !isDeepStrictEqual(o.updatedInput, rewritten),
+    )
+  )
+    denials.push('the hooks rewrote the call to different inputs');
+  // An `allow` about the input another hook then rewrote is about a
+  // different operation.
+  const hook = (['ask', 'allow'] as const).find((answer) =>
+    outcomes.some(
+      (o) =>
+        o.decision === answer &&
+        (answer === 'ask' || !rewritten || o.updatedInput !== null),
+    ),
+  );
+  const deny = denials.length === 0 ? null : denials.join('\n');
+  return { deny, hook, rewritten };
+};
+
+const hookDenied = (tool: string, why: string): ToolResult => ({
+  status: 'error',
+  error: `Blocked by a PreToolUse hook: ${why}`,
+  diagnostics: { code: 'hook_denied', tool },
+});
+
+/** The result that replaces the call when the chain stops it over its
+ *  final `input`, and `undefined` when its body may run. */
+const rejection = Effect.fn('toolUse.guard')(function* (
   tool: RuntimeTool,
-  rawInput: unknown,
+  input: unknown,
+  hook: HookAnswer,
+  rewritten: boolean,
 ): Effect.fn.Return<ToolResult | undefined, Error, ToolServices> {
-  const guard = tool.guard;
-  // A tool that requires approval is asked about here unless its body opens
-  // its own request: `requiresApproval: true` cannot leave a call unasked.
-  const asks = guard?.bash !== undefined || tool.requiresApproval === true;
-  if (!guard?.writes && !asks) return undefined;
-  // The guard reads the call's own validated arguments, from the same schema
+  const { guard, definition } = tool;
+  // The loop asks about a command, a tool that requires approval, and a call
+  // a hook asked about. A tool whose body opens its own request (`'inBody'`)
+  // answers the hook there, from `RunCall.hook`.
+  const asks =
+    guard?.bash !== undefined ||
+    tool.requiresApproval === true ||
+    (hook === 'ask' && tool.requiresApproval === undefined);
+  if (!guard?.writes && !asks && !rewritten) return undefined;
+  // The chain reads the call's own validated arguments, from the same schema
   // `call` validates with; a tool whose parameters are a pass-through JSON
-  // Schema (an MCP server's) takes a JSON object, as its `call` checks. A tool
-  // that is guarded but has no schema would have the guard quietly stop
-  // gating it, so it is a defect, not a skip.
+  // Schema (an MCP server's) takes a JSON object, as its `call` checks. A
+  // guarded tool with no schema would have the guard quietly stop gating it,
+  // so it is a defect, not a skip.
   const schema =
-    tool.definition.schema ??
-    (tool.definition.parameters ? JSON_OBJECT_ARGUMENTS : undefined);
-  if (!schema)
+    definition.schema ??
+    (definition.parameters ? JSON_OBJECT_ARGUMENTS : undefined);
+  if (!schema && guard !== undefined)
     return yield* Effect.die(
       new Error(
-        `Tool ${tool.definition.name} is guarded but declares no schema: the guard has no arguments to read.`,
+        `Tool ${definition.name} is guarded but declares no schema: the guard has no arguments to read.`,
       ),
     );
-  // An input that schema refuses reaches no prompt and no path: the `call`
-  // below re-reads it and returns the validation error, which is the report.
-  const parsed = Schema.decodeUnknownResult(schema)(rawInput);
-  if (!Result.isSuccess(parsed)) return undefined;
-  const input = parsed.success as never;
+  const parsed = schema && Schema.decodeUnknownResult(schema)(input);
+  if (parsed && !Result.isSuccess(parsed))
+    // An issued input the schema refuses reaches no prompt and no path: the
+    // `call` below re-reads it and reports the validation error. A rewrite
+    // it refuses is the hook's, and denies the call.
+    return rewritten
+      ? hookDenied(
+          definition.name,
+          `it rewrote the call to an input ${definition.name} does not take.\n${parsed.failure.message}`,
+        )
+      : undefined;
+  const decoded = (parsed ? parsed.success : input) as never;
   const call = yield* ToolContext;
 
   // Resolution and the read-only-root check both reject with a `ToolError`
   // the dispatcher reports to the model, so they stay a failure rather than
   // becoming a defect.
   const targets = yield* Effect.try({
-    try: () => guard?.writes?.(input) ?? [],
+    try: () => guard?.writes?.(decoded) ?? [],
     catch: ensureError,
   });
   for (const target of targets) {
@@ -80,10 +207,10 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
 
   if (!asks) return undefined;
   // The call as the prompt shows it: the guard's spelling, else the tool's
-  // name and the arguments it was called with.
+  // name and its final input.
   const command = guard?.bash
-    ? yield* guard.bash(input)
-    : `${tool.definition.name} ${JSON.stringify(input)}`;
+    ? yield* guard.bash(decoded)
+    : `${definition.name} ${JSON.stringify(decoded)}`;
   // The directory the approved command runs in, as the tool declared it.
   // `'unknown'`: the executor can name none, so the prompt names none rather
   // than a directory the approved command may not run in, and the call's own
@@ -96,34 +223,52 @@ const guardRefusal = Effect.fn('toolUse.guard')(function* (
       ? (call.env.workingDirectory ?? call.env.roots.workspace)
       : undefined;
 
-  // Only the shell's own commands take the run's command grant; every other
-  // tool is asked per call, so approving one for the session cannot become
-  // blanket shell approval, and a shell grant does not approve it.
-  const decision = yield* requestBashApproval({
-    command,
-    cwd,
-    grant: tool.definition.name === SHELL_TOOL ? 'shell' : 'call',
-  });
+  const operation =
+    definition.name === SHELL_TOOL && guard?.bash ? 'bash' : 'call';
+  const { run } = yield* requireRun('A call the loop asks about');
+  const answer = sessionOf(run).approvals.permission(
+    run.runId,
+    operation,
+    hook,
+  );
+  if (answer === 'allow') return undefined;
+  const decision =
+    answer === 'ask'
+      ? yield* requestBashApproval({
+          command,
+          cwd,
+          grant: hook === 'ask' ? null : operation,
+        })
+      : answer;
   return decision.action === 'approve'
     ? undefined
     : buildBashApprovalRejectedResult(command, decision);
 });
 
-/** One call, guard first: the declared guard's refusal, else the tool's
- *  body, which `bodyStarts` announces (and records) once the guard has let
- *  it run. */
+/** One call through the chain, over the `issued` input and its recorded
+ *  `hooks`: its rejection, else the tool's body on the final input, which
+ *  `bodyStarts` is handed (and records) once the chain has let it run. */
 export const guardedToolCall = (
   tool: RuntimeTool,
-  rawInput: unknown,
-  bodyStarts: Effect.Effect<void, Error> = Effect.void,
-): ReturnType<RuntimeTool['call']> =>
-  guardRefusal(tool, rawInput).pipe(
-    Effect.flatMap((refusal) =>
-      refusal
-        ? Effect.succeed(refusal)
-        : Effect.andThen(bodyStarts, tool.call(rawInput)),
+  issued: unknown,
+  hooks: CallHooks = { outcomes: [], fromHook: (input) => input },
+  bodyStarts: (input: unknown) => Effect.Effect<void, Error> = () =>
+    Effect.void,
+): ReturnType<RuntimeTool['call']> => {
+  const { deny, hook, rewritten } = answerOf(hooks.outcomes);
+  if (deny !== null)
+    return Effect.succeed(hookDenied(tool.definition.name, deny));
+  const input = rewritten === null ? issued : hooks.fromHook(rewritten);
+  return rejection(tool, input, hook, rewritten !== null).pipe(
+    Effect.flatMap((rejected) =>
+      rejected
+        ? Effect.succeed(rejected)
+        : Effect.andThen(bodyStarts(input), tool.call(input)).pipe(
+            Effect.updateService(RunCall, (call) => call && { ...call, hook }),
+          ),
     ),
   );
+};
 
 /**
  * One tool call's requests (`CallRequests`), opened through its run's loop

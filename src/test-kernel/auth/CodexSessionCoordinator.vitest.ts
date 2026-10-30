@@ -150,6 +150,23 @@ const freshToken = (coordinator: SubscriptionCoordinator<CodexSession>) =>
   Effect.map(coordinator.getFreshSession(), (fresh) => fresh.accessToken);
 
 describe('CodexSessionCoordinator', () => {
+  it.effect(
+    'reuses one coordinator per store, so distinct stores share no state',
+    () =>
+      Effect.gen(function* () {
+        const first = memoryStorage();
+        const second = memoryStorage();
+        const coordinator = codexCoordinator(first);
+
+        expect(codexCoordinator(first)).toBe(coordinator);
+        expect(codexCoordinator(second)).not.toBe(coordinator);
+
+        yield* coordinator.storeTokens(tokenResponse());
+        expect(first.peek()?.accessToken).toBe('access-1');
+        expect(second.peek()).toBeUndefined();
+      }),
+  );
+
   it.effect('single-flights concurrent refreshes', () =>
     Effect.gen(function* () {
       const storage = memoryStorage(expiredSession());

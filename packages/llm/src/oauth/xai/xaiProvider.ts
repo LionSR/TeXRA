@@ -18,7 +18,6 @@
 import { Effect, Option, Schema, SchemaGetter, Struct } from 'effect';
 import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
-import { createSecretBackedCoordinator } from '../sessionAccess.js';
 import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
 import {
   SubscriptionSessionBaseSchema,
@@ -201,6 +200,7 @@ function decodeXaiJwtClaims(token: string): XaiJwtClaims {
  * so the shared coordinator runs it as is.
  */
 const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
+  secretKey: XAI_SESSION_SECRET_KEY,
   sessionSchema: XaiSessionSchema,
   tokenEndpoint: {
     tokenUrl: XAI_TOKEN_URL,
@@ -242,11 +242,8 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
  */
 export const xaiCoordinator: (
   secrets: CredentialStore,
-) => SubscriptionCoordinator<XaiSession> = createSecretBackedCoordinator({
-  secretKey: XAI_SESSION_SECRET_KEY,
-  makeCoordinator: (storage) =>
-    new SubscriptionOAuthCoordinator({ storage, policy: XAI_POLICY }),
-});
+) => SubscriptionCoordinator<XaiSession> =
+  SubscriptionOAuthCoordinator.forProvider(XAI_POLICY);
 
 /** Signed-in status, read from the caller's secret store. A store that
  *  cannot be read, or a stored session that does not parse, fails. */

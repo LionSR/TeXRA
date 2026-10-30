@@ -119,15 +119,6 @@ interface ModelAvailabilityContext extends ModelRouteContext {
   keyStatuses: ProviderKeyStatuses;
 }
 
-/** The one provider whose key decides a model, and the plan it pays through. */
-interface ProviderKeyGate {
-  needsProviderKey: ApiKeyProviderId;
-  usageRoute?: UsageRoute;
-}
-
-/** A route's availability: a verdict, or the provider key still to consult. */
-type RouteGate = ModelAvailabilityStatus | ProviderKeyGate;
-
 /**
  * What stage 1 decided for one model, and the only thing stage 3 reads about
  * it.
@@ -140,7 +131,6 @@ interface RoutedModel {
   /** The effort, thinking and mode the model string asks for. */
   readonly request: ReasoningRequest;
   readonly route: ModelRoute;
-  readonly gate: RouteGate;
 }
 
 /**
@@ -150,21 +140,25 @@ interface RoutedModel {
 type RoutedModels = ReadonlyMap<string, RoutedModel>;
 
 /**
- * Stage 1: what the decided route means for availability, free of any key
- * status. A route that comes down to a direct provider key answers with that
- * provider, so the batch read that follows consults exactly the providers the
- * routes reached.
+ * Stage 3 — the per-model verdict over the route stage 1 decided and the
+ * provider key statuses stage 2 read. Retired models need no provider key.
+ *
+ * A provider absent from the map was never read, rather than read and missing:
+ * that is a defect in the batch read, not a request for the user to add a key.
  */
-function routeGate(route: ModelRoute): RouteGate {
+function resolveModelAvailability(
+  model: string,
+  { rawConfig, route }: RoutedModel,
+  keyStatuses: ProviderKeyStatuses,
+): ModelAvailabilityStatus {
+  if (rawConfig.retired) return { kind: 'retired' };
   switch (route.kind) {
     case 'chatgpt-subscription':
       return { kind: 'subscription-access', usageRoute: route.kind };
     case 'xai-subscription':
       return { kind: 'xai-subscription-access', usageRoute: route.kind };
     case 'api-key':
-      return route.usageRoute === 'api-key'
-        ? { needsProviderKey: route.provider }
-        : { needsProviderKey: route.provider, usageRoute: route.usageRoute };
+      break;
     case 'no-api-key':
       return { kind: 'missing-key' };
     case 'unserved':
@@ -172,24 +166,7 @@ function routeGate(route: ModelRoute): RouteGate {
     case 'validation':
       return { kind: 'provider-key' };
   }
-}
-
-/**
- * Stage 3 — the per-model verdict, pure: stage 1's own answer, or the one the
- * consulted provider's key status decides.
- *
- * A provider the map has no entry for was never read, which is a different
- * fact from "read, and no key is set". Reporting it as `missing-key` would
- * tell a user with a working key that they have none, so it throws: the only
- * way to reach it is a stage-1 decision the stage-2 batch did not see.
- */
-function resolveModelAvailability(
-  model: string,
-  gate: RouteGate,
-  keyStatuses: ProviderKeyStatuses,
-): ModelAvailabilityStatus {
-  if (!('needsProviderKey' in gate)) return gate;
-  const provider = gate.needsProviderKey;
+  const provider = route.provider;
   const usable = keyStatuses[provider];
   if (usable === undefined) {
     throw new Error(
@@ -198,7 +175,10 @@ function resolveModelAvailability(
   }
   if (usable === 'unreadable') return { kind: 'key-unreadable' };
   if (!usable) return { kind: 'missing-key' };
-  return { kind: 'provider-key', usageRoute: gate.usageRoute };
+  return {
+    kind: 'provider-key',
+    usageRoute: route.usageRoute === 'api-key' ? undefined : route.usageRoute,
+  };
 }
 
 /**
@@ -276,7 +256,6 @@ function routeModels(
       config: routeConfig(rawConfig, route, ctx.facts),
       request: selected.request,
       route,
-      gate: rawConfig.retired ? { kind: 'retired' } : routeGate(route),
     });
   }
   return routed;
@@ -292,12 +271,13 @@ function withConsultedKeyStatuses(
   ctx: ModelAvailabilityContext,
 ): Effect.Effect<ModelAvailabilityContext, never, Secrets> {
   const consulted = new Set<ApiKeyProviderId>();
-  for (const { gate } of routed.values()) {
+  for (const { rawConfig, route } of routed.values()) {
     if (
-      'needsProviderKey' in gate &&
-      ctx.keyStatuses[gate.needsProviderKey] === undefined
+      !rawConfig.retired &&
+      route.kind === 'api-key' &&
+      ctx.keyStatuses[route.provider] === undefined
     ) {
-      consulted.add(gate.needsProviderKey);
+      consulted.add(route.provider);
     }
   }
   if (consulted.size === 0) return Effect.succeed(ctx);
@@ -533,7 +513,7 @@ function optionOf(
   const { route, config } = decision;
   const { kind, usageRoute } = resolveModelAvailability(
     model,
-    decision.gate,
+    decision,
     keyStatuses,
   );
   // cast: a kind the status table marks unavailable is one the builders

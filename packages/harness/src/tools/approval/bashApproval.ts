@@ -1,23 +1,13 @@
 import { Effect } from 'effect';
 
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireRun, sessionOf } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
-  BASH_APPROVAL_CONFIG_KEY,
-  type BashPermission,
   type RequestDecision,
   type RefusalDecision,
-  type RunId,
   type ToolResult,
 } from '@shared/schemas';
-import {
-  decideApproval,
-  isApprovalDenied,
-  approvalPolicyDenialMessage,
-} from '@shared/approvalPolicy';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
-import { Settings } from '@shared/config/settings';
 import { errorResult } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
 
@@ -29,16 +19,12 @@ export interface BashApprovalRequest {
   readonly command: string;
   readonly cwd?: string | null;
   /**
-   * Which standing grant answers this call. `'shell'`: a `bash` command; the
-   * run's command bypass answers it, and its prompt offers approve-for-session,
-   * which turns that bypass on. `'call'`: another tool's call spelled as a
-   * command (an MCP tool, codex, claude_code, send_to_terminal, a
-   * setup change). The command bypass is the shell's, so it answers no such
-   * call, and the prompt offers no session grant, because the one a bash
-   * prompt can mint is that shell bypass. Only the run's delegated-work grant,
-   * which approves everything the run does, answers it without a prompt.
+   * The standing grant that answers this call while it waits: `'bash'`, the
+   * run's command grant, which its prompt offers to turn on; `'call'`, only
+   * the run's delegated-work grant (no session grant is offered); `null`, a
+   * `PreToolUse` hook asked, so only a person answers.
    */
-  readonly grant: 'shell' | 'call';
+  readonly grant: 'bash' | 'call' | null;
 }
 
 /** What a bash approval settles to: the approval, or one of the refusals. */
@@ -46,90 +32,52 @@ export type BashDecision =
   Extract<RequestDecision, { action: 'approve' }> | RefusalDecision;
 
 /**
- * Build the bash permission payload every host lists from the fold, the bash
- * counterpart of `prepareToolEditApprovalPrompt`.
- *
- * Owning it here keeps one request-id scheme, derives the bypass affordance
- * from the run's current bypass state, and drops a blank working directory
- * so no renderer has to decide what an empty `cwd` means.
- */
-function prepareBashApprovalPrompt(
-  request: BashApprovalRequest,
-  requestId: string,
-  runId: RunId,
-  session: SessionHandle,
-): BashPermission {
-  const cwd = request.cwd?.trim();
-  return {
-    requestId,
-    command: request.command,
-    ...(cwd && { cwd }),
-    allowBypass:
-      request.grant === 'shell' &&
-      session.approvals.bypass(runId, 'bash') === null,
-    runId,
-  };
-}
-
-/**
- * Ask the person for a command: policy first (allow, deny), else a
- * `request.opened` on the run, serialized behind the run's other prompts,
- * answered by a surface's `request.decide`.
+ * Ask the person about a call that `sessionPermission` (`loop/toolGuard.ts`)
+ * said to ask about: a `request.opened` on the run, serialized behind the
+ * run's other prompts, answered by a surface's `request.decide`.
  */
 export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   request: BashApprovalRequest,
 ): Effect.fn.Return<BashDecision, Error, ToolContext> {
-  const { env, run, requests } = yield* requireRun('A bash approval');
-  const approvalsEnabled = yield* Settings.get<boolean>(
-    env.roots,
-    BASH_APPROVAL_CONFIG_KEY,
-  );
+  const { run, requests } = yield* requireRun('A bash approval');
   const { runId } = run;
   const session = sessionOf(run);
   const granted = () =>
+    request.grant !== null &&
     session.approvals.bypass(
       runId,
-      request.grant === 'shell' ? 'bash' : 'superYolo',
+      request.grant === 'bash' ? 'bash' : 'superYolo',
     ) !== null;
-  const policy = session.approvals.policy(runId);
-  const decision = decideApproval({
-    policy,
-    promptRequired: approvalsEnabled,
-    scopedBypass: granted(),
-    canPresent: !session.interactions.approvalPromptsUnavailable,
-  });
 
-  if (decision === 'allow') return { action: 'approve' };
-  if (isApprovalDenied(decision)) {
-    session.interactions.approvalDenied({ kind: 'executable', policy }, runId);
-    return { action: 'deny', reason: approvalPolicyDenialMessage(decision) };
-  }
-
-  const permission = prepareBashApprovalPrompt(
-    request,
-    requests.nextId('bash'),
-    runId,
-    session,
-  );
+  // The payload every host lists: a blank directory is dropped, so no
+  // renderer decides what an empty `cwd` means.
+  const cwd = request.cwd?.trim();
   const prompt = requests
-    .open({ kind: 'bash', data: permission })
+    .open({
+      kind: 'bash',
+      data: {
+        requestId: requests.nextId('bash'),
+        command: request.command,
+        ...(cwd && { cwd }),
+        allowBypass: request.grant === 'bash' && !granted(),
+        runId,
+      },
+    })
     .pipe(
       Effect.map((decided): BashDecision =>
         decided.action === 'approve' ? decided : refusalOf('bash', decided),
       ),
     );
-  const approved = Effect.succeed<BashDecision>({ action: 'approve' });
-  // The queue re-reads the shell's bypass when a call reaches the head of the
-  // run's lane. Another tool's call re-reads its own grant there instead, so a
-  // command bypass turned on while it waited does not answer it.
-  const atDispatch = Effect.suspend(() => (granted() ? approved : prompt));
-  return yield* session.approvals.enqueue(
-    'bash',
-    runId,
-    request.grant === 'shell'
-      ? { prompt, bypassed: approved }
-      : { prompt: atDispatch, bypassed: atDispatch },
+  // The call's own grant is read again when it reaches the head of the
+  // run's lane, so a command grant turned on while another tool's call
+  // waited does not answer it.
+  const atDispatch = Effect.suspend(() =>
+    granted() ? Effect.succeed<BashDecision>({ action: 'approve' }) : prompt,
   );
+  return yield* session.approvals.enqueue('bash', runId, {
+    prompt: atDispatch,
+    bypassed: atDispatch,
+  });
 });
 
 export function buildBashApprovalRejectedResult(

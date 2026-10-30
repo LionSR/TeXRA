@@ -183,10 +183,11 @@ A defined tool: plain data plus a `call` that validates and normalizes
 failures. An anonymous object type so the SDK's `.d.ts` inlines it.
 
 ```ts
-type DefinedTool<T, R = never> = Omit<
+type DefinedTool<T, R = never, Name extends string = string> = Omit<
   ITool<Error, R>,
-  'call' | 'guard'
+  'call' | 'guard' | 'definition'
 > & {
+  readonly definition: ToolDefinition & { readonly name: Name };
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
@@ -201,9 +202,9 @@ and turn ordinary failures into `{ status: 'error' }` feedback.
 Interruption, run history refusals and database write failures propagate.
 
 ```ts
-function defineTool<T, R = never>(
-  def: DefineToolOptions<T, R>,
-): DefinedTool<T, R>
+function defineTool<T, R = never, const Name extends string = string>(
+  def: DefineToolOptions<T, R> & { readonly name: Name },
+): DefinedTool<T, R, Name>
 ```
 
 ## HeldRun
@@ -319,16 +320,14 @@ interface ITool<E = Error, R = never> {
    */
   readonly replay?: 'safe' | 'unsafe';
   /**
-   * Whether a call needs a person's approval, and who asks for it. `true`:
-   * the run loop asks before the body runs, spelling the call as `guard.bash`
-   * does when the guard names one and as the tool's name and arguments
-   * otherwise, so a tool cannot declare approval and run unasked.
-   * `'inBody'`: the body opens its own request (a file-edit review, a plan, a
-   * question, a delegation proposal, an external inquiry) and the loop does
-   * not ask again. Either
-   * way, a run that cannot present a prompt is not offered the tool.
+   * Whether a call needs a person's approval, and who asks. `true` (implied
+   * by `guard.bash`): the run loop, before the body runs. `'inBody'`: the
+   * body's own request (an edit's review, a plan, a delegation proposal, a
+   * question, an external inquiry), which answers what the call's hooks
+   * said. A run that cannot present a prompt is not offered such a tool
+   * (`asksApproval`).
    */
-  readonly requiresApproval?: boolean | 'inBody';
+  readonly requiresApproval?: true | 'inBody';
   /** Its card opens before the call runs; a fast tool's opens and closes
    *  with its settlement. */
   readonly slow?: boolean;
@@ -487,8 +486,8 @@ interface Plugin {
    *  directory): lowercase letters, digits and dashes, starting with a
    *  letter or digit. A list with any other id is refused. */
   readonly id: string;
-  /** Its tools, by registered name. */
-  readonly tools?: Readonly<Record<string, ITool<Error, PluginToolServices>>>;
+  /** Its tools, registered by each tool's `definition.name`, in order. */
+  readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /**
    * Present when the plugin has an external dependency: it is probed, and
    * its tools are withheld while the dependency is missing. Without it the

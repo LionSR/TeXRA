@@ -42,7 +42,6 @@ import {
   type StorageFs,
   type WorkspaceFs,
 } from '@texra-ai/harness/host';
-import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type {
   FileOpResult,
@@ -68,7 +67,6 @@ import {
 import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
 import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
-import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
 import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
@@ -89,6 +87,7 @@ import {
   type HostSnapshotSource,
 } from './hostSnapshotSource';
 import { SessionBridge } from './SessionBridge';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { HostDraftRequests } from './hostDraftRequests';
 
 /** Where a window's runs run: this process's own session, whose windows
@@ -428,34 +427,6 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     runs: runActions,
   });
 
-  /**
-   * The chat export controller, loaded on the first export so its module
-   * graph -- the formatters, the trace assembler, the LaTeX compiler --
-   * stays out of the window's start. A successful load is kept for the
-   * window's life, and a failed one expires at once so the next export
-   * retries.
-   */
-  const exportController = yield* Effect.cachedWithTTL(
-    Effect.tryPromise({
-      try: async () => {
-        const { ChatExportController } =
-          await import('@texra/controllers/progressView/ChatExportController');
-        return new ChatExportController({
-          roots,
-          records: exportRecords,
-          latexPreamble: host.export.latexPreamble,
-        });
-      },
-      catch: (cause) =>
-        new TranscriptExportFailed({
-          step: 'openController',
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    }),
-    (exit) => (Exit.isSuccess(exit) ? 'Infinity' : 0),
-  );
-
   const { bindings } = host;
   const shared = (request: SharedHostRequest, port: string) =>
     answerShared(request, port, {
@@ -475,7 +446,9 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           openPath: host.export.openPath,
           showInfo: host.showInfoMessage,
           showWarning: host.showWarningMessage,
-          getController: exportController,
+          roots,
+          records: exportRecords,
+          latexPreamble: host.export.latexPreamble,
           templatePath: traceViewerTemplatePath(host.export.resourcesPath),
         }),
     });

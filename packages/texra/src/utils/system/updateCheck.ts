@@ -140,7 +140,7 @@ export const runDailyUpdateCheck = Effect.fn('updateCheck.runDailyUpdateCheck')(
         ? Effect.ignore(stamp, {
             log: 'Warn',
             message: 'The update check time was not saved',
-          })
+          }).pipe(withLogChannel('updateCheck'))
         : stamp;
     }
     return latest;

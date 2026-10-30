@@ -88,8 +88,8 @@ function runHistoryShow(
 /**
  * Export a stored conversation to stdout as a standalone document.
  *
- * `md` mirrors the progress-view ChatExportController.buildExportInput so the
- * CLI and the GUI render the same conversation identically.
+ * `md` uses the same input loader and formatter as the progress view, so
+ * the CLI and the GUI render the same conversation identically.
  *
  * `html` assembles the run's trace (`assembleTrace`, shared with the
  * progress-view "Export transcript" button) and embeds it into the

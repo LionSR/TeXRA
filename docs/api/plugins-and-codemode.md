@@ -78,16 +78,14 @@ export const latexMetricsPlugin = definePlugin({
   id: 'latex-metrics',
   toggle: 'on',
   availability: ALWAYS_AVAILABLE,
-  tools: {
-    count_equations: countEquationsTool,
-  },
+  tools: [countEquationsTool],
 });
 ```
 
 A [`PluginDefinition`](./harness/plugins#plugindefinition) can declare:
 
 - **`id`**: stable lowercase identifier (`[a-z0-9-]+`), persisted in settings and `tools.offered` rows.
-- **`tools`**: map of tool name to `ITool`. Every tool name is unique across the process's [`ToolRegistry`](./harness/plugins#toolregistry).
+- **`tools`**: list of `ITool` values, registered by each tool's `definition.name`. Every tool name is unique across the process's [`ToolRegistry`](./harness/plugins#toolregistry).
 - **`availability` and `toggle`**: `availability` probes external dependencies ([`ALWAYS_AVAILABLE`](./harness/plugins#always_available) or [`probeTool`](./harness/node#probetool)); missing dependencies withhold the plugin's tools. `toggle: 'on' | 'off'` creates a user setting switch seeded on first install.
 - **`injectedWhen`**: maps tool names to a boolean setting key (or `true`) to inject those tools into every tool-using agent while the plugin is enabled.
 - **`processLayer` and `sessionLayer`**: lazy Effect `Layer`s ([`ProcessPluginLayer`](./harness/plugins#processpluginlayer), [`SessionPluginLayer`](./harness/plugins#sessionpluginlayer)) built when a step first pins the plugin. Work that outlives a step keeps the session layer alive with [`PluginHold`](./harness/plugins#pluginhold).

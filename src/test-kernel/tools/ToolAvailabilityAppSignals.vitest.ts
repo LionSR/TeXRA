@@ -72,16 +72,11 @@ const probeServices = Layer.mergeAll(
 /** Tools under `names`, which the availability service only lists. */
 const named = (
   ...names: string[]
-): Record<string, RuntimeTool<Error, PluginToolServices>> =>
-  Object.fromEntries(
-    names.map((name) => [
-      name,
-      {
-        definition: { name, description: name, parameters: {} },
-        call: vi.fn(),
-      },
-    ]),
-  );
+): readonly RuntimeTool<Error, PluginToolServices>[] =>
+  names.map((name) => ({
+    definition: { name, description: name, parameters: {} },
+    call: vi.fn(),
+  }));
 
 /** The process's availability service over `plugins`, as a composition root
  *  builds it. */

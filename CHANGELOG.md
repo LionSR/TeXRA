@@ -118,12 +118,18 @@ All notable changes to this project will be documented in this file.
   address) in place of `mediaFiles`, and a user row's and an `InboxItem`'s
   `mediaFiles` is `media: { name, mimeType, digest }[]`.
 
-- **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.0.6 (peer
-  floor `^4.0.6`).** Their Effect peers (`effect`, plus
+- **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.1.0 (peer
+  floor `^4.1.0`).** Their Effect peers (`effect`, plus
   `@effect/platform-node` and `@effect/sql-sqlite-node` for the harness) now
-  start at `^4.0.6`. Effect 4.0.6 changed how a SQL transaction acquires its
-  connection, and the harness's session database follows the new contract,
-  which 4.0.5 lacks.
+  start at `^4.1.0`. Effect 4.0.6 changed how a SQL transaction acquires its
+  connection, and Effect 4.1.0 derives a file system's `glob` from a typed
+  directory listing; the harness's session database and its rooted file
+  systems (`WorkspaceFs`, `StorageFs`, `GlobalStorageFs`) follow both
+  contracts, which earlier versions lack. A `glob` on those file systems now
+  reads Effect's pattern syntax: its wildcards match case-sensitively on every
+  platform (they ignored case on macOS and Windows), `\` escapes the next
+  character instead of separating paths, and extended globs such as `@(a|b)`
+  are not interpreted.
 - **Goal mode is a script.** **Run as goal** on a plan now runs the goal
   template, a background script of the conversation whose rounds are the
   same agent again: each round continues the conversation as it stood when
@@ -1302,6 +1308,33 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A task interrupted by a crash is no longer held forever after the
+  network changes.** On macOS the computer's name follows the network (a
+  router-assigned name at home, `name.local` elsewhere), and a task whose
+  process stopped under one name was treated as running on another
+  computer: it was never shown as interrupted and could not be resumed.
+  TeXRA now identifies the process itself, not the computer's name.
+- **A model request cut off by a crash counts against its retries.** When
+  the process died while a model request was running (for example, a
+  response that ran it out of memory), every reopen sent the request again
+  without asking, and with **Interrupted tasks** set to continue them all
+  it could be billed again on every start. Each such attempt now uses one
+  of the automatic retries; once they are spent, TeXRA asks before sending
+  it again, and a run with nobody to answer, such as a headless one, ends
+  there instead.
+- **A tool call that crashes TeXRA is not run on every start.** A tool call
+  that is safe to repeat (a file read, say), cut short by the process
+  stopping, was run again each time the task resumed, so a call that ran the
+  process out of memory stopped every start. After three such starts, TeXRA
+  no longer runs it and tells the model the call may be what stops the
+  process.
+- **Work a crash interrupted is reported or finished.** A background
+  command that was running when the app or CLI stopped was deleted at the
+  next start, and the task that launched it, told the result would arrive
+  on its own, waited for it in vain. That task now receives a message that
+  a restart interrupted the command and its outcome is unknown. A task that
+  had not been given its title before the crash now gets one when it
+  resumes.
 - **One notice when a message cannot wake its task.** A message sent to a
   task whose agent or plugin is missing or off showed two notices, the
   second a generic "could not be resumed automatically" that suggested a
@@ -2287,6 +2320,10 @@ view` on a sub-agent the parent waited for shows its report instead of
   heading, hash marks included, as its one-line summary in the terminal's
   plan panel and in the plan notice an orchestrator receives. A heading is
   used only when the plan has no other text, without its marks.
+- **An MCP server hears when TeXRA stops waiting.** When you stopped a run
+  during an MCP tool call, or the call hit its 60-second limit, the server
+  was never told and kept working on it. TeXRA now sends the protocol's
+  cancellation notice, so the server can stop.
 
 ### Extension (VS Code)
 
@@ -2549,6 +2586,10 @@ view` on a sub-agent the parent waited for shows its report instead of
   opens where the new text differs from the old. The card's title names the
   file relative to the workspace instead of wrapping its absolute path over
   several lines.
+- **The resume command printed on Windows pastes into PowerShell** — its
+  `--cwd` and `--source` paths are quoted the way PowerShell reads them, so a
+  path holding an apostrophe pastes as written instead of with every
+  backslash doubled.
 
 ## [0.40.10] - 2026-09-06
 

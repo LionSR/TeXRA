@@ -115,9 +115,10 @@ function reducedOutputBudget(available: number, buffer: number): number {
 const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
 
-/** What a person is asked again about an admitted attempt a stop cut. */
+/** What a person is asked before an attempt the process stopped during is
+ *  sent again: one they approved, or one past the automatic retries. */
 const INTERRUPTED_RETRY_MESSAGE =
-  'The process stopped while the retry you approved was running, so it may have been billed without an answer. Retry again?';
+  'The process stopped while a model request was running, so it may have been billed without an answer. Retry again?';
 
 /**
  * How much of a failed attempt's streamed output the failure carries. The
@@ -675,9 +676,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             next,
             bound,
           ) {
-            const info = failureInfo(error, bound.config.provider, {
-              unsent,
-            });
+            const info = failureInfo(error, bound.config.provider, { unsent });
             if (next.kind === 'ask' || next.kind === 'stop')
               yield* logProviderError(
                 logger,

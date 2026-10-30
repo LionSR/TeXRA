@@ -124,7 +124,6 @@
       "runtime/delegation/detachedChildRun#startDetachedChildRunLoop",
       "runtime/delegation/inBandSubagentRun#executeSubagentInBand",
       "runtime/delegation/subagentRun#describeSubagentProgress",
-      "runtime/detachSubagentsOnStop#detachSubagentsOnStop",
       "runtime/forkRun#forkSeed",
       "runtime/historyQuery/views#HISTORY_VIEW_SUMMARY",
       "runtime/loop/step#offeredBy",

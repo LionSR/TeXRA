@@ -22,7 +22,6 @@ import {
   codexThreadsLayer,
 } from '@texra/tools/agentCliSessionStores';
 import { ClaudeAgentTool } from '@texra/tools/claudeAgent';
-import { CLAUDE_AGENT_NAME } from '@texra/tools/claudeAgentShared';
 import { CodexTool } from '@texra/tools/codex';
 import { GitHubSubscriptionTool } from '@texra/tools/github/githubSubscriptionTool';
 import { GitHubSubscriptions } from '@texra/tools/github/subscriptionBindings';
@@ -61,12 +60,12 @@ export const wolfram: Plugin = {
 
 export const zotero: Plugin = {
   id: 'zotero',
-  tools: {
-    zotero_collections: ZoteroCollectionsTool,
-    zotero_search: ZoteroSearchTool,
-    zotero_add: ZoteroAddTool,
-    zotero_export: ZoteroExportTool,
-  },
+  tools: [
+    ZoteroCollectionsTool,
+    ZoteroSearchTool,
+    ZoteroAddTool,
+    ZoteroExportTool,
+  ],
   toggle: 'off',
   availability: ZOTERO_AVAILABILITY,
 };
@@ -82,12 +81,12 @@ export const lean4 = (host: {
 }): Plugin =>
   definePlugin<LeanLanguageServices>({
     id: 'lean4',
-    tools: {
-      lean_diagnostics: LeanDiagnosticsTool,
-      lean_file: LeanFileTool,
-      lean_project: LeanProjectTool,
-      lean_inspect: LeanInspectTool,
-    },
+    tools: [
+      LeanDiagnosticsTool,
+      LeanFileTool,
+      LeanProjectTool,
+      LeanInspectTool,
+    ],
     availability: lean4Availability(host.setup),
     processLayer: { layer: host.services ?? directLeanLanguageServices() },
   });
@@ -97,7 +96,7 @@ export const githubActivity = definePlugin<GitHubSubscriptions>({
   // disabled-tool preferences. The user-facing name has expanded to
   // cover repos and issues but the persistence key is stable.
   id: 'github-pr-subscription',
-  tools: { github_subscription: GitHubSubscriptionTool },
+  tools: [GitHubSubscriptionTool],
   toggle: 'off',
   processLayer: {
     layer: gitHubSubscriptionsLayer,
@@ -109,7 +108,7 @@ export const githubActivity = definePlugin<GitHubSubscriptions>({
 
 export const externalInquiry: Plugin = {
   id: 'external-inquiry',
-  tools: { inquiry: ExternalInquiryTool },
+  tools: [ExternalInquiryTool],
   arms: APP_PLUGIN_ARMS['external-inquiry'],
   toggle: 'off',
   availability: ALWAYS_AVAILABLE,
@@ -130,7 +129,7 @@ export const externalInquiry: Plugin = {
 
 export const codex = definePlugin<CodexThreads>({
   id: 'codex',
-  tools: { codex: CodexTool },
+  tools: [CodexTool],
   toggle: 'off',
   sessionLayer: codexThreadsLayer,
   availability: CODEX_AVAILABILITY,
@@ -142,7 +141,7 @@ export const claudeAgent = definePlugin<ClaudeAgentSessions>({
   // and the tool name string is `claude_code`, but the persistence key is
   // stable.
   id: 'claude-agent',
-  tools: { [CLAUDE_AGENT_NAME]: ClaudeAgentTool },
+  tools: [ClaudeAgentTool],
   toggle: 'off',
   sessionLayer: claudeAgentSessionsLayer,
   availability: CLAUDE_CODE_AVAILABILITY,

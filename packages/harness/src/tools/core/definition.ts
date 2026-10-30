@@ -18,10 +18,11 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  * A defined tool: plain data plus a `call` that validates and normalizes
  * failures. An anonymous object type so the SDK's `.d.ts` inlines it.
  */
-export type DefinedTool<T, R = never> = Omit<
+export type DefinedTool<T, R = never, Name extends string = string> = Omit<
   ITool<Error, R>,
-  'call' | 'guard'
+  'call' | 'guard' | 'definition'
 > & {
+  readonly definition: ToolDefinition & { readonly name: Name };
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
@@ -65,9 +66,9 @@ export type DefineToolOptions<T, R = never> = Required<
  * and turn ordinary failures into `{ status: 'error' }` feedback.
  * Interruption, run history refusals and database write failures propagate.
  */
-export function defineTool<T, R = never>(
-  def: DefineToolOptions<T, R>,
-): DefinedTool<T, R> {
+export function defineTool<T, R = never, const Name extends string = string>(
+  def: DefineToolOptions<T, R> & { readonly name: Name },
+): DefinedTool<T, R, Name> {
   const {
     name,
     description,

@@ -12,7 +12,7 @@
  * `waiting`; the same log with the owner gone folds to `interrupted`.
  */
 // Node imports
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdtempSync,
@@ -41,6 +41,7 @@ import {
   type FileSystem,
   Layer,
   type Path,
+  Schedule,
   Schema,
   Stream,
   SubscriptionRef,
@@ -205,8 +206,11 @@ async function bundleStoreWriter(dir: string): Promise<string> {
   return outfile;
 }
 
-const SELF = '["test-host",4242,"self-start"]';
-const OTHER = '["test-host",4343,"other-start"]';
+/** Two processes' owner ids: live pids (this one and its parent) whose start
+ *  identity was never read, so no proof ties either record to a process and
+ *  each reads `unprovable` to the other. */
+const SELF = JSON.stringify(['test-host', process.pid, null]);
+const OTHER = JSON.stringify(['test-host', process.ppid, null]);
 /** The run every case here is about; one id, the key of its one aggregate. */
 const RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
 const OLDER = Schema.decodeUnknownSync(RunIdSchema)('ab12ce');
@@ -550,10 +554,10 @@ describe('Sessions owner', () => {
         }));
         // A released claim is not held, even while the display still says so.
         expect(yield* requests.request(request)).toEqual({ kind: 'done' });
-        // A stop that leaves the child policy unset takes the session's
-        // configured "Keep subagents running".
+        // A stop that leaves the child policy unset leaves it to the stop,
+        // which reads the session's "Keep subagents running".
         expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, {
-          detachActiveChildren: true,
+          detachActiveChildren: undefined,
           reason: 'user',
         });
       }).pipe(withRequestServices),
@@ -1742,18 +1746,20 @@ describe('the session event table and its one publisher', () => {
    * process's claim is proving its recorded owner dead. A restart that meets
    * a stale claim it cannot disprove never resumes the run, for the life of
    * the store, so this is the one window whose regression costs every run
-   * that was live at the crash. The recorded owner here is this pid under a
-   * start identity from before the crash: the pid resolves, its identity
-   * differs, and that is `proveOwnerLiveness`'s pid-reuse verdict. The
+   * that was live at the crash. Both owners here recorded the name another
+   * network gave this machine (macOS takes its hostname from DHCP or
+   * reverse DNS), which no proof reads: the crashed one's pid names no
+   * process, so it is dead, and this process under that name is alive. The
    * follow-up the crash left queued reaches the restarted publisher's
    * pending set where the claim moves.
    */
   it.live('reclaims a run whose recorded owner is provably dead', () => {
     const storage = workspace();
+    const renamed = `${os.hostname().toLowerCase()}.elsewhere`;
     const CRASHED = JSON.stringify([
-      os.hostname().toLowerCase(),
-      process.pid,
-      'an-earlier-process',
+      renamed,
+      spawnSync(process.execPath, ['-e', '']).pid,
+      'exited',
     ]);
     const target = qualifyAggregateId('run', RUN);
     const followUp = {
@@ -1761,6 +1767,16 @@ describe('the session event table and its one publisher', () => {
       content: { text: 'deliver me', from: { kind: 'user' as const } },
     };
     return Effect.gen(function* () {
+      const { nodeProcesses } = yield* Effect.promise(
+        () => import('@platform/defaults/nodeProcesses'),
+      );
+      const running = JSON.stringify([
+        renamed,
+        process.pid,
+        (yield* nodeProcesses
+          .selfIdentity()
+          .pipe(Effect.provide(nodePlatformLayer))) ?? null,
+      ]);
       yield* Database.pipe(
         Effect.flatMap((crashed) =>
           crashed.appendAll([
@@ -1770,8 +1786,15 @@ describe('the session event table and its one publisher', () => {
         ),
         Effect.provide(substrate(storage, CRASHED)),
       );
+      yield* Database.pipe(
+        Effect.flatMap((live) => live.appendAll([olderStart])),
+        Effect.provide(substrate(storage, running)),
+      );
       yield* Effect.gen(function* () {
         const restarted = yield* Database;
+        expect(
+          yield* restarted.claimOwner(qualifyAggregateId('run', OLDER)),
+        ).toEqual({ ownerId: running, liveness: 'alive' });
         expect(yield* restarted.claimOwner(target)).toEqual({
           ownerId: CRASHED,
           liveness: 'dead',
@@ -1787,7 +1810,7 @@ describe('the session event table and its one publisher', () => {
           SELF,
         );
         // The resumed run appends onto the rows the crash left behind.
-        expect((yield* restarted.appendAll([waiting]))[0]?.commit).toBe(3);
+        expect((yield* restarted.appendAll([waiting]))[0]?.seq).toBe(3);
       }).pipe(
         Effect.provide(
           runHistoryOverStore.pipe(
@@ -1797,6 +1820,76 @@ describe('the session event table and its one publisher', () => {
       );
     });
   });
+
+  /**
+   * A background shell the crash killed mid-command: its parent's model was
+   * told the result arrives as a follow-up, and no process is left to send
+   * it. The next open tells the parent, once, that the command's outcome is
+   * unknown, and deletes the shell, however far the view's own proof of the
+   * crashed owner has got.
+   */
+  it.live(
+    "tells a crashed background shell's parent its outcome is unknown",
+    () => {
+      const storage = workspace();
+      const CRASHED = JSON.stringify([
+        os.hostname().toLowerCase(),
+        process.pid,
+        'an-earlier-process',
+      ]);
+      const SHELL = Schema.decodeUnknownSync(RunIdSchema)('ab12cf');
+      const shell = qualifyAggregateId('run', SHELL);
+      return Effect.gen(function* () {
+        yield* Database.pipe(
+          Effect.flatMap((crashed) =>
+            crashed.appendAll([
+              runStart,
+              { type: 'run.activate', aggregateId: runStart.aggregateId },
+              {
+                type: 'run.start',
+                aggregateId: shell,
+                identity: { kind: 'process', tool: 'bash' },
+                userFollowUpSupport: 'unsupported',
+                parent: { id: RUN, call: null },
+                provenance: null,
+              },
+              {
+                type: 'run.config',
+                aggregateId: shell,
+                config: { name: 'bash', instruction: 'make build' },
+              },
+              { type: 'run.activate', aggregateId: shell },
+              {
+                type: 'child.turn',
+                aggregateId: shell,
+                attemptId: 'crashed-attempt',
+                turnIndex: 1,
+                phase: 'accepted',
+              },
+            ]),
+          ),
+          Effect.provide(substrate(storage, CRASHED)),
+        );
+        const session = yield* openTestSession({
+          roots: createFakeWorkspaceRoots({ storagePath: storage }),
+        });
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
+        yield* session.log.facts(SHELL).pipe(
+          Effect.repeat({
+            until: (facts) => facts === null,
+            schedule: Schedule.spaced('20 millis'),
+          }),
+          Effect.timeout('10 seconds'),
+        );
+        const { followUps } = yield* session.followUps.read(RUN);
+        expect(followUps.map(({ content }) => content.from)).toEqual([
+          expect.objectContaining({ kind: 'run', runId: SHELL }),
+        ]);
+        expect(followUps[0]?.content.text).toContain('command="make build"');
+        expect(followUps[0]?.content.text).toContain('outcome is unknown');
+      });
+    },
+  );
 
   it.effect(
     'fences a second writer and transfers only released claims together',
