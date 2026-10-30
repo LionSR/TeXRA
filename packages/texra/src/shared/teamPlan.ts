@@ -140,7 +140,7 @@ export const applyTeam = Effect.fn('applyTeam')(function* <
 >(
   query: string,
   workspace: {
-    readonly workspaceAgents: Pick<WorkspaceAgentsController<T>, 'setTeam'>;
+    readonly workspaceAgents: WorkspaceAgentsController<T>;
     readonly repoState: Pick<StateStore, 'get'>;
     readonly resolveAgent: TeamRunOptions<T>['resolveAgent'];
   },

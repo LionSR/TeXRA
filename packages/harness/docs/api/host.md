@@ -232,10 +232,10 @@ interface AgentDirectoriesPort {
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
   /**
-   * The agent names a workspace's team lists, read from its repository state;
-   * `undefined` for a team id the workspace has no team of. The app owns what
-   * a team is; the harness only stores a selection naming one by id. Absent,
-   * the app has no teams.
+   * The member names of the workspace's team `teamId`, read from its
+   * repository state; `undefined` for a team the workspace has none of. The
+   * app owns what a team is; the harness only stores a selection naming one
+   * by id. Absent, the app has no teams.
    */
   readonly teamMembers?: (
     repoState: StateStore,

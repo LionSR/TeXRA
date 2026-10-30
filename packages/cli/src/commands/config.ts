@@ -9,6 +9,7 @@ import { Effect } from 'effect';
 import { agentKeyOf } from '@texra-ai/harness/schemas';
 
 import { workspaceTeams } from '@texra/shared/agentTeams';
+import { findTeamPreset } from '@texra/shared/teamPlan';
 import {
   CliUsageError,
   failUsage,
@@ -131,10 +132,15 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
 
     if (input.inherit) yield* workspaceAgents.setInherited();
     if (input.all) yield* workspaceAgents.setAll();
-    const teamId = input.team;
-    if (teamId) {
+    if (input.team) {
+      // `--team` names a team by id, name or slug; the selection stores the id.
+      const team = findTeamPreset(
+        yield* workspaceTeams(roots.repoState),
+        input.team,
+      );
+      if (!team) return yield* failUsage(`Unknown agent team: ${input.team}`);
       yield* workspaceAgents
-        .setTeam(teamId)
+        .setTeam(team.id)
         .pipe(Effect.mapError(asTeamUsageError));
     }
     if (input.agents !== undefined) {
