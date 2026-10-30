@@ -70,10 +70,9 @@ export type ResumeHandOff =
   | { readonly activation: CommitOrdinal }
   | Exclude<ResumeAttempt, { readonly started: true }>;
 
-export interface ResumeRunOptions extends Pick<
-  ExecuteAgentOptions,
-  'onRun' | 'tools'
-> {
+/** What a resume's caller supplies: the run's extra tools, whether it
+ *  stops after one cycle, and the session it resumes in. */
+export interface ResumeRunOptions extends Pick<ExecuteAgentOptions, 'tools'> {
   /** Stop the run after one model/tool cycle instead of waiting for
    *  follow-up input. */
   readonly stopAfterCycle?: boolean;

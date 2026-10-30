@@ -24,14 +24,20 @@ is the module map by concern. Run-loop rules are in
 
 ## Top-level modules
 
-- **Launch and configuration**: `AgentLaunchContext`; `agentToolResolution`
-  (the effective tool list); `runLaunchGuard` (the end of a failed
-  process-child hand-off, and a held child's end).
-- **Start and resume**: `rootLaunch` (what `Runs.launch({ request, options })`
+- **Launch and configuration**: `AgentLaunchContext` (the definition a
+  launch resolves before its run exists: agent, tools, model);
+  `agentToolResolution` (the effective tool list); `runLaunchGuard` (the
+  ends a run's driver does not write: a failed process-child hand-off, a
+  held child's end, and the children a dead process left under a resuming
+  run).
+- **Start, resume and end**: `rootLaunch` (what `Runs.launch({ request, options })`
   runs: assigns the `runId`, registers, runs); `executeAgent` (the one
-  run program, fresh or resumed); `AgentRunLifecycle`
-  (completion side effects, error classification); `runReport` (a run's
-  unclassified report to its lifecycle); `resumeRun` (the cross-host resume entry, root or recovered child: the
+  run program, fresh or resumed: the run's entry, its services, its
+  description, and the masked region whose exit is its terminal);
+  `AgentRunLifecycle` (the end: `endRun`, the terminal's classification of
+  an exit, and `endActivation`, the one end of an activation, through
+  `agent/storage/runLifecycle`'s `finalizeRun`); `runReport` (a run's
+  unclassified report to its terminal); `resumeRun` (the cross-host resume entry, root or recovered child: the
   run's activation from the call, joined by a second resume);
   `forkRun` (a new root seeded from another run's view); `resumeBlocker` (a
   missing or untrusted agent).
@@ -41,9 +47,10 @@ is the module map by concern. Run-loop rules are in
   tools see them, and a loop's `RunControls`).
 - **Session events**: `SessionHandle` (one composition record per session);
   `SessionEvents` (one publisher, the reads, and trace-to-fact translation);
-  `runtimePresentationEvents`; `terminalResultToast`; `HostInteractions` /
+  `runtimePresentationEvents`; `HostInteractions` /
   `SessionHostInteractions` (the session's host port: diagnostics, approvals,
-  retries, user questions, external inquiry, and other notices).
+  retries, user questions, external inquiry, and other notices, and what a
+  failed run presents on it).
 - **History and per-call services**: `RunHistory` (claims through
   `Database`, reads and writes through `SessionLog`); `FollowUps` (pending
   follow-up input, consumed one batch at a time); `ModelInvoker` (the one

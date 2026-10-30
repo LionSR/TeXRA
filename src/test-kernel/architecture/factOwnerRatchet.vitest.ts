@@ -70,7 +70,9 @@ const VOCABULARY = new Set([
 ]);
 
 const RUN_REGISTRY = 'packages/harness/src/agent/runtime/runRegistry.ts';
-const RUN_LIFECYCLE = 'packages/harness/src/agent/storage/runLifecycle.ts';
+/** The lifecycle rows, built beside the readers of their facts; the
+ *  transactions that commit them are `agent/storage/runLifecycle.ts`'s. */
+const LIFECYCLE_ROWS = 'packages/harness/src/shared/session/runFacts.ts';
 
 type Use = 'assigns' | 'constructs' | 'reads';
 
@@ -102,7 +104,7 @@ const OWNERS: readonly {
   },
   {
     fact: "a run's terminal row, written once per lifecycle",
-    owner: RUN_LIFECYCLE,
+    owner: LIFECYCLE_ROWS,
     use: 'constructs',
     name: 'run.end',
     also: {
@@ -112,7 +114,7 @@ const OWNERS: readonly {
   },
   {
     fact: "a run's activation",
-    owner: RUN_LIFECYCLE,
+    owner: LIFECYCLE_ROWS,
     use: 'constructs',
     name: 'run.activate',
   },

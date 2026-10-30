@@ -5,7 +5,7 @@ import { runRejection } from '@agent/storage/resumability';
 import type { ResumeAttempt, ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { registryOf } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { presentRunFailure } from '@agent/runtime/terminalResultToast';
+import { presentRunFailure } from '@agent/runtime/HostInteractions';
 import { withLogChannel } from '@logger/effectLog';
 import {
   type CommitOrdinal,
