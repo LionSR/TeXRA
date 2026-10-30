@@ -88,9 +88,9 @@ type SelectHandler<T> = (value: T) => SlashCommandEffect;
  */
 export function registerBuiltinSlashCommands(options: {
   /**
-   * The three setting slots the built-in forms and handlers read: every one
-   * of them runs outside Effect, so the stores arrive from the surface that
-   * registers the commands.
+   * The setting stores the built-in forms and handlers read: they run
+   * outside Effect, so the stores arrive from the surface that registers the
+   * commands.
    */
   stores: SettingsStores;
   /** The process runtime the account commands and the `/resume` listing run
@@ -133,8 +133,7 @@ export function registerBuiltinSlashCommands(options: {
   configRoots?: WorkspaceRoots;
   onError?: ErrorHandler;
 }): void {
-  const { stores, runtime } = options;
-  const { runSession } = options;
+  const { stores, runtime, runSession } = options;
   const modelStores = { ...stores, runtime };
   const onAgentSelect: SelectHandler<string> =
     options.onAgentSelect ??
@@ -385,23 +384,21 @@ export function registerBuiltinSlashCommands(options: {
   function configContribution(
     configRoots: WorkspaceRoots,
   ): SlashCommandContribution {
-    const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => {
-      return (
-        <CliConfigForm
-          roots={configRoots}
-          runtime={runtime}
-          availableRows={props.availableRows}
-          // The project's policy, written: the status bar follows it, and
-          // the chat's own `/approval` choice stays as it was.
-          onApprovalPolicyChanged={options.onProjectApprovalPolicyChanged}
-          onClose={() => props.onDone(undefined)}
-          onError={async (error) => {
-            props.onPersist?.();
-            await options.onError?.(error);
-          }}
-        />
-      );
-    };
+    const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => (
+      <CliConfigForm
+        roots={configRoots}
+        runtime={runtime}
+        availableRows={props.availableRows}
+        // The project's policy, written: the status bar follows it, and
+        // the chat's own `/approval` choice stays as it was.
+        onApprovalPolicyChanged={options.onProjectApprovalPolicyChanged}
+        onClose={() => props.onDone(undefined)}
+        onError={async (error) => {
+          props.onPersist?.();
+          await options.onError?.(error);
+        }}
+      />
+    );
     return {
       pluginId: 'config',
       commands: [
@@ -450,8 +447,7 @@ export function registerBuiltinSlashCommands(options: {
           aliases: ['agents'],
           category: 'configuration',
           echo: 'ifPersists',
-          handler: (remainder, context) =>
-            applyInitialCliAgentSelection(remainder, context),
+          handler: applyInitialCliAgentSelection,
           formComponent: AgentListFormAdapter,
         },
         {
@@ -488,8 +484,7 @@ export function registerBuiltinSlashCommands(options: {
           description: 'Set the approval policy',
           category: 'configuration',
           echo: 'ifPersists',
-          handler: (remainder, context) =>
-            applyCliApprovalPolicySelection(remainder, context),
+          handler: applyCliApprovalPolicySelection,
           formRemainders: ['status'],
           formComponent: ApprovalPolicyFormAdapter,
         },

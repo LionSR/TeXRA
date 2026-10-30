@@ -110,7 +110,7 @@ export class CliUsageError extends Schema.TaggedError<CliUsageError>()(
 
 /** Fail the command with a usage error. */
 export const failUsage = (message: string) =>
-  Effect.fail(new CliUsageError({ message: message }));
+  Effect.fail(new CliUsageError({ message }));
 
 export interface CliAmbientState {
   readonly isCi: boolean;
@@ -533,8 +533,7 @@ export function launchApprovalNotice(
 ): string | undefined {
   if (
     requested === undefined ||
-    (requested === 'yolo' && configured !== 'never') ||
-    stricterPolicy(requested, configured) === requested
+    effectiveApprovalPolicy(requested, configured) === requested
   )
     return undefined;
   const change = `Change the project's policy with /config in \`texra chat\` or in the settings view.`;

@@ -253,10 +253,6 @@ export async function runChat(
         writeTextStderr(agentEntry.message);
         return { exitCode: CliExitCode.Usage };
       }
-      // One API mode for the whole session: an explicit --api-mode/env
-      // override wins, otherwise the persisted account default. Model
-      // resolution, the no-models hints, and the header/status all read this
-      // same value so they can never disagree.
       const modelSelectionExit = yield* Effect.exit(
         credential.ready
           ? selectCliRunnableModel(
@@ -340,9 +336,17 @@ export async function runChat(
     ),
   );
   if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
-  const { services, runtimeSession, runSession, runsElsewhere, link } = startup;
-  const { defaults } = startup;
-  const { inputHistory, startupNotices, terminalCaps } = startup;
+  const {
+    services,
+    runtimeSession,
+    runSession,
+    runsElsewhere,
+    link,
+    defaults,
+    inputHistory,
+    startupNotices,
+    terminalCaps,
+  } = startup;
 
   // The policy this chat's launches ask for (`launchApproval`): its flag,
   // then each `/approval`.
@@ -650,7 +654,6 @@ export async function runChat(
     },
   });
 
-  const stdoutColorEnabled = context.stdoutColorEnabled;
   const inkRef: { current?: InkInstance } = {};
   const viewportController = createTuiViewportController(inkRef);
   const ink = render(
@@ -671,7 +674,10 @@ export async function runChat(
       history={inputHistory}
     />,
     {
-      stdout: tuiOutputStreamForColor(process.stdout, stdoutColorEnabled),
+      stdout: tuiOutputStreamForColor(
+        process.stdout,
+        context.stdoutColorEnabled,
+      ),
       stderr: process.stderr,
       stdin: process.stdin,
       // Own Ctrl+C ourselves (App's unified useInput → exit()) instead of via

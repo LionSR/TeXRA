@@ -1,6 +1,5 @@
 {
   "packages/cli/src/chat/tui/App.tsx": 1,
-  "packages/cli/src/chat/tui/commands/registerBuiltins.tsx": 2,
   "packages/cli/src/chat/tui/forms/_shared/useAsyncListForm.ts": 1,
   "packages/cli/src/chat/tui/forms/AgentListForm.tsx": 1,
   "packages/cli/src/chat/tui/forms/CliConfigForm.tsx": 1,

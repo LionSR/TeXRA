@@ -315,8 +315,7 @@ export function initCliPlatform(
       runtime,
       Effect.gen(function* () {
         const globalState = yield* AppState;
-        // The three setting slots this process answers a catalog row from:
-        // the roots an earlier init built.
+        // A later init finds the roots and session an earlier one built.
         if (installed) return { globalState, platform: installed };
         const sessions = yield* Sessions;
 

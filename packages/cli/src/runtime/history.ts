@@ -204,6 +204,9 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       ],
       { concurrency: 8 },
     );
+    if (!run && !config && conversation.length === 0 && !checkpointPresent) {
+      return null;
+    }
     // The model the run is on, as the view derives it for the listing too.
     const currentModel = config ? (run?.model ?? undefined) : undefined;
     // The same rule the listing applies, from the same facts: `status` is a
@@ -228,9 +231,6 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       })),
     );
 
-    if (!run && !config && conversation.length === 0 && !checkpointPresent) {
-      return null;
-    }
     return {
       id,
       status: standing.status,
