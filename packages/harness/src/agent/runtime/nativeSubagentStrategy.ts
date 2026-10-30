@@ -10,7 +10,6 @@ import { type RunReport } from '@agent/runtime/runReport';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { RegisterRunOptions } from '@agent/storage/runLifecycle';
 import {
   registryOf,
   type AgentRunServices,
@@ -22,6 +21,7 @@ import {
   type PreparedAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
+import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { emptyRunEndOutput, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { readRecipeResult } from './recipeResult';
@@ -63,10 +63,7 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
         /** A persisted child, resumed under its stored config with the
          *  parent its rows hold (`parent`), read as its run starts, under
          *  the claim its loop holds. */
-        readonly resume: Pick<
-          ExecuteAgentOptions,
-          'onRun' | 'onAdmitted' | 'tools'
-        > & {
+        readonly resume: Pick<ExecuteAgentOptions, 'onAdmitted' | 'tools'> & {
           readonly config: AgentConfig;
           readonly parent: Effect.Effect<RunId | undefined, Error>;
           readonly stopAfterCycle?: boolean;
@@ -81,8 +78,8 @@ export function createNativeSubagentStrategy(
     ? params.definition.config
     : params.resume.config;
   // A child's provider/runtime failure rides its report's `failure`
-  // (`runWithLifecycle` returns a terminal failed result rather than
-  // rejecting); a thrown call reaches `formatError` as its `err`.
+  // (`endRun` returns a terminal failed result rather than rejecting); a
+  // thrown call reaches `formatError` as its `err`.
   let lastResult: RunReport | undefined;
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (

@@ -380,6 +380,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               showProgressView: () => this.showProgressView(),
               globalState,
               presentLaunchedRun: (runId) => this.presentLaunchedRun(runId),
+              // The launcher is bound once the window has opened
+              // (`gui.runValidated` below): read when the setup assistant
+              // starts, not here.
+              launcher: () => this.runValidated,
               popOutToEditor: () => this.popOutToEditor(),
               showInSidebar: () => this.showInSidebar(),
               refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),

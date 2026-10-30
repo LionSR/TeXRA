@@ -343,7 +343,7 @@ describe(
           yield* lineage.release;
           yield* launched.reached;
           // Its generation holds the run here, not yet admitted.
-          expect(session.runs.get(runId)?.live).toBe(true);
+          expect(session.runs.get(runId)).toBeDefined();
 
           session.runs.stop(runId, {
             reason: 'user',

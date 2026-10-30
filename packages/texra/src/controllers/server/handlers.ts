@@ -122,9 +122,8 @@ export const runningTasks = Effect.fn('server.runningTasks')(function* (
   let running = 0;
   for (const session of (yield* projects.opened).values()) {
     const { runs } = session.view.current();
-    for (const { runId, live } of session.held())
-      if (live && (parked || runs.get(runId)?.status !== RUN_PHASE.WAITING))
-        running += 1;
+    for (const { runId } of session.held())
+      if (parked || runs.get(runId)?.status !== RUN_PHASE.WAITING) running += 1;
   }
   return running;
 });
@@ -135,7 +134,7 @@ export const runningTasks = Effect.fn('server.runningTasks')(function* (
  *  `ownedHere`, which a fork's rows also take). */
 function liveRoot(session: LocalSession, runId: RunId): RunId | null {
   const view: SessionView = session.view.current();
-  const live = (id: RunId) => session.held(id)?.live === true;
+  const live = (id: RunId) => session.held(id) !== undefined;
   if (!live(runId)) return null;
   let root = runId;
   for (

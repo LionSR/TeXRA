@@ -872,6 +872,13 @@ export function crashConformanceSuite(): void {
      * script awaits an `agent()` child of its own: a resume never launches
      * that child again for its call (I5).
      *
+     * A child the cut left unfinished (a turn accepted and not settled, or
+     * none begun) is a background run whose process died: the parent's
+     * resume finishes it, resuming an agent or a script under its own id,
+     * and ending a command with a notice that its outcome is unknown. A
+     * child left as the cut found it, never resumed and its parent never
+     * told, is the failure.
+     *
      * `elsewhere`: the parent's claim reads as another live process's while
      * the children settle, so each parks holding its result (`child.park`
      * `delivery`, a last turn not ended) in the batch that settles it. Once
@@ -948,12 +955,56 @@ export function crashConformanceSuite(): void {
                       row.commit > h.row.commit,
                   ),
               );
-            /** Every result read, every held child ended, and every child
-             *  the resume launched (a command it re-ran after its outcome
-             *  was unknown) settled. */
+            /** The root's children a cut at `n` left unfinished: a turn
+             *  accepted and not settled, or none begun and no end, in the
+             *  rows up to `n`. */
+            const cutShort = (rows: readonly Row[], n: number) =>
+              rows
+                .filter(
+                  (row) =>
+                    row.commit <= n &&
+                    row.type === 'run.start' &&
+                    row.parent === root,
+                )
+                .map((child) => child.run)
+                .filter((child) => {
+                  const before = rows.filter(
+                    (row) => row.run === child && row.commit <= n,
+                  );
+                  const turns = (phase: string) =>
+                    before.filter(
+                      (row) =>
+                        row.type === 'child.turn' && json(row).phase === phase,
+                    ).length;
+                  const accepted = turns('accepted');
+                  return (
+                    accepted > turns('settled') ||
+                    (accepted === 0 &&
+                      !before.some((row) => row.type === 'run.end'))
+                  );
+                });
+            /** Whether `child` settled a turn or ended after commit `after`. */
+            const finished = (
+              rows: readonly Row[],
+              child: string,
+              after: number,
+            ) =>
+              rows.some(
+                (row) =>
+                  row.run === child &&
+                  row.commit > after &&
+                  (row.type === 'run.end' ||
+                    (row.type === 'child.turn' &&
+                      json(row).phase === 'settled')),
+              );
+            /** Every result read, every held child ended, every child the
+             *  cut left unfinished finished after it, and every child the
+             *  resume launched (a command it re-ran after its outcome was
+             *  unknown) settled. */
             const quiet = (rows: readonly Row[], n: number) =>
               allRead(rows) &&
               unended(rows).length === 0 &&
+              cutShort(rows, n).every((child) => finished(rows, child, n)) &&
               rows
                 .filter(
                   (row) =>
@@ -961,15 +1012,7 @@ export function crashConformanceSuite(): void {
                     row.type === 'run.start' &&
                     row.parent === root,
                 )
-                .every((child) =>
-                  rows.some(
-                    (row) =>
-                      row.run === child.run &&
-                      (row.type === 'run.end' ||
-                        (row.type === 'child.turn' &&
-                          json(row).phase === 'settled')),
-                  ),
-                );
+                .every((child) => finished(rows, child.run, 0));
             const { points, clean } = yield* cleanPass(
               roots,
               (session) =>
@@ -1097,6 +1140,9 @@ export function crashConformanceSuite(): void {
                 unended(final).length === 0
                   ? null
                   : 'a child holding its last result never ended',
+                cutShort(prefix, n).every((child) => finished(final, child, n))
+                  ? null
+                  : 'a child the crash cut short was neither resumed nor reported',
                 twice('followup.queued').length === 0
                   ? null
                   : 'a child result was queued twice',

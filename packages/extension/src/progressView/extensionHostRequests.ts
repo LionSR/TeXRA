@@ -99,6 +99,7 @@ import {
   hostFailure,
   type HostCallFailed,
 } from '@texra/controllers/session/hostCallFailure';
+import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
   OwnHostRequest,
@@ -140,6 +141,10 @@ interface ExtensionHostRequestsOptions {
   showProgressView(): Effect.Effect<void, Error>;
   /** Select a run this window just launched (the run actions' `launched`). */
   presentLaunchedRun(runId: RunId): void;
+  /** The window's launcher (`HostRunActions.runValidated`), which the setup
+   *  assistant's run starts through; bound once the window has opened, so
+   *  read as that run starts. */
+  launcher(): HostRunActions['runValidated'];
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
   showInSidebar(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
@@ -472,7 +477,7 @@ export const createExtensionHostRequests = Effect.fn(
           launchSetupAssistant(
             roots,
             runSession,
-            (runId) => Effect.sync(() => options.presentLaunchedRun(runId)),
+            options.launcher(),
             options.showConnectModel(),
             options.showProgressView(),
           ),

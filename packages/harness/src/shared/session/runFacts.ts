@@ -6,19 +6,35 @@
  * finalized answer); and the rules for reading its pending input (the
  * `followup.queued` rows), stated once for the loop, the inbox and the view. The row handlers in `runState.ts` and
  * `turnRowHandlers.ts` set these fields, so the loop reads them off the
- * same state on the live path and on resume.
+ * same state on the live path and on resume. The lifecycle rows a run is
+ * registered, activated and ended with are built here too, beside the
+ * readers of their facts; `agent/storage/runLifecycle.ts` commits them.
  */
+import {
+  NO_APPROVAL_GRANTS,
+  type ApprovalGrants,
+} from '@shared/approvalBypassKind';
 import {
   type AggregateId,
   type DispatchFacts,
+  emptyRunEndOutput,
   type FollowUpContent,
   type JsonValue,
   qualifyAggregateId,
+  type RunEnd,
+  type RunEndOutput,
   type RunId,
+  type RunIdentity,
   type RunInput,
+  type RunOutcome,
+  type RunParent,
+  type RunProvenance,
   type SessionEvent,
+  type SessionEventDraft,
   STRUCTURED_OUTPUT_TOOL_NAME,
   type ToolResultPayload,
+  USER_FOLLOW_UP_SUPPORT,
+  type UserFollowUpSupport,
 } from '@shared/schemas';
 
 import {
@@ -30,8 +46,9 @@ import {
   type RunLookup,
   runRowsFrom,
 } from './runRows';
+import type { RunHistoryDraft, RunInputDraft } from './runState';
 import type { RunRows } from './runRowsShape';
-import type { PendingResponse } from './inFlight';
+import type { Invocation, PendingResponse } from './inFlight';
 
 /** What a run answers and produced, as its rows record it. */
 export type RunFacts = {
@@ -258,4 +275,121 @@ export function needsWake(input: RunRows, run: RunLookup): boolean {
       return end === null;
     },
   );
+}
+
+/** `invocation` once a clean close stopped its open attempt (a `run.position`
+ *  halt with reason `closed`): none, or one whose outcome a row recorded, is
+ *  as it was. */
+export function closedBy(invocation: Invocation | null): Invocation | null {
+  if (invocation === null || invocation.current.failed !== null)
+    return invocation;
+  return { ...invocation, current: { ...invocation.current, closed: true } };
+}
+
+/** What a run is registered with: the facts its `run.start` carries. */
+export interface RegisterRunOptions {
+  /** The launching run: the whole parent edge, stamped on `run.start`. */
+  readonly parentRunId?: RunId;
+  /** The parent's call that launched it, which owns this run until it
+   *  detaches, and that call's tool card. */
+  readonly parentCall?: NonNullable<RunParent['call']>;
+  /** The run's identity, declared by the launch site — the durable authority. */
+  readonly identity: RunIdentity;
+  /** Runtime behavior declared by the launch source, not UI visibility. */
+  readonly userFollowUpSupport?: UserFollowUpSupport;
+  /** The run's `run.description`, durable at birth: a child's
+   *  task label; a root's summary comes later as a second row. */
+  readonly description?: string;
+  /** Who wrote it: the model, unless a fork copies its user's title. */
+  readonly descriptionBy?: 'model' | 'user';
+  readonly provenance?: RunProvenance; // a fork's source and cut
+  readonly grants?: ApprovalGrants; // the grants it starts with
+  /** A fork's history, which its opening commits in place of a prompt
+   *  (`forkSeed`): the run is born on it, not resumed onto it. */
+  readonly seed?: readonly RunHistoryDraft[];
+}
+
+type RunConfigRow = Extract<SessionEventDraft, { readonly type: 'run.config' }>;
+
+/**
+ * The rows that register a run, in the order its batch commits them: a new
+ * run's (`born`) `run.start` first, then its configuration, its
+ * `run.activate` (a re-registration's with the grants it ends, `ended`),
+ * and the description it is born with.
+ */
+export function registrationDrafts(
+  runId: RunId,
+  config: RunConfigRow['config'],
+  options: RegisterRunOptions,
+  born: boolean,
+  ended: readonly SessionEventDraft[],
+): SessionEventDraft[] {
+  const target = qualifyAggregateId('run', runId);
+  const worktree = config.workingDirectory?.trim();
+  const rows: SessionEventDraft[] = [];
+  if (born)
+    rows.push({
+      type: 'run.start',
+      aggregateId: target,
+      identity: options.identity,
+      userFollowUpSupport:
+        options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+      worktree: worktree ? { workingDirectory: worktree } : undefined,
+      parent:
+        options.parentRunId === undefined
+          ? null
+          : { id: options.parentRunId, call: options.parentCall ?? null },
+      provenance: options.provenance ?? null,
+      approvalPolicy: options.grants ?? NO_APPROVAL_GRANTS,
+    });
+  rows.push(
+    { type: 'run.config', aggregateId: target, config },
+    { type: 'run.activate', aggregateId: target },
+  );
+  if (!born) rows.push(...ended);
+  if (options.description !== undefined)
+    rows.push({
+      type: 'run.description',
+      aggregateId: target,
+      description: options.description,
+      by: options.descriptionBy ?? 'model',
+    });
+  return rows;
+}
+
+/** A resume's activation rows: its `run.activate`, the grants it ends
+ *  (`ended`), and its configuration when that changed (`config`). */
+export function activationDrafts(
+  runId: RunId,
+  ended: readonly SessionEventDraft[],
+  config: RunConfigRow['config'] | null,
+): SessionEventDraft[] {
+  const target = qualifyAggregateId('run', runId);
+  const changed: RunConfigRow[] =
+    config === null
+      ? []
+      : [{ type: 'run.config', aggregateId: target, config }];
+  return [{ type: 'run.activate', aggregateId: target }, ...ended, ...changed];
+}
+
+/** The `run.end` row: the run's outcome, its error with the note of a last
+ *  turn whose delivery failed (`note`), and what it produced, or nothing. */
+export function runEndDraft(
+  runId: RunId,
+  end: {
+    readonly outcome: RunOutcome;
+    readonly error?: RunEnd['error'];
+    readonly note?: string;
+    readonly output?: RunEndOutput;
+  },
+): Extract<RunInputDraft, { readonly type: 'run.end' }> {
+  const { outcome, error, note } = end;
+  const message = error && [error.message, note].filter(Boolean).join('; ');
+  return {
+    type: 'run.end',
+    aggregateId: qualifyAggregateId('run', runId),
+    outcome,
+    ...(error && { error: { ...error, message } }),
+    output: end.output ?? emptyRunEndOutput(),
+  };
 }

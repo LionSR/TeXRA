@@ -1,5 +1,7 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
 
+import { basename } from 'node:path';
+
 import {
   DatabaseReadFailed,
   isRequestRefusal,
@@ -64,9 +66,35 @@ import {
   planCompileFixer,
   type CompileFixerPlanFailed,
 } from '../progressView/compileFixer';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type {
+  AgentConfig,
+  RequestEnsureProgressViewPayload,
+} from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'HostRunActions';
+
+/** The notice an editor host shows for a run this window launched when it
+ *  cannot reveal its progress view: the run, named by its agent, model and
+ *  files. */
+function launchNotice(
+  config: AgentConfig,
+): NonNullable<RequestEnsureProgressViewPayload['fallbackNotification']> {
+  const primaryInput = config.inputFiles[0];
+  const inputName = primaryInput ? basename(primaryInput) : 'selected input';
+  const { outputFiles } = config;
+  let outputInfo = '';
+  if (outputFiles.length > 1) {
+    outputInfo = `to ${outputFiles.length} files`;
+  } else if (outputFiles[0]) {
+    outputInfo = `to ${basename(outputFiles[0])}`;
+  }
+  return {
+    agentName: config.agent,
+    modelName: config.model,
+    inputName,
+    outputInfo,
+  };
+}
 
 /** The workflow toolbar's latexdiff over a run's outputs, as each host's
  *  diff command takes it. The run id is the whole request: the diff reads
@@ -284,6 +312,16 @@ export const createHostRunActions = Effect.fn(
     session.start({ config, ...options, interactive: true }).pipe(
       // A failure before the run opens has no row to show it.
       Effect.tapError((error) => presentRunFailure(ports.present, error)),
+      // An editor host brings its progress view into view for the run, or
+      // names the run in a notice when it cannot; a window whose surface
+      // is always on screen presents nothing.
+      Effect.tap(() =>
+        ports.present.emit(
+          'requestEnsureProgressView',
+          { fallbackNotification: launchNotice(config) },
+          { replayWhenAttached: true },
+        ),
+      ),
       Effect.tap(ports.launched),
       // Presentation reacts to the outcome the run committed; it never
       // runs inside the run, so it cannot change that outcome.
