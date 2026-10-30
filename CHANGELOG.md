@@ -1304,6 +1304,12 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A task interrupted by a crash is no longer held forever after the
+  network changes.** On macOS the computer's name follows the network (a
+  router-assigned name at home, `name.local` elsewhere), and a task whose
+  process stopped under one name was treated as running on another
+  computer: it was never shown as interrupted and could not be resumed.
+  TeXRA now identifies the process itself, not the computer's name.
 - **A model request cut off by a crash counts against its retries.** When
   the process died while a model request was running (for example, a
   response that ran it out of memory), every reopen sent the request again

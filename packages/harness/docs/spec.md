@@ -641,12 +641,11 @@ lock, and the transaction runs again with that verdict
 `DatabaseClaimRefused`, and so does an unprovable one on every other path
 (`controllers/session/storeAside.ts:79-83`).
 
-Liveness is proven from the owner identity alone, with no clock
-(`agent/storage/leaseOwnerLiveness.ts:42-90`):
+Liveness is proven from the owner's pid and start identity alone, with no clock
+and no hostname (`agent/storage/leaseOwnerLiveness.ts:40-90`):
 
 | Observed                                     | Verdict      |
 | -------------------------------------------- | ------------ |
-| owner recorded on another host               | `unprovable` |
 | `kill(pid, 0)` reports `ESRCH`               | `dead`       |
 | pid exists, start identity equals the record | `alive`      |
 | pid exists, start identity differs           | `dead`       |
