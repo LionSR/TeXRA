@@ -361,7 +361,7 @@ export const closeLeftoverChildren = Effect.fn('closeLeftoverChildren')(
     yield* session.log.settled;
     const { runs } = yield* session.view.read([]);
     for (const child of runs.values()) {
-      if (child.parentId !== runId || session.runs.get(child.id)?.live === true)
+      if (child.parentId !== runId || session.runs.get(child.id) !== undefined)
         continue;
       const facts = yield* session.log.facts(child.id);
       if (facts === null || !cutShort(facts)) continue;
