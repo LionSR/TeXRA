@@ -11,7 +11,6 @@ import {
   Schema,
   Stream,
 } from 'effect';
-import type { TeamPreset } from '@common/teams/TeamPlan';
 import { AgentSourceSchema } from '@shared/schemas';
 import type { SettingsCatalog } from '@shared/state/stateSettings';
 
@@ -221,11 +220,16 @@ export interface AgentDirectoriesPort {
     FileSystem.FileSystem
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
-  /** The team presets a workspace offers, built-in and its own, read from its
-   *  repository state; absent, the app has no teams. */
-  readonly teams?: (
+  /**
+   * The agent names a workspace's team lists, read from its repository state;
+   * `undefined` for a team id the workspace has no team of. The app owns what
+   * a team is; the harness only stores a selection naming one by id. Absent,
+   * the app has no teams.
+   */
+  readonly teamMembers?: (
     repoState: StateStore,
-  ) => Effect.Effect<readonly TeamPreset[], StateReadFailed>;
+    teamId: string,
+  ) => Effect.Effect<readonly string[] | undefined, StateReadFailed>;
   /**
    * The packaged resources root a host ships its bundled agents under,
    * the tool plugins' agent directories among them. Absent where none ships:

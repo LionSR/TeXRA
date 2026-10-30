@@ -11,7 +11,7 @@ import type { StateStore } from '@platform/interfaces';
 import { agentMatchesIdentifier } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
-import { workspaceTeams } from '@texra/shared/agentTeams';
+import { teamMembers } from '@texra/shared/agentTeams';
 
 const agents: WorkspaceAgentsEntry[] = [
   { source: 'builtIn', name: 'write' },
@@ -28,7 +28,7 @@ function controller(
   return new WorkspaceAgentsController({
     repoState: workspaceState,
     globalState: new FakeStateStore(),
-    teams: workspaceTeams,
+    teamMembers,
     getAgents,
     resolveAgent: (identifier) =>
       getAgents().find((entry) => agentMatchesIdentifier(entry, identifier)),

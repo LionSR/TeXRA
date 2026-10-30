@@ -62,7 +62,6 @@ export {
   type WorkspaceAgentsControllerDeps,
   type WorkspaceAgentsEntry,
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
-export * from '@common/teams/TeamPlan';
 export type { AgentDelegationScope } from '@shared/schemas';
 export {
   AgentCustomizeRefused,

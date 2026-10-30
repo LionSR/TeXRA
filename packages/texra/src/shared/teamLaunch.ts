@@ -1,24 +1,23 @@
 /**
  * Team launch: whether a planned team can run, how available it is, the
- * picker rows the hosts show for it, and the fields a launch carries. The
- * harness plans a team (`planTeamRun`); what the plan means to a person is
- * TeXRA's.
+ * picker rows the hosts show for it, and the fields a launch carries, over
+ * the plan `planTeamRun` makes.
  */
 
 // Third-party imports
 import { String as Str } from 'effect';
+import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
+import { agentKeyOf, type AgentSource } from '@texra-ai/harness/schemas';
+import type { TeamPreset } from '@texra/shared/agentTeams';
+import type { TeamOptionData } from '@texra/shared/pickerOptions';
 import {
   findTeamPreset,
   planTeamRun,
-  type AgentDelegationScope,
   type TeamCatalogAgent,
-  type TeamPreset,
   type TeamRunOptions,
   type TeamRunPlan,
-} from '@texra-ai/harness/host';
-import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
-import { agentKeyOf, type AgentSource } from '@texra-ai/harness/schemas';
-import type { TeamOptionData } from '@texra/shared/pickerOptions';
+} from '@texra/shared/teamPlan';
+import type { AgentDelegationScope } from '@texra-ai/harness/host';
 
 export function planTeamRuns<T extends TeamCatalogAgent>(
   presets: readonly TeamPreset[],

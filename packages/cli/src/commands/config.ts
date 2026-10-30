@@ -8,6 +8,7 @@ import { Effect } from 'effect';
 
 import { agentKeyOf } from '@texra-ai/harness/schemas';
 
+import { workspaceTeams } from '@texra/shared/agentTeams';
 import {
   CliUsageError,
   failUsage,
@@ -48,9 +49,9 @@ function formatConfigValue(value: unknown): string {
 }
 
 /**
- * The agent list refuses an unknown or non-built-in team id in its own right; the
- * command reports that refusal as a usage error (exit 2) and leaves every
- * other write failure to the top-level handler.
+ * The agent list refuses an unknown team id in its own right; the command
+ * reports that refusal as a usage error (exit 2) and leaves every other write
+ * failure to the top-level handler.
  */
 function asTeamUsageError<E>(error: E): E | CliUsageError {
   return error instanceof InvalidAgentTeamError
@@ -141,6 +142,16 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
     }
     const defaultTeamId = input.defaultTeam;
     if (defaultTeamId) {
+      // Only a built-in team can be the user default: a saved team belongs to
+      // one workspace.
+      const team = (yield* workspaceTeams(roots.repoState)).find(
+        (preset) => preset.id === defaultTeamId,
+      );
+      if (team && team.source !== 'built-in') {
+        return yield* failUsage(
+          `Only a built-in team can be the user default: ${defaultTeamId}`,
+        );
+      }
       yield* workspaceAgents
         .setDefaultTeam(defaultTeamId)
         .pipe(Effect.mapError(asTeamUsageError));
