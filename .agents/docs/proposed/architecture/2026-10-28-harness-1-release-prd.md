@@ -404,6 +404,8 @@ TeXRA 强在耐久性（重试预算按行计、子结果与父投递同一事�
 
 三条线都比上表小。先后顺序待定：三者与负责人另一会话正在改的区域（#14453 刚动 `sessionStore.ts`、`sessionLayer.ts`）重叠，`SessionHandle` 一片要动 42 个源文件与 36 个测试文件，并行会再撞冲突。
 
+负责人 2026-10-30 定按推荐顺序执行。线 7 第一片（团队移出 harness）开为 #14462。实施时修正了上面对比稿的一个前提：harness 并非从不读团队。`AgentCatalog.visible` 要把存储的 `{ kind: 'team', teamId }` 选择（以及经默认团队的 `inherit`）解析成成员名，所以端口不能整删，收成一个函数 `AgentDirectoriesPort.teamMembers(repoState, teamId)`，返回成员名或 `undefined`；比较过收窄成 `{ id, agents }[]` 列表（harness 仍保留三处查找，控制器的 `allPresets` 返回应用选择器画不出的类型）和改存成员键（格式变化，且丢掉“成员出现即激活”与“保存团队改动到达每个工作区”），都否。其余团队词汇全部归应用：`TeamPreset` 从应用的 preset schema 派生、`findTeamPreset`、`planTeamRun`、`applyTeam`（设置视图与 `apply_team` 工具共用）、“只有内置团队能当默认”的规则在能输入自定义 id 的唯一入口（`texra config --default-team`）检查。控制器删 `allPresets`、`applyTeam`、`resolveAgent` 转发，选择解析收成一处。`./host` 导出 188 → 182；file-size、pass-through（两份）、explicit-module-boundary-types、entry-files 五个基线下降；无存储或线上格式变化。
+
 ## 基线整合后的交付和删除要求
 
 | 阶段               | 代码范围与交付                                                                    | 需要删除或消除的内容                                                                                                                        | 完成门槛                                                                    |
