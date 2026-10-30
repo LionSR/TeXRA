@@ -14,16 +14,14 @@
  * underlying filesystem reports (`SystemError`, matched by `reason._tag`).
  */
 
-// Node imports
-import { platform } from 'node:process';
-
 // Third-party imports
 import { Effect, FileSystem, Path, PlatformError, Stream } from 'effect';
-import { Glob, type GlobOptions } from 'glob';
 
 // Local imports
 import { isPathWithin } from '@utils/core/pathCore';
 import { readDirectoryTyped, writeFileAtomic } from './fsDurability';
+
+import type { Glob, GlobOptions } from 'glob';
 
 const MODULE = 'RootedFileSystem';
 
@@ -59,7 +57,7 @@ export interface RootedFileSystem extends FileSystem.FileSystem {
     target: string,
     data: Uint8Array,
   ) => Effect.Effect<void, PlatformError.PlatformError>;
-  /** Directory entries with the type of each, one `stat` per entry. */
+  /** Directory entries with the type of each, from one typed listing. */
   readonly readDirectoryTyped: (
     target: string,
   ) => Effect.Effect<
@@ -97,23 +95,6 @@ function resolverFor(root: string | undefined, path: Path.Path) {
         : Effect.succeed(resolved);
     });
 }
-
-/**
- * The options Node's `fs.glob` compiles a pattern with (`createMatcher` in
- * `lib/internal/fs/glob.js`). Effect's Node `FileSystem.glob` delegates to
- * `fs.glob`, whose matcher is its bundled minimatch; `glob`'s `Glob`
- * compiles with the same minimatch release line, so given these options it
- * produces the segment matchers the walker will run.
- */
-const NODE_GLOB_MATCHER_OPTIONS = {
-  nocase: platform === 'win32' || platform === 'darwin',
-  windowsPathsNoEscape: true,
-  nonegate: true,
-  nocomment: true,
-  optimizationLevel: 2,
-  platform,
-  nocaseMagicOnly: true,
-} as const;
 
 type CompiledGlobSegment = Glob<GlobOptions>['patterns'][number];
 
@@ -243,46 +224,6 @@ export function rootedFileSystem(
     copy: (from, to, options) =>
       onPair('copy', (a, b) => fs.copy(a, b, options))(from, to),
     copyFile: (from, to) => onPair('copyFile', fs.copyFile)(from, to),
-    // Confined like every other method: no compiled alternative of the
-    // pattern may be absolute or have a segment matching `..`, and every
-    // match must still resolve under the root. A symlinked directory inside
-    // the root is followed, as a read through it would be.
-    glob: Effect.fn('rootedFileSystem.glob')(function* (pattern, options) {
-      const resolvedRoot = yield* inRoot('glob', options?.root);
-      const escaping = yield* Effect.try({
-        try: () =>
-          globEscape(
-            new Glob(pattern, {
-              ...NODE_GLOB_MATCHER_OPTIONS,
-              cwd: resolvedRoot,
-            }).patterns,
-          ),
-        catch: (cause) =>
-          PlatformError.badArgument({
-            module: MODULE,
-            method: 'glob',
-            description: `pattern does not compile: ${pattern}`,
-            cause,
-          }),
-      });
-      if (escaping !== undefined) {
-        return yield* PlatformError.badArgument({
-          module: MODULE,
-          method: 'glob',
-          description: `pattern escapes the root ${root}: ${escaping}`,
-        });
-      }
-      const matches = yield* fs.glob(pattern, {
-        ...options,
-        root: resolvedRoot,
-      });
-      yield* Effect.forEach(
-        matches,
-        (match) => at('glob', path.resolve(resolvedRoot, match)),
-        { concurrency: 8, discard: true },
-      );
-      return matches;
-    }),
     link: (from, to) => onPair('link', fs.link)(from, to),
     lstat: on('lstat', fs.lstat),
     makeDirectory: (target, options) =>
@@ -311,6 +252,11 @@ export function rootedFileSystem(
       on('readDirectory', (resolved) => fs.readDirectory(resolved, options))(
         target,
       ),
+    // `FileSystem.make` derives `glob` from this listing, `stat` and
+    // `readLink`, so a glob walks only confined paths: a pattern that leaves
+    // the root (through `..` or an absolute path) fails with `BadArgument`
+    // when the walk reaches it.
+    readDirectoryEntries: on('readDirectoryEntries', fs.readDirectoryEntries),
     readFile: on('readFile', fs.readFile),
     readLink: on('readLink', fs.readLink),
     realPath: on('realPath', fs.realPath),

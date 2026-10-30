@@ -275,12 +275,15 @@ describe('wakeRun', () => {
         const decide = vi.fn(() => Effect.succeed(false));
         const ended = vi
           .spyOn(runLifecycle, 'finalizeRun')
-          .mockReturnValue(Effect.succeed({ recorded: true }));
+          .mockReturnValue(Effect.succeed({ end: null, wrote: false }));
 
         const woken = yield* wakeRun(runId, session).pipe(
           withResumePort(decide),
         );
-        session.runs.stop(runId, { reason: 'user' });
+        session.runs.stop(runId, {
+          reason: 'user',
+          detachActiveChildren: false,
+        });
         yield* woken;
 
         expect(decide).not.toHaveBeenCalled();
@@ -288,6 +291,7 @@ describe('wakeRun', () => {
           runId,
           outcome: 'cancelled',
           ownerless: true,
+          stopped: true,
         });
       }),
   );

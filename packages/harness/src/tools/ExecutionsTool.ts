@@ -22,7 +22,6 @@ import {
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { Runs } from '@agent/runtime/runRegistry';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { StorageFs } from '@platform/rootedFs';
@@ -464,11 +463,9 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
     return yield* Effect.fail(new ToolError(killDenial));
   }
 
-  const detachActiveChildren = yield* detachSubagentsOnStop(
-    context.session.roots,
-  );
+  // Its children follow the session's stop policy (`RunRegistry.stop`).
   const success = yield* Effect.suspend(() => {
-    const stop = runs.stop(runId, { detachActiveChildren, reason: 'user' });
+    const stop = runs.stop(runId, { reason: 'user' });
     // Asked after the settlement: a detaching stop interrupts the run
     // only once its children have left it, so that is when it knows
     // whether a live target took the stop.

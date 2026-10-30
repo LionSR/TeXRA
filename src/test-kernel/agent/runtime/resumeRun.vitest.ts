@@ -30,7 +30,9 @@
  * - every caller of a resume leaving before admission leaves the resume
  *   running with no owner, which then activates the run;
  * - a message sent while a resume decides only watches that resume, so the
- *   resume's caller leaving loses the wake.
+ *   resume's caller leaving loses the wake;
+ * - a run whose process died before its title was written stays untitled
+ *   after its resume, or a resume titles it a second time.
  */
 import '@test/support/sessionGraphTestSetup';
 
@@ -275,8 +277,10 @@ describe(
       'a run a live process elsewhere holds is refused before the host rearranges',
       () =>
         Effect.gen(function* () {
+          // A live pid (this process's parent) whose start identity was
+          // never read: no proof finds it dead.
           const { session, runId, storage } = yield* parkedRunAfterCrash({
-            owner: JSON.stringify(['other-host', 4321, 'start-1']),
+            owner: JSON.stringify(['other-host', process.ppid, null]),
           });
 
           expect(yield* resume(runId, { session })).toEqual({
@@ -441,6 +445,24 @@ describe(
             ),
           );
         }),
+    );
+
+    it.live('a run the crash left untitled is titled once by its resume', () =>
+      Effect.gen(function* () {
+        // The title is lost with the killed process: its write fails.
+        const faults = yield* sessionStoreFaults(testWorkspaceRoots().storage);
+        yield* faults.failNext('appendAll', 'run.description');
+        const { session, runId, storage } = yield* parkedRunAfterCrash();
+        const titles = () =>
+          storedRows(storage).filter(
+            (row) => row.run === runId && row.type === 'run.description',
+          );
+        expect(titles()).toEqual([]);
+
+        expect(yield* resume(runId, { session })).toMatchObject(ACTIVATED);
+        yield* untilStored(storage, () => titles().length > 0);
+        expect(titles()).toHaveLength(1);
+      }),
     );
   },
 );

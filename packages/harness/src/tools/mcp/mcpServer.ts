@@ -43,7 +43,10 @@ import type { LoadedPluginTools } from './mcpConfig';
 
 const CHANNEL = 'mcp';
 
-/** The protocol revision the harness speaks; a server answers its own. */
+/** The protocol revision the harness asks for. A server that does not speak
+ *  it answers with its own, which is accepted: effect/ai's McpClient fails
+ *  any answer but the revision it asked for, so a server on an older one
+ *  would start with no tools. */
 const PROTOCOL_VERSION = '2025-06-18';
 const START_TIMEOUT = Duration.seconds(30);
 const CALL_TIMEOUT = Duration.seconds(60);
@@ -193,7 +196,6 @@ function mcpTool(
       // `type`, and a tool's arguments are always an object.
       parameters: { ...listed.inputSchema, type: 'object' },
     },
-    requiresApproval: true,
     slow: true,
     // A server tool re-runs after an interruption only when its server calls
     // it read-only or idempotent: a repeat changes nothing either way.
@@ -299,6 +301,12 @@ const connect = (config: McpServerConfig) =>
         ),
       onRequest: (method) =>
         method === 'ping' ? Effect.succeed({}) : undefined,
+      // A stopped run or a timed-out call stops the server's work too. The
+      // protocol forbids cancelling `initialize`.
+      cancel: (id, method) =>
+        method === 'initialize'
+          ? undefined
+          : ['notifications/cancelled', { requestId: id }],
     });
     // Once its output is read ('exit' can precede it), fail what waits on
     // the process with its exit code. Its stderr (which may hold credentials)

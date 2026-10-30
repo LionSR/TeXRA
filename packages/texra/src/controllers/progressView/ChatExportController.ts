@@ -1,37 +1,21 @@
 /**
- * Chat export orchestration controller.
- *
- * Owns run loading, export input construction, formatter selection,
- * storage writes, HTML asset staging, and LaTeX compilation. The progress-view
- * toolbar (`EXPORT_TRANSCRIPT`) is the GUI caller; the CLI's
- * `texra history --export` shares the same loaders and formatters. Hosts
- * perform only UI actions (opening a file, showing a message, opening a
- * browser).
- *
- * Not a Settings History leftover: that tab was retired. Do not delete this
- * writer as part of settings-view cleanup.
- *
- * This module is VS Code-free: all platform wiring lives in the caller. The
- * LaTeX document preamble is a host-supplied asset (the `.tex` template lives
- * under the extension's `resources/`), so the host injects it via the
- * constructor instead of the controller importing `@resources`.
+ * Write a transcript in the chosen format. The GUI loads this module only
+ * after a format is selected, keeping formatters and the LaTeX compiler out
+ * of window startup. File opening and notices belong to the caller.
  */
 
+// Node imports
 import * as path from 'node:path';
 
-import { Effect, FileSystem, type PlatformError } from 'effect';
+// Third-party imports
+import { Effect, FileSystem } from 'effect';
 
-import {
-  StorageFs,
-  type AssembleTraceResult,
-  type WorkspaceFs,
-  pathToLocationIn,
-} from '@texra-ai/harness/host';
+// Local imports - export data and storage
+import { Rejected } from '@texra-ai/harness';
+import { StorageFs, pathToLocationIn } from '@texra-ai/harness/host';
 import { absentReason, readNormalizedFile } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { compileLatex2Pdf } from '@latex/texTools';
-import type { ChatExportInput } from '@texra/agent/export/schemas';
-
 import { formatChatAsMarkdown } from '@texra/agent/export/chatExport/markdownSpec';
 import { formatChatAsLatex } from '@texra/agent/export/chatExport/latexSpec';
 import { generateExportFilename } from '@texra/agent/export/chatExport/filenames';
@@ -41,44 +25,13 @@ import type {
 } from '@texra/agent/export/loadChatExportInput';
 import type { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
-
 import { TranscriptExportFailed } from './transcriptExportFailure';
 import type { WorkspaceRoots } from '@texra-ai/harness';
+import type { AssembleTraceResult } from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-/** Outcome of loading run data for export. */
-export type ExportInputStatus =
-  'ok' | 'config_missing' | 'conversation_missing';
-
-type ExportInputResult =
-  | { readonly status: 'ok'; readonly exportInput: ChatExportInput }
-  | { readonly status: Exclude<ExportInputStatus, 'ok'> };
-
-interface ChatExportResult {
-  /** Storage-relative path to the exported file. */
-  readonly storagePath: string;
-  /** Absolute filesystem path to the exported file. */
-  readonly absolutePath: string;
-}
-
-interface LatexExportResult extends ChatExportResult {
-  /** Absolute path to the compiled PDF, or undefined if compilation failed. */
-  readonly pdfPath?: string;
-  /** Tail of the LaTeX compile log, present when compilation failed. */
-  readonly logTail?: string;
-}
-
-/** `assembleTrace`'s failure statuses, re-surfaced for the HTML export path. */
-type HtmlExportStatus = Exclude<AssembleTraceResult['status'], 'ok'>;
-
-export type HtmlExportOutcome =
-  | { readonly status: 'ok'; readonly result: ChatExportResult }
-  | { readonly status: HtmlExportStatus };
-
-/** The host-supplied trace-viewer bundle is unusable. The tag carries the
- *  minted error as its own cause, so a dialog wording `cause` reads exactly
- *  the sentence the bare `Error` carried here before. */
+/** The host-supplied trace-viewer bundle is unusable. Preserve its own
+ *  message as the cause a host presents. */
 function bundleFailure(
   message: string,
 ): Effect.Effect<never, TranscriptExportFailed> {
@@ -91,232 +44,130 @@ function bundleFailure(
   );
 }
 
-/** The run records an export reads: from this process's session
- *  (`openGuiWindow`), or from the service that holds the run. */
-interface ChatExportRecords {
-  /** The run's setup and assembled export input (`loadChatExportInput`). */
-  readonly input: (
-    runId: RunId,
-  ) => Effect.Effect<
-    Pick<ChatExportLoadResult, 'config' | 'exportInput'>,
-    ChatExportInputUnreadable | TaskRecordsFailed
-  >;
-  /** The run's static trace, for the HTML export. */
-  readonly trace: (runId: RunId) => Effect.Effect<AssembleTraceResult, Error>;
-}
+/** Write one export beneath its run's storage directory. */
+const writeExport = Effect.fn('writeTranscript.writeExport')(function* (
+  runId: RunId,
+  filename: string,
+  content: string,
+) {
+  const storagePath = `executions/${runId}/${filename}`;
+  const storageFs = yield* StorageFs;
+  yield* storageFs.makeDirectory(`executions/${runId}`, { recursive: true });
+  yield* storageFs.writeFile(storagePath, new TextEncoder().encode(content));
+  return {
+    storagePath,
+    absolutePath: yield* storageFs.resolve(storagePath),
+  };
+});
 
-interface ChatExportControllerDeps {
-  /**
-   * LaTeX document preamble prepended to `.tex` exports. Host-supplied because
-   * the template lives under the extension's `resources/` tree.
-   */
-  readonly latexPreamble: string;
-  readonly roots: WorkspaceRoots;
-  readonly records: ChatExportRecords;
-}
+/**
+ * Load the run's records, write its transcript, and compile a LaTeX export.
+ * Missing records reject with the reason the surface presents. A failed
+ * compilation preserves the written source and its log for the caller.
+ */
+export const writeTranscript = Effect.fn('writeTranscript')(function* (
+  runId: RunId,
+  format: 'html' | 'md' | 'tex',
+  options: {
+    readonly roots: WorkspaceRoots;
+    /** The preamble is a host asset, independent of its installation path. */
+    readonly latexPreamble: string;
+    readonly templatePath: string;
+    /** Records come from the local session or the service that owns it. */
+    readonly records: {
+      readonly input: (
+        runId: RunId,
+      ) => Effect.Effect<
+        Pick<ChatExportLoadResult, 'config' | 'exportInput'>,
+        ChatExportInputUnreadable | TaskRecordsFailed
+      >;
+      readonly trace: (
+        runId: RunId,
+      ) => Effect.Effect<AssembleTraceResult, Error>;
+    };
+  },
+) {
+  if (format === 'html') {
+    const traceResult = yield* options.records.trace(runId).pipe(
+      Effect.mapError(
+        (cause) =>
+          new TranscriptExportFailed({
+            step: 'assembleTrace',
+            message: toErrorMessage(cause),
+            cause,
+          }),
+      ),
+    );
+    if (traceResult.status !== 'ok')
+      return yield* new Rejected({
+        reason: {
+          config_missing: 'This run has no saved data to export.',
+          streamLogs_missing:
+            'No transcript was saved for this run, so there is nothing to export. Try exporting a more recent run.',
+        }[traceResult.status],
+      });
+    const { trace, record } = traceResult;
 
-export class ChatExportController {
-  private readonly deps: ChatExportControllerDeps;
-  constructor(deps: ChatExportControllerDeps) {
-    this.deps = deps;
+    // The bundle path is absolute and host-supplied, so the process
+    // filesystem reads it. Missing bundles give the host a rebuild hint.
+    const fs = yield* FileSystem.FileSystem;
+    if (!path.isAbsolute(options.templatePath))
+      return yield* bundleFailure(
+        `Trace-viewer standalone bundle path must be absolute: ${options.templatePath}`,
+      );
+    const template = yield* readNormalizedFile(fs, options.templatePath).pipe(
+      Effect.catchIf(absentReason, () =>
+        bundleFailure(
+          `Trace-viewer standalone bundle missing at ${options.templatePath}: ` +
+            'rebuild the extension (npm run package:fast) so packages/trace-viewer builds.',
+        ),
+      ),
+    );
+    const html = injectStandaloneTrace(template, trace);
+    const filename = generateExportFilename(
+      {
+        // The assembler guarantees a non-empty document; the creation
+        // row, when present, supplies the original launch time.
+        timestamp: new Date(
+          (
+            trace.events.find((event) => event.type === 'run.start') ??
+            trace.events[0]!
+          ).at,
+        ).toISOString(),
+        config: record,
+      },
+      'html',
+    );
+    return { ...(yield* writeExport(runId, filename, html)), format };
   }
 
-  /**
-   * Load run data and construct the format-agnostic {@link ChatExportInput}.
-   *
-   * Returns a discriminated status so the caller can show the right error
-   * message for each missing piece without coupling to storage details.
-   * Thin wrapper around the shared `loadChatExportInput` loader, which
-   * also backs the CLI's `readCliHistoryExportInput`: so both hosts read,
-   * validate, and assemble export input identically (including treating a
-   * stored-but-empty conversation array as absent, not present).
-   */
-  readonly buildExportInput = Effect.fn(
-    'ChatExportController.buildExportInput',
-  )(function* (
-    this: ChatExportController,
-    runId: RunId,
-  ): Effect.fn.Return<
-    ExportInputResult,
-    ChatExportInputUnreadable | TaskRecordsFailed
-  > {
-    const { config, exportInput } = yield* this.deps.records.input(runId);
+  const { config, exportInput } = yield* options.records.input(runId);
+  if (!config)
+    return yield* new Rejected({
+      reason: 'This run has no saved data to export.',
+    });
+  if (!exportInput)
+    return yield* new Rejected({
+      reason: 'No conversation was saved for this run.',
+    });
 
-    if (!config) {
-      return { status: 'config_missing' };
-    }
-
-    if (!exportInput) {
-      return { status: 'conversation_missing' };
-    }
-
-    return { status: 'ok', exportInput };
-  });
-
-  /**
-   * Format and write a Markdown export.
-   */
-  readonly exportAsMarkdown = Effect.fn(
-    'ChatExportController.exportAsMarkdown',
-  )(function* (
-    this: ChatExportController,
-    runId: RunId,
-    exportInput: ChatExportInput,
-  ): Effect.fn.Return<
-    ChatExportResult,
-    PlatformError.PlatformError,
-    StorageFs
-  > {
-    return yield* this.writeExport(
-      runId,
-      generateExportFilename(exportInput, 'md'),
-      formatChatAsMarkdown(exportInput),
-    );
-  });
-
-  /**
-   * Format, write, and compile a LaTeX export.
-   *
-   * Stores the `.tex` source and runs `pdflatex` / `latexmk` on it.
-   * Returns the compiled PDF path when compilation succeeds so the caller
-   * can decide whether to open the PDF or fall back to the `.tex` source.
-   */
-  readonly exportAsLatex = Effect.fn('ChatExportController.exportAsLatex')(
-    function* (
-      this: ChatExportController,
-      runId: RunId,
-      exportInput: ChatExportInput,
-    ): Effect.fn.Return<
-      LatexExportResult,
-      PlatformError.PlatformError,
-      FileSystem.FileSystem | StorageFs | WorkspaceFs | ChildProcessSpawner
-    > {
-      const { storagePath, absolutePath } = yield* this.writeExport(
-        runId,
-        generateExportFilename(exportInput, 'tex'),
-        formatChatAsLatex(exportInput, this.deps.latexPreamble),
-      );
-
-      const compiled = yield* compileLatex2Pdf(
-        pathToLocationIn(this.deps.roots.workspace, absolutePath),
-        this.deps.roots,
-      );
-
-      return {
-        storagePath,
-        absolutePath,
-        pdfPath: compiled.ok ? compiled.pdfPath : undefined,
-        logTail: compiled.ok ? undefined : compiled.logTail,
-      };
-    },
+  const result = yield* writeExport(
+    runId,
+    generateExportFilename(exportInput, format),
+    format === 'md'
+      ? formatChatAsMarkdown(exportInput)
+      : formatChatAsLatex(exportInput, options.latexPreamble),
   );
+  if (format === 'md') return { ...result, format };
 
-  /**
-   * Assemble the run's trace and embed it into the trace-viewer's
-   * single-file standalone bundle: the same faithful Progress View replay
-   * the CLI's `--export html` produces, not the retired hand-written
-   * chat-bubble exporter. Single file, no separate `assets/` folder: it
-   * opens correctly straight from disk (`file://`) with no server, which
-   * matters here because `vscode.env.openExternal` hands the result to the
-   * OS's default handler for the file, not a served URL.
-   */
-  readonly exportAsHtml = Effect.fn('ChatExportController.exportAsHtml')(
-    function* (
-      this: ChatExportController,
-      runId: RunId,
-      standaloneTemplatePath: string,
-    ): Effect.fn.Return<
-      HtmlExportOutcome,
-      PlatformError.PlatformError | TranscriptExportFailed,
-      FileSystem.FileSystem | StorageFs
-    > {
-      const traceResult = yield* this.deps.records.trace(runId).pipe(
-        Effect.mapError(
-          (cause) =>
-            new TranscriptExportFailed({
-              step: 'assembleTrace',
-              message: toErrorMessage(cause),
-              cause,
-            }),
-        ),
-      );
-      if (traceResult.status !== 'ok') {
-        return { status: traceResult.status };
-      }
-      const { trace, record } = traceResult;
-
-      // The bundle path is host-supplied and absolute, so it is the process
-      // filesystem's, not a rooted view's. A relative path would resolve
-      // against cwd, so require an absolute one: a relative argument must not
-      // silently retarget. A missing bundle, or one whose parent is not a
-      // directory, is a rebuild hint, not a failure.
-      const fs = yield* FileSystem.FileSystem;
-      if (!path.isAbsolute(standaloneTemplatePath)) {
-        return yield* bundleFailure(
-          `Trace-viewer standalone bundle path must be absolute: ${standaloneTemplatePath}`,
-        );
-      }
-      const template = yield* readNormalizedFile(
-        fs,
-        standaloneTemplatePath,
-      ).pipe(
-        Effect.catchIf(absentReason, () =>
-          bundleFailure(
-            `Trace-viewer standalone bundle missing at ${standaloneTemplatePath}: ` +
-              'rebuild the extension (npm run package:fast) so packages/trace-viewer builds.',
-          ),
-        ),
-      );
-      const html = injectStandaloneTrace(template, trace);
-
-      const filename = generateExportFilename(
-        {
-          // The creation row's publish clock is the run's launch time. Found
-          // by type rather than by position: an aggregate always opens with
-          // `run.start`, but that ordering is another file's invariant, and
-          // the assembler only guarantees the document is non-empty.
-          timestamp: new Date(
-            (
-              trace.events.find((event) => event.type === 'run.start') ??
-              trace.events[0]!
-            ).at,
-          ).toISOString(),
-          config: record,
-        },
-        'html',
-      );
-      return {
-        status: 'ok',
-        result: yield* this.writeExport(runId, filename, html),
-      };
-    },
+  const compiled = yield* compileLatex2Pdf(
+    pathToLocationIn(options.roots.workspace, result.absolutePath),
+    options.roots,
   );
-
-  /** Write an export payload into the run's storage directory. */
-  private readonly writeExport = Effect.fn('ChatExportController.writeExport')(
-    function* (
-      this: ChatExportController,
-      runId: RunId,
-      filename: string,
-      content: string,
-    ): Effect.fn.Return<
-      ChatExportResult,
-      PlatformError.PlatformError,
-      StorageFs
-    > {
-      const storagePath = `executions/${runId}/${filename}`;
-      const storageFs = yield* StorageFs;
-      yield* storageFs.makeDirectory(`executions/${runId}`, {
-        recursive: true,
-      });
-      yield* storageFs.writeFile(
-        storagePath,
-        new TextEncoder().encode(content),
-      );
-      return {
-        storagePath,
-        absolutePath: yield* storageFs.resolve(storagePath),
-      };
-    },
-  );
-}
+  return {
+    ...result,
+    format,
+    pdfPath: compiled.ok ? compiled.pdfPath : undefined,
+    logTail: compiled.ok ? undefined : compiled.logTail,
+  };
+});

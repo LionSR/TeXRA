@@ -23,6 +23,7 @@ import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import type { ITool } from '@agent/core/tools/ToolTypes';
+import { asksApproval } from '@agent/runtime/agentToolResolution';
 
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
@@ -69,7 +70,7 @@ function admitTools(
   canAsk: boolean,
 ): Effect.Effect<void, ToolsRefused> {
   const needApproval = tools
-    .filter((tool) => tool.requiresApproval)
+    .filter(asksApproval)
     .map((tool) => tool.definition.name);
   return needApproval.length > 0 && !canAsk
     ? Effect.fail(

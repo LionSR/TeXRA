@@ -26,7 +26,7 @@ import { scriptChildBudget } from '@agent/runtime/childRunBudget';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { getRunRecords } from '@agent/storage/runRecords';
-import { requireToolRun } from '@agent/runtime/RunCall';
+import { RunCall, requireToolRun } from '@agent/runtime/RunCall';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
@@ -207,8 +207,7 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   const state = yield* session.runHistory.load(runId);
   const { raised, own } = attemptRequests(state?.requests ?? {}, shared);
   if (own?.request.decision === null)
-    // A plane that closes first decides nothing: the call stays in
-    // flight, and the next resume finds the request still open.
+    // A session that closes first decides nothing: the next resume asks.
     return yield* session.requests.decision(runId, own.requestId, from).pipe(
       Effect.map((row) => row.decision),
       Effect.catch((cause) =>
@@ -226,6 +225,7 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
     kind: 'proposal',
     data: {
       requestId: callRequestId(shared, raised + 1),
+      allowBypass: (yield* RunCall)?.hook !== 'ask',
       runId,
       ...proposal,
       script: {

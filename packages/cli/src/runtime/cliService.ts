@@ -4,18 +4,17 @@
  * as the desktop opens its folders), the detached start a client asks for
  * when no service answers, and the connection the chat TUI holds.
  */
-import { hostname } from 'node:os';
 import * as path from 'node:path';
 
 import {
   Clock,
+  Context,
   Duration,
   Effect,
   Exit,
+  FileSystem,
+  Path,
   Scope,
-  type Context,
-  type FileSystem,
-  type Path,
 } from 'effect';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
@@ -42,6 +41,7 @@ import {
   ownerIdentity,
   type OwnerId,
 } from '@texra-ai/harness/schemas';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
@@ -67,7 +67,6 @@ import { loginShellEnvironment } from './loginShellEnv';
 import { cliEnvValue, readCliEntrypointPath } from './cliContext';
 import { silentLogSink } from './logSinks';
 import type { CliContext } from './cliContext';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** The service's own log channel. */
 const CHANNEL = 'cliService';
@@ -133,10 +132,20 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   yield* bootstrapHost({ roots: yield* openRoots(undefined, scope) });
 
   // What opening a project reads, captured once: `open` is the port's,
-  // called from handlers that hold no process context of their own.
-  const services = yield* Effect.context<
-    ChildProcessSpawner | FileSystem.FileSystem | Path.Path | StateStores
-  >();
+  // called from handlers that hold no process context of their own. Exactly
+  // these services, never the build's scope with them: provided over a
+  // handler's lease, that scope would hold the lease's release until the
+  // service exits, so no project would ever go idle.
+  const services = Context.pick(
+    ChildProcessSpawner,
+    FileSystem.FileSystem,
+    Path.Path,
+    StateStores,
+  )(
+    yield* Effect.context<
+      ChildProcessSpawner | FileSystem.FileSystem | Path.Path | StateStores
+    >(),
+  );
   // Each project's approval policy is its persisted setting, which the
   // session reads at every decision through these following config stores:
   // a change any client writes applies to the next request, and nothing a
@@ -320,8 +329,8 @@ export function heldByService(
     if (yield* envFlag(NO_SERVICE)) return false;
     const info = yield* probeCliService;
     if (info === null) return false;
-    const { hostname: host, pid } = ownerIdentity(owner);
-    return pid === info.pid && host.toLowerCase() === hostname().toLowerCase();
+    // It answered on this machine's socket; a recorded hostname may be stale.
+    return ownerIdentity(owner).pid === info.pid;
   });
 }
 

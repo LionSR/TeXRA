@@ -77,7 +77,6 @@ function requestEdit(path: string, proposedContent: string) {
       originalContent: '',
       proposedContent,
       sourceTool: 'write_file',
-      runId: ROOT_RUN,
     }).pipe(
       Effect.provide(
         nativeToolTestLayer({
@@ -127,6 +126,7 @@ describe('approval prompt hooks', () => {
           kind: 'proposal',
           data: {
             requestId: 'proposal-1',
+            allowBypass: true,
             runId: ROOT_RUN,
             agent: 'review',
             model: 'deepseek/deepseek-v4-flash',

@@ -57,6 +57,7 @@ export function launchSetupAssistant(
       );
       yield* showTasks.pipe(
         Effect.ignore({ log: 'Warn', message: 'Revealing the task list' }),
+        withLogChannel(CHANNEL),
       );
       return outcome;
     }

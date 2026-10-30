@@ -7,10 +7,10 @@
  * {@link ChatExportInput} the markdown and LaTeX formatters consume (the HTML
  * export path uses `assembleTrace` instead), so the two hosts render a stored
  * conversation identically. This module is the single place that does that
- * read + assemble; each host wraps it with its own status vocabulary (see
+ * read + assemble; each host presents missing data to its own surface (see
  * `readCliHistoryExportInput` in
  * `packages/cli/src/runtime/history.ts` and
- * `ChatExportController.buildExportInput` in
+ * `writeTranscript` in
  * `packages/texra/src/controllers/progressView/ChatExportController.ts`).
  *
  * The conversation comes from the completed-run archive facade

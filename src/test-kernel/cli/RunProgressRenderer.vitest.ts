@@ -18,17 +18,18 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
+import { waitForCondition } from '@test/support/asyncTestUtils';
 
-/** Let the renderer's fiber observe the latest view before a case reads
- *  the output: a few turns of the event loop cover the stream pipeline. */
+/** Let the session's fibers catch up with what was just published: a few
+ *  turns of the event loop cover the stream pipeline. */
 async function settle(): Promise<void> {
   for (let turn = 0; turn < 6; turn += 1) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }
 /** A run on a real session: its `run.start`, the config the fold reads the
- *  inputs from, and the RUNNING transition, then the fold's own settle. */
-function publishRun(session: SessionHandle, runId: RunId): Effect.Effect<void> {
+ *  inputs from, and the RUNNING transition. */
+function publishRun(session: SessionHandle, runId: RunId): void {
   const agent = 'polish';
   publishTestRows(session, [
     {
@@ -74,11 +75,11 @@ function publishRun(session: SessionHandle, runId: RunId): Effect.Effect<void> {
       payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
     },
   ]);
-  return Effect.promise(() => settle());
 }
+/** What `action` writes to `stream`; `action` reads it as it grows. */
 function captureStreamWrites<E, R>(
   stream: NodeJS.WriteStream,
-  action: Effect.Effect<unknown, E, R>,
+  action: (written: () => string) => Effect.Effect<unknown, E, R>,
 ): Effect.Effect<string, E, R> {
   let output = '';
   return Effect.acquireUseRelease(
@@ -87,7 +88,7 @@ function captureStreamWrites<E, R>(
         output += chunk;
       }),
     ),
-    () => action,
+    () => action(() => output),
     (spy) => Effect.sync(() => spy.mockRestore()),
   ).pipe(Effect.map(() => output));
 }
@@ -102,12 +103,11 @@ function ndjsonRecords(output: string): Record<string, unknown>[] {
 describe('CLI run progress renderer', () => {
   it.live('writes human progress to stderr without polluting json stdout', () =>
     Effect.gen(function* () {
+      const line = 'polish paper.tex · 0s';
       let stderr = '';
-      const stdout = yield* captureStreamWrites(
-        process.stdout,
+      const stdout = yield* captureStreamWrites(process.stdout, () =>
         Effect.gen(function* () {
-          stderr = yield* captureStreamWrites(
-            process.stderr,
+          stderr = yield* captureStreamWrites(process.stderr, (written) =>
             Effect.gen(function* () {
               const session = yield* createTestSession();
               const host = createCliRuntimeHost(
@@ -125,7 +125,14 @@ describe('CLI run progress renderer', () => {
               yield* host
                 .attachRunProgressRenderer(testSessionOf(session), runId)
                 .pipe(Scope.provide(scope));
-              yield* publishRun(session, runId);
+              publishRun(session, runId);
+              // Painted once the renderer's fiber sees the running view, as
+              // many event-loop turns later as Effect's scheduling takes.
+              yield* Effect.promise(() =>
+                waitForCondition(() => written().includes(line), {
+                  timeoutMessage: 'The run progress line was never painted.',
+                }),
+              );
               yield* Scope.close(scope, Exit.void);
               yield* host.close();
             }),
@@ -133,7 +140,7 @@ describe('CLI run progress renderer', () => {
         }),
       );
 
-      expect(stderr).toContain('polish paper.tex · 0s');
+      expect(stderr).toContain(line);
       expect(stdout).toBe('');
     }),
   );
@@ -144,8 +151,7 @@ describe('CLI run progress renderer', () => {
       Effect.gen(function* () {
         const parentRunId = 'a1a1a1' as RunId;
         const childRunId = 'b1b1b1' as RunId;
-        const output = yield* captureStreamWrites(
-          process.stdout,
+        const output = yield* captureStreamWrites(process.stdout, () =>
           Effect.gen(function* () {
             const session = yield* createTestSession();
             publishTestRunStart(session, parentRunId);

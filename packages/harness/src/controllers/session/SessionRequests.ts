@@ -13,7 +13,6 @@ import {
   runInbox,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { requestAsks } from '@agent/runtime/requestPolicy';
 import {
   claimRejection,
@@ -352,30 +351,27 @@ const handle = (
 ): Effect.Effect<Outcome, RequestError, RequestServices> => {
   switch (req.kind) {
     case 'run.stop':
-      return Effect.gen(function* () {
-        // An explicit child policy wins; an unset one is the session's
-        // "Keep subagents running", resolved once for every request's stop.
-        const detachActiveChildren =
-          req.detachActiveChildren ??
-          (yield* detachSubagentsOnStop(deps.session().roots));
-        yield* deps.session().runs.stop(req.runId, {
-          detachActiveChildren,
+      // An unset child policy is the stop's to decide (`RunRegistry.stop`).
+      return deps
+        .session()
+        .runs.stop(req.runId, {
+          detachActiveChildren: req.detachActiveChildren ?? undefined,
           reason: req.reason,
-        }).settlement;
-      }).pipe(
-        // A setting that would not read, or a refused terminal row (a live
-        // foreign owner, a rolled-back transaction): the run is still in
-        // flight, so the requester hears that rather than `done`.
-        Effect.mapError(
-          (error): RequestError =>
-            new Unavailable({
-              runId: req.runId,
-              reason: `The ${runNoun(deps.session(), req.runId)} could not be stopped: ${toErrorMessage(error)}`,
-            }),
-        ),
-        Effect.as(done),
-        Effect.uninterruptible,
-      );
+        })
+        .settlement.pipe(
+          // A setting that would not read, or a refused terminal row (a live
+          // foreign owner, a rolled-back transaction): the run is still in
+          // flight, so the requester hears that rather than `done`.
+          Effect.mapError(
+            (error): RequestError =>
+              new Unavailable({
+                runId: req.runId,
+                reason: `The ${runNoun(deps.session(), req.runId)} could not be stopped: ${toErrorMessage(error)}`,
+              }),
+          ),
+          Effect.as(done),
+          Effect.uninterruptible,
+        );
     case 'run.delete':
       return deleteAdmittedRun(deps, req.runId, admitted, 'single');
     case 'run.compact':

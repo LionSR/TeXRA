@@ -845,6 +845,9 @@ interface JsonRpcConnectionOptions {
     method: string,
     params: unknown,
   ) => Effect.Effect<unknown> | undefined;
+  /** The `[method, params]` notification telling the peer we stopped waiting
+   *  for unanswered request `id` (its caller was interrupted, a timeout too). */
+  cancel?(id: number, method: string): readonly [string, unknown] | undefined;
 }
 ```
 
@@ -1293,8 +1296,9 @@ interface RequestDecisionHook {
 
 ## requestToolEditApproval
 
-Ask the person for an edit: policy first (allow, deny), else a
-`request.opened` on the run with its content held in the session's
+Ask the person for an edit when `sessionPermission` (`loop/toolGuard.ts`),
+given what the call's hooks said, asks: a `request.opened` on the run with
+its content held in the session's
 tool-edit store, serialized behind the run's other prompts, answered by a
 surface's `request.decide`. An approve applies the file as the user left
 it: the decision's content, else the edit a surface recorded, else the
@@ -1811,7 +1815,6 @@ interface ToolEditProposal {
   readonly originalContent: string;
   readonly proposedContent: string;
   readonly sourceTool: string;
-  readonly runId?: RunId | null;
 }
 ```
 

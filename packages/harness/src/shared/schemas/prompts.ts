@@ -120,6 +120,9 @@ export type AgentProposal = typeof AgentProposalSchema.Type;
 export const AgentProposalPermissionSchema = AgentProposalSchema.mapFields(
   Struct.assign({
     requestId: Schema.String,
+    /** Whether a grant turned on while it waits answers it: false when a
+     *  hook asked for this review. */
+    allowBypass: Schema.Boolean,
     runId: RunIdSchema,
   }),
 );

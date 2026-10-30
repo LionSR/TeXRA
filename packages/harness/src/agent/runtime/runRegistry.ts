@@ -28,6 +28,7 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import type { RunAttempt } from '@agent/followUp/ToolUseFollowUp';
 import type { ProcessServices } from '@platform/processRuntime';
 import { grantsKept, type ApprovalGrants } from '@shared/approvalBypassKind';
+import { Settings } from '@shared/config/settings';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
@@ -36,6 +37,7 @@ import {
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { rootRun } from './rootLaunch';
 import type { SessionHandle } from './SessionHandle';
@@ -594,13 +596,14 @@ export class RunRegistry implements RunsShape {
   }
 
   /**
-   * Stop a run by the caller's child policy. A run this process drives is
-   * stopped where it stands, children first: a cascading stop now, so
-   * {@link RunStop.accepted} answers at once; a detaching one after the
-   * children's `run.detach` batch commits, or a child completing meanwhile
-   * would route its result to the just-stopped parent. A run nothing here
-   * owns is stopped under its claim, descendants swept, and given the end
-   * the stop owes it ({@link stopEnd}); a refused row fails it.
+   * Stop a run, deciding here what happens to its children: the caller's
+   * policy, else the session's "Keep subagents running", read as the stop
+   * runs. A run this process drives is stopped where it stands, children
+   * first; a detaching stop only after the children's `run.detach` commits,
+   * or a child completing meanwhile would route its result to the stopped
+   * parent. A run nothing here owns is stopped under its claim, taken before
+   * its children are touched, and given the end the stop owes it
+   * ({@link stopEnd}); a refused claim or row fails it.
    */
   stop(runId: RunId, options: RunStopOptions): RunStop {
     const entry = this.entries.get(runId);
@@ -609,37 +612,45 @@ export class RunRegistry implements RunsShape {
     // waits for the run to drain (`submitFollowUp`); a failed stop unmarks.
     const marked = entry?.activation?.stop;
     if (entry !== undefined) this.markStopped(runId, options.reason);
-
-    const detach = options.detachActiveChildren === true;
+    const asked = options.detachActiveChildren;
     // Something here to stop: a launch, or its fiber.
     const local = this.isLaunched(runId) || entry?.fiber !== undefined;
     const end = this.stopEnd(runId, options.reason);
     let reached = false;
-    const stopHere = (): boolean => {
-      // Shared by the child sweep and the root cascade: each run once.
-      const visited = new Set<string>();
-      reached = this.terminate(runId, visited, !detach, options.reason);
+    // The child sweep and the root cascade visit each run once.
+    const stopHere = (cascade: boolean): boolean => {
+      reached = this.terminate(runId, new Set(), cascade, options.reason);
       return reached;
     };
-    if (!detach && (local || end === undefined)) {
-      stopHere();
+    if (asked === false && (local || end === undefined)) {
+      stopHere(true);
       return { accepted: () => reached, settlement: Effect.void };
     }
-    const apply = (
-      detach ? this.detachActiveChildren(runId) : Effect.void
-    ).pipe(
-      Effect.andThen(
-        Effect.suspend(() =>
-          // A reached target ends itself; an end owed otherwise is written
-          // as an inactive-run step, which a generation admitted meanwhile
-          // refuses (`RunLive`) and becomes the target instead.
-          stopHere() || end === undefined
-            ? Effect.void
-            : this.withInactiveRunStep(runId, end).pipe(
-                Effect.catchIf(isRunLive, () => Effect.sync(stopHere)),
-              ),
+    const key = GlobalStateKey.DETACH_SUBAGENTS_ON_STOP;
+    const apply = Effect.flatMap(
+      asked === undefined
+        ? Effect.suspend(() =>
+            Settings.get<boolean>(this.init.session().roots, key),
+          )
+        : Effect.succeed(asked),
+      (detach) =>
+        (detach ? this.detachActiveChildren(runId) : Effect.void).pipe(
+          Effect.andThen(
+            Effect.suspend(() =>
+              // A reached target ends itself; an end owed otherwise is
+              // written as an inactive-run step, which a generation admitted
+              // meanwhile refuses (`RunLive`) and becomes the target instead.
+              stopHere(!detach) || end === undefined
+                ? Effect.void
+                : this.withInactiveRunStep(runId, end).pipe(
+                    Effect.catchIf(isRunLive, () =>
+                      Effect.sync(() => stopHere(!detach)),
+                    ),
+                  ),
+            ),
+          ),
         ),
-      ),
+    ).pipe(
       // Refused before anything was stopped: the run goes on, unmarked.
       Effect.tapError(() =>
         Effect.sync(() => {
@@ -648,40 +659,30 @@ export class RunRegistry implements RunsShape {
         }),
       ),
     );
-    const { log } = this.init.session();
+    const held = this.init.session().log.hold(runId, { ends: true });
     return {
       accepted: () => reached,
-      settlement: local
-        ? apply
-        : Effect.scoped(Effect.andThen(log.hold(runId, { ends: true }), apply)),
+      settlement: local ? apply : Effect.scoped(Effect.andThen(held, apply)),
     };
   }
 
-  /** The end a stop owes a run no generation here took it for, decided
-   *  here only: a user's stop ends it cancelled, under its claim (an end it
-   *  wrote stands); a shutdown or a release owes none and leaves it
-   *  resumable. A generation a stop reached ends itself, cancelled, through
-   *  its lifecycle. */
+  /** The end a stop owes a run no generation here took it for, decided here
+   *  only: a user's stop ends it cancelled, ownerless; a shutdown or a release
+   *  owes none. A generation a stop reached ends itself, cancelled. */
   private stopEnd(
     runId: RunId,
     cause: StopCause | undefined,
   ): Effect.Effect<void, Error> | undefined {
     if (cause !== 'user') return undefined;
-    const session = this.init.session();
-    const end = { runId, outcome: RUN_OUTCOME.CANCELLED, ownerless: true };
-    return Effect.scoped(
-      Effect.andThen(
-        session.log.hold(runId, { ends: true }),
-        finalizeRun(session, end),
-      ),
-    ).pipe(Effect.asVoid);
+    const { CANCELLED: outcome } = RUN_OUTCOME;
+    const end = { runId, outcome, ownerless: true, stopped: true };
+    return Effect.asVoid(finalizeRun(this.init.session(), end));
   }
 
   /** The session is closing: refuse every run registered from here on, and
    *  stop every run whose parent this registry does not hold (that parent's
-   *  cascade stops the rest). A shutdown owes no end ({@link stopEnd}): a run
-   *  nothing here drives is left resumable, and a stopped one keeps its
-   *  record until it has ended itself ({@link awaitDrained}). */
+   *  cascade stops the rest). A shutdown owes no end ({@link stopEnd}); a
+   *  stopped run keeps its record until it ended itself ({@link awaitDrained}). */
   stopAll(): void {
     this.closing = true;
     const active = new Set(this.entries.keys());
