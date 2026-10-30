@@ -377,7 +377,7 @@ export const handleRunLatexdiff = Effect.fnUntraced(function* (
           return runLatexdiffForRun({
             runId: request.runId,
             // The window's own view: where its runs run, here or in the
-            // service, it folds their documents.
+            // service, it reads their documents.
             rounds: runOutputFiles(session.view.current(), request.runId),
             roots,
             mathMarkup,

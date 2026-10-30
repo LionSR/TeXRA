@@ -19,7 +19,7 @@ const CHANNEL = SETUP_ASSISTANT_CHANNEL;
 
 /**
  * The launch program the command surface runs on the process runtime: it
- * folds every failure — a failed host call, a failed model resolution, a
+ * turns every failure — a failed host call, a failed model resolution, a
  * failed root launch — into one error report and a `not-started` result,
  * which is the contract its host caller relies on. An interrupted launch is
  * not a failure: the cause is re-raised so a runtime disposal stays a

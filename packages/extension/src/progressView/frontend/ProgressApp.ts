@@ -1,5 +1,5 @@
 /**
- * `<progress-app>`: the one conversation shell of the extension (PRD 12.1).
+ * `<progress-app>`: the one conversation shell of the extension.
  * It is the root, the only element that holds the three records, and it
  * renders exactly one of two states from `surface.selected`: the New task
  * empty state (hero, the context disclosure, the Active now strip, the
@@ -373,7 +373,7 @@ export class ProgressApp extends LitElement {
     `;
   }
 
-  /** The hero slot holds one card (PRD 12.1): setup while the funnel is
+  /** The hero slot holds one card: setup while the funnel is
    *  pending, else the project starter while the folder has no LaTeX
    *  files, else the prompt. Without a credential the welcome card
    *  replaces the whole state (see below). */

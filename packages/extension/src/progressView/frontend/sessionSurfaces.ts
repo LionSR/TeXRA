@@ -1,6 +1,5 @@
 /**
- * The open sessions of one webview (PRD one-fold-three-renderers, 7.7, 8,
- * 9, 12.2): one fold per session on the one webview runtime, one `Surface`
+ * The open sessions of one webview : one session view per session on the one webview runtime, one `Surface`
  * per session owned and persisted here, and the request round trip whose
  * responses land back on the surface (a follow-up rejected keeps its
  * draft, a picker returns its paths, a polish its text). The sidebar and
@@ -196,7 +195,7 @@ export function createSessionSurfaces(options: {
       subscribedTranscript: '',
       unsubscribe: () => undefined,
     };
-    // The per-run maps drop what the view no longer holds (PRD 9), the
+    // The per-run maps drop what the view no longer holds, the
     // launcher's selections follow the host's catalogs, and the transcript
     // subscription follows the selection.
     entry.unsubscribe = subscribeToSignalChanges(
@@ -257,7 +256,7 @@ export function createSessionSurfaces(options: {
     }
   }
 
-  /** The response of a `host.request`, folded onto the surface. */
+  /** The response of a `host.request`, applied to the surface. */
   function settleHost(
     entry: Held,
     request: HostRequest,
@@ -484,7 +483,7 @@ export function createSessionSurfaces(options: {
     if (runId !== null) {
       const run = view.runs.get(runId);
       const draft = surface.drafts.get(runId) ?? EMPTY_DRAFT;
-      // The same decision the composer's Send takes, from the same fold
+      // The same decision the composer's Send takes, from the same view
       // fields: a run that ended or that another process owns takes no
       // follow-up, however the send was reached.
       if (!run || !canSendFollowUp(run, draft)) return;

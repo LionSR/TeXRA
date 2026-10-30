@@ -1,6 +1,5 @@
 /**
- * The progress webview's root wiring (PRD one-fold-three-renderers, 7.7, 8,
- * 9): the one session of this webview, opened through the shared session
+ * The progress webview's root wiring: the one session of this webview, opened through the shared session
  * surfaces, assigned to the `<progress-app>` element on every change, the
  * window's one message listener, and the three shell events forwarded to
  * the surfaces. The sidebar port also reports which state it shows, so the

@@ -18,7 +18,7 @@ import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /**
- * State 0 "Connect a model" card (PRD: agent-native onboarding), the one
+ * State 0 "Connect a model" card, the one
  * credential prompt in the extension and the desktop — a port of the CLI
  * first-run picker, not a new design: ChatGPT subscription first, the API-key
  * alternative, and a quiet "Skip for now" link last. The setup assistant
