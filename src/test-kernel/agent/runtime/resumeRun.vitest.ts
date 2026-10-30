@@ -43,12 +43,11 @@ import { it } from '@effect/vitest';
 import { Cause, Effect, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { submitFollowUp, wakeRun } from '@agent/followUp/ToolUseFollowUp';
-import { appendRow, positionRow } from '@agent/runtime/loop/rows';
-import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
+import { withProcessServices } from '@texra-ai/harness/host';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withProcessServices } from '@platform/processRuntime';
-import { type RunId } from '@shared/schemas';
+import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
+import { appendRow, positionRow } from '@agent/runtime/loop/rows';
+import { submitFollowUp, wakeRun } from '@agent/followUp/ToolUseFollowUp';
 import { queuedFollowUps } from '@test/support/sessionTestUtils';
 import {
   answersOf,
@@ -63,6 +62,7 @@ import {
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { makeSessions } from '../../../../packages/harness/src/effect/sessionPrograms';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** A resume on the test process's runtime. */
 const resume = (runId: RunId, options: ResumeRunOptions) =>

@@ -24,7 +24,6 @@ import {
 import { describe, expect } from 'vitest';
 
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
-import type { RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -40,6 +39,7 @@ import {
   decideRequest,
   sessionWithInteractions,
 } from '../agent/progressTestUtils';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The per-install key env values are digested under, fixed. */
 const TEST_REVISION_KEY = Effect.succeed('00'.repeat(32));

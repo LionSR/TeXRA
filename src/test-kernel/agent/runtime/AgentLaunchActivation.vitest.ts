@@ -16,11 +16,11 @@ import { describe, expect } from 'vitest';
 
 import '@test/support/sessionGraphTestSetup';
 
+import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+import { withProcessServices } from '@texra-ai/harness/host';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { Runs } from '@agent/runtime/runRegistry';
-import { withProcessServices } from '@platform/processRuntime';
-import { AgentConfigSchema } from '@shared/schemas';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
   parkedAfter,
@@ -32,7 +32,6 @@ import {
 } from '@test/support/storeFaults';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { generateRunId } from '@utils/core';
 
 const config = (instruction: string) =>
   Schema.decodeUnknownSync(AgentConfigSchema)({

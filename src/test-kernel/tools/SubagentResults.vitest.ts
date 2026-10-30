@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
+import { formatDelivery } from '@texra-ai/harness/plugins';
 
 // formatDelivery is the one builder behind every child-run delivery: the
 // native subagent path, the background-bash path, workflow scripts, and the

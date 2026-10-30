@@ -6,13 +6,13 @@ import { it } from '@effect/vitest';
 
 import { describe, expect } from 'vitest';
 
-import { ToolError } from '@shared/schemas';
-import { installedHost, installPlatform } from '@test/support/setupPlatform';
 import {
   assertNoParentTraversal,
-  assertWritable,
   resolveToolPath,
-} from '@tools/pathResolution';
+  ToolError,
+} from '@texra-ai/harness/plugins';
+import { installedHost, installPlatform } from '@test/support/setupPlatform';
+import { assertWritable } from '@tools/pathResolution';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 
 describe('assertNoParentTraversal', () => {

@@ -9,7 +9,6 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -25,6 +24,7 @@ import {
   type EditorCapabilities,
 } from '@texra/tools/editorHost';
 import { OpenPdfTool } from '@texra/tools/OpenPdfTool';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The request shape the host's PDF opener receives, derived from the port. */
 type OpenPdfRequest = Parameters<NonNullable<EditorCapabilities['openPdf']>>[0];

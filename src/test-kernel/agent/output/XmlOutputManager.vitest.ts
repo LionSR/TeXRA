@@ -2,9 +2,9 @@ import { it } from '@effect/vitest';
 import { Effect, FileSystem } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { RunFileService } from '@texra-ai/harness/plugins';
+import { createExternalLocation } from '@texra-ai/harness/host';
 
-import { type RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
@@ -12,8 +12,7 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
 import { assignByContentSimilarity } from '@texra/agent/output/extraction/contentSimilarity';
-import { createExternalLocation } from '@utils/files/fileLocation';
-import { RunFileService } from '@utils/files/runStorage';
+import type { AgentConfig, RunId } from '@texra-ai/harness/schemas';
 
 const RUN_ID = 'xml-output-manager-test' as RunId;
 

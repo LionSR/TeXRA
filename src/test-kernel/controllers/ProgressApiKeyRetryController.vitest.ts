@@ -3,10 +3,10 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { apiKeySecretName, type ApiKeyProviderId } from '@texra-ai/llm';
-import { Secrets } from '@platform/secrets';
-import type { RunId } from '@shared/schemas';
+import { Secrets } from '@texra-ai/harness/host';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 describe('ProgressApiKeyRetryController', () => {
   it.effect(

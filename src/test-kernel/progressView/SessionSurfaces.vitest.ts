@@ -4,9 +4,9 @@ import { signal } from '@lit-labs/signals';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
+import { Rejected } from '@texra-ai/harness';
 import type { WebviewTransport } from '@progressView/frontend/sessionTransport';
-import { Rejected, type RuntimeRequest } from '@shared/session/runtimeRequest';
+import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import { emptySessionView } from '@shared/session/sessionView';
 import {
   buildScenario,
@@ -20,6 +20,7 @@ import {
   createWebviewStorage,
   type KeyValueStore,
 } from '@texra/shared/state/PersistedState';
+import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 
 const transport = vi.hoisted(() => ({
   receive: vi.fn(),

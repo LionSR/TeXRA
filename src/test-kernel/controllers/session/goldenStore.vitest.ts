@@ -41,7 +41,13 @@ import { it } from '@effect/vitest';
 import { Effect, Layer, Schema, Stream, SubscriptionRef } from 'effect';
 import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
-import { AgentCatalog } from '@agent/index/agentCatalog';
+import {
+  qualifyAggregateId,
+  type RunId,
+  RunIdSchema,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
+import { AgentCatalog, withProcessServices } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
@@ -57,17 +63,9 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { makeSessionStore } from '@controllers/session/sessionStore';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { withProcessServices } from '@platform/processRuntime';
-import {
-  qualifyAggregateId,
-  isDisplaySessionEvent,
-  ROW_KINDS,
-  RunIdSchema,
-  type RunId,
-} from '@shared/schemas';
+import { isDisplaySessionEvent, ROW_KINDS } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import type { SessionView } from '@shared/session/sessionView';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';

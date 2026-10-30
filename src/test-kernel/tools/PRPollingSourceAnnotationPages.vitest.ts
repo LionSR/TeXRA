@@ -7,7 +7,7 @@ import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - platform
-import { Secrets } from '@platform/secrets';
+import { Secrets } from '@texra-ai/harness/host';
 
 // Local imports - test support
 import { FakeSecrets } from '@test/support/FakePlatform';

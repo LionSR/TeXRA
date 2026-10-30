@@ -4,12 +4,12 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+import { pathToLocationIn } from '@texra-ai/harness/host';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 
 const mocks = vi.hoisted(() => ({
   runToolWithCheck: vi.fn(),

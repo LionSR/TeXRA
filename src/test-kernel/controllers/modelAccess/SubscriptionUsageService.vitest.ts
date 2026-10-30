@@ -3,7 +3,7 @@ import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as codexAuth from '@texra-ai/llm/node';
-import { Secrets } from '@platform/secrets';
+import { Secrets } from '@texra-ai/harness/host';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets } from '@test/support/FakePlatform';

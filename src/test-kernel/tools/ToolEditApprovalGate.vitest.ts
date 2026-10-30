@@ -16,13 +16,18 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { describe, beforeEach, afterEach, vi } from 'vitest';
-import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
-import type { ToolServices } from '@agent/runtime/ToolServices';
 
-import { WorkspaceFs } from '@platform/rootedFs';
-import type { RequestDecision, RunId } from '@shared/schemas';
+import {
+  generateRunId,
+  type RequestDecision,
+  type RunId,
+} from '@texra-ai/harness/schemas';
+import { requestToolEditApproval } from '@texra-ai/harness/plugins';
+import { WorkspaceFs } from '@texra-ai/harness/host';
+import type { ToolServices } from '@agent/runtime/ToolServices';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import {
   setTestApprovalPolicy,
   publishTestRunStart,
@@ -34,8 +39,6 @@ import { fakePath } from '@test/support/FakePlatform';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { EditFileTool } from '@tools/EditTool';
 import { writeFileTool } from '@tools/WriteTool';
-import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
-import { generateRunId } from '@utils/core';
 
 // Local file imports
 import { autoDecideRequests, decideRequest } from '../agent/progressTestUtils';

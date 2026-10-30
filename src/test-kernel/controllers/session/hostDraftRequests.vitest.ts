@@ -4,18 +4,20 @@ import { Effect, Fiber, FileSystem, Layer } from 'effect';
 import { expect, vi } from 'vitest';
 
 // Local imports
+import {
+  AppState,
+  type RootedFileSystem,
+  Secrets,
+  StorageFs,
+  UsageLog,
+} from '@texra-ai/harness/host';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
-import { AppState } from '@platform/interfaces';
-import { StorageFs } from '@platform/rootedFs';
-import { Secrets } from '@platform/secrets';
-import { UsageLog } from '@shared/usageLog';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
-import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
 // The recorder module answers in Effects, so every double returns one: a

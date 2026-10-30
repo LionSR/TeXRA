@@ -59,12 +59,6 @@ import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import {
-  type PermissionPayload,
-  type RequestDecision,
-  type RetryPermission,
-  type RunId,
-} from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
@@ -80,6 +74,12 @@ import {
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
+import type {
+  PermissionPayload,
+  RequestDecision,
+  RetryPermission,
+  RunId,
+} from '@texra-ai/harness/schemas';
 import type { PlatformSecrets } from '@texra-ai/harness/host';
 
 /** The settings the TUI's retry decisions write through, if any. */

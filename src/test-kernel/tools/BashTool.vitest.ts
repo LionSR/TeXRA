@@ -9,17 +9,15 @@ import { Deferred, Effect, Fiber, Schedule, SubscriptionRef } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
-import { getRunRecords } from '@agent/storage/runRecords';
-import { registryOf } from '@agent/runtime/runRegistry';
 
 import {
-  RUN_OUTCOME,
   qualifyAggregateId,
+  RUN_OUTCOME,
   RUN_PHASE,
-  type ExecResult,
   type RunId,
-  type ToolResult,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { registryOf } from '@agent/runtime/runRegistry';
+import { getRunRecords } from '@agent/storage/runRecords';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -31,6 +29,8 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
 import { shouldSkipWait } from '@tools/executions/waitCoordination';
 import * as execUtils from '@utils/system/execUtils';
+import type { ToolResult } from '@texra-ai/harness';
+import type { ExecResult } from '@texra-ai/harness/node';
 
 /**
  * Stub `executeCommand` to park until the test settles it. Returns the

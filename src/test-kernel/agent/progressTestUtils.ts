@@ -2,18 +2,18 @@ import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
 import {
-  SessionHostInteractions,
-  type HostInteractions,
-} from '@agent/runtime/HostInteractions';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  qualifyAggregateId,
-  aggregateTarget,
   type BashPermission,
   type DisplaySessionEvent,
+  qualifyAggregateId,
   type RequestDecision,
   type RunId,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import {
+  type HostInteractions,
+  SessionHostInteractions,
+} from '@texra-ai/harness/host';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { aggregateTarget } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTestSession,

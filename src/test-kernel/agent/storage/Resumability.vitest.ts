@@ -2,16 +2,16 @@ import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
+import {
+  AgentConfigSchema,
+  emptyRunEndOutput,
+  qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { deriveResumability } from '@agent/storage/resumability';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { positionRow } from '@agent/runtime/loop/rows';
-import {
-  AgentConfigSchema,
-  qualifyAggregateId,
-  emptyRunEndOutput,
-  RUN_OUTCOME,
-  type RunId,
-} from '@shared/schemas';
 import {
   createProcessSession,
   publishTestRunStart,

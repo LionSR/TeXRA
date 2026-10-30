@@ -9,7 +9,6 @@ import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { CompileLatex2PdfResult } from '@latex/texTools';
-import type { RunId } from '@shared/schemas';
 import { fakePath } from '@test/support/FakePlatform';
 import {
   ensureRoundData,
@@ -24,6 +23,7 @@ import {
   initLatexPlatform,
   outputFile,
 } from './compileCheckTestUtils';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 // The compiled PDF the fake engine reports; no test seeds it, so artifact
 // publication is a no-op — the path only has to be a plausible absolute one.

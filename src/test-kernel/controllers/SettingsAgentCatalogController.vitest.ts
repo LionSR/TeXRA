@@ -5,8 +5,8 @@ import { Effect } from 'effect';
 
 import { describe } from 'vitest';
 
+import { agentMatchesIdentifier } from '@texra-ai/harness/schemas';
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
-import { agentMatchesIdentifier } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import {
   CUSTOM_TEAMS_KEY,

@@ -38,12 +38,12 @@ import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { RunId } from '@shared/schemas';
 import {
   LeanServerPool,
   type LeanServerPoolOptions,
 } from '@texra/tools/lean/direct/leanServerPool';
 import { isLeanServerActive } from '@texra/tools/lean/leanServerRegistry';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 const FAKE_LAKE = `#!/usr/bin/env node
 const fs = require('node:fs');

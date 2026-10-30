@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { fileLocationDisplayPath, type RunId } from '@shared/schemas';
+import { fileLocationDisplayPath, type RunId } from '@texra-ai/harness/schemas';
+import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { traceFileLineage } from '@texra/agent/output/lineageMapping';
 import {
   ensureRoundData,
   type OutputState,
 } from '@texra/agent/output/outputState';
-import { createRunStorageLocation } from '@utils/files/fileLocation';
 
 describe('workflow output lineage mapping', () => {
   const runId = 'abc123' as RunId;

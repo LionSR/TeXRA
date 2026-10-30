@@ -1,16 +1,20 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
+import {
+  type ApprovalGrants,
+  resolveBypass,
+  RUN_PHASE,
+  type RunId,
+  type RunView,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
-import { RUN_PHASE, type RunId } from '@shared/schemas';
-import type { RunView, SessionView } from '@shared/session/sessionView';
 
 // Local imports
 import {
   NO_APPROVAL_GRANTS,
-  type ApprovalGrants,
   inheritedGrants,
-  resolveBypass,
 } from '@shared/approvalBypassKind';
 
 /** A session's grants as its rows fold them: parent edges, each run's

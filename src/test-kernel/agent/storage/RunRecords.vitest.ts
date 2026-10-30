@@ -2,13 +2,13 @@ import { Effect, Schema, Stream, SubscriptionRef } from 'effect';
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
 
+import {
+  AgentConfigSchema,
+  qualifyAggregateId,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { getRunRecords } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  qualifyAggregateId,
-  AgentConfigSchema,
-  type RunId,
-} from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';

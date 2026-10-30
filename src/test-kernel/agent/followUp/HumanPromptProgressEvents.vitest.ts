@@ -6,18 +6,17 @@ import { it } from '@effect/vitest';
 
 // Third-party imports
 import { beforeEach, describe, expect } from 'vitest';
-import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
 
-import type { RunId } from '@shared/schemas';
+import { generateRunId, type RunId } from '@texra-ai/harness/schemas';
+import { requestToolEditApproval } from '@texra-ai/harness/plugins';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { requestBashApproval } from '@tools/approval/bashApproval';
-import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
-import { generateRunId } from '@utils/core';
 
 // Local file imports
 import { autoDecideRequests, createRecordingHost } from '../progressTestUtils';

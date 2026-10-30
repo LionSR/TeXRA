@@ -21,17 +21,18 @@ import { describe, expect } from 'vitest';
 
 import '@test/support/sessionGraphTestSetup';
 
+import {
+  AgentConfigSchema,
+  generateRunId,
+  type RequestDecision,
+  type RunId,
+} from '@texra-ai/harness/schemas';
+import { withProcessServices } from '@texra-ai/harness/host';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { agentTool } from '@agent/runtime/delegation/AgentTool';
 import { executeSubagentInBand } from '@agent/runtime/delegation/inBandSubagentRun';
-import { withProcessServices } from '@platform/processRuntime';
-import {
-  AgentConfigSchema,
-  type RequestDecision,
-  type RunId,
-} from '@shared/schemas';
 import {
   nativeToolTestLayer,
   testModelCell,
@@ -54,7 +55,6 @@ import {
   type StoredRow,
 } from '@test/support/storeFaults';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { generateRunId } from '@utils/core';
 
 /** The parent's model, which its children inherit: the validation model
  *  answers it, and the host's OpenAI key makes it available. It is not the

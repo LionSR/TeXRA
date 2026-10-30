@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { Schema } from 'effect';
 import {
-  qualifyAggregateId,
-  DisplaySessionEventSchema,
-  LOG_LEVELS,
   MESSAGE_TYPES,
+  qualifyAggregateId,
   type RunId,
-} from '@shared/schemas';
+  type TraceDocument,
+} from '@texra-ai/harness/schemas';
+import { DisplaySessionEventSchema } from '@texra-ai/harness/transcript';
+import { LOG_LEVELS } from '@shared/schemas';
 import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
-import type { TraceDocument } from '@texra-ai/harness/schemas';
 
 const RUN_ID = 'ab0001' as RunId;
 

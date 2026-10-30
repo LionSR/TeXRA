@@ -5,16 +5,16 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
-import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
+} from '@texra-ai/harness/node';
+import { createExternalLocation } from '@texra-ai/harness/host';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { createExternalLocation } from '@utils/files/fileLocation';
 
 const mocks = vi.hoisted(() => ({
   executeCommand: vi.fn(),

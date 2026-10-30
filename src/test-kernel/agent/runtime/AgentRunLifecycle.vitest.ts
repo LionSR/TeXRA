@@ -2,15 +2,18 @@ import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber } from 'effect';
 
 import { afterEach, describe, expect, vi } from 'vitest';
+import {
+  qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+} from '@texra-ai/harness/schemas';
+import { setLogSink } from '@texra-ai/harness/host';
 import { Runs } from '@agent/runtime/runRegistry';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { type RunReport } from '@agent/runtime/runReport';
 import type { RunLaunch } from '@agent/runtime/run/AgentRun';
-import { setLogSink } from '@logger/logSink';
-import { qualifyAggregateId, RUN_OUTCOME } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';

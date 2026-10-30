@@ -2,11 +2,11 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
+import { pathToLocationIn } from '@texra-ai/harness/host';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 
 function extractFromPaper(content: string) {
   return Effect.promise(() =>

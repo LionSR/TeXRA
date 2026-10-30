@@ -3,15 +3,17 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import {
-  WorkspaceAgentsController,
-  type WorkspaceAgentsControllerDeps,
-  type WorkspaceAgentsEntry,
-} from '@agent/workspaceAgents/WorkspaceAgentsController';
-import type { StateStore } from '@platform/interfaces';
-import { agentMatchesIdentifier } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+  agentMatchesIdentifier,
+  WorkspaceStateKey,
+} from '@texra-ai/harness/schemas';
+import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { workspaceTeams } from '@texra/shared/agentTeams';
+import type {
+  StateStore,
+  WorkspaceAgentsControllerDeps,
+  WorkspaceAgentsEntry,
+} from '@texra-ai/harness/host';
 
 const agents: WorkspaceAgentsEntry[] = [
   { source: 'builtIn', name: 'write' },

@@ -7,7 +7,7 @@ import { Effect, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { AgentDirectoryService } from '@agent/index/AgentDirectoryService';
+import { AgentDirectoryService } from '@texra-ai/harness/host';
 import { globalStorageFsLayer } from '@platform/rootedFs';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { decodeXmlEntities } from '@shared/subagentFollowup';
+import { decodeXmlEntities } from '@texra-ai/harness/transcript';
 
 describe('decodeXmlEntities', () => {
   it('decodes only XML entities in a single pass', () => {

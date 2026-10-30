@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { cliRunStanding } from '@cli/runtime/toolUseResumeData';
-import type { RunOutcome } from '@shared/schemas';
+import type { RunOutcome } from '@texra-ai/harness/schemas';
 
 describe('CLI history status formatting', () => {
   /** The frozen status mapping alone. */

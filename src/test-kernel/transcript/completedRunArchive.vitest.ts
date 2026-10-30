@@ -5,16 +5,16 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { resumeRun } from '@agent/runtime/resumeRun';
-import { withProcessServices } from '@platform/processRuntime';
 import {
+  type AgentConfig,
   AgentConfigSchema,
   MESSAGE_TYPES,
   qualifyAggregateId,
-} from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
+  type RunId,
+} from '@texra-ai/harness/schemas';
+import { withProcessServices } from '@texra-ai/harness/host';
+import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { resumeRun } from '@agent/runtime/resumeRun';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {

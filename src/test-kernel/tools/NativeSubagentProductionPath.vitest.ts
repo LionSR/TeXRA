@@ -51,7 +51,15 @@ vi.mock('@agent/runtime/modelAccess/ModelAccess', async (importActual) => {
 });
 
 // Local imports - agent runtime
-import { AgentCatalog } from '@agent/index/agentCatalog';
+import {
+  AgentConfigSchema,
+  generateRunId,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  RUN_PHASE,
+  type RunId,
+} from '@texra-ai/harness/schemas';
+import { type BoundModel, RunFileService } from '@texra-ai/harness/plugins';
+import { AgentCatalog, withProcessServices } from '@texra-ai/harness/host';
 import { getRunRecords, readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import type { AppendedMessage } from '@agent/runtime/storedTurn';
@@ -62,16 +70,8 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared/runtime boundaries
 import { submitFollowUp, wakeRun } from '@agent/followUp/ToolUseFollowUp';
-import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { launchDetachedSubagent } from '@agent/runtime/delegation/subagentRun';
-import { withProcessServices } from '@platform/processRuntime';
-import {
-  AgentConfigSchema,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  RUN_PHASE,
-  type RunId,
-} from '@shared/schemas';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { noopTrace } from '@test/support/noopTrace';
@@ -95,8 +95,6 @@ import {
 } from '@test/support/sessionEnd';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { readCompletedRunConversation } from '@transcript/completedRunArchive';
-import { generateRunId } from '@utils/core';
-import { RunFileService } from '@utils/files/runStorage';
 import { ResolvedTurnSchema } from '../../../packages/llm/src/turn.js';
 
 const PARENT_RUN_ID = 'a9531a9531a9' as RunId;

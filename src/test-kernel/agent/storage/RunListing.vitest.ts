@@ -2,16 +2,16 @@ import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import { listRuns } from '@agent/storage/runListing';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { DatabaseReadFailed } from '@shared/session/database';
+import { DatabaseReadFailed } from '@texra-ai/harness';
 import {
+  type AgentConfig,
   AgentConfigSchema,
   qualifyAggregateId,
   type RunId,
   type RunIdentity,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { listRuns } from '@agent/storage/runListing';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';

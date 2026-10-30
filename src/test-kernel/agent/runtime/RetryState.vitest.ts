@@ -39,35 +39,34 @@ import {
 } from '@texra-ai/llm';
 
 // Local imports
-import { appendRow, positionRow } from '@agent/runtime/loop/rows';
-import { ModelInvoker, modelInvokerLayer } from '@agent/runtime/ModelInvoker';
-import type { InvokeRequest } from '@agent/runtime/run/requestContext';
-import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
-import { RouteRetries } from '@agent/runtime/run/invocation';
-import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
-import { Secrets } from '@platform/secrets';
+import { DatabaseReadFailed } from '@texra-ai/harness';
 import {
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   RUN_PHASE,
   type RunId,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 import {
-  DatabaseReadFailed,
   DatabaseWriteFailed,
-} from '@shared/session/database';
+  Secrets,
+  Settings,
+  UsageLog,
+} from '@texra-ai/harness/host';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
+import { RouteRetries } from '@agent/runtime/run/invocation';
+import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
+import type { InvokeRequest } from '@agent/runtime/run/requestContext';
+import { ModelInvoker, modelInvokerLayer } from '@agent/runtime/ModelInvoker';
+import { appendRow, positionRow } from '@agent/runtime/loop/rows';
+import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
+import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
 import {
   RunHistory,
   RunHistoryRefused,
   type RunCell,
 } from '@shared/session/runHistory';
-import { UsageLog } from '@shared/usageLog';
 import { freshRunState, type RunState } from '@shared/session/runState';
-import { Settings } from '@shared/config/settings';
 import {
   setTestApprovalPolicy,
   publishTestRunStart,
@@ -95,6 +94,7 @@ import {
   seedActiveRun,
   sessionWithInteractions,
 } from '../progressTestUtils';
+import type { BoundModel } from '@texra-ai/harness/plugins';
 
 const GPT54 = 'openai/gpt-5.4-2026-03-05';
 
