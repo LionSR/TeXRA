@@ -12,8 +12,6 @@ import { toolUseDisplayLines } from '@cli/chat/tui/panes/toolRenderers';
 import { toolRowModel } from '@shared/transcript/toolRowModel';
 import type { ToolRow } from '@texra-ai/harness/transcript';
 
-// Local imports - test support
-
 function toolUse(
   toolName: string,
   input: unknown,

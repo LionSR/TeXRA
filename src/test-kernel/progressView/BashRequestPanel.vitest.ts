@@ -13,8 +13,6 @@ import type {
   RuntimeRequest,
 } from '@texra-ai/harness/schemas';
 
-// Local file imports
-
 // Every card shares one action row (BaseRequestPanel); the bash card is where
 // it guards the most, so these pin the row's keys here.
 describe('bash-request-panel', () => {
