@@ -4,6 +4,8 @@
  * reader holds.
  */
 import type {
+  CommitOrdinal,
+  FollowUpDisposition,
   PermissionPayload,
   PositionAt,
   RequestDecision,
@@ -30,7 +32,9 @@ type RequestState = {
  */
 export type RunPosition = {
   readonly family: RunFamily | null;
-  readonly at: PositionAt | null;
+  /** Where the loop stands, or stood when it halted: a halt row changes
+   *  `outcome`, not this. */
+  readonly at: Exclude<PositionAt, 'halted'> | null;
   readonly outcome: RunOutcome | null;
   readonly turn: number;
   /** By request id, in the order the rows opened them. */
@@ -45,18 +49,20 @@ type RowOf<T extends SessionEvent['type']> = Extract<SessionEvent, { type: T }>;
  * follow-up lists from it. The loop reads its pending input from the rows
  * (`Inbox.read`), so `RunState` carries only the position.
  *
- * The fields after `followUpIds` only `runRowsFrom` folds (the view keeps
- * its own on `RunView`), each from the rows its comment names.
+ * The fields after `taken` only `runRowsFrom` sets (the view keeps its
+ * own on `RunView`), each from the rows its comment names.
  */
 export type RunRows = RunPosition & {
   /** Queued without consumed, in commit order. */
   readonly followUps: readonly QueuedFollowUp[];
   /**
-   * Every follow-up id a row named, queued or consumed: the unique key. A
-   * delivery its producer replays after a restart is a second row
-   * under an id already here, and it is queued once, never twice.
+   * Every follow-up a row consumed, by id: why it left the queue and the
+   * commit that took it. With `followUps` it is every id a row named, the
+   * unique key: a delivery its producer replays after a restart is a second
+   * row under an id already queued or taken, and it is queued once, never
+   * twice.
    */
-  readonly followUpIds: ReadonlySet<string>;
+  readonly taken: ReadonlyMap<string, TakenFollowUp>;
   /** Its `run.start`, and its parent edge: the start's, until a
    *  `run.detach` severs it. */
   readonly start: RowOf<'run.start'> | null;
@@ -105,6 +111,12 @@ export type RunRows = RunPosition & {
   readonly results: readonly ToolResultPayload[];
   readonly scriptCalls: readonly ScriptCallPayload[];
 };
+
+/** A consumed follow-up: its row's `disposition` and commit. */
+interface TakenFollowUp {
+  readonly disposition: FollowUpDisposition;
+  readonly commit: CommitOrdinal;
+}
 
 /** One child turn's identity: `key` names the child-run attempt that
  *  accepted it and `index` its position in that attempt. */

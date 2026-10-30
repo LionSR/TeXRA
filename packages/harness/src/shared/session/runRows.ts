@@ -134,7 +134,7 @@ export const freshRunPosition = (): RunPosition => ({
 export const freshRunRows = (): RunRows => ({
   ...freshRunPosition(),
   followUps: [],
-  followUpIds: new Set(),
+  taken: new Map(),
   start: null,
   parent: null,
   activation: null,
@@ -168,7 +168,7 @@ type FollowUpRow = Extract<
   { type: 'followup.queued' | 'followup.consumed' }
 >;
 
-const copySet = (ids: ReadonlySet<string>) => new Set(ids);
+const copyMap = <V>(entries: ReadonlyMap<string, V>) => new Map(entries);
 
 /**
  * Apply one shared row. `current` is `null` for a reader that holds nothing
@@ -206,9 +206,10 @@ export function applyRunRow(
           detail: `turn ${p.turn} is below ${rows.turn}`,
         };
       }
+      // A halt records its outcome where the loop stood; `at` keeps that spot.
       return applied({
         family: p.family,
-        at: p.at,
+        at: p.at === 'halted' ? rows.at : p.at,
         turn: p.turn ?? rows.turn,
         outcome: p.at === 'halted' ? (p.outcome ?? null) : rows.outcome,
       });
@@ -239,7 +240,8 @@ export function applyRunRow(
       // Queued input may come before everything else a run writes, so it
       // starts the reader's state; a replayed delivery id is queued once.
       const rows = slice ?? freshRunRows();
-      if (rows.followUpIds.has(row.followUpId)) return { kind: 'unchanged' };
+      const seen = rows.followUps.some((f) => f.followUpId === row.followUpId);
+      if (seen || rows.taken.has(row.followUpId)) return { kind: 'unchanged' };
       const followUps = ownCopy(copies, rows.followUps, (f) => [...f]);
       followUps.push({
         followUpId: row.followUpId,
@@ -248,27 +250,24 @@ export function applyRunRow(
         ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
         ...(row.control ? { control: row.control } : {}),
       });
-      const followUpIds = ownCopy(copies, rows.followUpIds, copySet);
-      followUpIds.add(row.followUpId);
-      return applied({ followUps, followUpIds });
+      return applied({ followUps });
     }
     case 'followup.consumed': {
-      // The consumer commits this with the message the follow-up became. An
-      // id this reader never queued (another writer queued it while the loop
-      // ran, or the read that delivered this row did not carry the queuing)
-      // consumes nothing, and is recorded so the queuing cannot land twice.
-      if (slice === null) return { kind: 'unchanged' };
+      // The consumer commits this beside the rows that took the follow-up and
+      // says why. An id this reader never queued (queued by another writer
+      // while the loop ran, or not carried by the read that delivered this
+      // row) consumes nothing and is recorded, so the queuing cannot land twice.
+      const { followUpId, disposition, commit } = row;
+      if (slice === null || slice.taken.has(followUpId))
+        return { kind: 'unchanged' };
       const followUps = slice.followUps.filter(
-        (f) => f.followUpId !== row.followUpId,
+        (f) => f.followUpId !== followUpId,
       );
       const removed = followUps.length !== slice.followUps.length;
-      if (!removed && slice.followUpIds.has(row.followUpId)) {
-        return { kind: 'unchanged' };
-      }
       if (removed) copies?.add(followUps);
-      const followUpIds = ownCopy(copies, slice.followUpIds, copySet);
-      followUpIds.add(row.followUpId);
-      return applied({ ...(removed ? { followUps } : {}), followUpIds });
+      const taken = ownCopy(copies, slice.taken, copyMap);
+      taken.set(followUpId, { disposition, commit });
+      return applied({ ...(removed ? { followUps } : {}), taken });
     }
   }
 }

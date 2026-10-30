@@ -15,6 +15,7 @@ import { Effect, SynchronizedRef } from 'effect';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
   qualifyAggregateId,
+  type FollowUpDisposition,
   type PositionAt,
   type RunBinding,
   type RunId,
@@ -185,15 +186,17 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
  *  nested calls are `script/<seq>`. */
 const SCRIPT_CALL_ID = 'script';
 
-/** The `followup.consumed` rows of the run's pending requests of `kind`,
- *  or of every kind. */
-export const consumedRows = (
-  runId: RunId,
-  controls: readonly QueuedFollowUp[],
-  kind?: NonNullable<QueuedFollowUp['control']>['kind'],
-): Extract<RunHistoryDraft, { type: 'followup.consumed' }>[] =>
-  controls.flatMap(({ followUpId, control }) =>
-    control !== undefined && (kind === undefined || control.kind === kind)
-      ? [consumedRow(runId, followUpId)]
-      : [],
-  );
+/** The `followup.consumed` rows of the run's pending requests of `kind` (or
+ *  of every kind), each with the `disposition` given. A caller names the run
+ *  and the kind once and records a different disposition per call. */
+export const consumedRows =
+  (runId: RunId, kind?: NonNullable<QueuedFollowUp['control']>['kind']) =>
+  (
+    controls: readonly QueuedFollowUp[],
+    disposition: FollowUpDisposition,
+  ): Extract<RunHistoryDraft, { type: 'followup.consumed' }>[] =>
+    controls.flatMap(({ followUpId, control }) =>
+      control !== undefined && (kind === undefined || control.kind === kind)
+        ? [consumedRow(runId, followUpId, disposition)]
+        : [],
+    );

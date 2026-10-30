@@ -3,21 +3,25 @@
  * them: its input (system text, instruction, activated skills, memory
  * misses), the files its calls edited and how many ran, its structured
  * output, and where its turn policy stands (the final-tool nudge, the
- * finalized answer); and the rules for reading its pending input (the
- * `followup.queued` rows), stated once for the loop, the inbox and the view. The row handlers in `runState.ts` and
+ * finalized answer). The row handlers in `runState.ts` and
  * `turnRowHandlers.ts` set these fields, so the loop reads them off the
- * same state on the live path and on resume. The lifecycle rows a run is
- * registered, activated and ended with are built here too, beside the
- * readers of their facts; `agent/storage/runLifecycle.ts` commits them.
+ * same state on the live path and on resume. The consumed follow-up is here
+ * too, as its writers commit it and as a reader learns its receipt from
+ * `RunRows`; the rules for which pending rows a run reads are the reader's
+ * (`agent/followUp/RunInput.ts`). The lifecycle rows a run is registered,
+ * activated and ended with are built here, beside the readers of their
+ * facts; `agent/storage/runLifecycle.ts` commits them.
  */
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
 } from '@shared/approvalBypassKind';
 import {
+  type CommitOrdinal,
   type DispatchFacts,
   emptyRunEndOutput,
   type FollowUpContent,
+  type FollowUpDisposition,
   type JsonValue,
   qualifyAggregateId,
   type RunEnd,
@@ -37,14 +41,7 @@ import {
   type UserFollowUpSupport,
 } from '@shared/schemas';
 
-import {
-  byId,
-  isMessage,
-  isSharedRunRow,
-  isStaleNotice,
-  type QueuedFollowUp,
-  type RunLookup,
-} from './runRows';
+import { byId, isSharedRunRow } from './runRows';
 import { runRowsFrom } from './runRowReads';
 import type { RunHistoryDraft, RunInputDraft } from './runState';
 import type { RunRows } from './runRowsShape';
@@ -164,56 +161,74 @@ function outputOf(
 export const isInstruction = ({ from }: FollowUpContent): boolean =>
   from.kind === 'user' || (from.kind === 'run' && from.relation === 'parent');
 
-/** Where in its loop a run reads its input: before a model request inside
- *  a turn, at the turn's end, or while it waits for input. */
-export type InputPoint = 'request' | 'turn' | 'idle';
+// ----------------------------------------------- the consumed follow-up
 
-/** The pending messages a run reads at `at`, in commit order. A row held
- *  until an instruction (a child's pause or stop notice) is read only beside
- *  one. A row held until the turn ends, or one for a running generation only
- *  (a progress notice, a host notification), is not read before a request
- *  inside the turn. A notice from a child run that has ended is stale: it is
- *  consumed unread (`staleNotices`). */
-export function readableMessages(
-  rows: readonly QueuedFollowUp[],
-  at: InputPoint,
-  run: RunLookup,
-): QueuedFollowUp[] {
-  const messages = rows.filter(isMessage);
-  const asked = messages.some(
-    (f) => f.holdUntil === undefined && isInstruction(f.content),
-  );
-  return messages.filter((f) => {
-    switch (f.holdUntil) {
-      case 'instruction':
-        return asked;
-      case 'turn':
-        return at !== 'request';
-      case 'generation':
-        return at !== 'request' && !isStaleNotice(f, run);
-      case undefined:
-        return true;
-    }
-  });
-}
-
-/** The stale notices among the pending rows: consumed unread by the next
- *  batch the run takes. */
-export const staleNotices = (
-  rows: readonly QueuedFollowUp[],
-  run: RunLookup,
-): QueuedFollowUp[] => rows.filter((f) => isStaleNotice(f, run));
-
-/** The row that consumes one follow-up: committed with the message it became,
- *  or with the end of a run that never read it. */
+/** The row that consumes one follow-up, committed beside the rows that took
+ *  it; its writer states why (`disposition`). */
 export const consumedRow = (
   runId: RunId,
   followUpId: string,
+  disposition: FollowUpDisposition,
 ): Extract<RunInputDraft, { readonly type: 'followup.consumed' }> => ({
   type: 'followup.consumed',
   aggregateId: qualifyAggregateId('run', runId),
   followUpId,
+  disposition,
 });
+
+/**
+ * Where one follow-up stands: `accepted` while queued; `incorporated` once
+ * it is part of a turn's message and that turn has not ended; `terminal`
+ * once something answered it (`answer`: the commit of the row that took it,
+ * written in the transaction that answered it: a child's report, a
+ * control's edit or config, or the turn's own rows) or nothing will
+ * (`answer` null, `reason`: a dropped row's, or the error or outcome that
+ * ended the run before its turn finished). Every message of one turn
+ * shares that turn's answer.
+ */
+type FollowUpReceipt =
+  | { readonly state: 'accepted' }
+  | { readonly state: 'incorporated'; readonly turn: number }
+  | {
+      readonly state: 'terminal';
+      readonly answer: CommitOrdinal | null;
+      readonly reason?: string;
+    };
+
+/** The receipt of `followUpId` as `rows` say it; an id no row named has
+ *  left no receipt. A turn ends when the loop rests at it (`waiting`, or
+ *  `turn.ready` once the next input is taken at the same turn number),
+ *  moves past it, or the run ends. */
+export function followUpReceipt(
+  rows: RunRows,
+  followUpId: string,
+): FollowUpReceipt | undefined {
+  if (rows.followUps.some((f) => f.followUpId === followUpId))
+    return { state: 'accepted' };
+  const taken = rows.taken.get(followUpId);
+  if (taken === undefined) return undefined;
+  const { disposition, commit } = taken;
+  switch (disposition.kind) {
+    case 'answered':
+    case 'applied':
+      return { state: 'terminal', answer: commit };
+    case 'dropped':
+      return { state: 'terminal', answer: null, reason: disposition.reason };
+    case 'turn': {
+      const { turn } = disposition;
+      const rested = rows.at === 'waiting' || rows.at === 'turn.ready';
+      if (rows.turn > turn || (rows.turn === turn && rested))
+        return { state: 'terminal', answer: commit };
+      if (rows.end === null) return { state: 'incorporated', turn };
+      const { error, outcome } = rows.end;
+      return {
+        state: 'terminal',
+        answer: null,
+        reason: error?.message ?? outcome,
+      };
+    }
+  }
+}
 
 /** Run `runId`'s rows among `rows`, folded (a shared row left out, so a
  *  partial read, a listing's, folds too). */
@@ -245,33 +260,6 @@ export function runEndFromEvents(
   runId: RunId,
 ): Extract<SessionEvent, { type: 'run.end' }> | null {
   return recordsOf(rows, runId).end;
-}
-
-/**
- * Whether a run's pending input obliges a resume of it when no generation
- * holds it, from its input rows (`followup.queued`, `followup.consumed`,
- * `run.activate`, `run.end`), over the messages readable at idle. While the
- * run's current lifecycle has not ended (it waits on a child, or its
- * generation left without an end), any run's message wakes it, as the
- * user's does. Once it ended, only the user's message or a child's delivery
- * does, and after a user's Stop (that lifecycle's `run.end` is cancelled)
- * only the user's message committed after that end: a run's message never
- * revives a run that ended. A row for a running generation only (a progress
- * notice, a host notification) wakes nothing.
- */
-export function needsWake(input: RunRows, run: RunLookup): boolean {
-  // A resumed run that crashed carries no end, so no earlier Stop of it
-  // holds a message back.
-  const end = input.end;
-  const stopped = end?.outcome === 'cancelled';
-  return readableMessages(input.followUps, 'idle', run).some(
-    ({ commit, holdUntil, content: { from } }) => {
-      if (holdUntil === 'generation') return false;
-      if (from.kind === 'user') return !stopped || commit > end.commit;
-      if (from.kind === 'run' && from.relation === 'child') return !stopped;
-      return end === null;
-    },
-  );
 }
 
 /** `invocation` once a clean close stopped its open attempt (a `run.position`

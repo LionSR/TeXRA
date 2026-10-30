@@ -615,7 +615,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
       ),
       ...cards,
       ...post,
-      ...answered.map((followUpId) => consumedRow(runId, followUpId)),
+      ...answered.map((id) => consumedRow(runId, id, { kind: 'answered' })),
       ...facts.run,
     ],
     facts.alongside,

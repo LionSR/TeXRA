@@ -199,8 +199,9 @@ export const endIn = Effect.fn('endIn')(function* (
       facts.position === null
         ? []
         : [haltedPositionRow(facts.position, persisted, closed)];
+    const unapplied = (yield* session.followUps.read(runId)).followUps;
     closing = [
-      ...consumedRows(runId, (yield* session.followUps.read(runId)).followUps),
+      ...consumedRows(runId)(unapplied, { kind: 'dropped', reason: 'ended' }),
       ...session.trace.closure(runId, persisted),
       end,
     ];

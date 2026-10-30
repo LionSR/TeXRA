@@ -35,7 +35,7 @@ import {
   ResultMetaSchema,
 } from './runRecords';
 import { RunIdSchema } from './identifiers';
-import { FollowUpContentSchema } from './followUp';
+import { FollowUpContentSchema, FollowUpDispositionSchema } from './followUp';
 import { PermissionPayloadSchema } from './progressView/data';
 import { RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
@@ -293,10 +293,12 @@ const DisplayRowDraftSchema = Schema.Union([
       ]),
     ),
   }),
-  /** The follow-up became the message a turn carries, in that
-   *  message's batch: never delivered twice. */
+  /** The follow-up left the queue, in the batch of the rows that took it,
+   *  and why (`disposition`: part of a turn's message, answered, applied,
+   *  or dropped with its reason): never delivered twice. */
   durable('followup.consumed', {
     followUpId: Schema.String.check(Schema.isMinLength(1)),
+    disposition: FollowUpDispositionSchema,
   }),
   /** A run asking a person: what the UI shows, never host handles.
    *  Pending is opened without decided. */
