@@ -1,5 +1,7 @@
 import { Effect, Schema, Struct, type Types } from 'effect';
 
+import { StoredProtocolSchema } from './storedTurn';
+
 export const TokenCountSchema = Schema.Int.check(
   Schema.isGreaterThanOrEqualTo(0),
 );
@@ -170,4 +172,78 @@ export function sumRunUsageTotals(
       if (key !== 'firstInputTokens') sum[key] += usage[key];
   sum.firstInputTokens = totals[0]?.firstInputTokens ?? 0;
   return sum;
+}
+
+/**
+ * Normalized usage statistics from any model provider: the ONLY usage type
+ * after API response extraction. The package's `TurnResult.usage` is priced
+ * into this shape by `run/pricing.ts`.
+ *
+ * Reuses only the required base fields via `.pick()` — the optional cache
+ * fields on `TokenUsageStatsSchema` (`cacheReadInputTokens` /
+ * `cacheCreationInputTokens`) are never populated for a NormalizedUsage; the
+ * live cache metrics below (`cachedInputTokens` / `cacheCreationTokens`) are
+ * the authoritative names. Extending the full base instead would inherit
+ * those dead fields and duplicate `cacheMissInputTokens`.
+ */
+export const NormalizedUsageSchema = TokenUsageStatsSchema.mapFields(
+  Struct.pick(['inputTokens', 'outputTokens', 'cost']),
+).mapFields(
+  Struct.assign({
+    /** Response time in milliseconds */
+    responseTimeMs: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+    /** Wire surface that produced this usage; usage is billed per surface. */
+    provider: StoredProtocolSchema,
+
+    // Optional metrics (when supported by provider)
+    /** Tokens served from cache (reduces cost) */
+    cachedInputTokens: Schema.optional(TokenCountSchema),
+    /** Tokens that missed provider prompt cache and were billed at full input rate */
+    cacheMissInputTokens: Schema.optional(TokenCountSchema),
+    /** Tokens written to cache - Anthropic only (increases cost by 1.25x) */
+    cacheCreationTokens: Schema.optional(TokenCountSchema),
+    /** Tokens used for reasoning (OpenAI reasoning models, Claude and Gemini thinking) */
+    reasoningTokens: Schema.optional(TokenCountSchema),
+    /** Tokens consumed by tool use prompts (Google) */
+    toolUsePromptTokens: Schema.optional(TokenCountSchema),
+    /** Canonical route used for usage display and telemetry. */
+    usageRoute: Schema.optional(UsageRouteSchema),
+    /** The route's subscription plan, when it names one; display-only. */
+    usagePlan: Schema.optional(Schema.String),
+  }),
+);
+/** Normalized, priced usage of one call ({@link NormalizedUsageSchema}). */
+export type NormalizedUsage = typeof NormalizedUsageSchema.Type;
+
+/**
+ * The priced usage the writer stamped on one completed turn, summed into the
+ * run totals. The package's `turn.usage` is deliberately not the input: it
+ * carries token counts and provider-specific extras but no runtime price, so
+ * folding it would leave a resumed run's `totalCost` at zero. Every field of the totals is named here, so a new
+ * metric on either schema is a compile error rather than a silent zero.
+ */
+export function addTurnUsage(
+  totals: RunUsageTotals,
+  usage: NormalizedUsage | null,
+): RunUsageTotals {
+  if (usage === null) return totals;
+  return {
+    firstInputTokens:
+      totals.firstInputTokens === 0
+        ? usage.inputTokens
+        : totals.firstInputTokens,
+    totalInputTokens: totals.totalInputTokens + usage.inputTokens,
+    totalOutputTokens: totals.totalOutputTokens + usage.outputTokens,
+    totalCost: totals.totalCost + usage.cost,
+    totalCacheReadInputTokens:
+      totals.totalCacheReadInputTokens + (usage.cachedInputTokens ?? 0),
+    totalCacheMissInputTokens:
+      totals.totalCacheMissInputTokens + (usage.cacheMissInputTokens ?? 0),
+    totalCacheCreationInputTokens:
+      totals.totalCacheCreationInputTokens + (usage.cacheCreationTokens ?? 0),
+    totalReasoningTokens:
+      totals.totalReasoningTokens + (usage.reasoningTokens ?? 0),
+    totalToolUsePromptTokens:
+      totals.totalToolUsePromptTokens + (usage.toolUsePromptTokens ?? 0),
+  };
 }
