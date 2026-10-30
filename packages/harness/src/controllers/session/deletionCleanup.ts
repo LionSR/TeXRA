@@ -53,7 +53,7 @@ class GeneratedRootRedirected extends Schema.TaggedError<GeneratedRootRedirected
  * Each target is then checked to fall inside the resolved runs directory.
  *
  * A refusal fails with `GeneratedRootRedirected`, which leaves the deletion
- * record closed and pending instead of collected, so the same tombstone
+ * record closed and pending instead of collected, so the same deletion marker
  * retries once the root is sane.
  *
  * This is resolve-then-check, not the handle-confined deletion the retired
@@ -101,7 +101,7 @@ const removeRunDirectories = (
 
 /**
  * The session's deletion collector, bound to the caller's scope: each run
- * of the answered effect forks one pass over the pending tombstones there,
+ * of the answered effect forks one pass over the pending deletion markers there,
  * answering its fiber (the session runs one at open and one after each
  * removal). Every step of a pass may run twice, in one process or two, so
  * passes never conflict; a failed record stays closed and pending for the

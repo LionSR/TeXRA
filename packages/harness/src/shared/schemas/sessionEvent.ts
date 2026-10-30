@@ -411,7 +411,7 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
  * transaction that appends it: the parent a `run.start` stamps, the
  * aggregate a row hangs its target under (a plugin's aggregate under its
  * `parent` run, or none), the claim a plugin's aggregate borrows for that
- * transaction alone, and the closure a tombstone makes.
+ * transaction alone, and the closure a deletion marker makes.
  * {@link referencedAggregates} reads the same edges off committed rows.
  */
 export interface AggregateEdges {
@@ -448,9 +448,9 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
  * The listing types the fold keys `latest` by: every durable arm
  * but the transcript tier. The request pair shares one entry because it
  * folds to one set, the follow-up pair likewise, and the lifecycle pair (`run.start`, `run.removed`)
- * shares one because it folds to one existence: a tombstone's commit then
+ * shares one because it folds to one existence: a deletion marker's commit then
  * outranks a replayed `run.start` below it, which is what makes the
- * tombstone final under every read. `run.position` is a
+ * deletion marker final under every read. `run.position` is a
  * listing key of its own: the phase is folded from it, so a cold listing
  * that dropped it would paint every parked run as ready. `stage.start` is
  * transcript tier alone: its display arm is a no-op and only the transcript
@@ -483,7 +483,7 @@ export function listingTypeOf(
     case 'hook.outcome':
     case 'child.turn':
       // A priced turn is never "latest of type" (`listingKeyOf`). Run-history
-      // rows stay out: a cold hydrate never pulls one into every
+      // rows stay out: a cold initial load never pulls one into every
       // renderer (`run.position` is a listing row). Keyed
       // records fold whole; the fold suite pins this list.
       return null;

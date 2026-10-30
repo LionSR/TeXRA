@@ -471,8 +471,8 @@ export function configTreeRows(
 
 /**
  * `approvalPolicy`, written out beside the config tree because the
- * approval-policy module owns its schema and its legacy-spelling
- * normalization.
+ * approval-policy module owns its schema and the tolerant parsing of
+ * typed-in spellings.
  */
 const APPROVAL_POLICY_SETTING = {
   key: APPROVAL_POLICY_CONFIG_KEY,

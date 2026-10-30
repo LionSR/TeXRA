@@ -87,8 +87,8 @@ const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
     Effect.catchIf(isFileNotFoundError, () => Effect.void),
   );
   if (content === undefined) return { ...missingFallback };
-  const parsed = yield* Effect.try({
-    try: () => JSON.parse(content) as unknown,
+  const parsed: unknown = yield* Effect.try({
+    try: () => JSON.parse(content),
     catch: (cause) => cause as SyntaxError,
   });
   if (Predicate.isObject(parsed)) return parsed;

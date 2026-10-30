@@ -242,7 +242,7 @@ const decideRequest = (
     Effect.gen(function* () {
       const pending = pendingOf(deps, req.runId, req.requestId);
       if (pending === undefined) return yield* settled(req.runId);
-      // A request that parks its caller is answered by the fiber waiting on it,
+      // A request that blocks its caller is answered by the fiber waiting on it,
       // and that fiber died with the owner this decision takes over from:
       // recording a decision would clear the panel without doing what it says.
       // Resuming the run re-enters the call, which asks again and is answered then.
@@ -448,7 +448,7 @@ export function sessionRequests(init: SessionRequestsInit): SessionRequests {
     }
     yield* requireRunAction(deps, req);
     const admitted = yield* admit(deps, req);
-    // This process holds the run's claim: a parked request has a fiber here.
+    // This process holds the run's claim: a blocked request has a fiber here.
     const heldHere =
       admitted.ownerId !== null &&
       SubscriptionRef.getUnsafe(deps.local).self.includes(admitted.ownerId);

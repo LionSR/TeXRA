@@ -190,9 +190,9 @@ export type PermissionPayload = typeof PermissionPayloadSchema.Type;
  */
 export type ProgressPermissionKind = PermissionPayload['kind'];
 /**
- * Whether a request parks the tool that opened it. Every kind does but the
+ * Whether a request blocks the tool that opened it. Every kind does but the
  * external inquiry: its tool returns `dispatched` at once and the run carries
- * on, so the answer arrives as a follow-up instead of releasing a parked
+ * on, so the answer arrives as a follow-up instead of releasing a blocked
  * fiber. Both folds read the distinction off this one predicate - the run
  * fold to decide which open requests a snapshot may leave unbound, the
  * session fold to decide which ones make a run wait on its user.

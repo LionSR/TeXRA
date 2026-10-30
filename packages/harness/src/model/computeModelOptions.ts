@@ -511,6 +511,7 @@ function optionOf(
     };
   }
   const { route, config } = decision;
+  const source = modelSource(route, config);
   const { kind, usageRoute } = resolveModelAvailability(
     model,
     decision,
@@ -522,7 +523,7 @@ function optionOf(
     ? undefined
     : UNAVAILABLE_REASON_BUILDERS[kind as UnavailableAvailabilityKind]({
         model,
-        source: modelSource(route, config),
+        source,
       });
   const savedEffort = reasoningLevels[config.ref];
   const backend = servingBackend(config, route);
@@ -534,7 +535,7 @@ function optionOf(
     published: decision.rawConfig,
     config,
     route,
-    source: modelSource(route, config),
+    source,
     savedEffort,
     // The bind's own decision over the bind's inputs (`binding.ts`
     // `reasoningOf`): the routed config, the model string's request, the

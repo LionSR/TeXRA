@@ -87,7 +87,7 @@ export const READ_LISTING = `SELECT * FROM (
 ) ORDER BY "commit"`;
 
 /** One open run's listing rows, its requests and follow-ups left out:
- *  none for a run never started or closed by its tombstone. */
+ *  none for a run never started or closed by its deletion marker. */
 export const READ_RUN_RECORDS = `SELECT ${EVENT_COLUMNS} FROM ${LISTED}
   WHERE l.aggregate = (SELECT id FROM event_sequence WHERE kind = ?
       AND logical_id = ? AND closed_by IS NULL AND start_commit IS NOT NULL)
