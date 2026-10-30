@@ -289,9 +289,11 @@ interface CallRequests {
    *  it opens. */
   readonly nextId: (kind: PermissionPayload['kind']) => string;
   /** Open the request (or re-enter the standing one) and wait for its
-   *  decision, as `SessionRequests.ask` does. */
+   *  decision, as `SessionRequests.ask` does. `blobs` are the strings the
+   *  payload names by address, stored with the request's row. */
   readonly open: <P extends PermissionPayload>(
     payload: P,
+    blobs?: readonly DraftBlob[],
   ) => Effect.Effect<DecisionOf<P['kind']>, DatabaseNotOwner | CellError>;
 }
 ```
@@ -1297,12 +1299,13 @@ interface RequestDecisionHook {
 ## requestToolEditApproval
 
 Ask the person for an edit when `sessionPermission` (`loop/toolGuard.ts`),
-given what the call's hooks said, asks: a `request.opened` on the run with
-its content held in the session's
-tool-edit store, serialized behind the run's other prompts, answered by a
-surface's `request.decide`. An approve applies the file as the user left
-it: the decision's content, else the edit a surface recorded, else the
-proposal.
+given what the call's hooks said, asks: a `request.opened` on the run
+that names the proposal's content (the original and proposed text with
+their diff) by its address in the session's blob store, stored with the
+row, so every process the request reaches shows the same diff
+(`request.preview`); serialized behind the run's other prompts, answered
+by a surface's `request.decide`. An approve applies the file as the
+person left it: the decision's content, else the proposal.
 
 ```ts
 const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApprovalResult, Error, ToolContext>

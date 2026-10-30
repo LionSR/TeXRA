@@ -5,8 +5,8 @@
  * persona travels with its record, so nothing blocks it. A resume that
  * meets one does not fail the run: the run stays interrupted, the reason
  * goes into the projection (`SessionHandle.view.markResumeBlocked`), and the
- * session's follower (`followInterruptedTasks`) resumes it once the catalog
- * says it is back.
+ * session's follower (`followInterruptedTasks`) clears it once the catalog
+ * says it is back, resuming the run under `resumeOnOpen: auto`.
  *
  * A tool plugin that is off is not a blocker: the step withholds its tools,
  * and a call to one settles `tool_unavailable` (the user's switch, not the

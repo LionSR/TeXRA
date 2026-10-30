@@ -1,15 +1,16 @@
-import { Effect, HashMap, Option, SubscriptionRef } from 'effect';
+import { Effect } from 'effect';
 
 import { RunCall, requireRun, sessionOf } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   type RefusalDecision,
+  type ToolEditContent,
   type ToolEditPermission,
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy } from '@shared/session/approvalDecision';
-import type { StagedToolEdit } from '@shared/session/runtimeRequest';
 import { errorResult } from '@tools/core/result';
+import { blobAddress } from '@utils/core/idHash';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import {
   buildDiffHunks,
@@ -62,12 +63,13 @@ function diffEdit(original: string, proposed: string): DiffHunks {
 
 /**
  * Ask the person for an edit when `sessionPermission` (`loop/toolGuard.ts`),
- * given what the call's hooks said, asks: a `request.opened` on the run with
- * its content held in the session's
- * tool-edit store, serialized behind the run's other prompts, answered by a
- * surface's `request.decide`. An approve applies the file as the user left
- * it: the decision's content, else the edit a surface recorded, else the
- * proposal.
+ * given what the call's hooks said, asks: a `request.opened` on the run
+ * that names the proposal's content (the original and proposed text with
+ * their diff) by its address in the session's blob store, stored with the
+ * row, so every process the request reaches shows the same diff
+ * (`request.preview`); serialized behind the run's other prompts, answered
+ * by a surface's `request.decide`. An approve applies the file as the
+ * person left it: the decision's content, else the proposal.
  */
 export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
   function* (
@@ -90,6 +92,14 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     const { hunks, timeout } = diffEdit(originalContent, proposedContent);
     yield* reportDiffTimeout(timeout);
     const lines = countLineChanges(hunks);
+    const content: ToolEditContent = {
+      originalContent,
+      proposedContent,
+      hunks,
+      firstChangedLine: firstChangedLine(hunks, proposedContent),
+    };
+    const text = JSON.stringify(content);
+    const address = blobAddress(text);
     const permission: ToolEditPermission = {
       requestId: requests.nextId('toolEdit'),
       path,
@@ -103,46 +113,26 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       runId,
       addedLines: lines.added,
       removedLines: lines.removed,
+      content: address,
     };
-    const { requestId } = permission;
-    const { toolEdits } = session.view;
-    // The content is held in the session's store from before the request
-    // opens until this call stops waiting on it, however it stops: a
-    // surface reading the committed row never finds the request listed with
-    // nothing to show for it, and nothing is left behind.
-    const review = Effect.acquireUseRelease(
-      SubscriptionRef.update(
-        toolEdits,
-        HashMap.set<string, StagedToolEdit>(requestId, {
-          originalContent,
-          proposedContent,
-          hunks,
-          firstChangedLine: firstChangedLine(hunks, proposedContent),
-          edited: null,
-        }),
-      ),
-      () =>
-        requests.open({ kind: 'toolEdit', data: permission }).pipe(
-          Effect.flatMap((decided): Effect.Effect<ToolEditApprovalResult> =>
-            decided.action !== 'approve'
-              ? Effect.succeed(decided)
-              : // An approval naming no content applies the user's edit
-                // of the proposal, when a surface sent one.
-                Effect.flatMap(SubscriptionRef.get(toolEdits), (held) =>
-                  finalizeApprovalResult(
-                    (
-                      decided.content ??
-                      Option.getOrUndefined(HashMap.get(held, requestId))
-                        ?.edited ??
-                      request.proposedContent
-                    ).replaceAll('\r\n', '\n'),
-                    request,
-                  ),
+    const review = requests
+      .open({ kind: 'toolEdit', data: permission }, [{ digest: address, text }])
+      .pipe(
+        Effect.flatMap((decided): Effect.Effect<ToolEditApprovalResult> =>
+          decided.action !== 'approve'
+            ? Effect.succeed(decided)
+            : // The decision carries the proposed file as the person left
+              // it in a host's view; one naming no content applies the
+              // proposal. A host read the bytes itself, so they may be CRLF.
+              finalizeApprovalResult(
+                (decided.content ?? request.proposedContent).replaceAll(
+                  '\r\n',
+                  '\n',
                 ),
-          ),
+                request,
+              ),
         ),
-      () => SubscriptionRef.update(toolEdits, HashMap.remove(requestId)),
-    );
+      );
     // An edit grant turned on while it waited answers it, unless a hook
     // asked.
     return yield* session.approvals.enqueue('toolEdit', runId, {

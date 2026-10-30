@@ -129,8 +129,6 @@ const PARTIAL_TEXT_TAIL_MAX = 4096;
 interface InvocationResponse {
   readonly kind: 'response';
   readonly state: RunState;
-  /** The assistant text of the turn, joined; empty when it produced none. */
-  readonly text: string;
 }
 
 /** A failure's error is the run state's `lastError`. */
@@ -386,7 +384,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           });
         }
         yield* reportUsage(usageLog, bound, usage, attribution, session.roots);
-        return { kind: 'response', state: next, text };
+        return { kind: 'response', state: next };
       });
 
       /**

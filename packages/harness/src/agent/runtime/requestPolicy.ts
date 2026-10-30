@@ -342,6 +342,7 @@ export function requestAsks({
           aggregateId,
           requestId,
           payload,
+          ...(options.blobs && { blobs: options.blobs }),
         },
         ...policyDecidedRows(session(), runId, payload, (yield* RunCall)?.hook),
       ];

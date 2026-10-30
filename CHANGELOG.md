@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: a tool edit's proposal is the request's, not the session's.**
+  `ToolEditPermission.content` names the proposal (`ToolEditContent`) by its
+  address in the session's blob store, written with the `request.opened`
+  row; `request.preview` answers it from the store, and `request.edit` is
+  gone: an approve carries the proposed file as the person left it as the
+  decision's `content`. `StagedToolEdit` leaves `@texra-ai/harness/schemas`;
+  `CallRequests.open` takes the blobs a payload names. A blocked resume
+  (`RunView.statusNotice` `resumeBlocked`, `LocalRuntimeState.resumeBlocked`)
+  carries no `retry`: whether an unblocked task continues by itself is the
+  `resumeOnOpen` setting's, read once at open.
 - **SDK: settings-view snapshot ids are the app's.** `SettingsViewSnapshot`
   leaves `@texra-ai/harness/schemas`; a row's `surfaces.settingsView` and
   `snapshotEntries` take the app's id as a string.
@@ -1308,6 +1318,14 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **An approved tool edit keeps the person's changes across a crash.** The
+  proposed file as the person left it in the diff view now travels with the
+  approval and is recorded with it, and the proposal itself is stored with
+  the request, so a task resumed in a new process applies what was approved
+  and shows the same diff. Before, both lived only in the process that
+  opened the request, and a resume applied the tool's own proposal. A
+  window that closes mid-review takes its unsent edits with it, as an
+  editor does.
 - **A task interrupted by a crash is no longer held forever after the
   network changes.** On macOS the computer's name follows the network (a
   router-assigned name at home, `name.local` elsewhere), and a task whose

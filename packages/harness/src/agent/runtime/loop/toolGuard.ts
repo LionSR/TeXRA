@@ -320,7 +320,7 @@ export const callRequests = (
       reentering?.request.payload.kind === kind
         ? reentering.requestId
         : callRequestId(at, opened + 1),
-    open: (payload) =>
+    open: (payload, blobs) =>
       Effect.suspend(() => {
         const reentered =
           payload.data.requestId === reentering?.requestId ? reentering : null;
@@ -335,6 +335,7 @@ export const callRequests = (
             reentered.request.decision,
           );
         return session.requests.ask(runId, payload, {
+          ...(blobs && { blobs }),
           open: (rows) => {
             if (reentered !== null) {
               // Open already: only what the policy decides commits, and

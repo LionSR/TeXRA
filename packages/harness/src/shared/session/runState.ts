@@ -93,10 +93,8 @@ export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsi
  */
 export type RunState = RunPosition &
   RunFacts & {
-    /** The last applied row. */
     readonly commit: CommitOrdinal;
-    /** Whether a run history row was applied: rows that only update an
-     *  existing state (requests, config, activation) do not count. */
+    /** A run history row was applied, not only requests, config, activation. */
     readonly hasHistoryRows: boolean;
     /** `null` until the opening `run.position` (then set by
      *  {@link phaseAfter}): no row that needs an opened run comes before it. */
@@ -128,6 +126,8 @@ export type RunState = RunPosition &
     /** Request ids answered since the latest `run.activate`, when this
      *  process took over the run; nothing waiting has seen them yet. */
     readonly decidedSinceActivation: ReadonlySet<string>;
+    /** True after a `run.activate` until the loop writes its next position. */
+    readonly resuming: boolean;
     /** The priced usage summed from its `response` and `context.edit` rows. */
     readonly usage: RunUsageTotals;
     /** The latest `context.edit`'s `seq`: the next edit's `base`. */
@@ -184,6 +184,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   countStale: false,
   pendingResponse: null,
   decidedSinceActivation: new Set(),
+  resuming: false,
   usage: EMPTY_RUN_USAGE_TOTALS,
   ...NO_FACTS,
   lastEdit: null,
@@ -290,16 +291,15 @@ const applySharedRow = (
   const closed = row.type === 'run.position' && row.payload.reason === 'closed';
   return Result.succeed({
     ...state,
-    ...(row.type === 'request.decided'
-      ? {
-          decidedSinceActivation: new Set([
-            ...state.decidedSinceActivation,
-            row.requestId,
-          ]),
-          declinedRoutes: declinedBy(state, row),
-        }
-      : {}),
+    ...(row.type === 'request.decided' && {
+      decidedSinceActivation: new Set([
+        ...state.decidedSinceActivation,
+        row.requestId,
+      ]),
+      declinedRoutes: declinedBy(state, row),
+    }),
     ...verdict.rows,
+    ...(row.type === 'run.position' && { resuming: false }),
     phase: phaseAfter(state.phase, verdict.rows.at),
     invocation: closed ? closedBy(state.invocation) : state.invocation,
   });
@@ -315,11 +315,13 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
   'request.opened': { requires: 'existing', apply: applySharedRow },
   'request.decided': { requires: 'existing', apply: applySharedRow },
   'run.activate': {
-    // A new process takes over the run: nothing waiting has read the
-    // decisions from here on.
     requires: 'existing',
     apply: (state) =>
-      Result.succeed({ ...state, decidedSinceActivation: new Set() }),
+      Result.succeed({
+        ...state,
+        decidedSinceActivation: new Set(),
+        resuming: true,
+      }),
   },
   'run.config': {
     // What the run runs on: its model, and once it binds, its backend and

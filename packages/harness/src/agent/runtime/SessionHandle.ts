@@ -43,10 +43,8 @@ import type {
   SessionOpenError,
   SessionStoreMovedAside,
 } from '@shared/session/database';
-import type {
-  RequestError,
-  StagedToolEdits,
-} from '@shared/session/runtimeRequest';
+import type { DraftBlob } from '@shared/session/historyTurns';
+import type { RequestError } from '@shared/session/runtimeRequest';
 import type { RunHistory } from '@shared/session/runHistory';
 import type { RunRowRead } from '@shared/session/runRowReads';
 import type { RunRows } from '@shared/session/runRowsShape';
@@ -123,7 +121,8 @@ export interface SessionLog {
     id: AggregateId,
     read: RunRowRead,
   ): Effect.Effect<RunRows, DatabaseReadFailed>;
-  /** The strings under `digests`: media bytes the history names by address. */
+  /** The strings under `digests`: what the rows name by address (media
+   *  bytes, a tool edit's proposal). */
   blobs(
     digests: readonly string[],
   ): Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
@@ -164,12 +163,6 @@ export interface SessionLog {
   readonly movedAside: SessionStoreMovedAside | null;
 }
 
-/** What a resume of a run waits for, and whether one was asked for. */
-interface ResumeBlock {
-  readonly reason: ResumeBlocker;
-  readonly retry: boolean;
-}
-
 /**
  * The session's view: the one state every renderer reads, the transport
  * replay it is built from, the transcript subscriptions that decide what it
@@ -197,17 +190,15 @@ export interface SessionViewAccess {
     port: string,
     set: readonly TranscriptSubscription[],
   ): Effect.Effect<void>;
-  /** Record what a resume of a run waits for, or null
-   *  when nothing blocks it any more: local truth, never a row. */
+  /** Record what a resume of a run waits for in this process, or null when
+   *  nothing blocks it any more: a fact about this process's catalog, never
+   *  a row. */
   markResumeBlocked(
     runId: RunId,
-    blocked: ResumeBlock | null,
+    blocked: ResumeBlocker | null,
   ): Effect.Effect<void>;
   /** The runs a resume found blocked here, with what each waits for. */
   resumeBlocks(): LocalRuntimeState['resumeBlocked'];
-  /** Each pending tool edit's content and the user's edit of it, held while
-   *  the call that opened the request waits on it: local, never a row. */
-  readonly toolEdits: SubscriptionRef.SubscriptionRef<StagedToolEdits>;
 }
 
 /** A streaming row's closing fact, as the run history commits it. */
@@ -244,11 +235,12 @@ export interface SessionHandleInit {
   readonly interactions?: HostInteractions;
   /**
    * The opener is a host window, which follows its interrupted tasks
-   * (`followInterruptedTasks`): it resumes a task whose resume was blocked
-   * once what it needs is back, and with `offer` also lists at open, or
-   * under `resumeOnOpen: auto` continues, the tasks a closed or
-   * crashed host app left interrupted. Headless runs and the SDK leave it
-   * unset: their policy is off.
+   * (`followInterruptedTasks`): a task whose resume was blocked is checked
+   * again as the catalog changes and, under `resumeOnOpen: auto`, resumed
+   * once what it needs is back; with `offer` the tasks a closed or crashed
+   * host app left interrupted are also listed at open, or under `auto`
+   * continued. Headless runs and the SDK leave it unset: their policy is
+   * off.
    */
   readonly interruptedTasks?: 'offer' | 'retry';
   /** Absent, the project's database; ephemeral, a throwaway one. */
@@ -274,6 +266,10 @@ export interface AskOptions<E> {
   readonly open?: (
     rows: readonly RequestRow[],
   ) => Effect.Effect<CommitOrdinal, E>;
+  /** The strings the payload names by address (a tool edit's proposal),
+   *  stored with the `request.opened` row; {@link SessionLog.blobs} reads
+   *  them back for as long as the row lives. */
+  readonly blobs?: readonly DraftBlob[];
 }
 
 /**

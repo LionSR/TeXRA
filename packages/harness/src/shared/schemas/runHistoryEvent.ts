@@ -18,7 +18,7 @@ import { Schema } from 'effect';
 
 import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 import { RunOutcomeSchema } from './run';
 import { NormalizedUsageSchema, RunInputSchema } from './runFacts';
 import {

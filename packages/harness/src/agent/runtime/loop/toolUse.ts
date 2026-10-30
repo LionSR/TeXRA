@@ -85,6 +85,19 @@ const nudge = (text: string) => ({
   content: [{ kind: 'text' as const, text }],
 });
 
+/** What the run answers with, read off its rows: a failed handed-down
+ *  call's error, else the model's last text since the last user message
+ *  (the turn's input, a nudge, a message delivered mid-turn): the same
+ *  live, after a resume, and for a run that failed after saying it. */
+const turnResponse = (at: RunState): string => {
+  if (at.handedDown?.status === 'error') return at.handedDown.error;
+  const since = at.messages.findLastIndex((m) => m.role === 'user');
+  const last = at.messages
+    .slice(since + 1)
+    .findLast((m) => m.role === 'assistant');
+  return last === undefined ? '' : turnText(last);
+};
+
 /** What a turn of the loop reads from its run's context. */
 type TurnServices =
   | AgentRun
@@ -160,8 +173,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // ---------------------------------------------------------------- state
   // The system text a fresh run renders, until its opening batch records it.
   let openingSystem: string | undefined;
-  // The text the turn answers with, reported with its end.
-  let response = '';
 
   const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
     stepFor(run, state, kind, isChild(), openingSystem);
@@ -277,13 +288,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   /** A turn's exit, and a handed-down call's run's at its park: a failed
-   *  call's error fails it and is the reply. */
-  const completeTurn = (at: RunState): RunExit => {
-    if (at.handedDown?.status !== 'error')
-      return { state: at, outcome: 'completed' };
-    response = at.handedDown.error;
-    return { state: at, outcome: 'failed' };
-  };
+   *  call's error fails it and is the reply (`turnResponse`). */
+  const completeTurn = (at: RunState): RunExit => ({
+    state: at,
+    outcome: at.handedDown?.status === 'error' ? 'failed' : 'completed',
+  });
 
   // ------------------------------------------------------------ the turn
   const runTurn = Effect.fn('toolUse.turn')(function* (
@@ -294,7 +303,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const begins = state.phase === 'waiting' || state.phase === 'halted';
     const body = Effect.gen(function* () {
       if (begins) {
-        response = '';
         state = yield* cell.append([
           positionRow(runId, { ...state, turn: state.turn + 1 }, 'turn.begin'),
         ]);
@@ -326,7 +334,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             : undefined;
         if (last?.role === 'assistant') {
           const text = turnText(last);
-          if (text) response = text;
           const processed = yield* afterTextResponse(cell, state, text);
           state = processed.state;
           if (processed.done) return completeTurn(state);
@@ -388,7 +395,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           return { state, outcome: 'cancelled' } as const;
         if (outcome.kind === 'failed')
           return { state, outcome: 'failed' } as const;
-        if (outcome.text) response = outcome.text;
       }
     });
     return yield* stagedBy(
@@ -402,13 +408,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const cell = yield* openRun(runId, start.resume);
     const loaded = yield* cell.current;
     if (loaded.phase === null) return yield* openFresh(cell);
-    // A parked run answers with its last turn's text (a resumed child's).
-    const last = loaded.messages.at(-1);
-    if (
-      (loaded.phase === 'waiting' || loaded.phase === 'halted') &&
-      last?.role === 'assistant'
-    )
-      response = turnText(last);
     logger.debug('Resuming tool-use run from the run history.');
     return cell;
   });
@@ -417,7 +416,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     Effect.gen(function* () {
       // A resumed run first finishes what its children were left as.
       if (start.resume) yield* closeLeftoverChildren(session, runId);
-      let restoring = start.resume;
       for (;;) {
         let state = yield* cell.current;
         const parked =
@@ -433,10 +431,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const queued = yield* followUps.input.hasPending('idle');
           if (isChild() && afterError && !queued)
             return finish(state, RUN_OUTCOME.FAILED);
-          // Activation clears the visible step: restore an idle cursor's park.
-          if (restoring && !queued)
+          // An activation clears the step the view shows: a park it found
+          // idle is written again, unless the queued input starts a turn.
+          if (state.resuming && !queued)
             state = yield* cell.append([positionRow(runId, state, 'waiting')]);
-          restoring &&= queued;
           // A root's wait opens a step, recorded like a request's; a
           // child's idle is its parent's.
           if (!isChild()) {
@@ -461,7 +459,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const consumed = yield* followUps.consume(cell, batch);
           if (!consumed.turn) continue;
         }
-        restoring = false;
         const turn: RunExit = yield* start.turns
           ? start.turns.turnPermit(runTurn(cell))
           : runTurn(cell);
@@ -478,7 +475,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // closes open streams and is the rest a resume's receipt reads), a
         // child's turn result with its parent's delivery, and a Stop hook's
         // block or input already queued.
-        const { rows: hooks, block } = yield* stopHooks(run, turn, response);
+        const reply = turnResponse(turn.state);
+        const { rows: hooks, block } = yield* stopHooks(run, turn, reply);
         const goesOn =
           !run.toolPolicy.stopAfterCycle && turn.outcome === 'completed';
         const childTurn =
@@ -529,7 +527,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const result = (outcome: RunOutcome, at: RunState): RunReport => ({
     outcome,
     output: {
-      response,
+      response: turnResponse(at),
       files: [...at.edited],
       // A recipe's return value, which its block reads (`AgentBlock.result`).
       ...(at.structured?.value !== undefined && {

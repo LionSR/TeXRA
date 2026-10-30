@@ -148,6 +148,7 @@ export type {
   ToolCallStatus,
   ToolCard,
   ToolDefinition,
+  ToolEditContent,
   ToolEditPermission,
   ToolFact,
   ToolUseLog,
@@ -204,7 +205,6 @@ export {
   RuntimeRequestSchema,
   type RequestError,
   type RuntimeRequest,
-  type ToolEditContent,
 } from '@shared/session/runtimeRequest';
 // A memory as a memory list shows it.
 export {
