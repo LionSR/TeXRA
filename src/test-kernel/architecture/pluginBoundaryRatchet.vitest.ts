@@ -6,15 +6,17 @@ import { resolve } from 'node:path';
 import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import type { ToolRun } from '@agent/core/tools/ToolTypes';
+import {
+  harnessBuiltins,
+  type PluginDefinition,
+  type ToolRun,
+} from '@texra-ai/harness/plugins';
 import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ToolResult } from '@shared/schemas';
 
 import { texraPlugins } from '@texra/tools/registry';
-import { harnessBuiltins } from '@tools/builtinPlugins';
-import { armsOf, type Plugin, type PluginDefinition } from '@tools/plugins';
+import { armsOf } from '@tools/plugins';
 import {
   ALL_HOST_PRODUCTION_ROOTS,
   collectModuleSpecifiers,
@@ -24,6 +26,7 @@ import {
   REPO_ROOT,
   stripComments,
 } from '../support/repoScan';
+import type { Plugin, ToolResult } from '@texra-ai/harness';
 
 /**
  * Invariants 1 and 6 of the core concepts, for what a plugin brings: its

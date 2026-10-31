@@ -66,12 +66,18 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
   reportRequestDefect: mocks.reportRequestDefect,
 }));
 
-import { type Session } from '@texra-ai/harness';
+import {
+  type AgentConfig,
+  type AgentConfigPayload,
+  ensureError,
+  qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+  type RunOutcome,
+  type RuntimeRequest,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
 import { registryOf } from '@agent/runtime/runRegistry';
-import type {
-  AgentConfig,
-  AgentConfigPayload,
-} from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
@@ -86,13 +92,6 @@ import {
   TuiSession,
   type RootRunSettled,
 } from '@cli/chat/tui/state/sessionRunState';
-import {
-  qualifyAggregateId,
-  RUN_OUTCOME,
-  type RunId,
-  type RunOutcome,
-} from '@shared/schemas';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
@@ -105,14 +104,13 @@ import {
 } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { ensureError } from '@utils/errors/errorMessage';
 import {
   bindTestSessionView,
   makeRunView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
-import type { SessionView } from '@texra-ai/harness/schemas';
+import type { Outcome, Session } from '@texra-ai/harness';
 
 // The state stores the controller's setting reads land on, as ports of the
 // installed fake host rather than a module mock of `platform()`: the setting

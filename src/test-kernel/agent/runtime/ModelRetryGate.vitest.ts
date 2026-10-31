@@ -5,10 +5,8 @@ import { TestClock } from 'effect/testing';
 import { describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
-import {
-  ModelRetryGate,
-  type RoutePolicy,
-} from '@agent/runtime/ModelRetryGate';
+import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
+import type { RoutePolicy } from '@texra-ai/harness/plugins';
 
 const ROUTE = 'openai:subscription:gpt-5.6';
 const TRANSIENT = new Error('temporary connection failure');

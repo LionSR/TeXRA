@@ -12,6 +12,7 @@ import { Schema } from 'effect';
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
+import { WORKSPACE_STORES } from '@texra-ai/harness/node';
 import { DESKTOP_PROJECTS } from '@desktop/main/desktopProjectRecords';
 import {
   CURRENT_VALUE_VERSION,
@@ -19,11 +20,7 @@ import {
   ROW_KINDS,
   SessionEventDraftSchema,
 } from '@shared/schemas';
-import {
-  APP_STATE,
-  REPO_STATE,
-  WORKSPACE_STORES,
-} from '@shared/session/valueFamily';
+import { APP_STATE, REPO_STATE } from '@shared/session/valueFamily';
 import { TEXRA_SERVICE } from '@texra/controllers/server/protocol';
 import { INQUIRY_THREADS } from '@texra/shared/plugins/externalInquiry';
 import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';

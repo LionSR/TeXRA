@@ -9,11 +9,11 @@ import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/harness/schemas';
 import { priceTurnUsage } from '@agent/runtime/run/pricing';
-import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import type { BoundModel } from '@texra-ai/harness/plugins';
 
 import type { Model, TurnResult } from '@texra-ai/llm';
 

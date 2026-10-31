@@ -3,10 +3,10 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports
+import { AgentConfigSchema, type RunId } from '@texra-ai/harness/schemas';
 import type { RunLaunch } from '@agent/runtime/run/AgentRun';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { AgentConfigSchema, PersonaSchema } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
+import { PersonaSchema } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 

@@ -4,9 +4,8 @@ import { it } from '@effect/vitest';
 import { Effect, FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { AppSignals } from '@texra-ai/harness/host';
+import { AppSignals, createWorkspaceLocation } from '@texra-ai/harness/host';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
-import { createWorkspaceLocation } from '@utils/files/fileLocation';
 
 describe('acceptEditedFileReplace', () => {
   it.effect(

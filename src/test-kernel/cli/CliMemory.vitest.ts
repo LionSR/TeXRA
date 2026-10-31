@@ -7,8 +7,8 @@ import { Cause, Effect, Exit, FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { sessionFsLayer, type StorageFs } from '@texra-ai/harness/host';
 import { loadCliMemoryDetail } from '@cli/runtime/memory';
-import { sessionFsLayer, type StorageFs } from '@platform/rootedFs';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 /** Runs `program` over a temp storage root holding one stored memory,

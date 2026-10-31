@@ -7,7 +7,7 @@ import { Effect, SubscriptionRef } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { qualifyAggregateId, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,

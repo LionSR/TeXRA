@@ -5,7 +5,7 @@ import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { withRequestTimeout } from '@tools/timeouts';
+import { withRequestTimeout } from '@texra-ai/harness/plugins';
 
 /** Let the forked request start. */
 const started = Effect.promise(

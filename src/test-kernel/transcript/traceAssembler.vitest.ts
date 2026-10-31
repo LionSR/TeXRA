@@ -2,16 +2,15 @@ import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentConfigSchema,
-  qualifyAggregateId,
   emptyRunEndOutput,
-  LOG_LEVELS,
   MESSAGE_TYPES,
+  qualifyAggregateId,
   type RunId,
-  USER_FOLLOW_UP_SUPPORT,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { LOG_LEVELS, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createTestSession,

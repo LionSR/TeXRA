@@ -5,10 +5,10 @@ import { afterEach, describe, expect } from 'vitest';
 
 let detachHostInteractions = (): void => {};
 
-import { createHeadlessCliHostInteractions } from '@cli/runtime/approvalAdapter';
-import type { CliContext } from '@cli/runtime/cliContext';
+import { requestToolEditApproval } from '@texra-ai/harness/plugins';
 import { type CliApprovalPromptHooks } from '@cli/runtime/approval/approvalPrompts';
-import { type RunId } from '@shared/schemas';
+import type { CliContext } from '@cli/runtime/cliContext';
+import { createHeadlessCliHostInteractions } from '@cli/runtime/approvalAdapter';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -17,7 +17,7 @@ import {
   setTestApprovalPolicy,
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   return createTestCliContext({

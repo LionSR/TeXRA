@@ -1,9 +1,9 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
+import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import {
   createTestSession,
   publishTestRunStart,

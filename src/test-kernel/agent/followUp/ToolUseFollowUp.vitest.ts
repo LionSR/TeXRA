@@ -2,6 +2,14 @@ import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber, Scheduler, Semaphore } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
+import {
+  generateRunId,
+  qualifyAggregateId,
+  type RunId,
+  type SessionEvent,
+  type SessionEventDraft,
+} from '@texra-ai/harness/schemas';
+import { DatabaseWriteFailed } from '@texra-ai/harness/host';
 import * as resumability from '@agent/storage/resumability';
 import * as runLifecycle from '@agent/storage/runLifecycle';
 import { Inbox, type InboxPort } from '@agent/followUp/Inbox';
@@ -17,22 +25,12 @@ import type {
   SessionHandle,
   SessionTransaction,
 } from '@agent/runtime/SessionHandle';
-import {
-  type CommitOrdinal,
-  qualifyAggregateId,
-  type RunId,
-  type SessionEvent,
-  type SessionEventDraft,
-} from '@shared/schemas';
-import {
-  DatabaseClaimRefused,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
+import { DatabaseClaimRefused } from '@shared/session/database';
 import type { Append } from '@shared/session/sessionEvents';
 import { runStateAppend } from '@shared/session/runHistory';
 import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRowReads';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { generateRunId } from '@utils/core';
+import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 
 /** Let a forked submission reach its parked resume Promise. */
 const settle = Effect.promise(

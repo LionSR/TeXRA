@@ -4,9 +4,13 @@ import { dirname, join } from 'node:path';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
+import {
+  RUN_OUTCOME,
+  type RunId,
+  type RunOutcome,
+} from '@texra-ai/harness/schemas';
 import { resolveWorkflowOutput } from '@cli/runtime/workflowOutput';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

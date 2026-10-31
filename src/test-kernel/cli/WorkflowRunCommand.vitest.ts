@@ -21,7 +21,11 @@ import type {
 } from '@cli/runtime/executeCli';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
-import { qualifyAggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
+import {
+  qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {

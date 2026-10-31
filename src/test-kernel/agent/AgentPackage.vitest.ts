@@ -14,13 +14,14 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - package API under test
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import type { RunId, TranscriptSubscription } from '@shared/schemas';
 import {
   emptySessionView,
   type SessionView as RuntimeSessionView,
 } from '@shared/session/sessionView';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeSessions } from '../../../packages/harness/src/effect/sessionPrograms';
+import type { TranscriptSubscription } from '@texra-ai/harness/transcript';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { AgentPlatform } from '../../../packages/harness/src/index';
 
 /** A session view run entry as the package's fold keys it. */

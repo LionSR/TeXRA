@@ -42,7 +42,6 @@ vi.mock('@texra/tools/claudeAgentImport', async (importActual) => {
 import '@test/support/sessionGraphTestSetup';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
@@ -57,6 +56,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@texra/tools/agentCliSessionStores';
 import { AgentCliSessionRegistry } from '@texra/tools/agentCliSessionRegistry';
 import { ClaudeAgentTool } from '@texra/tools/claudeAgent';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 interface Parent {
   readonly session: SessionHandle;

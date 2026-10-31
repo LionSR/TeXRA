@@ -11,8 +11,6 @@ import { Effect } from 'effect';
 
 import { beforeEach, describe, expect } from 'vitest';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { type RunId } from '@shared/schemas';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -26,6 +24,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
+import type { AgentConfig, RunId } from '@texra-ai/harness/schemas';
 
 const tempDirs = useTempDirs();
 

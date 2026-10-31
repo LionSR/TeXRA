@@ -3,9 +3,9 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect, Scope } from 'effect';
 import { createSessionExitController } from '@cli/chat/tui/sessionExitController';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import type { RunId } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { bindTestSessionView } from './fixtures/sessionViewFixture';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 const mocks = vi.hoisted(() => ({
   handOffCliShutdownSignalHandlers: vi.fn(),

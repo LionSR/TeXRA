@@ -2,14 +2,15 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - CLI TUI rendering
+import {
+  type NormalizedToolUse,
+  TOOL_CALL_STATUS,
+} from '@texra-ai/harness/schemas';
 import { toolUseDisplayLines } from '@cli/chat/tui/panes/toolRenderers';
 
 // Local imports - shared schemas
-import { TOOL_CALL_STATUS, type NormalizedToolUse } from '@shared/schemas';
 import { toolRowModel } from '@shared/transcript/toolRowModel';
-
-// Local imports - test support
-import type { ToolRow } from '@shared/transcript/transcriptRow';
+import type { ToolRow } from '@texra-ai/harness/transcript';
 
 function toolUse(
   toolName: string,

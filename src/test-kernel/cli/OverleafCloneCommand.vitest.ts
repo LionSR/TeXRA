@@ -7,16 +7,16 @@ import { Effect, Layer } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { makeMachineGitEnv } from '@texra-ai/harness/node';
+import { Secrets } from '@texra-ai/harness/host';
 import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { overleafGitClone } from '@latex/overleafProject';
-import { Secrets } from '@platform/secrets';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
-import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import type * as ChildProcess from 'effect/process/ChildProcess';
 
 const mocks = vi.hoisted(() => ({

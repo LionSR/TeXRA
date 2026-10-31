@@ -37,28 +37,28 @@ import {
 } from '@texra-ai/llm';
 
 // Local imports
-import type {
-  RuntimeTool as ITool,
-  RuntimeToolRegistry,
-  ToolServices,
-} from '@agent/runtime/ToolServices';
-import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
-import { appendRow, positionRow } from '@agent/runtime/loop/rows';
-import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import type { PluginContext } from '@platform/processRuntime';
 import {
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   qualifyAggregateId,
   type RunId,
   type ToolDefinition,
-  type ToolResult,
-} from '@shared/schemas';
-import { DatabaseWriteFailed } from '@shared/session/database';
+} from '@texra-ai/harness/schemas';
+import {
+  DatabaseWriteFailed,
+  type PluginContext,
+} from '@texra-ai/harness/host';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
+import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
+import { appendRow, positionRow } from '@agent/runtime/loop/rows';
+import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
+import type {
+  RuntimeTool as ITool,
+  RuntimeToolRegistry,
+  ToolServices,
+} from '@agent/runtime/ToolServices';
+import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
 import { freshRunState, type RunState } from '@shared/session/runState';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
@@ -74,6 +74,8 @@ import { ScriptTool } from '@tools/codemode/ScriptTool';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
 import { recordSessionEvents } from './progressTestUtils';
+import type { BoundModel } from '@texra-ai/harness/plugins';
+import type { ToolResult } from '@texra-ai/harness';
 
 const GPT54 = 'openai/gpt-5.4-2026-03-05';
 

@@ -4,10 +4,10 @@ import { describe, expect, beforeEach } from 'vitest';
 import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
 
+import { GlobalDatabase } from '@texra-ai/harness/node';
 import { loadInputHistory } from '@cli/chat/tui/history/inputHistory';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
-import { GlobalDatabase } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';

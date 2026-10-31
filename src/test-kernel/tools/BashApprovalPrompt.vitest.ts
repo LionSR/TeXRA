@@ -5,11 +5,11 @@ import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Stream } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
+import { type BashPermission, generateRunId } from '@texra-ai/harness/schemas';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { type BashPermission } from '@shared/schemas';
 import {
   setTestApprovalPolicy,
   createTestSession,
@@ -19,7 +19,6 @@ import {
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { requestBashApproval } from '@tools/approval/bashApproval';
-import { generateRunId } from '@utils/core';
 
 /** Watch bash requests in a scoped fiber, as a real host surface does. */
 function watchBashRequests(session: SessionHandle) {

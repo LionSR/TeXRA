@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 import { describe } from 'vitest';
 
 // Local imports
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { buildSettingsSnapshotMessage } from '@texra/shared/settingsView/handlers/settingsSnapshot';

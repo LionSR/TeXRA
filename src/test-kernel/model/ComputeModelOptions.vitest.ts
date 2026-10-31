@@ -9,11 +9,12 @@ import {
   MODEL_CONFIGS,
   OWN_KEY_ROUTE_FACTS,
 } from '@texra-ai/llm';
-import { readModelOptions } from '@model/computeModelOptions';
-import { Secrets } from '@platform/secrets';
+import {
+  GlobalStateKey,
+  isModelOptionAvailable,
+} from '@texra-ai/harness/schemas';
+import { readModelOptions, Secrets } from '@texra-ai/harness/host';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
-import { isModelOptionAvailable } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   fakeHostSecrets,
   installedHost,

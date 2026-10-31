@@ -8,9 +8,9 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { Settings } from '@texra-ai/harness/host';
 import { ensureTexraGitignored } from '@cli/runtime/initConfig';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
-import { Settings } from '@shared/config/settings';
 import { errnoError } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';

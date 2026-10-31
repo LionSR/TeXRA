@@ -26,23 +26,28 @@ import {
   sourceFilesUnder,
 } from '../support/repoScan';
 
-const PACKAGES = [
-  'cli',
-  'desktop',
-  'extension',
-  'texra',
-  'trace-viewer',
-] as const;
+/** Each scanned tree: the app, host and viewer packages, and the test
+ *  kernel, whose suites reach the harness the same way an embedder does. */
+const ROOTS = {
+  cli: 'packages/cli/src',
+  desktop: 'packages/desktop/src',
+  extension: 'packages/extension/src',
+  texra: 'packages/texra/src',
+  'trace-viewer': 'packages/trace-viewer/src',
+  'test-kernel': 'src/test-kernel',
+} as const;
 
-type Package = (typeof PACKAGES)[number];
+const PACKAGES = Object.keys(ROOTS) as readonly Package[];
 
-interface DeepImportBaseline {
-  semantics: string;
-  hosts: Record<Package, string[]>;
-}
+type Package = keyof typeof ROOTS;
 
-const BASELINE_FILE = 'config/ratchets/harness-deep-import-baseline.json';
-const BASELINE_PATH = resolve(REPO_ROOT, BASELINE_FILE);
+const HOSTS_FILE = 'config/ratchets/harness-deep-import-baseline.json';
+const KERNEL_FILE = 'config/ratchets/test-kernel-deep-import-baseline.json';
+
+/** The baseline file that holds `pkg`'s row: the hosts share one, and the
+ *  test kernel has its own so the hosts' file gains no row. */
+const baselineFileOf = (pkg: Package): string =>
+  pkg === 'test-kernel' ? KERNEL_FILE : HOSTS_FILE;
 const TSCONFIG_PATH = resolve(REPO_ROOT, 'tsconfig.json');
 
 /** Each tsconfig alias (`@agent`, `@transcript`, `@common/webview`, …) and
@@ -81,9 +86,7 @@ function isHarnessDeepImport(specifier: string): boolean {
 
 function liveSpecifiers(pkg: Package): string[] {
   const specifiers = new Set<string>();
-  for (const file of sourceFilesUnder(
-    resolve(REPO_ROOT, `packages/${pkg}/src`),
-  )) {
+  for (const file of sourceFilesUnder(resolve(REPO_ROOT, ROOTS[pkg]))) {
     for (const specifier of collectModuleSpecifiers(parseSourceFile(file))) {
       if (isHarnessDeepImport(specifier)) specifiers.add(specifier);
     }
@@ -91,8 +94,18 @@ function liveSpecifiers(pkg: Package): string[] {
   return [...specifiers].toSorted((a, b) => a.localeCompare(b));
 }
 
-function readBaseline(): DeepImportBaseline {
-  return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as DeepImportBaseline;
+function readBaseline(): Record<Package, string[]> {
+  const hosts = (
+    JSON.parse(readFileSync(resolve(REPO_ROOT, HOSTS_FILE), 'utf8')) as {
+      hosts: Record<Exclude<Package, 'test-kernel'>, string[]>;
+    }
+  ).hosts;
+  const kernel = (
+    JSON.parse(readFileSync(resolve(REPO_ROOT, KERNEL_FILE), 'utf8')) as {
+      kernel: { 'test-kernel': string[] };
+    }
+  ).kernel;
+  return { ...hosts, ...kernel };
 }
 
 describe('harness deep-import ratchet', () => {
@@ -105,13 +118,13 @@ describe('harness deep-import ratchet', () => {
   it.each(PACKAGES)(
     'rejects a harness-internal specifier in %s that is not in the baseline',
     (pkg) => {
-      const listed = new Set(baseline.hosts[pkg]);
+      const listed = new Set(baseline[pkg]);
       const added = current[pkg].filter((specifier) => !listed.has(specifier));
       expect(
         added,
-        `New ${pkg} harness deep import(s) not in ${BASELINE_FILE}:\n` +
+        `New ${pkg} harness deep import(s) not in ${baselineFileOf(pkg)}:\n` +
           added.map((specifier) => `  + ${specifier}`).join('\n') +
-          `\n\nImport the public entry (@texra-ai/harness and its subpaths) or move the module to its owner; do not widen ${BASELINE_FILE}.`,
+          `\n\nImport the public entry (@texra-ai/harness and its subpaths) or move the module to its owner; do not widen ${baselineFileOf(pkg)}.`,
       ).toEqual([]);
     },
   );
@@ -120,24 +133,22 @@ describe('harness deep-import ratchet', () => {
     'rejects baseline specifiers with no live %s import (stale headroom)',
     (pkg) => {
       const live = new Set(current[pkg]);
-      const stale = baseline.hosts[pkg].filter(
-        (specifier) => !live.has(specifier),
-      );
+      const stale = baseline[pkg].filter((specifier) => !live.has(specifier));
       expect(
         stale,
-        `Stale ${pkg} specifier(s) in ${BASELINE_FILE}:\n` +
+        `Stale ${pkg} specifier(s) in ${baselineFileOf(pkg)}:\n` +
           stale.map((specifier) => `  - ${specifier}`).join('\n') +
-          `\n\nRemove them from ${BASELINE_FILE} so they cannot absorb a future new edge.`,
+          `\n\nRemove them from ${baselineFileOf(pkg)} so they cannot absorb a future new edge.`,
       ).toEqual([]);
     },
   );
 
   it('keeps the baseline ordered and duplicate-free per package', () => {
     for (const pkg of PACKAGES) {
-      const sortedUnique = [...new Set(baseline.hosts[pkg])].toSorted((a, b) =>
+      const sortedUnique = [...new Set(baseline[pkg])].toSorted((a, b) =>
         a.localeCompare(b),
       );
-      expect(baseline.hosts[pkg], `${BASELINE_FILE} hosts.${pkg}`).toEqual(
+      expect(baseline[pkg], `${baselineFileOf(pkg)} ${pkg}`).toEqual(
         sortedUnique,
       );
     }

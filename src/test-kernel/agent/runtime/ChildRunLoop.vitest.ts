@@ -12,7 +12,6 @@ import '@test/support/sessionGraphTestSetup';
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber, SubscriptionRef } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
 
 const mocks = vi.hoisted(() => ({
   wakeRun: vi.fn(),
@@ -26,14 +25,19 @@ vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
 }));
 
 import {
+  generateRunId,
+  qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+} from '@texra-ai/harness/schemas';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import {
   startChildRunLoop,
   type ChildRunLoopParams,
   type NativeChildStrategy,
-  type ProcessChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createChildRun } from '@agent/runtime/delegation/childRun';
-import { qualifyAggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { closeTestDefaultSession } from '@test/support/sessionEnd';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { sessionStoreFaults } from '@test/support/storeFaults';
@@ -47,7 +51,7 @@ import {
   queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { shouldSkipWait } from '@tools/executions/waitCoordination';
-import { generateRunId } from '@utils/core';
+import type { ProcessChildStrategy } from '@texra-ai/harness/plugins';
 
 // A persistent store under a temp root, so a case can fail its writes
 // (`sessionStoreFaults`); its run ends are the real `finalizeRun`'s.

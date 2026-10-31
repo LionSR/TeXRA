@@ -4,7 +4,7 @@ import { Cause, Effect, Exit, FileSystem, PlatformError } from 'effect';
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
-import { getGitignoreMatcher } from '@tools/gitignore';
+import { getGitignoreMatcher } from '@texra-ai/harness/plugins';
 
 /** The workspace root each call names, as its caller's `WorkspaceFs` would. */
 const WORKSPACE = '/workspace';

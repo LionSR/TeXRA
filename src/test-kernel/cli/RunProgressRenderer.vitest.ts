@@ -1,15 +1,15 @@
 import { it } from '@effect/vitest';
 import { Effect, Exit, Schema, Scope } from 'effect';
 import { describe, expect } from 'vitest';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
   type RunId,
-  USER_FOLLOW_UP_SUPPORT,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
+import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
+import { USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { testSessionOf } from '@test/support/testProcessRuntime';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';

@@ -17,10 +17,14 @@ import { it } from '@effect/vitest';
 import { Effect, Fiber, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
+import {
+  AgentConfigSchema,
+  generateRunId,
+  type RunId,
+} from '@texra-ai/harness/schemas';
+import { withProcessServices } from '@texra-ai/harness/host';
 import type { RootLaunchOptions } from '@agent/runtime/rootLaunch';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withProcessServices } from '@platform/processRuntime';
-import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
   claimHolder,
@@ -33,7 +37,6 @@ import {
 } from '@test/support/storeFaults';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { generateRunId } from '@utils/core';
 
 const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
   agent: 'assistant',

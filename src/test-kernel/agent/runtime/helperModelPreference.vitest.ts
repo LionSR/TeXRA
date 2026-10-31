@@ -2,13 +2,13 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { applyHelperModelPreference } from '@agent/runtime/helperModelName';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import {
   fakeProcessServices,
   installedHost,
 } from '@test/support/setupPlatform';
+import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 describe('applyHelperModelPreference', () => {
   // No credential is stored, so the helper model cannot run: the launch keeps

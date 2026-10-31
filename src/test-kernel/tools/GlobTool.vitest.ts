@@ -5,9 +5,9 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { Glob } from 'glob';
 
 import { describe, expect, vi } from 'vitest';
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';

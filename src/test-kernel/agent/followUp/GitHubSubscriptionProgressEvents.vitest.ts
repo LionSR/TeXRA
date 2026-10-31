@@ -4,12 +4,11 @@ import { Effect, Exit, Layer, Scope } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { AppSignals } from '@platform/appSignals';
-import { Secrets } from '@platform/secrets';
-import type { RunId } from '@shared/schemas';
+import { AppSignals, Secrets } from '@texra-ai/harness/host';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { RunSubscriptionRegistry } from '@texra/tools/github/RunSubscriptionRegistry';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** A polling source that records its active keys and key listeners. */
 class RegistryTestSource {

@@ -3,12 +3,12 @@ import { BadRequestError as OpenAIBadRequestError } from 'openai';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
 import {
   attachErrorPresentationClaimed,
-  attachProviderError,
   hasErrorPresentationClaimed,
-} from '@common/errors/sdkError/errorMetadata';
+} from '@texra-ai/harness/host';
+import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
+import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { openaiFailure } from '../../../packages/llm/src/api/openaiError.js';
 import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';

@@ -1,7 +1,7 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
-import { qualifyAggregateId, type RunId } from '@shared/schemas';
+import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import {
   createTestSession,
   publishTestRunStart,

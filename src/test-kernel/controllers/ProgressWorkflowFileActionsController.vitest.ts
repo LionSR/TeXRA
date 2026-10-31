@@ -3,8 +3,8 @@ import { Effect, FileSystem, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { AppSignals } from '@texra-ai/harness/host';
-import type { RunId } from '@shared/schemas';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 const RUN = 'ab12cd' as RunId;
 

@@ -2,14 +2,14 @@ import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 
 import { describe, expect } from 'vitest';
+import {
+  qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+  RunIdSchema,
+} from '@texra-ai/harness/schemas';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 
-import {
-  RUN_OUTCOME,
-  qualifyAggregateId,
-  RunIdSchema,
-  type RunId,
-} from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { startAwaited } from '@test/support/runHandleFixtures';

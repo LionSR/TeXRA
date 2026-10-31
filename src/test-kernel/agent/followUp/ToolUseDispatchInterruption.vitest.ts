@@ -6,7 +6,7 @@ import { Deferred, Effect, Fiber, Layer, Queue } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import { generateRunId } from '@texra-ai/harness/schemas';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
@@ -19,9 +19,9 @@ import {
   type ScriptedRunInit,
 } from '@test/support/scriptedRunLayers';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { generateRunId } from '@utils/core';
 
 import { sessionWithInteractions } from '../progressTestUtils';
+import type { ITool } from '@texra-ai/harness';
 
 import type { TurnResult } from '@texra-ai/llm';
 
