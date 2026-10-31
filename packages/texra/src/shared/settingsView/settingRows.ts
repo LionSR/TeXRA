@@ -6,15 +6,13 @@
  */
 import { Schema, SchemaAST } from 'effect';
 
-import type {
-  StateSettingEntry,
-  SurfacedSettingEntry,
-} from '@texra-ai/harness/schemas';
+import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
+import type { StateSettingEntry } from '@texra-ai/harness/schemas';
 
 /** A row a plugin declares, with the short label its Plugins-page card shows
  *  (the card already names the plugin, so 'Model' rather than 'Codex model'). */
 export interface PluginSettingRow {
-  readonly row: SurfacedSettingEntry;
+  readonly row: TexraSettingRow;
   readonly label: string;
 }
 

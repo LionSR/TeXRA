@@ -9,7 +9,6 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports
-import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 import {
   AGENT_CLI_EFFORT_SETTING,
   CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
@@ -22,6 +21,7 @@ import {
   CodexSandboxModeSchema,
 } from '@texra/shared/agentCliSettings';
 import { type PluginSettingRow } from '@texra/shared/settingsView/settingRows';
+import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
 
 /** The `codex` plugin's repository-scoped keys. */
 export const CodexStateKey = Object.freeze({
@@ -43,14 +43,14 @@ export type ClaudeAgentStateKey =
 
 /** An external coding agent's row: repo-scoped, on the approval tab and in `/config`. */
 function agentCliSetting(
-  entry: Omit<SurfacedSettingEntry, 'category' | 'slot' | 'surfaces'>,
-): SurfacedSettingEntry {
+  entry: Omit<TexraSettingRow, 'category' | 'slot' | 'surfaces'>,
+): TexraSettingRow {
   return {
     ...entry,
     category: 'ai-agents',
     slot: 'repoState',
     surfaces: { settingsView: 'approval', cliConfig: true },
-  } satisfies SurfacedSettingEntry;
+  } satisfies TexraSettingRow;
 }
 
 /** The `codex` plugin's rows, in its card's order. */

@@ -1264,22 +1264,6 @@ Who serves a run's conversation ({@link ModelBackendSchema}).
 type ModelBackend = typeof ModelBackendSchema.Type;
 ```
 
-## ModelsTabSurface
-
-One provider's control group in the Models tab.
-
-```ts
-interface ModelsTabSurface {
-  /** Canonical provider id whose expanded settings show this control. */
-  readonly provider: string;
-  readonly label: string;
-  readonly description: string;
-  readonly warning?: string;
-  readonly warningUrl?: string;
-  readonly warningUrlLabel?: string;
-}
-```
-
 ## NormalizedToolUse
 
 The flat, renderer-friendly tool-use view `normalizeToolUse`
@@ -1484,6 +1468,14 @@ interface ProposalFileGroup {
   /** When false, files are virtual paths that should not be opened via workspace file commands. */
   clickable: boolean;
 }
+```
+
+## PROVIDER_ENDPOINT_STATE_ENTRIES
+
+The providers with a custom-endpoint setting, in catalog order.
+
+```ts
+const PROVIDER_ENDPOINT_STATE_ENTRIES: readonly [{ id: "openai"; displayName: string; endpointKey: "endpoint.openai"; }, { id: "anthropic"; displayName: string; endpointKey: "endpoint.anthropic"; }, { id: "google"; displayName: string; endpointKey: "endpoint.google"; }, { id: "xai"; displayName: string; endpointKey: "endpoint.xai"; }, { id: "deepseek"; displayName: string; endpointKey: "endpoint.deepseek"; }, { id: "moonshot"; displayName: string; endpointKey: "endpoint.moonshot"; }, { id: "dashscope"; displayName: string; endpointKey: "endpoint.dashscope"; }, { id: "minimax"; displayName: string; endpointKey: "endpoint.minimax"; }, { id: "glm"; displayName: string; endpointKey: "endpoint.glm"; }, { id: "meta"; displayName: string; endpointKey: "endpoint.meta"; }]
 ```
 
 ## providerEndpointKey
@@ -2117,7 +2109,7 @@ function settingsCatalog(options: {
 
 ## SettingsCatalog
 
-One settings catalog and the lookups every settings surface reads from it.
+One settings catalog: its rows and the lookups the stores read from them.
 
 ```ts
 interface SettingsCatalog {
@@ -2130,28 +2122,6 @@ interface SettingsCatalog {
   readonly byKey: (key: string) => StateSettingEntry | undefined;
   /** Look up a row by its stored key, as a store lists it. */
   readonly byStoredKey: (storedKey: string) => StateSettingEntry | undefined;
-  /** Look up a row the settings view's unified write path owns. */
-  readonly settingsViewByKey: (
-    key: string,
-  ) => SettingsViewStateSettingEntry | undefined;
-  /**
-   * The rows one settings-view snapshot carries, in catalog order: the
-   * outbound payload's schema, the backend's read loop and the webview's
-   * apply step each iterate this list, so adding
-   * `surfaces.settingsView: '<snapshot>'` to a row puts it on the wire.
-   */
-  readonly snapshotEntries: (
-    snapshot: string,
-  ) => readonly SettingsViewStateSettingEntry[];
-  /** The `/config` panel's rows: `surfaces.cliConfig` is the one predicate. */
-  readonly cliRows: readonly SurfacedSettingEntry[];
-  /** Look up a row the CLI `/config` panel lists, and so may write. */
-  readonly cliByKey: (key: string) => SurfacedSettingEntry | undefined;
-  /** The Models tab's controls for one provider, in catalog order. */
-  readonly modelsTab: (provider: string) => readonly {
-    readonly entry: StateSettingEntry;
-    readonly surface: ModelsTabSurface;
-  }[];
   /**
    * A fresh copy of a config-file-backed row's default, or `undefined` for a
    * key no such row owns: what every `ConfigProvider` answers for an absent
@@ -2173,51 +2143,6 @@ worktree.
 ```ts
 type SettingStore =
   'config' | 'workspaceState' | 'repoState' | 'globalState';
-```
-
-## SettingSurfaces
-
-Catalog-driven UIs that render the row. Absent means no UI renders it.
-
-```ts
-interface SettingSurfaces {
-  /**
-   * Rendered by the extension/desktop settings view; the value names the
-   * snapshot (the app's id) rebroadcast after a write. Presence also makes
-   * the row writable through the generic `UPDATE_STATE_SETTING` boundary.
-   */
-  readonly settingsView?: string;
-  /** Listed as an editable row in the CLI `/config` panel. */
-  readonly cliConfig?: true;
-  /** Shown as a per-provider toggle in the Models tab. */
-  readonly models?: readonly ModelsTabSurface[];
-}
-```
-
-## SettingsViewStateSettingEntry
-
-A row the extension/desktop settings view owns the write path for.
-
-```ts
-type SettingsViewStateSettingEntry = SurfacedSettingEntry & {
-  readonly surfaces: SettingSurfaces & {
-    readonly settingsView: string;
-  };
-};
-```
-
-## SettingWriteEffects
-
-Consequences of writing a row, read by the settings write handlers.
-
-```ts
-interface SettingWriteEffects {
-  /**
-   * Writing the row changes which models are available or how they route, so
-   * hosts must recompute their cached model options.
-   */
-  readonly invalidatesModelOptions?: true;
-}
 ```
 
 ## SkillDisplayIssue
@@ -2297,10 +2222,6 @@ interface StateSettingEntry {
    * never opt in. A malformed project value counts too, and fails closed.
    */
   readonly projectMayOptOut?: true;
-  /** Which catalog-driven UIs render the row. */
-  readonly surfaces?: SettingSurfaces;
-  /** Write-time consequences, read by the settings write handlers. */
-  readonly onWrite?: SettingWriteEffects;
   /**
    * Per-value descriptions for an enum setting, aligned 1:1 with the schema's
    * enum options (a host's settings UI derives them). The option *values* are
@@ -2309,11 +2230,6 @@ interface StateSettingEntry {
   readonly enumDescriptions?: readonly string[];
   /** Display labels for enum options, aligned 1:1 with the schema options. */
   readonly enumLabels?: readonly string[];
-  /**
-   * Delegate editing to an existing list form (e.g. `ModelListForm`) instead of
-   * the scalar read/write accessor.
-   */
-  readonly openForm?: string;
 }
 ```
 
@@ -2391,18 +2307,6 @@ and plan are kept when every nonempty item names the same one.
 function sumUsageStats(
   items: Iterable<TokenUsageStats>,
 ): TokenUsageStats
-```
-
-## SurfacedSettingEntry
-
-A row at least one catalog-driven UI renders, so display copy is present.
-
-```ts
-type SurfacedSettingEntry = StateSettingEntry & {
-  readonly description: string;
-  readonly category: string;
-  readonly surfaces: SettingSurfaces;
-};
 ```
 
 ## TaskGroup

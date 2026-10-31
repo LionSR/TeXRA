@@ -35,12 +35,12 @@ describe('SessionHandle', () => {
         const service = yield* JsonStore.open(file, { follow });
         const windowB = yield* JsonStore.open(file);
         // The file holds the key as stored, under the catalog's namespace.
-        const STORED_POLICY_KEY = `${TEXRA_SETTINGS.namespace}.${APPROVAL_POLICY_CONFIG_KEY}`;
+        const STORED_POLICY_KEY = `${TEXRA_SETTINGS.catalog.namespace}.${APPROVAL_POLICY_CONFIG_KEY}`;
         const config = new JsonConfigProvider({
           workspace: yield* JsonStore.open(`${file}.workspace`, { follow }),
           global: yield* JsonStore.open(`${file}.global`, { follow }),
           local: service,
-          catalog: TEXRA_SETTINGS,
+          catalog: TEXRA_SETTINGS.catalog,
         });
         yield* windowB.set(STORED_POLICY_KEY, 'yolo');
         const roots = { ...testWorkspaceRoots(), config };

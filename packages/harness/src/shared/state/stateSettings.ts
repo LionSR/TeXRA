@@ -53,18 +53,11 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * skills, logging). An app declares its rows (its plugins' among them)
  * beside its code, and `settingsCatalog` puts them after these.
  *
- * One row carries the catalog facts:
- *
- * - **`slot`** — where the value is stored (`config` / `workspaceState` /
- *   `repoState` / `globalState`); the same on every host.
- * - **`surfaces`** — which catalog-driven *UI* renders the row (settings view,
- *   CLI `/config`, the Models tab's per-provider controls).
- * - **`onWrite`** — write-time consequences declared once, read by the
- *   settings write handlers (the settings views' and the CLI `/config` form's).
- *
- * Everything downstream is a filter over these rows: the CLI unknown-key set,
- * the `/config` panel, the settings-view write gate, the Models tab rows, and
- * `entry.slot`.
+ * A row carries what a setting is: its key, its schema with the default, where
+ * the value is stored (`slot`: `config` / `workspaceState` / `repoState` /
+ * `globalState`, the same on every host) and its display copy. Where an app
+ * shows a row is the app's: TeXRA keeps that beside its own rows
+ * (`packages/texra/src/shared/settingsView/settingSurfaces.ts`).
  */
 
 /**
@@ -75,40 +68,6 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  */
 export type SettingStore =
   'config' | 'workspaceState' | 'repoState' | 'globalState';
-
-/** One provider's control group in the Models tab. */
-export interface ModelsTabSurface {
-  /** Canonical provider id whose expanded settings show this control. */
-  readonly provider: string;
-  readonly label: string;
-  readonly description: string;
-  readonly warning?: string;
-  readonly warningUrl?: string;
-  readonly warningUrlLabel?: string;
-}
-
-/** Catalog-driven UIs that render the row. Absent means no UI renders it. */
-export interface SettingSurfaces {
-  /**
-   * Rendered by the extension/desktop settings view; the value names the
-   * snapshot (the app's id) rebroadcast after a write. Presence also makes
-   * the row writable through the generic `UPDATE_STATE_SETTING` boundary.
-   */
-  readonly settingsView?: string;
-  /** Listed as an editable row in the CLI `/config` panel. */
-  readonly cliConfig?: true;
-  /** Shown as a per-provider toggle in the Models tab. */
-  readonly models?: readonly ModelsTabSurface[];
-}
-
-/** Consequences of writing a row, read by the settings write handlers. */
-export interface SettingWriteEffects {
-  /**
-   * Writing the row changes which models are available or how they route, so
-   * hosts must recompute their cached model options.
-   */
-  readonly invalidatesModelOptions?: true;
-}
 
 export interface StateSettingEntry {
   /** The row's key, relative to its catalog's namespace (`memory.enabled`),
@@ -135,10 +94,6 @@ export interface StateSettingEntry {
    * never opt in. A malformed project value counts too, and fails closed.
    */
   readonly projectMayOptOut?: true;
-  /** Which catalog-driven UIs render the row. */
-  readonly surfaces?: SettingSurfaces;
-  /** Write-time consequences, read by the settings write handlers. */
-  readonly onWrite?: SettingWriteEffects;
   /**
    * Per-value descriptions for an enum setting, aligned 1:1 with the schema's
    * enum options (a host's settings UI derives them). The option *values* are
@@ -147,26 +102,7 @@ export interface StateSettingEntry {
   readonly enumDescriptions?: readonly string[];
   /** Display labels for enum options, aligned 1:1 with the schema options. */
   readonly enumLabels?: readonly string[];
-  /**
-   * Delegate editing to an existing list form (e.g. `ModelListForm`) instead of
-   * the scalar read/write accessor.
-   */
-  readonly openForm?: string;
 }
-
-/** A row at least one catalog-driven UI renders, so display copy is present. */
-export type SurfacedSettingEntry = StateSettingEntry & {
-  readonly description: string;
-  readonly category: string;
-  readonly surfaces: SettingSurfaces;
-};
-
-/** A row the extension/desktop settings view owns the write path for. */
-export type SettingsViewStateSettingEntry = SurfacedSettingEntry & {
-  readonly surfaces: SettingSurfaces & {
-    readonly settingsView: string;
-  };
-};
 
 // ============================================================================
 // Row builders
@@ -180,33 +116,23 @@ function configToggle(on: boolean, description: string) {
   return { configTarget: 'global', schema, description } as const;
 }
 
-/**
- * A Models-tab provider toggle: a boolean every host stores in GlobalState, rendered as a profile row, a CLI `/config` row, and
- * one Models-tab control. The control's label and description are the row's
- * title and description, so the copy is written once.
- */
+/** A provider toggle: a boolean every host stores in GlobalState. */
 function globalProviderToggle(opts: {
   readonly key: string;
   readonly default: boolean;
-  readonly onWrite?: SettingWriteEffects;
-  readonly model: ModelsTabSurface;
-}): SurfacedSettingEntry {
+  readonly title: string;
+  readonly description: string;
+}): StateSettingEntry {
   return {
     key: opts.key,
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(opts.default)),
     ),
-    title: opts.model.label,
-    description: opts.model.description,
+    title: opts.title,
+    description: opts.description,
     category: 'model',
     slot: 'globalState',
-    ...(opts.onWrite && { onWrite: opts.onWrite }),
-    surfaces: {
-      settingsView: 'profile',
-      cliConfig: true,
-      models: [opts.model],
-    },
-  } satisfies SurfacedSettingEntry;
+  };
 }
 
 // ============================================================================
@@ -218,11 +144,10 @@ function globalProviderToggle(opts: {
  *
  * All three hosts read `.texra/config.json` and that storage is flat, so the
  * key and the slot are derived rather than restated; a row carries the schema
- * (with its `withDecodingDefault` default), the copy, and which UI
- * renders it — exactly the shape every state-backed row below already uses.
+ * (with its `withDecodingDefault` default) and the copy — exactly the shape
+ * every state-backed row below already uses.
  *
- * The record's own declaration order is the catalog order, including the
- * Models tab's control order: reordering these keys reorders that UI.
+ * The record's own declaration order is the catalog order.
  */
 const HARNESS_CONFIG_ROWS: Record<
   string,
@@ -243,7 +168,6 @@ const HARNESS_CONFIG_ROWS: Record<
     title: 'Agents at once',
     description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
     category: 'agents',
-    surfaces: { settingsView: 'agents', cliConfig: true },
   },
   // Global: how one person wants their windows to open.
   [RESUME_ON_OPEN_SETTING.configKey]: {
@@ -257,7 +181,6 @@ const HARNESS_CONFIG_ROWS: Record<
     description: RESUME_ON_OPEN_SETTING.description,
     category: 'agents',
     enumLabels: ['Ask', 'Resume automatically'],
-    surfaces: { settingsView: 'approval', cliConfig: true },
   },
   // Global: a committed project config must not raise or remove the user's cap.
   [GOAL_MAX_COST_SETTING.configKey]: {
@@ -274,7 +197,6 @@ const HARNESS_CONFIG_ROWS: Record<
     title: 'Goal spend cap (USD)',
     description: GOAL_MAX_COST_SETTING.description,
     category: 'tools',
-    surfaces: { settingsView: 'approval', cliConfig: true },
   },
   // The provider toggles below are `configTarget: 'global'`: they describe how
   // you talk to a provider, not a property of one project. Writes go to the
@@ -295,17 +217,6 @@ const HARNESS_CONFIG_ROWS: Record<
     description:
       "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
     category: 'model',
-    surfaces: {
-      settingsView: 'profile',
-      models: [
-        {
-          provider: 'google',
-          label: 'Server-side conversation state',
-          description:
-            "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
-        },
-      ],
-    },
   },
   'model.useGoogleBackgroundResponses': configToggle(
     false,
@@ -339,7 +250,6 @@ const HARNESS_CONFIG_ROWS: Record<
     title: 'Compaction threshold',
     description: MODEL_COMPACTION_THRESHOLD_SETTING.description,
     category: 'model',
-    surfaces: { settingsView: 'agents', cliConfig: true },
   },
   [MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey]: {
     schema: Schema.Int.check(
@@ -354,7 +264,6 @@ const HARNESS_CONFIG_ROWS: Record<
     title: 'Automatic retries',
     description: MODEL_RETRY_MAX_ATTEMPTS_SETTING.description,
     category: 'model',
-    surfaces: { settingsView: 'agents', cliConfig: true },
   },
   'chatgptCodex.preferSubscription': {
     schema: Schema.Boolean.pipe(
@@ -374,10 +283,6 @@ const HARNESS_CONFIG_ROWS: Record<
     title: 'Subscription input token budget (K tokens)',
     description: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.description,
     category: 'model',
-    // This bucket controls snapshot/rebroadcast routing, not tab placement;
-    // reuse it for the Subscriptions control because no subscriptions bucket exists.
-    surfaces: { settingsView: 'agents', cliConfig: true },
-    onWrite: { invalidatesModelOptions: true },
   },
   'xaiGrok.preferSubscription': {
     schema: Schema.Boolean.pipe(
@@ -429,7 +334,6 @@ const HARNESS_CONFIG_ROWS: Record<
     description:
       'Expose enabled built-in and imported skills to agent prompts. Skills are off by default.',
     category: 'tools',
-    surfaces: { settingsView: 'skills', cliConfig: true },
   },
   [TOOL_EDIT_APPROVAL_CONFIG_KEY]: {
     schema: Schema.Boolean.pipe(
@@ -440,7 +344,6 @@ const HARNESS_CONFIG_ROWS: Record<
       'Show a diff and wait for your approval before an agent changes a project file.',
     category: 'tools',
     configTarget: 'local',
-    surfaces: { settingsView: 'approval' },
   },
   [BASH_APPROVAL_CONFIG_KEY]: {
     schema: Schema.Boolean.pipe(
@@ -450,7 +353,6 @@ const HARNESS_CONFIG_ROWS: Record<
     description: 'Wait for your approval before an agent runs a shell command.',
     category: 'tools',
     configTarget: 'local',
-    surfaces: { settingsView: 'approval' },
   },
 };
 
@@ -474,7 +376,7 @@ export function configTreeRows(
  * approval-policy module owns its schema and the tolerant parsing of
  * typed-in spellings.
  */
-const APPROVAL_POLICY_SETTING = {
+const APPROVAL_POLICY_SETTING: StateSettingEntry = {
   key: APPROVAL_POLICY_CONFIG_KEY,
   // Strict on purpose: `settingEnumOptions` derives the dropdown from a
   // literal-list row, and the tolerant spelling belongs to
@@ -491,41 +393,29 @@ const APPROVAL_POLICY_SETTING = {
   slot: 'config',
   configTarget: 'local',
   enumLabels: ['Block', 'Ask', 'Auto-approve'],
-  surfaces: { settingsView: 'approval', cliConfig: true },
-} satisfies SurfacedSettingEntry;
+};
 
 // ============================================================================
 // State-backed rows
 // ============================================================================
 
-// Written by the extension/desktop Models tab and the CLI's `/config` panel
-// through the same catalog write path.
-const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
-  ({ endpointKey, displayName }) =>
-    ({
-      key: endpointKey,
-      schema: Schema.String.pipe(
-        Schema.withDecodingDefault(Effect.succeed('')),
-      ),
-      title: `${displayName} endpoint`,
-      description: `Custom base URL for ${displayName} API requests. Leave empty to use the default endpoint.`,
-      category: 'model',
-      slot: 'globalState',
-      surfaces: { settingsView: 'profile', cliConfig: true },
-    }) satisfies SurfacedSettingEntry,
-);
+const PROVIDER_ENDPOINT_SETTINGS: readonly StateSettingEntry[] =
+  PROVIDER_ENDPOINT_STATE_ENTRIES.map(({ endpointKey, displayName }) => ({
+    key: endpointKey,
+    schema: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+    title: `${displayName} endpoint`,
+    description: `Custom base URL for ${displayName} API requests. Leave empty to use the default endpoint.`,
+    category: 'model',
+    slot: 'globalState',
+  }));
 
 /**
- * Region toggles resolved into `RouteFacts.endpoints`, each also a Models tab
- * control for its provider: one row per provider plugin `region`.
+ * Region toggles resolved into `RouteFacts.endpoints`: one row per provider
+ * plugin `region`.
  */
 const PROVIDER_ROUTING_SETTINGS = PROVIDER_REGION_SETTINGS.map(
-  ({ provider, key, default: china, control }) =>
-    globalProviderToggle({
-      key,
-      default: china,
-      model: { provider, ...control },
-    }),
+  ({ key, default: china, title, description }) =>
+    globalProviderToggle({ key, default: china, title, description }),
 );
 
 const STATE_SETTINGS: readonly StateSettingEntry[] = [
@@ -540,8 +430,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Attribute agent-authored git commits to the agent commit author so they are distinguishable from your own commits.',
     category: 'git',
     slot: 'repoState',
-    surfaces: { settingsView: 'git-author', cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  },
   {
     key: WorkspaceStateKey.GIT_AUTHOR_NAME,
     // `.min(1)` so a blank value is rejected at the write boundary and a
@@ -554,8 +443,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Author and committer name used for agent-authored commits when commit marking is enabled.',
     category: 'git',
     slot: 'repoState',
-    surfaces: { settingsView: 'git-author', cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  },
   {
     key: WorkspaceStateKey.GIT_AUTHOR_EMAIL,
     schema: Schema.String.check(Schema.isMinLength(1)).pipe(
@@ -566,8 +454,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Author and committer email used for agent-authored commits when commit marking is enabled.',
     category: 'git',
     slot: 'repoState',
-    surfaces: { settingsView: 'git-author', cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  },
   {
     key: WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
     schema: Schema.Boolean.pipe(
@@ -578,8 +465,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Allow spawned subagents to run in isolated git worktrees so parallel edits do not conflict.',
     category: 'git',
     slot: 'repoState',
-    surfaces: { settingsView: 'git-author', cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  },
 
   // --- Workspace agents ----------------------------------------------------------
   // Written and read by the agent list and the settings view's agent catalog,
@@ -616,8 +502,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Allow a task to stop the agents it started once they are no longer needed.',
     category: 'agents',
     slot: 'globalState',
-    surfaces: { settingsView: 'agents', cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  },
   {
     key: GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
     schema: Schema.Boolean.pipe(
@@ -627,13 +512,11 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: "Let a task's agents continue when the task is stopped.",
     category: 'agents',
     slot: 'globalState',
-    surfaces: { settingsView: 'agents', cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  },
 
   // --- Memory ---------------------------------------------------------------
   // Every host's runtime honors the key through the `memory` entry of the
-  // memory-workflow plugin's `injectedWhen` (`@tools/plugins`), but only the
-  // settings view renders it; the CLI has no `/config` row for it.
+  // memory-workflow plugin's `injectedWhen` (`@tools/plugins`).
   {
     key: GlobalStateKey.MEMORY_ENABLED,
     schema: Schema.Boolean.pipe(
@@ -643,8 +526,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Remember useful details across chat sessions.',
     category: 'tools',
     slot: 'globalState',
-    surfaces: { settingsView: 'memory' },
-  } satisfies SurfacedSettingEntry,
+  },
 
   // --- Code mode -------------------------------------------------------------
   // The codemode plugin's `injectedWhen` reads the key to inject `script`;
@@ -660,8 +542,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Send chat agents the script tool and their own tools alone: every other tool is called from inside a script. Off by default while the comparison against direct tool calls runs.',
     category: 'agents',
     slot: 'globalState',
-    surfaces: { cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  },
 
   // --- OpenAI WebSocket transport (experimental) -----------------------------
   {
@@ -674,19 +555,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'EXPERIMENTAL: use the persistent WebSocket transport for OpenAI Responses requests (lower latency for tool-use loops), and let the ChatGPT-subscription Codex backend attempt WebSocket. Off by default.',
     category: 'model',
     slot: 'globalState',
-    surfaces: {
-      settingsView: 'profile',
-      cliConfig: true,
-      models: [
-        {
-          provider: 'openai',
-          label: 'WebSocket transport',
-          description:
-            'Use a persistent WebSocket connection for lower-latency tool-use loops. Requires direct OpenAI API (not compatible with custom endpoints).',
-        },
-      ],
-    },
-  } satisfies SurfacedSettingEntry,
+  },
 
   // --- Provider endpoints -----------------------------------------------------
   ...PROVIDER_ENDPOINT_SETTINGS,
@@ -702,8 +571,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Model used for auxiliary tasks: instruction polishing, merges, and session descriptions.',
     category: 'model',
     slot: 'globalState',
-    surfaces: { settingsView: 'models' },
-  } satisfies SurfacedSettingEntry,
+  },
   {
     key: GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
     schema: Schema.Boolean.pipe(
@@ -713,34 +581,23 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Show compact model names in pickers.',
     category: 'model',
     slot: 'globalState',
-    surfaces: { settingsView: 'models' },
-  } satisfies SurfacedSettingEntry,
+  },
 
   // --- Provider routing & region toggles --------------------------------------
   globalProviderToggle({
     key: GlobalStateKey.KIMI_CODE_PREFER,
     default: false,
-    onWrite: { invalidatesModelOptions: true },
-    model: {
-      provider: 'kimiCode',
-      label: 'Kimi Code subscription',
-      description:
-        'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
-    },
+    title: 'Kimi Code subscription',
+    description:
+      'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
   }),
   ...PROVIDER_ROUTING_SETTINGS,
   globalProviderToggle({
     key: GlobalStateKey.GLM_CODING_PLAN,
     default: false,
-    onWrite: { invalidatesModelOptions: true },
-    model: {
-      provider: 'glm',
-      label: 'GLM Coding Plan',
-      description:
-        'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
-      warningUrl: 'https://z.ai/subscribe',
-      warningUrlLabel: 'Subscribe',
-    },
+    title: 'GLM Coding Plan',
+    description:
+      'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
   }),
 
   {
@@ -752,9 +609,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Enable or disable individual skills in this workspace.',
     category: 'tools',
     slot: 'config',
-    openForm: 'skills',
-    surfaces: { settingsView: 'skills', cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  },
   {
     key: WorkspaceStateKey.DISABLED_SKILL_SOURCES,
     schema: Schema.Array(ActiveSkillSourceScopeSchema).pipe(
@@ -764,9 +619,7 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Enable or disable skill source groups in this workspace.',
     category: 'tools',
     slot: 'config',
-    openForm: 'skills',
-    surfaces: { settingsView: 'skills', cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  },
   {
     key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
     schema: Schema.Boolean.pipe(
@@ -779,13 +632,11 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Keep file-reading, editing, search, diagnostics, and PDF tools inside the active working directory. Turn this off only when an agent must use arbitrary filesystem paths.',
     category: 'tools',
     slot: 'workspaceState',
-    surfaces: { settingsView: 'approval', cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  },
 ];
 
 // ============================================================================
-// The catalog — the harness's rows followed by an app's; every list below is
-// a filter over it, never hand-maintained
+// The catalog — the harness's rows followed by an app's
 // ============================================================================
 
 /** The harness's own rows, in catalog order: config-file-backed, then state-backed. */
@@ -795,15 +646,7 @@ const HARNESS_SETTINGS: readonly StateSettingEntry[] = [
   ...STATE_SETTINGS,
 ];
 
-function isSurfaced(entry: StateSettingEntry): entry is SurfacedSettingEntry {
-  return (
-    entry.surfaces !== undefined &&
-    entry.description !== undefined &&
-    entry.category !== undefined
-  );
-}
-
-/** One settings catalog and the lookups every settings surface reads from it. */
+/** One settings catalog: its rows and the lookups the stores read from them. */
 export interface SettingsCatalog {
   /** The app's prefix on every stored key (`texra`): the config and state
    *  stores write a row's relative key as `<namespace>.<key>`. */
@@ -814,28 +657,6 @@ export interface SettingsCatalog {
   readonly byKey: (key: string) => StateSettingEntry | undefined;
   /** Look up a row by its stored key, as a store lists it. */
   readonly byStoredKey: (storedKey: string) => StateSettingEntry | undefined;
-  /** Look up a row the settings view's unified write path owns. */
-  readonly settingsViewByKey: (
-    key: string,
-  ) => SettingsViewStateSettingEntry | undefined;
-  /**
-   * The rows one settings-view snapshot carries, in catalog order: the
-   * outbound payload's schema, the backend's read loop and the webview's
-   * apply step each iterate this list, so adding
-   * `surfaces.settingsView: '<snapshot>'` to a row puts it on the wire.
-   */
-  readonly snapshotEntries: (
-    snapshot: string,
-  ) => readonly SettingsViewStateSettingEntry[];
-  /** The `/config` panel's rows: `surfaces.cliConfig` is the one predicate. */
-  readonly cliRows: readonly SurfacedSettingEntry[];
-  /** Look up a row the CLI `/config` panel lists, and so may write. */
-  readonly cliByKey: (key: string) => SurfacedSettingEntry | undefined;
-  /** The Models tab's controls for one provider, in catalog order. */
-  readonly modelsTab: (provider: string) => readonly {
-    readonly entry: StateSettingEntry;
-    readonly surface: ModelsTabSurface;
-  }[];
   /**
    * A fresh copy of a config-file-backed row's default, or `undefined` for a
    * key no such row owns: what every `ConfigProvider` answers for an absent
@@ -860,17 +681,6 @@ export function settingsCatalog(options: {
     }
     byKey.set(row.key, row);
   }
-  const surfaced = rows.filter(isSurfaced);
-  const settingsView = new Map(
-    surfaced
-      .filter(
-        (entry): entry is SettingsViewStateSettingEntry =>
-          entry.surfaces.settingsView !== undefined,
-      )
-      .map((entry) => [entry.key, entry]),
-  );
-  const cliRows = surfaced.filter((entry) => entry.surfaces.cliConfig === true);
-  const cliByKey = new Map(cliRows.map((entry) => [entry.key, entry]));
   const defaults = new Map<string, unknown>();
   return {
     namespace: options.namespace,
@@ -880,19 +690,6 @@ export function settingsCatalog(options: {
       storedKey.startsWith(`${options.namespace}.`)
         ? byKey.get(storedKey.slice(options.namespace.length + 1))
         : undefined,
-    settingsViewByKey: (key) => settingsView.get(key),
-    snapshotEntries: (snapshot) =>
-      [...settingsView.values()].filter(
-        (entry) => entry.surfaces.settingsView === snapshot,
-      ),
-    cliRows,
-    cliByKey: (key) => cliByKey.get(key),
-    modelsTab: (provider) =>
-      rows.flatMap((entry) =>
-        (entry.surfaces?.models ?? [])
-          .filter((surface) => surface.provider === provider)
-          .map((surface) => ({ entry, surface })),
-      ),
     configDefault: (key) => {
       const entry = byKey.get(key);
       if (entry?.slot !== 'config') return undefined;

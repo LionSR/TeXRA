@@ -260,7 +260,7 @@ const HARNESS_RESOURCES_PATH = await Effect.runPromise(
 const HARNESS_CLI_CONTEXT: CliContext = {
   storageRoot: HARNESS_STORAGE_ROOT,
   approvalPolicy: APPROVAL_POLICY_DEFAULT,
-  config: new MemoryConfigProvider(TEXRA_SETTINGS),
+  config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog),
   commandName: 'texra',
   configWarnings: [],
   configDegradations: [],

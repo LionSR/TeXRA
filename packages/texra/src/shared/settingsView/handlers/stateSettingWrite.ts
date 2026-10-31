@@ -16,9 +16,9 @@ import { Effect, Result, Schema } from 'effect';
 
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type {
-  SettingsViewStateSettingEntry,
-  SurfacedSettingEntry,
-} from '@texra-ai/harness/schemas';
+  SettingsViewRow,
+  TexraSettingRow,
+} from '@texra/shared/settingsView/settingSurfaces';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
 /** The surfaces that write a setting: a settings view's host, or the CLI. */
@@ -29,12 +29,12 @@ type SettingSurface = 'vscode' | 'desktop' | 'cli';
  * the rows they render, the CLI writes the rows its `/config` panel lists.
  */
 type WritableEntry<H extends SettingSurface> = H extends 'cli'
-  ? SurfacedSettingEntry
-  : SettingsViewStateSettingEntry;
+  ? TexraSettingRow
+  : SettingsViewRow;
 
 /** Outcome of {@link applyStateSettingUpdate}, for host-specific UI feedback. */
 export type StateSettingUpdateResult<
-  E extends SurfacedSettingEntry = SurfacedSettingEntry,
+  E extends TexraSettingRow = TexraSettingRow,
 > =
   | { readonly kind: 'ignored' }
   | { readonly kind: 'rejected'; readonly entry: E; readonly error: Error }
