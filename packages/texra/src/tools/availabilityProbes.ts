@@ -1,8 +1,7 @@
 /**
  * The probes TeXRA's plugin checks are built from (`./pluginAvailability`):
  * the localhost Zotero probes, the SDK-and-binary probe the agent CLIs
- * share, the prerequisites bridge that feeds one cached probe result to a
- * plugin's check, badge and detail callbacks, and the install-command picker.
+ * share, and the install-command picker.
  */
 
 // Third-party imports
@@ -18,12 +17,6 @@ import {
   SYSTEM_PACKAGE_MANAGERS,
   type SystemPackageManager,
 } from '@texra/utils/system/toolChecks';
-import type {
-  ToolAvailabilityChecks,
-  ToolProbeError,
-  ToolProbeInputs,
-  ToolProbeServices,
-} from '@texra-ai/harness/plugins';
 
 import type { Cause } from 'effect';
 import type { HttpClient, HttpClientError } from 'effect/http';
@@ -82,17 +75,6 @@ export function probeZoteroConnector(
   );
 }
 
-/**
- * The port the Zotero plugin's own `probe` resolved. The availability layer
- * types a cached probe result `unknown` because the plugins are heterogeneous;
- * this one's only ever originates from that probe, and a plugin that declares
- * one reaches `check`/`detailCheck` only once it has produced a value — the
- * bridge `prerequisitesChecks` makes for entries with pure callbacks.
- */
-export function zoteroProbePort(probeResult: unknown): number {
-  return probeResult as number;
-}
-
 /** Probe the Better BibTeX JSON-RPC endpoint. */
 export function probeZoteroBbt(
   port: number,
@@ -109,7 +91,7 @@ function wslInstallHint(): string {
 }
 
 /** Resolved status of an SDK-backed CLI integration for the dashboard. */
-export type SdkBinaryStatus =
+type SdkBinaryStatus =
   { ok: false; message: string } | { ok: true; binaryPath: string };
 
 /**
@@ -170,48 +152,6 @@ export function probeSdkBinaryStatus(config: {
     }
     return { ok: true as const, binaryPath };
   });
-}
-
-/**
- * Wire a prerequisites-style availability entry. `probe` runs once and its
- * result is cached by the availability layer, then handed back to every
- * callback as `probeResult`, typed `unknown` at the `ToolAvailabilityChecks` boundary
- * because the dashboard's entries are heterogeneous — each plugin has its own
- * prerequisites shape `T`. Bridging that cached `unknown` back to `T` happens
- * once, here, in `resolve`: a cache miss re-derives it via the entry's own
- * `fallback`, and a hit is cast back to `T`, safe because the value only ever
- * originated from this entry's own `probe`. `check`/`statusLabel`/`detailCheck`
- * then receive the resolved `T` directly; `detailCheck` is an Effect so a
- * detail may read a service (the Claude Code entry reads Secrets).
- */
-export function prerequisitesChecks<T, R = ToolProbeServices>(config: {
-  probe: (inputs: ToolProbeInputs) => Effect.Effect<T, ToolProbeError, R>;
-  /**
-   * Re-derives `T` on a cache miss, which the callbacks reach carrying no
-   * probe inputs — so each entry says here what it answers without a workspace.
-   */
-  fallback: () => Effect.Effect<T, ToolProbeError, R>;
-  check: (prereqs: T) => boolean;
-  statusLabel?: (prereqs: T) => string | undefined;
-  detailCheck: (
-    prereqs: T,
-  ) => Effect.Effect<string | undefined, ToolProbeError, R>;
-}): ToolAvailabilityChecks<R> {
-  const { probe, fallback, check, statusLabel, detailCheck } = config;
-  const resolve = (
-    probeResult: unknown,
-  ): Effect.Effect<T, ToolProbeError, R> =>
-    probeResult === undefined ? fallback() : Effect.succeed(probeResult as T);
-  return {
-    probe,
-    check: (probeResult) => Effect.map(resolve(probeResult), check),
-    ...(statusLabel && {
-      statusLabel: (probeResult: unknown) =>
-        Effect.map(resolve(probeResult), statusLabel),
-    }),
-    detailCheck: (probeResult) =>
-      Effect.flatMap(resolve(probeResult), detailCheck),
-  };
 }
 
 /**
