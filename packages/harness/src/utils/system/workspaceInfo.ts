@@ -119,12 +119,7 @@ export const buildWorkspaceInfoBlock = Effect.fn(function* (
 
   const lines: string[] = [];
 
-  if (wsPath) {
-    lines.push(`Workspace: ${escapeTextStrict(wsPath)}`);
-    lines.push(
-      `Bash cwd: already set to the workspace path above; use relative paths directly`,
-    );
-  }
+  if (wsPath) lines.push(`Workspace: ${escapeTextStrict(wsPath)}`);
 
   lines.push(`Platform: ${escapeTextStrict(platform)}`);
 
