@@ -30,12 +30,13 @@
 // Node imports
 import { execFileSync } from 'node:child_process';
 import console from 'node:console';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import { ZERO_RULES } from './ratchet-zero-rules.mjs';
+import { walkFiles } from './walkFiles.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -291,16 +292,6 @@ function checkBaseline(file, previous, current, renames) {
   return problems;
 }
 
-/** Walk every file, including nested baselines, without an extension filter. */
-function baselineFiles(dir) {
-  return readdirSync(path.join(rootDir, dir), { withFileTypes: true }).flatMap(
-    (entry) => {
-      const file = `${dir}/${entry.name}`;
-      return entry.isDirectory() ? baselineFiles(file) : [file];
-    },
-  );
-}
-
 function main() {
   // A git-show failure propagates; only a path absent from the base's tree is
   // a new baseline.
@@ -310,7 +301,9 @@ function main() {
       .split('\n'),
   );
   const files = existsSync(path.join(rootDir, baselineDir))
-    ? baselineFiles(baselineDir).toSorted()
+    ? walkFiles(path.join(rootDir, baselineDir))
+        .map((entry) => `${baselineDir}/${entry.relativePath}`)
+        .toSorted()
     : [];
   const problems = [];
   const renames = renamesSinceBase();
