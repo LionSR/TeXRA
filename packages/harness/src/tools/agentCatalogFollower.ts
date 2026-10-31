@@ -49,7 +49,7 @@ import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
-import { fileWatchRetrySchedule } from '@utils/files/fsEntryExists';
+import { fileWatchRetrySchedule } from '@utils/files/fileWatch';
 
 /** Register one agent directory root; a failure (an unreadable directory
  *  setting, a relative path, a path that cannot be canonicalised) is logged
