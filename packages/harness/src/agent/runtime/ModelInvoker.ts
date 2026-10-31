@@ -33,6 +33,7 @@ import {
 } from 'effect';
 import {
   ModelError,
+  fillModelError,
   type BackgroundEvent,
   type TurnEvent,
   type TurnRequest,
@@ -205,26 +206,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           roots: session.roots,
         });
 
-      /**
-       * The tail of the text the failing attempt had streamed, which its
-       * `failed` row carries for the retry surface. Attempts of one run go
-       * one at a time, so the last one written is the failure's.
-       */
-      let streamedTail = '';
-      const failAttempt = (error: ModelError, streamedText = '') =>
-        Effect.suspend(() => {
-          streamedTail = streamedText;
-          return Effect.fail(error);
-        });
-
-      /** Prepare one attempt's turn: a failure is the attempt's own, unsent. */
-      const prepareAttempt = (bound: BoundModel, request: TurnRequest) =>
-        Effect.tapError(bound.model.prepareTurn(request), () =>
-          Effect.sync(() => {
-            streamedTail = '';
-          }),
-        );
-
       interface AttemptTrace {
         readonly thinking: StreamHandle;
         readonly output: StreamHandle;
@@ -330,7 +311,11 @@ export const modelInvokerLayer = (): Layer.Layer<
           if (Result.isFailure(found))
             return yield* Effect.die(Cause.squash(streamed.cause));
           return yield* found.success instanceof ModelError
-            ? failAttempt(found.success, completed.streamedText)
+            ? Effect.fail(
+                fillModelError(found.success, {
+                  partialText: completed.streamedText,
+                }),
+              )
             : Effect.fail(found.success);
         }
         const responseTimeMs = (yield* Clock.currentTimeMillis) - started;
@@ -338,12 +323,12 @@ export const modelInvokerLayer = (): Layer.Layer<
         if (turn === null) {
           trace.thinking.finalize(undefined);
           trace.output.finalize();
-          return yield* failAttempt(
+          return yield* Effect.fail(
             new ModelError({
               kind: 'malformed-output',
               message: EMPTY_RESPONSE_ERROR_MESSAGE,
+              partialText: completed.streamedText,
             }),
-            completed.streamedText,
           );
         }
         const text = turnText(turn);
@@ -422,7 +407,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         if (mode !== 'background' && contextWindow > 0) {
           const inputTokens = contextTokens(state);
           if (inputTokens > contextWindow) {
-            return yield* failAttempt(
+            return yield* Effect.fail(
               new ModelError({
                 kind: 'context-overflow',
                 message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${contextWindow} tokens.`,
@@ -458,7 +443,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         // tools, the run as its cache key, and the last response's
         // continuation while the binding matches its whole origin. A resume
         // rebuilds it from the same inputs; no row copies history.
-        const resolved = yield* prepareAttempt(bound, {
+        const resolved = yield* bound.model.prepareTurn({
           mode,
           ...(request.system !== undefined ? { system: request.system } : {}),
           messages: yield* providerMessages(state.messages, session.log.blobs),
@@ -522,7 +507,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         > {
           const background = bound.model.background;
           if (background === undefined) {
-            return yield* failAttempt(
+            return yield* Effect.fail(
               new ModelError({
                 kind: 'unsupported',
                 message:
@@ -687,10 +672,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             next,
             bound,
           ) {
-            const info = failureInfo(error, bound.config.provider, {
-              partialText: unsent ? undefined : streamedTail,
-              unsent,
-            });
+            const info = failureInfo(error, bound.config.provider, { unsent });
             if (next.kind === 'ask' || next.kind === 'stop')
               yield* logProviderError(
                 logger,

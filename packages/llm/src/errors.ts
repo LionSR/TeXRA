@@ -65,6 +65,8 @@ const ModelErrorFieldsSchema = Schema.Struct({
     'observation-deadline',
   ]),
   message: Schema.String,
+  /** Text emitted before this attempt failed, when the caller observed it. */
+  partialText: Schema.optional(Schema.String),
   requestId: Schema.optional(Schema.String),
   responseId: Schema.optional(Schema.String),
   model: Schema.optional(Schema.String),

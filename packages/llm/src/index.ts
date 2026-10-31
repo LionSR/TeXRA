@@ -57,7 +57,7 @@ export {
 export type { ModelOrigin, PreparedHistoryEntry } from './protocol.js';
 export { AssistantMessageSchema, MessageSchema } from './message.js';
 export type { AssistantMessage, Continuation } from './message.js';
-export { ModelError, RemoteOperationSchema } from './errors.js';
+export { ModelError, fillModelError, RemoteOperationSchema } from './errors.js';
 export type {
   BillingRoute,
   ModelErrorFields,
