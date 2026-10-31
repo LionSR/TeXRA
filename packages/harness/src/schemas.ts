@@ -111,7 +111,7 @@ export type {
   FollowUpSender,
   HookEvent,
   InlinePersona,
-  InstructionAction,
+  HarnessInstructionKey,
   JsonValue,
   LoadedMediaMetadata,
   LocalRuntimeState,
@@ -127,8 +127,7 @@ export type {
   PermissionPayload,
   Persona,
   ProposalFileGroup,
-  RequestEnsureProgressViewPayload,
-  RequestOpenFilePayload,
+  OpenFilePayload,
   RequestShowErrorPayload,
   RequestShowInstructionPayload,
   ResultMeta,
@@ -143,12 +142,13 @@ export type {
   ScriptDeliverySummary,
   SessionEvent,
   SessionEventDraft,
-  ShowAgentConfigBannerPayload,
+  AgentNotFoundPayload,
   TaskGroup,
   TaskGroupStatus,
   ToolCallStatus,
   ToolCard,
   ToolDefinition,
+  ToolEditContent,
   ToolEditPermission,
   ToolFact,
   ToolUseLog,
@@ -205,7 +205,6 @@ export {
   RuntimeRequestSchema,
   type RequestError,
   type RuntimeRequest,
-  type ToolEditContent,
 } from '@shared/session/runtimeRequest';
 // A memory as a memory list shows it.
 export {
@@ -237,20 +236,17 @@ export { getBasename, getFileStem, normalizeFilePath } from '@utils/core';
 export {
   configTreeRows,
   settingsCatalog,
-  type ModelsTabSurface,
   type SettingsCatalog,
   type SettingStore,
-  type SettingSurfaces,
-  type SettingsViewStateSettingEntry,
-  type SettingWriteEffects,
   type StateSettingEntry,
-  type SurfacedSettingEntry,
 } from '@shared/state/stateSettings';
 // What a `ConfigProvider` (root) writes to and reads back per scope.
 export type { ConfigInspection, ConfigTarget } from '@platform/interfaces';
 export { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-// A provider's custom-endpoint key and China-region toggle, if it has them.
+// The providers with a custom-endpoint setting, and a provider's
+// custom-endpoint key and China-region toggle, if it has them.
 export {
+  PROVIDER_ENDPOINT_STATE_ENTRIES,
   providerEndpointKey,
   providerRegionSetting,
 } from '@shared/state/providerSettings';
@@ -310,7 +306,7 @@ export {
   type InquiryThreadId,
   InquiryThreadIdSchema,
   InstalledPluginSchema,
-  INSTRUCTION_ACTION,
+  HARNESS_INSTRUCTION_KEY,
   isEmptyUsage,
   isLoopDriven,
   isModelOptionAvailable,

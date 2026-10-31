@@ -38,6 +38,7 @@ import type {
 import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
+import { instructionActions } from '@ui/copy/instructionActions';
 import { texraGuideUrl } from '@ui/copy/guide';
 
 import {
@@ -104,20 +105,20 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       RuntimePresentationEventPayloads,
       HostPresentation
     > = {
-      // The desktop shell keeps the conversation canvas permanently on
-      // screen, so there is no separate progress surface to reveal.
-      requestEnsureProgressView: () => undefined,
       requestShowError: ({ message, docsPage }) =>
         host.showErrorDialog(message, docsPage),
       // An instruction is actionable guidance, not a failure, so it uses
       // the info-style dialog with each action token as a real button.
       requestShowInstruction: (instruction) =>
-        host.showInstructionDialog(instruction.message, instruction.actions),
-      showAgentConfigBanner: ({ agentName }) =>
+        host.showInstructionDialog(
+          instruction.message,
+          instructionActions(instruction.key),
+        ),
+      agentNotFound: ({ agentName }) =>
         withProcessServices(runtime, snapshot.showAgentConfigBanner(agentName)),
       // Desktop has no editor integration to preview through, so the
       // resolved path goes to the preview-with-fallback host directly.
-      requestOpenFile: (data) => host.openPath(data.location.absolutePath),
+      openFile: (data) => host.openPath(data.location.absolutePath),
     };
 
     const fileActions = new DesktopProgressFileActions(

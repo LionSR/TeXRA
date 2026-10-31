@@ -24,7 +24,7 @@ describe('application state on SQLite', () => {
   const openAppStateStore = (storage: string) =>
     Effect.map(
       Layer.build(
-        globalAppStateLayer(storage, TEXRA_SETTINGS).pipe(
+        globalAppStateLayer(storage, TEXRA_SETTINGS.catalog).pipe(
           Layer.provide(globalDatabaseLayer(storage)),
         ),
       ),

@@ -160,9 +160,9 @@ function seedFakeRoot(files: Record<string, string | Uint8Array>): void {
 export function fakeConfig(
   values: Record<string, unknown> = {},
 ): MemoryConfigProvider {
-  const config = new MemoryConfigProvider(TEXRA_SETTINGS);
+  const config = new MemoryConfigProvider(TEXRA_SETTINGS.catalog);
   for (const [key, value] of Object.entries(values)) {
-    const row = TEXRA_SETTINGS.byKey(key);
+    const row = TEXRA_SETTINGS.catalog.byKey(key);
     Effect.runSync(config.update(key, value, row?.configTarget ?? 'workspace'));
   }
   return config;

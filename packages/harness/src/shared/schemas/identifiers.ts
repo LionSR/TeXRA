@@ -147,3 +147,8 @@ export function aggregateTarget(key: AggregateId): AggregateTarget {
     ? { kind, id: Schema.decodeUnknownSync(RunIdSchema)(id) }
     : { kind, id };
 }
+
+/** A content address: the sha256 of a value's canonical JSON. */
+export const Sha256Schema = Schema.String.check(
+  Schema.isPattern(/^[0-9a-f]{64}$/),
+);

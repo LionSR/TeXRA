@@ -77,7 +77,7 @@ const present = (docs: Documents, locations: readonly FileLocation[]) =>
   Effect.forEach(
     locations,
     (location) =>
-      docs.requests.present('requestOpenFile', {
+      docs.requests.present('openFile', {
         location,
         preserveFocus: true,
       }),

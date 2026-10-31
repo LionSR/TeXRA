@@ -237,7 +237,7 @@ export function installCliProcessRuntime(
         HostWindows.layer(editors),
         processLayer({
           storageRoot,
-          settings: TEXRA_SETTINGS,
+          settings: TEXRA_SETTINGS.catalog,
           commandDirs,
           plugins: texraPlugins({ name: 'cli', editors }),
           ...(options?.resourcesPath !== undefined && {

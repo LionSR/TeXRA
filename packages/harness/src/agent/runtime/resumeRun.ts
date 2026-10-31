@@ -46,8 +46,10 @@ import { resumeBlocker } from './resumeBlocker';
 
 import { type RunReport } from './runReport';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
-import { prepareAgentDefinition } from './AgentLaunchContext';
-import { activationIfOpened } from './rootLaunch';
+import {
+  activationIfOpened,
+  prepareAgentDefinition,
+} from './AgentLaunchContext';
 import { deliverHeld } from './runLaunchGuard';
 import { startChildRunLoop } from './childRunLoop';
 import { registryOf, type AgentRunServices, RunLive } from './runRegistry';
@@ -199,10 +201,7 @@ export const decideResume = Effect.fn('decideResume')(function* (
   // resume once it is back; nothing is launched. Another process's run
   // is refused as such above, whatever this process lacks.
   const blocker = yield* resumeBlocker(session, config);
-  yield* session.view.markResumeBlocked(
-    runId,
-    blocker === null ? null : { reason: blocker, retry: true },
-  );
+  yield* session.view.markResumeBlocked(runId, blocker);
   if (blocker !== null) return { failed: 'blocked' };
   // The launched run is admitted once its `run.activate` commits.
   return yield* resumeQueuedToolUse(session, runId, config, options, activated);

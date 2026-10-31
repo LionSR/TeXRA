@@ -5,7 +5,7 @@
  * under a run, finished as it resumes (`closeLeftoverChildren`). A run's
  * claim is its generation's (`RunRegistry.admit`).
  */
-import { Cause, Effect, Exit, Schedule, type Scope } from 'effect';
+import { Cause, Effect, Exit, type Scope } from 'effect';
 
 import { openResume } from '@agent/followUp/ToolUseFollowUp';
 import { runRejection } from '@agent/storage/resumability';
@@ -29,7 +29,6 @@ import {
 import { heldElsewhereBy } from '@shared/session/database';
 import { recordOf } from '@shared/session/runRowReads';
 import type { RunRows } from '@shared/session/runRowsShape';
-import type { Append } from '@shared/session/sessionEvents';
 import type { RunView } from '@shared/session/sessionView';
 import { aggregateError } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -43,7 +42,7 @@ import {
 } from './childTurnResult';
 import { formatDelivery } from './deliveryEnvelope';
 import { presentRunFailure } from './HostInteractions';
-import type { SessionHandle } from './SessionHandle';
+import type { SessionHandle, SessionTransaction } from './SessionHandle';
 
 /**
  * Hand a registered process child to its loop, which owns its end from
@@ -110,9 +109,10 @@ export function runWithLaunchGuard<A, E, R>(
 /**
  * Deliver what `parent`'s children hold for it (`child.park` `heldFor`),
  * read from rows, each child in one append; a last turn held (`ends`) also
- * ends the child, under its claim. Run by whoever holds the parent: its
- * tail seeing a park, and its resume. A parent another process holds keeps
- * it held; a replay writes nothing, so two triggers deliver once.
+ * ends the child, under the claim its park let go (`endIn`). Run by whoever
+ * holds the parent: its tail seeing a park, and its resume. A parent
+ * another process holds keeps it held; a replay writes nothing, so two
+ * triggers deliver once.
  */
 export const deliverHeld = Effect.fn('runLaunchGuard.deliverHeld')(function* (
   session: SessionHandle,
@@ -123,7 +123,7 @@ export const deliverHeld = Effect.fn('runLaunchGuard.deliverHeld')(function* (
   for (const child of runs.values())
     if (child.parentId === parent && !isTerminalOutcomePhase(child.status))
       yield* session.log.transact((tx) =>
-        deliverOne(session, tx.append, child.id, parent).pipe(Effect.scoped),
+        deliverOne(session, tx, child.id, parent).pipe(Effect.scoped),
       );
 });
 
@@ -139,10 +139,11 @@ const heldParks = (session: SessionHandle, child: RunId) =>
  *  its end when the newest park held its last turn. */
 const deliverOne = Effect.fn('runLaunchGuard.deliverOne')(function* (
   session: SessionHandle,
-  append: Append,
+  tx: SessionTransaction,
   child: RunId,
   parent: RunId,
 ): Effect.fn.Return<void, Error, Scope.Scope> {
+  const { append } = tx;
   const parks = yield* heldParks(session, child);
   const held = parks.filter(({ park }) => park.heldFor !== undefined);
   if (held.length === 0) return;
@@ -196,17 +197,18 @@ const deliverOne = Effect.fn('runLaunchGuard.deliverOne')(function* (
   // its unread input consumed, its halt, what it left open, its `run.end`.
   yield* endIn(
     session,
-    append,
+    tx,
     { runId: child, outcome: ends },
     Effect.succeed({ rows: delivered }),
   );
 });
 
 /**
- * The tail's triggers, each in `scope`. A result parked for a parent this
- * process holds is delivered, retried while the child's process lets its
- * claim go, and a delivery that still fails is surfaced. A delivered
- * result a child this process runs was holding clears its waiting park.
+ * The tail's triggers, each in `scope`: a result parked for a parent this
+ * process holds is delivered; a delivered result a child this process runs
+ * was holding clears its waiting park. The tail goes on past a failure, so
+ * one is told to the person here, once: the parent's next resume delivers
+ * the result again (`deliverHeld`).
  */
 export const onHeldResult = (
   session: SessionHandle,
@@ -217,33 +219,26 @@ export const onHeldResult = (
   if (target.kind !== 'run') return Effect.void;
   const record = recordOf(event);
   const sent = record.followUps[0];
+  let work: Effect.Effect<void, Error> | undefined;
   if (sent?.content.from.kind === 'run') {
     const child = sent.content.from.runId;
-    if (session.view.run(child)?.substate !== RUN_SUBSTATE.RESULT_WAITING)
-      return Effect.void;
-    return Effect.forkIn(clearHeld(session, child, sent.followUpId), scope);
+    if (session.view.run(child)?.substate === RUN_SUBSTATE.RESULT_WAITING)
+      work = clearHeld(session, child, sent.followUpId);
+  } else if (record.heldParks[0]?.park.heldFor !== undefined) {
+    const parent = session.view.run(target.id)?.parentId;
+    if (parent != null)
+      work = Effect.gen(function* () {
+        if (yield* session.log.owns(parent))
+          yield* deliverHeld(session, parent);
+      });
   }
-  if (record.heldParks[0]?.park.heldFor === undefined) return Effect.void;
-  const parent = session.view.run(target.id)?.parentId;
-  if (parent == null) return Effect.void;
-  return Effect.gen(function* () {
-    if (!(yield* session.log.owns(parent))) return;
-    yield* deliverHeld(session, parent).pipe(
-      Effect.retry({ times: 20, schedule: Schedule.spaced('500 millis') }),
-    );
-  }).pipe(
+  if (work === undefined) return Effect.void;
+  return work.pipe(
     Effect.catch((error) =>
-      Effect.andThen(
-        warn(
-          undefined,
-          `Held results for ${parent} were not delivered.`,
-          error,
-        ),
-        presentRunFailure(
-          session.interactions,
-          error,
-          "A subagent's result could not be delivered: ",
-        ),
+      presentRunFailure(
+        session.interactions,
+        error,
+        "A subagent's result could not be delivered: ",
       ),
     ),
     Effect.forkIn(scope),
@@ -256,27 +251,21 @@ const clearHeld = (
   session: SessionHandle,
   child: RunId,
   followUpId: string,
-): Effect.Effect<void> =>
-  session.log
-    .transact((tx) =>
-      Effect.gen(function* () {
-        if (!(yield* session.log.owns(child))) return;
-        const park = (yield* heldParks(session, child)).at(-1)?.park;
-        if (park === undefined || park.heldFor !== followUpId) return;
-        yield* tx.append([
-          {
-            type: 'child.park',
-            aggregateId: park.aggregateId,
-            phase: 'parked',
-          },
-        ]);
-      }),
-    )
-    .pipe(
-      Effect.catch((error) =>
-        warn(undefined, `Run ${child} still reads as holding a result.`, error),
-      ),
-    );
+): Effect.Effect<void, Error> =>
+  session.log.transact((tx) =>
+    Effect.gen(function* () {
+      if (!(yield* session.log.owns(child))) return;
+      const park = (yield* heldParks(session, child)).at(-1)?.park;
+      if (park === undefined || park.heldFor !== followUpId) return;
+      yield* tx.append([
+        {
+          type: 'child.park',
+          aggregateId: park.aggregateId,
+          phase: 'parked',
+        },
+      ]);
+    }),
+  );
 
 /** The envelope a child's kind delivers its failure in. */
 const TAG_OF = {

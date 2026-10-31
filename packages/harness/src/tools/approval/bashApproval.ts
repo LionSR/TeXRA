@@ -48,16 +48,18 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   // The payload every host lists: a blank directory is dropped, so no
   // renderer decides what an empty `cwd` means.
   const cwd = request.cwd?.trim();
-  const prompt = requests.open({
-    kind: 'bash',
-    data: {
-      requestId: requests.nextId('bash'),
-      command: request.command,
-      ...(cwd && { cwd }),
-      allowBypass: request.grant === 'bash' && !granted(),
-      runId,
-    },
-  });
+  const prompt = requests
+    .open({
+      kind: 'bash',
+      data: {
+        requestId: requests.nextId('bash'),
+        command: request.command,
+        ...(cwd && { cwd }),
+        allowBypass: request.grant === 'bash' && !granted(),
+        runId,
+      },
+    })
+    .pipe(Effect.map(({ decision }) => decision));
   // The call's own grant is read again when it reaches the head of the
   // run's lane, so a command grant turned on while another tool's call
   // waited does not answer it.

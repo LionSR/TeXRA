@@ -10,6 +10,7 @@ import { agentKeyOf } from '@texra-ai/harness/schemas';
 
 import { workspaceTeams } from '@texra/shared/agentTeams';
 import { findTeamPreset } from '@texra/shared/teamPlan';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import {
   CliUsageError,
   failUsage,
@@ -66,10 +67,10 @@ const showConfig = Effect.fn('showConfig')(function* (
 ) {
   const stores = services.roots;
   const agents = yield* readCliWorkspaceAgents(stores);
-  const { catalog } = stores.config;
+  const { catalog, cliRows } = TEXRA_SETTINGS;
   // Named as `.texra/config.json` spells them.
   const settings = Object.fromEntries(
-    yield* Effect.forEach(catalog.cliRows, (entry) =>
+    yield* Effect.forEach(cliRows, (entry) =>
       Effect.map(Settings.get(stores, entry.key), (value) => [
         `${catalog.namespace}.${entry.key}`,
         value,

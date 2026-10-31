@@ -35,14 +35,15 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     );
     const model = switches.at(-1)?.model;
     if (model === undefined) return yield* cell.current;
-    const current = yield* SynchronizedRef.get(run.model);
     const requests = consumedRows(run.runId, 'model');
-    // A switch to the model already bound changes nothing.
-    if (current.modelId === model)
+    // The run's model is its newest `run.config`, the fold's; the binding
+    // is the resource bound for it. A switch to that model changes nothing.
+    if ((yield* cell.current).modelId === model)
       return yield* cell.append(
         requests(controls, { kind: 'dropped', reason: 'noop' }),
       );
     const consumed = requests(controls, { kind: 'applied' });
+    const current = yield* SynchronizedRef.get(run.model);
     const selected = selectModel(model);
     // A switch that cannot apply fails the run: its `run.end` consumes the
     // request, so no resume meets it again.

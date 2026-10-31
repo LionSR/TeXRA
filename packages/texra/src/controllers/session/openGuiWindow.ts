@@ -229,7 +229,7 @@ interface GuiWindowHost extends Pick<
   readonly window: WindowHost;
   readonly runs: Pick<
     HostRunActionPorts,
-    'launched' | 'openFinalOutput' | 'promptForApiKey'
+    'launched' | 'openFinalOutput' | 'promptForApiKey' | 'revealProgress'
   >;
   readonly files: Omit<
     ConstructorParameters<

@@ -6,14 +6,10 @@
  */
 import { Schema } from 'effect';
 
+import { Sha256Schema } from './identifiers';
 import { JsonValueSchema } from './jsonValue';
 
 /* ---------------------------------------------------------- tools.offered */
-
-/** A content address: the sha256 of a value's canonical JSON. */
-export const Sha256Schema = Schema.String.check(
-  Schema.isPattern(/^[0-9a-f]{64}$/),
-);
 
 /** One offered tool and its identity: a call to it runs only while the tool
  *  the run would dispatch still has this name, digest, plugin and revision. */

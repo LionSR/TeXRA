@@ -396,7 +396,8 @@ export class RunRegistry implements RunsShape {
   /** A generation's run under its claim, let go before its fiber exits (a
    *  parent woken then reads the child): held from the start if the run
    *  exists (a resume, a process child), so nothing moves it between its
-   *  launch's read and its run; a birth's claim is taken at the end to go. */
+   *  launch's read and its run. A run born here holds its birth's claim
+   *  itself, from its opening (`executeAgent`). */
   private claimed<A, E, R>(
     runId: RunId,
     operation: Effect.Effect<A, E, R>,
@@ -404,20 +405,11 @@ export class RunRegistry implements RunsShape {
     const session = this.init.session();
     const hold = Effect.flatMap(
       getRunRecords(session, runId).exists(),
-      (born) =>
-        born
-          ? Effect.as(session.log.hold(runId, { ends: true }), true)
-          : Effect.succeed(false),
+      (born) => (born ? session.log.hold(runId, { ends: true }) : Effect.void),
     );
-    const letGo = Effect.ignore(hold, {
-      log: 'Warn',
-      message: `The claim on ${runId} was not let go.`,
-    });
     return Effect.scoped(
       Effect.uninterruptibleMask((restore) =>
-        Effect.flatMap(hold, (held) =>
-          restore(operation).pipe(Effect.ensuring(held ? Effect.void : letGo)),
-        ),
+        Effect.andThen(hold, restore(operation)),
       ),
     );
   }

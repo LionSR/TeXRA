@@ -66,20 +66,18 @@ export function runStatusLabel(key: RunStatusKey): string {
 
 type RunNotice = NonNullable<RunView['statusNotice']>;
 
-/** What a resume found blocking a run, and what then happens: it continues
- *  by itself (`retry`: a resume was asked for), or can be resumed. */
+/** What a resume found blocking a run: it can continue once that is back
+ *  (by itself under `resumeOnOpen: auto`, else when resumed). */
 function resumeBlockedText({
   reason,
-  retry,
 }: Extract<RunNotice, { kind: 'resumeBlocked' }>): string {
-  const then = retry ? 'It continues once' : 'You can resume it once';
   switch (reason.kind) {
     case 'agentMissing':
-      return `This task's agent, ${reason.name}, is no longer installed. ${then} the agent is back.`;
+      return `This task's agent, ${reason.name}, is no longer installed. It can continue once the agent is back.`;
     case 'pluginOff':
-      return `This task's agent comes from the ${reason.name} plugin, which is off. ${then} the plugin is on.`;
+      return `This task's agent comes from the ${reason.name} plugin, which is off. It can continue once the plugin is on.`;
     case 'pluginUntrusted':
-      return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. ${then} you trust it.`;
+      return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. It can continue once you trust it.`;
   }
 }
 

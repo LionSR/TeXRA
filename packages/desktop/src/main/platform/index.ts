@@ -87,7 +87,7 @@ export const initializeElectronPlatform = Effect.fn(
       const mainDir = yield* resolveDesktopMainDir(moduleDirname);
       const resourcesPath = yield* resolveResourcesPath(mainDir);
       const configStores = yield* openTexraConfigStores(
-        TEXRA_SETTINGS,
+        TEXRA_SETTINGS.catalog,
         dataRoot,
         undefined,
         (message) => console.warn(`[desktop] ${message}`),
@@ -119,7 +119,7 @@ export const initializeElectronPlatform = Effect.fn(
     ManagedRuntime.make(
       processLayer({
         storageRoot: dataRoot,
-        settings: TEXRA_SETTINGS,
+        settings: TEXRA_SETTINGS.catalog,
         commandDirs: commandDirs,
         plugins: texraPlugins({
           name: 'desktop',

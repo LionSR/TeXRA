@@ -2,12 +2,12 @@
  * Desktop preview port for {@link ToolEditApprovalController}.
  *
  * Each request gets its own temp directory; the renderer opens the staged
- * copies through the window's diff and file viewers, and the user's edits are
- * read back from the proposed copy on disk, each time it is saved.
+ * copies through the window's diff and file viewers, and an approval reads
+ * the user's edits back from the proposed copy on disk.
  */
 
 // Third-party imports
-import { Effect, FileSystem, Stream } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports - types
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -174,28 +174,6 @@ class DesktopToolEditPreview implements ToolEditPreview {
 
   openProposed(): Effect.Effect<void, HostRequestFailure> {
     return this.ui.openPath(this.staged.proposedPath);
-  }
-
-  /** The proposed copy each time it changes on disk: the user saved it. */
-  get edits(): Stream.Stream<string, never, FileSystem.FileSystem> {
-    return Stream.unwrap(
-      FileSystem.FileSystem.use((fs) =>
-        Effect.succeed(
-          fs.watch(this.staged.proposedPath).pipe(
-            Stream.mapEffect(() => fs.readFileString(this.staged.proposedPath)),
-            Stream.changes,
-          ),
-        ),
-      ),
-    ).pipe(
-      Stream.catch((error) =>
-        Stream.fromEffect(
-          Effect.logWarning(
-            `Edits to ${this.staged.proposedPath} stopped reaching the session: ${toErrorMessage(error)}`,
-          ),
-        ).pipe(Stream.drain),
-      ),
-    );
   }
 
   readProposedContent(): Effect.Effect<

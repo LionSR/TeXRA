@@ -29,7 +29,10 @@ import {
 import { AppSignals, appSignalStream } from '@texra-ai/harness/host';
 import { BundledViewContentProvider } from '@common/webview';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
-import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
+import {
+  createAgentPresentationHost,
+  revealProgressView,
+} from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
@@ -378,6 +381,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               openSettings,
               showConnectModel: () => this.showConnectModel(),
               showProgressView: () => this.showProgressView(),
+              revealProgress: (config) => revealProgressView(config, this),
               globalState,
               presentLaunchedRun: (runId) => this.presentLaunchedRun(runId),
               // The launcher is bound once the window has opened

@@ -3,12 +3,12 @@
  *
  * Owns everything the approval flow needs from the editor: the temp files the
  * diff editor reads, the diff tabs themselves, and reading back what the
- * user typed into the proposed side, which reaches the session as the user
- * types. The diff tab is evidence only: closing it leaves the request
+ * user typed into the proposed side, which an approval sends with its
+ * decision. The diff tab is evidence only: closing it leaves the request
  * pending on its card, where Open diff reopens it.
  */
 
-import { Effect, FileSystem, Queue, Scope, Stream } from 'effect';
+import { Effect, FileSystem, Scope } from 'effect';
 import * as vscode from 'vscode';
 
 import { pluralize } from '@texra-ai/harness/transcript';
@@ -34,9 +34,6 @@ import type { HostRequestFailure, WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
 
 const CHANNEL = 'ToolEditApproval';
-
-/** How long typing pauses before the edit reaches the session. */
-const EDIT_DEBOUNCE = '300 millis';
 
 export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
   private readonly diffViewHost = new VscodeDiffViewHost();
@@ -127,22 +124,6 @@ class VscodeToolEditPreview implements ToolEditPreview {
 
   showDiff(): Effect.Effect<void, HostRequestFailure> {
     return this.openDiff().pipe(Effect.andThen(this.revealFirstChange()));
-  }
-
-  /** The proposed side's text after each pause in the user's typing. */
-  get edits(): Stream.Stream<string> {
-    const proposed = vscode.Uri.file(this.staged.proposedPath).toString();
-    return Stream.callback<string>((queue) =>
-      Effect.acquireRelease(
-        Effect.sync(() =>
-          vscode.workspace.onDidChangeTextDocument(({ document }) => {
-            if (document.uri.toString() === proposed)
-              Queue.offerUnsafe(queue, document.getText());
-          }),
-        ),
-        (listener) => Effect.sync(() => listener.dispose()),
-      ),
-    ).pipe(Stream.debounce(EDIT_DEBOUNCE));
   }
 
   openProposed(): Effect.Effect<void, HostRequestFailure> {

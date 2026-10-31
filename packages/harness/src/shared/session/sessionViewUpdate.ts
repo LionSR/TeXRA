@@ -474,11 +474,7 @@ function withAggregates(u: Update, run: RunView): RunView {
   let statusNotice: RunView['statusNotice'] = null;
   if (unreadable !== undefined) statusNotice = { kind: unreadable };
   else if (blockedEntry !== undefined)
-    statusNotice = {
-      kind: 'resumeBlocked',
-      reason: blockedEntry.reason,
-      retry: blockedEntry.retry,
-    };
+    statusNotice = { kind: 'resumeBlocked', reason: blockedEntry.reason };
   else if (interrupted) statusNotice = { kind: 'interrupted' };
   else if (heldBy !== null)
     statusNotice = { kind: 'held', pid: ownerPid(heldBy) };

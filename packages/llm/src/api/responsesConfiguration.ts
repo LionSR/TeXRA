@@ -102,7 +102,7 @@ function vendorResponses(facts: Facts): ResponsesConfiguration | null {
         reasoning: null,
       });
     case ModelProvider.MINIMAX:
-      // M3 reasons only when asked; its temperature range is (0, 1].
+      // MiniMax reasons only when asked; its temperature range is (0, 1].
       return route({
         supportsForcedToolChoice: false,
         allowedReasoningEfforts: ['high'],

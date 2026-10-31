@@ -12,7 +12,10 @@ import type { ApprovalPolicy } from '@shared/approvalPolicy';
 import type { CommitOrdinal, RunId } from '@shared/schemas';
 import { generateRunId } from '@utils/core';
 import { humanGrant } from './runApprovalQueue';
-import { prepareAgentDefinition } from './AgentLaunchContext';
+import {
+  activationIfOpened,
+  prepareAgentDefinition,
+} from './AgentLaunchContext';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { applyHelperModelPreference } from './helperModelName';
 import { registryOf } from './runRegistry';
@@ -58,18 +61,6 @@ export interface RootLaunchRequest {
   /** The id to register the run under; one is minted when omitted. */
   readonly runId?: RunId;
 }
-
-/** The commit `opened` holds, once a launch's or resume's program is over:
- *  with none, its run's activation never committed and nothing entered the
- *  session. */
-export const activationIfOpened = (
-  opened: Deferred.Deferred<CommitOrdinal>,
-): Effect.Effect<CommitOrdinal, Error> =>
-  Effect.suspend(() =>
-    Deferred.isDoneUnsafe(opened)
-      ? Deferred.await(opened)
-      : Effect.fail(new Error('The run ended without entering the session.')),
-  );
 
 /**
  * START HERE — a root launch, what `Runs.launch({ request, options })` runs

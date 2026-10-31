@@ -6,7 +6,7 @@
  * registered for a launch that cannot run. The run program takes the
  * result (`executeAgent`).
  */
-import { Effect } from 'effect';
+import { Deferred, Effect } from 'effect';
 
 import { selectModel } from '@texra-ai/llm';
 import { AgentCatalog } from '@agent/index/agentCatalog';
@@ -16,7 +16,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentError } from '@common/errors/agentErrors';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { attachErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
-import { INSTRUCTION_ACTION } from '@shared/schemas';
+import { HARNESS_INSTRUCTION_KEY, type CommitOrdinal } from '@shared/schemas';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { ToolRegistry } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -32,7 +32,7 @@ import type {
 /**
  * Present a launch error through its targeted host notice (replayed if no
  * host is attached) and fail with it claimed, so no generic toast repeats
- * it; a host that throws on the notice shows that toast instead (#10398).
+ * it; a host that throws on the notice shows that toast instead.
  */
 function presentLaunchError<K extends RuntimePresentationEvent>(
   interactions: Pick<SessionHostInteractions, 'emit'>,
@@ -68,14 +68,26 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
       new AgentError({ message: `Model ${modelName} is not registered` }),
       'requestShowInstruction',
       {
-        key: 'modelNotRecognized',
+        key: HARNESS_INSTRUCTION_KEY.MODEL_NOT_RECOGNIZED,
         message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-        actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
         showSuppress: false,
       },
     );
   },
 );
+
+/** The commit `opened` holds, once a launch's or resume's program is over:
+ *  with none, its run's activation never committed and nothing entered the
+ *  session. What a launch that waits for its run's opening answers with
+ *  when the program ends first (`rootRun`, `launchDetachedSubagent`). */
+export const activationIfOpened = (
+  opened: Deferred.Deferred<CommitOrdinal>,
+): Effect.Effect<CommitOrdinal, Error> =>
+  Effect.suspend(() =>
+    Deferred.isDoneUnsafe(opened)
+      ? Deferred.await(opened)
+      : Effect.fail(new Error('The run ended without entering the session.')),
+  );
 
 /**
  * Resolve what a launch runs: the agent entry (an inline persona, or the
@@ -109,7 +121,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
                 presentLaunchError(
                   interactions,
                   new AgentError({ message: missed.message }),
-                  'showAgentConfigBanner',
+                  'agentNotFound',
                   { agentName: fullConfig.agent },
                 ),
               ),

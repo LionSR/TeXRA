@@ -11,10 +11,10 @@ import { Result, Schema, SchemaAST } from 'effect';
 import { Text, useInput } from 'ink';
 import { useState } from 'react';
 
-import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 import { isCtrlInput } from '@cli/tui/inputKeys';
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { settingEnumOptions } from '@texra/shared/settingsView/settingRows';
+import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
 
 import {
   buildConfigCategoryItems,
@@ -42,7 +42,7 @@ type SettingInputResult =
  * editor, form-backed settings delegate to an existing list form; anything
  * else (e.g. a record) is read-only.
  */
-function settingEditKind(entry: SurfacedSettingEntry): SettingEditKind {
+function settingEditKind(entry: TexraSettingRow): SettingEditKind {
   if (entry.openForm) return 'form';
   if (settingEnumOptions(entry)) return 'enum';
   // The schema's node is its value side, the row's default attached as its
@@ -87,7 +87,7 @@ function coerceSettingInput(
 
 /** Coerce text input, then run the setting's own schema before writing. */
 function validateSettingInput(
-  entry: SurfacedSettingEntry,
+  entry: TexraSettingRow,
   raw: string,
   isNumber: boolean,
 ): SettingInputResult {
@@ -106,13 +106,13 @@ function formatSettingValue(value: unknown): string {
   return String(value);
 }
 
-function settingDisplayName(entry: SurfacedSettingEntry): string {
+function settingDisplayName(entry: TexraSettingRow): string {
   return entry.title ?? entry.key;
 }
 
 function buildConfigListItems(
-  entries: readonly SurfacedSettingEntry[],
-  readValue: (entry: SurfacedSettingEntry) => unknown,
+  entries: readonly TexraSettingRow[],
+  readValue: (entry: TexraSettingRow) => unknown,
 ): Array<SelectItem<string>> {
   return entries.map((entry) => {
     const kind = settingEditKind(entry);
@@ -128,9 +128,7 @@ function buildConfigListItems(
   });
 }
 
-function buildEnumItems(
-  entry: SurfacedSettingEntry,
-): Array<SelectItem<string>> {
+function buildEnumItems(entry: TexraSettingRow): Array<SelectItem<string>> {
   const values = settingEnumOptions(entry) ?? [];
   const descriptions = entry.enumDescriptions ?? [];
   return values.map((value, index) => ({
@@ -141,18 +139,16 @@ function buildEnumItems(
 }
 
 interface ConfigFormProps {
-  readonly entries: readonly SurfacedSettingEntry[];
-  readonly readValue: (entry: SurfacedSettingEntry) => unknown;
+  readonly entries: readonly TexraSettingRow[];
+  readonly readValue: (entry: TexraSettingRow) => unknown;
   /** The write as a program: this form owns the one run, so a rejected write
    *  rolls its optimistic value back on the same runtime the surface holds. */
   readonly writeValue: (
-    entry: SurfacedSettingEntry,
+    entry: TexraSettingRow,
     value: unknown,
   ) => Effect.Effect<void, Error>;
   /** Reset a setting to its default (delete the key). */
-  readonly resetValue: (
-    entry: SurfacedSettingEntry,
-  ) => Effect.Effect<void, Error>;
+  readonly resetValue: (entry: TexraSettingRow) => Effect.Effect<void, Error>;
   /** The runtime the writes above run on, from the surface that mounted
    *  this form — Ink components run no Effect of their own. */
   readonly runtime: ProcessRuntime;
@@ -175,12 +171,12 @@ type ConfigFormMode =
   | { readonly kind: 'list'; readonly category: string }
   | {
       readonly kind: 'enum';
-      readonly entry: SurfacedSettingEntry;
+      readonly entry: TexraSettingRow;
       readonly category: string;
     }
   | {
       readonly kind: 'text';
-      readonly entry: SurfacedSettingEntry;
+      readonly entry: TexraSettingRow;
       readonly isNumber: boolean;
       readonly category: string;
     };
@@ -193,7 +189,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   // once the write lands, and rolls back if the write is rejected.
   const [overrides, setOverrides] = useState<Record<string, unknown>>({});
 
-  const effective = (entry: SurfacedSettingEntry): unknown =>
+  const effective = (entry: TexraSettingRow): unknown =>
     Object.hasOwn(overrides, entry.key)
       ? overrides[entry.key]
       : props.readValue(entry);
@@ -202,7 +198,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
   // back to the prior value if it fails; the failure reaches the surface's
   // error hook.
   const runWrite = (
-    entry: SurfacedSettingEntry,
+    entry: TexraSettingRow,
     optimisticValue: unknown,
     action: () => Effect.Effect<void, Error>,
   ): void => {
@@ -216,14 +212,14 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     });
   };
 
-  const commit = (entry: SurfacedSettingEntry, value: unknown): void =>
+  const commit = (entry: TexraSettingRow, value: unknown): void =>
     runWrite(entry, value, () => props.writeValue(entry, value));
 
   // Clearing a text field resets the setting (deletes the key) so its default
   // reappears — otherwise a stored empty string can read back as "(empty)" while
   // a consumer that coalesces empty→default (e.g. the git-author reader) quietly
   // uses the default, leaving the panel and the effect out of sync.
-  const resetEntry = (entry: SurfacedSettingEntry): void => {
+  const resetEntry = (entry: TexraSettingRow): void => {
     runWrite(entry, Schema.decodeUnknownSync(entry.schema)(undefined), () =>
       props.resetValue(entry),
     );

@@ -1,7 +1,7 @@
 import { Schema, Struct } from 'effect';
 
 import { RetryErrorInfoSchema } from './errors';
-import { RunSelectionSchema, RunIdSchema } from './identifiers';
+import { RunSelectionSchema, RunIdSchema, Sha256Schema } from './identifiers';
 import {
   ExternalInquiryTurnRecordSchema,
   InquirySessionLinksSchema,
@@ -29,9 +29,42 @@ export const ToolEditPermissionSchema = PermissionBaseSchema.mapFields(
     sourceTool: Schema.String,
     addedLines: LineCountSchema,
     removedLines: LineCountSchema,
+    /** The address of the proposal's content (`ToolEditContent`: the
+     *  original and proposed text with their diff) in the session's blob
+     *  store, stored with the request's row; `request.preview` reads it. */
+    content: Sha256Schema,
   }),
 );
 export type ToolEditPermission = typeof ToolEditPermissionSchema.Type;
+
+/** One unified-diff hunk: the line ranges it spans on each side, and its
+ *  lines, each marked ` `, `-` or `+` (`\` notes a missing final newline). */
+const DiffHunkSchema = Schema.Struct({
+  oldStart: Schema.Int,
+  oldLines: Schema.Int,
+  newStart: Schema.Int,
+  newLines: Schema.Int,
+  lines: Schema.Array(Schema.String),
+});
+
+/** What a pending tool edit would change: the original and proposed
+ *  content a host shows beside the request's path and line counts, and
+ *  the diff between them, computed once where the request is built: its
+ *  hunks and the 0-based line of the proposed text a diff view reveals
+ *  first (null when nothing changed). `request.preview` reads the stored
+ *  proposal named by `ToolEditPermission.content` and renders a missing
+ *  original file as empty text. The stored proposal distinguishes absence
+ *  from an empty file so applying it detects concurrent creation. */
+export const ToolEditContentSchema = Schema.Struct({
+  originalContent: Schema.String,
+  proposedContent: Schema.String,
+  hunks: Schema.Array(DiffHunkSchema),
+  firstChangedLine: Schema.NullOr(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  ),
+});
+/** A pending tool edit's content. */
+export type ToolEditContent = typeof ToolEditContentSchema.Type;
 
 export const BashPermissionSchema = PermissionBaseSchema.mapFields(
   Struct.assign({

@@ -8,7 +8,7 @@
  * barrel, so loading this pulls in only these three services.
  *
  * The spawner is the pinned `@effect/platform-node` one under a supervisor
- * that adds two things it lacks (#13182):
+ * that adds two things it lacks:
  *
  * - A bounded teardown. The upstream release signals the child, waits its
  *   grace (or `forceKillAfter` plus a SIGKILL grace), then awaits the exit

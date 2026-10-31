@@ -7,7 +7,7 @@
 import { Schema, Struct } from 'effect';
 
 import { ACTIVATED_SKILLS_MAX } from './activeSkills';
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 import { QualifiedSkillNameSchema } from './skillName';
 import { StoredProtocolSchema } from './storedTurn';
 import {

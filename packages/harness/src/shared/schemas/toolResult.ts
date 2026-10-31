@@ -2,7 +2,7 @@ import { Schema, SchemaGetter, SchemaIssue, Struct } from 'effect';
 
 import { JsonValueSchema } from './jsonValue';
 import { LineChangesSchema } from './lineChanges';
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 
 /**
  * Base schema for file references (metadata only, no binary data).

@@ -26,7 +26,6 @@ import {
   childTurnResult,
   commitPart,
   deliverIn,
-  deliverLaunchFailure,
   parentEdgeIn,
   sendToParent,
   traceLog,
@@ -244,7 +243,8 @@ type ChildEnd =
 /**
  * One child loop's state, passed through the functions below: its setup,
  * its turn, and `end`, its last turn's result. A stop is its run fiber's
- * interruption, its reason the registry activation's.
+ * interruption, its reason the registry activation's. The activation mints
+ * its turn keys (`attemptId`, `turnIndex`), which the `child.turn` rows record.
  */
 class ChildLoop<TTurn, R> {
   readonly attemptId = randomUUID();
@@ -389,7 +389,7 @@ const progressNotify =
   };
 
 /**
- * Accept the next turn: its `child.turn accepted` row (#9531), the fact the
+ * Accept the next turn: its `child.turn accepted` row, the fact the
  * report/result slots are attributed from, with the `resumed` row that ends
  * the wait. Not best-effort: a refused append is the turn's failure, and
  * `not-owner` stops the loop rather than run under a lost claim.
@@ -586,7 +586,7 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   strategy: NativeChildStrategy<TTurn, R>,
 ): Effect.fn.Return<TTurn | undefined, Error, R> {
-  const { session, runId, parentRunId } = loop.params;
+  const { session, runId } = loop.params;
   const turns = nativeTurns(loop, strategy, yield* Effect.context<R>());
   loop.turnStart = yield* Clock.currentTimeMillis;
   const turned = yield* attemptTurn(
@@ -595,24 +595,20 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
       strategy.launch(progressNotify(loop, strategy), turns),
     ),
   );
-  const { turn, err } = turned;
+  const { turn } = turned;
   // A turn that reports itself stopped stops the child.
   if (turn !== null && strategy.isTurnInterrupted?.(turn))
     return yield* Effect.interrupt;
   noteFailure(loop, turned);
-  // A launch can fail before its first cycle, and before its run's birth.
+  // A launch can fail before its first cycle, and before its run's birth:
+  // there is no run to end, and the launch waiting for the birth fails
+  // with it (`launchDetachedSubagent`, `rootRun`).
   if (
     loop.turnIndex === 0 &&
     loop.failure !== undefined &&
     !(yield* session.log.owns(runId))
-  ) {
-    if (strategy.deliveryMode !== 'persistOnly') {
-      const wallTimeMs = (yield* Clock.currentTimeMillis) - loop.turnStart;
-      const message = strategy.formatError(turn, err, wallTimeMs);
-      yield* deliverLaunchFailure(session, runId, parentRunId, message);
-    }
+  )
     return yield* Effect.fail(ensureError(loop.failure.cause));
-  }
   yield* endTurns(loop, turned);
   return turn ?? undefined;
 });
@@ -784,7 +780,7 @@ const endChildLoop = <TTurn, R>(
           error instanceof DatabaseNotOwner ||
           (error instanceof RunHistoryRefused && error.reason === 'not-owner');
       }
-      // Debug-only driver diagnostic (#9531): how the loop ended.
+      // Debug-only driver diagnostic: how the loop ended.
       yield* loop.log('debug', 'childRunLoop loop.terminated', {
         runId: loop.params.runId,
         stopped,
