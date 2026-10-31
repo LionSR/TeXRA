@@ -17,7 +17,7 @@
  */
 
 // Third-party imports
-import { Effect, type Layer, Result, Schema } from 'effect';
+import { Cause, Effect, type Layer, Result, Schema } from 'effect';
 
 // Local imports
 import type { SessionLog } from '@agent/runtime/SessionHandle';
@@ -26,6 +26,7 @@ import type {
   PluginToolServices,
   ToolServices,
 } from '@agent/runtime/ToolServices';
+import { withLogChannel } from '@logger/effectLog';
 import { type AppSignals, emitAppSignal } from '@platform/appSignals';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
 import {
@@ -220,9 +221,31 @@ export const announceWrites = (
     if (fact === undefined) return Effect.void;
     const writes = writing.get(`${fact.plugin}/${fact.kind}`);
     if (writes === undefined) return Effect.void;
-    return emitAppSignal('workspaceFilesWritten', {
-      absolutePaths: [...writes(fact.value)],
-    });
+    // File notifications are advisory; a plugin callback must not stop the
+    // reader that acknowledges committed rows.
+    return Effect.sync(() => [...writes(fact.value)]).pipe(
+      Effect.catchDefect((defect) =>
+        Effect.logWarning(
+          'Plugin workspace-write notification failed',
+          Cause.die(defect),
+        ).pipe(
+          Effect.annotateLogs({
+            data: {
+              plugin: fact.plugin,
+              kind: fact.kind,
+              aggregateId: row.aggregateId,
+              commit: row.commit,
+            },
+          }),
+          withLogChannel('plugins'),
+        ),
+      ),
+      Effect.flatMap((absolutePaths) =>
+        absolutePaths === undefined
+          ? Effect.void
+          : emitAppSignal('workspaceFilesWritten', { absolutePaths }),
+      ),
+    );
   };
 };
 
