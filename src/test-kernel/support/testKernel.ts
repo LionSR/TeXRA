@@ -14,7 +14,17 @@
  */
 
 // Third-party imports
-import { Context, Effect, Layer, ManagedRuntime, type Scope } from 'effect';
+import {
+  Context,
+  Effect,
+  FileSystem,
+  Layer,
+  ManagedRuntime,
+  Path,
+  type Scope,
+} from 'effect';
+import { HttpClient } from 'effect/http';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Local imports
 import {
@@ -23,17 +33,35 @@ import {
   type OpenOptions,
 } from '@texra-ai/harness';
 import {
+  AgentCatalog,
+  AgentDirectories,
+  AppSignals,
+  AppState,
+  GlobalStorageFs,
+  GlobalValues,
   processLayer,
+  Secrets,
+  StateStores,
+  ToolAvailability,
+  ToolCatalog,
+  UsageLog,
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness/host';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
+import { RouteRetries } from '@agent/runtime/run/invocation';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { validationModelLayer } from '@cli/runtime/validationModel';
 import { withForkFailureReporting } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { SessionOpenError } from '@shared/session/database';
+import {
+  GlobalDatabase,
+  ProjectDatabases,
+  type SessionOpenError,
+} from '@shared/session/database';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { texraPlugins } from '@texra/tools/registry';
+import { ToolRegistry } from '@tools/toolTable';
 
 import {
   createFakeHost,
@@ -85,6 +113,45 @@ export class FakeHost extends Context.Service<FakeHost, InstalledHost>()(
 }
 
 /**
+ * The services a host's `ProcessRuntime` holds, one tag each, for
+ * `Context.pick`: the `ProcessServices` type is a union nothing enumerates
+ * as values, so they are listed once here. Every process serves the
+ * platform services (`PlatformServices`): its `ProcessIdentity`, the Node
+ * `FileSystem`, `Path` and `ChildProcessSpawner`, `GlobalStorageFs`, the
+ * `GlobalDatabase` and `ProjectDatabases` handles, the `HttpClient`,
+ * `Secrets`, `AppState`, `AgentDirectories`, `GlobalValues`, `StateStores`,
+ * `UsageLog` and `AppSignals`. The agent runtime adds (`RunServices`) the
+ * `AgentCatalog`, the model routes' `RouteRetries` gate, the `ToolRegistry`
+ * and `ToolAvailability`; the composition adds its `ToolCatalog`; and a
+ * composition root opens its sessions through `Sessions`, with the internal
+ * `SessionOwner` beside it, which the suites' root launches ask.
+ */
+const PROCESS_SERVICES = [
+  ProcessIdentity,
+  FileSystem.FileSystem,
+  Path.Path,
+  ChildProcessSpawner,
+  GlobalStorageFs,
+  GlobalDatabase,
+  ProjectDatabases,
+  HttpClient.HttpClient,
+  Secrets,
+  AppState,
+  AgentDirectories,
+  GlobalValues,
+  StateStores,
+  UsageLog,
+  AppSignals,
+  AgentCatalog,
+  RouteRetries,
+  ToolRegistry,
+  ToolAvailability,
+  ToolCatalog,
+  Sessions,
+  SessionOwner,
+] as const;
+
+/**
  * The process every TeXRA host composes, as a layer: `processLayer` over
  * TeXRA's plugins (with the installed host's setup platform) and the fake
  * host's ports, which read the host installed when they are called, so a
@@ -113,21 +180,26 @@ export const SessionGraph = {
    * A `ProcessRuntime` over the calling fiber's services, for a subject that
    * takes a host's runtime (the CLI's log sinks and view binding, a desktop
    * window's hosts): what it forks or runs there runs on the block's graph,
-   * and disposing it when the scope closes releases none of the graph. The
-   * fiber's whole context is captured, as a host's runtime holds its own,
-   * so the subject sees exactly the services the test does.
+   * and disposing it when the scope closes releases none of the graph. Only
+   * the process services travel (`PROCESS_SERVICES`), never the fiber's
+   * scope or a test's own services: a program run on the runtime would
+   * otherwise register its cleanup against the block layer's scope.
    */
   runtime: Effect.acquireRelease(
-    Effect.map(Effect.context<ProcessServices | Sessions>(), (context) =>
-      withForkFailureReporting(
-        ManagedRuntime.make(Layer.succeedContext(context)),
-      ),
+    Effect.map(
+      Effect.context<ProcessServices | Sessions | SessionOwner>(),
+      (context) =>
+        withForkFailureReporting(
+          ManagedRuntime.make(
+            Layer.succeedContext(Context.pick(...PROCESS_SERVICES)(context)),
+          ),
+        ),
     ),
     (runtime) => runtime.disposeEffect,
   ) satisfies Effect.Effect<
     ProcessRuntime,
     never,
-    ProcessServices | Sessions | Scope.Scope
+    ProcessServices | Sessions | SessionOwner | Scope.Scope
   >,
 };
 
