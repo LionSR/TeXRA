@@ -45,7 +45,7 @@ const TOKEN_STATS = [
     always: true,
   },
   {
-    key: 'cacheReadInputTokens',
+    key: 'cachedInputTokens',
     icon: 'cloud-arrow-down',
     id: 'usage-cache-read-icon',
     tooltip: 'Cache read tokens (discounted)',
@@ -59,7 +59,7 @@ const TOKEN_STATS = [
     label: 'cache miss tokens',
   },
   {
-    key: 'cacheCreationInputTokens',
+    key: 'cacheWriteTokens',
     icon: 'database',
     id: 'usage-cache-write-icon',
     tooltip: 'Cache creation tokens (1.25× cost)',

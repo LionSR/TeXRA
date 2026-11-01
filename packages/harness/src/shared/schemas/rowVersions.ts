@@ -137,7 +137,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // build's card would read without its sections).
   'tool.start': { version: 2, upcast: [] },
   'tool.end': V1,
-  usage: V1,
+  // v2: the counts carry `TurnUsage`'s names (`cachedInputTokens`,
+  // `cacheWriteTokens`, `toolUsePromptTokens`), and `elapsedTime` is gone
+  // (no upcaster: an earlier build's cache counts would read as absent).
+  usage: { version: 2, upcast: [] },
   'context.state': V1,
   'stream.start': V1,
   'stream.end': V1,
@@ -159,14 +162,20 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v6: no OpenRouter protocol (no upcaster, as
   // `run.config`: an earlier build's row would fail as damaged).
   // v7: no `vscode-lm` protocol and no editor turn (no upcaster, as v6).
-  'model.message': { version: 7, upcast: [] },
+  // v8: a turn's usage counts its cache writes and tool-use prompt tokens
+  // (`cacheWriteTokens`, `toolUsePromptTokens`) beside its cache reads, and
+  // the priced usage names them so (no upcaster: an earlier build's
+  // `cacheCreationTokens` would read as absent).
+  'model.message': { version: 8, upcast: [] },
   // v2: the causes are `compaction` and `fork` alone (no upcaster, as
   // `run.config`: an earlier build's edit of another cause would fail its
   // run as damaged rather than read as that build's).
   // v3: media parts by address, as `model.message` v5.
   // v4: no OpenRouter protocol, as `model.message` v6.
   // v5: no `vscode-lm` origin, as `model.message` v7.
-  'context.edit': { version: 5, upcast: [] },
+  // v6: the priced usage's cache writes are `cacheWriteTokens`, as
+  // `model.message` v8.
+  'context.edit': { version: 6, upcast: [] },
   'tool.intent': V1,
   'script.call': V1,
   // v2: a captured attachment holds its bytes by blob address, never inline.

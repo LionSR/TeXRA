@@ -450,7 +450,9 @@ const TURN = {
     outputTokens: 5,
     totalTokens: 15,
     cachedInputTokens: 4,
+    cacheWriteTokens: null,
     reasoningTokens: null,
+    toolUsePromptTokens: null,
   },
 };
 const CALLS = [
@@ -702,7 +704,7 @@ describe('applyRunRows', () => {
     ]);
     expect(state?.pendingResponse).toBeNull();
     expect(state?.usage.totalInputTokens).toBe(10);
-    expect(state?.usage.totalCacheReadInputTokens).toBe(4);
+    expect(state?.usage.totalCachedInputTokens).toBe(4);
     // The turn's stamped price: a settlement adds nothing to it.
     expect(state?.usage.totalCost).toBe(0.25);
     // Incremental and cold folds are the same computation.

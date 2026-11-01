@@ -79,7 +79,7 @@ CREATE VIEW usage AS
 SELECT position, run_id, at,
   json_extract(data, '$.usage.inputTokens') AS input_tokens,
   json_extract(data, '$.usage.outputTokens') AS output_tokens,
-  json_extract(data, '$.usage.cacheReadInputTokens') AS cache_read_input_tokens,
+  json_extract(data, '$.usage.cachedInputTokens') AS cached_input_tokens,
   json_extract(data, '$.usage.reasoningTokens') AS reasoning_tokens,
   json_extract(data, '$.usage.cost') AS cost
 FROM events WHERE type = 'usage';
@@ -152,6 +152,6 @@ export const HISTORY_VIEW_SUMMARY = `- runs(id, parent_id, kind, name, model, de
 - run_tree(ancestor_id, id, depth) - every ancestor of every run; depth 1 is the direct parent.
 - messages(position, run_id, at, role, text) - user turns and assistant replies, role 'user' or 'assistant'.
 - tool_calls(position, run_id, call_id, tool, input, status, result, started_at, ended_at) - input and result are JSON text; status/result are NULL while the call is open.
-- usage(position, run_id, at, input_tokens, output_tokens, cache_read_input_tokens, reasoning_tokens, cost) - one row per priced model call (turns and compaction summaries).
+- usage(position, run_id, at, input_tokens, output_tokens, cached_input_tokens, reasoning_tokens, cost) - one row per priced model call (turns and compaction summaries).
 - events(position, run_id, type, at, data) - the session's display rows, data as JSON text, which every view above but runs reads.
 Times are ISO-8601 UTC text. Order by position for load order. A text value longer than ${HISTORY_TEXT_LIMIT} characters (a large tool input or result, most often) is stored cut to its first ${HISTORY_TEXT_LIMIT}, followed by '… [cut: N characters in all]'; a row whose data is still longer than ${HISTORY_ROW_LIMIT} characters is stored as {"cut": N}.`;

@@ -138,16 +138,16 @@ const SUMMARY_MAX_LENGTH = 60;
 function claudeUsageStats(
   inputTokens: number,
   outputTokens: number,
-  cacheReadInputTokens: number,
-  cacheCreationInputTokens: number,
+  cachedInputTokens: number,
+  cacheWriteTokens: number,
   cost: number,
 ): TokenUsageStats {
   return {
     inputTokens,
     outputTokens,
     cost,
-    ...(cacheReadInputTokens > 0 && { cacheReadInputTokens }),
-    ...(cacheCreationInputTokens > 0 && { cacheCreationInputTokens }),
+    ...(cachedInputTokens > 0 && { cachedInputTokens }),
+    ...(cacheWriteTokens > 0 && { cacheWriteTokens }),
   };
 }
 

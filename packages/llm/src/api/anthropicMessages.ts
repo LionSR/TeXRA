@@ -337,15 +337,16 @@ function canonicalUsage(
     inputTokens,
     outputTokens,
     cachedInputTokens: cached,
+    cacheWriteTokens: creation,
     totalTokens:
       inputTokens !== null && outputTokens !== null
         ? inputTokens + outputTokens
         : null,
     reasoningTokens: usage.output_tokens_details?.thinking_tokens ?? null,
+    toolUsePromptTokens: null,
     providerUsage: {
       kind: 'anthropic',
       uncachedInputTokens: uncached,
-      cacheCreationTokens: creation,
       cacheCreation5mTokens:
         usage.cache_creation?.ephemeral_5m_input_tokens ?? null,
       cacheCreation1hTokens:
