@@ -201,7 +201,11 @@ const conversationPane = (
  *  (label, ancestors path, status) over its transcript. */
 const transcriptBody = (project: RailProject, run: RunView) =>
   html`<run-header .run=${run} .view=${project.view}></run-header>
-    <log-list .run=${run} .surface=${project.surface}></log-list>`;
+    <log-list
+      .run=${run}
+      .surface=${project.surface}
+      .tools=${{ icons: {}, terminalOutput: [] }}
+    ></log-list>`;
 
 const pdfPane = createPdfPane();
 const tab = (

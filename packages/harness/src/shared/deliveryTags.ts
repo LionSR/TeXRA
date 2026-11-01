@@ -7,8 +7,9 @@
 // names no plugin: a result or an error it builds with `formatDelivery` is
 // `<family>-result` / `<family>-error` (an XML-entity-escaped body, opening
 // with the `id` attribute that builder writes first), and an activity report
-// is a bare `<family>-activity>` ending its line, whose body the plugin
-// neutralizes instead of escaping. `family` is lowercase words joined by `-`.
+// is a bare `<family>-activity>` ending its line (LF or CRLF), whose body the
+// plugin neutralizes instead of escaping. `family` is lowercase words joined
+// by `-`.
 //
 // Intentionally has NO host imports (no vscode, no Ink/React) so both
 // @shared (webview) and the CLI can consume it, matching subagentFollowup.ts.
@@ -33,7 +34,7 @@ const FAMILY = '[a-z][a-z0-9]*(?:-[a-z0-9]+)*';
 export const DELIVERY_TAG_PATTERN = [
   ...Object.values(DELIVERY_TAG),
   `${FAMILY}-(?:result|error)(?= id=")`,
-  `${FAMILY}-activity(?=>\n)`,
+  `${FAMILY}-activity(?=>\r?\n)`,
 ].join('|');
 
 /**
