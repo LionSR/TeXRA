@@ -274,9 +274,9 @@ export const ResolvedTurnSchema = Schema.Union([
 /** A prepared turn: the request with the binding's controls fixed. */
 export type ResolvedTurn = typeof ResolvedTurnSchema.Type;
 
-/** A turn's token counts as the provider reported them; an unknown count
- *  stays null. `providerUsage` keeps only what no neutral count holds: an
- *  xAI receipt's own cost and Anthropic's split of its cache writes. */
+/** A turn's token counts as reported; an unknown count stays null. Only what
+ *  no neutral count holds is `providerUsage`: an xAI receipt's cost, and
+ *  Anthropic's uncached input count and 5m/1h split of its cache writes. */
 const TurnUsageSchema = Schema.Struct({
   inputTokens: Schema.NullOr(CountSchema),
   outputTokens: Schema.NullOr(CountSchema),
