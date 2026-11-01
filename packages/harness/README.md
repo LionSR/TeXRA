@@ -410,7 +410,8 @@ The harness's log entries (a store that failed, a plugin that did not load, a
 run's warnings) print to the console until you name another destination:
 `setLogSink({ write(entry) { … } })` from `@texra-ai/harness/node` receives
 each `LogEntry`, Effect's structured record (level, message, cause,
-annotations). Setting a sink disposes the one it replaces (its optional
+annotations), and `entryChannel` / `entryMessage` read its channel and text
+as the console prints them. Setting a sink disposes the one it replaces (its optional
 `dispose`), and `setLogSink(null)` restores the console. Entries reach the sink
 with secrets redacted, unless you pass `{ trusted: true }`. `Sessions.layer`
 logs at `Info` and above; `effectDiagnosticsLayer(level)`, from the same

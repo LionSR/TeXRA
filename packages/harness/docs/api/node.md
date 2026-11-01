@@ -111,6 +111,29 @@ freeze the setting for a whole session.
 const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>
 ```
 
+## entryChannel
+
+Which channel an entry belongs to, or `undefined` when it names none. An
+`Effect.log*` carries one only through `Effect.annotateLogs`; a tracer span
+opened by `Effect.withSpan` does not supply it, because the entry's `spans`
+field reads `CurrentLogSpans` (`Effect.withLogSpan`), a separate mechanism.
+An unattributed entry lands on the host's shared surface, which is the right
+home for it.
+
+```ts
+function entryChannel(entry: LogEntry): string | undefined
+```
+
+## entryMessage
+
+Render an entry's message for a host that wants one line of text. Effect
+hands `message` through as a single value or an array of them, so both
+shapes fold here rather than at each host.
+
+```ts
+function entryMessage(entry: LogEntry): string
+```
+
 ## entryTypeIn
 
 The entry's own type at `target`, or `undefined` when nothing is there, with
@@ -383,6 +406,14 @@ interface JsonStoreOptions {
    */
   follow?: boolean;
 }
+```
+
+## LOG_CHANNEL
+
+Annotation naming the logical channel an entry belongs to.
+
+```ts
+const LOG_CHANNEL: "channel"
 ```
 
 ## LogEntry
@@ -755,4 +786,14 @@ file would make unreadable on resume; not for workspace files.
 
 ```ts
 const writeFileAtomic: (target: string, data: Uint8Array<ArrayBufferLike>) => Effect<void, PlatformError, never>
+```
+
+## writeLogLine
+
+One `WARN` channel line, for the few synchronous publication points with no
+fiber to run `Effect.log*` on (the trace emitter, pre-runtime and shutdown
+paths). The entry has the shape the logger layer writes.
+
+```ts
+function writeLogLine(channel: string, message: string): void
 ```

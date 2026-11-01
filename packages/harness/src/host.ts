@@ -265,14 +265,7 @@ export {
 } from '@tools/toolAvailabilityService';
 // The tool catalog: enabled built-ins, plugin services and switches.
 export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
-// How a log entry reads, and a line written to the sink (`setLogSink` in
-// `@texra-ai/harness/node`).
-export {
-  entryChannel,
-  entryMessage,
-  LOG_CHANNEL,
-  writeLogLine,
-} from '@logger/logSink';
+// The channel an Effect's log entries name (`entryChannel`, `/node`).
 export { withLogChannel } from '@logger/effectLog';
 // The write path's redaction, for host text shown outside it.
 export { formatFatalErrorDetail, redactSecrets } from '@logger/redaction';
