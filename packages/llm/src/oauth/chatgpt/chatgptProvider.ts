@@ -191,7 +191,7 @@ const storedRegistration = Effect.fn('chatgpt.storedRegistration')(function* (
 
 /**
  * A code grant is accepted only with plan usage granted and a verified ID
- * token: the token alone does not authorize plan usage. A registration is
+ * token: the ID token alone does not authorize plan usage. A registration is
  * recorded with its account; a returning sign-in must be that account, since
  * one registration's client never carries another account's tokens.
  */
@@ -200,7 +200,12 @@ const acceptChatgptGrant = Effect.fn('chatgpt.acceptGrant')(function* (
   attempt: SubscriptionAuthorizeRequest,
   secrets: CredentialStore,
 ) {
-  if (!tokens.scope?.split(' ').includes(TOKEN_SHARING_SCOPE)) {
+  // A token response names its scopes only when they differ from the request
+  // (RFC 6749 §5.1), so an absent `scope` granted everything asked for.
+  if (
+    tokens.scope != null &&
+    !tokens.scope.split(' ').includes(TOKEN_SHARING_SCOPE)
+  ) {
     return yield* new SubscriptionOAuthError({
       message:
         'ChatGPT sign-in finished without plan usage. Sign in again and allow TeXRA to use your ChatGPT plan, or use an OpenAI API key.',
