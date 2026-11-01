@@ -33,7 +33,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { readModelSettings, routeFactsFor } from './modelSettings';
 import {
-  reasoningRouteOf,
   routeReasoningOf,
   servingBackend,
   type RouteReasoning,
@@ -524,7 +523,6 @@ function optionOf(
         source,
       });
   const savedEffort = reasoningLevels[config.ref];
-  const backend = servingBackend(config);
   return {
     model,
     availability: kind,
@@ -537,15 +535,15 @@ function optionOf(
     savedEffort,
     // The bind's own decision over the bind's inputs (`binding.ts`
     // `reasoningOf`): the routed config, the model string's request, the
-    // saved level, and the route a fresh run's backend serves.
+    // saved level and the route. A model no backend serves has none to show.
     reasoning:
-      backend === undefined
+      servingBackend(config) === undefined
         ? undefined
         : routeReasoningOf({
             config,
             request: decision.request,
             saved: savedEffort,
-            route: reasoningRouteOf(route, backend),
+            route,
           }),
   };
 }

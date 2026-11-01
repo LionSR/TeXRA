@@ -17,11 +17,7 @@ import {
 import { bindModel as bindWireModel } from '@texra-ai/llm/node';
 
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import {
-  decideReasoning,
-  PROTOCOL_BY_BACKEND,
-  reasoningRouteOf,
-} from '@model/reasoningLevel';
+import { decideReasoning, PROTOCOL_BY_BACKEND } from '@model/reasoningLevel';
 import {
   readBackgroundToggles,
   type BackgroundToggles,
@@ -88,7 +84,7 @@ const reasoningOf = Effect.fn('binding.reasoning')(function* (
     config,
     plan.ask,
     plan.settings.reasoningLevels[config.ref],
-    reasoningRouteOf(plan.decision.route, plan.backend),
+    plan.decision.route,
   ).pipe(Effect.mapError(RouteUnavailable.of));
   if (choice.note !== undefined) yield* Effect.logInfo(choice.note);
   return choice;
