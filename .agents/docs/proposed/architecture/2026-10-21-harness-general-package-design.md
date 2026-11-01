@@ -201,6 +201,11 @@ The root entry has about 30 names: `Sessions`, `Session`, `Run`, `StartInput`,
 `Run` gains `text: Stream<string>`, `followUp`, `stop`, `decide` and
 `transcript`, all thin methods over the existing request unions.
 
+Superseded (2026-10-28, [Harness 1.0 release PRD](./2026-10-28-harness-1-release-prd.md)):
+the PRD rejects methods on `Run` or `Session` that only forward to
+`session.request`, which stays the one door; `Run` keeps `result` and the
+view. The paragraph above records the option, not the plan.
+
 The subpaths are: `./schemas` (a named manifest with storage and view sections,
 and no `texra.*` constant), `./plugins` (the whole authoring closure), `./node`,
 `./host` (host composition only), and `./promise`, which ships last.
@@ -239,6 +244,10 @@ agent SDK's public surface is Effect") and the owner's 2026-10-06 decision on
 of 60 to 120 lines, holding one `ManagedRuntime` and no logic. It is added to
 the `Effect.run*` entry allowlist and recorded in `refuted-candidates`. If the
 ruling holds, the file is deleted and nothing else changes.
+
+Superseded (2026-10-28, the release PRD): the Effect-only ruling holds for 1.0
+and `./promise` is not built; the entry stays in the table above as the
+refused option.
 
 ### Plugin contract
 
