@@ -38,8 +38,9 @@ interface RowKind {
    * another; the lifecycle pair (`run.start`, `run.removed`) updates one
    * existence, so a deletion marker's commit outranks a replayed
    * `run.start` below it, which makes the marker final under every read.
-   * The transcript tier and the run history are listed nowhere: a cold
-   * initial load would pull the newest one of every run into every
+   * The run history and the transcript tier but `context.state` (the
+   * run's context gauge, read from its newest row) are listed nowhere: a
+   * cold initial load would pull the newest one of every run into every
    * renderer for no reader. `run.position` and `child.park` are listed:
    * the phase is read from them, so a listing without them would paint
    * every waiting run as ready and every waiting child as busy.

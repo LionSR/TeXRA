@@ -114,8 +114,9 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
         ...(rows.end === null && { heldParks: [...rows.heldParks, held] }),
       };
     }
-    // The shared rows (`applyRunRow`), the transcript tier and the run
-    // history record nothing here.
+    // The run's model (the session view's), the shared rows
+    // (`applyRunRow`), the transcript tier and the run history record
+    // nothing here.
     case 'run.model':
     case 'followup.queued':
     case 'followup.consumed':
