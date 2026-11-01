@@ -87,8 +87,13 @@ export interface SubscriptionCoordinator<S extends SubscriptionSession> {
   refreshRejected(
     accessToken: string,
   ): Effect.Effect<void, Error, HttpClient.HttpClient>;
-  /** Forget the stored session. */
-  signOut(): Effect.Effect<void, SecretsFailed>;
+  /** End the stored session at the provider, then forget it either way; a
+   *  provider that could not confirm the end fails after the local sign-out. */
+  signOut(): Effect.Effect<
+    void,
+    SecretsFailed | SubscriptionOAuthError,
+    HttpClient.HttpClient
+  >;
   /** The PKCE authorize URL for a loopback callback on `port`. */
   buildAuthorizeRequest(
     port: number,
@@ -153,6 +158,13 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
     SubscriptionOAuthError | SecretsFailed,
     HttpClient.HttpClient
   >;
+  /**
+   * End a session at the provider before sign-out deletes it (token
+   * revocation). Absent: sign-out only deletes it.
+   */
+  readonly endSession?: (
+    session: S,
+  ) => Effect.Effect<void, SubscriptionOAuthError, HttpClient.HttpClient>;
   /** Token response to session. Must not throw: it runs in `Effect.succeed`. */
   buildSession(
     tokens: SubscriptionTokenResponse,

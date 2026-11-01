@@ -11,7 +11,7 @@
  * secret store's own {@link SecretsFailed}.
  */
 // Third-party imports
-import { Clock, Effect, Result, Schema } from 'effect';
+import { Clock, Effect, Exit, Result, Schema } from 'effect';
 
 // Local imports
 import { SharedAttempt } from './sharedAttempt.js';
@@ -224,28 +224,21 @@ export class SubscriptionOAuthCoordinator<
   };
 
   /**
-   * After a refresh is superseded (concurrent login/sign-out), take a stable
-   * storage snapshot and:
-   * - return a *replacement* session (different credentials) — concurrent
-   *   sign-in succeeded; do not force re-auth;
-   * - return a still-fresh same session (rare: supersede without replace);
-   * - fail `expired` when storage is empty (sign-out won);
-   * - fail `transient` when the pre-refresh session is still the only
-   *   stored value and still needs refresh (failed concurrent store, or a
-   *   server-rotated refresh that never landed) — never hand back a known-
-   *   stale token as if the refresh completed.
+   * After a refresh is superseded (a concurrent login or sign-out), the
+   * stored session from a stable snapshot: a replacement or a still-fresh
+   * one is returned; none fails `expired` (sign-out won); the pre-refresh
+   * one, still expiring, fails `transient` rather than hand back a stale
+   * token as if the refresh completed.
    */
   private readonly sessionAfterSupersede = Effect.fn(
     'SubscriptionOAuthCoordinator.sessionAfterSupersede',
   )(function* (this: SubscriptionOAuthCoordinator<S>, previous: S) {
     const { session } = yield* this.stableSession();
     if (!session) {
-      return yield* Effect.fail(
-        new SubscriptionOAuthError({
-          message: this.policy.sessionChangedMessage,
-          kind: 'expired',
-        }),
-      );
+      return yield* new SubscriptionOAuthError({
+        message: this.policy.sessionChangedMessage,
+        kind: 'expired',
+      });
     }
     const replaced =
       session.accessToken !== previous.accessToken ||
@@ -256,21 +249,30 @@ export class SubscriptionOAuthCoordinator<
     ) {
       return session;
     }
-    return yield* Effect.fail(
-      new SubscriptionOAuthError({
-        message: this.policy.sessionChangedMessage,
-        kind: 'transient',
-      }),
-    );
+    return yield* new SubscriptionOAuthError({
+      message: this.policy.sessionChangedMessage,
+      kind: 'transient',
+    });
   });
 
-  /** Delete the stored session, superseding any refresh in flight. */
+  /** End the stored (readable) session at the provider, then delete it either
+   *  way, superseding any refresh; a failed end is reported after. */
   readonly signOut = Effect.fn('SubscriptionOAuthCoordinator.signOut')(
     function* (this: SubscriptionOAuthCoordinator<S>) {
+      const { endSession } = this.policy;
+      const ended = yield* Effect.exit(
+        this.loadSession().pipe(
+          Effect.catchTag('SubscriptionOAuthError', () => Effect.succeed(null)),
+          Effect.flatMap((session) =>
+            session && endSession ? endSession(session) : Effect.void,
+          ),
+        ),
+      );
       yield* this.sessionMutations.run(
         this.secrets.delete(this.policy.secretKey),
         this.supersedeInFlightRefresh,
       );
+      if (Exit.isFailure(ended)) return yield* Effect.failCause(ended.cause);
     },
   );
 
@@ -339,12 +341,10 @@ export class SubscriptionOAuthCoordinator<
   )(function* (this: SubscriptionOAuthCoordinator<S>, rejected?: string) {
     const { generation, session } = yield* this.stableSession();
     if (!session) {
-      return yield* Effect.fail(
-        new SubscriptionOAuthError({
-          message: this.policy.notSignedInMessage,
-          kind: 'expired',
-        }),
-      );
+      return yield* new SubscriptionOAuthError({
+        message: this.policy.notSignedInMessage,
+        kind: 'expired',
+      });
     }
     if (
       session.accessToken !== rejected &&

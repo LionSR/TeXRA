@@ -19,11 +19,20 @@
 import { randomUUID } from 'node:crypto';
 
 // Third-party imports
-import { Effect, Option, Result, Schema, SchemaGetter, Struct } from 'effect';
+import {
+  Effect,
+  Option,
+  Result,
+  Schedule,
+  Schema,
+  SchemaGetter,
+  Struct,
+} from 'effect';
 
 // Local imports
 import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
 import { verifyIdToken } from '../idToken.js';
+import { oauthHttpError, postOAuthForm } from '../oauthRequest.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
 import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
 import { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
@@ -49,6 +58,7 @@ const CHATGPT_ISSUER = 'https://auth.openai.com';
 
 const CHATGPT_AUTHORIZE_URL = `${CHATGPT_ISSUER}/api/accounts/authorize`;
 const CHATGPT_TOKEN_URL = `${CHATGPT_ISSUER}/api/accounts/oauth/token`;
+const CHATGPT_REVOKE_URL = `${CHATGPT_ISSUER}/api/accounts/oauth/revoke`;
 /** Where OpenAI's ID tokens come from and the keys that sign them. */
 const OPENAI_ID_TOKENS = {
   issuer: CHATGPT_ISSUER,
@@ -255,6 +265,38 @@ const acceptChatgptGrant = Effect.fn('chatgpt.acceptGrant')(function* (
   }
 });
 
+/** Revoke the refresh token (RFC 7009) before sign-out deletes it, retrying a
+ *  network failure or a 5xx; an unconfirmed revocation tells the user how to
+ *  end the session in ChatGPT, after sign-out deletes the tokens anyway. */
+const revokeSession = Effect.fn('chatgpt.revokeSession')(function* (
+  session: ChatgptSession,
+) {
+  const body = new URLSearchParams({
+    token: session.refreshToken,
+    token_type_hint: 'refresh_token',
+    client_id: session.clientId ?? REGISTRATION_CLIENT_ID,
+  });
+  yield* Effect.flatMap(postOAuthForm(CHATGPT_REVOKE_URL, body), (response) =>
+    response.ok ? Effect.void : oauthHttpError(response, 'Token revocation'),
+  ).pipe(
+    Effect.retry({
+      times: 2,
+      schedule: Schedule.exponential('1 second'),
+      while: (error) =>
+        error._tag === 'OAuthNetworkError' ||
+        (error._tag === 'OAuthHttpError' && error.status >= 500),
+    }),
+    Effect.mapError(
+      (cause) =>
+        new SubscriptionOAuthError({
+          message: `Signed out of ChatGPT on this machine, but OpenAI did not confirm that the session was revoked (${cause.message}). To end it, disconnect TeXRA in ChatGPT settings.`,
+          kind: 'transient',
+          cause,
+        }),
+    ),
+  );
+});
+
 /** This machine's stable id for OpenAI, created on first use. */
 const hostId = Effect.fn('chatgpt.hostId')(function* (
   secrets: CredentialStore,
@@ -312,6 +354,7 @@ const CHATGPT_POLICY: SubscriptionOAuthPolicy<ChatgptSession> = {
       };
     }),
   acceptGrant: acceptChatgptGrant,
+  endSession: revokeSession,
   buildSession(tokens, refreshToken, nowMs, previous) {
     const claims = extractChatgptClaims(
       tokens.id_token ?? undefined,

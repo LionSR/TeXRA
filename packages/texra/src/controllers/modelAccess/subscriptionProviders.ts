@@ -124,7 +124,11 @@ export interface SubscriptionProvider {
    * The sign-out program. A host runs it at its own edge; a failure is the
    * provider's own auth error or the secret store's rejection.
    */
-  signOut(): Effect.Effect<void, SecretsFailed, Secrets>;
+  signOut(): Effect.Effect<
+    void,
+    SubscriptionStatusError,
+    Secrets | HttpClient.HttpClient
+  >;
   /**
    * The signed-in status. A store that cannot be read, or a stored session
    * that does not parse, fails rather than reading as signed out.
@@ -159,7 +163,11 @@ interface SubscriptionProviderBindings<Coordinator, Session> extends Pick<
   'id' | 'displayName' | 'sessionName' | 'copyTarget' | 'modelFamily'
 > {
   readonly coordinator: (secrets: PlatformSecrets) => Coordinator & {
-    signOut(): Effect.Effect<void, SecretsFailed>;
+    signOut(): Effect.Effect<
+      void,
+      SubscriptionStatusError,
+      HttpClient.HttpClient
+    >;
   };
   readonly getStatus: (
     secrets: PlatformSecrets,

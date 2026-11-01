@@ -14,7 +14,9 @@ All notable changes to this project will be documented in this file.
   browser-only (no device code; `--device` uses the browser), the consent
   page must allow plan usage, and the plan's usage meter is gone from the
   settings view and `/login status`, since OpenAI shows it in ChatGPT. The
-  registered client outlives sign-out, so signing in again reuses it; to
+  registered client outlives sign-out, which revokes the session at OpenAI
+  (and says so when OpenAI does not confirm it), so signing in again reuses
+  the client; to
   register a different ChatGPT account, sign in with it twice (the first
   attempt says so and forgets the old registration). On this route the
   agent's tools travel in one `texra` namespace, as OpenAI requires, and a

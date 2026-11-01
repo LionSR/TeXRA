@@ -84,7 +84,11 @@ let grants: {
  * handler for its `grant_type`.
  */
 const tokenEndpoint: typeof fetch = async (_input, init) => {
-  const grantType = new URLSearchParams(String(init?.body)).get('grant_type');
+  const form = new URLSearchParams(String(init?.body));
+  // Sign-out revokes the refresh token first; revocation answers an empty 200.
+  if (form.get('token_type_hint') === 'refresh_token')
+    return new Response(null, { status: 200 });
+  const grantType = form.get('grant_type');
   if (grantType === 'refresh_token' && grants.refreshTokens) {
     return grants.refreshTokens();
   }
@@ -210,7 +214,7 @@ describe('ChatGPT session coordinator', () => {
       const token = yield* forkNow(freshToken(coordinator));
       yield* refreshStarted;
 
-      yield* coordinator.signOut();
+      yield* withHttp(coordinator.signOut());
       pending.resolve(jsonResponse(tokenResponse()));
 
       const error = yield* joinFailure(token);

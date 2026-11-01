@@ -305,8 +305,13 @@ interface SubscriptionCoordinator<S extends SubscriptionSession> {
   refreshRejected(
     accessToken: string,
   ): Effect.Effect<void, Error, HttpClient.HttpClient>;
-  /** Forget the stored session. */
-  signOut(): Effect.Effect<void, SecretsFailed>;
+  /** End the stored session at the provider, then forget it either way; a
+   *  provider that could not confirm the end fails after the local sign-out. */
+  signOut(): Effect.Effect<
+    void,
+    SecretsFailed | SubscriptionOAuthError,
+    HttpClient.HttpClient
+  >;
   /** The PKCE authorize URL for a loopback callback on `port`. */
   buildAuthorizeRequest(
     port: number,
