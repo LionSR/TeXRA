@@ -21,23 +21,37 @@ import { buildRunTranscript } from '@shared/session/transcriptUpdate';
 // ============================================================================
 
 /**
- * Deliberate non-goal (#7508): image blocks inside a tool result are not
- * reconstructed here. `ToolUseLog.output` carries either historical display
- * text or the attachment-stripped `ToolResult` fields; attachment bytes never
- * reach the transcript row, and the `tool-result` node is `{text}` only.
+ * A call's `tool-result` node, when it has a result: the text the model read
+ * and the structured `value` the call recorded, if any. Deliberate non-goal
+ * (#7508): image blocks inside a tool result are not reconstructed here.
+ * `ToolUseLog.output` carries either historical display text or the
+ * attachment-stripped `ToolResult` fields; attachment bytes never reach the
+ * transcript row.
  */
-function toolResultText(tool: ToolUseLog): string | undefined {
-  if (tool.error !== undefined) return tool.error;
-  if (typeof tool.output === 'string') return tool.output;
+function toolResultNodes(tool: ToolUseLog): ExportNode[] {
+  const node = (text: string): ExportNode[] => [{ kind: 'tool-result', text }];
+  if (tool.error !== undefined) return node(tool.error);
+  if (typeof tool.output === 'string') return node(tool.output);
   if (Predicate.isObject(tool.output)) {
     const result = Schema.decodeUnknownResult(ToolResultSchema)({
       ...tool.output,
       status: tool.status === TOOL_CALL_STATUS.FAILED ? 'error' : 'executed',
     });
-    if (Result.isSuccess(result)) return formatToolResultAsText(result.success);
+    if (Result.isSuccess(result)) {
+      const decoded = result.success;
+      return [
+        {
+          kind: 'tool-result',
+          text: formatToolResultAsText(decoded),
+          ...(decoded.status === 'executed' &&
+            decoded.value !== undefined && { value: decoded.value }),
+        },
+      ];
+    }
   }
-  if (tool.output !== undefined) return stringifyConversationValue(tool.output);
-  return tool.summary;
+  if (tool.output !== undefined)
+    return node(stringifyConversationValue(tool.output));
+  return tool.summary === undefined ? [] : node(tool.summary);
 }
 
 /**
@@ -74,17 +88,15 @@ function conversationNodesForRow(
       return [{ kind: 'assistant-text', text: row.text.full }];
     case 'thinking':
       return [{ kind: 'thinking', text: row.text.full }];
-    case 'tool': {
-      const text = toolResultText(row.log);
+    case 'tool':
       return [
         {
           kind: 'tool-call',
           name: row.log.toolName ?? 'unknown',
           input: row.log.input ?? {},
         },
-        ...(text !== undefined ? [{ kind: 'tool-result' as const, text }] : []),
+        ...toolResultNodes(row.log),
       ];
-    }
     case 'webSearch':
       return row.query ? [{ kind: 'web-search', query: row.query }] : [];
     // ── Deliberately skipped: not conversation content ──────────────────

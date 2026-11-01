@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Stream } from 'effect';
+import { Effect, Schema, Stream } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { completedTurn, type TurnRequest } from '@texra-ai/llm';
+import { toolDefinitionsFor } from '@tools/catalogEntries';
+import { defineTool } from '@tools/core/definition';
 import { anthropicMessagesModel } from '../../../packages/llm/src/api/anthropicMessages.js';
 import type { AnthropicMessagesConfiguration } from '../../../packages/llm/src/turn.js';
 
@@ -237,6 +239,35 @@ describe('canonical Anthropic Messages protocol', () => {
           },
         ]);
       }),
+  );
+
+  it.effect('offers and calls a plugin tool that takes no arguments', () =>
+    Effect.gen(function* () {
+      const hold = defineTool({
+        name: 'hold',
+        description: 'Hold until released.',
+        schema: Schema.Struct({}),
+        execute: () => Effect.succeed('held'),
+      });
+      const bound = model();
+      const turn = yield* bound.prepareTurn({
+        ...REQUEST,
+        tools: toolDefinitionsFor([hold.definition]),
+      });
+      assert(turn.mode === 'foreground');
+      yield* completedTurn(bound.streamTurn(turn));
+      const [offered] = JSON.parse(
+        fetchModel.mock.calls[0]![1]!.body as string,
+      ).tools;
+      expect(offered).toMatchObject({
+        name: 'hold',
+        input_schema: { type: 'object', properties: {} },
+      });
+      expect(yield* hold.call({})).toMatchObject({
+        status: 'executed',
+        output: 'held',
+      });
+    }),
   );
 
   it.effect(
