@@ -166,7 +166,9 @@ function serializes(text: string, body: unknown): boolean {
 /** One failure's reply, read once. */
 export function readReply(error: ModelError): Reply {
   const source = error.cause instanceof Error ? error.cause : error;
-  const body = replyBody(source);
+  // A streamed response's failure event carries its error as a plain object.
+  const body =
+    replyBody(source) ?? (isFields(error.cause) ? error.cause : undefined);
   const own =
     source instanceof Error && source.message.trim() !== ''
       ? source.message.trim()
