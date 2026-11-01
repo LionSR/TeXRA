@@ -327,6 +327,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     status: RUN_LIFECYCLE_READY,
     substate: null,
     durableOutcome: null,
+    output: null,
     statusNotice: null,
     lost: null,
     ...runStatus(RUN_LIFECYCLE_READY),
@@ -713,6 +714,7 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
         runStartedAt: event.at,
         turn: null,
         lost: null,
+        output: null,
       };
     }
     case 'run.config': {
@@ -771,10 +773,16 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
             title: event.description || run.label,
           };
     case 'run.end':
-      // The run ended: its outcome, and any result its end lost.
+      // The run ended: its outcome and output, and any result its end lost.
       return withTurnFinished(
         u,
-        { ...run, status: event.outcome, substate: null, runStartedAt: null },
+        {
+          ...run,
+          status: event.outcome,
+          output: event.output,
+          substate: null,
+          runStartedAt: null,
+        },
         event.at,
         event.error,
       );

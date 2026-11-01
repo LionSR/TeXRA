@@ -23,6 +23,7 @@ import {
   PluginFactDraftSchema,
   blocksCaller,
   RunActionSchema,
+  RunEndSchema,
   RunIdentitySchema,
   RunNoticeSchema,
   RunOutcomeSchema,
@@ -131,6 +132,8 @@ const RunViewSchema = Schema.Struct({
    *  follow-up's `run.activate` restarts it. Lets a host paint an open group
    *  as interrupted and the session release the run's sidecar record. */
   durableOutcome: Schema.NullOr(RunOutcomeSchema),
+  /** What `run.end` stored as the run's output; `run.activate` clears it. */
+  output: Schema.NullOr(RunEndSchema.fields.output),
   /** What the run's banner says (`RunNoticeSchema`); null: nothing. */
   statusNotice: Schema.NullOr(RunNoticeSchema),
   /** The result its end lost (a `result-lost` error), whatever its outcome. */

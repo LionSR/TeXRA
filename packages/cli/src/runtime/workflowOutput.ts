@@ -8,23 +8,21 @@ import { toPosixPath, isNotADirectoryError } from '@texra-ai/harness/host';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
+import { isTaskConfig, RUN_OUTCOME } from '@texra-ai/harness/schemas';
 import {
-  type RunEndOutput,
-  isTaskConfig,
-  RUN_OUTCOME,
-} from '@texra-ai/harness/schemas';
-import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
+  runOutcomeToCliRunStatus,
+  type CliRunResult,
+  type CliWorkflowRunResult,
+} from '@cli/schemas/cliOutput';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
 import {
   documentsResultOf,
   finalWorkflowOutput,
-  type DocumentsResult,
   type OutputFileSummary,
 } from '@texra/shared/plugins/documentOutputs';
 
 import { CliUsageError, type CliContext } from './cliContext';
-import { type CliRunResult } from './terminalStatus';
 import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
@@ -187,16 +185,6 @@ export function assertOutputFileAvailable(
     ),
   );
 }
-
-/** A document task's run result: its output always carries its documents. */
-export type CliWorkflowRunResult = CliRunResult & {
-  /** The run's output with its documents projected as `documents` (the
-   *  CLI's JSON contract), not as the run's `structured` value. */
-  readonly output: Omit<RunEndOutput, 'structured'> & {
-    readonly documents: DocumentsResult;
-  };
-  readonly runDirectory: string;
-};
 
 interface WorkflowOutputResolutionOptions {
   readonly expectedOutputFiles?: readonly string[];

@@ -7,6 +7,7 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@texra-ai/harness/schemas';
+import type { CliWorkflowRunResult } from '@cli/schemas/cliOutput';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
@@ -61,7 +62,6 @@ import {
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
-  type CliWorkflowRunResult,
   formatWorkflowTextResult,
   inputDerivedOutputFiles,
   resolveWorkflowOutput,
