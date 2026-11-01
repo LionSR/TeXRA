@@ -748,7 +748,8 @@ export async function runChat(
   // The one "agent finished" notification: the claimed run's turn finishes,
   // at WAITING ("your turn", alongside the StatusBar pill) or at its outcome.
   // A run that ends after waiting was already announced, and a stop the user
-  // asked for is not news.
+  // asked for is not news. A turn end, not `attentionOf`'s `finished`: a
+  // conversation's turn ends at WAITING with no outcome.
   let rootPhase = session.status();
   onChatClose(
     subscribeToSignalChanges([sessionView()], () => {
