@@ -1,16 +1,17 @@
 import { Effect } from 'effect';
 
 import { Cancelled } from '@texra-ai/harness';
-import { agentName, isLiveRun } from '@texra-ai/harness/schemas';
+import {
+  agentName,
+  isLiveRun,
+  type AgentConfig,
+} from '@texra-ai/harness/schemas';
 import {
   presentRunFailure,
   type Secrets,
   type SessionHostInteractions,
 } from '@texra-ai/harness/host';
-import {
-  validateRunRequest,
-  type ValidatedRunRequest,
-} from '@texra/controllers/session/runRequests';
+import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { resolveSetupLaunchModel } from '@texra/model/setupCredentialAccess';
 import { SETUP_AGENT_NAME } from '@texra/shared/constants/agents';
@@ -33,7 +34,7 @@ export const launchSetup = <E>(options: {
   readonly session: Pick<Session, 'view'>;
   readonly roots: SettingsStores;
   /** This host's launch path for the setup request. */
-  readonly start: (request: ValidatedRunRequest) => Effect.Effect<Run, E>;
+  readonly start: (config: AgentConfig) => Effect.Effect<Run, E>;
 }) =>
   Effect.gen(function* () {
     // A second setup conversation, however it was started, would race the
@@ -50,17 +51,13 @@ export const launchSetup = <E>(options: {
     // as "No model is available".
     const model = yield* resolveSetupLaunchModel(options.roots);
     if (model === null) return 'no-model' as const;
-    const validation = validateRunRequest({
-      config: {
-        agent: SETUP_AGENT_NAME,
-        model,
-        instruction: SETUP_INSTRUCTION,
-      },
-    });
-    if (!validation.valid) {
-      return yield* Effect.fail(new Error(validation.message));
-    }
-    const run = yield* options.start(validation.request);
+    // An Error, as every host words a failed setup launch by its message.
+    const config = yield* decodeLaunchConfig({
+      agent: SETUP_AGENT_NAME,
+      model,
+      instruction: SETUP_INSTRUCTION,
+    }).pipe(Effect.mapError(({ reason }) => new Error(reason)));
+    const run = yield* options.start(config);
     yield* run.result.pipe(
       Effect.asVoid,
       Effect.catch((failure) =>

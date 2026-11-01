@@ -87,7 +87,7 @@ describe('main-view run launch controller', () => {
           inputFiles: ['/papers/first/main.tex'],
           contextFiles: ['/papers/first/refs.bib'],
         };
-        const { config } = yield* onGlobalStorage(
+        const config = yield* onGlobalStorage(
           prepareSurfaceLaunch(launchRequest(selections), ROOTS),
         );
 

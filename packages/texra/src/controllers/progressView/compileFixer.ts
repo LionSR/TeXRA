@@ -15,11 +15,11 @@ import {
   isModelOptionAvailable,
   RunIdSchema,
   type AgentConfig,
+  type AgentConfigInput,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { pluralize } from '@texra-ai/harness/transcript';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
-import type { RunRequest } from '@texra/controllers/session/runRequests';
 import {
   type CompileFailure,
   type ReadonlyRoundIndexed,
@@ -44,7 +44,7 @@ interface CompileFixerTarget {
 type ProgressFollowUpPlan =
   | { kind: 'warning'; message: string }
   | { kind: 'info'; message: string }
-  | { kind: 'execute'; request: RunRequest };
+  | { kind: 'execute'; config: AgentConfigInput };
 
 /** Resolve editable targets and a latexFixer request from one documents projection.
  * Model options are read by the caller before it captures the run's current documents.
@@ -129,22 +129,20 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
     const editableFiles = targets.map((target) => target.path);
     return {
       kind: 'execute',
-      request: {
-        config: {
-          ...workflowConfig,
-          agent: 'latexFixer',
-          model,
-          instruction: buildCompileFixerQuestion(
-            compileFailures,
-            targets,
-            input.runId,
-          ),
-          // A chat with latexFixer, not the task's recipe again.
-          script: null,
-          inputFiles: editableFiles,
-          outputFiles: [],
-          editedFile: null,
-        },
+      config: {
+        ...workflowConfig,
+        agent: 'latexFixer',
+        model,
+        instruction: buildCompileFixerQuestion(
+          compileFailures,
+          targets,
+          input.runId,
+        ),
+        // A chat with latexFixer, not the task's recipe again.
+        script: null,
+        inputFiles: editableFiles,
+        outputFiles: [],
+        editedFile: null,
       },
     };
   },

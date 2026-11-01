@@ -55,7 +55,7 @@ export function handleFixCompilation(
           agent: 'latexFixer',
           instruction,
         });
-        const run = yield* launch({ config }, { helperModel: true });
+        const run = yield* launch(config, { helperModel: true });
         yield* run.result;
       }),
   );
