@@ -338,7 +338,6 @@ export {
   referencedAggregates,
   type RequestDecision,
   requestParksItsCaller,
-  RESUME_ON_OPEN_SETTING,
   type RetryPermission,
   RUN_LIFECYCLE_READY,
   RUN_OUTCOME,

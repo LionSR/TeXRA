@@ -94,7 +94,7 @@ export const pluginCatalogLayer = (
             };
           }),
           warnings: [
-            ...withheld,
+            ...withheld.map(({ reason }) => reason),
             ...loadable.flatMap(({ plugin }) => plugin.warnings),
           ],
         };

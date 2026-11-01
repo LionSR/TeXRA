@@ -93,8 +93,8 @@ export function describeRunNotice(run: RunView): string | null {
     case 'earlierBuild':
       return 'an earlier build wrote it, and this build cannot open it';
     case 'resumeBlocked': {
-      const { kind, name } = notice.reason;
-      return `its ${kind === 'agentMissing' ? 'agent' : 'plugin'} ${name} ${RESUME_BLOCKER[kind]}; it can continue once that is fixed`;
+      const { blocker, name } = notice.reason;
+      return `its ${blocker === 'agentMissing' ? 'agent' : 'plugin'} ${name} ${RESUME_BLOCKER[blocker]}; it can continue once that is fixed`;
     }
     case 'interrupted':
       return 'the process running it stopped before it finished; resume it to continue';

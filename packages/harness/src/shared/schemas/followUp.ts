@@ -6,7 +6,7 @@
  */
 import { Schema } from 'effect';
 
-import { RunIdSchema } from './identifiers';
+import { OwnerIdSchema, RunIdSchema } from './identifiers';
 import { StoredMediaSchema } from './storedTurn';
 
 /**
@@ -89,22 +89,38 @@ export const FollowUpDispositionSchema = Schema.Union([
 /** A `followup.consumed` row's `disposition`. */
 export type FollowUpDisposition = typeof FollowUpDispositionSchema.Type;
 
+/** A run this process cannot continue until its agent, or its agent's
+ *  plugin, is back: a fact about this build's catalog, never a row's. */
+export const ResumeBlockedSchema = Schema.Struct({
+  kind: Schema.Literal('blocked'),
+  blocker: Schema.Literals(['agentMissing', 'pluginOff', 'pluginUntrusted']),
+  /** The agent or plugin it names. */
+  name: Schema.String.check(Schema.isMinLength(1)),
+});
+/** What a blocked resume waits for ({@link ResumeBlockedSchema}). */
+export type ResumeBlocked = typeof ResumeBlockedSchema.Type;
+
 /**
- * Why a persisted run is not resumed here: `finished` (nothing left to
- * continue from), `owned_elsewhere` (another live process holds it),
- * `blocked` (an agent or plugin it needs is missing, off or not trusted
- * here), `unusable_checkpoint` (its saved state is there but cannot be
- * continued: never `finished`, which would say it ended normally),
- * `earlier_build` (an earlier build wrote its rows), or `not_resumable` (it
- * is running here, it was deleted, or its input is closed).
+ * Why a persisted run is not continued here: the one answer a resume, a
+ * message to a run with no loop here, a run's records and its view give.
+ * `finished` (nothing left to continue from), `ownedElsewhere` (a live
+ * owner, or one not provably dead, holds its claim), `blocked`
+ * ({@link ResumeBlockedSchema}), `unusableCheckpoint` (its saved state is
+ * there but cannot be continued: never `finished`, which would say it ended
+ * normally), `earlierBuild` (an earlier build wrote its rows), or
+ * `notResumable` (it is running here, it was deleted, or its input is
+ * closed).
  */
-export const ResumeRefusalSchema = Schema.Literals([
-  'finished',
-  'owned_elsewhere',
-  'blocked',
-  'unusable_checkpoint',
-  'earlier_build',
-  'not_resumable',
+export const ResumeRefusalSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal('finished') }),
+  Schema.Struct({
+    kind: Schema.Literal('ownedElsewhere'),
+    owner: OwnerIdSchema,
+  }),
+  ResumeBlockedSchema,
+  Schema.Struct({ kind: Schema.Literal('unusableCheckpoint') }),
+  Schema.Struct({ kind: Schema.Literal('earlierBuild'), cause: Schema.String }),
+  Schema.Struct({ kind: Schema.Literal('notResumable') }),
 ]);
 /** One reason a resume is refused ({@link ResumeRefusalSchema}). */
 export type ResumeRefusal = typeof ResumeRefusalSchema.Type;

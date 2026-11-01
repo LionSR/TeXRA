@@ -1,21 +1,21 @@
 /**
- * Open-time continuation, for a session an interactive host window opened.
- * Headless runs and the SDK never start it: their policy is `off`. An
- * explicit resume of one run starts only its retries: an open-time resume
- * beside that one would race it.
+ * Open-time recovery: what a session does with the tasks a closed or
+ * crashed process left interrupted, started by the open that asks for it
+ * (`OpenOptions.host.interruptedTasks`, `list` or `resume`). A session
+ * opened without it recovers nothing at open.
  *
  * At open it finds the interrupted roots: runs no process holds that did not
  * end, launched by a user (an owned child is resumed by its parent's call).
  * Each one a resume would find blocked gets its reason in the
- * projection (`RunView.resumeBlocked`). Under `resumeOnOpen: auto` the
- * rest are resumed, and a blocked one is resumed once it is unblocked; under
- * `ask` they are left for the window to list.
+ * projection (`RunView.resumeBlocked`). Under `resume` the rest are resumed,
+ * and a blocked one is resumed once it is unblocked; under `list` they are
+ * left for the host to list.
  *
  * Then it follows the agent catalog, which reloads when an agent file or a
  * plugin's switch or trust changes: each run a resume found blocked is
  * checked again, its reason cleared once nothing blocks it, and the run
- * resumed under `auto`. The policy is read once, at open: what an earlier
- * resume asked for is not kept, by this process or any other.
+ * resumed under `resume`. What an earlier open asked for is not kept, by
+ * this process or any other.
  */
 import { Deferred, Effect, Queue, type Scope } from 'effect';
 
@@ -25,15 +25,9 @@ import type { AgentCatalog } from '@agent/index/agentCatalog';
 import type { AgentCatalogServices } from '@agent/index/agentEntry';
 import { withLogChannel } from '@logger/effectLog';
 import { onAppSignal } from '@platform/appSignals';
-import {
-  RESUME_ON_OPEN_SETTING,
-  RESTING_SUBSTATES,
-  type ResumeOnOpen,
-  type RunId,
-} from '@shared/schemas';
+import { RESTING_SUBSTATES, type RunId } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { claimStanding } from '@shared/session/database';
-import { Settings } from '@shared/config/settings';
 
 import { resumeBlocker } from './resumeBlocker';
 import type { SessionHandle } from './SessionHandle';
@@ -63,10 +57,10 @@ const checkRun = (session: SessionHandle, runId: RunId, resume: boolean) =>
 export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
   function* (
     session: SessionHandle,
-    /** Find the interrupted tasks at open too, not only retry blocked
-     *  resumes. */
-    offer: boolean,
+    /** What an unblocked task does: waits to be listed, or is resumed. */
+    recovery: 'list' | 'resume',
   ) {
+    const resume = recovery === 'resume';
     // Subscribed before the open-time pass, so a catalog change during it
     // is not missed.
     const changed = yield* Queue.sliding<void>(1);
@@ -79,12 +73,6 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
       ),
     );
     yield* Deferred.await(subscribed);
-    // What an unblocked run does: under `auto` it is resumed.
-    const policy = yield* Settings.get<ResumeOnOpen>(
-      session.roots,
-      RESUME_ON_OPEN_SETTING.configKey,
-    );
-    const resume = policy === 'auto';
 
     // One check of a run at a time: a resume runs until the run is idle,
     // and a change meanwhile must not resume it twice. A change that lands
@@ -122,26 +110,24 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
           ),
         );
       });
-    if (offer) {
-      const view = yield* session.view.read([]);
-      const roots = [...view.runs.values()].filter(
-        (run) =>
-          run.parentId === null &&
-          run.identity.kind === 'agent' &&
-          !RESTING_SUBSTATES.has(run.substate) &&
-          !isTerminalOutcomePhase(run.status) &&
-          session.runs.get(run.id) === undefined,
-      );
-      // Interrupted: no live process holds it (the claim's owner is proved
-      // dead, or there is none).
-      const interrupted = yield* Effect.filter(roots, (run) =>
-        Effect.map(
-          session.log.owner(run.id),
-          (claim) => claimStanding(claim).kind === 'free',
-        ),
-      );
-      for (const run of interrupted) yield* check(run.id);
-    }
+    const view = yield* session.view.read([]);
+    const roots = [...view.runs.values()].filter(
+      (run) =>
+        run.parentId === null &&
+        run.identity.kind === 'agent' &&
+        !RESTING_SUBSTATES.has(run.substate) &&
+        !isTerminalOutcomePhase(run.status) &&
+        session.runs.get(run.id) === undefined,
+    );
+    // Interrupted: no live process holds it (the claim's owner is proved
+    // dead, or there is none).
+    const interrupted = yield* Effect.filter(roots, (run) =>
+      Effect.map(
+        session.log.owner(run.id),
+        (claim) => claimStanding(claim).kind === 'free',
+      ),
+    );
+    for (const run of interrupted) yield* check(run.id);
     return yield* Effect.forever(
       Effect.andThen(Queue.take(changed), () =>
         Effect.forEach(

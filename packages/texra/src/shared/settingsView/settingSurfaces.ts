@@ -20,7 +20,6 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   PROVIDER_ENDPOINT_STATE_ENTRIES,
-  RESUME_ON_OPEN_SETTING,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
   WorkspaceStateKey,
   type StateSettingEntry,
@@ -126,7 +125,6 @@ function providerToggle(
 export const HARNESS_ROW_SURFACES: Readonly<Record<string, Placement>> = {
   // --- Config-file-backed rows ---------------------------------------------
   [CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY]: AGENTS_AND_CLI,
-  [RESUME_ON_OPEN_SETTING.configKey]: APPROVAL_AND_CLI,
   [GOAL_MAX_COST_SETTING.configKey]: APPROVAL_AND_CLI,
   'model.useGoogleInteractionsServerState': {
     surfaces: {

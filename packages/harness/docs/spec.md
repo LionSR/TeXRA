@@ -151,7 +151,7 @@ The publisher offers these doors:
   (`agent/runtime/SessionEvents.ts:311-319`).
 - `drain`: End the inbox and run what it holds within the close deadline of
   5,000 ms (`agent/runtime/SessionEvents.ts:252-290`,
-  `agent/runtime/SessionHandle.ts:366`).
+  `agent/runtime/SessionHandle.ts:360`).
 
 A job MUST NOT wait on its own publisher; doing so is a defect
 (`agent/runtime/SessionEvents.ts:197-202`, `:299`). A job MAY run again whole
@@ -667,7 +667,7 @@ who owns the run, and holds it until the launched run holds its own
 (`agent/runtime/resumeRun.ts:180-192`). Its earlier reads only refuse a run
 whose records are gone, and one deleted or whose input closed while they ran
 (`agent/runtime/resumeRun.ts:168-179`). A run another live process holds answers
-`owned_elsewhere` (`agent/runtime/resumeRun.ts:192`). A resume is the run's
+`ownedElsewhere` (`agent/runtime/resumeRun.ts:192`). A resume is the run's
 activation from the call: a second resume of the run joins it and gets its
 result, a stop reaches it before it admits the run (a user's stop ends the run
 cancelled, and nothing is admitted after), and the last caller to leave before

@@ -88,13 +88,15 @@ export interface OpenOptions {
    * answer until a host with an `approve` handler attaches
    * ({@link Session.attach}), so every request is denied.
    *
-   * `interruptedTasks` handles runs that a closed or crashed process left
-   * unfinished. Both values resume such a run once what it was missing (an
-   * agent, a plugin) is back. `offer` also lists them when the session
-   * opens, and continues them when the `resumeOnOpen` setting is
-   * `auto`.
+   * `interruptedTasks` is what the session does at open with the root
+   * runs a closed or crashed process left unfinished, the one place that
+   * decides it. Both values mark what blocks each one (an agent, a plugin:
+   * `RunView.resumeBlocked`) and clear the mark once it is back. `list`
+   * leaves them for the host to list and resume; `resume` continues them,
+   * and a blocked one once it is back. Absent, the session recovers
+   * nothing at open.
    */
-  readonly host?: { readonly interruptedTasks?: 'offer' | 'retry' };
+  readonly host?: { readonly interruptedTasks?: 'list' | 'resume' };
 }
 
 /**

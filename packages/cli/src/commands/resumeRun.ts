@@ -150,7 +150,7 @@ export function runResumeCommand(
     }
     // A conversation the service holds continues there: the chat is its
     // client, so the service stays the run's one writer.
-    if (rejection?.kind === 'owned_elsewhere') {
+    if (rejection?.kind === 'ownedElsewhere') {
       const inService = documentTask
         ? Result.succeed(false)
         : yield* Effect.result(heldByService(rejection.owner));

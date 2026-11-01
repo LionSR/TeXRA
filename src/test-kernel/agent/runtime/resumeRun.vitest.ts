@@ -290,12 +290,13 @@ describe(
         Effect.gen(function* () {
           // A live pid (this process's parent) whose start identity was
           // never read: no proof finds it dead.
+          const owner = JSON.stringify(['other-host', process.ppid, null]);
           const { session, runId, storage } = yield* parkedRunAfterCrash({
-            owner: JSON.stringify(['other-host', process.ppid, null]),
+            owner,
           });
 
           expect(yield* resume(runId, { session })).toEqual({
-            failed: 'owned_elsewhere',
+            failed: { kind: 'ownedElsewhere', owner },
           });
           expect(activations(storage, runId)).toBe(1);
         }),

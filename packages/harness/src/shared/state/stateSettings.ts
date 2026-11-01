@@ -23,7 +23,6 @@ import {
   GOAL_MAX_COST_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  RESUME_ON_OPEN_SETTING,
   INHERITED_WORKSPACE_AGENTS,
   QualifiedSkillNameSchema,
 } from '@shared/schemas';
@@ -168,19 +167,6 @@ const HARNESS_CONFIG_ROWS: Record<
     title: 'Agents at once',
     description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
     category: 'agents',
-  },
-  // Global: how one person wants their windows to open.
-  [RESUME_ON_OPEN_SETTING.configKey]: {
-    schema: Schema.Literals(RESUME_ON_OPEN_SETTING.values).pipe(
-      Schema.withDecodingDefault(
-        Effect.succeed(RESUME_ON_OPEN_SETTING.defaultValue),
-      ),
-    ),
-    configTarget: 'global',
-    title: 'Interrupted tasks',
-    description: RESUME_ON_OPEN_SETTING.description,
-    category: 'agents',
-    enumLabels: ['Ask', 'Resume automatically'],
   },
   // Global: a committed project config must not raise or remove the user's cap.
   [GOAL_MAX_COST_SETTING.configKey]: {

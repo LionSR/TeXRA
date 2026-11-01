@@ -1577,7 +1577,7 @@ function handleHarnessSubmit(line: string): void {
     // The session refuses a message to an agent that takes none.
     if (!acceptsFollowUp(focused)) {
       appendHarnessAssistantTranscript(
-        describeFollowUpFailure('not_resumable'),
+        describeFollowUpFailure('notResumable'),
         focused.id,
       );
       return;
@@ -1852,7 +1852,11 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
           ? [
               {
                 runId: interrupted,
-                reason: { kind: 'pluginOff', name: 'zotero' },
+                reason: {
+                  kind: 'blocked',
+                  blocker: 'pluginOff',
+                  name: 'zotero',
+                },
               },
             ]
           : [],

@@ -186,7 +186,8 @@ export const decideResume = Effect.fn('decideResume')(function* (
       return holder === null ? Effect.fail(error) : Effect.succeed(holder);
     }),
   );
-  if (heldBy !== null) return { failed: 'owned_elsewhere' };
+  if (heldBy !== null)
+    return { failed: { kind: 'ownedElsewhere', owner: heldBy } };
   // Whether an open call owns it, read under its claim in this resume's
   // job, so the answer and the activation below are one decision.
   const owner = yield* owningCall(session, runId);
@@ -195,14 +196,14 @@ export const decideResume = Effect.fn('decideResume')(function* (
   yield* deliverHeld(session, runId);
   // Nothing to continue from, or rows this build cannot open.
   const rejected = yield* runRejection(runId, session);
-  if (rejected !== null) return { failed: rejected.kind };
+  if (rejected !== null) return { failed: rejected };
   // An agent or plugin this process cannot run now leaves the run
   // interrupted with the reason, never failed, for the session's follower to
   // resume once it is back; nothing is launched. Another process's run
   // is refused as such above, whatever this process lacks.
   const blocker = yield* resumeBlocker(session, config);
   yield* session.view.markResumeBlocked(runId, blocker);
-  if (blocker !== null) return { failed: 'blocked' };
+  if (blocker !== null) return { failed: blocker };
   // The launched run is admitted once its `run.activate` commits.
   return yield* resumeQueuedToolUse(session, runId, config, options, activated);
 }, Effect.scoped);
@@ -249,17 +250,20 @@ function refusalFor(
 ): Effect.Effect<ResumeRunResult | undefined> {
   if (error instanceof RunLive) return Effect.succeed(REFUSED);
   // A live owner refused the claim, or took it after its owner was proved dead.
-  if (heldElsewhereBy(error) !== null)
-    return Effect.succeed({ failed: 'owned_elsewhere' });
+  const owner = heldElsewhereBy(error);
+  if (owner !== null)
+    return Effect.succeed({ failed: { kind: 'ownedElsewhere', owner } });
   if (error instanceof DatabaseRowEarlier)
-    return Effect.succeed({ failed: 'earlier_build' });
+    return Effect.succeed({
+      failed: { kind: 'earlierBuild', cause: error.message },
+    });
   if (namesUnusableCheckpoint(error)) {
     return Effect.logWarning(
       `Refusing to resume ${runId}: its saved state cannot be continued: ${toErrorMessage(error)}`,
     ).pipe(
       Effect.annotateLogs({ data: error }),
       withLogChannel(CHANNEL),
-      Effect.as({ failed: 'unusable_checkpoint' } as const),
+      Effect.as({ failed: { kind: 'unusableCheckpoint' } } as const),
     );
   }
   return Effect.succeed(undefined);

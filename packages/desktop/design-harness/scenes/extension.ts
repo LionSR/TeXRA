@@ -286,7 +286,7 @@ function interruptedTasksView(): SessionView {
       resumeBlocked: [
         {
           runId: ABSTRACT_TASK,
-          reason: { kind: 'pluginOff', name: 'zotero' },
+          reason: { kind: 'blocked', blocker: 'pluginOff', name: 'zotero' },
         },
       ],
     }),

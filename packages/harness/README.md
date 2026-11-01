@@ -137,9 +137,12 @@ session is closed.
 A later process can open the same root and call `session.resume(runId)` to
 continue a run from its committed history, returning the same `Run` handle that
 `start` returns. A run that cannot continue fails with `ResumeRefused`, whose
-`reason` is `finished`, `owned_elsewhere` (a live process holds it), `blocked`
-(an agent or plugin it needs is missing), `unusable_checkpoint`, or
-`not_resumable` (it is running here, or it was deleted). If `runId` belongs to
+`reason` is a `ResumeRefusal`, the same value `records(runId).readRejection()`
+and `RunView.resumeBlocked` give: its `kind` is `finished`, `ownedElsewhere`
+(a live process holds it, named by `owner`), `blocked` (the agent or plugin
+named by `name` is missing, off or not trusted), `unusableCheckpoint`,
+`earlierBuild` (with its `cause`), or `notResumable` (it is running here, or
+it was deleted). If `runId` belongs to
 a child run owned by an active parent call, `session.resume` resumes the parent
 and sets `run.redirectedFrom` to the requested child `runId`. Pass the same
 custom `tools` to `resume` that were passed to `start`. Calling `resume` on a
@@ -329,7 +332,7 @@ the session store's source; in short:
   `DatabaseClaimRefused`, both typed): nothing was written. A run that loses its own
   claim stops, with no retry. When another process holds the run, every
   caller refuses the same way (`heldElsewhereBy`): a resume or follow-up
-  answers `owned_elsewhere`, a request `NotOwner`.
+  answers `ownedElsewhere`, a request `NotOwner`.
 
 ## Run results
 

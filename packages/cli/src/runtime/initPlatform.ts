@@ -23,6 +23,7 @@ import {
 import { ensureError, GlobalStateKey } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
+import { interruptedTasksOnOpen } from '@texra/controllers/session/interruptedTasksOnOpen';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
 // Local file imports
@@ -85,9 +86,11 @@ type CliPlatformInitOptions = Pick<
    *  above its header. Otherwise this init prints it to stderr: the
    *  platform's log sink is always silent. */
   readonly presentsStoreMovedAside?: boolean;
-  /** The chat TUI: how its session follows interrupted tasks
-   *  (`OpenOptions.host`). */
-  readonly interruptedTasks?: 'offer' | 'retry';
+  /** The chat TUI: its session recovers interrupted tasks
+   *  (`OpenOptions.host.interruptedTasks`) as the `resumeOnOpen` setting
+   *  says, or, beside a resume of one task that resuming the others would
+   *  race, only lists them. */
+  readonly interruptedTasks?: 'setting' | 'list';
 };
 
 /**
@@ -351,14 +354,16 @@ export function initCliPlatform(
           // opens one.
           const openSession = yield* Effect.cached(
             Effect.acquireRelease(
-              sessions.open(roots, {
-                persistent: true,
-                host: {
-                  ...(context.interruptedTasks !== undefined && {
-                    interruptedTasks: context.interruptedTasks,
+              Effect.flatMap(
+                context.interruptedTasks === 'setting'
+                  ? interruptedTasksOnOpen(roots)
+                  : Effect.succeed(context.interruptedTasks),
+                (interruptedTasks) =>
+                  sessions.open(roots, {
+                    persistent: true,
+                    host: { ...(interruptedTasks && { interruptedTasks }) },
                   }),
-                },
-              }),
+              ),
               (session) => Effect.asVoid(sessions.close(session.roots)),
             ).pipe(
               Effect.tap(recordFirstCompletedRun),

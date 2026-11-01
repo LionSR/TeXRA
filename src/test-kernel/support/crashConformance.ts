@@ -1083,7 +1083,7 @@ export function crashConformanceSuite(): void {
                         refused.add(id);
                         return Effect.succeed({
                           rows: [],
-                          sent: { kind: 'refused', reason: 'owned_elsewhere' },
+                          sent: { kind: 'refused', reason: 'ownedElsewhere' },
                         } as const);
                       });
                   }

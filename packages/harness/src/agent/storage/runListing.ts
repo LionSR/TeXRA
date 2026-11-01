@@ -91,7 +91,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
           ...(run.model === null ? {} : { model: run.model }),
           resumable: resumeFrom.kind === 'checkpoint',
           ...((resumeFrom.kind === 'unreadable' ||
-            resumeFrom.kind === 'earlier_build') && {
+            resumeFrom.kind === 'earlierBuild') && {
             resumeBlocked: resumeFrom.cause,
           }),
           identity,

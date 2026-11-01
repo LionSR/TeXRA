@@ -12,11 +12,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExportNode } from '@agent/export/schemas';
 import type { LiveRun } from '@agent/runtime/runs';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  deriveResumability,
-  runRejection,
-  type RunRejection,
-} from '@agent/storage/resumability';
+import { deriveResumability, runRejection } from '@agent/storage/resumability';
 import { listRuns } from '@agent/storage/runListing';
 import { getRunRecords, type RunResult } from '@agent/storage/runRecords';
 import {
@@ -24,6 +20,7 @@ import {
   type RunWorkspaceFile,
 } from '@agent/storage/runWorkspaceFiles';
 import {
+  type ResumeRefusal,
   type RunEnd,
   type RunId,
   type TranscriptSubscription,
@@ -78,8 +75,10 @@ export interface RunRecords {
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;
-  /** Why a resume of it here is rejected, or null when it may go ahead. */
-  readonly readRejection: () => Effect.Effect<RunRejection | null, Error>;
+  /** Why a resume of it here is refused before its agent is checked
+   *  (`finished`, `ownedElsewhere` or `earlierBuild`), or null when it may
+   *  go ahead; a fact that cannot be read fails. */
+  readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
   readonly readConversation: () => Effect.Effect<ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */

@@ -71,7 +71,7 @@ type RunNotice = NonNullable<RunView['statusNotice']>;
 function resumeBlockedText({
   reason,
 }: Extract<RunNotice, { kind: 'resumeBlocked' }>): string {
-  switch (reason.kind) {
+  switch (reason.blocker) {
     case 'agentMissing':
       return `This task's agent, ${reason.name}, is no longer installed. It can continue once the agent is back.`;
     case 'pluginOff':

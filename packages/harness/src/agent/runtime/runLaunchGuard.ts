@@ -171,7 +171,7 @@ const deliverOne = Effect.fn('runLaunchGuard.deliverOne')(function* (
       {},
       undefined,
     );
-    if (one.sent.kind === 'refused' && one.sent.reason === 'owned_elsewhere')
+    if (one.sent.kind === 'refused' && one.sent.reason === 'ownedElsewhere')
       return;
     // A parent that refused it (its input closed) leaves the park held.
     if (one.sent.kind === 'refused') refused = true;
@@ -360,7 +360,7 @@ export const closeLeftoverChildren = Effect.fn('closeLeftoverChildren')(
       const report = (why: string) =>
         reportInterrupted(session, runId, child, facts, why);
       const rejection = yield* runRejection(child.id, session);
-      if (rejection?.kind === 'owned_elsewhere') continue;
+      if (rejection?.kind === 'ownedElsewhere') continue;
       if (rejection !== null) {
         yield* report(rejection.kind);
         continue;
@@ -373,8 +373,8 @@ export const closeLeftoverChildren = Effect.fn('closeLeftoverChildren')(
       yield* Effect.forkScoped(
         Effect.matchEffect(attempt.answer, {
           onSuccess: (answer) =>
-            'failed' in answer && answer.failed !== 'blocked'
-              ? report(answer.failed)
+            'failed' in answer && answer.failed.kind !== 'blocked'
+              ? report(answer.failed.kind)
               : Effect.void,
           onFailure: (error) =>
             warn(undefined, `${runId}: child ${child.id} not resumed`, error),

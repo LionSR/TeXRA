@@ -599,12 +599,13 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       ).pipe(
         Effect.flatMap((resumed) =>
           // Waiting for what blocks it (its agent, a plugin): the service
-          // continues it once that is back.
-          resumed === null
+          // clears the mark once that is back, and under `resumeOnOpen:
+          // auto` continues it.
+          'kind' in resumed
             ? Effect.fail(
                 new ResumeRefused({
                   runId,
-                  reason: 'blocked',
+                  reason: resumed,
                   message: describeFollowUpFailure('blocked'),
                 }),
               )

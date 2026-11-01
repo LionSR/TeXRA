@@ -20,7 +20,6 @@ export { processLayer } from './effect/processLayer.js';
 export { replayTrace } from '@controllers/session/runTrace';
 // A project's view read cold from its store, for a multi-project listing.
 export { readSessionView } from '@controllers/session/readSessionView';
-export type { RunRejection } from '@agent/storage/resumability';
 export { ExportNodeSchema, type ExportNode } from '@agent/export/schemas';
 export {
   formatConversationMessage,

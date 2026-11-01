@@ -26,7 +26,6 @@ import {
   type StartInput,
 } from '@texra-ai/harness';
 import {
-  describeFollowUpFailure,
   hasErrorPresentationClaimed,
   withProcessServices,
   type ProcessRuntime,
@@ -167,15 +166,13 @@ function launchOn(
   options: CliExecuteOptions,
 ): Effect.Effect<Run, Error> {
   if (options.runId !== undefined)
-    return session.resume(options.runId).pipe(
-      Effect.catchTag('ResumeRefused', (refusal) =>
-        Effect.fail(
-          new CliUsageError({
-            message: describeFollowUpFailure(refusal.reason),
-          }),
+    return session
+      .resume(options.runId)
+      .pipe(
+        Effect.catchTag('ResumeRefused', ({ message }) =>
+          Effect.fail(new CliUsageError({ message })),
         ),
-      ),
-    );
+      );
   return session.start({
     config: request.config,
     runId: request.runId,

@@ -119,7 +119,7 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
     const result = yield* inbox.send(followUp, {
       fromParent: callerRunId !== undefined,
     });
-    if (result.status === 'failed' && result.reason === 'not_parent')
+    if (result.status === 'failed' && result.reason === 'notParent')
       return yield* notOwned(id, labels);
     const shown = presentFollowUpResult(result);
     if (shown.severity === 'warning') {

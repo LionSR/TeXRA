@@ -15,12 +15,12 @@ import {
   WorkspaceStateKey,
   BASH_APPROVAL_CONFIG_KEY,
   GOAL_MAX_COST_SETTING,
-  RESUME_ON_OPEN_SETTING,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
   parseApprovalPolicy,
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
+import { RESUME_ON_OPEN_KEY } from '@texra/shared/settingsView/texraSettings';
 import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
@@ -112,7 +112,7 @@ export class ApprovalTab extends SignalWatcher(LitElement) {
               max: GOAL_MAX_COST_SETTING.max,
               step: 0.5,
             })}
-            ${renderStateSettingSelectRow(RESUME_ON_OPEN_SETTING.configKey)}
+            ${renderStateSettingSelectRow(RESUME_ON_OPEN_KEY)}
           </div>
         </div>
       </div>
