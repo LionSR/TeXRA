@@ -34,8 +34,8 @@ import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { coreEntries } from './core-quality-api-report.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
-/** Lines a core file may hold before it needs a budget row. */
-const CORE_FILE_LINES = 400;
+/** Lines a core file may hold before file-size counts it. */
+export const CORE_FILE_LINES = 400;
 
 const MIN_DEPTH_INTERFACE = 4;
 const MIN_MODULE_DEPTH = 3;
@@ -146,9 +146,11 @@ const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
 const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
 
 /**
- * The repo-relative source files under `dirs`, sorted. The merge base's tree
- * may predate a listed directory or entry file: it has no files there, so
- * the head's start at zero.
+ * The repo-relative source files under `dirs`, sorted. A directory or entry
+ * file a change adds to the list is absent from the merge base's tree: it
+ * has no files there, so the head's start at zero. Nothing else is guarded:
+ * the manifests, src/test-kernel and the harness README exist at every base
+ * the check runs against.
  */
 function sourceFiles(rootDir, dirs) {
   return dirs
