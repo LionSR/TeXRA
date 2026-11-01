@@ -29,7 +29,7 @@ Exports: 45
 - `makeMachineGitEnv` — `const makeMachineGitEnv: Effect<ProcessEnv, never, never>`
 - `nodeFileServices` — `const nodeFileServices: Layer<FileSystem | Path, never, never>`
 - `nodePlatform` — `function nodePlatform: (options: NodePlatformOptions) => AgentPlatform`
-- `NodePlatformOptions` — `interface NodePlatformOptions { readonly agentsDir: string; readonly workspaceDir?: string; readonly storageDir: string; readonly settings?: SettingsCatalog; }`
+- `NodePlatformOptions` — `interface NodePlatformOptions { readonly agentsDir?: string; readonly workspaceDir?: string; readonly storageDir: string; readonly settings?: SettingsCatalog; }`
 - `nodePlatformServices` — `const nodePlatformServices: Layer<ChildProcessSpawner | FileSystem | Path, never, never>`
 - `NodeWorkspaceRootsInit` — `interface NodeWorkspaceRootsInit { readonly workspacePath: string | undefined; readonly storageRoot: string; readonly storage: string; readonly config: JsonConfigProviderOptions | ConfigProvider; readonly workspaceState: StateStore; readonly repoState: StateStore; readonly globalState: StateStore; }`
 - `pathExists` — `const pathExists: (fs: FileSystem, target: string) => Effect<boolean, PlatformError, never>`

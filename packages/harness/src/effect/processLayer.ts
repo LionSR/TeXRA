@@ -50,6 +50,14 @@ export type ProcessServices = RunServices | ToolCatalog;
 export interface ProcessLayerOptions extends ProcessServicesOptions {
   /** The host's skill sources; absent, the process discovers no skills. */
   readonly skills?: HostSkillOptions;
+  /**
+   * Whether the build seeds the first-install tool switches, turning the
+   * opt-in plugins off before the user first sets them (a no-op once the
+   * user's list exists). Absent, it does; `false` for a process whose
+   * global store refuses every write, such as a CLI entry that must create
+   * nothing under its storage root.
+   */
+  readonly seedToolSwitches?: boolean;
 }
 
 /** The runtime a composition root makes over `processLayer`: the process
@@ -108,12 +116,10 @@ export class Sessions extends Context.Service<
    * its plugins (`harnessBuiltins` from `@texra-ai/harness/plugins`, or a
    * list of the embedder's own beside them), and serve its sessions for
    * this layer's lifetime; the layer's release closes every session still
-   * open. A plugin list the harness cannot compose (the defects `toolTable`
-   * refuses: an id that is not lowercase letters, digits and dashes, an id
-   * or tool name listed twice, a second plugin continuing waiting runs or
-   * recording one request kind's decisions, a switch on a plugin with no
-   * availability probe) fails with {@link PluginsRefused}, before anything
-   * is built.
+   * open. A list the harness cannot compose fails with
+   * {@link PluginsRefused}, as {@link processLayer} says, and the
+   * first-install tool switches are seeded into the platform's global
+   * state.
    *
    * Build it once per process, as any Effect layer is memoized: a second
    * live build that opens a root the first holds is refused at open
@@ -124,43 +130,21 @@ export class Sessions extends Context.Service<
     plugins,
     skills,
   }: Composition): Layer.Layer<Sessions, PluginsRefused> {
-    // The list is checked before anything is composed, so a refusal names
-    // the plugin rather than failing the first session open, and leaves the
-    // process untouched. Then the first-install tool switches are seeded, as
-    // every host's bootstrap seeds them, before the process's catalog first
-    // reads them: the opt-in plugins stay off until the embedder switches
-    // them on. A store that cannot be read or written is a platform defect.
-    // The process layer is built only then.
-    return Layer.unwrap(
-      Effect.try({
-        try: () => toolTable(plugins),
-        catch: (thrown) =>
-          new PluginsRefused({ message: toErrorMessage(thrown) }),
-      }).pipe(
-        Effect.tap(() =>
-          seedDisabledToolDefaults(platform.roots.globalState, plugins).pipe(
-            Effect.orDie,
-          ),
-        ),
-        Effect.map(() =>
-          sessionsLayer({
-            storageRoot: platform.roots.storageRoot,
-            settings: platform.roots.config.catalog,
-            plugins,
-            skills,
-            secrets: Secrets.layer(platform.secrets),
-            appState: AppState.layer(platform.roots.globalState),
-            agentDirectories: Layer.succeed(AgentDirectories)(
-              platform.agentDirectories,
-            ),
-            commandDirs: platform.commandDirs,
-            // An embedder's console has no live level filter of its own, so
-            // the package speaks at the informational level, not flooding it.
-            minimumLogLevel: 'Info',
-          }),
-        ),
+    return sessionsLayer({
+      storageRoot: platform.roots.storageRoot,
+      settings: platform.roots.config.catalog,
+      plugins,
+      skills,
+      secrets: Secrets.layer(platform.secrets),
+      appState: AppState.layer(platform.roots.globalState),
+      agentDirectories: Layer.succeed(AgentDirectories)(
+        platform.agentDirectories,
       ),
-    );
+      commandDirs: platform.commandDirs,
+      // An embedder's console has no live level filter of its own, so
+      // the package speaks at the informational level, not flooding it.
+      minimumLogLevel: 'Info',
+    });
   }
 }
 
@@ -175,10 +159,18 @@ export class Sessions extends Context.Service<
  * becomes the process's global one, and the rest of its HTTP traffic follows
  * the same proxy policy. An embedder's process (`Sessions.layer`) keeps its
  * own global dispatcher: its model traffic carries the transport anyway.
+ *
+ * A plugin list the harness cannot compose (the defects `toolTable`
+ * refuses: an id that is not lowercase letters, digits and dashes, an id or
+ * tool name listed twice, a second plugin continuing waiting runs or
+ * recording one request kind's decisions, a switch on a plugin with no
+ * availability probe) fails the build with {@link PluginsRefused} before
+ * anything is built, so the refusal names the plugin rather than failing
+ * the first session open.
  */
 export function processLayer(
   options: ProcessLayerOptions,
-): Layer.Layer<ProcessServices | Sessions> {
+): Layer.Layer<ProcessServices | Sessions, PluginsRefused> {
   return Layer.merge(
     sessionsLayer(options),
     Layer.effectDiscard(Effect.sync(installProcessHttpDispatcher)),
@@ -187,10 +179,17 @@ export function processLayer(
 
 function sessionsLayer(
   options: ProcessLayerOptions,
-): Layer.Layer<ProcessServices | Sessions> {
-  return Layer.effect(
+): Layer.Layer<ProcessServices | Sessions, PluginsRefused> {
+  const sessions = Layer.effect(
     Sessions,
     Effect.gen(function* () {
+      // The catalog follows the switches as they change, so a seed written
+      // once the process services are built still reaches it. A global
+      // store that cannot be read or written is a platform defect.
+      if (options.seedToolSwitches ?? true)
+        yield* seedDisabledToolDefaults(yield* AppState, options.plugins).pipe(
+          Effect.orDie,
+        );
       return yield* makeSessions(
         yield* SessionOwner,
         yield* Effect.context<ProcessServices>(),
@@ -216,5 +215,12 @@ function sessionsLayer(
         ? Layer.empty
         : Layer.succeed(CommandDirs)(options.commandDirs),
     ),
+  );
+  return Layer.unwrap(
+    Effect.try({
+      try: () => toolTable(options.plugins),
+      catch: (thrown) =>
+        new PluginsRefused({ message: toErrorMessage(thrown) }),
+    }).pipe(Effect.as(sessions)),
   );
 }

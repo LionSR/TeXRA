@@ -22,7 +22,9 @@ import type { AgentPlatform } from '../agentPlatform';
 
 /** Filesystem locations used by the default Node platform. */
 export interface NodePlatformOptions {
-  readonly agentsDir: string;
+  /** The directory custom agent YAML files are read from. Absent, there is
+   *  none: runs name inline personas or the plugins' agents. */
+  readonly agentsDir?: string;
   readonly workspaceDir?: string;
   /**
    * The directory this platform stores run history, checkpoints and its
@@ -60,8 +62,9 @@ const unpersistedSecrets: PlatformSecrets = {
  * Construct the Node services required by the agent package: the process
  * platform plus the workspace roots of `workspaceDir`.
  *
- * Agent definitions are read from `agentsDir`; configuration and state are
- * process-local, while run artifacts use the ordinary Node storage layout.
+ * Agent definitions are read from `agentsDir`, if given; configuration and
+ * state are process-local, while run artifacts use the ordinary Node storage
+ * layout.
  */
 export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   // Canonical once, here: the storage directory and `roots.workspace` both
@@ -73,8 +76,9 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   return {
     secrets: unpersistedSecrets,
     agentDirectories: {
-      custom: () => Effect.succeed(options.agentsDir),
-      customConfigured: () => Effect.succeed(true),
+      // '' is no directory, as `builtIn` answers: the scan skips it.
+      custom: () => Effect.succeed(options.agentsDir ?? ''),
+      customConfigured: () => Effect.succeed(options.agentsDir !== undefined),
       builtIn: () => Effect.succeed(''),
     },
     roots: createNodeWorkspaceRoots({

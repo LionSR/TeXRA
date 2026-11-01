@@ -5,7 +5,7 @@
  * part is the settings catalog, the command directories, its plugins over
  * one editor registry the host's windows attach to (`HostWindows`), the one
  * credential store under the storage root, the agent directories with their
- * team membership, the usage log, and the first-install tool switches.
+ * team membership, and the usage log.
  */
 
 // Third-party imports
@@ -19,7 +19,6 @@ import {
   processLayer,
   type ProcessServices,
   Secrets,
-  seedDisabledToolDefaults,
   type SkillSourceOptions,
   type StateStore,
 } from '@texra-ai/harness/host';
@@ -70,7 +69,8 @@ export interface TexraProcessHost extends Omit<
   /**
    * The global stores served in place of the storage root's own, for a
    * process that must create nothing under that root (the platform-less CLI
-   * entries' refusals). Nothing is seeded into them.
+   * entries' refusals). The first-install tool switches are not seeded
+   * into them.
    */
   readonly globalStores?: {
     readonly appState: StateStore;
@@ -134,17 +134,10 @@ export const texraProcessLayer = ({
     ...(globalStores && {
       appState: AppState.layer(globalStores.appState),
       globalDatabase: globalStores.globalDatabase,
+      seedToolSwitches: false,
     }),
-  });
-  // First install switches the opt-in plugins off, before anything reads the
-  // switches; the seed is a no-op once the user's list exists. A global store
-  // that cannot be read or written is a platform defect.
-  const seeded = globalStores
-    ? services
-    : Layer.effectDiscard(
-        Effect.flatMap(AppState, (state) =>
-          seedDisabledToolDefaults(state, plugins),
-        ).pipe(Effect.orDie),
-      ).pipe(Layer.provideMerge(services));
-  return Layer.merge(seeded, HostWindows.layer(editors));
+    // TeXRA's plugin list is fixed in this build, so a list the harness
+    // refuses is a defect of the build, not a failure a host can recover.
+  }).pipe(Layer.orDie);
+  return Layer.merge(services, HostWindows.layer(editors));
 };

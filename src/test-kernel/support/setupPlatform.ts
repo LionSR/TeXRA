@@ -110,6 +110,9 @@ export const testProcessOptions = (
   plugins,
   secrets: Secrets.layer(fakeHostSecrets),
   appState: AppState.layer(fakeHostAppState),
+  // No first-install seed: every plugin of the list starts on, and a suite
+  // that needs one off switches it itself.
+  seedToolSwitches: false,
   agentDirectories: Layer.succeed(AgentDirectories)(fakeHostAgentDirectories),
   toolAvailability: unprobedToolAvailability,
   // The harness reports no usage; the telemetry suite starts its own.

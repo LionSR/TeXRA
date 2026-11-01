@@ -1770,10 +1770,18 @@ becomes the process's global one, and the rest of its HTTP traffic follows
 the same proxy policy. An embedder's process (`Sessions.layer`) keeps its
 own global dispatcher: its model traffic carries the transport anyway.
 
+A plugin list the harness cannot compose (the defects `toolTable`
+refuses: an id that is not lowercase letters, digits and dashes, an id or
+tool name listed twice, a second plugin continuing waiting runs or
+recording one request kind's decisions, a switch on a plugin with no
+availability probe) fails the build with {@link PluginsRefused} before
+anything is built, so the refusal names the plugin rather than failing
+the first session open.
+
 ```ts
 function processLayer(
   options: ProcessLayerOptions,
-): Layer.Layer<ProcessServices | Sessions>
+): Layer.Layer<ProcessServices | Sessions, PluginsRefused>
 ```
 
 ## ProcessLayerOptions
@@ -1785,6 +1793,14 @@ What a composition root composes its process from: the services' options
 interface ProcessLayerOptions extends ProcessServicesOptions {
   /** The host's skill sources; absent, the process discovers no skills. */
   readonly skills?: HostSkillOptions;
+  /**
+   * Whether the build seeds the first-install tool switches, turning the
+   * opt-in plugins off before the user first sets them (a no-op once the
+   * user's list exists). Absent, it does; `false` for a process whose
+   * global store refuses every write, such as a CLI entry that must create
+   * nothing under its storage root.
+   */
+  readonly seedToolSwitches?: boolean;
 }
 ```
 
@@ -2241,22 +2257,6 @@ the service is that value, not a thunk resolved per member call.
 class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
   '@texra-ai/harness/platform/Secrets',
 )
-```
-
-## seedDisabledToolDefaults
-
-Seed the disabled-tool list for first-time users only, on every host and
-in the agent package: every plugin of `plugins` whose switch starts `off`.
-DISABLED_TOOLS is its own fresh-install signal: only this seed writes it
-before the user does, so an absent value means the list was never set, and
-a present one (an empty list included) holds the user's choices, which a
-re-seed would silently undo. The read and the seed are one `modify`, so a
-switch another process records between them is kept. A recorded id that
-names no plugin of `plugins` is kept: one composition's list is not every
-list that shares the store, and an id no plugin has switches nothing.
-
-```ts
-const seedDisabledToolDefaults: (state: StateStore, plugins: readonly Plugin[]) => Effect<void, StateReadFailed | StateWriteFailed, never>
 ```
 
 ## SentReasoning
