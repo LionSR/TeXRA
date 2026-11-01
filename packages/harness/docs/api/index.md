@@ -566,7 +566,8 @@ class PluginsRefused extends Schema.TaggedError<PluginsRefused>()(
 
 ## Rejected
 
-The runtime refused the request for a worded reason.
+The runtime refused the request for a worded reason, which is also its
+`message`, so a caller that only formats errors still shows why.
 
 ```ts
 class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
