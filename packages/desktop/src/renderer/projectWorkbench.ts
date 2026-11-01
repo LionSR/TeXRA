@@ -4,12 +4,12 @@
 import { Result, Schema, Struct } from 'effect';
 
 import { isPackagedAgentSource } from '@texra-ai/harness/schemas';
-import type { ProgressApp } from '@progressView/frontend/ProgressApp';
-import type { SessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import { postMessage } from '@texra/shared/hostBridge';
 import type { Theme } from '@texra/shared/ipc';
+import type { SessionSurfaces } from '@ui/progress/sessionSurfaces';
+import type { ProgressApp } from '@ui/progress/ProgressApp';
 
 import {
   DesktopShellStateSchema,

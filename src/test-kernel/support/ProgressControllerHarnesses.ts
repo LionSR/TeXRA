@@ -1,8 +1,6 @@
 // Local imports
-import { Schema } from 'effect';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
-import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 
 /**
  * `config` opened on the document recipe of its agent, as a launcher builds
@@ -35,7 +33,6 @@ export function asDocumentTask<
         },
       },
     },
-    Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({}),
   );
   if (patch === null) throw new Error('a task entry always patches');
   // The recipe only: the launch's outputs stay as the case wrote them.

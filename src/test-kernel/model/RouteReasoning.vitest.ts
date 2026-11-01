@@ -7,7 +7,7 @@ import {
   ReasoningEffort as E,
   type ReasoningRequest,
 } from '@texra-ai/llm';
-import { decideReasoning, type ReasoningRoute } from '@model/reasoningLevel';
+import { decideReasoning } from '@model/reasoningLevel';
 
 import { modelFileName } from '@texra/utils/files/outputFileUtils';
 
@@ -17,11 +17,8 @@ const model = (ref: string): ModelConfig => {
   return config;
 };
 
-const onRoute = (
-  config: ModelConfig,
-  route: ReasoningRoute,
-  request: ReasoningRequest = {},
-) => decideReasoning(config, request, undefined, route);
+const onKey = (config: ModelConfig, request: ReasoningRequest = {}) =>
+  decideReasoning(config, request, undefined, { kind: 'api-key' });
 
 describe('reasoning on a route', () => {
   it.effect(
@@ -30,13 +27,7 @@ describe('reasoning on a route', () => {
       Effect.gen(function* () {
         const flash = model('google/gemini-2.5-flash');
         expect(flash.reasoning?.off).toBeDefined();
-        const refused = yield* Effect.flip(
-          onRoute(
-            flash,
-            { protocol: 'google-interactions', codexSubscription: false },
-            { effort: E.NONE },
-          ),
-        );
+        const refused = yield* Effect.flip(onKey(flash, { effort: E.NONE }));
         expect(refused.message).toMatch(/cannot turn thinking off/);
       }),
   );

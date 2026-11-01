@@ -4,10 +4,10 @@
  * OpenAI and xAI on theirs, and the ChatGPT subscription's Codex backend.
  */
 import { Number as Num } from 'effect';
-import { ModelProvider, ReasoningEffort } from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
 import { codexBackendModelId } from '../models/modelRoute.js';
-import { CODEX_ROUTE_EFFORTS, wireEffort } from '../models/reasoningChoice.js';
+import { wireEffort } from '../models/reasoningChoice.js';
 import {
   type BACKEND_PROTOCOLS,
   type BackendProviderId,
@@ -100,10 +100,7 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
       supportsStorage: false,
       supportsDocumentInput: config.capabilities.supportsNativePdf,
       webSocketStreamParameter: 'implicit',
-      allowedReasoningEfforts: facts.acceptedEfforts.filter(
-        (value) =>
-          value === ReasoningEffort.NONE || CODEX_ROUTE_EFFORTS.includes(value),
-      ),
+      allowedReasoningEfforts: facts.acceptedEfforts,
       instructions: { kind: 'optional' },
       continuationInheritsInstructions: false,
       // OpenAI documents no `tool_choice` for a namespaced function.
@@ -195,7 +192,7 @@ const RESPONSES_ROUTES: {
   moonshot: (facts) =>
     vendorRoute(facts, {
       supportsForcedToolChoice: false,
-      allowedReasoningEfforts: facts.config.reasoning?.efforts ?? [],
+      allowedReasoningEfforts: facts.acceptedEfforts,
       stores: false,
       temperature: null,
       reasoning: effortOnly(facts.spec.options.reasoning.effort),
@@ -218,7 +215,7 @@ const RESPONSES_ROUTES: {
   dashscope: (facts) =>
     vendorRoute(facts, {
       supportsForcedToolChoice: false,
-      allowedReasoningEfforts: [],
+      allowedReasoningEfforts: facts.acceptedEfforts,
       stores: true,
       temperature: facts.controls.temperature,
       reasoning: null,

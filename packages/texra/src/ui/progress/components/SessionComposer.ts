@@ -40,7 +40,7 @@ import {
   readFileAsBase64,
   type ExtractedClipboardImage,
 } from '@texra/shared/utils/clipboardImages';
-import { generatePastedImageName } from '@texra/utils/files/pastedImageName';
+import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { selectedItemValue } from '@ui/wa/selectTemplates';

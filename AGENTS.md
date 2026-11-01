@@ -183,9 +183,9 @@ storage, and workspace files") and shown in the native TeXRA settings view.
 Core logic must not import `vscode`. Check this first on any diff.
 
 **VS Code-free zones:** `packages/harness/src/`, `packages/texra/src/`,
-`packages/llm/src/`, `packages/desktop/src/`, and the webview frontends
-`packages/extension/src/progressView/frontend/` and
-`packages/extension/src/settingsView/frontend/`. Enforced by
+`packages/llm/src/`, `packages/desktop/src/`, and the settings webview
+frontend `packages/extension/src/settingsView/frontend/` (the progress view's
+frontend is app code, `packages/texra/src/ui/progress/`). Enforced by
 `VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs`, mirrored in
 `src/test-kernel/architecture/dependencyDirection.vitest.ts`; keep both in sync
 with this list.
@@ -194,8 +194,8 @@ with this list.
 over `processLayer()` once), `packages/extension/src/commands/`,
 `packages/extension/src/frontend/` (the extension-host frontend, not a webview),
 `packages/extension/src/common/` (not the harness's `common/`), and the view
-providers in `packages/extension/src/{progressView,settingsView}/` outside
-their `frontend/`.
+providers in `packages/extension/src/progressView/` and in
+`packages/extension/src/settingsView/` outside its `frontend/`.
 
 - Reach process services (`AgentDirectories`, `AppState`, `Secrets`,
   `FileSystem`, `SetupPlatform`, …) from the Effect context the process

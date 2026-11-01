@@ -1,10 +1,9 @@
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness/host';
-import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import {
   showLoggedInfoMessage,
@@ -20,6 +19,7 @@ import {
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
+import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
@@ -51,7 +51,7 @@ export function handleFixCompilation(
 
         // This is a "run latexFixer" command, so prefer the helper model.
         // The command settles when the run ends.
-        const config = yield* Schema.decodeUnknownEffect(AgentConfigSchema)({
+        const config = yield* decodeLaunchConfig({
           agent: 'latexFixer',
           instruction,
         });

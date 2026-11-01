@@ -289,11 +289,16 @@ export class Cancelled extends Schema.TaggedError<Cancelled>()(
   {},
 ) {}
 
-/** The runtime refused the request for a worded reason. */
+/** The runtime refused the request for a worded reason, which is also its
+ *  `message`, so a caller that only formats errors still shows why. */
 export class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
   reason: Schema.String,
   docsPage: Schema.optional(Schema.String),
-}) {}
+}) {
+  override get message(): string {
+    return this.reason;
+  }
+}
 
 /** A handler died. The cause is in the host log under `ref` (the request
  *  id); the surface hears that the request failed, never the text. */

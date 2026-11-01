@@ -42,7 +42,7 @@ import type { ToolRow } from '@texra-ai/harness/transcript';
 import type { FormatResult } from '../baseLogFormatter';
 
 // Side-effect import - register the <tool-timer> element rendered below
-import '@progressView/frontend/components/ToolTimer';
+import '@ui/progress/components/ToolTimer';
 
 /** The names the toolkit draws: a plugin names its tools' icons as plain
  *  strings, since the app's modules do not import the toolkit. */

@@ -38,7 +38,7 @@ points to a strictly lower layer:
   - A `configTarget: 'global'` row is read from global scope only. The exception is `texra.telemetry.enabled`, read from the merged config, where `projectValueIgnored` (`jsonConfigProvider.ts`, from the row's `projectMayOptOut`) lets a project opt out but never in.
   - A write reachable from a settings UI (extension/desktop `UPDATE_STATE_SETTING`, CLI `/config`) goes through `applyStateSettingUpdate` (`packages/texra/src/shared/settingsView/handlers/stateSettingWrite.ts`), which adds the open-workspace guard; its callers apply the row's write consequences (`onWrite`, the approval-policy repaint).
 - **Files.** Inside Effect, use the rooted services (`WorkspaceFs`, `StorageFs`, `GlobalStorageFs` in `@platform/rootedFs`), which refuse a path escaping their root. Workspace path math is pure in the root (`@utils/files/workspaceFS`); outside Effect, every run-storage helper in `@utils/files/runStorageFs` takes the root as its first parameter. Nothing in `@utils/files` resolves a root on its own.
-- Pasted images: names from `@texra/utils/files/pastedImageName`, paths from `@texra/utils/files/pastedImageUtils` (keeps Node filesystem code out of browser bundles).
+- Pasted images: names from `@texra/shared/utils/pastedImageName`, paths from `@texra/utils/files/pastedImageUtils` (keeps Node filesystem code out of browser bundles).
 - Discover files with `listWorkspaceFiles` (`packages/texra/src/common/files/workspaceFileListing.ts`) and agents with `AgentCatalog`; don't duplicate discovery.
 
 ## Agent execution
@@ -54,7 +54,7 @@ points to a strictly lower layer:
   6. Its endpoint row and region toggle in `shared/state/providerSettings.ts` (gated in `model/modelSettings.ts`); the toggle's placement in `packages/texra/src/shared/settingsView/settingSurfaces.ts` is checked when the catalog loads (`placeRows`), not by the compiler.
   7. The app's picker source (`MODEL_SOURCES`, `packages/texra/src/shared/settingsView/settingsViewMessages.ts`), key page (`KEY_PAGES`, `packages/texra/src/model/providerPresentation.ts`) and setup probe model (`SETUP_MODEL_BY_PROVIDER`, `packages/texra/src/model/setupModelDefaults.ts`).
 
-  A quirk outside the request (`reasoningLevel.ts`'s DashScope and Kimi reasoning rules) and a subscription plan (a `PLAN_ROUTES` row in `packages/llm/src/errors.ts` with its settings and usage adapter) are not enforced.
+  A quirk outside the request (the DashScope, Gemini and Kimi reasoning rules in `routeControls`, `packages/llm/src/models/reasoningChoice.ts`) and a subscription plan (a `PLAN_ROUTES` row in `packages/llm/src/errors.ts` with its settings and usage adapter) are not enforced.
 
 ## Run loop architecture
 

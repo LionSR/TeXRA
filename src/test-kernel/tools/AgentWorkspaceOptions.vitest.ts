@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
+import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspaceOptions';
 
 describe('agent workspace options', () => {
   // An external CLI agent gets access to exactly the directories it names:

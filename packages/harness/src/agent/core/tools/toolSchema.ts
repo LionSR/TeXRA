@@ -1,12 +1,12 @@
 /**
  * Provider-neutral tool parameter schemas: a tool definition's Effect Schema
  * or pre-built JSON Schema, normalized to the object shape every
- * function-calling API accepts (top-level unions flattened, the dialect URI
- * stripped, every array given an `items`). The tool catalog builds the
- * package's uniform tool definitions from it; the structured-output tool
- * builder shares it.
+ * function-calling API accepts (top-level unions flattened, a fieldless
+ * struct given an object root, the dialect URI stripped, every array given an
+ * `items`). The tool catalog builds the package's uniform tool definitions
+ * from it; the structured-output tool builder shares it.
  */
-import { Predicate, Schema } from 'effect';
+import { Predicate, Schema, SchemaAST } from 'effect';
 
 import type { ToolDefinition } from '@shared/schemas';
 
@@ -225,14 +225,37 @@ export const inputSchema = (definition: ToolDefinition): unknown => {
 
 /**
  * Converts an Effect Schema to JSON Schema, or returns the pre-converted
- * parameters: top-level unions are flattened, every array
- * names its `items`, and `$schema` is stripped so the output passes every
- * provider's schema validator.
+ * parameters: top-level unions are flattened, a fieldless struct is an
+ * empty object, every array names its `items`, and `$schema` is stripped so
+ * the output passes every provider's schema validator.
  */
 export function convertToolSchema(
   def: ToolDefinition,
 ): JSONSchemaObject | null {
   const schema = inputSchema(def) as JSONSchemaObject | null | undefined;
   if (!schema) return null;
-  return withArrayItems(stripDollarSchema(flattenTopLevelUnion(schema)));
+  return withArrayItems(
+    stripDollarSchema(withObjectRoot(def, flattenTopLevelUnion(schema))),
+  );
+}
+
+/**
+ * Every function-calling API takes only an object as a tool's parameters,
+ * and Effect Schema emits a struct with no fields as `{ not: { type: 'null' } }`
+ * (it decodes any value but null). A tool whose schema is a struct declared
+ * an object, so its parameters are one; any other root stays as it is, for
+ * the provider to reject by the tool's name.
+ */
+function withObjectRoot(
+  def: ToolDefinition,
+  schema: JSONSchemaObject,
+): JSONSchemaObject {
+  if (
+    schema.type === 'object' ||
+    def.schema === undefined ||
+    !SchemaAST.isObjects(SchemaAST.toEncoded(def.schema.ast))
+  )
+    return schema;
+  const { not: _not, ...rest } = schema;
+  return { ...rest, type: 'object', properties: {} };
 }

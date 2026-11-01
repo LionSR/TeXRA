@@ -33,7 +33,6 @@ const VSCODE_FREE_ZONES = [
   'packages/texra/src',
   'packages/llm/src',
   'packages/desktop/src',
-  'packages/extension/src/progressView/frontend',
   'packages/extension/src/settingsView/frontend',
 ] as const;
 

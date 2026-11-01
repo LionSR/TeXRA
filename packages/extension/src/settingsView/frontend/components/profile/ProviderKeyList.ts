@@ -13,12 +13,12 @@ import { providerEndpointKey } from '@texra-ai/harness/schemas';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
-import { TickerController } from '@texra/shared/litControllers/TickerController';
 import type {
   ProviderKeyStatus,
   ProviderSetting,
 } from '@texra/shared/settingsView/profileViewMessages';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
+import { TickerController } from '@ui/litControllers/TickerController';
 import { planCreditsHint, type PlanCredits } from '@ui/copy/modelAccess';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';

@@ -179,8 +179,10 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         `this host does not serve "${tool.hostCapability}".`,
       );
     if (tool && asksApproval(tool) && input.approvalPromptsUnavailable) {
-      // One whose plugin is off is withheld for that, silently.
-      if (enabled.has(name)) withheldForApproval.push(name);
+      // Only a declared one is reported; an injected one, or one whose
+      // plugin is off, is withheld silently.
+      if (source === 'declared' && enabled.has(name))
+        withheldForApproval.push(name);
       return false;
     }
     return true;

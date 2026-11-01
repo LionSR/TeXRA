@@ -18,7 +18,7 @@ import {
   formatUnknownTeamMessage,
   resolveTeamLaunch,
 } from '@texra/shared/teamLaunch';
-import { isPastedImage } from '@texra/utils/files/pastedImageName';
+import { isPastedImage } from '@texra/shared/utils/pastedImageName';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
@@ -119,11 +119,9 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
       isPastedImage(file) ? pastedImageFullPath(roots.storage, file) : file,
     ),
   };
-  // A document task runs its agent's recipe over the files.
-  const patch =
-    task && optionsResult !== undefined && Result.isSuccess(optionsResult)
-      ? documentTaskPatch(config, task, optionsResult.success)
-      : null;
+  // A document task runs its agent's recipe over the files, with the
+  // form's switches checked above.
+  const patch = task ? documentTaskPatch(config, task, launch) : null;
   return yield* decodeLaunchConfig(patch ? { ...config, ...patch } : config);
 });
 

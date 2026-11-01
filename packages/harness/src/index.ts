@@ -52,6 +52,15 @@ export type {
   SessionHost,
   StartInput,
 } from './effect/sessions.js';
+// What a session's methods take and hand out: a run's id
+// (`session.resume`), a commit position and a display event (`view`), and a
+// stored conversation's nodes (`records(runId).readConversation()`).
+export type { ExportNode } from '@agent/export/schemas';
+export type {
+  CommitOrdinal,
+  DisplaySessionEvent,
+  RunId,
+} from '@shared/schemas';
 
 // What a run reports while it runs, and how it ended.
 export type { AgentEvent, StreamChunkEvent } from '@agent/trace';

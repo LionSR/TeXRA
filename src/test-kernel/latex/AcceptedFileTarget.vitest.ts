@@ -29,6 +29,7 @@ describe('acceptEditedFileReplace', () => {
         const fs = {
           readFileString: () => Effect.succeed('edited content'),
           writeFileString: () => Effect.void,
+          rename: () => Effect.void,
           exists: () => Effect.succeed(false),
           remove: (absolutePath: string) =>
             Effect.sync(() => {

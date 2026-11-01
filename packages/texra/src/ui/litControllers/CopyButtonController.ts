@@ -1,7 +1,7 @@
 import {
   createFlushableDebounce,
   type FlushableDebounce,
-} from '@texra/utils/core/flushableDebounce';
+} from '@texra/shared/utils/flushableDebounce';
 import {
   copyTextToClipboard,
   COPY_RESET_DELAY_MS,

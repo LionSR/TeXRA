@@ -23,11 +23,7 @@ import {
 
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import { routeFactsFor, type ModelSettings } from '@model/modelSettings';
-import {
-  decideReasoning,
-  reasoningRouteOf,
-  servingBackend,
-} from '@model/reasoningLevel';
+import { decideReasoning, servingBackend } from '@model/reasoningLevel';
 import { Secrets } from '@platform/secrets';
 import {
   getExhaustionReason,
@@ -161,7 +157,7 @@ export const admitSwitch = Effect.fn('admitSwitch')(function* (
     selected.config,
     selected.request,
     settings.reasoningLevels[selected.config.ref],
-    reasoningRouteOf(decision.route, backend),
+    decision.route,
   ).pipe(
     Effect.as(null),
     Effect.catch((error) =>

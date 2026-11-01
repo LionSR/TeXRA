@@ -54,7 +54,7 @@ export interface Facts {
     readonly temperature: number | null;
     readonly parallelToolCalls: boolean;
   };
-  /** The effort values the model accepts on the wire (see {@link acceptedEfforts}). */
+  /** The effort values the route accepts on the wire (see {@link acceptedEfforts}). */
   readonly acceptedEfforts: readonly ReasoningEffort[];
 }
 
@@ -155,7 +155,7 @@ export function configurationFor(spec: BindSpec): {
   }
   const options: Options = {
     maxOutputTokens: config.maxOutputTokens,
-    reasoning: chooseReasoning(config),
+    reasoning: chooseReasoning(config, {}, { route }),
     parallelToolCalls: false,
     reasoningSummary: false,
     serverState: false,
@@ -193,7 +193,7 @@ export function configurationFor(spec: BindSpec): {
       // Every OpenAI-descended route honors this; Anthropic uses its default.
       parallelToolCalls: options.parallelToolCalls,
     },
-    acceptedEfforts: acceptedEfforts(config),
+    acceptedEfforts: acceptedEfforts(config, route),
   });
   return { config, options, configuration };
 }

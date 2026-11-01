@@ -1,6 +1,6 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
-import { FileDropController } from '@progressView/frontend/fileDropHandler';
+import { FileDropController } from '@ui/progress/fileDropHandler';
 
 describe('FileDropController', () => {
   it('preserves hosts when extracting UNC-style file URIs', () => {

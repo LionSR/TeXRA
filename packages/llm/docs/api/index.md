@@ -30,12 +30,14 @@ OAuth flows live in [`@texra-ai/llm/node`](./node).
 
 ## acceptedEfforts
 
-The effort values a route may send for a model: the levels it accepts
+The effort values `route` may send for a model: the levels it accepts
 while thinking, plus `none` where `none` is how thinking is turned off.
+Without a route, the model's own.
 
 ```ts
 function acceptedEfforts(
-  config: Pick<ModelConfig, 'reasoning'>,
+  config: Pick<ModelConfig, 'provider' | 'reasoning'>,
+  route?: Pick<ModelRoute, 'kind'>,
 ): ReasoningEffort[]
 ```
 
@@ -202,7 +204,8 @@ function checkPreparedHistory(
 
 ## chooseReasoning
 
-Decide thinking, effort and mode for one request.
+Decide thinking, effort and mode for one request, over the controls the
+model has on `options.route`.
 
 - The effort is the selection's, else the user's saved level, else
   {@link DEFAULT_EFFORT}.
@@ -214,7 +217,7 @@ Decide thinking, effort and mode for one request.
 
 ```ts
 function chooseReasoning(
-  config: Pick<ModelConfig, 'label' | 'reasoning' | 'modes'>,
+  config: Pick<ModelConfig, 'label' | 'provider' | 'reasoning' | 'modes'>,
   request: ReasoningRequest = {},
   options: ChooseReasoningOptions = {},
 ): ReasoningChoice
@@ -228,23 +231,13 @@ How {@link chooseReasoning} resolves a request the model cannot serve.
 interface ChooseReasoningOptions {
   /** The user's saved level for this model, used when the selection names none. */
   readonly userEffort?: ReasoningEffort;
-  /** A route's own ceiling on the levels it can serve (e.g. the Codex subscription backend). */
+  /** The route the request is bound on, which may carry fewer controls than the model has. */
+  readonly route?: Pick<ModelRoute, 'kind'>;
+  /** The caller's own ceiling on the levels it can serve (e.g. an installed Codex CLI's). */
   readonly routeEfforts?: readonly ReasoningEffort[];
   /** Refuse instead of substituting a nearby level. */
   readonly strict?: boolean;
 }
-```
-
-## CODEX_ROUTE_EFFORTS
-
-The ChatGPT plan route's effort ceiling, applied through the one reasoning
-policy. It was set for ChatGPT's Codex backend, which ran every turn
-synchronously on one connection so that a higher effort risked a client
-timeout; the token-sharing route streams over the public API and keeps the
-ceiling until higher efforts are measured there.
-
-```ts
-const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[]
 ```
 
 ## codexBackendModelId

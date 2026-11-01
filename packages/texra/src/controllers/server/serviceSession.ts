@@ -45,7 +45,7 @@ import {
   replayTrace,
 } from '@texra-ai/harness/host';
 import type { EventsFrame } from '@texra/shared/session/sessionFrames';
-import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
+import { WebviewSessions } from '@texra/shared/session/webviewSessionLayer';
 
 import { attachWindowHost } from './windowHost';
 import {

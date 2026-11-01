@@ -20,7 +20,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
-import { DetailsOpenController } from '@texra/shared/litControllers/DetailsOpenController';
+import { DetailsOpenController } from '@ui/litControllers/DetailsOpenController';
 import type { IconName } from '@ui/wa/iconNames';
 import { getLightweightMd } from '@ui/markdown/lightweightMd';
 import { markdownStyles } from '@ui/styles/markdownStyles';

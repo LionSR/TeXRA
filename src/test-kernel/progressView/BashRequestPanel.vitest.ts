@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { BashRequestPanel } from '@progressView/frontend/components/BashRequestPanel';
+import type { BashRequestPanel } from '@ui/progress/components/BashRequestPanel';
 import {
   mountComponent,
   useLitComponentTestDom,
@@ -17,7 +17,7 @@ import type {
 // it guards the most, so these pin the row's keys here.
 describe('bash-request-panel', () => {
   useLitComponentTestDom(
-    () => import('@progressView/frontend/components/BashRequestPanel'),
+    () => import('@ui/progress/components/BashRequestPanel'),
   );
 
   it('rejects on one "n", sends an opened note with it, and never answers on Escape', async () => {

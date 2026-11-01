@@ -46,7 +46,7 @@ import {
 import type { CodexApprovalPolicy } from '@texra/shared/agentCliSettings';
 import { CodexSandboxModeSchema } from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
-import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
+import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspaceOptions';
 
 // Local file imports
 import {

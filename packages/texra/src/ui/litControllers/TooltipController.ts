@@ -1,4 +1,4 @@
-import { createFlushableDebounce } from '@texra/utils/core/flushableDebounce';
+import { createFlushableDebounce } from '@texra/shared/utils/flushableDebounce';
 
 /**
  * Tooltip delay in ms before showing (matches VS Code native tooltip timing).

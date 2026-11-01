@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   importCodexClass: vi.fn(),
 }));
 
-vi.mock('@texra/tools/codexConfig', async () => {
+vi.mock('@texra/tools/agentCli/codexConfig', async () => {
   const { Effect } = await import('effect');
   return {
     codexRun: () =>
@@ -30,10 +30,12 @@ vi.mock('@texra/tools/codexConfig', async () => {
   };
 });
 
-vi.mock('@texra/tools/codexImport', async (importActual) => {
+vi.mock('@texra/tools/agentCli/codexImport', async (importActual) => {
   const { Effect } = await import('effect');
   return {
-    ...(await importActual<typeof import('@texra/tools/codexImport')>()),
+    ...(await importActual<
+      typeof import('@texra/tools/agentCli/codexImport')
+    >()),
     // The client over whatever class the case's SDK import yields.
     openCodexClient: () =>
       mocks.importCodexClass().pipe(
@@ -59,9 +61,9 @@ import {
 } from '@test/support/storeFaults';
 import { noPluginHold } from '@test/support/testPluginServices';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { CodexThreads as CodexThreadsService } from '@texra/tools/agentCliSessionStores';
-import { AgentCliSessionRegistry } from '@texra/tools/agentCliSessionRegistry';
-import { CodexTool } from '@texra/tools/codex';
+import { CodexThreads as CodexThreadsService } from '@texra/tools/agentCli/agentCliSessionStores';
+import { AgentCliSessionRegistry } from '@texra/tools/agentCli/agentCliSessionRegistry';
+import { CodexTool } from '@texra/tools/agentCli/codex';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The tool's call layer under `run`, serving `registry` as the step would. */

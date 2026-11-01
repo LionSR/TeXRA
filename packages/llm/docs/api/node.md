@@ -43,8 +43,6 @@ interface Binding {
   readonly maxOutputTokens: number | null;
   /** Turns can run as background work (submit and observe). */
   readonly background: boolean;
-  /** One connection a failed turn invalidates (the Responses WebSocket). */
-  readonly persistentConnection: boolean;
   readonly serviceTier: 'fast' | null;
   /** The route takes a tool choice naming one function. */
   readonly forcedToolChoice: boolean;

@@ -7,7 +7,7 @@ import { apiKeySecretName } from '@texra-ai/llm';
 import { Secrets } from '@texra-ai/harness/host';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { buildClaudeAgentEnv } from '@texra/tools/claudeAgentConfig';
+import { buildClaudeAgentEnv } from '@texra/tools/agentCli/claudeAgentConfig';
 
 /** Build the env over a stored managed API key, with no keychain
  *  credential: every `security` probe exits 1. */

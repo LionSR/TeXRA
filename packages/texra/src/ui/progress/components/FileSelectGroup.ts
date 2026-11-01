@@ -17,7 +17,7 @@ import {
 } from '@texra/shared/plugins/documents';
 import type { SurfaceAction } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { SortableController } from '@texra/shared/litControllers/SortableController';
+import { SortableController } from '@ui/litControllers/SortableController';
 import type { FileSelectConfig } from '@ui/copy/fileSelectConfigs';
 import type { IconName } from '@ui/wa/iconNames';
 import { dropCueStyles } from '@ui/styles/commonViewStyles';

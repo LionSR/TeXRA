@@ -3,17 +3,19 @@ import { describe, expect, it } from 'vitest';
 import {
   chooseReasoning,
   type ModelConfig,
+  ModelProvider,
   ReasoningChoiceError,
   ReasoningEffort as E,
 } from '@texra-ai/llm';
 
-type Spec = Pick<ModelConfig, 'label' | 'reasoning' | 'modes'>;
+type Spec = Pick<ModelConfig, 'label' | 'provider' | 'reasoning' | 'modes'>;
 
 const model = (
   reasoning: ModelConfig['reasoning'],
   modes?: Spec['modes'],
 ): Spec => ({
   label: 'Test model',
+  provider: ModelProvider.OTHERS,
   reasoning,
   ...(modes && { modes }),
 });
