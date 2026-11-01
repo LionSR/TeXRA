@@ -92,7 +92,7 @@ export const RULES = {
   'try-catch-effect':
     '`try/catch` around Effect code: errors belong in the typed error channel.',
   'silent-degradation':
-    'Empty `catch {}`, `.catch(() => value)`, `Effect.orElseSucceed`, `Effect.ignore` without a log, and `Effect.catch`, `catchCause` or `catchDefect` with `() => Effect.succeed(...)` or `() => Effect.void`: a failure turned into a quiet default. `catchIf` and `catchTag` name the condition they absorb.',
+    'Empty `catch {}`, `.catch(() => value)`, `Effect.orElseSucceed`, `Effect.ignore` without a log, and `Effect.catch`, `catchCause` or `catchDefect` whose handler ignores its error and answers `Effect.succeed(...)` or `Effect.void`: a failure turned into a quiet default. `catchIf` and `catchTag` name the condition they absorb.',
   'missing-readme':
     'A core directory without a README holding a purpose line and a mermaid diagram.',
   'entry-files':
@@ -267,14 +267,27 @@ function returnsQuietValue(handler) {
 
 const CATCH_ALLS = new Set(['catch', 'catchCause', 'catchDefect']);
 
-/** `Effect.catch(() => Effect.succeed(...))` or `() => Effect.void`, with any catch-all. */
+/** Whether `node` names the identifier `name` anywhere inside it. */
+function mentions(node, name) {
+  return ts.isIdentifier(node)
+    ? node.text === name
+    : (ts.forEachChild(node, (child) => mentions(child, name) || undefined) ??
+        false);
+}
+
+/** A catch-all whose handler never reads its error and answers
+ *  `Effect.succeed(...)` or `Effect.void`. */
 function dropsError(node) {
   const call = node.parent;
   if (!ts.isCallExpression(call) || call.expression !== node) return false;
   const handler = call.arguments.at(-1);
   if (handler == null || !ts.isArrowFunction(handler)) return false;
-  if (handler.parameters.length > 0 || ts.isBlock(handler.body)) return false;
+  if (ts.isBlock(handler.body)) return false;
   const body = handler.body;
+  const readsError = handler.parameters.some(
+    ({ name }) => !ts.isIdentifier(name) || mentions(body, name.text),
+  );
+  if (readsError) return false;
   return (
     body.getText() === 'Effect.void' ||
     (ts.isCallExpression(body) &&
