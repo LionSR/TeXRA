@@ -1,6 +1,6 @@
 // Measures the core-quality rules over CORE_QUALITY_DIRS (eslint.config.mjs).
 // Each rule yields its sites per file; check-core-quality.mjs compares the
-// per-file counts with config/ratchets/core-quality/<rule>.json.
+// per-file counts with the same measurement of the merge base's tree.
 //
 // The ESLint half runs ESLint's own rules without type information, so it
 // is fast and needs no project. The AST half reads each file with the
@@ -145,9 +145,14 @@ const SOURCE_DIRS = [
 const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
 const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
 
-/** The repo-relative source files under `dirs`, sorted. */
+/**
+ * The repo-relative source files under `dirs`, sorted. The merge base's tree
+ * may predate a listed directory or entry file: it has no files there, so
+ * the head's start at zero.
+ */
 function sourceFiles(rootDir, dirs) {
   return dirs
+    .filter((dir) => existsSync(path.join(rootDir, dir)))
     .flatMap((dir) =>
       dir.endsWith('.ts')
         ? [dir]
