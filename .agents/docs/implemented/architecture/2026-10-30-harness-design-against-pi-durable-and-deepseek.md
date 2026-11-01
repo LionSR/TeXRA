@@ -42,10 +42,11 @@ The measurements, grades and design estimates below retain the original
 `808521a8ed` baseline. They are not measured implementation totals. The current
 [row-reader baseline](https://github.com/LionSR/TeXRA/blob/784dbab9251a148f75695530bacc19c3bf91ad3c/config/ratchets/row-readers-baseline.json)
 contains 14 file entries across eight row kinds, including storage and trace
-boundaries; the proposed zero-reader target has not been reached. M6 still
-requires each failure contract to be checked separately, including the
-distinction between local usage records and backend billing below. This update
-records merged scope, not acceptance of every original estimate or risk.
+boundaries; the proposed zero-reader target has not been reached. At this
+revision M6 required each failure contract to be checked separately, including
+the distinction between local usage records and backend billing below; it later
+landed as #14473 (see "Landed" at the end). This update records merged scope,
+not acceptance of every original estimate or risk.
 
 ## Summary
 
