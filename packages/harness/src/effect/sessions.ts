@@ -14,10 +14,7 @@ import type {
   SessionHostInteractions,
 } from '@agent/runtime/HostInteractions';
 import type { AgentRunListingEntry } from '@agent/storage/runListing';
-import type {
-  AgentDirectoriesPort,
-  ToolMissingHandler,
-} from '@platform/interfaces';
+import type { AgentDirectoriesPort } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { HostSkillOptions } from '@platform/processRuntime';
@@ -61,10 +58,6 @@ import type { HeldRun, RunDeletion, RunRecords } from './sessionReads.js';
 export interface AgentPlatform {
   /** The agent directories this process's `AgentDirectories` service serves. */
   readonly agentDirectories: AgentDirectoriesPort;
-  /** Surfaces a tool-missing error to the embedder, served as
-   *  `ToolMissingReporter`; absent, a missing-tool probe answers without
-   *  surfacing. */
-  readonly toolMissingHandler?: ToolMissingHandler;
   /** The app's directories on every command's PATH (`CommandDirs`). */
   readonly commandDirs?: () => readonly string[];
   readonly roots: WorkspaceRoots;

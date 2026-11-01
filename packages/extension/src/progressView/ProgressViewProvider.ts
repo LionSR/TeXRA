@@ -330,7 +330,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             // Already an Effect program, and one that answers a failed probe as a
             // missing tool rather than failing, so the banner reads it directly.
             dependencyBanner: () =>
-              checkCoreDependencies(false).pipe(
+              checkCoreDependencies().pipe(
                 Effect.map((missingTools) => ({
                   visible: missingTools.length > 0,
                   missingTools: [...missingTools],

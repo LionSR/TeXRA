@@ -1,16 +1,15 @@
 /**
- * TeXRA's required tools: each one's version command, the message that tells
- * the user how to install it (the install guides of the LaTeX toolchain
- * table), the version probe that falls back to `findCommand`, and the
- * checks that hand a missing one to the host.
+ * Running TeXRA's LaTeX and image tools: the missing-tool error, the version
+ * probe the status surfaces report, and the runner every tool call goes
+ * through. What each tool is, how it answers a probe and how to install it is
+ * the catalog's (`@texra/shared/constants/latexToolchain`).
  */
 
 // Third-party imports
-import { Effect, Option } from 'effect';
-import { parse as shellParse } from 'shell-quote';
+import { Effect, Schema } from 'effect';
 
 // Local imports
-import { ToolMissingReporter, withLogChannel } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   executeCommand,
@@ -21,157 +20,42 @@ import {
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
-  PDFLATEX_INSTALL_GUIDE,
-  LATEXDIFF_INSTALL_GUIDE,
-  LATEXINDENT_INSTALL_GUIDE,
-  TEXCOUNT_INSTALL_GUIDE,
-  PERL_INSTALL_GUIDE,
-  GHOSTSCRIPT_INSTALL_GUIDE,
-  GRAPHICSMAGICK_INSTALL_GUIDE,
-  IMAGEMAGICK_INSTALL_GUIDE,
-  LATEXMK_INSTALL_GUIDE,
-  TEXFMT_INSTALL_GUIDE,
   getInstallGuide,
+  LATEX_TOOL_ENTRIES,
+  type LatexToolName,
 } from '@texra/shared/constants/latexToolchain';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-interface ToolConfig {
-  command?: string | string[]; // Optional - defaults to "${toolName} --version"
-  errorMessage: string;
-  docsPage?: string; // The texra.ai guide page that covers installing it
-  label?: string; // Display name for missing-dependency lists; defaults to the id
+/**
+ * A tool a call needs is not installed: its name and this platform's install
+ * steps. The caller that owns the user-facing message shows it (a command's
+ * error report, a tool result, a skipped check's reason).
+ */
+export class ToolMissing extends Schema.TaggedError<ToolMissing>()(
+  'ToolMissing',
+  { tool: Schema.String, guide: Schema.String },
+) {
+  override get message(): string {
+    return `${this.tool} is not installed.\n${this.guide}`;
+  }
 }
 
-/**
- * Hand the missing-tool message to the host. The reporter is the process's
- * optional `ToolMissingReporter` service; the composition root omits it where
- * no host UI exists, so an absent port reads as silence.
- */
-function reportMissingTool(
-  message: string,
-  docsPage?: string,
-): Effect.Effect<void> {
-  return Effect.serviceOption(ToolMissingReporter).pipe(
-    Effect.flatMap(
-      Option.match({
-        onNone: () => Effect.void,
-        onSome: (report) => report(message, docsPage),
-      }),
-    ),
+/** Whether a probe answered: exit 0, or version-like output (some tools
+ *  exit non-zero for their version flag but still print it). */
+function answered(result: ExecResult): boolean {
+  return (
+    result.exitCode === 0 ||
+    /\d+\.\d+/.test(result.stdout) ||
+    /\d+\.\d+/.test(result.stderr)
   );
 }
 
-// Platform-specific install instructions resolved at module load.
-// All guides are defined in @shared/constants/latex (single source of truth).
-function installGuide(guide: Parameters<typeof getInstallGuide>[0]): string {
-  return getInstallGuide(guide, process.platform);
-}
-
-const LATEXDIFF_INSTRUCTIONS = installGuide(LATEXDIFF_INSTALL_GUIDE);
-const LATEXINDENT_INSTRUCTIONS = installGuide(LATEXINDENT_INSTALL_GUIDE);
-const TEXFMT_INSTRUCTIONS = installGuide(TEXFMT_INSTALL_GUIDE);
-const TEXCOUNT_INSTRUCTIONS = installGuide(TEXCOUNT_INSTALL_GUIDE);
-const PERL_INSTRUCTIONS = installGuide(PERL_INSTALL_GUIDE);
-const GHOSTSCRIPT_INSTRUCTIONS = installGuide(GHOSTSCRIPT_INSTALL_GUIDE);
-const GM_INSTRUCTIONS = installGuide(GRAPHICSMAGICK_INSTALL_GUIDE);
-const MAGICK_INSTRUCTIONS = installGuide(IMAGEMAGICK_INSTALL_GUIDE);
-const PDFLATEX_INSTRUCTIONS = installGuide(PDFLATEX_INSTALL_GUIDE);
-const LATEXMK_INSTRUCTIONS = installGuide(LATEXMK_INSTALL_GUIDE);
-
-// Most tool entries share the same installation docs page and the same
-// "<tool> is not installed…" phrasing; only the label, install guide, and the
-// occasional reason/command differ. These builders capture just that variance.
-const INSTALL_DOCS = 'installation';
-
-function featureTool(name: string, guide: string): string {
-  return `${name} is not installed. Please install it to use this feature.\n${guide}`;
-}
-
-function texTool(name: string, guide: string): string {
-  return `${name} is not installed. Please install a TeX distribution to use this feature.\n${guide}`;
-}
-
-/** Build a ToolConfig with the default install-docs page unless `docs: false`. */
-function withDocs(
-  errorMessage: string,
-  extra: { command?: string | string[]; docs?: false; label?: string } = {},
-): ToolConfig {
-  return {
-    errorMessage,
-    ...(extra.command ? { command: extra.command } : {}),
-    ...(extra.docs === false ? {} : { docsPage: INSTALL_DOCS }),
-    ...(extra.label ? { label: extra.label } : {}),
-  };
-}
-
-const TOOL_CONFIGS: Record<string, ToolConfig> = {
-  // ImageMagick / GraphicsMagick / system dependencies
-  magick: withDocs(
-    'ImageMagick is not installed. Please install ImageMagick to use PDF to PNG conversion.\n' +
-      MAGICK_INSTRUCTIONS,
-    { label: 'ImageMagick' },
-  ),
-  gm: withDocs(
-    'GraphicsMagick is not installed. Please install GraphicsMagick to use PDF to PNG conversion.\n' +
-      GM_INSTRUCTIONS,
-    // GraphicsMagick has no `--version` flag.
-    { command: 'gm version', label: 'GraphicsMagick' },
-  ),
-  perl: withDocs(
-    'Perl is not installed. latexindent requires Perl.\n' + PERL_INSTRUCTIONS,
-    { command: 'perl --version' },
-  ),
-  gs: withDocs(
-    'Ghostscript is not installed. Please install Ghostscript to use PDF to PNG conversion.\n' +
-      GHOSTSCRIPT_INSTRUCTIONS,
-    {
-      command:
-        process.platform === 'win32'
-          ? ['gswin64c --version', 'gswin32c --version', 'gs --version']
-          : 'gs --version',
-    },
-  ),
-  // Probe only: the wolfram plugin's manifest entry owns the install copy.
-  wolframscript: withDocs(
-    '"wolframscript" is not installed or not in your PATH.',
-    { command: 'wolframscript -version', docs: false },
-  ),
-
-  // LaTeX tools
-  latexdiff: withDocs(featureTool('latexdiff', LATEXDIFF_INSTRUCTIONS)),
-  'latexdiff-vc': withDocs(featureTool('latexdiff-vc', LATEXDIFF_INSTRUCTIONS)),
-  latexindent: withDocs(featureTool('latexindent', LATEXINDENT_INSTRUCTIONS)),
-  'tex-fmt': withDocs(featureTool('tex-fmt', TEXFMT_INSTRUCTIONS)),
-  texcount: withDocs(featureTool('texcount', TEXCOUNT_INSTRUCTIONS)),
-  latexmk: withDocs(featureTool('latexmk', LATEXMK_INSTRUCTIONS)),
-  pdflatex: withDocs(featureTool('pdflatex', PDFLATEX_INSTRUCTIONS)),
-  xelatex: withDocs(texTool('xelatex', PDFLATEX_INSTRUCTIONS)),
-  lualatex: withDocs(texTool('lualatex', PDFLATEX_INSTRUCTIONS)),
-  bibtex: withDocs(texTool('bibtex', PDFLATEX_INSTRUCTIONS)),
-  biber: withDocs(texTool('biber', PDFLATEX_INSTRUCTIONS)),
-};
-
-/** Whether a probe result carries a version-like pattern (e.g., "3.7.1"). */
-function hasVersionOutput(result: { stdout: string; stderr: string }): boolean {
-  return /\d+\.\d+/.test(result.stdout) || /\d+\.\d+/.test(result.stderr);
-}
-
-/** Split a probe command string into an executable and its arguments. */
-function parseCommand(cmd: string): { cmdName: string; args: string[] } | null {
-  const parts = shellParse(cmd).filter(
-    (arg): arg is string => typeof arg === 'string',
-  );
-  if (parts.length === 0) return null;
-  const [cmdName, ...args] = parts;
-  return { cmdName, args };
-}
-
 /**
- * Run one `<tool> --version` probe. A `--version` probe answers the same from
- * any directory and for any project, so it names the process cwd and no
- * setting slots. An interrupted probe's scope kills the child.
+ * Run one version probe. A probe answers the same from any directory and for
+ * any project, so it names the process cwd and no setting slots. An
+ * interrupted probe's scope kills the child.
  */
-const runProbe = (cmd: string, args: string[]) =>
+const runProbe = (cmd: string, args: readonly string[]) =>
   executeCommand([cmd, ...args], {
     cwd: process.cwd(),
     settings: undefined,
@@ -180,166 +64,80 @@ const runProbe = (cmd: string, args: string[]) =>
   });
 
 /**
- * Probe one command, falling back to a common-paths-resolved path when the
- * direct spawn neither exits 0 nor prints version-like output.
+ * Whether `tool` answers the version probe `args`, spawned directly or at the
+ * path `findCommand` resolves. Every call spawns, so a status surface reports
+ * what is installed now. A catalog tool is probed through {@link probeTool};
+ * a plugin's binary outside the catalog (`wolframscript`) names its own
+ * arguments.
+ *
+ * A probe that dies (the binary resolution and the PATH build are ordinary
+ * code) answers `false`, logged at warn. Interruption is not a defect, so it
+ * still unwinds the fiber and kills the spawned probe.
  */
-const executeWithFallback = Effect.fn('toolChecks.executeWithFallback')(
-  function* (
-    cmd: string,
-    args: string[],
-  ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
-    let result = yield* runProbe(cmd, args);
-    // Accept if exit code is 0, OR if we got version-like output
-    // (some tools return non-zero for --version but still output version info)
-    if (result.exitCode === 0 || hasVersionOutput(result)) return true;
-
-    const fallback = yield* findCommand(cmd);
+export const probeCommand = Effect.fn('toolChecks.probeCommand')(function* (
+  tool: string,
+  args: readonly string[],
+): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
+  return yield* Effect.gen(function* () {
+    let result = yield* runProbe(tool, args);
+    if (answered(result)) return true;
+    const fallback = yield* findCommand(tool);
     if (fallback) {
       result = yield* runProbe(fallback.command, [...fallback.args, ...args]);
-      if (result.exitCode === 0 || hasVersionOutput(result)) return true;
+      if (answered(result)) return true;
     }
-
-    // Log at info level so it shows in output channel by default
     yield* Effect.logInfo(
-      `Tool '${cmd}' not detected. Last result: exitCode=${result.exitCode}, ` +
+      `Tool '${tool}' not detected. Last result: exitCode=${result.exitCode}, ` +
         `stdout=${result.stdout.slice(0, 200) || '(empty)'}, ` +
         `stderr=${result.stderr.slice(0, 200) || '(empty)'}`,
-    ).pipe(withLogChannel('toolUtils'));
-    return false;
-  },
-);
-
-/**
- * Whether a tool is installed.
- *
- * @param toolName Tool name (looked up in TOOL_CONFIGS)
- * @param showError Whether to report a missing tool through the host handler
- *
- * The spawned `<tool> --version` probes are cancelled by the fiber's own
- * interruption, so no caller threads an `AbortSignal` in. An interrupted probe
- * never reaches the report below either: interruption unwinds the fiber, which
- * is what the old `signal.aborted` guard hand-rolled — stopping a run must not
- * raise an install prompt or open the setup docs.
- *
- * The probe's own failure is answered, not raised: the user-facing message is
- * the tool's install guidance either way, so the cause is logged and the tool
- * reports as absent. That leaves no error channel for callers to handle.
- */
-export const checkToolInstalled = Effect.fn('toolChecks.checkToolInstalled')(
-  function* (
-    toolName: string,
-    showError: boolean = true,
-  ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
-    const config = TOOL_CONFIGS[toolName];
-
-    if (!config) {
-      if (showError) {
-        yield* reportMissingTool(`Unknown tool: ${toolName}`);
-      }
-      return false;
-    }
-
-    // Each of the tool's version commands in turn, until one answers.
-    const command = config.command ?? `${toolName} --version`;
-    const probe = Effect.gen(function* () {
-      for (const cmd of typeof command === 'string' ? [command] : command) {
-        const parsed = parseCommand(cmd);
-        if (parsed && (yield* executeWithFallback(parsed.cmdName, parsed.args)))
-          return true;
-      }
-      return false;
-    });
-    // A probe that throws (the binary resolution and the PATH build are
-    // ordinary code) reads as an absent tool, marked: a caller that reports
-    // the absence links no install docs for a probe that never answered.
-    // Interruption is not a defect, so it still unwinds the fiber instead of
-    // reporting a missing tool.
-    const outcome = yield* probe.pipe(
-      Effect.map((installed) => ({ installed, probeFailed: false })),
-      Effect.catchDefect((err) =>
-        Effect.logWarning(
-          `Tool check for '${toolName}' failed: ${toErrorMessage(err)}`,
-        ).pipe(
-          withLogChannel('toolUtils'),
-          Effect.as({ installed: false, probeFailed: true }),
-        ),
-      ),
     );
-    if (!outcome.installed && showError) {
-      yield* reportMissingTool(
-        config.errorMessage,
-        outcome.probeFailed ? undefined : config.docsPage,
-      );
-    }
-
-    return outcome.installed;
-  },
-);
+    return false;
+  }).pipe(
+    Effect.catchDefect((err) =>
+      Effect.logWarning(
+        `Tool check for '${tool}' failed: ${toErrorMessage(err)}`,
+      ).pipe(Effect.as(false)),
+    ),
+    withLogChannel('toolUtils'),
+  );
+});
 
 /**
- * Options for runToolWithCheck function (internal to this module).
- *
- * `signal` is not among them: both the preflight probe and the run itself are
- * cancelled by the fiber's interruption, so there is nothing for a caller to
- * thread through.
+ * Whether a catalog tool answers its version probe: what the status surfaces
+ * (the doctor, the setup assistant, the settings view, the dependency banner)
+ * report.
  */
-type RunToolOptions = {
-  /** Whether to show error messages for missing tools */
-  showError?: boolean;
-} & Omit<ExecuteCommandBaseOptions, 'signal'>;
+export const probeTool = (tool: LatexToolName) =>
+  probeCommand(tool, LATEX_TOOL_ENTRIES[tool].versionArgs ?? ['--version']);
 
 /**
- * Tools a `runToolWithCheck` probe found installed in this process, so each
- * later run skips the `--version` spawn. Only hits are kept: a tool installed
- * mid-session is found on the next run. `checkToolInstalled` itself never reads
- * this, so the dashboard and setup probes always spawn.
- */
-const toolsFoundInstalled = new Set<string>();
-
-/**
- * Run a tool after verifying it is installed, answering `false` when the tool
- * is missing.
+ * Run a catalog tool. No probe precedes the run, so an installed tool costs
+ * one spawn and nothing is cached. A run that could not start (the result
+ * `executeCommand` reports with code 127 and no exit code of its own) is
+ * asked the version probe: a tool that does not answer fails with
+ * {@link ToolMissing}; one that does returns the failed run's result.
  *
  * Interruption tears the spawned process down: `executeCommand` is an Effect
  * whose own finalizer terminates the child, so there is nothing to thread.
  */
-export const runToolWithCheck = Effect.fn('toolChecks.runToolWithCheck')(
-  function* (
-    toolName: string,
-    args: string[],
-    options: RunToolOptions,
-  ): Effect.fn.Return<ExecResult | false, never, ChildProcessSpawner> {
-    const { showError = true, ...execOptions } = options;
-    if (!toolsFoundInstalled.has(toolName)) {
-      if (!(yield* checkToolInstalled(toolName, showError))) {
-        return false;
-      }
-      toolsFoundInstalled.add(toolName);
-    }
-    return yield* executeCommand([toolName, ...args], execOptions);
-  },
-);
-
-/** The guide page that covers installing `tool`, when one is registered. */
-export function getToolDocsPage(tool: string): string | undefined {
-  return TOOL_CONFIGS[tool]?.docsPage;
-}
-
-/** Display label for `id` from TOOL_CONFIGS, defaulting to the id itself. */
-export function toolLabel(id: string): string {
-  return TOOL_CONFIGS[id]?.label ?? id;
-}
-
-/** Reports the neither-GraphicsMagick-nor-ImageMagick error through the host handler. */
-export function reportMissingImageTools(): Effect.Effect<void> {
-  const errorMsg =
-    'Neither GraphicsMagick nor ImageMagick is installed. Please install either tool for image processing.\n' +
-    'GraphicsMagick:\n' +
-    GM_INSTRUCTIONS +
-    '\n\nOR\n\nImageMagick:\n' +
-    MAGICK_INSTRUCTIONS;
-  return reportMissingTool(errorMsg, INSTALL_DOCS);
-}
+export const runTool = Effect.fn('toolChecks.runTool')(function* (
+  tool: LatexToolName,
+  args: readonly string[],
+  options: ExecuteCommandBaseOptions,
+): Effect.fn.Return<ExecResult, ToolMissing, ChildProcessSpawner> {
+  const result = yield* executeCommand([tool, ...args], options);
+  if (
+    result.noExitCode === true &&
+    result.exitCode === 127 &&
+    !(yield* probeTool(tool))
+  ) {
+    return yield* new ToolMissing({
+      tool,
+      guide: getInstallGuide(LATEX_TOOL_ENTRIES[tool].guide, process.platform),
+    });
+  }
+  return result;
+});
 
 /** Package managers TeXRA knows how to install dependencies with. */
 export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;

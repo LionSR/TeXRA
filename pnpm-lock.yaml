@@ -105,9 +105,6 @@ catalogs:
     safe-stable-stringify:
       specifier: ^3.0.0
       version: 3.0.0
-    shell-quote:
-      specifier: ^1.12.0
-      version: 1.12.0
     tar:
       specifier: ^7.5.22
       version: 7.5.22
@@ -720,9 +717,6 @@ importers:
       semver:
         specifier: ^7.8.5
         version: 7.8.5
-      shell-quote:
-        specifier: 'catalog:'
-        version: 1.12.0
       sortablejs:
         specifier: ^1.15.7
         version: 1.15.7

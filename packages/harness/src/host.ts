@@ -121,11 +121,9 @@ export {
   ConfigWriteFailed,
   StateReadFailed,
   StateWriteFailed,
-  ToolMissingReporter,
   type AgentDirectoriesPort,
   type ConfigProvider,
   type StateStore,
-  type ToolMissingHandler,
 } from '@platform/interfaces';
 export { Secrets, type PlatformSecrets } from '@platform/secrets';
 // App-lifecycle signals: the process's hub, which `ProcessServices` serves,

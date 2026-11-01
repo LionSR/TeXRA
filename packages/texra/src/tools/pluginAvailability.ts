@@ -32,13 +32,13 @@ import {
 } from '@texra/tools/lean/leanServerRegistry';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import { ZOTERO_PORT_KEY } from '@texra/tools/zotero/bbtClient';
-import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import {
   probeSdkBinaryStatus,
   probeZoteroBbt,
   probeZoteroConnector,
 } from '@texra/tools/availabilityProbes';
 import { isGitRepository } from '@texra/utils/git/isGitRepository';
+import { probeCommand } from '@texra/utils/system/toolChecks';
 import type { ToolAvailabilityChecks } from '@texra-ai/harness/plugins';
 
 const CHANNEL = 'pluginAvailability';
@@ -47,7 +47,7 @@ const CHANNEL = 'pluginAvailability';
 // interrupted dashboard refresh kills the probe instead of abandoning it.
 export const WOLFRAM_AVAILABILITY: ToolAvailabilityChecks = {
   check: () =>
-    Effect.map(checkToolInstalled('wolframscript', false), (available) => ({
+    Effect.map(probeCommand('wolframscript', ['-version']), (available) => ({
       available,
     })),
 };

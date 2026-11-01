@@ -158,6 +158,11 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
   const compiled = yield* compileLatex2Pdf(
     pathToLocationIn(options.roots.workspace, result.absolutePath),
     options.roots,
+  ).pipe(
+    // No compiler still leaves the written source; the reason is its log.
+    Effect.catchTag('ToolMissing', (missing) =>
+      Effect.succeed({ ok: false, logTail: missing.message } as const),
+    ),
   );
   return {
     ...result,

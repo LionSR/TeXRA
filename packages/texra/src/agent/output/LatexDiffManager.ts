@@ -28,7 +28,6 @@ import {
   workflowOutputRoundDir,
 } from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 
 import {
   publishCompiledPdfArtifact,
@@ -176,14 +175,8 @@ export class LatexDiffManager {
     outputFiles: readonly OutputFileInfo[],
     previousOutputs: readonly OutputFileInfo[],
   ): Effect.Effect<RoundLatexdiffs, never, DiffServices> {
+    // A missing latexdiff is each pair's failure, carrying its install steps.
     const execute = Effect.gen({ self: this }, function* () {
-      if (!(yield* checkToolInstalled('latexdiff'))) {
-        this.logger.warn(
-          'Skipping latexdiff operations - latexdiff not installed',
-        );
-        return notRun('latexdiff is not installed');
-      }
-
       if (outputFiles.length === 0) {
         this.logger.warn(
           `No output files found for round ${currRound}, skipping latexdiff operations`,
@@ -405,7 +398,12 @@ export class LatexDiffManager {
         outputDirectory: buildDir,
         timeout: timeoutMs,
         extraInputDirs,
-      });
+      }).pipe(
+        // No compiler costs this diff its PDF, not the diff itself.
+        Effect.catchTag('ToolMissing', (missing) =>
+          Effect.succeed({ ok: false, logTail: missing.message } as const),
+        ),
+      );
 
       if (!compiled.ok) {
         // Keep the missing auxiliary PDF visible, but leave the compiler tail

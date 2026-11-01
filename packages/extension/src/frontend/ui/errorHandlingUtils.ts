@@ -9,7 +9,9 @@ import {
   formatError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
+import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { ToolMissing } from '@texra/utils/system/toolChecks';
 
 /** Valid documentation identifiers for error messages. */
 type DocId = 'custom-agents' | 'latex-diff';
@@ -36,13 +38,37 @@ export function announce<A>(
   );
 }
 
-/** Log a formatted error message and display it to the user. */
+const INSTALL_GUIDE_ACTION = 'View Installation Guide';
+
+/**
+ * Log a formatted error message and display it to the user. A missing tool's
+ * message carries its install steps, and the notice offers the installation
+ * guide: this is where the editor shows every `ToolMissing`.
+ */
 export function showLoggedErrorMessage(
   channel: string,
   prefix: string,
   err: unknown,
 ): Effect.Effect<string> {
-  return showLoggedMessage(channel, formatError(prefix, err));
+  const message = formatError(prefix, err);
+  if (!(err instanceof ToolMissing)) return showLoggedMessage(channel, message);
+  return Effect.gen(function* () {
+    yield* Effect.logError(message).pipe(withLogChannel(channel));
+    const choice = yield* announce(
+      channel,
+      vscodeUi.error(message, { items: [INSTALL_GUIDE_ACTION] }),
+      undefined,
+    );
+    if (choice === INSTALL_GUIDE_ACTION)
+      yield* openGuidePage('installation').pipe(
+        Effect.catch((error) =>
+          Effect.logError('Could not open the installation guide', error).pipe(
+            withLogChannel(channel),
+          ),
+        ),
+      );
+    return message;
+  });
 }
 
 /** Log a pre-formatted message and display it to the user as an error. */
