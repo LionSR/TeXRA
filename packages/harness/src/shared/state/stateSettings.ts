@@ -670,16 +670,18 @@ export function settingsCatalog(options: {
   if (unowned.length > 0) {
     throw new Error(`No harness setting has the key ${unowned.join(', ')}.`);
   }
-  const harnessRows = HARNESS_SETTINGS.map((row) =>
-    Object.hasOwn(appDefaults, row.key)
-      ? {
-          ...row,
-          schema: row.schema.pipe(
-            Schema.withDecodingDefault(Effect.succeed(appDefaults[row.key])),
-          ),
-        }
-      : row,
-  );
+  const harnessRows = HARNESS_SETTINGS.map((row) => {
+    if (!Object.hasOwn(appDefaults, row.key)) return row;
+    // An app default the row's own schema refuses is a defect of the app:
+    // it fails here, where the catalog is built, not at the first read.
+    Schema.decodeUnknownSync(row.schema)(appDefaults[row.key]);
+    return {
+      ...row,
+      schema: row.schema.pipe(
+        Schema.withDecodingDefault(Effect.succeed(appDefaults[row.key])),
+      ),
+    };
+  });
   const rows = [...harnessRows, ...options.rows];
   const byKey = new Map<string, StateSettingEntry>();
   for (const row of rows) {
