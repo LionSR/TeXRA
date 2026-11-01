@@ -108,13 +108,13 @@ function checkRule(rule, base, actual, baseKey) {
     if (entry.value <= allowed) continue;
     const absent =
       rule === 'file-size'
-        ? `merge base at most ${CORE_FILE_LINES} lines (within the threshold there`
-        : 'merge base 0 (no site there';
+        ? `merge base at most ${CORE_FILE_LINES} lines (within the threshold there)`
+        : 'merge base 0 (no site there)';
     const bound =
       base == null
         ? 'held at zero'
         : before == null
-          ? `${absent}, a new file, or a move whose rename is not staged)`
+          ? `${absent}: a new file, or a move whose rename is not staged`
           : `merge base ${allowed}${allowed === before ? '' : ` (${before} lines rounded up to ${FILE_SIZE_STEP})`}`;
     problems.push(
       `${rule}: ${key} has ${entry.value}, ${bound} — ${RULES[rule]}\n${describeSites(entry)}`,
