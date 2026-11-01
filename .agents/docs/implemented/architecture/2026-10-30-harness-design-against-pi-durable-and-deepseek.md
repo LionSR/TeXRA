@@ -7,9 +7,14 @@ status: implemented
 
 The owner decisions are listed at the end.
 
-Measured 2026-10-30 at TeXRA `808521a8ed`, pi `31ade0e0`
-(`packages/durable`, published as pi-durable 1.4.0) and DeepSeek Harness (dsh)
-`ce7073d5` (0.2.2-alpha.2). Three independent read-only passes, one per
+Measured 2026-10-30 at TeXRA `808521a8ed`, pi
+[`31ade0e0`](https://github.com/earendil-works/pi/tree/31ade0e0dc2a27cffc2d71207360fe7ea83c707c/packages/durable)
+(`packages/durable`, the durable library rather than the coding-agent CLI, at
+a commit carrying
+[changes unreleased after 1.4.0](https://github.com/earendil-works/pi/blob/31ade0e0dc2a27cffc2d71207360fe7ea83c707c/packages/durable/CHANGELOG.md#L3))
+and DeepSeek Harness (dsh)
+[`ce7073d5`](https://github.com/deepseek-ai/deepseek-harness/tree/ce7073d51254c26cd63b22a60835b8f948deb447)
+(0.2.2-alpha.2). Three independent read-only passes, one per
 codebase, produced notes with file and line evidence against the same template;
 this note is the comparison and the design that follows from it. It builds on
 the [general-package design](../../proposed/architecture/2026-10-21-harness-general-package-design.md)
@@ -30,25 +35,30 @@ services on a shared context, extension is by typed events, and composition is
 YAML patches.
 
 By Ousterhout's criteria the three land close together on module depth and
-information hiding (3, 3, 3 out of 5) and apart on the rest. TeXRA is the only
-one with cross-process ownership: pi-durable has none (a second opener rewrites
-the first opener's running tasks and runs them), dsh has a non-expiring file
-lock. TeXRA's weaknesses are specific and measured: the per-call path is one
+information hiding (3, 3, 3 out of 5) and apart on the rest. TeXRA and dsh both
+refuse a second writer across processes: TeXRA with a claim per aggregate whose
+owner's liveness is proved, dsh with an exclusive per-session kernel lock that
+the kernel releases on close or process death and that, by design, nobody can
+take from a live but stalled writer; pi-durable leaves one writer to its caller
+(a second opener rewrites the first opener's running tasks and runs them).
+TeXRA's weaknesses are specific and measured: the per-call path is one
 804-line function and a call passes about 24 named functions in 14 files; a
 run's start and end are cut by time across ten modules (2,668 lines); "who runs
 this run" has four answers; 15 row types are read outside their reducers in 43
 file entries; six in-flight facts have a memory twin; 11 sites warn and
-continue over a lost durable fact; and churn is high (372 harness commits in 30
-days, 217 of them refactors; `rowVersions.ts` edited 34 times).
+continue where a durable fact or a delivery may be lost; and churn is high (372
+harness commits in 30 days, 217 of them refactors; `rowVersions.ts` edited 34
+times).
 
 The design is eight moves. Six reshape TeXRA's kernel (M1 to M6). Two take a
 shape from a peer and recast it as rows (M7 crash closers from dsh, M8 close
 versus crash from pi-durable). It refuses, with the peers' own numbers, a task
 scheduler, an event bus, YAML composition, documents as a second state owner,
-deferred commits and JSONL. Together the moves delete about 1,250 kernel lines,
-take a tool call from about 24 functions to about 8, liveness from 4 answers to
-1, row readers outside reducers from 43 to 0, and warn-and-continue sites over
-durable facts from 11 to 0, without a new concept, stored kind or layer.
+deferred commits and JSONL. The design estimated about 1,250 kernel lines
+deleted, a tool call from about 24 functions to about 8, liveness from 4 answers
+to 1, row readers outside reducers from 43 to 0, and warn-and-continue sites
+over durable facts from 11 to 0, without a new concept, stored kind or layer;
+what landed is under "Landed (2026-10-30)".
 
 ## What gets deleted
 
@@ -89,19 +99,19 @@ Scores are 1 to 5 and are a reading aid; the evidence lines are the result.
 
 ## The three designs on one page
 
-| Axis                       | TeXRA                                                                                                                                                                | pi-durable                                                                                                                                                                | dsh                                                                                                                                                                  |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Size                       | harness 84.6k lines, llm 12.0k                                                                                                                                       | 27.5k lines, a 6.4k-line spec                                                                                                                                             | 189k lines of TypeScript, kernel packages about 25k                                                                                                                  |
-| Composition                | Effect layers at process, session and run lifetimes; plugins as typed values                                                                                         | `Harness.open(storage, { models, registry })`; extensions as in-process bundles                                                                                           | Cordis plugin tree from 97 base rows plus patches; 88 typed events in three domains                                                                                  |
-| The loop                   | one program, `runToolUse` (431 lines) plus `dispatchPendingResponse` (804 lines, one function)                                                                       | scheduler (2,565 lines, 19 index structures) driving phase handlers; generation, tool and compaction tasks                                                                | `ReactLoopAgent`: 3 public methods over 2,130 lines; `turn()` 107 lines, `step()` 176                                                                                |
-| State                      | `RunState` from rows (the resume authority); memory twins listed under M5                                                                                            | task rows plus the `pi.live` document plus the scheduler's `#live` mirror                                                                                                 | the log plus `deriveMessages()`; projection units with checkpoints; 4 in-memory facts in the driver                                                                  |
-| Durability                 | five write points, one publisher, uninterruptible appends; stream chunks never rows                                                                                  | atomic commit, adopt before publish, deferred commits for partials, a failure latch; 15 storage transactions per turn with one tool                                       | synchronous emit into a 200 ms write-behind buffer, flushed fail-closed before every model call and tool body; fsync per batch, `link()` publication                 |
-| Ownership across processes | a claim per aggregate, liveness from pid plus process start, `PRAGMA data_version` wake, a resume refused as `owned_elsewhere` unless the owner is proved dead       | none: "One process owns a storage at a time; there is no cross-process locking" (pi `README.md:881`); a second opener rewrites `running` tasks as `pending` and runs them | a non-expiring `flock` on `session.lock`; readers never blocked; `SessionOwnershipLostError` declared, never thrown                                                  |
-| Extension unit             | `Plugin` (13 fields), `ITool` (11)                                                                                                                                   | `Extension` (6), `ToolRegistration` (12), `ToolExecutionApi` (23), 8 hooks                                                                                                | plugin contract with 17 touchable members; `ToolDefinition` (11); events                                                                                             |
-| One tool, for an author    | an 11-line `defineTool` call, `attach({ approve })`, `tools` repeated on `resume`                                                                                    | 17 calls, 12 of them pi-durable's; a Chord `Context` on every call                                                                                                        | a 20-file package, about 29 files outside it, 130 snapshot files                                                                                                     |
-| Crash recovery             | the same program over the rows; `nextAttempt` decides send, observe, reask, await, fail or cancel; a started call re-runs only when `replay` is `safe` on both sides | open rewrites `running` as `pending` with `restarts + 1`; a request found in flight is charged, not re-sent; tools re-run only when `replay` is `safe`                    | pure closers append a synthetic error `tool/result` per dangling call (`TOOL_NOT_STARTED` or `TOOL_OUTCOME_UNKNOWN`, with retry guidance) and `turn/end interrupted` |
-| Retry bound                | counted from rows across crashes; a process-wide gate per route                                                                                                      | `maxRetries`, `restartLimit` 5, a fault for a phase that made no durable progress                                                                                         | none in the loop; `llm-retry` (5) and two compaction listeners each may claim the retry, in registration order                                                       |
-| Churn                      | 372 harness commits in 30 days, 217 refactors; `rowVersions.ts` 34 edits                                                                                             | 9 releases in 20 days, 53 breaking entries; parking added in 1.4.0 and removed unreleased                                                                                 | 91 upgrade-guide entries over 11 pre-1.0 versions; 4 session-format bumps in 15 days                                                                                 |
+| Axis                       | TeXRA                                                                                                                                                                | pi-durable                                                                                                                                                                | dsh                                                                                                                                                                                                                                                               |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Size                       | harness 84.6k lines, llm 12.0k                                                                                                                                       | 27.5k lines, a 6.4k-line spec                                                                                                                                             | 189k lines of TypeScript, kernel packages about 25k                                                                                                                                                                                                               |
+| Composition                | Effect layers at process, session and run lifetimes; plugins as typed values                                                                                         | `Harness.open(storage, { models, registry })`; extensions as in-process bundles                                                                                           | Cordis plugin tree from 97 base rows plus patches; 88 typed events in three domains                                                                                                                                                                               |
+| The loop                   | one program, `runToolUse` (431 lines) plus `dispatchPendingResponse` (804 lines, one function)                                                                       | scheduler (2,565 lines, 19 index structures) driving phase handlers; generation, tool and compaction tasks                                                                | `ReactLoopAgent`: 3 public methods over 2,130 lines; `turn()` 107 lines, `step()` 176                                                                                                                                                                             |
+| State                      | `RunState` from rows (the resume authority); memory twins listed under M5                                                                                            | task rows plus the `pi.live` document plus the scheduler's `#live` mirror                                                                                                 | the log plus `deriveMessages()`; projection units with checkpoints; 4 in-memory facts in the driver                                                                                                                                                               |
+| Durability                 | five write points, one publisher, uninterruptible appends; stream chunks never rows                                                                                  | atomic commit, adopt before publish, deferred commits for partials, a failure latch; 15 storage transactions per turn with one tool                                       | synchronous emit into a 200 ms write-behind buffer, flushed fail-closed before every model call and tool body; fsync per batch, `link()` publication                                                                                                              |
+| Ownership across processes | a claim per aggregate, liveness from pid plus process start, `PRAGMA data_version` wake, a resume refused as `owned_elsewhere` unless the owner is proved dead       | none: "One process owns a storage at a time; there is no cross-process locking" (pi `README.md:881`); a second opener rewrites `running` tasks as `pending` and runs them | an exclusive per-session kernel lock (`flock` on POSIX, a named semaphore on Windows) that refuses a second writer and is released on close or process death, with no expiry by design; readers never blocked; `SessionOwnershipLostError` declared, never thrown |
+| Extension unit             | `Plugin` (13 fields), `ITool` (11)                                                                                                                                   | `Extension` (6), `ToolRegistration` (12), `ToolExecutionApi` (23), 8 hooks                                                                                                | plugin contract with 17 touchable members; `ToolDefinition` (11); events                                                                                                                                                                                          |
+| One tool, for an author    | an 11-line `defineTool` call, `attach({ approve })`, `tools` repeated on `resume`                                                                                    | 17 calls, 12 of them pi-durable's; a Chord `Context` on every call                                                                                                        | a 20-file package, about 29 files outside it, 130 snapshot files                                                                                                                                                                                                  |
+| Crash recovery             | the same program over the rows; `nextAttempt` decides send, observe, reask, await, fail or cancel; a started call re-runs only when `replay` is `safe` on both sides | open rewrites `running` as `pending` with `restarts + 1`; a request found in flight is charged, not re-sent; tools re-run only when `replay` is `safe`                    | pure closers append a synthetic error `tool/result` per dangling call (`TOOL_NOT_STARTED` or `TOOL_OUTCOME_UNKNOWN`, with retry guidance) and `turn/end interrupted`                                                                                              |
+| Retry bound                | counted from rows across crashes; a process-wide gate per route                                                                                                      | `maxRetries`, `restartLimit` 5, a fault for a phase that made no durable progress                                                                                         | none in the loop; `llm-retry` (5) and two compaction listeners each may claim the retry, in registration order                                                                                                                                                    |
+| Churn                      | 372 harness commits in 30 days, 217 refactors; `rowVersions.ts` 34 edits                                                                                             | 9 releases in 20 days, 53 breaking entries; parking added in 1.4.0 and removed unreleased                                                                                 | 91 upgrade-guide entries over 11 pre-1.0 versions; 4 session-format bumps in 15 days                                                                                                                                                                              |
 
 ## Findings by criterion
 
@@ -139,10 +149,15 @@ paths. `rowVersions.ts` and `runLifecycle.ts` were edited 34 and 30 times in 30
 days: the cost of change amplification. pi's lifecycle sits in the scheduler
 and dsh's in one 192-line `initializeAgent`; neither is split by phase.
 
-**Second owners.** All three keep a live mirror beside the durable record, and
-each pays for it: pi's `pi.live` diverges from the task tree after an answer
-with `afterRun` hooks; dsh's turn counter and its `turnBoundary` projection both
-own "current turn"; TeXRA answers "who runs this run" from `RunRegistry.isLive`
+**Second owners.** All three keep a live mirror beside the durable record.
+pi keeps busy, tool-slot and compaction state in `pi.live` beside the task
+rows; its documented "busy after the answer" case is consistent, though:
+`holdRun` keeps `live.run` while the input submissions finish
+(`pi:src/harness/generation.ts:878-893`), and `finish` and `drain` wait for the
+after-run tasks before `endAnsweredRun` ends the run (356-381, 935-945), so an
+answered submission and an idle conversation are two conditions, not two values
+of one fact. dsh's turn counter and its `turnBoundary` projection both own
+"current turn"; TeXRA answers "who runs this run" from `RunRegistry.isLive`
 (`runRegistry.ts:251`), `SessionLog.owns` (`SessionHandle.ts:154`),
 `RunView.ownerId` with `LocalRuntimeState.dead`, and `ProcessIdentity.owners`;
 `decideResume` (`resumeRun.ts:157-210`) asks the registry, then the claim,
@@ -173,17 +188,17 @@ Taken, reshaped as rows (M7, M8):
 
 Evaluated and not taken, with the evidence:
 
-| Peer shape                                                       | Why not                                                                                                                                                                                                                              |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| A task scheduler (pi)                                            | 2,565 lines, 19 index structures, a 12 s to 50 ms fix eleven days after 1.0, parking added and removed within 20 days; AGENTS.md rules out a flow engine. One program per run already gives one owner of loop state.                 |
-| An event bus with listener order (dsh)                           | 88 events; `agent/request-error` has three listeners that may each claim the retry, so recovery depends on registration order; 18 `agent/pre-step` listeners each able to rewrite messages. Invariant 6: no ordered listener chains. |
-| Composition from YAML patches (dsh)                              | one 81-line guard touches about 29 files; `config` replaced whole, never merged; a documented `preset` patch form with no handler. Effect layers and `Plugin` values already compose at build time with types.                       |
-| Documents as a second state owner (pi `pi.live`)                 | busy, tool slots and compaction status live twice and diverge; `defineDoc` was dropped on 2026-10-02 (durable-harness note).                                                                                                         |
-| Deferred commits for streamed progress (pi)                      | TeXRA writes no progress rows: stream chunks are transient on the live trace (invariant 9), so there is nothing to defer; pi's consumer invariant is maintained by hand in each consumer.                                            |
-| The exact stream embedded in the assistant row (dsh)             | TeXRA stores the final message and each attempt as rows already; embedding every timed chunk would move transient observations into history against invariant 9 and grow rows by the stream size.                                    |
-| Projection units with checkpoint rows (dsh)                      | the two named projections and `projection_state` already rebuild from rows; a stored derivation beside the rows was deleted in #13837, and invariant 2 allows only a checkpoint that loses every conflict.                           |
-| JSONL with `flock` (dsh), five storage backends (pi)             | one SQLite backend on purpose (durable-harness note, "Considered and dropped"); claims with liveness need a store that can refuse a writer, which a file lock without expiry and a per-process id counter cannot.                    |
-| Step-scoped tool resolution, once per step (dsh `tools.resolve`) | the right shape, and TeXRA's `StepTools` already pins the set per step; what is wrong is the five layers around it, which the general-package design's lane 4b collapses. Not a new move.                                            |
+| Peer shape                                                       | Why not                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A task scheduler (pi)                                            | 2,565 lines, 19 index structures, a 12 s to 50 ms fix eleven days after 1.0, parking added and removed within 20 days; AGENTS.md rules out a flow engine. One program per run already gives one owner of loop state.                                                                                                                                                              |
+| An event bus with listener order (dsh)                           | 88 events; `agent/request-error` has three listeners that may each claim the retry, so recovery depends on registration order; 18 `agent/pre-step` listeners each able to rewrite messages. Invariant 6: no ordered listener chains.                                                                                                                                              |
+| Composition from YAML patches (dsh)                              | one 81-line guard touches about 29 files; `config` replaced whole, never merged; a documented `preset` patch form with no handler. Effect layers and `Plugin` values already compose at build time with types.                                                                                                                                                                    |
+| Documents as a second state owner (pi `pi.live`)                 | busy, tool slots and compaction status are kept beside the task rows, a second representation to maintain even where, as in the after-run case, the two agree; `defineDoc` was dropped on 2026-10-02 (durable-harness note).                                                                                                                                                      |
+| Deferred commits for streamed progress (pi)                      | TeXRA writes no progress rows: stream chunks are transient on the live trace (invariant 9), so there is nothing to defer; pi's consumer invariant is maintained by hand in each consumer.                                                                                                                                                                                         |
+| The exact stream embedded in the assistant row (dsh)             | TeXRA stores the final message and each attempt as rows already; embedding every timed chunk would move transient observations into history against invariant 9 and grow rows by the stream size.                                                                                                                                                                                 |
+| Projection units with checkpoint rows (dsh)                      | the two named projections and `projection_state` already rebuild from rows; a stored derivation beside the rows was deleted in #13837, and invariant 2 allows only a checkpoint that loses every conflict.                                                                                                                                                                        |
+| JSONL with `flock` (dsh), five storage backends (pi)             | one SQLite backend on purpose (durable-harness note, "Considered and dropped"); dsh's kernel lock does refuse a second writer, per session and without expiry, while TeXRA's claims refuse one per aggregate and let a proved-dead owner's run be taken over, which a lock only the kernel releases cannot; neither another format nor another backend is needed for that choice. |
+| Step-scoped tool resolution, once per step (dsh `tools.resolve`) | the right shape, and TeXRA's `StepTools` already pins the set per step; what is wrong is the five layers around it, which the general-package design's lane 4b collapses. Not a new move.                                                                                                                                                                                         |
 
 ## The design
 
@@ -295,23 +310,28 @@ Risk: blob growth for large diffs; the `request.opened` payload gains a digest
 Criterion: define errors out of existence; silent degradation is a defect.
 
 Eleven sites beyond the eight in `silent-degradation.json` warn and continue
-over a durable fact: a request its call no longer asks stays open
-(`toolGuard.ts:305-315`); a child's launch failure never reaches its parent
-(`childTurnResult.ts:341-358`); held results are dropped after 20 tries
-(`runLaunchGuard.ts:217-226`); a claim not released stays held until the
-process dies (`runRegistry.ts:502-505`); a finished compaction's paid summary
-is dropped at stop (`toolUse.ts:553-560`); a request's cancel is not written as
-the run stops (`requestPolicy.ts:362-372`); usage accounting is lost
-(`run/pricing.ts:118-126`); and four more in `sessionTools.ts`,
-`interruptedTasks.ts`, `Database.ts:1020` and the media path.
+where a durable fact or a delivery may be lost: a request its call no longer
+asks stays open (`toolGuard.ts:305-315`); a child's launch failure never
+reaches its parent (`childTurnResult.ts:341-358`); held results are dropped
+after 20 tries (`runLaunchGuard.ts:217-226`); a claim not released stays held
+until the process dies (`runRegistry.ts:502-505`); a finished compaction's paid
+summary is dropped at stop (`toolUse.ts:553-560`); a request's cancel is not
+written as the run stops (`requestPolicy.ts:362-372`); the backend usage-log
+write fails after the session's own accounting committed on the `response` row
+(`run/pricing.ts:118-126`: a separate best-effort billing write, not a lost
+session fact); and four more in `sessionTools.ts`, `interruptedTasks.ts`,
+`Database.ts:1020` and the media path.
 
 Shape: a failed retirement or delivery becomes a row the next acceptance reads
 (`child.park` already is this for held results; the launch-failure path uses
 it); a claim-release failure is a `DatabaseWriteFailed` that ends the run like
-any refused write (`findStorageRefusal` exists); a usage write failure is a flag
-on the `usage` row.
+any refused write (`findStorageRefusal` exists); the usage log's sender owns
+its delivery (queued, batched, retried, and it says so when it gives up), so
+the loop keeps no billing catch and a billing failure ends no run. Each site
+needs its own failure contract checked before it changes.
 
-Deletes: 11 catch blocks (about 120 lines) and three retry loops.
+Deletes: the catch blocks that warn over a lost delivery or claim, and their
+retry loops (estimated at 11 and about 120 lines; "Landed" has what went).
 
 Risk: failures that scroll by as warnings today end the run visibly.
 
@@ -419,9 +439,10 @@ Answered 2026-10-30: yes to all five. Decision 2 landed with one qualification, 
 2. **M5.** Store a proposal's content and the person's edit as a `context.blob`
    beside its `request.opened`, so a crash keeps the edit? The alternative keeps
    it in memory and accepts the loss. _Recommend: yes; the blob table exists._
-3. **M6.** Accept that a failed claim release, held-result delivery or usage
-   write ends the run or lands as a row, where today a warning scrolls by?
-   _Recommend: yes._
+3. **M6.** Accept that a failed claim release or held-result delivery ends the
+   run or lands as a row, where today a warning scrolls by, each site's failure
+   contract checked first? _Recommend: yes._ The backend billing write stays a
+   separate best-effort write; its failure never ends a run.
 4. **M3.** The claim row as the only owner, with the registry reduced to a
    `FiberMap` and the per-key lane? _Recommend: yes._
 5. **M5.** `resumeBlocked` stays process-local and loses `retry`? _Recommend:
@@ -456,6 +477,16 @@ durable fact.
   (`pi-durable.md`, `deepseek.md`, `texra.md`); each pass spot-checked its own
   anchors after drafting. The peer trees are not vendored: pi at `31ade0e0`
   and dsh at `ce7073d5` are public repositories on GitHub.
+- Corrected 2026-11-01 (folded from #14468, whose branch the note's move to
+  `implemented/` left behind): dsh's per-session lock is cross-process
+  ownership without expiry, not its absence
+  (`dsh:packages/session/session-persistence-jsonl/src/lease.ts:1-96`); pi's
+  "busy after the answer" case is consistent (`holdRun`, `finish` and `drain`
+  in `pi:src/harness/generation.ts`); the pi snapshot carries changes
+  unreleased after 1.4.0; and `ModelInvoker` commits a response's usage before
+  `reportUsage`, so the billing write at `run/pricing.ts:118-126` was a
+  best-effort side write, not a lost session fact. The scores and counts above
+  were not re-derived.
 - Checked by the author against the tree at `808521a8ed`:
   `dispatchPendingResponse` starts at `toolUseDispatch.ts:304` and
   `makeScheduler` at 225 in a 1,107-line file; the ten lifecycle modules total
