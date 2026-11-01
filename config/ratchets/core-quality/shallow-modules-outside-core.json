@@ -27,7 +27,7 @@
   "packages/texra/src/tools/github/githubAuth.ts": 11,
   "packages/texra/src/tools/github/githubPaths.ts": 11,
   "packages/texra/src/tools/github/subscriptionBindings.ts": 5,
-  "packages/texra/src/tools/lean/leanLanguageServices.ts": 43,
+  "packages/texra/src/tools/lean/leanLanguageServices.ts": 42,
   "packages/texra/src/ui/styles/index.ts": 9,
   "packages/texra/src/utils/files/pastedImageName.ts": 5
 }

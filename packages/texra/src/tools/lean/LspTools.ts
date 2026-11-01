@@ -1,5 +1,5 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { Cause, Effect, Schema, Scope } from 'effect';
+import { Cause, Effect, Result, Schema, Scope } from 'effect';
 
 import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness/plugins';
@@ -26,6 +26,7 @@ import {
   type LeanCommandSpec,
   type LeanFileCommand,
   type LeanProjectCommand,
+  type LeanUnavailable,
   type LspResult,
 } from './leanTypes';
 import {
@@ -122,12 +123,23 @@ const LeanInspectInputSchema = Schema.Struct({
 type LeanInspectInput = typeof LeanInspectInputSchema.Type;
 
 /**
- * Setup guidance appended when Lean diagnostics fail for a reason that is
- * plausibly a missing/misconfigured toolchain rather than a bad file. Shared by
- * the `toolchain_unavailable` branch and the catch-all below so the two stay in
- * sync.
+ * The tool's answer when Lean cannot serve a call: the adapter's message,
+ * with setup guidance only when the toolchain is the cause. A missing project
+ * names its lakefile and a stopped or crashed server is not a setup problem.
  */
-const LEAN_TOOLCHAIN_HELP = `In VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that \`lake\` is on PATH, and make sure the file is inside a Lake project (lakefile.lean / lakefile.toml).`;
+const leanUnavailableResult = (
+  failed: string,
+  failure: LeanUnavailable,
+  summary: string,
+): ToolResult =>
+  errorResult(
+    `${failed}: ${failure.message}${
+      failure.reason === 'toolchain'
+        ? '\n\nIn VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that `lake` is on PATH.'
+        : ''
+    }`,
+    { summary },
+  );
 
 const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.
 
@@ -154,7 +166,7 @@ function executeLeanDiagnosticsTool(
   const { command, file } = input;
   return diagnose(file, command).pipe(
     catchLeanFailure(
-      (cause) => `Error: ${toErrorMessage(cause)}\n\n${LEAN_TOOLCHAIN_HELP}`,
+      (cause) => `Error: ${toErrorMessage(cause)}`,
       'Failed to get diagnostics',
     ),
   );
@@ -167,26 +179,24 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
   const call = yield* ToolContext;
   const services = yield* LeanLanguageServices;
   const absoluteFile = yield* leanFilePath(file, call);
-  const result = yield* services.fetchDiagnosticsForFile(
-    absoluteFile,
-    yield* leanRunId(services),
+  const fetched = yield* Effect.result(
+    services.fetchDiagnosticsForFile(absoluteFile, yield* leanRunId(services)),
   );
-  if (!result.ok) {
-    // The adapter distinguishes a genuinely missing file from a broken or
-    // absent Lean toolchain — only the former is a "could not open file";
-    // the latter gets the same actionable setup guidance as a general
-    // tool failure.
-    if (result.kind === 'toolchain_unavailable') {
-      return errorResult(
-        `Failed to get diagnostics for ${file}: ${result.message}\n\n${LEAN_TOOLCHAIN_HELP}`,
-        { summary: 'Failed to get diagnostics' },
-      );
-    }
-    return errorResult(
-      `Could not open file ${file}: ${result.message}\n\nMake sure the file exists and is accessible.`,
-      { summary: 'Failed to open file' },
-    );
+  if (Result.isFailure(fetched)) {
+    // Only a file that could not be opened is a "could not open file".
+    const failure = fetched.failure;
+    return failure._tag === 'LeanUnavailable'
+      ? leanUnavailableResult(
+          `Failed to get diagnostics for ${file}`,
+          failure,
+          'Failed to get diagnostics',
+        )
+      : errorResult(
+          `Could not open file ${file}: ${failure.message}\n\nMake sure the file exists and is accessible.`,
+          { summary: 'Failed to open file' },
+        );
   }
+  const result = fetched.success;
   const diagnostics = result.diagnostics;
 
   // Host capability: VS Code moves the editor cursor to the first error;
@@ -282,18 +292,23 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
           Effect.as(executed(`Executed "${command}" on ${file}`, description)),
           // The adapter's cause is the answer; setup guidance only when the
           // cause is the setup.
-          Effect.catchTag('LeanFileCommandFailed', (failure) =>
-            Effect.succeed(
-              errorResult(
-                `Could not execute "${command}" on ${file}: ${failure.message}${
-                  failure.reason === 'toolchain_unavailable'
-                    ? `\n\n${LEAN_TOOLCHAIN_HELP}`
-                    : ''
-                }`,
-                { summary: 'Command failed' },
+          Effect.catchTags({
+            LeanFileCommandFailed: (failure) =>
+              Effect.succeed(
+                errorResult(
+                  `Could not execute "${command}" on ${file}: ${failure.message}`,
+                  { summary: 'Command failed' },
+                ),
               ),
-            ),
-          ),
+            LeanUnavailable: (failure) =>
+              Effect.succeed(
+                leanUnavailableResult(
+                  `Could not execute "${command}" on ${file}`,
+                  failure,
+                  'Command failed',
+                ),
+              ),
+          }),
         );
     }).pipe(
       catchLeanFailure(
