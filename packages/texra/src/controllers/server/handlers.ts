@@ -49,7 +49,7 @@ import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 
 import {
-  PROTOCOL_VERSION,
+  PROTOCOL,
   ProjectStateFailed,
   TaskFailed,
   TaskRecordsFailed,
@@ -357,7 +357,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
     return {
       'service.hello': Effect.fn('handlers.service.hello')(function* () {
         return {
-          protocol: PROTOCOL_VERSION,
+          protocol: PROTOCOL.version,
           version: control.version,
           pid: process.pid,
           socket: control.socket,

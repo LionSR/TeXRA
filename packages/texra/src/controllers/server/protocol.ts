@@ -74,9 +74,38 @@ import type { ValueFamily } from '@texra-ai/harness/host';
 export const BUILD_VERSION: string =
   process.env.TEXRA_BUILD_VERSION || 'unknown';
 
-/** Bumped whenever a procedure or a payload changes shape. A client newer
- *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 42;
+/** The protocol's version and the shapes it versions. `version` is bumped
+ *  whenever a procedure or a payload changes shape: a client newer than the
+ *  running service retires it, an older one stays in process. `shapes` holds
+ *  each procedure's hash of its payload, success and error JSON Schemas at
+ *  that version. `protocolVersion.vitest.ts` fails when one moves, and
+ *  `npm run protocol:bump` advances the version and rewrites the hashes
+ *  together. A hash sees what JSON Schema shows: an opaque `Schema.declare`
+ *  or a `Schema.Json` field moves none. */
+export const PROTOCOL: {
+  readonly version: number;
+  readonly shapes: Readonly<Record<string, string>>;
+} = Object.freeze({
+  version: 42,
+  shapes: Object.freeze({
+    'service.hello': 'b883cf64d52c',
+    'service.stop': '8d19317aa364',
+    'tasks.list': 'f53aa5564aa8',
+    'task.watch': 'ed773bfeb75e',
+    'task.request': '2d02fac452d1',
+    'task.start': '0b4a53ec91d2',
+    'task.resume': '80bcbb1450bf',
+    'task.ended': 'e4309942b0fc',
+    'task.config': 'ee42ee67ab23',
+    'task.exportTrace': 'aff43fe555fd',
+    'task.exportInput': 'fefc9f82f1e2',
+    'host.attach': 'b0875cdcef14',
+    'state.get': '221cc7263384',
+    'state.set': 'e377b902a4e3',
+    'host.focus': 'fd20627c2222',
+    'host.answer': 'cc171cdead15',
+  }),
+});
 
 /** What `service.hello` and `texra service status` report. */
 export const ServiceInfoSchema = Schema.Struct({
