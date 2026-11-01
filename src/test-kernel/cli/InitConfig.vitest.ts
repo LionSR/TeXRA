@@ -3,7 +3,7 @@ import { readFile as nodeReadFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
-import { it } from '@effect/vitest';
+import { it, layer } from '@effect/vitest';
 import { Effect, FileSystem, PlatformError } from 'effect';
 import { describe, expect } from 'vitest';
 
@@ -12,40 +12,39 @@ import { Settings } from '@texra-ai/harness/host';
 import { ensureTexraGitignored } from '@cli/runtime/initConfig';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { errnoError } from '@test/support/fsTestUtils';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { installPlatform } from '@test/support/setupPlatform';
+import { FakeHost } from '@test/support/testKernel';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempDirs = useTempDirs();
 
-describe('setWorkspaceCliChatAgent', () => {
+layer(
+  FakeHost.layer({
+    config: {
+      model: 'deepseek/deepseek-v4-flash',
+      chat: {
+        agent: 'chat',
+        model: 'deepseek/deepseek-v4-flash',
+      },
+    },
+  }),
+)('setWorkspaceCliChatAgent', (it) => {
   it.effect(
     'updates only chat.agent and preserves the other command defaults',
     () =>
       Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installPlatform({
-            config: {
-              model: 'deepseek/deepseek-v4-flash',
-              chat: {
-                agent: 'chat',
-                model: 'deepseek/deepseek-v4-flash',
-              },
-            },
-          }),
-        );
-        const chatSection = () => Settings.get(testWorkspaceRoots(), 'chat');
+        const { roots } = yield* FakeHost;
+        const chatSection = () => Settings.get(roots, 'chat');
 
-        yield* setWorkspaceCliChatAgent(testWorkspaceRoots(), 'builtIn:review');
+        yield* setWorkspaceCliChatAgent(roots, 'builtIn:review');
         expect(yield* chatSection()).toEqual({
           agent: 'builtIn:review',
           model: 'deepseek/deepseek-v4-flash',
         });
-        expect(yield* Settings.get(testWorkspaceRoots(), 'model')).toBe(
+        expect(yield* Settings.get(roots, 'model')).toBe(
           'deepseek/deepseek-v4-flash',
         );
 
-        yield* setWorkspaceCliChatAgent(testWorkspaceRoots(), undefined);
+        yield* setWorkspaceCliChatAgent(roots, undefined);
         expect(yield* chatSection()).toEqual({
           model: 'deepseek/deepseek-v4-flash',
         });

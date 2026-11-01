@@ -50,6 +50,8 @@ const COMPOSITION_ROOT_FILES = new Set([
   // the process runtime the session graph runs on, over the plugin list its
   // setup module passes (`sessionGraphTestSetup`).
   path.join(__dirname, 'src/test-kernel/support/sessionGraphInstall.ts'),
+  // Its layer form: the session graph a block builds with `it.layer`.
+  path.join(__dirname, 'src/test-kernel/support/testKernel.ts'),
 ]);
 
 // The CLI reads process input only through its runtime context and writes to
