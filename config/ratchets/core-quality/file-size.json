@@ -5,7 +5,7 @@
   "packages/harness/src/agent/runtime/loop/step.ts": 479,
   "packages/harness/src/agent/runtime/loop/toolUse.ts": 575,
   "packages/harness/src/agent/runtime/loop/toolUseDispatch.ts": 1100,
-  "packages/harness/src/agent/runtime/ModelInvoker.ts": 817,
+  "packages/harness/src/agent/runtime/ModelInvoker.ts": 800,
   "packages/harness/src/agent/runtime/ModelRetryGate.ts": 438,
   "packages/harness/src/agent/runtime/run/compaction.ts": 445,
   "packages/harness/src/agent/runtime/RunHistory.ts": 409,

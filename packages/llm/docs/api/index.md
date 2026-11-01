@@ -363,6 +363,19 @@ function exposeApiKey(key: Redacted.Redacted<string>): string
 type FileUpload = typeof FileUploadSchema.Type;
 ```
 
+## fillModelError
+
+A `ModelError` completed with what an outer scope knows. A field the error
+already carries is never overwritten: the scope nearest the failure, such
+as the turn assembly that learned the returned model, recorded it first.
+`message` and `cause` live on `Error` as own non-enumerable properties, so
+the spread that carries every other field would drop both; restating them
+keeps a re-thrown error's text and origin.
+
+```ts
+const fillModelError: (error: ModelError, known: Partial<ModelErrorFields>) => ModelError
+```
+
 ## findModelProviderPlugin
 
 Look up a provider plugin by id.
