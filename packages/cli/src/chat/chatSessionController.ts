@@ -22,7 +22,6 @@ import {
 import {
   describeFollowUpFailure,
   hasErrorPresentationClaimed,
-  heldElsewhereBy,
   presentFollowUpResult,
   type PerKeyLane,
   type ProcessRuntime,
@@ -416,12 +415,7 @@ export function createChatSessionController(
     if (!hasErrorPresentationClaimed(error)) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
-    // Another live process holds the run: it refused the claim, or took it
-    // after its owner was proved dead.
-    session.runExitCode =
-      heldElsewhereBy(error) !== null
-        ? CliExitCode.Usage
-        : CliExitCode.AgentError;
+    session.runExitCode = CliExitCode.AgentError;
   };
 
   // One interaction host for the chat session's lifetime, as the extension

@@ -91,7 +91,6 @@ export {
   readStorageInventory,
   type StorageInventory,
 } from '@controllers/session/projectDatabase';
-export { heldElsewhereBy } from '@shared/session/database';
 // Follow-up delivery, error-presentation and prompt-escaping helpers hosts share.
 export {
   describeFollowUpFailure,
