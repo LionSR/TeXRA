@@ -1,12 +1,19 @@
-/** The Codex CLI plugin: the `codex` tool and its threads, and its card. */
+/** The Codex CLI plugin: the `codex` tool and its threads, its
+ *  availability check, its icons and its card. */
+
+// Third-party imports
+import { Effect } from 'effect';
 
 // Local imports
 import { definePlugin } from '@texra-ai/harness/plugins';
 import { CODEX_SETTINGS } from '@texra/shared/settingsView/integrationSettings';
 import { CodexThreads, codexThreadsLayer } from './agentCliSessionStores';
-import { preferredInstallCommand } from './availabilityProbes';
+import {
+  preferredInstallCommand,
+  probeSdkBinaryStatus,
+} from './availabilityProbes';
 import { CodexTool } from './codex';
-import { CODEX_AVAILABILITY } from './pluginAvailability';
+import { findCodexBinaryPath, importCodexClass } from './codexImport';
 import type { TexraPlugin } from './registry';
 
 export const codex: TexraPlugin = {
@@ -15,8 +22,40 @@ export const codex: TexraPlugin = {
     tools: [CodexTool],
     toggle: 'off',
     sessionLayer: codexThreadsLayer,
-    availability: CODEX_AVAILABILITY,
+    // A binary lookup that errors (EACCES, EMFILE) stays on the error
+    // channel, so the dashboard reports the check as failed rather than the
+    // tool as not installed.
+    availability: {
+      check: () =>
+        Effect.map(
+          probeSdkBinaryStatus({
+            importSdk: importCodexClass,
+            findBinary: findCodexBinaryPath,
+            importFailedLabel: 'Codex SDK import failed',
+            classifyImportError: (msg) =>
+              msg.includes('Unsupported platform')
+                ? `Platform not supported: ${msg}`
+                : undefined,
+            binaryNotFoundMessage:
+              'Codex SDK loaded but native binary not found. ' +
+              'Install with: npm install -g @openai/codex',
+          }),
+          (status) => ({
+            available: status.ok,
+            statusDetail: status.ok
+              ? `Codex CLI ready. Binary: ${status.binaryPath}`
+              : status.message,
+          }),
+        ),
+    },
   }),
+  // The tool's own call, and the steps of a Codex turn it reports as calls.
+  icons: {
+    codex: 'robot',
+    codex_patch: 'code-compare',
+    codex_thread: 'comments',
+    codex_turn: 'check-double',
+  },
   card: {
     name: 'OpenAI Codex CLI',
     description:

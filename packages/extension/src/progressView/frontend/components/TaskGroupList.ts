@@ -25,6 +25,7 @@ import {
   type ScriptStageView,
   type TranscriptRow,
 } from '@texra-ai/harness/transcript';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { designTokens } from '@ui/styles';
@@ -175,6 +176,8 @@ export class TaskGroupList extends LitElement {
   @property({ attribute: false }) run: RunView | null = null;
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
+  /** The host's tool icons the tool rows paint with. */
+  @property({ attribute: false }) toolIcons: HostSnapshot['toolIcons'] = {};
 
   /** The run's script stages by id (`scriptStages`). */
   private scripts: ReadonlyMap<string, ScriptStageView> = new Map();
@@ -352,11 +355,16 @@ export class TaskGroupList extends LitElement {
    * Paint one transcript row, guarded against re-render while the row stays
    * the same object and its run's interrupted fact holds. A row is replaced
    * (never patched) whenever its source entry changes, so reference identity
-   * is the freshness test for the row itself.
+   * is the freshness test for the row itself. The tool icons are no part of
+   * the guard: they are the process's plugin list, in the first host
+   * snapshot before any row paints, and every host frame decodes a fresh
+   * copy of the same record.
    */
   private renderLogEntry(row: TranscriptRow) {
     const interrupted = this.run?.group === 'interrupted';
-    return guard([row, interrupted], () => formatLogEntry(row, interrupted));
+    return guard([row, interrupted], () =>
+      formatLogEntry(row, interrupted, this.toolIcons),
+    );
   }
 
   private handleRevealOlderRows(event: Event): void {

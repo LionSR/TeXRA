@@ -21,13 +21,13 @@ import {
   toolDisplayKind,
   normalizeToolName,
 } from '@texra-ai/harness/transcript';
-import type { IconName } from '@ui/wa/iconNames';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import { ICON_NAMES, type IconName } from '@ui/wa/iconNames';
 
 // Local imports - formatter helpers
 import {
   buildToolUseSection,
   wrapInPre,
-  getToolIconName,
   SPINNER_ICON_NAME,
 } from '../htmlBuilders';
 
@@ -44,6 +44,10 @@ import type { FormatResult } from '../baseLogFormatter';
 // Side-effect import - register the <tool-timer> element rendered below
 import '@progressView/frontend/components/ToolTimer';
 
+/** The names the toolkit draws: a plugin names its tools' icons as plain
+ *  strings, since the app's modules do not import the toolkit. */
+const DRAWN_ICONS: ReadonlySet<string> = new Set(ICON_NAMES);
+
 /** Header width for this surface; the model carries the preview untruncated. */
 const HEADER_PREVIEW_MAX_CHARS = 120;
 
@@ -54,7 +58,8 @@ const HEADER_PREVIEW_MAX_CHARS = 120;
  */
 export function formatToolUseTemplate(
   row: ToolRow,
-  interrupted = false,
+  interrupted: boolean,
+  toolIcons: HostSnapshot['toolIcons'],
 ): FormatResult {
   const { toolUse, model } = row;
   const running = model.isInProgress && !interrupted;
@@ -69,10 +74,15 @@ export function formatToolUseTemplate(
     iconName = 'comment';
   } else if (running) {
     iconName = SPINNER_ICON_NAME;
-  } else if (stopped) {
+  } else if (stopped || showAsError) {
     iconName = 'circle-exclamation';
   } else {
-    iconName = getToolIconName(normalizedToolName, showAsError);
+    const icon = toolIcons[normalizedToolName];
+    // cast: `DRAWN_ICONS` holds exactly the `IconName`s.
+    iconName =
+      icon !== undefined && DRAWN_ICONS.has(icon)
+        ? (icon as IconName)
+        : 'wrench';
   }
 
   const headerPreview = truncateWithEllipsis(

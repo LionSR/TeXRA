@@ -93,6 +93,9 @@ export const HostSnapshotSchema = Schema.Struct({
   agentOptions: Schema.Array(DocumentAgentOptionSchema),
   modelOptions: Schema.Array(ModelOptionDataSchema),
   teamOptions: Schema.Array(TeamOptionDataSchema),
+  /** The icon a tool call is painted with, by normalized tool name: the
+   *  icons the process's plugins carry (`TexraPlugin.icons`). */
+  toolIcons: Schema.Record(Schema.String, Schema.String),
   workspaceRoots: Schema.Array(WorkspaceRootOptionDataSchema),
   /** The project's configured policy, shown before a task is launched. */
   approvalPolicy: ApprovalPolicySchema,
@@ -125,6 +128,7 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     agentOptions: [],
     modelOptions: [],
     teamOptions: [],
+    toolIcons: {},
     workspaceRoots: [],
     approvalPolicy: APPROVAL_POLICY_DEFAULT,
     fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },
