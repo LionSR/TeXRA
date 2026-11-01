@@ -155,12 +155,11 @@ const credentialRenewal = <R>(
     failure: AttemptFailure,
     bound: BoundModel,
   ): Effect.Effect<AttemptFailure | true, never, R> => {
-    const route = bound.route.kind;
     if (
       spent ||
       !(failure.error instanceof ModelError) ||
       failure.error.status !== StatusCodes.UNAUTHORIZED ||
-      (route !== 'chatgpt-subscription' && route !== 'xai-subscription')
+      bound.subscriptionToken === undefined
     )
       return Effect.succeed(failure);
     spent = true;

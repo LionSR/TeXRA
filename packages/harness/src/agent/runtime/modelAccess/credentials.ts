@@ -8,10 +8,11 @@ import { Effect } from 'effect';
 
 import {
   type ApiKeyProviderId,
+  type CredentialRoute,
   exposeApiKey,
   lookupApiKey,
   type ModelConfig,
-  type ModelRoute,
+  PLAN_ROUTES,
   resolveRouteEndpoint,
   type RouteFacts,
 } from '@texra-ai/llm';
@@ -28,11 +29,8 @@ import type { SettingsStores } from '@shared/config/settings';
 import { SUBSCRIPTION_AUTH_NAMES } from '@shared/model/subscriptionAuth';
 import type { HttpClient } from 'effect/http';
 
-/** The routes that bill a credential. */
-type CredentialRoute = Extract<
-  ModelRoute,
-  { kind: 'api-key' | 'chatgpt-subscription' | 'xai-subscription' }
->;
+/** A route that bills a signed-in subscription session. */
+type SessionRoute = Exclude<CredentialRoute['kind'], 'api-key'>;
 
 /** The credential and endpoint of one route, resolved together. */
 export type RouteCredential = {
@@ -55,7 +53,7 @@ export type RouteCredential = {
  * or turn off the preference", not a raw auth error.
  */
 function subscriptionUnavailable(
-  route: 'chatgpt-subscription' | 'xai-subscription',
+  route: SessionRoute,
   error: Error,
 ): RouteUnavailable {
   const copy =
@@ -104,7 +102,7 @@ const routeEndpoint = (
  * is refreshed first, while stored.
  */
 const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
-  route: 'chatgpt-subscription' | 'xai-subscription',
+  route: SessionRoute,
   endpoint: string,
   rejected: string | undefined,
 ): Effect.fn.Return<
@@ -113,11 +111,12 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
   HttpClient.HttpClient | Secrets
 > {
   const secrets = yield* Secrets;
+  const { provider } = PLAN_ROUTES[route];
   const session: Effect.Effect<RouteCredential, Error, HttpClient.HttpClient> =
     route === 'chatgpt-subscription'
       ? Effect.map(codexCoordinator(secrets).getFreshSession(), (fresh) => ({
           route,
-          provider: 'openai',
+          provider,
           bearer: fresh.accessToken,
           accountId: fresh.accountId ?? null,
           plan: fresh.planType,
@@ -125,7 +124,7 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
         }))
       : Effect.map(xaiCoordinator(secrets).getFreshSession(), (fresh) => ({
           route,
-          provider: 'xai',
+          provider,
           bearer: fresh.accessToken,
           endpoint,
         }));

@@ -3,13 +3,14 @@
  * model switch's admission, the helper model and the picker's route facts
  * take a {@link ModelSettings}; nothing beneath them reads a store.
  */
-import { Effect } from 'effect';
+import { Effect, Struct } from 'effect';
 
 import {
   type EndpointProviderId,
   findModelProviderPlugin,
   hasUsableApiKey,
   MODEL_PROVIDER_PLUGINS,
+  type PlanRoute,
   type ReasoningEffort,
   type RegionalProviderId,
   type RouteFacts,
@@ -68,10 +69,9 @@ type _RegionRowsCoverTheCatalog = AssertNever<
 /** The model-access settings, as one read found them. */
 export interface ModelSettings {
   /** The host half of the route facts, before a run declines any route. */
-  readonly route: RouteFacts & {
-    /** A dashboard GLM endpoint, which outranks the Coding Plan's path. */
-    readonly glmEndpoint: boolean;
-  };
+  readonly route: RouteFacts;
+  /** A Kimi Code console key is stored. */
+  readonly kimiCodeKey: boolean;
   /** The user's saved reasoning effort per model reference. */
   readonly reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
   /** Send the unpinned `shortName` in place of the date-pinned id. */
@@ -214,18 +214,18 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
   const flag = (key: string) => Settings.get<boolean>(stores, key);
   // One read decides both the route and how an unreadable key fails.
   const preferKimiCode = yield* flag(GlobalStateKey.KIMI_CODE_PREFER);
-  const [route, rest, wire] = yield* Effect.all(
+  const [
+    { chatgpt, xai, glm, glmEndpoint, kimiCodeKey, ...route },
+    rest,
+    wire,
+  ] = yield* Effect.all(
     [
       Effect.all(
         {
-          preferKimiCode: Effect.succeed(preferKimiCode),
-          glmCodingPlan: flag(GlobalStateKey.GLM_CODING_PLAN),
-          glmEndpoint: Effect.map(
-            Settings.get<string>(stores, 'endpoint.glm'),
-            Boolean,
-          ),
-          chatgptSubscription: subscriptionOn(stores, 'chatgpt'),
-          xaiSubscription: subscriptionOn(stores, 'grok'),
+          chatgpt: subscriptionOn(stores, 'chatgpt'),
+          xai: subscriptionOn(stores, 'grok'),
+          glm: flag(GlobalStateKey.GLM_CODING_PLAN),
+          glmEndpoint: Settings.get<string>(stores, 'endpoint.glm'),
           // Under the Kimi Code preference the key picks the billing route,
           // so an unreadable one fails the read rather than routing to the
           // pay-per-token key. Otherwise it reads as absent and warns, the
@@ -282,29 +282,32 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
     ],
     { concurrency: 'unbounded' },
   );
-  return { route, wire, ...rest };
+  const on = {
+    'chatgpt-subscription': chatgpt,
+    'xai-subscription': xai,
+    'kimi-code-subscription': preferKimiCode && kimiCodeKey,
+    // A dashboard GLM endpoint outranks the Coding Plan's path.
+    'glm-coding-plan-subscription': glm && !glmEndpoint,
+  } satisfies Record<PlanRoute, boolean>;
+  return {
+    route: { ...route, plans: Struct.keys(on).filter((plan) => on[plan]) },
+    kimiCodeKey,
+    wire,
+    ...rest,
+  };
 });
 
 /**
  * The host route facts under the routes a run declined (a retry the user
- * answered with their own key): a declined subscription reads as off for
- * that run without touching the user's preference.
+ * answered with their own key): a declined plan reads as off for that run
+ * without touching the user's preference.
  */
 export function routeFactsFor(
   settings: Pick<ModelSettings, 'route'>,
   declined: readonly DeclinableUsageRoute[],
 ): RouteFacts {
-  const allowed = (route: DeclinableUsageRoute) => !declined.includes(route);
-  const { glmEndpoint, ...route } = settings.route;
   return {
-    ...route,
-    chatgptSubscription:
-      route.chatgptSubscription && allowed('chatgpt-subscription'),
-    xaiSubscription: route.xaiSubscription && allowed('xai-subscription'),
-    preferKimiCode: route.preferKimiCode && allowed('kimi-code-subscription'),
-    glmCodingPlan:
-      route.glmCodingPlan &&
-      !glmEndpoint &&
-      allowed('glm-coding-plan-subscription'),
+    ...settings.route,
+    plans: settings.route.plans.filter((plan) => !declined.includes(plan)),
   };
 }

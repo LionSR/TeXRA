@@ -28,7 +28,7 @@ import { toErrorMessage } from './oauth/support.js';
 import { originOf, type ModelOrigin } from './protocol.js';
 import type { ModelConfig } from 'llm-zoo';
 
-import type { ModelRoute } from './models/modelRoute.js';
+import type { CredentialRoute } from './models/modelRoute.js';
 import type { ReasoningChoice } from './models/reasoningChoice.js';
 import type { Model, ModelConfiguration } from './turn.js';
 
@@ -54,10 +54,7 @@ export type ModelCredential =
 export interface BindSpec {
   /** The llm-zoo entry, before its route's overrides. */
   readonly model: ModelConfig;
-  readonly route: Extract<
-    ModelRoute,
-    { kind: 'api-key' | 'chatgpt-subscription' | 'xai-subscription' }
-  >;
+  readonly route: CredentialRoute;
   readonly endpoint: string;
   readonly credential: ModelCredential;
   /** Each option has a default; the booleans default to `false`. */

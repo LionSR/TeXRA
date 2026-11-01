@@ -10,5 +10,5 @@ liveProtocol({
   continuation: 'supported',
   model: 'glm/glm-5.3@low',
   endpoint: 'https://open.bigmodel.cn/api/v1',
-  route: { glmCodingPlan: true },
+  route: { plans: ['glm-coding-plan-subscription'] },
 });

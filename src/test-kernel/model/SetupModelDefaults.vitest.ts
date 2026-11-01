@@ -46,7 +46,7 @@ describe('SETUP_MODEL_BY_PROVIDER', () => {
     assert.equal(
       decideModelRoute(chatgptSetup, {
         ...OWN_KEY_ROUTE_FACTS,
-        chatgptSubscription: true,
+        plans: ['chatgpt-subscription'],
       }).kind,
       'chatgpt-subscription',
     );
