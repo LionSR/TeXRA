@@ -28,7 +28,9 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
 ) {
   // A configuration that does not decode fails the command with the
   // launch's rejection, so its caller hears it instead of a finished launch
-  // that never started.
+  // that never started. A malformed wrapper (a non-boolean
+  // `preferHelperModel`) is a bad command argument, not a launch: it fails
+  // with its own schema error.
   const wrapped =
     input !== null && typeof input === 'object' && 'config' in input
       ? yield* Schema.decodeUnknownEffect(WrappedExecuteInputSchema)(input)
