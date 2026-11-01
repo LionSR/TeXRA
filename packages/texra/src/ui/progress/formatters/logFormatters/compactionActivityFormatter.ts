@@ -1,4 +1,4 @@
-import '@progressView/frontend/components/CompactionActivity';
+import '@ui/progress/components/CompactionActivity';
 
 import { html } from 'lit';
 

@@ -42,7 +42,7 @@ import {
   type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { TickerController } from '@texra/shared/litControllers/TickerController';
+import { TickerController } from '@ui/litControllers/TickerController';
 import type { IconName } from '@ui/wa/iconNames';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';

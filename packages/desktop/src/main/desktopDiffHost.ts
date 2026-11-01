@@ -15,7 +15,7 @@ import {
   type DiffSource,
   type DiffViewHost,
 } from '@texra/hosts/uiHosts';
-import { monacoLanguageForPath } from '@texra/shared/monaco/monacoLanguage';
+import { monacoLanguageForPath } from '@ui/monaco/monacoLanguage';
 
 import {
   DESKTOP_DIFF_COMMANDS,

@@ -2,7 +2,7 @@
 
 Use this checklist after touching shared frontend code (`packages/harness/src/shared/`,
 `packages/extension/src/common/webview/`,
-`packages/extension/src/{progressView,settingsView}/frontend/`,
+`packages/texra/src/ui/`, `packages/extension/src/settingsView/frontend/`,
 `packages/desktop/src/renderer/`) to confirm each major surface still mounts
 in both hosts.
 

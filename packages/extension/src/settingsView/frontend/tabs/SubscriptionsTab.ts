@@ -18,7 +18,7 @@ import type { SubscriptionAuthStatuses } from '@texra/shared/model/subscriptionA
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
-import { TickerController } from '@texra/shared/litControllers/TickerController';
+import { TickerController } from '@ui/litControllers/TickerController';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';

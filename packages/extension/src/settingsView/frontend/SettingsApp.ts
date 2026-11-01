@@ -10,7 +10,6 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { isUnrecognizedCommand } from '@texra/shared/utils/dispatcher';
-import { installToolbarTooltips } from '@texra/shared/litControllers/TooltipController';
 
 // Local imports - shared styles
 
@@ -20,6 +19,7 @@ import type {
   SettingsSectionName,
   SettingsTabPanelName,
 } from '@texra/shared/settingsView/settingsTarget';
+import { installToolbarTooltips } from '@ui/litControllers/TooltipController';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';

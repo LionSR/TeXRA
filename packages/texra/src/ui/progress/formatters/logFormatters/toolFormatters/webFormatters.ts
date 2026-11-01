@@ -2,7 +2,7 @@
 
 import { html } from 'lit';
 
-import type { FormatResult } from '@progressView/frontend/formatters/baseLogFormatter';
+import type { FormatResult } from '@ui/progress/formatters/baseLogFormatter';
 import { buildToolUseDetails } from './helpers';
 import type { WebSearchRow } from '@texra-ai/harness/transcript';
 

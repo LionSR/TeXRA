@@ -13,7 +13,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import { acceptsFollowUp, resolveBypass } from '@texra-ai/harness/schemas';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
+import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import type { IconName } from '@ui/wa/iconNames';
 import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
@@ -23,7 +23,7 @@ import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { afterDropdownHides, selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import '@progressView/frontend/components/ToolTimer';
+import '@ui/progress/components/ToolTimer';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';

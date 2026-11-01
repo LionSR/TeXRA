@@ -30,7 +30,7 @@ import type {
   ToolDashboardItem,
   ToolInstallAction,
 } from '@texra/shared/settingsView/settingsViewMessages';
-import { DetailsOpenController } from '@texra/shared/litControllers/DetailsOpenController';
+import { DetailsOpenController } from '@ui/litControllers/DetailsOpenController';
 import {
   PLUGINS_PAGE,
   pluginRowName,

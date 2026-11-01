@@ -15,7 +15,7 @@
       ]
     },
     "packages/extension": {
-      "entry": ["src/**/frontend/index.ts!"],
+      "entry": ["src/settingsView/frontend/index.ts!"],
       "project": ["src/**/*.{ts,tsx,mts}!"]
     },
     "packages/harness": {
@@ -33,7 +33,7 @@
       "ignoreDependencies": ["@typescript/native"]
     },
     "packages/texra": {
-      "entry": ["src/shared/commands/catalog.ts!"],
+      "entry": ["src/shared/commands/catalog.ts!", "src/ui/progress/index.ts!"],
       "project": ["src/**/*.{ts,tsx,mts}!"]
     },
     "packages/llm": {

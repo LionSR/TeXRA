@@ -93,7 +93,6 @@ const VSCODE_FREE_ZONE_DIRS = [
   'packages/texra/src',
   'packages/llm/src',
   'packages/desktop/src',
-  'packages/extension/src/progressView/frontend',
   'packages/extension/src/settingsView/frontend',
 ].map((dir) => path.join(__dirname, dir));
 // A zone that names a missing directory would hold nothing: fail loudly, so
@@ -115,6 +114,24 @@ const BROWSER_HARNESS_ENTRY_PATTERN = {
     'A browser bundle takes nothing from this harness entry, types included: use @texra-ai/harness/schemas or @texra-ai/harness/transcript.',
 };
 
+// The browser bundles (the settings webview frontend and the UI toolkit) may
+// use host-neutral types from backend modules, but runtime values must come
+// from browser-safe shared modules.
+const BROWSER_RUNTIME_IMPORT_PATTERNS = [
+  {
+    group: ['@common', '@common/**', '@tools', '@tools/**'],
+    allowTypeImports: true,
+    message:
+      'A browser bundle must import runtime values from browser-safe shared modules.',
+  },
+  {
+    group: ['@utils', '@utils/**'],
+    allowTypeImports: true,
+    message:
+      'A browser bundle reaches harness helpers through @texra-ai/harness/schemas or @texra-ai/harness/transcript, whose closures the browser build proves.',
+  },
+];
+
 // The SDK's entry files: the package's public surface and its Effect
 // boundary, as opposed to the harness modules under it.
 const HARNESS_ENTRY_FILES = [
@@ -129,7 +146,7 @@ const HARNESS_ENTRY_FILES = [
 // The named runtime entries that may call `Effect.run*` outside a host
 // package (the no-restricted-syntax block below).
 const EFFECT_RUN_ENTRIES = [
-  'packages/extension/src/progressView/frontend/sessionTransport.ts',
+  'packages/texra/src/ui/progress/sessionTransport.ts',
   'packages/texra/src/shared/signals.ts',
   'packages/harness/src/platform/processRuntime.ts',
   // Worker entry: no process runtime exists in the worker.
@@ -922,30 +939,16 @@ export default tseslint.config(
     },
   },
 
-  // Extension browser frontends may use host-neutral types from backend
-  // modules, but runtime values must come from browser-safe shared modules.
+  // The settings webview frontend, a browser bundle outside the UI kit.
   {
-    files: [
-      'packages/extension/src/{progressView,settingsView}/frontend/**/*.{ts,tsx,mts}',
-    ],
+    files: ['packages/extension/src/settingsView/frontend/**/*.{ts,tsx,mts}'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
           patterns: [
-            {
-              group: ['@common', '@common/**', '@tools', '@tools/**'],
-              allowTypeImports: true,
-              message:
-                'Extension browser frontends must import runtime values from browser-safe shared modules.',
-            },
+            ...BROWSER_RUNTIME_IMPORT_PATTERNS,
             BROWSER_HARNESS_ENTRY_PATTERN,
-            {
-              group: ['@utils', '@utils/**'],
-              allowTypeImports: true,
-              message:
-                'A browser bundle reaches harness helpers through @texra-ai/harness/schemas or @texra-ai/harness/transcript, whose closures the browser build proves.',
-            },
           ],
         },
       ],
@@ -972,6 +975,7 @@ export default tseslint.config(
           paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: [
             ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
+            ...BROWSER_RUNTIME_IMPORT_PATTERNS,
             BROWSER_HARNESS_ENTRY_PATTERN,
           ],
         },
@@ -1133,7 +1137,6 @@ export default tseslint.config(
           'packages/texra/src/**/*.{ts,tsx,mts}',
           'packages/llm/src/**/*.{ts,tsx,mts}',
           'packages/trace-viewer/src/**/*.{ts,tsx,mts}',
-          'packages/extension/src/progressView/frontend/**/*.{ts,tsx,mts}',
           'packages/extension/src/settingsView/frontend/**/*.{ts,tsx,mts}',
         ],
         [

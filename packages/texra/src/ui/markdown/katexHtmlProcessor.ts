@@ -13,7 +13,7 @@
 import katex from 'katex';
 import texmath from 'markdown-it-texmath';
 
-import { highlightCode } from '@texra/shared/highlighting/highlightCode';
+import { highlightCode } from '@ui/highlighting/highlightCode';
 
 import {
   createMarkdownProcessor,

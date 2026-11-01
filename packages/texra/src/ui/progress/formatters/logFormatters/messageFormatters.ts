@@ -14,7 +14,7 @@
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Side-effect import to register the <user-message> custom element
-import '@progressView/frontend/components/UserMessage';
+import '@ui/progress/components/UserMessage';
 
 // Third-party imports - Lit template utilities
 import { html, type TemplateResult } from 'lit';

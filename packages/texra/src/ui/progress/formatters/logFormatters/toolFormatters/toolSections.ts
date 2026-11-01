@@ -26,8 +26,8 @@ import {
   buildExecutionsPathDisplay,
   buildStatusBadge,
   triStateStatusIcon,
-} from '@progressView/frontend/formatters/htmlBuilders';
-import { getLanguageFromPath } from '@progressView/frontend/formatters/constants';
+} from '@ui/progress/formatters/htmlBuilders';
+import { getLanguageFromPath } from '@ui/progress/formatters/constants';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { buildToolSection } from './helpers';
