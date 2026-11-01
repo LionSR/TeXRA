@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { RunCall, requireRun, sessionOf } from '@agent/runtime/RunCall';
+import { requireToolRun } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   type RefusalDecision,
@@ -80,13 +80,11 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
   function* (
     request: ToolEditProposal,
   ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolContext> {
-    const call = yield* requireRun('A tool-edit approval');
-    const { run, requests } = call;
-    const session = sessionOf(run);
-    const { runId } = run;
+    const call = yield* requireToolRun('A tool-edit approval');
+    const { run, requests, hook } = call;
+    const { runId, session } = run;
     const acceptProposedAsIs = (): Effect.Effect<ToolEditApprovalResult> =>
       finalizeApprovalResult(request.proposedContent, request);
-    const hook = (yield* RunCall)?.hook;
     const answer = session.approvals.permission(runId, 'toolEdit', hook);
     if (answer === 'allow') return yield* acceptProposedAsIs();
     if (answer !== 'ask') return answer;

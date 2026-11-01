@@ -4,6 +4,7 @@ import { Effect, Layer, Schema, Scope, SynchronizedRef } from 'effect';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
   ToolContext,
+  type ITool,
   type ToolContextShape,
   type ToolEnv,
 } from '@agent/core/tools/ToolTypes';
@@ -13,7 +14,7 @@ import type { OpenStep } from '@agent/runtime/loop/step';
 import {
   ChildRuns,
   childRuns,
-  type RuntimeTool,
+  type PluginToolServices,
 } from '@agent/runtime/ToolServices';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { sessionFsLayer } from '@platform/rootedFs';
@@ -51,7 +52,7 @@ export const noStep = () => SynchronizedRef.makeUnsafe<OpenStep | null>(null);
  *  exactly `tools`, as the run's own tools over an empty catalog. */
 export const testRunTools = (
   stores: SettingsStores,
-  tools: Readonly<Record<string, RuntimeTool>> = {},
+  tools: Readonly<Record<string, ITool<Error, PluginToolServices>>> = {},
 ): Pick<AgentRunShape, 'toolInputs' | 'steps'> => ({
   toolInputs: {
     tools: [],
@@ -99,7 +100,8 @@ export function nativeToolTestLayer(
     callbacks: {},
     ...run,
   };
-  // One layer value, so the child door and the plugin services share it.
+  // One layer value, which the plugin services are built over; the child
+  // door reads the same runs off the call (`RunCallShape.runs`).
   const runs = Layer.sync(Runs, () => run?.session.runs ?? testRunRegistry());
   // A test call is no script's and issues none; under a run it launches
   // children through the door over its own place in the run, and outside
@@ -109,6 +111,7 @@ export function nativeToolTestLayer(
       ? null
       : {
           run: toolRun,
+          runs: toolRun.session.runs,
           responseId: 'test-response',
           instruction: undefined,
           attempt: 1,
@@ -126,10 +129,7 @@ export function nativeToolTestLayer(
   const childDoor =
     runCall === null
       ? Layer.effectDiscard(Effect.void)
-      : Layer.effect(
-          ChildRuns,
-          Effect.map(Runs, (registry) => childRuns(runCall, registry)),
-        ).pipe(Layer.provide(runs));
+      : Layer.succeed(ChildRuns)(childRuns(runCall));
   return Layer.mergeAll(
     Layer.effectContext(testRuntime().contextEffect),
     // The call's rooted filesystems, from the same roots it is given.

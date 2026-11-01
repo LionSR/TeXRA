@@ -140,7 +140,6 @@ export {
 export { callerRun, requireRun } from '@agent/runtime/RunCall';
 export {
   ChildRuns,
-  type CallServices,
   type ChildRunsShape,
   type PluginToolServices,
 } from '@agent/runtime/ToolServices';

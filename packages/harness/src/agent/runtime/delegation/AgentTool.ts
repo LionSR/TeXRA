@@ -20,15 +20,15 @@ import { Cause, Effect, Exit, Result, Schema, SynchronizedRef } from 'effect';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { ToolContext } from '@agent/core/tools/ToolTypes';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { scriptChildBudget } from '@agent/runtime/childRunBudget';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { RunCall, requireToolRun } from '@agent/runtime/RunCall';
-import type { AgentRunServices } from '@agent/runtime/runRegistry';
+import { Runs } from '@agent/runtime/runRegistry';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   AGENT_SOURCE,
   AgentProposalSchema,
@@ -147,7 +147,6 @@ export const CALL_FIELDS = {
 };
 const AgentInputSchema = Schema.Struct({ ...LAUNCH_FIELDS, ...CALL_FIELDS });
 type AgentInput = typeof AgentInputSchema.Type;
-type AgentToolServices = AgentRunServices | ToolContext;
 
 /**
  * One child launch as the shared core runs it: the agent and its prompt,
@@ -295,11 +294,12 @@ export const launchChildAgent = Effect.fn('AgentTool.call')(function* (
   launch: ChildLaunch,
 ) {
   const call = yield* requireToolRun(launch.tool);
-  const { script } = call;
-  if (script === null || launch.background === true)
-    return yield* agentCall(call, launch);
+  const { script, runs } = call;
+  // The child launches under the session's runs the engine door holds.
+  const child = agentCall(call, launch).pipe(Effect.provideService(Runs, runs));
+  if (script === null || launch.background === true) return yield* child;
   const budget = yield* scriptChildBudget(call.env.roots, script);
-  return yield* budget.withPermits(1)(agentCall(call, launch));
+  return yield* budget.withPermits(1)(child);
 });
 
 /** A child's run failed the call: timed out, or ended without an answer. */
@@ -544,7 +544,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
 });
 
 /** The `agent` tool. */
-export const agentTool = (): DefinedTool<AgentInput, AgentToolServices> =>
+export const agentTool = (): DefinedTool<AgentInput, PluginToolServices> =>
   defineTool({
     name: 'agent',
     requiresApproval: 'inBody',

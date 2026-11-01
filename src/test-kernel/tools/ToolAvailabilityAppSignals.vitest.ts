@@ -25,13 +25,12 @@ import {
   ToolAvailability,
   ToolCatalog,
 } from '@texra-ai/harness/host';
-import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { toolTable } from '@tools/toolTable';
-import type { Plugin } from '@texra-ai/harness';
+import type { ITool, Plugin } from '@texra-ai/harness';
 
 /** The mocked tool defs read no secrets, so any call here is a test error. */
 const unreadSecret = (): never => {
@@ -77,7 +76,7 @@ const probeServices = Layer.mergeAll(
 /** Tools under `names`, which the availability service only lists. */
 const named = (
   ...names: string[]
-): readonly RuntimeTool<Error, PluginToolServices>[] =>
+): readonly ITool<Error, PluginToolServices>[] =>
   names.map((name) => ({
     definition: { name, description: name, parameters: {} },
     call: vi.fn(),

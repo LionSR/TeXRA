@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { requireRun, sessionOf } from '@agent/runtime/RunCall';
+import { requireToolRun } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   type DecisionOf,
@@ -35,9 +35,8 @@ export interface BashApprovalRequest {
 export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   request: BashApprovalRequest,
 ): Effect.fn.Return<DecisionOf<'bash'>, Error, ToolContext> {
-  const { run, requests } = yield* requireRun('A bash approval');
-  const { runId } = run;
-  const session = sessionOf(run);
+  const { run, requests } = yield* requireToolRun('A bash approval');
+  const { runId, session } = run;
   const granted = () =>
     request.grant !== null &&
     session.approvals.bypass(

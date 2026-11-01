@@ -53,11 +53,9 @@ import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
-import type {
-  RuntimeTool as ITool,
-  RuntimeToolRegistry,
-  ToolServices,
-} from '@agent/runtime/ToolServices';
+import type { ResolvedTools } from '@agent/runtime/agentToolResolution';
+import type { Runs } from '@agent/runtime/runRegistry';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
 import { freshRunState, type RunState } from '@shared/session/runState';
@@ -75,7 +73,7 @@ import { ExecutionsTool } from '@tools/ExecutionsTool';
 
 import { recordSessionEvents } from './progressTestUtils';
 import type { BoundModel } from '@texra-ai/harness/plugins';
-import type { ToolResult } from '@texra-ai/harness';
+import type { ITool, ToolResult } from '@texra-ai/harness';
 
 const GPT54 = 'openai/gpt-5.4-2026-03-05';
 
@@ -111,8 +109,8 @@ function probeTool(
   probe: DispatchProbe,
   name: string,
   wait: number | Effect.Effect<void>,
-  options: { endTurn?: boolean; lane?: ITool['lane'] } = {},
-): ITool {
+  options: { endTurn?: boolean; lane?: StepTool['lane'] } = {},
+): StepTool {
   return {
     definition: { name, description: name, parameters: {} },
     lane: options.lane,
@@ -130,7 +128,7 @@ function probeTool(
         endTurn: options.endTurn,
       };
     }),
-  } as ITool;
+  } as StepTool;
 }
 
 interface Call {
@@ -233,14 +231,17 @@ interface DispatchKit {
    *  it then committed, as the invoker's does. */
   readonly cell: RunCell;
   /** The tools the dispatch's step offers. */
-  readonly tools: RuntimeToolRegistry;
+  readonly tools: ResolvedTools['registry'];
   readonly layer: Layer.Layer<
-    AgentRun | RunHistory | Exclude<ToolServices, Scope.Scope>
+    AgentRun | RunHistory | Runs | Exclude<PluginToolServices, Scope.Scope>
   >;
 }
 
+/** A tool as the step's registry holds it. */
+type StepTool = ITool<Error, PluginToolServices>;
+
 interface HarnessOptions {
-  readonly tools: Record<string, ITool>;
+  readonly tools: Record<string, StepTool>;
   readonly calls: readonly Call[];
 }
 
@@ -337,7 +338,7 @@ describe('tool-use dispatch', () => {
       const kit = yield* openDispatch({
         tools: {
           // cast: the built-ins' services are the dispatch's.
-          script: ScriptTool as unknown as ITool,
+          script: ScriptTool as unknown as StepTool,
           executions: ExecutionsTool,
         },
         calls: [
@@ -440,7 +441,7 @@ return { columns: page.columns, count: page.rows.length,
         const kit = yield* openDispatch({
           tools: {
             // cast: the built-in's services are the dispatch's.
-            script: ScriptTool as unknown as ITool,
+            script: ScriptTool as unknown as StepTool,
             slow: probeTool(
               probe,
               'slow',
@@ -521,7 +522,7 @@ return { columns: page.columns, count: page.rows.length,
   it.live('commits the card and the workspace with the tool result', () =>
     Effect.gen(function* () {
       const probe = newProbe();
-      const editingTool: ITool = {
+      const editingTool: StepTool = {
         definition: { name: 'edit_file', description: 'edit_file' },
         call: () =>
           Effect.sync((): ToolResult => {

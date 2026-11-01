@@ -6,13 +6,13 @@ import { Glob } from 'glob';
 
 import { describe, expect, vi } from 'vitest';
 import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
-import type { ToolServices } from '@agent/runtime/ToolServices';
 
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { GlobTool } from '@tools/glob';
+import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
 /**
  * A glob run in which one match's `stat` fails: the tool's own failure policy
@@ -43,7 +43,9 @@ const globWithFailedStat = (
   });
 
 function withGlobWorkspace(
-  run: (workspacePath: string) => Effect.Effect<void, unknown, ToolServices>,
+  run: (
+    workspacePath: string,
+  ) => Effect.Effect<void, unknown, PluginToolServices>,
 ) {
   return withTempDirEffect('texra-glob-tool-', (workspacePath) =>
     Effect.gen(function* () {

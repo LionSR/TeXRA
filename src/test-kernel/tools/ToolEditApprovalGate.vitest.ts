@@ -17,9 +17,11 @@ import {
   type RequestDecision,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import { requestToolEditApproval } from '@texra-ai/harness/plugins';
+import {
+  requestToolEditApproval,
+  type PluginToolServices,
+} from '@texra-ai/harness/plugins';
 import { WorkspaceFs } from '@texra-ai/harness/host';
-import type { ToolServices } from '@agent/runtime/ToolServices';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import {
   setTestApprovalPolicy,
@@ -139,7 +141,7 @@ function stubWorkspaceFile(
 }
 
 /** Supply the exact per-call capabilities a dispatched tool receives. */
-function inRun<A, E>(effect: Effect.Effect<A, E, ToolServices>) {
+function inRun<A, E>(effect: Effect.Effect<A, E, PluginToolServices>) {
   return withStubbedEditFiles(effect).pipe(
     Effect.provide(
       nativeToolTestLayer({
