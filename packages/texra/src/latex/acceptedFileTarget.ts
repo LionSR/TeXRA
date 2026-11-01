@@ -174,6 +174,7 @@ export function commitAcceptedFile<E>(
           }),
         ),
       ),
+      Effect.uninterruptible,
     );
     if (targetLocation.kind === 'workspace') {
       yield* emitAppSignal('workspaceFilesWritten', {

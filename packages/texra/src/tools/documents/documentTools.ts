@@ -336,7 +336,7 @@ export const DocumentExtractTool = defineTool({
     return {
       ...executed(
         (files.length > 0
-          ? `Revision ${revision + 1} wrote: ${files.join(', ')}`
+          ? `Revision ${revision + 1} wrote: ${files.join(', ')}.`
           : `Revision ${revision + 1} wrote no documents.`) +
           (missing.length > 0 ? ` Missing: ${missing.join(', ')}.` : '') +
           (truncated === undefined ? '' : ` ${truncated}`),
