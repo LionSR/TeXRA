@@ -286,7 +286,11 @@ function dropsError(node) {
   const call = node.parent;
   if (!ts.isCallExpression(call) || call.expression !== node) return false;
   const handler = call.arguments.at(-1);
-  if (handler == null || !ts.isArrowFunction(handler)) return false;
+  if (
+    handler == null ||
+    !(ts.isArrowFunction(handler) || ts.isFunctionExpression(handler))
+  )
+    return false;
   let body = handler.body;
   if (ts.isBlock(body)) {
     const [only, ...rest] = body.statements;
@@ -296,6 +300,7 @@ function dropsError(node) {
     if (only.expression == null) return false;
     body = only.expression;
   }
+  while (ts.isParenthesizedExpression(body)) body = body.expression;
   const readsError = handler.parameters.some(
     ({ name }) => !ts.isIdentifier(name) || mentions(handler.body, name.text),
   );
