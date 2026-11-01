@@ -93,7 +93,7 @@ export const sessionInputsLayer = Layer.effect(
             const listing = (yield* requiredRead(log.readListing())).filter(
               isDisplaySessionEvent,
             );
-            let checked = new Set<AggregateId>(
+            const checked = new Set<AggregateId>(
               effectiveAggregates.map(({ id }) => id),
             );
             for (const event of listing)
@@ -130,9 +130,6 @@ export const sessionInputsLayer = Layer.effect(
             );
             yield* markDamaged(local.ref, replayState.damaged);
             const replayExistence = reconcileExistence(replayState);
-            checked = new Set(
-              replayExistence.claims.map(({ aggregateId }) => aggregateId),
-            );
             const initialLocal = yield* SubscriptionRef.get(local.ref);
             replay.push(
               { _tag: 'local', local: initialLocal },
@@ -149,24 +146,24 @@ export const sessionInputsLayer = Layer.effect(
               { concurrency: 3 },
             );
             /** The durable half of a drain: the rows committed past
-             *  `from`, and the existence of the aggregates still checked. */
-            const readDurable = (from: number) =>
+             *  `from`, and the existence of the aggregates that changed
+             *  after `change` (the replay read every other one). */
+            const readDurable = (from: number, change: number) =>
               requiredRead(
                 log.readInputBatch(
                   aggregates.map(({ id }) => id),
                   from,
-                  // The read dedups the ids it checks.
-                  [...checked, ...effectiveAggregates.map(({ id }) => id)],
+                  [],
+                  change,
                 ),
               ).pipe(
                 Effect.tap((read) => markDamaged(local.ref, read.damaged)),
-                Effect.map((read) => {
-                  const existence = reconcileExistence(read);
-                  checked = new Set(
-                    existence.claims.map(({ aggregateId }) => aggregateId),
-                  );
-                  return { cursor: read.cursor, rows: read.events, existence };
-                }),
+                Effect.map((read) => ({
+                  cursor: read.cursor,
+                  change: read.change,
+                  rows: read.events,
+                  existence: reconcileExistence(read),
+                })),
               );
             const tail = wakes.pipe(
               // Wakeups carry no data: the next read captures every source's
@@ -181,9 +178,10 @@ export const sessionInputsLayer = Layer.effect(
                   level: -1,
                   text: new Map() as InflightText,
                   local: initialLocal,
-                  // The first drain must publish the anchor: replay.complete
-                  // reconciles existence but does not advance the view cursor.
-                  existence: undefined as ExistenceReconciliation | undefined,
+                  // Every change the record holds: an aggregate that started
+                  // or moved its claim during the cold read is checked again
+                  // once its rows are in the view, not only by the replay.
+                  change: 0,
                 }),
                 (previous) =>
                   Effect.gen(function* () {
@@ -194,21 +192,15 @@ export const sessionInputsLayer = Layer.effect(
                     const level = yield* SubscriptionRef.get(log.level);
                     // A burst of text, or a local change, moved no durable
                     // state: only a new level is worth a database read.
-                    const {
-                      cursor,
-                      rows,
-                      existence,
-                    }: Omit<
-                      Effect.Success<ReturnType<typeof readDurable>>,
-                      'existence'
-                    > & { existence?: ExistenceReconciliation } =
+                    const { cursor, change, rows, existence } =
                       level === previous.level
                         ? {
                             cursor: previous.cursor,
+                            change: previous.change,
                             rows: [],
-                            existence: previous.existence,
+                            existence: { checkedAggregateIds: [], claims: [] },
                           }
-                        : yield* readDurable(previous.cursor);
+                        : yield* readDurable(previous.cursor, previous.change);
                     const inputs: SessionViewInput[] = textChunks(
                       previous.text,
                       nextText,
@@ -220,15 +212,14 @@ export const sessionInputsLayer = Layer.effect(
                       inputs.length > 0 ||
                       rows.length > 0 ||
                       cursor !== previous.cursor ||
-                      !isDeepStrictEqual(previous.existence, existence)
+                      existence.checkedAggregateIds.length > 0 ||
+                      // The first drain must publish the anchor: replay.complete
+                      // reconciles existence but does not advance the view cursor.
+                      previous.level === -1
                     ) {
                       // Every nonempty batch needs its closing marker so the
                       // webview decoder can release it as one complete read.
-                      inputs.push({
-                        _tag: 'drained',
-                        cursor,
-                        existence: existence ?? replayExistence,
-                      });
+                      inputs.push({ _tag: 'drained', cursor, existence });
                     }
                     const batch: SessionViewInput[] = [
                       ...rows
@@ -246,7 +237,7 @@ export const sessionInputsLayer = Layer.effect(
                         level,
                         text: nextText,
                         local: snapshot,
-                        existence,
+                        change,
                       },
                       batch.length === 0 ? [] : [batch],
                     ] as const;

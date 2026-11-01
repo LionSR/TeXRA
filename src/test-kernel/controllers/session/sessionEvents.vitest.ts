@@ -417,6 +417,58 @@ describe('session events and view', () => {
       }).pipe(Effect.provide(graph([runStart]))),
   );
 
+  it.effect('hears a claim that writes no row: a release, then a take', () =>
+    Effect.gen(function* () {
+      // The view checks existence only of aggregates that changed since its
+      // last read. A claim moves without a row (an ownerless run taken by
+      // whoever resumes it), so no row of the batch names it.
+      const db = yield* Database;
+      const view = yield* SessionViewService;
+      const id = qualifyAggregateId('run', RUN);
+      const owner = (v: SessionView) => v.runs.get(RUN)?.ownerId;
+      yield* settle(view.ref, (v) => owner(v) === SELF);
+      yield* db.releaseClaims([id]);
+      yield* settle(view.ref, (v) => owner(v) === null);
+      yield* db.acquireClaims([id]);
+      yield* settle(view.ref, (v) => owner(v) === SELF);
+    }).pipe(Effect.provide(graph([runStart]))),
+  );
+
+  it.effect('owns a run started between the listing and the claim read', () => {
+    // A run another writer starts after the cold read's listing and before
+    // its claim read: its change is older than that read, and the view
+    // first holds it from the tail, so the tail must still check it.
+    const store = databaseLayer('ephemeral').pipe(
+      Layer.orDie,
+      Layer.provide(storePluginsLayer),
+    );
+    const startsDuringListing = Layer.effect(
+      Database,
+      Effect.map(Database, (db) => {
+        let started = false;
+        const start = Effect.suspend(() => {
+          if (started) return Effect.void;
+          started = true;
+          return db.appendAll([
+            { ...runStart, aggregateId: qualifyAggregateId('run', NEWER) },
+          ]);
+        });
+        return {
+          ...db,
+          readListing: () =>
+            db.readListing().pipe(Effect.tap(() => Effect.orDie(start))),
+        };
+      }),
+    ).pipe(Layer.provide(store));
+    return Effect.gen(function* () {
+      const view = yield* SessionViewService;
+      yield* settle(
+        view.ref,
+        (v) => v.runs.get(NEWER)?.ownerId === SELF && v.runs.has(RUN),
+      );
+    }).pipe(Effect.provide(graph([runStart], startsDuringListing)));
+  });
+
   it.effect('publishes complete replay and finite live batches in order', () =>
     Effect.gen(function* () {
       const events = yield* SessionEvents;

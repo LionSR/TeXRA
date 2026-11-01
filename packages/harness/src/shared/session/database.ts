@@ -372,14 +372,20 @@ export class Database extends Context.Service<
     readonly releaseClaims: (
       ids: readonly AggregateId[],
     ) => Effect.Effect<void, DatabaseWriteFailed>;
-    /** The event prefix, current claims and damaged runs from one read. */
+    /** The event prefix, current claims and damaged runs from one read: the
+     *  claims of `checkedIds` and of every aggregate whose existence or
+     *  claim changed after `changedSince` (a row that changes one is such a
+     *  change too); `change` is the last such change the read saw, or
+     *  `changedSince` when there was none. */
     readonly readInputBatch: (
       ids: readonly AggregateId[],
       fromCommit: CommitOrdinal,
-      checkedIds?: readonly AggregateId[],
+      checkedIds: readonly AggregateId[],
+      changedSince?: number,
     ) => Effect.Effect<
       {
         readonly cursor: CommitOrdinal;
+        readonly change: number;
         readonly events: readonly SessionEvent[];
         readonly checkedAggregateIds: readonly AggregateId[];
         readonly state: readonly AggregateState[];
