@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { Schema } from 'effect';
 import {
   qualifyAggregateId,
-  DisplaySessionEventSchema,
-  USER_FOLLOW_UP_SUPPORT,
   type RunId,
-} from '@shared/schemas';
+  type TraceDocument,
+} from '@texra-ai/harness/schemas';
+import { DisplaySessionEventSchema } from '@texra-ai/harness/transcript';
+import { USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
-import type { TraceDocument } from '@texra-ai/harness/schemas';
 // Relative import: `packages/trace-viewer` is a separate workspace package
 // with no path alias into the root vitest config, but this suite exercises
 // the real replay pipeline (`@progressView/frontend`'s dispatcher + slices),

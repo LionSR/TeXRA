@@ -5,20 +5,20 @@ import * as path from 'node:path';
 import { Effect, Schema } from 'effect';
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
-import type { RunRecord } from '@agent/core/definition/RunRecord';
+import {
+  AgentConfigSchema,
+  emptyRunEndOutput,
+  qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+  type RunOutcome,
+  type RunRecord,
+} from '@texra-ai/harness/schemas';
 import {
   cliHistoryNdjsonRecords,
   listCliHistoryEntries,
   readCliHistoryDetails,
 } from '@cli/runtime/history';
-import {
-  AgentConfigSchema,
-  qualifyAggregateId,
-  emptyRunEndOutput,
-  RUN_OUTCOME,
-  type RunId,
-  type RunOutcome,
-} from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   publishTestRunStart,

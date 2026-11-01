@@ -2,7 +2,8 @@
 import * as path from 'node:path';
 
 // Local imports
-import type { RunId, FileLocation } from '@shared/schemas';
+import { RunFileService } from '@texra-ai/harness/plugins';
+import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
@@ -12,8 +13,7 @@ import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import type { OutputState } from '@texra/agent/output/outputState';
 import type { runCompileCheck } from '@texra/agent/output/compileCheck';
-import { createRunStorageLocation } from '@utils/files/fileLocation';
-import { RunFileService } from '@utils/files/runStorage';
+import type { FileLocation, RunId } from '@texra-ai/harness/schemas';
 
 export const storagePath = fakePath('storage');
 export const workspacePath = fakePath('workspace');

@@ -7,14 +7,14 @@ import { describe, expect } from 'vitest';
 
 import { Effect } from 'effect';
 import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@texra-ai/harness/node';
+import {
   buildCliContext,
   type BuildCliContextInit,
   type CliContext,
 } from '@cli/runtime/cliContext';
-import {
-  resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { withEnv } from '@test/support/testEnv';

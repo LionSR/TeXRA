@@ -7,12 +7,11 @@ import { Effect, type FileSystem, Option } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { type RootedFileSystem, StorageFs } from '@texra-ai/harness/host';
 import { MEMORY_DISPLAY_ROOT } from '@agent/memory/memoryUtils';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { StorageFs } from '@platform/rootedFs';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { MemoryTool } from '@tools/memory/MemoryTool';
-import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 const TEST_TIMESTAMP = Date.parse('2026-01-01T00:00:00.000Z');
 

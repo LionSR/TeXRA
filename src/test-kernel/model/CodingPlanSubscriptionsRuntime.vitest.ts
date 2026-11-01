@@ -11,11 +11,12 @@ import {
   type ModelConfig,
   resolveRouteEndpoint,
 } from '@texra-ai/llm';
-import { readModelOptions } from '@model/computeModelOptions';
+import {
+  type DeclinableUsageRoute,
+  GlobalStateKey,
+} from '@texra-ai/harness/schemas';
+import { readModelOptions, Secrets } from '@texra-ai/harness/host';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
-import { Secrets } from '@platform/secrets';
-import type { DeclinableUsageRoute } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   fakeHostSecrets,
   installedHost,

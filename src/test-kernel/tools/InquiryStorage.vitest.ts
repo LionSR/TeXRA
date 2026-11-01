@@ -5,9 +5,10 @@ import { it } from '@effect/vitest';
 import { Effect, Layer, Result, Schema } from 'effect';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
 
+import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { ToolError } from '@texra-ai/harness/plugins';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
-import { RunIdSchema, ToolError } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { globalValuesOver } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';

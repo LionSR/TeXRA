@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ModelError } from '@texra-ai/llm';
 
+import { RouteUnavailable } from '@texra-ai/harness/host';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
-import { RouteUnavailable } from '@common/errors/agentErrors';
 
 const diskFull: NodeJS.ErrnoException = new Error('write failed');
 diskFull.code = 'ENOSPC';

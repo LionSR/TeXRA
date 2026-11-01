@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { logUserMessage, type AgentTrace } from '@agent/trace';
-import type { RunId } from '@shared/schemas';
+import { logUserMessage } from '@agent/trace';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
+import type { RunId } from '@texra-ai/harness/schemas';
+import type { AgentTrace } from '@texra-ai/harness/plugins';
 
 // #7508: the userMessage row's attachment-kind/count payload — logUserMessage
 // stamps data.attachments when attachments are present and stays byte-for-byte

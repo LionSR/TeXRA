@@ -6,6 +6,7 @@ import { Effect, Fiber, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { requestToolEditApproval } from '@texra-ai/harness/plugins';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -15,7 +16,6 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
 type PendingToolEdit = Parameters<typeof requestToolEditApproval>[0];
 

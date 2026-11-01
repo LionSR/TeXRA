@@ -8,21 +8,21 @@ import { describe, expect, it } from 'vitest';
 
 import { Result, Schema } from 'effect';
 
-import { runHistoryRows, storedDraft } from '@agent/runtime/storedTurn';
 import {
-  qualifyAggregateId,
   emptyRunEndOutput,
-  DISPLAY_EVENT_TYPES,
   listingTypeOf,
+  qualifyAggregateId,
   RUN_PHASE,
-  RunIdSchema,
-  SessionEventSchema,
   type RunId,
-} from '@shared/schemas';
+  RunIdSchema,
+  type RunView,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
+import { runHistoryRows, storedDraft } from '@agent/runtime/storedTurn';
+import { DISPLAY_EVENT_TYPES, SessionEventSchema } from '@shared/schemas';
 
 import type { RunHistoryRow } from '@shared/session/historyTurns';
 import { applyRunRows, type RunHistoryDraft } from '@shared/session/runState';
-import { type SessionView, type RunView } from '@shared/session/sessionView';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import {
   loadSurface,

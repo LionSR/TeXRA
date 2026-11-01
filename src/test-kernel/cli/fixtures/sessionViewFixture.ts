@@ -7,24 +7,20 @@
  */
 import '@test/support/sessionGraphTestSetup';
 import { SubscriptionRef } from 'effect';
-import { bindSessionView, sessionView } from '@cli/chat/tui/state/sessionView';
-import {
-  requestParksItsCaller,
-  RUN_PHASE,
-  USER_FOLLOW_UP_SUPPORT,
-  type RunId,
-} from '@shared/schemas';
-import {
-  emptySessionView,
-  type SessionView,
-  type RunView,
-} from '@shared/session/sessionView';
-import { runActions } from '@shared/session/runActions';
-import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import {
   isInFlightPhase,
   isTerminalOutcomePhase,
-} from '@shared/runs/runStatus';
+  requestParksItsCaller,
+  RUN_PHASE,
+  type RunId,
+  type RunView,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
+import { compareByNewestCreationTime } from '@texra-ai/harness/transcript';
+import { bindSessionView, sessionView } from '@cli/chat/tui/state/sessionView';
+import { USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
+import { emptySessionView } from '@shared/session/sessionView';
+import { runActions } from '@shared/session/runActions';
 import { runStatus } from '@shared/runs/runStatusDisplay';
 import { testRuntime } from '@test/support/testProcessRuntime';
 

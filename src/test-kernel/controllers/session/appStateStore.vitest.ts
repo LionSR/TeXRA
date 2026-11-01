@@ -8,10 +8,10 @@ import { it } from '@effect/vitest';
 import { Context, Effect, Layer, Result } from 'effect';
 import { describe, expect } from 'vitest';
 
+import { AppState } from '@texra-ai/harness/host';
 import { globalAppStateLayer } from '@controllers/session/appStateStore';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
-import { AppState } from '@platform/interfaces';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

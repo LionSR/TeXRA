@@ -9,9 +9,9 @@ import { Effect, Fiber, Schema } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
-import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 
-import { type ExecResult, RunIdSchema, type RunId } from '@shared/schemas';
+import { type RunId, RunIdSchema } from '@texra-ai/harness/schemas';
+import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -23,6 +23,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { BashTool } from '@tools/bash';
 import * as execUtils from '@utils/system/execUtils';
+import type { ExecResult } from '@texra-ai/harness/node';
 
 const PARENT_RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('ba5e00000001');
 

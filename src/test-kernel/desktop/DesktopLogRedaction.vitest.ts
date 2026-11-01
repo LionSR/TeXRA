@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { API_KEY_PROVIDER_IDS } from '@texra-ai/llm';
-import { redactDisplayValue, redactSecrets } from '@logger/redaction';
+import { redactSecrets } from '@texra-ai/harness/host';
+import { redactDisplayValue } from '@logger/redaction';
 
 /**
  * Representative keys for each configurable provider's key shape. These are

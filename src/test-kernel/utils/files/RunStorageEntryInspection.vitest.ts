@@ -4,12 +4,12 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem, PlatformError } from 'effect';
 import { describe, expect, it } from 'vitest';
-import type { RunId } from '@shared/schemas';
+import { RunFileService } from '@texra-ai/harness/plugins';
 
 // Local imports
 import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { RunFileService } from '@utils/files/runStorage';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 const runId = 'abcdef123456' as RunId;
 const storageRoot = path.resolve(path.sep, 'storage');

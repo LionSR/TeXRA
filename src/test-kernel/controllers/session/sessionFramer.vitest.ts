@@ -12,6 +12,15 @@ import { Effect, Fiber, Layer, Stream, SubscriptionRef } from 'effect';
 import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
+import {
+  MESSAGE_TYPES,
+  qualifyAggregateId,
+  RUN_PHASE,
+  type RunId,
+  type SessionEventDraft,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
+import { SessionInputs } from '@texra-ai/harness/transcript';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import {
   LocalRuntimeSource,
@@ -24,17 +33,8 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { runStateAppend } from '@shared/session/runHistory';
-import {
-  qualifyAggregateId,
-  MESSAGE_TYPES,
-  RUN_PHASE,
-  type RunId,
-  type SessionEventDraft,
-} from '@shared/schemas';
 import { Database } from '@shared/session/database';
-import { SessionInputs } from '@shared/session/sessionInputs';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
-import type { SessionView } from '@shared/session/readonlyViews';
 import {
   createFakeWorkspaceRoots,
   fakeConfig,
