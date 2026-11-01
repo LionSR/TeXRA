@@ -55,9 +55,9 @@ const ToolChoiceSchema = Schema.Union([
   Schema.Literal('auto'),
   Schema.Struct({ name: Schema.String.check(Schema.isMinLength(1)) }),
 ]);
-// This package speaks its own protocol vocabulary and takes no llm-zoo
-// dependency; the registry's enum is checked against this one by assignment at
-// the harness's model-access call sites that feed it.
+// The turn contract spells efforts in its own literals, not llm-zoo's
+// `ReasoningEffort` enum; the enum is checked against them by assignment in
+// the configuration builders (`api/configuration.ts`).
 const ReasoningEffortLevelSchema = Schema.Literals([
   'none',
   'minimal',
