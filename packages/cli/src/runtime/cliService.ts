@@ -59,7 +59,6 @@ import {
   type ServiceLink,
   type ServiceUnavailable,
 } from '@texra/controllers/server/client';
-import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { loginShellEnvironment } from './loginShellEnv';
@@ -73,9 +72,7 @@ const CHANNEL = 'cliService';
 
 /**
  * The service's projects over the CLI's node roots, opened in `scope` and
- * closed with it. The process bootstrap (the tool seed) runs once here over
- * the no-workspace roots, as the desktop's does, so serving never records a
- * folder of its own as a project.
+ * closed with it.
  */
 export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   context: Pick<CliContext, 'storageRoot'>,
@@ -133,8 +130,6 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       globalState,
     });
   });
-  yield* bootstrapHost({ roots: yield* openRoots(undefined, scope) });
-
   // What opening a project reads, captured once: `open` is the port's,
   // called from handlers that hold no process context of their own. Exactly
   // these services, never the build's scope with them: provided over a
