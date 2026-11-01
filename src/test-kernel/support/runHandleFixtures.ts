@@ -42,11 +42,6 @@ export function testRunRegistry(): RunRegistry {
 /** The run programs a test registry runs: the production ones, each read
  *  per call so a suite's own mock of its module is the program it reaches. */
 export const testRunPrograms: RunPrograms = {
-  root: (...args) =>
-    Effect.flatMap(
-      Effect.promise(() => import('@agent/runtime/rootLaunch')),
-      (module) => module.rootRun(...args),
-    ),
   executeAgent: (...args) =>
     Effect.flatMap(
       Effect.promise(() => import('@agent/runtime/executeAgent')),

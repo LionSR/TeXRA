@@ -84,8 +84,6 @@ export interface CliExecuteOptions {
     readonly runtime: ProcessRuntime;
     readonly shutdownScope: Scope.Scope;
   };
-  /** Stop a tool-use run after one model/tool cycle. */
-  readonly stopAfterCycle?: boolean;
   /** Called during signal shutdown once the run's CANCELLED end is
    *  committed and its rows say it can be resumed, before the signal
    *  handler exits. */
@@ -128,7 +126,6 @@ export function executeCliToolUseConfig(
     const workingDirectory = config.workingDirectory || runContext.cwd;
     const run = yield* executeCliConfig(config, runContext, {
       services: options.services,
-      stopAfterCycle: true,
       onInterruptedRunFinalized: options.recoveryInputIsDurable
         ? (runId) =>
             writeInterruptedResumeHint(
@@ -159,7 +156,8 @@ export function executeCliToolUseConfig(
 
 /** How a headless run enters its session: `texra resume`'s resume of the
  *  persisted run (a refusal is the caller's usage exit), or a fresh start
- *  with the approval it rides (`launchApproval`). */
+ *  with the approval it rides (`launchApproval`). Either is one cycle
+ *  long: neither is `interactive`. */
 function launchOn(
   session: Session,
   request: CliRunRequest,
@@ -180,7 +178,6 @@ function launchOn(
     config: request.config,
     runId: request.runId,
     approval: launchApproval(runContext.requestedApprovalPolicy),
-    interactive: options.stopAfterCycle !== true,
   });
 }
 

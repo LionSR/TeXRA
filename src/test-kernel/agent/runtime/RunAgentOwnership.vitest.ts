@@ -23,7 +23,7 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { withProcessServices } from '@texra-ai/harness/host';
-import type { RootLaunchOptions } from '@agent/runtime/rootLaunch';
+import { rootRun } from '@agent/runtime/rootLaunch';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
@@ -45,15 +45,10 @@ const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
 });
 
 /** A root launch of `config` as `runId` on the session. */
-const launch = (
-  session: SessionHandle,
-  runId: RunId,
-  options: RootLaunchOptions = {},
-  config = CONFIG,
-) =>
+const launch = (session: SessionHandle, runId: RunId) =>
   withProcessServices(
     testRuntime(),
-    session.runs.launch({ request: { config, runId }, options }),
+    rootRun(session, { config: CONFIG, runId, interactive: true }),
   );
 
 describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {

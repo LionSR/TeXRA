@@ -20,6 +20,7 @@ import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
 import { withProcessServices } from '@texra-ai/harness/host';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
+import { rootRun } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
@@ -57,9 +58,10 @@ describe(
           const parentRunId = generateRunId();
           yield* withProcessServices(
             testRuntime(),
-            session.runs.launch({
-              request: { config: config('Parent.'), runId: parentRunId },
-              options: {},
+            rootRun(session, {
+              config: config('Parent.'),
+              runId: parentRunId,
+              interactive: true,
             }),
           ).pipe(Effect.forkChild);
           yield* untilStored(

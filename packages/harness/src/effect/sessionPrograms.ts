@@ -21,7 +21,7 @@ import { Context, Effect, Schema, SubscriptionRef } from 'effect';
 import { AgentCatalog, AgentNotFound } from '@agent/index/agentCatalog';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { SessionOwner } from '@agent/runtime/rootLaunch';
+import { rootRun, SessionOwner } from '@agent/runtime/rootLaunch';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { asksApproval } from '@agent/runtime/agentToolResolution';
@@ -129,8 +129,8 @@ function admitInput(
   });
 }
 
-/** Start one run on `session`: a root launch of its runs under the
- *  process's session owner, one cycle long unless it is a window's. */
+/** Start one run on `session`: a root launch under the process's session
+ *  owner, with the run id minted here when the input names none. */
 function start(
   session: RuntimeSessionHandle,
   services: Context.Context<ProcessServices>,
@@ -150,22 +150,14 @@ function start(
       return yield* runFailure(
         new Error(`Run ${runId} already exists in this session.`),
       );
-    const activation = yield* session.runs
-      .launch({
-        request: { config, runId },
-        options: {
-          stopAfterCycle: input.interactive !== true,
-          tools: input.tools,
-          continues: input.continues,
-          preferHelperModel: input.helperModel,
-          approveDelegatedWork: input.approval?.delegated,
-          approvalPolicy: input.approval?.policy,
-        },
-      })
-      .pipe(
-        Effect.provideService(SessionOwner, owner),
-        Effect.mapError(runFailure),
-      );
+    const activation = yield* rootRun(session, {
+      ...input,
+      config,
+      runId,
+    }).pipe(
+      Effect.provideService(SessionOwner, owner),
+      Effect.mapError(runFailure),
+    );
     return runView(session, runId, activation);
   });
 }

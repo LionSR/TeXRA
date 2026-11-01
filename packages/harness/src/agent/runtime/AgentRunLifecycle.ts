@@ -280,7 +280,7 @@ const failedEnd = Effect.fn('failedEnd')(function* (
   // Receipt for a root run's failure once its `run.end` row committed: the
   // session's presenter shows that row's guidance, so the failure thrown
   // past it is marked presented. A run that never opened has no row: its
-  // launch presents it (`Runs.launch`).
+  // launch presents it (`session.start`).
   const recorded = finalized.event.error;
   if (finalized.recorded && recorded && agentErrorPresentation(recorded))
     attachErrorPresentationClaimed(failure);

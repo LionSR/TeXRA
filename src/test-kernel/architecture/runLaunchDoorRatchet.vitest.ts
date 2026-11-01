@@ -15,12 +15,12 @@ import {
 
 /**
  * Every run starts through one door,
- * `Runs.launch`, forked from the session's context. Every Effect fork starts
+ * `RunRegistry.start`, forked from the session's context. Every Effect fork starts
  * with its caller's context, so a run forked from a tool call reads that
  * call's run-scoped services as its own (#13348). In the run and tool trees a
  * detached or keyed fork is therefore a launch until it proves otherwise: the
  * sites below are the ones that start no run, each counted, and the counts
- * only shrink. A new one either launches through `Runs.launch` or joins this
+ * only shrink. A new one either launches through `RunRegistry.start` or joins this
  * list with its reason in the same PR.
  */
 const LAUNCH_ROOTS = [
@@ -87,7 +87,7 @@ describe('run launch door (R2)', () => {
       });
     expect(
       drift,
-      'launch a run through Runs.launch; a fork that starts no run joins DETACHED_FORK_ALLOWLIST with its reason, and a removed one lowers its count',
+      'launch a run through RunRegistry.start; a fork that starts no run joins DETACHED_FORK_ALLOWLIST with its reason, and a removed one lowers its count',
     ).toEqual([]);
   });
 

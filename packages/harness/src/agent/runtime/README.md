@@ -30,10 +30,11 @@ is the module map by concern. Run-loop rules are in
   ends a run's driver does not write: a failed process-child hand-off, a
   held child's end, and the children a dead process left under a resuming
   run).
-- **Start, resume and end**: `rootLaunch` (what `Runs.launch({ request, options })`
-  runs: assigns the `runId`, registers, runs); `executeAgent` (the one
-  run program, fresh or resumed: the run's entry, its services, its
-  description, and the masked region whose exit is its terminal);
+- **Start, resume and end**: `rootLaunch` (what `session.start` runs:
+  registers the run under the id the start minted, and runs it);
+  `executeAgent` (the one run program, fresh or resumed: the run's entry,
+  its services, its description, and the masked region whose exit is its
+  terminal);
   `AgentRunLifecycle` (the end: `endRun`, the terminal's classification of
   an exit, and `endActivation`, the one end of an activation, through
   `agent/storage/runLifecycle`'s `finalizeRun`); `runReport` (a run's

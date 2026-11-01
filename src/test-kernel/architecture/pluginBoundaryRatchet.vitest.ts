@@ -11,6 +11,7 @@ import {
   type PluginDefinition,
   type ToolRun,
 } from '@texra-ai/harness/plugins';
+import { rootRun } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
@@ -305,9 +306,9 @@ describe('plugin rosters', () => {
     const probes: PluginTool[] = [
       // @ts-expect-error a plugin's tool never reaches a root launch
       calling(() =>
-        session.runs
-          .launch({ request: { config: null as never }, options: {} })
-          .pipe(Effect.as(null as unknown as ToolResult)),
+        rootRun(session, { config: null as never, runId: null as never }).pipe(
+          Effect.as(null as unknown as ToolResult),
+        ),
       ),
     ];
     expect(probes).toHaveLength(1);

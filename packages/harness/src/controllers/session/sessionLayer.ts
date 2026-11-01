@@ -35,7 +35,7 @@ import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { decideResume } from '@agent/runtime/resumeRun';
-import { rootRun, SessionOwner } from '@agent/runtime/rootLaunch';
+import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { onHeldResult } from '@agent/runtime/runLaunchGuard';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { sessionPermission } from '@agent/runtime/loop/toolGuard';
@@ -179,11 +179,7 @@ const sessionHandleLayer = (key: SessionKey) =>
       const runs = new RunRegistry({
         session: () => session,
         fork: (run) => fork(Effect.provide(run, env)),
-        programs: {
-          root: rootRun,
-          executeAgent,
-          resume: decideResume,
-        },
+        programs: { executeAgent, resume: decideResume },
         wake: (id) => void fork(session.followUps.wake(id)),
       });
       const session: SessionHandle = {

@@ -352,8 +352,11 @@ export function isRequestRefusal(error: unknown): error is RequestRefusal {
   );
 }
 
-/** What a start takes besides its agent, whichever way the agent is given. */
-const StartOptionsSchema = Schema.Struct({
+/** What a start takes besides its agent, whichever way the agent is given.
+ *  Each is read once, as the run opens: its effect lands in the opening's
+ *  rows, or the loop reads it and a resume passes it again (`interactive`).
+ *  An option a resumed run must keep goes on `AgentConfigSchema` instead. */
+export const StartOptionsSchema = Schema.Struct({
   /** The run's id. Absent, one is generated. */
   runId: Schema.optional(RunIdSchema),
   /** The earlier run this one continues in a chat: the new run starts with
@@ -361,9 +364,8 @@ const StartOptionsSchema = Schema.Struct({
   continues: Schema.optional(RunIdSchema),
   /** Run on the configured helper model instead of the selected one. */
   helperModel: Schema.optional(Schema.Boolean),
-  /** A stricter approval policy for this run (it can only narrow the
-   *  project's), and whether work it delegates to other agents starts
-   *  approved. */
+  /** A stricter approval policy for this run (it only narrows the
+   *  project's), and whether the work it delegates starts approved. */
   approval: Schema.optional(
     Schema.Struct({
       policy: Schema.optional(ApprovalPolicySchema),

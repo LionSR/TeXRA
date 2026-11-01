@@ -4,20 +4,9 @@
  * `Runs` tag that serves these is its module's.
  */
 
-import type { CommitOrdinal, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import type { Effect } from 'effect';
-import type {
-  RootLaunchOptions,
-  RootLaunchRequest,
-  SessionOwner,
-} from './rootLaunch';
-
-/** A root launch: what to run, and with which options. */
-export interface RootLaunch {
-  readonly request: RootLaunchRequest;
-  readonly options: RootLaunchOptions;
-}
 
 /**
  * What a host can ask of a running tool-use loop: the members something
@@ -61,14 +50,12 @@ export interface LiveRun {
 }
 
 /**
- * A session's runs, as hosts and tools reach them: launch a root, stop one,
- * and read what this process holds of them; a run resumes through
- * `resumeRun`. A root launch requires the composition root's
- * `SessionOwner`, which no tool is given.
+ * A session's runs, as hosts and tools reach them: stop one, and read what
+ * this process holds of them. A root starts through `session.start`
+ * (`rootRun`, which requires the composition root's `SessionOwner`, given
+ * to no tool); a run resumes through `resumeRun`.
  */
 export interface RunsShape {
-  /** Launch a root run: the commit of its opening, once that commits. */
-  launch(spec: RootLaunch): Effect.Effect<CommitOrdinal, Error, SessionOwner>;
   stop(runId: RunId, options: RunStopOptions): RunStop;
   /** What this process holds for `runId`, or undefined while no launch of
    *  it is in flight here. */

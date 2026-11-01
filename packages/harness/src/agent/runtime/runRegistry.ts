@@ -30,7 +30,6 @@ import type { RunAttempt } from '@agent/followUp/ToolUseFollowUp';
 import { grantsKept, type ApprovalGrants } from '@shared/approvalBypassKind';
 import { Settings } from '@shared/config/settings';
 import {
-  type CommitOrdinal,
   qualifyAggregateId,
   RUN_OUTCOME,
   RUN_PHASE,
@@ -40,11 +39,9 @@ import {
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import type { rootRun, SessionOwner } from './rootLaunch';
 import type { SessionHandle } from './SessionHandle';
 import type {
   LiveRun,
-  RootLaunch,
   RunControls,
   RunsShape,
   RunStop,
@@ -92,10 +89,9 @@ export interface RunRegistryInit {
   readonly wake: (runId: RunId) => void;
 }
 
-/** The run programs: a root launch, a run's program (fresh or resumed),
- *  and a resume's decision. */
+/** The run programs: a run's program (fresh or resumed) and a resume's
+ *  decision. */
 export interface RunPrograms {
-  readonly root: typeof rootRun;
   readonly executeAgent: typeof executeAgent;
   readonly resume: typeof decideResume;
 }
@@ -234,14 +230,6 @@ export class RunRegistry implements RunsShape {
       throw new Error(
         `Cannot launch child run ${childRunId} under run ${parentRunId}: that run was stopped.`,
       );
-  }
-
-  /** A root launch (`programs.root`), awaited. */
-  launch(spec: RootLaunch): Effect.Effect<CommitOrdinal, Error, SessionOwner> {
-    return this.programs.root(spec.request, {
-      ...spec.options,
-      session: this.init.session(),
-    });
   }
 
   /** The one launch door: every run starts here, on the session's context,
