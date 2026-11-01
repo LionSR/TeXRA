@@ -213,7 +213,9 @@ export function chooseReasoning(
         options.routeEfforts?.includes(effort),
       )
     : reasoning.efforts;
-  if (reasoning.efforts.length === 0) {
+  // A model with no levels of its own thinks without one; a route ceiling
+  // that leaves it none refuses the level instead (`snapped`).
+  if (config.reasoning?.efforts.length === 0) {
     if (explicit === undefined && options.userEffort === undefined)
       return { thinking: true, effort: null, mode };
     return {
