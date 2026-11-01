@@ -55,9 +55,17 @@ describe('service protocol version', () => {
     const table = Object.entries(shapes)
       .map(([tag, hash]) => `    '${tag}': '${hash}',`)
       .join('\n');
-    const source = readFileSync(PROTOCOL_FILE, 'utf8')
+    const source = readFileSync(PROTOCOL_FILE, 'utf8');
+    const bumped = source
       .replace(/(\n {2}version: )\d+/, `$1${PROTOCOL.version + 1}`)
-      .replace(/(\n {2}shapes: )\{[^}]*\}/, `$1{\n${table}\n  }`);
-    writeFileSync(PROTOCOL_FILE, source);
+      .replace(
+        /(\n {2}shapes: Object\.freeze\()\{[^}]*\}/,
+        `$1{\n${table}\n  }`,
+      );
+    // A rewrite that missed either line would record shapes under the old
+    // version, or a version over the old shapes.
+    expect(bumped).toContain(`  version: ${PROTOCOL.version + 1},`);
+    expect(bumped).toContain(table);
+    writeFileSync(PROTOCOL_FILE, bumped);
   });
 });
