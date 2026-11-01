@@ -79,7 +79,6 @@ import {
 } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
-import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -172,12 +171,12 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         storageRoot: defaultNodeStorageRoot(),
         resourcesPath: path.join(context.extensionPath, 'resources'),
         agentIssues: showLoggedMessageWithDocs,
-        usageLog: usageLogLayer({
+        usageLog: {
           version: extensionVersion,
           editorType: vscode.env.appName || undefined,
           // VS Code's own telemetry setting, read live: it overrides ours.
           hostTelemetryEnabled: () => vscode.env.isTelemetryEnabled,
-        }),
+        },
         // The Output channel owns filtering, so emit every level.
         minimumLogLevel: 'Trace',
         // The window's own reads (credential status, model discovery) see

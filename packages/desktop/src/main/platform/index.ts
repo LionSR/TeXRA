@@ -16,7 +16,6 @@ import {
   secretsDirectory,
 } from '@texra-ai/harness/node';
 import { emitAppSignal } from '@texra-ai/harness/host';
-import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
@@ -97,10 +96,10 @@ export const initializeElectronPlatform = Effect.fn(
         inquiryPanel: true,
         storageRoot: dataRoot,
         resourcesPath,
-        usageLog: usageLogLayer({
+        usageLog: {
           version: app.getVersion(),
           editorType: 'desktop',
-        }),
+        },
         // The rotated log file is the artefact attached to a bug report, so it
         // keeps debug entries; rotation already bounds its size.
         minimumLogLevel: 'Debug',

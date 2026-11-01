@@ -42,7 +42,6 @@ import {
 } from '@texra-ai/harness/host';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import { GlobalDatabase } from '@texra-ai/harness/node';
-import { usageLogLayer } from '@telemetry/UsageLogService';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import {
   texraProcessLayer,
@@ -196,10 +195,10 @@ export function installCliProcessRuntime(
         ...options,
         // The runtime's disposal is the last shutdown step of every exit
         // path this process has.
-        usageLog: usageLogLayer({
+        usageLog: {
           version: readCliVersion(),
           editorType: 'cli',
-        }),
+        },
         minimumLogLevel: options?.minimumLogLevel ?? 'Info',
       }).pipe(Layer.provide(validationModelLayer)),
     ),

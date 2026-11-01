@@ -5,7 +5,7 @@
  * part is the settings catalog, the command directories, its plugins over
  * one editor registry the host's windows attach to (`HostWindows`), the one
  * credential store under the storage root, the agent directories with their
- * team membership, and the first-install tool switches.
+ * team membership, the usage log, and the first-install tool switches.
  */
 
 // Third-party imports
@@ -17,7 +17,6 @@ import {
   AgentDirectoryService,
   AppState,
   processLayer,
-  type ProcessLayerOptions,
   type ProcessServices,
   Secrets,
   seedDisabledToolDefaults,
@@ -29,6 +28,10 @@ import {
   type GlobalDatabase,
   secretsDirectory,
 } from '@texra-ai/harness/node';
+import {
+  usageLogLayer,
+  type UsageLogOptions,
+} from '@telemetry/UsageLogService';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { teamMembers } from '@texra/shared/agentTeams';
@@ -50,9 +53,9 @@ export interface TexraProcessHost extends Omit<
   readonly resourcesPath?: string;
   /** The flags every skill read uses (the CLI's `--source`). */
   readonly skillSourceOptions?: SkillSourceOptions;
-  /** The host's usage log (`usageLogLayer`), stamped with its version and
-   *  editor; the runtime's disposal drains its queue. */
-  readonly usageLog: NonNullable<ProcessLayerOptions['usageLog']>;
+  /** What the usage log stamps on each entry, and the host's own live
+   *  telemetry switch; the runtime's disposal drains the log's queue. */
+  readonly usageLog: Omit<UsageLogOptions, 'config'>;
   /** The runtime's floor for Effect diagnostics. */
   readonly minimumLogLevel: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
@@ -125,7 +128,7 @@ export const texraProcessLayer = ({
           }),
       ),
     ),
-    usageLog,
+    usageLog: usageLogLayer(usageLog),
     minimumLogLevel,
     workspace,
     ...(globalStores && {
