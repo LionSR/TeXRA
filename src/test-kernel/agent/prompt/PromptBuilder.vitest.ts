@@ -12,7 +12,7 @@ describe('PromptBuilder', () => {
       offered: ['memory'],
       isChild: false,
       isAnthropic: false,
-      config: new MemoryConfigProvider(TEXRA_SETTINGS),
+      config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog),
     });
 
     // Behavioral contract, not exact prose (review note on #7959): pinned

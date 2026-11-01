@@ -46,8 +46,10 @@ import { resumeBlocker } from './resumeBlocker';
 
 import { type RunReport } from './runReport';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
-import { prepareAgentDefinition } from './AgentLaunchContext';
-import { activationIfOpened } from './rootLaunch';
+import {
+  activationIfOpened,
+  prepareAgentDefinition,
+} from './AgentLaunchContext';
 import { deliverHeld } from './runLaunchGuard';
 import { startChildRunLoop } from './childRunLoop';
 import { registryOf, type AgentRunServices, RunLive } from './runRegistry';

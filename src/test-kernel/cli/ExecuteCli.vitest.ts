@@ -10,18 +10,20 @@ import {
   type LocalSession,
   type StartInput,
 } from '@texra-ai/harness';
+import {
+  APPROVAL_BYPASS_KINDS,
+  qualifyAggregateId,
+  type RunId,
+  type RuntimeRequest,
+  toErrorMessage,
+} from '@texra-ai/harness/schemas';
+import { AgentError } from '@texra-ai/harness/host';
 import { liveToolGates } from '@agent/runtime/requestPolicy';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliConfig } from '@cli/runtime/executeCli';
-import { AgentError } from '@common/errors/agentErrors';
-import {
-  APPROVAL_BYPASS_KINDS,
-  NO_APPROVAL_GRANTS,
-} from '@shared/approvalBypassKind';
-import { qualifyAggregateId } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
+import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import {
@@ -36,8 +38,6 @@ import {
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRows, seedRows } from '@test/support/sessionTestUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),

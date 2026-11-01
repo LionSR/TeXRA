@@ -10,7 +10,6 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -22,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { runTests } from '@vscode/test-electron';
 
 import { isolatedHomeEnv } from './isolated-home.mjs';
+import { walkFiles } from './walkFiles.mjs';
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -177,17 +177,13 @@ function stopService() {
 
 /** Every log the window and the service wrote, for a run that failed. */
 function printLogs() {
-  const files = [];
-  const walk = (dir) => {
-    if (!existsSync(dir)) return;
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.name.endsWith('.log')) files.push(full);
-    }
-  };
-  walk(path.join(root, 'u', 'logs'));
-  walk(path.join(home, '.texra', 'run'));
+  const files = [path.join(root, 'u', 'logs'), path.join(home, '.texra', 'run')]
+    .filter((dir) => existsSync(dir))
+    .flatMap((dir) =>
+      walkFiles(dir, { include: (file) => file.endsWith('.log') }).map(
+        (entry) => entry.absolutePath,
+      ),
+    );
   for (const file of files) {
     const text = readFileSync(file, 'utf8');
     if (text.trim() === '') continue;

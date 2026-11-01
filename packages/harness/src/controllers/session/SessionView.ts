@@ -24,28 +24,19 @@ import {
   Fiber,
   Layer,
   Option,
-  Schema,
   type Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
 
-import type {
-  SessionLog,
-  SessionViewAccess,
-} from '@agent/runtime/SessionHandle';
+import type { SessionViewAccess } from '@agent/runtime/SessionHandle';
 import {
   qualifyAggregateId,
-  ToolEditContentSchema,
   type LocalRuntimeState,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
-import type {
-  PendingRequest,
-  SessionView as ReadonlySessionView,
-} from '@shared/session/readonlyViews';
-import type { Outcome } from '@shared/session/runtimeRequest';
+import type { SessionView as ReadonlySessionView } from '@shared/session/readonlyViews';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { SessionView } from '@shared/session/sessionView';
@@ -268,33 +259,3 @@ export const makeSessionViewAccess = Effect.fn(
     resumeBlocks: () => SubscriptionRef.getUnsafe(local.ref).resumeBlocked,
   };
 });
-
-/**
- * A surface's `request.preview` of `pending`: the content its row names,
- * read back from the store under that address. Null for a request the view
- * no longer lists (none given), one of another kind, or one an earlier
- * build wrote, which has no content to show: the card answers from its
- * payload.
- */
-export const toolEditPreview = (
-  log: Pick<SessionLog, 'blobs'>,
-  pending: PendingRequest | undefined,
-): Effect.Effect<Extract<Outcome, { kind: 'preview' }>> => {
-  const address =
-    pending?.payload.kind === 'toolEdit'
-      ? pending.payload.data.content
-      : undefined;
-  if (address === undefined)
-    return Effect.succeed({ kind: 'preview', preview: null });
-  // The row links the blob, which the store keeps while the row lives: a
-  // read that fails or finds nothing is a corrupt store.
-  return Effect.map(Effect.orDie(log.blobs([address])), (held) => {
-    const text = held.get(address);
-    if (text === undefined)
-      throw new Error(`The store holds no tool edit proposal at ${address}`);
-    const preview = Schema.decodeUnknownSync(ToolEditContentSchema)(
-      JSON.parse(text),
-    );
-    return { kind: 'preview', preview };
-  });
-};

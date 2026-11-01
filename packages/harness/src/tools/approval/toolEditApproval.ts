@@ -4,11 +4,11 @@ import { RunCall, requireRun, sessionOf } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   type RefusalDecision,
-  type ToolEditContent,
   type ToolEditPermission,
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy } from '@shared/session/approvalDecision';
+import { readToolEditContent } from '@shared/session/runtimeRequest';
 import { errorResult } from '@tools/core/result';
 import { blobAddress } from '@utils/core/idHash';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
@@ -28,7 +28,8 @@ import {
  */
 export interface ToolEditProposal {
   readonly path: string;
-  readonly originalContent: string;
+  /** Null when the file did not exist when this edit was proposed. */
+  readonly originalContent: string | null;
   readonly proposedContent: string;
   readonly sourceTool: string;
 }
@@ -42,6 +43,10 @@ export type ToolEditApprovalResult =
   | {
       readonly action: 'apply';
       readonly appliedContent: string;
+      /** The reviewed base, used to reconcile changes made while waiting. */
+      readonly originalContent: string | null;
+      /** The reviewed proposal, before any edits made in the approval view. */
+      readonly proposedContent: string;
       readonly lineChanges?: {
         readonly added: number;
         readonly removed: number;
@@ -89,10 +94,10 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     // One diff pass gives the hunks, their line counts and the first
     // changed line, so every surface reports the same numbers for one edit.
     const { originalContent, proposedContent, path, sourceTool } = request;
-    const { hunks, timeout } = diffEdit(originalContent, proposedContent);
+    const { hunks, timeout } = diffEdit(originalContent ?? '', proposedContent);
     yield* reportDiffTimeout(timeout);
     const lines = countLineChanges(hunks);
-    const content: ToolEditContent = {
+    const content: Effect.Success<ReturnType<typeof readToolEditContent>> = {
       originalContent,
       proposedContent,
       hunks,
@@ -118,19 +123,26 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     const review = requests
       .open({ kind: 'toolEdit', data: permission }, [{ digest: address, text }])
       .pipe(
-        Effect.flatMap((decided): Effect.Effect<ToolEditApprovalResult> =>
-          decided.action !== 'approve'
-            ? Effect.succeed(decided)
-            : // The decision carries the proposed file as the person left
-              // it in a host's view; one naming no content applies the
-              // proposal. A host read the bytes itself, so they may be CRLF.
-              finalizeApprovalResult(
-                (decided.content ?? request.proposedContent).replaceAll(
-                  '\r\n',
-                  '\n',
+        Effect.flatMap(
+          ({ payload, decision }): Effect.Effect<ToolEditApprovalResult> =>
+            decision.action !== 'approve'
+              ? Effect.succeed(decision)
+              : readToolEditContent(
+                  session.log.blobs,
+                  payload.data.content,
+                ).pipe(
+                  Effect.flatMap((reviewed) =>
+                    // A host's edited bytes may be CRLF. The base and proposal
+                    // are the request's stored ones, including after a resume.
+                    finalizeApprovalResult(
+                      (decision.content ?? reviewed.proposedContent).replaceAll(
+                        '\r\n',
+                        '\n',
+                      ),
+                      reviewed,
+                    ),
+                  ),
                 ),
-                request,
-              ),
         ),
       );
     // An edit grant turned on while it waited answers it, unless a hook
@@ -144,10 +156,13 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
 
 function finalizeApprovalResult(
   appliedContent: string,
-  request: ToolEditProposal,
+  request: Pick<ToolEditProposal, 'originalContent' | 'proposedContent'>,
 ): Effect.Effect<ToolEditApprovalResult> {
   // One pass answers both the start line and the counts.
-  const { hunks, timeout } = diffEdit(request.originalContent, appliedContent);
+  const { hunks, timeout } = diffEdit(
+    request.originalContent ?? '',
+    appliedContent,
+  );
 
   // Compute startLine once here (convert 0-based to 1-based; null → line 1).
   const startLine = (firstChangedLine(hunks, appliedContent) ?? 0) + 1;
@@ -156,6 +171,8 @@ function finalizeApprovalResult(
     Effect.as({
       action: 'apply' as const,
       appliedContent,
+      originalContent: request.originalContent,
+      proposedContent: request.proposedContent,
       lineChanges: countLineChanges(hunks),
       startLine,
     }),

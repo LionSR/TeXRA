@@ -44,7 +44,7 @@ import type { ModelConfig } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 
 import type { OpenStep } from '../loop/step';
-import type { SessionHandle } from '../SessionHandle';
+import type { ClaimError, SessionHandle } from '../SessionHandle';
 
 /**
  * How a launch enters its run's cell: a fresh run's `registration` rides
@@ -63,7 +63,8 @@ interface LaunchEntry {
   readonly registration: Registration | null;
   readonly seed?: RegisterRunOptions['seed'] | null;
   readonly opening: Alongside;
-  readonly entered: (state: RunState) => Effect.Effect<void>;
+  /** Fails when a fresh run's claim, its birth's, cannot be held. */
+  readonly entered: (state: RunState) => Effect.Effect<void, ClaimError>;
   readonly initialUserMessage: string | undefined;
 }
 

@@ -26,7 +26,6 @@ import {
   childTurnResult,
   commitPart,
   deliverIn,
-  deliverLaunchFailure,
   parentEdgeIn,
   sendToParent,
   traceLog,
@@ -587,7 +586,7 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   strategy: NativeChildStrategy<TTurn, R>,
 ): Effect.fn.Return<TTurn | undefined, Error, R> {
-  const { session, runId, parentRunId } = loop.params;
+  const { session, runId } = loop.params;
   const turns = nativeTurns(loop, strategy, yield* Effect.context<R>());
   loop.turnStart = yield* Clock.currentTimeMillis;
   const turned = yield* attemptTurn(
@@ -596,24 +595,20 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
       strategy.launch(progressNotify(loop, strategy), turns),
     ),
   );
-  const { turn, err } = turned;
+  const { turn } = turned;
   // A turn that reports itself stopped stops the child.
   if (turn !== null && strategy.isTurnInterrupted?.(turn))
     return yield* Effect.interrupt;
   noteFailure(loop, turned);
-  // A launch can fail before its first cycle, and before its run's birth.
+  // A launch can fail before its first cycle, and before its run's birth:
+  // there is no run to end, and the launch waiting for the birth fails
+  // with it (`launchDetachedSubagent`, `rootRun`).
   if (
     loop.turnIndex === 0 &&
     loop.failure !== undefined &&
     !(yield* session.log.owns(runId))
-  ) {
-    if (strategy.deliveryMode !== 'persistOnly') {
-      const wallTimeMs = (yield* Clock.currentTimeMillis) - loop.turnStart;
-      const message = strategy.formatError(turn, err, wallTimeMs);
-      yield* deliverLaunchFailure(session, runId, parentRunId, message);
-    }
+  )
     return yield* Effect.fail(ensureError(loop.failure.cause));
-  }
   yield* endTurns(loop, turned);
   return turn ?? undefined;
 });

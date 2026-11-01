@@ -167,12 +167,19 @@ export interface CallRequests {
    *  it opens. */
   readonly nextId: (kind: PermissionPayload['kind']) => string;
   /** Open the request (or re-enter the standing one) and wait for its
-   *  decision, as `SessionRequests.ask` does. `blobs` are the strings the
-   *  payload names by address, stored with the request's row. */
+   *  decision. The returned payload is the request actually answered,
+   *  which on resume may differ from the proposal recomputed by the caller.
+   *  `blobs` are the strings the payload names by address, stored with its row. */
   readonly open: <P extends PermissionPayload>(
     payload: P,
     blobs?: readonly DraftBlob[],
-  ) => Effect.Effect<DecisionOf<P['kind']>, DatabaseNotOwner | CellError>;
+  ) => Effect.Effect<
+    {
+      readonly payload: Extract<PermissionPayload, { kind: P['kind'] }>;
+      readonly decision: DecisionOf<P['kind']>;
+    },
+    DatabaseNotOwner | CellError
+  >;
 }
 
 /**

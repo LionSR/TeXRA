@@ -91,7 +91,7 @@ const BARE_PLUGINS: readonly Plugin[] = [
   defineBuiltinPlugin({
     id: 'goal',
     toggle: 'off',
-    availability: { check: () => Effect.succeed(true) },
+    availability: { check: () => Effect.succeed({ available: true }) },
   }),
   ...ARMED_PLUGINS,
 ];
@@ -106,7 +106,7 @@ export const testProcessOptions = (
   // Under the worker's storage root: its global storage, and its mcp.json
   // rather than the developer's `~/.texra/mcp.json`.
   storageRoot: root,
-  settings: TEXRA_SETTINGS,
+  settings: TEXRA_SETTINGS.catalog,
   plugins,
   secrets: Secrets.layer(fakeHostSecrets),
   appState: AppState.layer(fakeHostAppState),

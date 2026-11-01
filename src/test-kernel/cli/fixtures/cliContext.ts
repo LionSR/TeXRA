@@ -35,7 +35,7 @@ const BASE_CLI_CONTEXT = {
   commandName: 'texra',
   version: '0.0.0',
   resourcesPath: '/tmp/resources',
-  config: new MemoryConfigProvider(TEXRA_SETTINGS),
+  config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog),
   configWarnings: [],
   configDegradations: [],
   skillSourceOptions: {},

@@ -186,11 +186,9 @@ export interface ChildLaunch {
 }
 
 /**
- * The request the `agent` calls of one script share: the first to ask opens
- * it, and a resumed script finds it, answered or still open, from its rows.
- * It is the script call's, shared by all its attempts (attempt 0), so it
- * outlives a restart; one the run's stop cancelled is asked again under the
- * next ordinal.
+ * One request shared by a script's `agent` calls and all its attempts
+ * (attempt 0), recovered from rows after restart. A stop cancels it, and
+ * the next request takes the next ordinal.
  */
 const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
   call: RunToolCall,
@@ -221,26 +219,28 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(function* (
     );
   if (own !== null) return own.request.decision;
   const calls = yield* script.calls;
-  return yield* call.requests.open({
-    kind: 'proposal',
-    data: {
-      requestId: callRequestId(shared, raised + 1),
-      allowBypass: (yield* RunCall)?.hook !== 'ask',
-      runId,
-      ...proposal,
-      script: {
-        title: script.title,
-        source: script.source,
-        calls: calls.map(({ toolName, input }) => ({
-          toolName,
-          // A tool the preview does not know shows its arguments.
-          preview:
-            deriveToolInputPreview(toolName, input) ||
-            truncateWithEllipsis(JSON.stringify(input) ?? '', 200),
-        })),
+  return yield* call.requests
+    .open({
+      kind: 'proposal',
+      data: {
+        requestId: callRequestId(shared, raised + 1),
+        allowBypass: (yield* RunCall)?.hook !== 'ask',
+        runId,
+        ...proposal,
+        script: {
+          title: script.title,
+          source: script.source,
+          calls: calls.map(({ toolName, input }) => ({
+            toolName,
+            // A tool the preview does not know shows its arguments.
+            preview:
+              deriveToolInputPreview(toolName, input) ||
+              truncateWithEllipsis(JSON.stringify(input) ?? '', 200),
+          })),
+        },
       },
-    },
-  });
+    })
+    .pipe(Effect.map(({ decision }) => decision));
 });
 
 /** What an ended child becomes for its call: its envelope (a recipe's read

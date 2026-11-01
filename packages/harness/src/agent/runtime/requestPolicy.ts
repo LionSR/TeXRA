@@ -3,17 +3,18 @@
  * session's approval policy settles when a request opens, decided in core so
  * that `yolo` and `never` mean one thing on every host; `ask`, which opens a
  * request with that answer beside it and waits for the `request.decided`
- * that closes it, cancelling it on an interruption so no pending request
- * outlives the call; and `decide`, the one writer of a decision. The answer is
- * recorded as the `request.decided` row beside the request's own
+ * that closes it; and `decide`, the one writer of a surface's decision. The
+ * answer is recorded as the `request.decided` row beside the request's own
  * `request.opened`, in the same batch, so no surface ever lists it pending.
+ * A request a stopped or failed run leaves open is cancelled with the run's
+ * end, in the end's batch (`endIn`); one a dead process left, with the
+ * run's next activation.
  *
  * A command, an edit and a delegation proposal reach the door already
  * decided by `sessionPermission` (`loop/toolGuard.ts`), so they present.
  */
 
 import {
-  Cause,
   Context,
   Effect,
   Option,
@@ -236,9 +237,6 @@ const CHANNEL = 'requestPolicy';
 export interface RequestAsksInit {
   /** The session the requests are asked on, resolved when first used. */
   readonly session: () => SessionHandle;
-  /** Whether the session's doors are shut: a cancellation then writes
-   *  nothing. */
-  readonly closed: () => boolean;
 }
 
 /** A recorded decision, as its request's kind takes it: a surface's answer
@@ -260,7 +258,6 @@ export const recordedDecision = <K extends PermissionPayload['kind']>(
  *  `decision`. */
 export function requestAsks({
   session,
-  closed,
 }: RequestAsksInit): Pick<SessionRequests, 'ask' | 'decide' | 'decision'> {
   const decide: SessionRequests['decide'] = (runId, requestId, answer) =>
     session().log.transact((tx) =>
@@ -364,31 +361,7 @@ export function requestAsks({
           ),
         ),
       );
-    }).pipe(
-      // The interruption decides the request through the one door a
-      // decision takes, awaited: the stop settles with the cancel written.
-      Effect.onInterrupt(() =>
-        closed()
-          ? Effect.void
-          : decide(runId, requestId, {
-              action: 'cancel',
-              cause: 'Run interrupted.',
-            }).pipe(
-              // `false` is the interruption that landed before the open
-              // committed: no row exists, so this cancellation writes none.
-              Effect.asVoid,
-              // A session draining under it refuses even as a defect.
-              Effect.catchCause((cause) =>
-                Effect.logWarning(
-                  `Request ${requestId} was not cancelled as its run stopped`,
-                ).pipe(
-                  Effect.annotateLogs({ data: Cause.squash(cause) }),
-                  withLogChannel(CHANNEL),
-                ),
-              ),
-            ),
-      ),
-    );
+    });
   };
 
   return { ask, decide, decision };

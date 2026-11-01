@@ -4,7 +4,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe } from 'vitest';
 
-import { Secrets } from '@platform/secrets';
+import { Secrets } from '@texra-ai/harness/host';
 import { createFakeUIHosts } from '@test/support/FakeHosts';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';

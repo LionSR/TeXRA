@@ -264,7 +264,7 @@ const inputBase = (run: AgentRunShape) => {
   const root = rootOf(run);
   return {
     session_id: root,
-    cwd: run.session.roots.workspace ?? '',
+    cwd: run.workingDirectory ?? run.session.roots.workspace ?? '',
     permission_mode:
       executableDecision(run.session, run.runId) === 'allow'
         ? ('bypassPermissions' as const)
@@ -401,14 +401,13 @@ export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
   const schema = step.registry.get(call.toolName)?.definition.schema;
   const read = schema && Schema.decodeUnknownResult(schema)(toolInput);
   const issued = read && Result.isSuccess(read) ? read.success : toolInput;
+  const input = inputBase(run);
   const claude = claudeToolCall(call.toolName, issued, (file) =>
-    typeof file === 'string'
-      ? path.resolve(run.session.roots.workspace ?? '', file)
-      : file,
+    typeof file === 'string' ? path.resolve(input.cwd, file.trim()) : file,
   );
   const names = [claude.toolName, call.toolName];
   const base = {
-    ...inputBase(run),
+    ...input,
     tool_name: claude.toolName,
     tool_input: claude.toolInput,
     tool_use_id: call.callId,

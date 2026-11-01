@@ -44,10 +44,11 @@ function providerSettings(stores: SettingsStores, provider: string) {
     TEXRA_SETTINGS.modelsTab(provider),
     ({ entry, surface }) =>
       Settings.get(stores, entry.key).pipe(
-        Effect.map((value) => {
-          const { provider: _provider, ...display } = surface;
-          return { ...display, key: entry.key, value: value === true };
-        }),
+        Effect.map((value) => ({
+          ...surface,
+          key: entry.key,
+          value: value === true,
+        })),
       ),
   );
 }

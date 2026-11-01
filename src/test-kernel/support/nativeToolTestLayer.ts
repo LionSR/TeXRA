@@ -151,9 +151,20 @@ export function nativeToolTestLayer(
             payload: P,
             blobs?: readonly DraftBlob[],
           ) =>
-            toolRun.session.requests.ask(toolRun.runId, payload, {
-              ...(blobs && { blobs }),
-            }),
+            toolRun.session.requests
+              .ask(toolRun.runId, payload, {
+                ...(blobs && { blobs }),
+              })
+              .pipe(
+                Effect.map((decision) => ({
+                  // The fixture always answers the supplied request's kind.
+                  payload: payload as Extract<
+                    PermissionPayload,
+                    { kind: P['kind'] }
+                  >,
+                  decision,
+                })),
+              ),
           post: (requestId: string, payload: PermissionPayload) =>
             toolRun.session.runHistory.open(toolRun.runId).pipe(
               Effect.flatMap((cell) =>

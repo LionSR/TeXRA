@@ -107,7 +107,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
         (yield* StateStores).project(storage, workspace),
         (yield* StateStores).repo(storage, workspace),
         openTexraWorkspaceConfigStores(
-          TEXRA_SETTINGS,
+          TEXRA_SETTINGS.catalog,
           storage,
           workspace,
           (message) => warnings.push(message),
@@ -123,7 +123,11 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       workspacePath: workspace,
       storageRoot,
       storage,
-      config: { ...configs, global: globalConfig, catalog: TEXRA_SETTINGS },
+      config: {
+        ...configs,
+        global: globalConfig,
+        catalog: TEXRA_SETTINGS.catalog,
+      },
       workspaceState,
       repoState,
       globalState,

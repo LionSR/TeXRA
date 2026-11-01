@@ -49,7 +49,6 @@ import {
   type ScriptScope,
   type ScriptSource,
 } from '@agent/runtime/RunCall';
-import type { AgentTrace } from '@agent/trace';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
@@ -195,12 +194,12 @@ const UPLOAD_DEADLINE = '5 seconds';
 /** The model-visible content of one call's result: text, then inline media,
  *  each with its attachment's path. The run history keeps the bytes; whether
  *  a later request sends them or a file id is the bound model's upload
- *  cache's decision. An attachment the binding cannot carry inline reaches
- *  the model as the text mention only, and the transcript says so. */
+ *  cache's decision. An attachment whose bytes were never captured (which
+ *  its row records) or that the binding cannot carry inline reaches the
+ *  model as its mention, which says why. */
 function resultContent(
   recorded: Pick<CallResult, 'result' | 'attachments'>,
   capabilities: Parameters<typeof storedMediaPart>[2],
-  logger: AgentTrace,
 ): {
   readonly text: InputPart;
   readonly media: readonly {
@@ -208,32 +207,24 @@ function resultContent(
     readonly part: StoredMediaPart;
   }[];
 } {
+  const media: { readonly path: string; readonly part: StoredMediaPart }[] = [];
+  const mentions = recorded.attachments.map(({ path, mimeType, content }) => {
+    if (content.kind !== 'stored')
+      return {
+        path,
+        mimeType,
+        note: `its bytes were not captured (${content.reason})`,
+      };
+    const part = storedMediaPart(mimeType, content.digest, capabilities);
+    if (part === null)
+      return { path, mimeType, note: `the model takes no ${mimeType} inline` };
+    media.push({ path, part });
+    return { path, mimeType };
+  });
   const text = formatToolResultAsText(
     recorded.result,
-    recorded.attachments.length > 0
-      ? formatAttachmentSummary(recorded.attachments)
-      : undefined,
+    mentions.length > 0 ? formatAttachmentSummary(mentions) : undefined,
   );
-  const media = recorded.attachments.flatMap((attachment) => {
-    if (attachment.content.kind !== 'stored') {
-      logger.warn(
-        `The model receives "${attachment.path}" as a mention only: its bytes were not captured (${attachment.content.reason}).`,
-      );
-      return [];
-    }
-    const part = storedMediaPart(
-      attachment.mimeType,
-      attachment.content.digest,
-      capabilities,
-    );
-    if (part === null) {
-      logger.warn(
-        `The model receives "${attachment.path}" as a mention only: the bound model carries no ${attachment.mimeType} attachment inline.`,
-      );
-      return [];
-    }
-    return [{ path: attachment.path, part }];
-  });
   return { text: { kind: 'text', text }, media };
 }
 
@@ -598,7 +589,13 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   const answered =
     sanitized.status === 'executed' ? (sanitized.consumedFollowUps ?? []) : [];
   const facts = factRows(extracted.facts, runId, plugin, run.session.log);
-  yield* retireStanding;
+  // A retirement refused outside the run history is the claim's refusal,
+  // worded as the cell words one of its own.
+  yield* retireStanding.pipe(
+    Effect.catchTag('DatabaseNotOwner', (refused) =>
+      Effect.fail(runRefusal(runId, refused)),
+    ),
+  );
   yield* commit(
     call,
     [
@@ -948,7 +945,7 @@ const deliver = Effect.fn('toolUse.deliver')(function* (
     if (recorded === null) {
       throw new Error(`Call ${fact.callId} has no result at delivery.`);
     }
-    const content = resultContent(recorded, bound.config.capabilities, logger);
+    const content = resultContent(recorded, bound.config.capabilities);
     media.push(...content.media);
     return {
       callOrdinal: ordinal,

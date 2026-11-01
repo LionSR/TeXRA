@@ -1,11 +1,14 @@
 import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 import { describe, expect } from 'vitest';
+import {
+  AgentConfigSchema,
+  runBypasses,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
 import { activationRows, registerRun } from '@agent/storage/runLifecycle';
-import { runBypasses } from '@shared/approvalBypassKind';
-import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';

@@ -8,7 +8,13 @@ import { it } from '@effect/vitest';
 import { Effect, Layer, Schema } from 'effect';
 import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+import {
+  AppSignals,
+  AppState,
+  mcpConfigPathOf,
+  Secrets,
+} from '@texra-ai/harness/host';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { stepFor } from '@agent/runtime/loop/step';
@@ -19,11 +25,6 @@ import {
   type RunLaunch,
 } from '@agent/runtime/run/AgentRun';
 import { validationModelLayer } from '@cli/runtime/validationModel';
-import { mcpConfigPathOf } from '@common/plugins/mcpServers';
-import { AppSignals } from '@platform/appSignals';
-import { AppState } from '@platform/interfaces';
-import { Secrets } from '@platform/secrets';
-import { AgentConfigSchema } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -39,10 +40,10 @@ import {
 } from '@test/support/FakePlatform';
 import { texraPlugins } from '@texra/tools/registry';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
-import { generateRunId } from '@utils/core';
 
 import { sessionWithInteractions } from './progressTestUtils';
 import { createTestLaunchContext } from './runtime/launchContextTestUtils';
+import type { ITool } from '@texra-ai/harness';
 
 function tool(name: string): ITool {
   return {

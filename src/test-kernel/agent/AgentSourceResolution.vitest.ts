@@ -10,12 +10,14 @@ import { afterAll, beforeAll, describe, expect } from 'vitest';
 // Local imports
 import {
   AgentCatalog,
-  findAgentByIdentifier,
   type AgentCatalogShape,
-} from '@agent/index/agentCatalog';
-import type { AgentEntry } from '@agent/index/agentEntry';
-import { AgentDirectories, AppState } from '@platform/interfaces';
-import { GlobalStorageFs } from '@platform/rootedFs';
+  AgentDirectories,
+  type AgentEntry,
+  AppState,
+  GlobalStorageFs,
+  type RootedFileSystem,
+} from '@texra-ai/harness/host';
+import { findAgentByIdentifier } from '@agent/index/agentCatalog';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
@@ -27,7 +29,6 @@ import {
 } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 /** The suite's catalog, loaded once the fake host is installed. */
 let catalog: AgentCatalogShape;

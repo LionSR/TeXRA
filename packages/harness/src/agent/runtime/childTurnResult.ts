@@ -333,28 +333,6 @@ export const sendToParent = (
     return Effect.map(commitPart(session, part), () => reached);
   });
 
-/**
- * A child launch that failed before its run was created: the child has no
- * row to record a result on, so its parent hears the failure as input
- * alone, and is woken for it.
- */
-export const deliverLaunchFailure = (
-  session: SessionHandle,
-  child: RunId,
-  launchParent: RunId,
-  text: string,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    if (yield* getRunRecords(session, child).exists()) return;
-    const from = { kind: 'run', runId: child } as const;
-    const item = { text, from, deliveryId: `${child}:launch` };
-    const to = yield* sendToParent(session, item, launchParent, {}, undefined);
-    if (to !== null) yield* wakeParent(session, { to, item }, undefined);
-  }).pipe(
-    // The launch's own failure stands; this one is logged beside it.
-    Effect.catch((e) => warn(undefined, `${child}: not delivered`, e)),
-  );
-
 /** Commit a part in one transaction of its own. */
 export const commitPart = (
   { log }: Pick<SessionHandle, 'log'>,

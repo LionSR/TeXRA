@@ -10,7 +10,6 @@ import {
 } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import type { RunId } from '@shared/schemas';
 import { testSessionOf, testRuntime } from '@test/support/testProcessRuntime';
 import { closeSessionOf } from '@test/support/sessionEnd';
 
@@ -21,6 +20,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import type { ToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**

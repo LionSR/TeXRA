@@ -1318,6 +1318,16 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A lost durable fact is a row or a failure, never a warning.** A
+  subagent's result held for a parent open in another process is delivered
+  under a claim its park let go, so the delivery no longer polls for the
+  child's process to exit; a request a stopped or failed run leaves open is
+  cancelled with the run's end; a run that cannot hold its claim, or record
+  a finished compaction as it stops, ends failed naming the refusal; a
+  subagent launch that fails before its run exists fails the `agent` call
+  that launched it; and a file a model cannot take, or a tool attachment it
+  cannot read inline, is told to the model in the message that carried it.
+  Before, each scrolled by as a warning and the fact was lost.
 - **An approved tool edit keeps the person's changes across a crash.** The
   proposed file as the person left it in the diff view now travels with the
   approval and is recorded with it, and the proposal itself is stored with

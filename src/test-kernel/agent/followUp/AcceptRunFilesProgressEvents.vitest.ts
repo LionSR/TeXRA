@@ -9,8 +9,7 @@ import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { WorkspaceFs } from '@platform/rootedFs';
-import type { RunId } from '@shared/schemas';
+import { WorkspaceFs } from '@texra-ai/harness/host';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -23,6 +22,7 @@ import { AcceptRunFilesTool } from '@texra/tools/AcceptRunFilesTool';
 
 // Local file imports
 import { autoDecideRequests } from '../progressTestUtils';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 const runId = 'abcdef' as RunId;
 const storagePath = '/storage';

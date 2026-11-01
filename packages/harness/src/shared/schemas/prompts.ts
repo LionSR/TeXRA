@@ -31,10 +31,8 @@ export const ToolEditPermissionSchema = PermissionBaseSchema.mapFields(
     removedLines: LineCountSchema,
     /** The address of the proposal's content (`ToolEditContent`: the
      *  original and proposed text with their diff) in the session's blob
-     *  store, stored with the request's row; `request.preview` reads it.
-     *  Absent only on a row an earlier build wrote, which has no content to
-     *  show. */
-    content: Schema.optional(Sha256Schema),
+     *  store, stored with the request's row; `request.preview` reads it. */
+    content: Sha256Schema,
   }),
 );
 export type ToolEditPermission = typeof ToolEditPermissionSchema.Type;
@@ -53,9 +51,10 @@ const DiffHunkSchema = Schema.Struct({
  *  content a host shows beside the request's path and line counts, and
  *  the diff between them, computed once where the request is built: its
  *  hunks and the 0-based line of the proposed text a diff view reveals
- *  first (null when nothing changed). Stored as JSON in the session's blob
- *  store under the address the request's payload names
- *  (`ToolEditPermission.content`), and answered to `request.preview`. */
+ *  first (null when nothing changed). `request.preview` reads the stored
+ *  proposal named by `ToolEditPermission.content` and renders a missing
+ *  original file as empty text. The stored proposal distinguishes absence
+ *  from an empty file so applying it detects concurrent creation. */
 export const ToolEditContentSchema = Schema.Struct({
   originalContent: Schema.String,
   proposedContent: Schema.String,

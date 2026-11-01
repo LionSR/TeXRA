@@ -14,14 +14,13 @@ import {
   rootRunId,
   sessionListRunIds,
 } from '@cli/chat/tui/state/cliState';
-import type { RunId } from '@shared/schemas';
-
 import {
   bindTestSessionView,
   makeRunView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 const ROOT = 'chat-root' as RunId;
 const RUN_A = 'run-a' as RunId;
