@@ -162,8 +162,8 @@ export const ChildRuns = Context.Reference<ChildRunsShape>(
 
 /** The door of one call: over the call's place in its run and the
  *  session's services, which the loop picked where it dispatched the call.
- *  A launch runs under exactly those, so nothing else of the dispatching
- *  fiber's context reaches it, and a plugin's tool sees neither. */
+ *  A launch is provided those session services; its other requirements
+ *  still resolve from the dispatching fiber. A plugin's tool sees neither. */
 export const childRuns = (call: RunCallShape): ChildRunsShape => {
   const { session } = call;
   const { runId } = call.run;
