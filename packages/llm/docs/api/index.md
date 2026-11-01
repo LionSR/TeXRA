@@ -910,7 +910,7 @@ model's own key without asking. Hosts store these spellings, so a key is
 never renamed.
 
 ```ts
-const PLAN_ROUTES: { readonly 'chatgpt-subscription': { readonly provider: "openai"; readonly credential: "session"; }; readonly 'xai-subscription': { readonly provider: "xai"; readonly credential: "session"; }; readonly 'kimi-code-subscription': { readonly provider: "kimiCode"; readonly credential: "key"; }; readonly 'glm-coding-plan-subscription': { readonly provider: "glm"; readonly credential: "key"; }; }
+const PLAN_ROUTES: Readonly<{ 'chatgpt-subscription': Readonly<{ provider: "openai"; credential: "session"; }>; 'xai-subscription': Readonly<{ provider: "xai"; credential: "session"; }>; 'kimi-code-subscription': Readonly<{ provider: "kimiCode"; credential: "key"; }>; 'glm-coding-plan-subscription': Readonly<{ provider: "glm"; credential: "key"; }>; }>
 ```
 
 ## PlanRoute

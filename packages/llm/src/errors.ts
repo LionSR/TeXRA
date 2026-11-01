@@ -49,14 +49,28 @@ export type RemoteOperation = typeof RemoteOperationSchema.Type;
  * model's own key without asking. Hosts store these spellings, so a key is
  * never renamed.
  */
-export const PLAN_ROUTES = {
-  'chatgpt-subscription': { provider: 'openai', credential: 'session' },
-  'xai-subscription': { provider: 'xai', credential: 'session' },
-  'kimi-code-subscription': { provider: 'kimiCode', credential: 'key' },
-  'glm-coding-plan-subscription': { provider: 'glm', credential: 'key' },
-} as const satisfies Record<
-  string,
-  { provider: ApiKeyProviderId; credential: 'session' | 'key' }
+export const PLAN_ROUTES = Object.freeze({
+  'chatgpt-subscription': Object.freeze({
+    provider: 'openai',
+    credential: 'session',
+  }),
+  'xai-subscription': Object.freeze({ provider: 'xai', credential: 'session' }),
+  'kimi-code-subscription': Object.freeze({
+    provider: 'kimiCode',
+    credential: 'key',
+  }),
+  'glm-coding-plan-subscription': Object.freeze({
+    provider: 'glm',
+    credential: 'key',
+  }),
+}) satisfies Readonly<
+  Record<
+    string,
+    {
+      readonly provider: ApiKeyProviderId;
+      readonly credential: 'session' | 'key';
+    }
+  >
 >;
 
 /** A subscription plan, named by the route that bills through it. */
