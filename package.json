@@ -65,7 +65,8 @@
     "check:desktop-installers": "node scripts/verify-desktop.mjs installers",
     "sync:notice": "node scripts/sync-notice-files.mjs",
     "check:notice": "node scripts/sync-notice-files.mjs --check",
-    "storage:freeze": "vitest run --config vitest.config.mjs --mode freeze src/test-kernel/schemas/rowVersions.vitest.ts"
+    "storage:freeze": "vitest run --config vitest.config.mjs --mode freeze src/test-kernel/schemas/rowVersions.vitest.ts",
+    "protocol:bump": "vitest run --config vitest.config.mjs --mode bump src/test-kernel/schemas/protocolVersion.vitest.ts"
   },
   "devDependencies": {
     "@effect/language-service": "^0.87.5",
