@@ -28,7 +28,7 @@ import type {
 } from '@agent/runtime/ToolServices';
 import { withLogChannel } from '@logger/effectLog';
 import { type AppSignals, emitAppSignal } from '@platform/appSignals';
-import { StateReadFailed, type StateStore } from '@platform/interfaces';
+import { StateReadFailed, type StateStore } from '@shared/config/settings';
 import {
   aggregateTarget,
   qualifyAggregateId,

@@ -12,10 +12,11 @@
 import { Effect, Result, Schema } from 'effect';
 
 import {
+  Settings,
   StateReadFailed,
   type StateStore,
   type StateWriteFailed,
-} from '@platform/interfaces';
+} from '@shared/config/settings';
 import {
   AGENT_SOURCE,
   agentKeyOf,
@@ -26,7 +27,6 @@ import {
   INHERITED_WORKSPACE_AGENTS,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { Settings } from '@shared/config/settings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 
 /**

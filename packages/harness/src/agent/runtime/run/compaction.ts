@@ -17,7 +17,8 @@ import {
   type AgentTrace,
 } from '@agent/trace';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import type { StateReadFailed } from '@platform/interfaces';
+import { Settings, type SettingsStores } from '@shared/config/settings';
+import type { StateReadFailed } from '@shared/config/settings';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
@@ -27,8 +28,6 @@ import {
 import type { CellError, RunCell } from '@shared/session/runHistory';
 import { turnText } from '@shared/session/runFacts';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import { Settings } from '@shared/config/settings';
-import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { contextTokens, estimateMessageTokens } from './contextTokens';
 import type { ModelInvoker } from '../ModelInvoker';

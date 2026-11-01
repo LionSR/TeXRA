@@ -7,12 +7,8 @@ import { Effect, Layer, RcMap, Result, Schema } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { withLogChannel } from '@logger/effectLog';
 import { GlobalValues, StateStores } from '@platform/processRuntime';
-import {
-  AppState,
-  StateReadFailed,
-  StateWriteFailed,
-  type AppStateStore,
-} from '@platform/interfaces';
+import { AppState, type AppStateStore } from '@platform/interfaces';
+import { StateReadFailed, StateWriteFailed } from '@shared/config/settings';
 import { JsonValueSchema, type JsonValue } from '@shared/schemas';
 import type { SettingsCatalog } from '@shared/state/stateSettings';
 import {

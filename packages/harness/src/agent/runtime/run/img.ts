@@ -7,8 +7,7 @@ import { imageSize } from 'image-size';
 
 // Local imports - log
 import { withLogChannel } from '@logger/effectLog';
-import type { ConfigProvider } from '@platform/interfaces';
-import { Settings } from '@shared/config/settings';
+import { Settings, type ConfigProvider } from '@shared/config/settings';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { detectImageTool } from '@utils/system/toolUtils';

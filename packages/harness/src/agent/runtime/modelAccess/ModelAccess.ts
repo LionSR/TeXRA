@@ -24,9 +24,8 @@ import { getHelperModelName } from '@agent/runtime/helperModelName';
 import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import { readModelSettings } from '@model/modelSettings';
-import type { StateReadFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
-import type { SettingsStores } from '@shared/config/settings';
+import type { SettingsStores, StateReadFailed } from '@shared/config/settings';
 import type {
   CredentialSwitch,
   DeclinableUsageRoute,

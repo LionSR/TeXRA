@@ -12,11 +12,13 @@ import {
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
   type AppState,
-  type StateReadFailed,
-  type StateStore,
 } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
-import { Settings } from '@shared/config/settings';
+import {
+  Settings,
+  type StateReadFailed,
+  type StateStore,
+} from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { AgentSource } from '@shared/schemas';
 import type { ToolRegistry } from '@tools/toolTable';

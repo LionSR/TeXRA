@@ -16,10 +16,9 @@ import {
   type ReasoningRequest,
   wireEffort,
 } from '@texra-ai/llm';
-import type { StateStore } from '@platform/interfaces';
+import { Settings, type StateStore } from '@shared/config/settings';
 import { ModelBackendSchema, type ModelBackend } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { Settings } from '@shared/config/settings';
 import { ensureError } from '@utils/errors/errorMessage';
 
 /**

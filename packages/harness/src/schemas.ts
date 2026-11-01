@@ -243,7 +243,7 @@ export {
   type StateSettingEntry,
 } from '@shared/state/stateSettings';
 // What a `ConfigProvider` (root) writes to and reads back per scope.
-export type { ConfigInspection, ConfigTarget } from '@platform/interfaces';
+export type { ConfigInspection, ConfigTarget } from '@shared/config/settings';
 export { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 // The providers with a custom-endpoint setting, and a provider's
 // custom-endpoint key and China-region toggle, if it has them.
