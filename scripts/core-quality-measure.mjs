@@ -92,7 +92,7 @@ export const RULES = {
   'try-catch-effect':
     '`try/catch` around Effect code: errors belong in the typed error channel.',
   'silent-degradation':
-    'Empty `catch {}`, `.catch(() => value)`, `Effect.orElseSucceed`, and `Effect.ignore` without a log: a failure turned into a quiet default.',
+    'Empty `catch {}`, `.catch(() => value)`, `Effect.orElseSucceed`, `Effect.ignore` without a log, and `Effect.catch`, `catchCause` or `catchDefect` with `() => Effect.succeed(...)` or `() => Effect.void`: a failure turned into a quiet default. `catchIf` and `catchTag` name the condition they absorb.',
   'missing-readme':
     'A core directory without a README holding a purpose line and a mermaid diagram.',
   'entry-files':
@@ -262,6 +262,23 @@ function returnsQuietValue(handler) {
     ts.isNoSubstitutionTemplateLiteral(body) ||
     (ts.isArrayLiteralExpression(body) && body.elements.length === 0) ||
     (ts.isObjectLiteralExpression(body) && body.properties.length === 0)
+  );
+}
+
+const CATCH_ALLS = new Set(['catch', 'catchCause', 'catchDefect']);
+
+/** `Effect.catch(() => Effect.succeed(...))` or `() => Effect.void`, with any catch-all. */
+function dropsError(node) {
+  const call = node.parent;
+  if (!ts.isCallExpression(call) || call.expression !== node) return false;
+  const handler = call.arguments.at(-1);
+  if (handler == null || !ts.isArrowFunction(handler)) return false;
+  if (handler.parameters.length > 0 || ts.isBlock(handler.body)) return false;
+  const body = handler.body;
+  return (
+    body.getText() === 'Effect.void' ||
+    (ts.isCallExpression(body) &&
+      body.expression.getText() === 'Effect.succeed')
   );
 }
 
@@ -1105,6 +1122,12 @@ function measureAst(rootDir, files, byRule) {
           isQuietIgnore(node)
         ) {
           site('silent-degradation', node, `Effect.${member} without a log`);
+        } else if (CATCH_ALLS.has(member) && dropsError(node)) {
+          site(
+            'silent-degradation',
+            node,
+            `Effect.${member} dropping its error`,
+          );
         }
       }
       ts.forEachChild(node, visit);

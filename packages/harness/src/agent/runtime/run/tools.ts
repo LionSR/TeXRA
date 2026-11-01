@@ -143,7 +143,7 @@ export const replayable = Effect.fn('toolUse.replayable')(function* (
   if (schema === undefined) return Predicate.isObject(input);
   return yield* Schema.decodeUnknownEffect(schema)(input).pipe(
     Effect.as(true),
-    Effect.catch(() => Effect.succeed(false)),
+    Effect.catchTag('SchemaError', () => Effect.succeed(false)),
     // A schema whose own check threw: the arguments are not known valid.
     Effect.catchDefect((defect) =>
       Effect.sync(() => {
