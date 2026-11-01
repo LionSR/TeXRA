@@ -59,7 +59,7 @@ const HEADER_PREVIEW_MAX_CHARS = 120;
 export function formatToolUseTemplate(
   row: ToolRow,
   interrupted: boolean,
-  toolIcons: HostSnapshot['toolIcons'],
+  tools: HostSnapshot['tools'],
 ): FormatResult {
   const { toolUse, model } = row;
   const running = model.isInProgress && !interrupted;
@@ -77,7 +77,7 @@ export function formatToolUseTemplate(
   } else if (stopped || showAsError) {
     iconName = 'circle-exclamation';
   } else {
-    const icon = toolIcons[normalizedToolName];
+    const icon = tools.icons[normalizedToolName];
     // cast: `DRAWN_ICONS` holds exactly the `IconName`s.
     iconName =
       icon !== undefined && DRAWN_ICONS.has(icon)
@@ -102,7 +102,8 @@ export function formatToolUseTemplate(
   // the header, the error, or the sections above).
   if (model.output) {
     sections.push(
-      displayKind === 'bash' || normalizedToolName === 'codex'
+      displayKind === 'bash' ||
+        tools.terminalOutput.includes(normalizedToolName)
         ? buildTerminalSection('', model.output.full)
         : buildToolSection('', model.output.full, {
             toolName,

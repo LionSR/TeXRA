@@ -16,6 +16,7 @@ import {
   type RunToolCall,
   type ScriptScope,
 } from '@agent/runtime/RunCall';
+import { Runs } from '@agent/runtime/runRegistry';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { childResult, failedResult } from '@agent/runtime/delegation/AgentTool';
 import {
@@ -212,6 +213,9 @@ Forked (the default), the child continues this conversation as it stood when the
     if (script === null)
       return errorResult('self() runs only inside a script.');
     const budget = yield* scriptChildBudget(call.env.roots, script);
-    return yield* budget.withPermits(1)(runSelf(call, input, script));
+    // The child launches under the session's runs the engine door holds.
+    return yield* budget.withPermits(1)(
+      runSelf(call, input, script).pipe(Effect.provideService(Runs, call.runs)),
+    );
   }),
 });

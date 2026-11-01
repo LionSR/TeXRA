@@ -11,8 +11,8 @@ import {
 } from '@agent/runtime/run/toolResultText';
 import type { ProcessChildStrategy } from '@agent/runtime/childRunLoop';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
-import { requireToolRun } from '@agent/runtime/RunCall';
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
+import { Runs } from '@agent/runtime/runRegistry';
 import {
   formatBashDelivery,
   formatBashError,
@@ -351,7 +351,7 @@ function executeBashTool(input: BashInput) {
     const cwd = toolCall.env.workingDirectory ?? toolCall.env.roots.workspace;
 
     if (input.run_in_background) {
-      const { run } = yield* requireToolRun('bash run_in_background');
+      const call = yield* requireToolRun('bash run_in_background');
       // A background shell delivers its result as a follow-up message; a
       // one-shot run ends after the current cycle, so nothing is left to collect
       // it. Every other child type already answers this case — agent-CLI
@@ -361,19 +361,13 @@ function executeBashTool(input: BashInput) {
       // time this refuses: in the SDK path (`packages/harness/src/effect/sessionPrograms.ts`)
       // the `finally` kills the process group, so launching here would run the
       // user's command and then discard its result with nothing reported.
-      if (run.toolPolicy.stopAfterCycle)
+      if (call.run.toolPolicy.stopAfterCycle)
         return yield* Effect.fail(
           new ToolError(
             'bash run_in_background is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Run the command in the foreground instead (omit run_in_background), raising `timeout` if it needs longer than the default.',
           ),
         );
-      return yield* executeBackground(
-        run.session,
-        input,
-        input.timeout,
-        run.runId,
-        cwd,
-      );
+      return yield* executeBackground(call, input, input.timeout, cwd);
     }
 
     return yield* executeForeground(
@@ -459,16 +453,16 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
 });
 
 const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
-  session: SessionHandle,
-  call: BackgroundBashCall,
+  call: RunToolCall,
+  input: BackgroundBashCall,
   timeoutMs: number,
-  parentRunId: RunId,
   cwd?: string,
 ) {
+  const { session, runId: parentRunId } = call.run;
   return yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const runId = generateRunId();
-      const { command } = call;
+      const { command } = input;
       const preview = previewLabel(command);
 
       // The durable record states only what a shell command has: no run
@@ -484,13 +478,14 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
           // The run's name reaches terminals (the task list): no control characters.
           description: childRunDescription(
             stripControlCharacters(
-              call.description?.trim() || command,
+              input.description?.trim() || command,
               ' ',
             ).trim(),
           ),
         },
       );
 
+      // The shell launches under the session's runs the engine door holds.
       yield* startDetachedChildRunLoop({
         session,
         runId,
@@ -502,14 +497,14 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
           Effect.sync(() =>
             createBackgroundBashStrategy({
               runId,
-              call,
+              call: input,
               timeoutMs,
               cwd,
               settings: session.roots,
               logger: childRun.logger,
             }),
           ),
-      });
+      }).pipe(Effect.provideService(Runs, call.runs));
 
       return executed(
         [

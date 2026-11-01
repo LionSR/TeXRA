@@ -8,7 +8,7 @@
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
-          "file": "packages/harness/src/platform/interfaces.ts",
+          "file": "packages/harness/src/shared/config/settings.ts",
           "symbol": "ConfigProvider",
           "signature": "export interface ConfigProvider { get<T>(key: string): T; update<T>( key: string, value: T, target?: ConfigTarget, ): Effect.Effect<void, ConfigWriteFailed>; inspect<T = unknown>(key: string): ConfigInspection<T>; readonly catalog: SettingsCatalog; }"
         },
@@ -146,6 +146,29 @@
           "file": "packages/harness/src/utils/files/externalRoots.ts",
           "symbol": "registerExternalRoot",
           "signature": "export function registerExternalRoot( absolutePath: string, options: ExternalRootOptions, ): void {…}"
+        }
+      ]
+    },
+    {
+      "id": "LLM-subscription-credential-facade",
+      "candidate": "a subscriptionCredential(route, secrets) call in @texra-ai/llm over the ChatGPT and Grok session coordinators, replacing the harness's two route branches in routeCredential",
+      "why": "Built and closed unmerged: the coordinators keep consumers in two packages (the harness, and the app's subscriptionProviders.ts), so both stay exported and the call hides nothing. The harness's two branches are 32 lines; the facade is 58 plus two new exports, net +26, a layer that deletes nothing it replaces.",
+      "ruling": "https://github.com/LionSR/TeXRA/pull/14504",
+      "symbols": [
+        {
+          "file": "packages/llm/src/oauth/chatgpt/chatgptProvider.ts",
+          "symbol": "chatgptCoordinator",
+          "signature": "export const chatgptCoordinator: ( secrets: CredentialStore, ) => SubscriptionCoordinator<ChatgptSession> = SubscriptionOAuthCoordinator.forProvider(CHATGPT_POLICY);"
+        },
+        {
+          "file": "packages/llm/src/oauth/xai/xaiProvider.ts",
+          "symbol": "xaiCoordinator",
+          "signature": "export const xaiCoordinator: ( secrets: CredentialStore, ) => SubscriptionCoordinator<XaiSession> = SubscriptionOAuthCoordinator.forProvider(XAI_POLICY);"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/modelAccess/credentials.ts",
+          "symbol": "routeCredential",
+          "signature": "export function routeCredential( route: CredentialRoute, config: ModelConfig, facts: Pick<RouteFacts, 'endpoints'>, rejected: string | undefined, ): Effect.Effect< RouteCredential, RouteUnavailable, HttpClient.HttpClient | Secrets > {…}"
         }
       ]
     }

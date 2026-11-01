@@ -38,7 +38,8 @@ import {
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import type { RuntimeTool } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   envDigest,
   jsonSyntaxError,
@@ -111,7 +112,7 @@ export const readMcpConfig = (
 
 /** What a server answers once up: its tools, or why none. */
 export interface LoadedPluginTools {
-  readonly tools: ReadonlyMap<string, RuntimeTool>;
+  readonly tools: ReadonlyMap<string, ITool<Error, PluginToolServices>>;
   /** Why the server offers no tools (it failed to start). */
   readonly failure?: string;
 }

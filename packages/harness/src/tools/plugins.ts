@@ -22,13 +22,10 @@ import { Cause, Effect, type Layer, Result, Schema } from 'effect';
 // Local imports
 import type { SessionLog } from '@agent/runtime/SessionHandle';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import type {
-  PluginToolServices,
-  ToolServices,
-} from '@agent/runtime/ToolServices';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { withLogChannel } from '@logger/effectLog';
 import { type AppSignals, emitAppSignal } from '@platform/appSignals';
-import { StateReadFailed, type StateStore } from '@platform/interfaces';
+import { StateReadFailed, type StateStore } from '@shared/config/settings';
 import {
   aggregateTarget,
   qualifyAggregateId,
@@ -151,12 +148,12 @@ export interface Plugin {
  * `definePlugin` checks that at compile time (a tool that needs a service no
  * layer of its plugin serves does not compile) and erases it: the table
  * holds every plugin alike, and the step that pins a plugin provides its
- * layers' services to its calls. `C`: what a tool's calls are served. */
-export interface PluginDefinition<ROut, C = PluginToolServices> extends Omit<
+ * layers' services to its calls. */
+export interface PluginDefinition<ROut> extends Omit<
   Plugin,
   'tools' | 'processLayer' | 'sessionLayer' | 'availability'
 > {
-  readonly tools?: readonly ITool<Error, C | ROut>[];
+  readonly tools?: readonly ITool<Error, PluginToolServices | ROut>[];
   readonly processLayer?: ProcessPluginLayer<ROut>;
   readonly sessionLayer?: Layer.Layer<ROut, never, PluginHold>;
   /** Probed outside any step, whether or not the plugin is on: it may
@@ -165,18 +162,14 @@ export interface PluginDefinition<ROut, C = PluginToolServices> extends Omit<
   readonly availability?: ToolAvailabilityChecks;
 }
 
-const erase = <ROut, C>(plugin: PluginDefinition<ROut, C>): Plugin =>
-  plugin as unknown as Plugin;
-
-/** A plugin value from its definition, its own services erased. */
-export const definePlugin: <ROut = never>(
+/** A plugin value from its definition, its own services erased: the
+ *  harness's built-ins and an app's plugins are written the same way. */
+export const definePlugin = <ROut = never>(
   plugin: PluginDefinition<ROut>,
-) => Plugin = erase;
-
-/** A built-in's value: its tools may read `ToolServices`. */
-export const defineBuiltinPlugin: <ROut = never>(
-  plugin: PluginDefinition<ROut, ToolServices>,
-) => Plugin = erase;
+): Plugin =>
+  // The step that pins the plugin serves its layers' services to its calls.
+  // cast: `ROut` is checked by the parameter type and erased here.
+  plugin as unknown as Plugin;
 
 /** {@link decodeDisabledTools}, failing as the state read it is. */
 export function storedDisabledTools(

@@ -20,9 +20,10 @@ import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { LogWriteError } from '@agent/runtime/SessionHandle';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AppSignals } from '@platform/appSignals';
-import type { AppState, ConfigProvider } from '@platform/interfaces';
+import type { AppState } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { GlobalValues } from '@platform/processRuntime';
+import type { ConfigProvider } from '@shared/config/settings';
 import {
   AgentDefinitionSchema,
   type PermissionPayload,

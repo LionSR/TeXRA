@@ -21,7 +21,7 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCatalogServices } from '@agent/index/agentEntry';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
-import type { StateReadFailed } from '@platform/interfaces';
+import type { StateReadFailed } from '@shared/config/settings';
 import { agentName, type ResumeBlocker } from '@shared/schemas';
 
 import type { SessionHandle } from './SessionHandle';

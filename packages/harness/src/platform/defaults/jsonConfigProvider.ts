@@ -4,14 +4,13 @@ import type {
   SettingsCatalog,
   StateSettingEntry,
 } from '@shared/state/stateSettings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-
 import {
   ConfigWriteFailed,
   type ConfigInspection,
   type ConfigProvider,
   type ConfigTarget,
-} from '../interfaces';
+} from '@shared/config/settings';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * The store surface one config target needs. `JsonStore` satisfies it; so does

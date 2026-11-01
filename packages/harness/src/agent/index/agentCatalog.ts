@@ -19,9 +19,9 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   AgentDirectories,
   type AgentDirectoriesFailed,
-  type StateReadFailed,
 } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { StateReadFailed } from '@shared/config/settings';
 import type {
   AgentDelegationScope,
   AgentScanIssue,

@@ -2,17 +2,9 @@
 // bypass a decision turns on, and the credential work behind a retry on the user's own key. A run asks
 // with `session.openRequest`; the surface answers with `request.decide`.
 
-import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
-import {
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  type MockInstance,
-  vi,
-} from 'vitest';
+import { layer } from '@effect/vitest';
+import { Deferred, Effect, Fiber, Layer, SubscriptionRef } from 'effect';
+import { afterEach, beforeEach, expect, type MockInstance, vi } from 'vitest';
 import {
   API_KEY_ENV_NAMES,
   apiKeySecretName,
@@ -59,8 +51,6 @@ import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
-import { testRuntime } from '@test/support/testProcessRuntime';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { installedHost } from '@test/support/setupPlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
@@ -70,13 +60,17 @@ import {
   setTestApprovalPolicy,
 } from '@test/support/sessionTestUtils';
 import {
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
+import {
   APPROVE_SESSION_ACTION,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
 import type {
   PermissionPayload,
-  RequestDecision,
   RetryPermission,
   RunId,
 } from '@texra-ai/harness/schemas';
@@ -84,34 +78,66 @@ import type { PlatformSecrets } from '@texra-ai/harness/host';
 
 /** The settings the TUI's retry decisions write through, if any. */
 const settingsStores = makeFakeSettingsStores();
-let detachHost = (): void => {};
+
+/** The file's session as the harness holds it: its requests, interactions,
+ *  log and view. */
+const sessionHandle = Effect.flatMap(TestSession, sessionHandleOf);
 
 /**
- * Attach the TUI presentation host for one test. It answers nothing on its
- * own: it stages what a request needs before it can be shown, and performs
- * the `useOwnApiKey` capability a retry decision names.
+ * Close whatever the test did not answer: a request left open outlives its
+ * test on the file's session, so the next one would read it at the head.
  */
-function tui(): void {
+const cancelOpenRequests = Effect.gen(function* () {
+  const session = yield* sessionHandle;
+  for (const request of SubscriptionRef.getUnsafe(session.view.ref).requests) {
+    yield* session.requests
+      .request({
+        kind: 'request.decide',
+        runId: request.runId,
+        requestId: request.requestId,
+        decision: { action: 'cancel', cause: 'Test finished.' },
+      })
+      .pipe(Effect.ignore);
+  }
+  yield* session.log.settled;
+  resetCliState();
+});
+
+/**
+ * Attach the TUI presentation host for one test, until its scope closes. It
+ * answers nothing on its own: it stages what a request needs before it can
+ * be shown, and performs the `useOwnApiKey` capability a retry decision
+ * names. The detach comes back for a test that detaches it early; the
+ * scope's close detaches it once, then cancels the requests left open.
+ */
+const tui = Effect.gen(function* () {
   const cliContext = createTuiCliContext();
   setTestApprovalPolicy(cliContext.approvalPolicy);
   const presentationHost = {
     emit: vi.fn(),
     close: vi.fn(() => Effect.void),
   } as unknown as CliRuntimeHost;
-  detachHost();
-  detachHost = Effect.runSync(
-    testDefaultSession().interactions.use(
-      createTuiHostInteractions(presentationHost, cliContext, {
-        requests: {
-          request: testDefaultSession().requests.request,
-          view: testDefaultSession().view,
-        },
-        settings: settingsStores.stores,
-        runtime: testRuntime(),
-      }),
-    ),
+  const session = yield* sessionHandle;
+  yield* Effect.addFinalizer(() => cancelOpenRequests);
+  const detachHost = yield* session.interactions.use(
+    createTuiHostInteractions(presentationHost, cliContext, {
+      requests: {
+        request: session.requests.request,
+        view: session.view,
+      },
+      settings: settingsStores.stores,
+      runtime: yield* SessionGraph.runtime,
+    }),
   );
-}
+  let attached = true;
+  const detach = Effect.sync(() => {
+    if (!attached) return;
+    attached = false;
+    detachHost();
+  });
+  yield* Effect.addFinalizer(() => detach);
+  return detach;
+});
 
 /** Run ids are hex-branded, so a readable case label hashes to a stable one. */
 function runIdFor(label: string): RunId {
@@ -126,13 +152,13 @@ function runIdFor(label: string): RunId {
  *  the run exists before the first one opens. */
 const started = new Set<RunId>();
 
-function ensureRun(runId: RunId): Effect.Effect<void> {
+function ensureRun(runId: RunId) {
   return Effect.gen(function* () {
     const root = rootRunId.get();
     if (root === undefined) rootRunId.set(runId);
     if (started.has(runId)) return;
     started.add(runId);
-    const session = testDefaultSession();
+    const session = yield* sessionHandle;
     publishTestRunStart(session, runId, { parent: root ?? null });
     yield* session.log.settled.pipe(Effect.orDie);
   });
@@ -140,19 +166,15 @@ function ensureRun(runId: RunId): Effect.Effect<void> {
 
 /** Ask through the protocol the TUI host answers: `request.opened` on the
  *  run, settled by the `request.decided` a surface commits. */
-function openRequest(
-  runId: RunId,
-  payload: PermissionPayload,
-): Effect.Effect<RequestDecision, Error> {
+function openRequest(runId: RunId, payload: PermissionPayload) {
   return Effect.gen(function* () {
     yield* ensureRun(runId);
-    return yield* testDefaultSession().requests.ask(runId, payload);
+    const session = yield* sessionHandle;
+    return yield* session.requests.ask(runId, payload);
   }).pipe(Effect.mapError((cause) => new Error(String(cause))));
 }
 
-function openRetry(
-  permission: RetryPermission,
-): Effect.Effect<RequestDecision, Error> {
+function openRetry(permission: RetryPermission) {
   return openRequest(permission.runId as RunId, {
     kind: 'retry',
     data: permission,
@@ -181,11 +203,13 @@ function chatGptSubscriptionRetry(label: string): RetryPermission {
 }
 
 /** Answer the request the modal is showing. */
-function decideCurrent(decision: SurfaceDecision): void {
-  currentApproval
-    .get()
-    ?.decide(testDefaultSession().requests, testRuntime(), decision);
-}
+const decideCurrent = (decision: SurfaceDecision) =>
+  Effect.gen(function* () {
+    const session = yield* sessionHandle;
+    currentApproval
+      .get()
+      ?.decide(session.requests, yield* SessionGraph.runtime, decision);
+  });
 
 /** The decision a retry on the user's own key lands. */
 const PERSONAL_KEY_RETRY = {
@@ -217,13 +241,18 @@ function waitForApproval(
   });
 }
 
-beforeAll(() => {
-  const { view } = testDefaultSession();
-  bindSessionView(testRuntime(), {
-    current: () => SubscriptionRef.getUnsafe(view.ref),
-    changes: view.changes,
-  });
-});
+/** The session's view bound into the TUI's signal for the file, as the chat
+ *  entry binds it. */
+const boundSessionView = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const { view } = yield* sessionHandle;
+    const unbind = bindSessionView(yield* SessionGraph.runtime, {
+      current: () => SubscriptionRef.getUnsafe(view.ref),
+      changes: view.changes,
+    });
+    yield* Effect.addFinalizer(() => Effect.sync(unbind));
+  }),
+);
 
 /** The OpenAI key's entry in the installed host's secret store. */
 const OPENAI_KEY = apiKeySecretName('openai');
@@ -238,45 +267,35 @@ let readSecret: PlatformSecrets['get'];
 const openAiKeyChecks = (): number =>
   secretReads.mock.calls.filter(([key]) => key === OPENAI_KEY).length;
 
-beforeEach(() => {
-  const { secrets } = installedHost();
-  readSecret = secrets.get.bind(secrets);
-  secretReads = vi.spyOn(secrets, 'get');
-  // The session runtime reads key variables from the process environment; a
-  // blank one counts as unset, so an ambient key never stands in for one.
-  for (const name of API_KEY_ENV_NAMES) vi.stubEnv(name, '');
-});
+// One session for the file, its view bound for the file. Live clock: the
+// host's key work and the surface's decisions settle on real event-loop
+// turns.
+layer(
+  boundSessionView.pipe(
+    Layer.provideMerge(TestSession.layer()),
+    Layer.provideMerge(SessionGraph.layer),
+  ),
+  { excludeTestServices: true },
+)('TUI request decisions', (it) => {
+  beforeEach(() => {
+    const { secrets } = installedHost();
+    readSecret = secrets.get.bind(secrets);
+    secretReads = vi.spyOn(secrets, 'get');
+    // The session runtime reads key variables from the process environment; a
+    // blank one counts as unset, so an ambient key never stands in for one.
+    for (const name of API_KEY_ENV_NAMES) vi.stubEnv(name, '');
+  });
 
-afterEach(async () => {
-  vi.unstubAllEnvs();
-  detachHost();
-  detachHost = () => {};
-  // A request left open outlives its test on the file's session, so close
-  // whatever this test did not answer before the next one reads the head.
-  const session = testDefaultSession();
-  for (const request of SubscriptionRef.getUnsafe(session.view.ref).requests) {
-    await testRuntime().runPromise(
-      session.requests
-        .request({
-          kind: 'request.decide',
-          runId: request.runId,
-          requestId: request.requestId,
-          decision: { action: 'cancel', cause: 'Test finished.' },
-        })
-        .pipe(Effect.ignore),
-    );
-  }
-  await Effect.runPromise(session.log.settled);
-  resetCliState();
-  secretReads.mockRestore();
-  await Effect.runPromise(installedHost().secrets.delete(OPENAI_KEY));
-  mocks.setCliSubscriptionPreference.mockReset();
-});
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    secretReads.mockRestore();
+    await Effect.runPromise(installedHost().secrets.delete(OPENAI_KEY));
+    mocks.setCliSubscriptionPreference.mockReset();
+  });
 
-describe('TUI request decisions', () => {
   it.effect('sets the run bash bypass at the approval decision site', () =>
     Effect.gen(function* () {
-      tui();
+      yield* tui;
       const runId = runIdFor('bash-bypass');
       const pending = yield* Effect.forkChild(
         openRequest(runId, {
@@ -286,13 +305,12 @@ describe('TUI request decisions', () => {
       );
 
       yield* waitForApproval('bash', { runId });
-      decideCurrent({ action: APPROVE_SESSION_ACTION });
+      yield* decideCurrent({ action: APPROVE_SESSION_ACTION });
 
       expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
+      const session = yield* sessionHandle;
       yield* waitFor(() =>
-        expect(
-          testDefaultSession().approvals.bypass(runId, 'bash') !== null,
-        ).toBe(true),
+        expect(session.approvals.bypass(runId, 'bash') !== null).toBe(true),
       );
     }),
   );
@@ -302,7 +320,7 @@ describe('TUI request decisions', () => {
     () =>
       Effect.gen(function* () {
         yield* installedHost().secrets.set(OPENAI_KEY, 'sk-own-key');
-        tui();
+        yield* tui;
         const pending = yield* Effect.forkChild(
           openRetry(chatGptSubscriptionRetry('s3')),
         );
@@ -313,7 +331,7 @@ describe('TUI request decisions', () => {
         });
         expect(openAiKeyChecks()).toBe(0);
 
-        decideCurrent(PERSONAL_KEY_RETRY);
+        yield* decideCurrent(PERSONAL_KEY_RETRY);
 
         expect(yield* Fiber.join(pending)).toEqual(PERSONAL_KEY_RETRY);
         // The decision is the whole switch: the run declines the exhausted
@@ -352,21 +370,19 @@ describe('TUI request decisions', () => {
                   }),
               }),
         );
-        tui();
+        const detachHost = yield* tui;
         const permission = chatGptSubscriptionRetry('disposed-key');
         const pending = yield* Effect.forkChild(openRetry(permission));
         yield* waitForApproval('retry', { runId: permission.runId });
-        decideCurrent(PERSONAL_KEY_RETRY);
+        yield* decideCurrent(PERSONAL_KEY_RETRY);
         yield* Deferred.await(lookupCaptured);
-        detachHost();
-        detachHost = () => {};
+        yield* detachHost;
         finishLookup?.();
         yield* settle();
-        yield* testDefaultSession().log.settled;
+        const session = yield* sessionHandle;
+        yield* session.log.settled;
         expect(
-          SubscriptionRef.getUnsafe(
-            testDefaultSession().view.ref,
-          ).requests.some(
+          SubscriptionRef.getUnsafe(session.view.ref).requests.some(
             (request) => request.requestId === permission.requestId,
           ),
         ).toBe(true);

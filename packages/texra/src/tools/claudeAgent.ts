@@ -36,7 +36,6 @@ import {
   type TokenUsageStats,
   type ToolUseLog,
 } from '@texra-ai/harness/schemas';
-import { DELIVERY_TAG } from '@texra-ai/harness/transcript';
 import { formatDelivery, type AgentTrace } from '@texra-ai/harness/plugins';
 import {
   ToolError,
@@ -462,7 +461,7 @@ function buildClaudeAgentLaunch(params: {
     turnErrorMessage: (turn) => turn.errorMessage || undefined,
     formatDelivery: (turn, wallTimeMs, lastPrompt) =>
       formatDelivery({
-        tag: DELIVERY_TAG.claudeAgentResult,
+        tag: 'claude-agent-result',
         runId,
         prompt: lastPrompt,
         attributes: [{ name: 'session-id', value: turn.sessionId || null }],
@@ -473,7 +472,7 @@ function buildClaudeAgentLaunch(params: {
       }),
     formatError: (turn, err, lastPrompt) =>
       formatDelivery({
-        tag: DELIVERY_TAG.claudeAgentError,
+        tag: 'claude-agent-error',
         runId,
         prompt: lastPrompt,
         lines: turn ? claudeCostLines(turn) : undefined,

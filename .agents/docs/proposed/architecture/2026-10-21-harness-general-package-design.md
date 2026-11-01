@@ -176,7 +176,7 @@ and the test kernel, so a deep import from the app or a host fails to compile.
 | Port      | Contract                                                                                                                                                                                                                                                            | Default (`./node`)                  | Conformance (internal suites)                                                                         |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Storage   | Deferred past 1.0 (re-check below): `openStore` is bound to a file, so a client from context cannot replace it                                                                                                                                                      | the Node SQLite file                | the golden store and crash suites as they are                                                         |
-| Execution | the existing `FileSystem \| ChildProcessSpawner` pair, named on `AgentPlatform`; the settings reads in `utils/system/execUtils.ts:9` and `gitAuthorEnv.ts:15` become arguments                                                                                      | the Node pair                       | the crash suite's command and file cases                                                              |
+| Execution | the existing `FileSystem \| ChildProcessSpawner` pair, named on `AgentPlatform`; the settings reads in `utils/system/execUtils.ts` become arguments                                                                                                                 | the Node pair                       | the crash suite's command and file cases                                                              |
 | Clock     | Effect `Clock`, `sleep` and `Schedule` only (R8); a timed wake is a follow-up held until its time (`followup.queued` gains `notBefore`), not a `run.position` field (re-check below); one scoped `Effect.sleep` per session to the earliest `notBefore` in the view | Effect's default                    | queue a timed follow-up, advance `TestClock`, assert the turn; then close, reopen, advance, assert it |
 | Host      | `SessionHost` with neutral names (`openFile`, `showNotice`, `showError`, `focusSession`)                                                                                                                                                                            | no-op                               | none; it decides no recorded fact                                                                     |
 | Settings  | `settingsCatalog(rows, { namespace })`, prefixed at the store boundary, so stored keys are unchanged and nothing migrates                                                                                                                                           | `'harness'`; TeXRA passes `'texra'` | the existing catalog suites                                                                           |
@@ -257,15 +257,16 @@ lanes table below keep it as the refused option.
 
 - The fields stay as they are. `availability` becomes optional, and
   `ALWAYS_AVAILABLE` is exported.
-- `Continuation` takes a public `RunPark` (run id, state, can-continue, ask)
-  instead of `SessionHandle`. `recipeOf(block)` becomes public, so TeXRA's
-  documents plugin is written the way an embedder's would be.
-- `defineBuiltinPlugin` is deleted. The engine tools stay in `tools/`. Every
-  other built-in is a `definePlugin` value in `builtins/`, which a lint fence
-  restricts to public entries. The same fence on `packages/texra/src/tools`
-  drives that count to zero.
-- `toolUseHelpers.ts` is deleted. The agent-CLI tools report progress through
-  `progress(text)`, which emits a transient `stream.chunk`.
+- `recipeOf(block)` becomes public, so TeXRA's documents plugin is written
+  the way an embedder's would be.
+- `defineBuiltinPlugin` is deleted: every built-in is a `definePlugin` value
+  on the one tool contract, `ITool<Error, PluginToolServices>`, and the
+  engine tools stay in `tools/`, reading the session's runs off the engine
+  door (`RunCallShape.runs`). A `builtins/` directory behind a lint fence
+  waits for a named embedder that cannot write a built-in on the public
+  surface; the app's own count is already zero
+  ([the tool layer](./2026-11-01-tool-layer-one-catalog-one-step.md),
+  decision 4).
 - `defineTool({ deferred: true })` builds on codemode's existing discovery.
 - Request kinds stay closed (ledger D11) until a named plugin cannot be MCP plus
   hooks plus data.
@@ -297,7 +298,7 @@ the 1.0 PRD takes it.
 | 2b  | Session merge, with the history lint zone                                                                                                                                                    | M      | ~55         |
 | 3   | Vocabulary as data: namespace, `SettingHost` → probe, branding, the prompt section, data files to texra, the validation model to cli, llm branding as bind facts, the OAuth `.catch` removal | M      | 9           |
 | 4   | Done (#14211): `satisfies never` after `transcriptUpdate.ts`'s `record` switch; the writer items closed on re-check (below)                                                                  | —      | 0           |
-| 4b  | Built-ins fence                                                                                                                                                                              | M      | ~53         |
+| 4b  | Built-ins fence, measured and redesigned as one tool contract in [the tool layer note](./2026-11-01-tool-layer-one-catalog-one-step.md) (the fence itself is its decision 4)                 | S      | 0           |
 | 5   | The timed follow-up with its first consumer tool; `defineTool({ deferred: true })` when tool counts need it; the storage port only for a named second driver                                 | M      | 0           |
 | 6   | Freeze: `storage:freeze` at the first release (a `releasing` step, not a lane)                                                                                                               | S      | 0           |
 | 7   | Host dedup: `createGuiHostRequests`, one service reach, the agent-directories layer from options, the CLI notices through `LocalSession.emit`                                                | L      | 0           |
@@ -382,8 +383,8 @@ re-read the surface and the ports. Where it changes this design:
   deletes the code-mode `WeakSet`. `SettingHost` is gone from
   `WorkspaceRoots`, `SettingsStores` and the probes: the app reads a host's
   capabilities instead, and the setup probe its `SetupHost`.
-  `defineBuiltinPlugin` remains as a typed alias until the lane 4b fence moves
-  the built-ins' services onto `ToolContext`.
+  `defineBuiltinPlugin` went with lane 4b's one tool contract: the built-ins
+  read the session's runs off the engine door, `RunCallShape.runs`.
 - **Lane 5, the clock.** A `run.position.wakeAt` field fits poorly: the loop
   rewrites positions at every boundary, so a user message drops the timer
   unless the loop restates it; a wake still needs input the parked run can

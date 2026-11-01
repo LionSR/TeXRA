@@ -17,8 +17,12 @@ import {
 } from '@texra-ai/llm';
 import { getChatgptStatus, getXaiStatus } from '@texra-ai/llm/node';
 
-import { StateReadFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
+import {
+  Settings,
+  StateReadFailed,
+  type SettingsStores,
+} from '@shared/config/settings';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -32,8 +36,6 @@ import {
   providerRegionSetting,
 } from '@shared/state/providerSettings';
 
-import { Settings } from '@shared/config/settings';
-import type { SettingsStores } from '@shared/config/settings';
 import { reasoningEffortOverrides } from './reasoningLevel';
 import { SubscriptionPreference } from './subscriptionAccess';
 

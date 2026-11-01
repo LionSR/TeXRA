@@ -8,7 +8,8 @@ import { Predicate, Schema } from 'effect';
 import { JsonObjectSchema, type TurnRequest } from '@texra-ai/llm';
 
 // Local imports - agent runtime
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { convertToolSchema } from '@agent/core/tools/toolSchema';
 import type { OfferedTool, ToolDefinition } from '@shared/schemas';
 import { sha256 } from '@utils/core/idHash';
@@ -48,7 +49,7 @@ export const sentDefinitions = (tools: {
 
 /** One tool in the catalog, with the identity a step records. */
 export interface ToolEntry {
-  readonly tool: ITool;
+  readonly tool: ITool<Error, PluginToolServices>;
   /** The contributing plugin's id. */
   readonly plugin: string;
   /** The plugin's revision, which rows record: `builtin` for a built-in
@@ -149,7 +150,7 @@ export const toolDigests = (
 /** A plugin's tools as catalog entries under one revision. */
 export const entriesOf = (
   plugin: string,
-  tools: Iterable<ITool>,
+  tools: Iterable<ITool<Error, PluginToolServices>>,
   loaded?: { readonly revision: string },
 ): ReadonlyMap<string, ToolEntry> =>
   new Map(

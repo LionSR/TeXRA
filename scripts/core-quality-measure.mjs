@@ -1,6 +1,6 @@
 // Measures the core-quality rules over CORE_QUALITY_DIRS (eslint.config.mjs).
 // Each rule yields its sites per file; check-core-quality.mjs compares the
-// per-file counts with config/ratchets/core-quality/<rule>.json.
+// per-file counts with the same measurement of the merge base's tree.
 //
 // The ESLint half runs ESLint's own rules without type information, so it
 // is fast and needs no project. The AST half reads each file with the
@@ -34,8 +34,8 @@ import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { coreEntries } from './core-quality-api-report.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
-/** Lines a core file may hold before it needs a budget row. */
-const CORE_FILE_LINES = 400;
+/** Lines a core file may hold before file-size counts it. */
+export const CORE_FILE_LINES = 400;
 
 const MIN_DEPTH_INTERFACE = 4;
 const MIN_MODULE_DEPTH = 3;
@@ -145,9 +145,16 @@ const SOURCE_DIRS = [
 const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
 const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
 
-/** The repo-relative source files under `dirs`, sorted. */
+/**
+ * The repo-relative source files under `dirs`, sorted. A directory or entry
+ * file a change adds to the list is absent from the merge base's tree: it
+ * has no files there, so the head's start at zero. Nothing else is guarded:
+ * the manifests, src/test-kernel and the harness README exist at every base
+ * the check runs against.
+ */
 function sourceFiles(rootDir, dirs) {
   return dirs
+    .filter((dir) => existsSync(path.join(rootDir, dir)))
     .flatMap((dir) =>
       dir.endsWith('.ts')
         ? [dir]

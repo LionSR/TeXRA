@@ -40,9 +40,8 @@ const INTERNAL_ALIAS_PATH_GROUPS = INTERNAL_ALIAS_NAMES.flatMap((alias) => [
 ]);
 
 const COMPOSITION_ROOT_FILES = new Set([
-  path.join(__dirname, 'packages/extension/src/extension.ts'),
-  path.join(__dirname, 'packages/desktop/src/main/platform/index.ts'),
-  path.join(__dirname, 'packages/cli/src/runtime/cliProcessRuntime.ts'),
+  // TeXRA's process layer, which the three hosts build their runtime over.
+  path.join(__dirname, 'packages/texra/src/controllers/texraProcessLayer.ts'),
   // The package's composition root: `Sessions.layer` composes the process
   // its projection serves.
   path.join(__dirname, 'packages/harness/src/effect/sessions.ts'),
@@ -50,6 +49,8 @@ const COMPOSITION_ROOT_FILES = new Set([
   // the process runtime the session graph runs on, over the plugin list its
   // setup module passes (`sessionGraphTestSetup`).
   path.join(__dirname, 'src/test-kernel/support/sessionGraphInstall.ts'),
+  // Its layer form: the session graph a block builds with `it.layer`.
+  path.join(__dirname, 'src/test-kernel/support/testKernel.ts'),
 ]);
 
 // The CLI reads process input only through its runtime context and writes to
@@ -139,8 +140,8 @@ const EFFECT_RUN_ENTRIES = [
 // quality like pi"): the harness side of the package split (PR #13639,
 // harness-package-split.md §1) plus the model package. `any`, `new Promise`,
 // `.then(` and `Effect.run*` outside a named entry are hard lint errors here
-// (the blocks below); the rest is the shrink-only ratchet in
-// scripts/check-core-quality.mjs over config/ratchets/core-quality/.
+// (the blocks below); the rest is the ratchet in
+// scripts/check-core-quality.mjs, measured against the merge base.
 export const CORE_QUALITY_DIRS = [
   'packages/harness/src/agent',
   'packages/harness/src/shared/session',

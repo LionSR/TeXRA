@@ -8,7 +8,7 @@ import {
 } from 'effect';
 
 // Internal imports
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import {
   convertToolSchema,
   type JSONSchemaObject,

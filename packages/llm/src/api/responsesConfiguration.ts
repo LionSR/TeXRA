@@ -8,31 +8,35 @@ import { ModelProvider, ReasoningEffort } from 'llm-zoo';
 
 import { codexBackendModelId } from '../models/modelRoute.js';
 import { CODEX_ROUTE_EFFORTS, wireEffort } from '../models/reasoningChoice.js';
-import { OPENAI_DEFAULT_ENDPOINT } from '../providers/providerPlugins.js';
+import {
+  type BACKEND_PROTOCOLS,
+  type BackendProviderId,
+  OPENAI_DEFAULT_ENDPOINT,
+} from '../providers/providerPlugins.js';
 import type { ConfigurationOf, Facts } from './configuration.js';
 
 type ResponsesConfiguration = ConfigurationOf<'openai-responses'>;
+
+/** The request fields a vendor route sets for itself. */
+interface VendorFields extends Pick<
+  ResponsesConfiguration,
+  'supportsForcedToolChoice' | 'allowedReasoningEfforts'
+> {
+  readonly stores: boolean;
+  readonly temperature: number | null;
+  readonly reasoning: ResponsesConfiguration['defaults']['reasoning'];
+}
 
 /**
  * The Responses route of a vendor serving OpenAI's format on its own
  * endpoint: stateless unless the vendor stores and chains, no background,
  * socket, files or token count, and only the request fields it documents.
- * `null` for OpenAI, Meta and xAI, which the Responses case binds.
  */
-function vendorResponses(facts: Facts): ResponsesConfiguration | null {
-  const { base, config, controls, spec } = facts;
-  const choice = spec.options.reasoning;
-  const effort = wireEffort(config, choice);
-  const route = (
-    fields: Pick<
-      ResponsesConfiguration,
-      'supportsForcedToolChoice' | 'allowedReasoningEfforts'
-    > & {
-      readonly stores: boolean;
-      readonly temperature: number | null;
-      readonly reasoning: ResponsesConfiguration['defaults']['reasoning'];
-    },
-  ): ResponsesConfiguration => ({
+function vendorRoute(
+  { base, controls }: Facts,
+  fields: VendorFields,
+): ResponsesConfiguration {
+  return {
     ...base,
     protocol: 'openai-responses',
     background: 'unsupported',
@@ -53,78 +57,19 @@ function vendorResponses(facts: Facts): ResponsesConfiguration | null {
       reasoning: fields.reasoning,
       serviceTier: null,
     },
-  });
-  const reasoning = (
-    value: ResponsesConfiguration['allowedReasoningEfforts'][number] | null,
-  ) => ({ effort: value, mode: null, summary: null });
-  switch (config.provider) {
-    case ModelProvider.DEEPSEEK:
-      // `none` turns thinking off; thinking refuses a temperature.
-      return route({
-        supportsForcedToolChoice: true,
-        allowedReasoningEfforts: facts.acceptedEfforts,
-        stores: false,
-        temperature: controls.temperature,
-        reasoning: reasoning(effort),
-      });
-    case ModelProvider.MOONSHOT:
-      // Kimi fixes its sampling. Its `thinking` switch is not part of this
-      // request shape, so `@none` is refused by the reasoning choice.
-      return route({
-        supportsForcedToolChoice: false,
-        allowedReasoningEfforts: config.reasoning?.efforts ?? [],
-        stores: false,
-        temperature: null,
-        reasoning: reasoning(choice.effort),
-      });
-    case ModelProvider.GLM:
-      // Zhipu stores for seven days; `none` turns thinking off.
-      return route({
-        supportsForcedToolChoice: false,
-        allowedReasoningEfforts: facts.acceptedEfforts,
-        stores: true,
-        temperature:
-          controls.temperature === null
-            ? null
-            : Math.min(1, controls.temperature),
-        reasoning: reasoning(effort),
-      });
-    case ModelProvider.DASHSCOPE:
-      // DashScope stores by default; Qwen keeps its own thinking default.
-      return route({
-        supportsForcedToolChoice: false,
-        allowedReasoningEfforts: [],
-        stores: true,
-        temperature: controls.temperature,
-        reasoning: null,
-      });
-    case ModelProvider.MINIMAX:
-      // MiniMax reasons only when asked; its temperature range is (0, 1].
-      return route({
-        supportsForcedToolChoice: false,
-        allowedReasoningEfforts: ['high'],
-        stores: false,
-        temperature:
-          spec.options.temperature === undefined
-            ? null
-            : Num.clamp(spec.options.temperature, {
-                minimum: 0.01,
-                maximum: 1,
-              }),
-        reasoning: choice.thinking ? reasoning('high') : null,
-      });
-    default:
-      return null;
-  }
+  };
 }
 
+/** A reasoning request that names only its effort. */
+const effortOnly = (
+  effort: ResponsesConfiguration['allowedReasoningEfforts'][number] | null,
+) => ({ effort, mode: null, summary: null });
+
 /**
- * The Responses configuration: a vendor's own endpoint, else OpenAI, Meta,
- * xAI or the ChatGPT subscription.
+ * The Responses route of OpenAI, xAI and Meta on their own endpoints, and of
+ * the ChatGPT subscription's Codex backend.
  */
-export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
-  const vendor = vendorResponses(facts);
-  if (vendor !== null) return vendor;
+function firstPartyResponses(facts: Facts): ResponsesConfiguration {
   const { base, config, controls, spec } = facts;
   const { credential, options } = spec;
   const choice = options.reasoning;
@@ -206,4 +151,92 @@ export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
       serviceTier: options.fastTier && config.tiers?.fast ? 'fast' : null,
     },
   };
+}
+
+/** A provider whose backend serves the Responses protocol. */
+type ResponsesProviderId = {
+  [
+    P in BackendProviderId
+  ]: (typeof BACKEND_PROTOCOLS)[P] extends 'openai-responses' ? P : never;
+}[BackendProviderId];
+
+/**
+ * Each Responses provider's route. Keyed by every provider whose backend
+ * serves Responses, so a provider added to `BACKEND_PROTOCOLS` does not
+ * compile until its row says which route it binds.
+ */
+const RESPONSES_ROUTES: {
+  readonly [P in ResponsesProviderId]: (facts: Facts) => ResponsesConfiguration;
+} = {
+  openai: firstPartyResponses,
+  xai: firstPartyResponses,
+  meta: firstPartyResponses,
+  // `none` turns thinking off; thinking refuses a temperature.
+  deepseek: (facts) =>
+    vendorRoute(facts, {
+      supportsForcedToolChoice: true,
+      allowedReasoningEfforts: facts.acceptedEfforts,
+      stores: false,
+      temperature: facts.controls.temperature,
+      reasoning: effortOnly(
+        wireEffort(facts.config, facts.spec.options.reasoning),
+      ),
+    }),
+  // Kimi fixes its sampling. Its `thinking` switch is not part of this
+  // request shape, so `@none` is refused by the reasoning choice.
+  moonshot: (facts) =>
+    vendorRoute(facts, {
+      supportsForcedToolChoice: false,
+      allowedReasoningEfforts: facts.config.reasoning?.efforts ?? [],
+      stores: false,
+      temperature: null,
+      reasoning: effortOnly(facts.spec.options.reasoning.effort),
+    }),
+  // Zhipu stores for seven days; `none` turns thinking off.
+  glm: (facts) =>
+    vendorRoute(facts, {
+      supportsForcedToolChoice: false,
+      allowedReasoningEfforts: facts.acceptedEfforts,
+      stores: true,
+      temperature:
+        facts.controls.temperature === null
+          ? null
+          : Math.min(1, facts.controls.temperature),
+      reasoning: effortOnly(
+        wireEffort(facts.config, facts.spec.options.reasoning),
+      ),
+    }),
+  // DashScope stores by default; Qwen keeps its own thinking default.
+  dashscope: (facts) =>
+    vendorRoute(facts, {
+      supportsForcedToolChoice: false,
+      allowedReasoningEfforts: [],
+      stores: true,
+      temperature: facts.controls.temperature,
+      reasoning: null,
+    }),
+  // MiniMax reasons only when asked; its temperature range is (0, 1].
+  minimax: (facts) => {
+    const { options } = facts.spec;
+    return vendorRoute(facts, {
+      supportsForcedToolChoice: false,
+      allowedReasoningEfforts: ['high'],
+      stores: false,
+      temperature:
+        options.temperature === undefined
+          ? null
+          : Num.clamp(options.temperature, { minimum: 0.01, maximum: 1 }),
+      reasoning: options.reasoning.thinking ? effortOnly('high') : null,
+    });
+  },
+};
+
+/**
+ * The Responses configuration of the provider's route. `configurationFor`
+ * reaches this case only for a provider `BACKEND_PROTOCOLS` maps to it.
+ */
+export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
+  // cast: a Responses backend, by the protocol lookup that chose this case.
+  const provider = facts.config.provider as ResponsesProviderId;
+  return RESPONSES_ROUTES[provider](facts);
 }

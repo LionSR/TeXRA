@@ -22,7 +22,6 @@ import {
 } from '@texra-ai/harness/node';
 import { ensureError, GlobalStateKey } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
-import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
@@ -304,13 +303,12 @@ export function initCliPlatform(
     // process session it opened) are what the second and later calls find;
     // the first call builds them below.
     //
-    // A step that fails after the runtime exists (a store that will not open, a
-    // seed that will not write) registers nothing to dispose it; the failure
-    // is re-raised so the caller reports the cause, and the process entry
-    // (`bin/texra.ts`) disposes the still-installed runtime in its
-    // `Effect.ensuring`, never a fiber on that runtime. Keep the roots and
-    // lazy session private until the fallible setup has succeeded: their
-    // ports have no reset operation.
+    // A step that fails after the runtime exists (a store that will not open)
+    // registers nothing to dispose it; the failure is re-raised so the caller
+    // reports the cause, and the process entry (`bin/texra.ts`) disposes the
+    // still-installed runtime in its `Effect.ensuring`, never a fiber on that
+    // runtime. Keep the roots and lazy session private until the fallible
+    // setup has succeeded: their ports have no reset operation.
     const { globalState, platform } = yield* withProcessServices(
       runtime,
       Effect.gen(function* () {
@@ -375,12 +373,6 @@ export function initCliPlatform(
               ),
             ),
           );
-
-          // The once-per-process write the shared bootstrap owns for all
-          // three hosts. Before the roots are published below, not after: its
-          // one fallible step (the first-install tool seed) must fail while
-          // they are still private, as the seed did when this body owned it.
-          yield* bootstrapHost({ roots });
 
           // The one-time telemetry notice: a single stderr line, then a state
           // flag. A quiet run neither prints it nor marks it shown.

@@ -139,8 +139,8 @@ export {
   type ScriptPhaseView,
   type ScriptStageView,
 } from '@shared/transcript/scriptStage';
-// A delivered follow-up as a renderer shows it: its tag, its summary, and
-// a script delivery's tally; and the envelope tags a producer mints.
+// A delivered follow-up as a renderer shows it: its tag, its summary, a
+// script delivery's tally, and whether its body is entity-escaped.
 export {
   decodeXmlEntities,
   deliveryTagOf,
@@ -148,12 +148,7 @@ export {
   summarizeEmbeddedSubagentFollowups,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-export {
-  DELIVERY_TAG,
-  DELIVERY_TAGS,
-  type DeliveryTagEntry,
-  type DeliveryTagName,
-} from '@shared/deliveryTags';
+export { deliveryBodyEscaped } from '@shared/deliveryTags';
 // Run lists and task groups: their order, a group's status, and a
 // compaction's status.
 export {

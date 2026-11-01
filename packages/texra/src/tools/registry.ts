@@ -145,6 +145,9 @@ export interface PluginCard {
 export type TexraPlugin = Plugin & {
   readonly card?: PluginCard;
   readonly icons?: Readonly<Record<string, string>>;
+  /** The tools, by normalized tool name, whose output the transcript paints
+   *  as a terminal session, as it paints `bash`'s. */
+  readonly terminalOutput?: readonly string[];
 };
 
 /** TeXRA's filter on `write_file`: a `.tex` file's content goes through the

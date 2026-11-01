@@ -21,7 +21,6 @@ import {
   AgentDirectories,
   AppState,
   type AgentDirectoriesPort,
-  type StateStore,
 } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -36,7 +35,7 @@ import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '@texra/tools/lean/leanLanguageServices';
-import { defineBuiltinPlugin, type Plugin } from '@tools/plugins';
+import { definePlugin, type Plugin } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 import {
@@ -50,6 +49,7 @@ import {
 import type {
   ProcessLayerOptions,
   ProcessServices,
+  StateStore,
 } from '@texra-ai/harness/host';
 
 /** TeXRA's plugins that own row kinds or an agent-file block, as those
@@ -88,7 +88,7 @@ export const storePluginsLayer = Layer.succeed(ToolRegistry)(
  *  tool): a suite that resolves a run's tools runs on the session graph's
  *  runtime or provides `pluginCatalogLayer`. */
 const BARE_PLUGINS: readonly Plugin[] = [
-  defineBuiltinPlugin({
+  definePlugin({
     id: 'goal',
     toggle: 'off',
     availability: { check: () => Effect.succeed({ available: true }) },

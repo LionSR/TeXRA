@@ -305,19 +305,6 @@ interface CallRequests {
 }
 ```
 
-## CallServices
-
-The runtime's services a call reads: the process's, the rooted
-filesystems of the session the call works in, and the call
-(`ToolContext`, the run included). A tool takes `WorkspaceFs` from
-context instead of resolving a static against whichever roots its fiber
-happens to carry.
-
-```ts
-type CallServices =
-  RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
-```
-
 ## CellError
 
 What a run cell's commits and re-reads fail with.
@@ -375,7 +362,10 @@ always render it the same way and in the same place.
 
 ```ts
 interface ChildRunDelivery {
-  /** Root element name (`subagent-result`, `background-error`, …). */
+  /** Root element name (`subagent-result`, `background-error`, …). A
+   *  plugin's is `<family>-result` or `<family>-error`, `family` being
+   *  lowercase words joined by `-`: every render surface recognizes that
+   *  shape as a delivery, so a plugin registers no tag. */
   readonly tag: string;
   readonly runId: string;
   /** Echoed prompt attribute, for a child that took a prompt; truncated before escaping. */
@@ -441,7 +431,7 @@ call's run; a standalone host call has none.
 interface ChildRunsShape {
   readonly launch: (
     launch: ChildLaunch,
-  ) => Effect.Effect<ToolResult, Error, CallServices>;
+  ) => Effect.Effect<ToolResult, Error, PluginToolServices>;
   readonly launchProcess: <TTurn>(
     launch: ProcessChildLaunch<TTurn>,
   ) => Effect.Effect<RunId, Error>;
@@ -534,12 +524,11 @@ type DecisionOf<K extends PermissionPayload['kind']> =
 
 ## definePlugin
 
-A plugin value from its definition, its own services erased.
+A plugin value from its definition, its own services erased: the
+harness's built-ins and an app's plugins are written the same way.
 
 ```ts
-const definePlugin: <ROut = never>(
-  plugin: PluginDefinition<ROut>,
-) => Plugin
+const definePlugin: <ROut = never>(plugin: PluginDefinition<ROut>) => Plugin
 ```
 
 ## DefineToolOptions
@@ -1072,14 +1061,14 @@ require `ROut`, the services its own layers serve, beside the harness's.
 `definePlugin` checks that at compile time (a tool that needs a service no
 layer of its plugin serves does not compile) and erases it: the table
 holds every plugin alike, and the step that pins a plugin provides its
-layers' services to its calls. `C`: what a tool's calls are served.
+layers' services to its calls.
 
 ```ts
-interface PluginDefinition<ROut, C = PluginToolServices> extends Omit<
+interface PluginDefinition<ROut> extends Omit<
   Plugin,
   'tools' | 'processLayer' | 'sessionLayer' | 'availability'
 > {
-  readonly tools?: readonly ITool<Error, C | ROut>[];
+  readonly tools?: readonly ITool<Error, PluginToolServices | ROut>[];
   readonly processLayer?: ProcessPluginLayer<ROut>;
   readonly sessionLayer?: Layer.Layer<ROut, never, PluginHold>;
   /** Probed outside any step, whether or not the plugin is on: it may
@@ -1134,13 +1123,19 @@ interface PluginRow {
 
 ## PluginToolServices
 
-Services the runtime supplies to a plugin's tool: the call's. The
-child-launch door (`ChildRuns`) and the call's place in its run
-(`RunCall`) are references with defaults, never requirements; a plugin's
-tool reads the door and never the session's `Runs`.
+The services the runtime supplies to a tool's call, a plugin's and a
+built-in's alike: the process's, the rooted filesystems of the session
+the call works in, and the call (`ToolContext`, the run included). A
+tool takes `WorkspaceFs` from context instead of resolving a static
+against whichever roots its fiber happens to carry. The child-launch
+door (`ChildRuns`) and the call's place in its run (`RunCall`) are
+references with defaults, never requirements; a plugin's tool reads the
+door and never the session's `Runs`, which only the engine door carries
+(`RunCallShape.runs`).
 
 ```ts
-type PluginToolServices = CallServices;
+type PluginToolServices =
+  RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
 ```
 
 ## ProcessChildLaunch

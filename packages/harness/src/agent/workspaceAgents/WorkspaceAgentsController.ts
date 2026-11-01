@@ -1,11 +1,12 @@
 import { Effect, Schema } from 'effect';
 
-import type {
-  AgentDirectoriesPort,
-  StateStore,
-  StateWriteFailed,
-  StateReadFailed,
-} from '@platform/interfaces';
+import type { AgentDirectoriesPort } from '@platform/interfaces';
+import {
+  Settings,
+  type StateReadFailed,
+  type StateStore,
+  type StateWriteFailed,
+} from '@shared/config/settings';
 import type { WorkspaceAgentsSelection, AgentSource } from '@shared/schemas';
 import {
   agentKeyOf,
@@ -14,7 +15,6 @@ import {
   WorkspaceAgentsSelectionSchema,
   INHERITED_WORKSPACE_AGENTS,
 } from '@shared/schemas';
-import { Settings } from '@shared/config/settings';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 
 import {

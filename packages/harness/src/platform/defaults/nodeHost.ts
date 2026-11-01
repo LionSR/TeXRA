@@ -10,11 +10,11 @@
  */
 
 // Local file imports
+import type { ConfigProvider, StateStore } from '@shared/config/settings';
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { resolveGlobalStoragePath } from './workspaceStorage';
 import type { WorkspaceRoots } from '../workspaceRoots';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
-import type { ConfigProvider, StateStore } from '../interfaces';
 
 /** The per-workspace services a Node host opens for one workspace folder. */
 export interface NodeWorkspaceRootsInit {

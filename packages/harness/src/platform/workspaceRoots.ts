@@ -10,7 +10,7 @@
  * holder: `SessionHandleInit.roots` is required, so every session is opened over roots its composition root named, and this
  * module declares the record without holding one.
  */
-import type { ConfigProvider, StateStore } from './interfaces';
+import type { ConfigProvider, StateStore } from '@shared/config/settings';
 
 /** One workspace's host services: its folder, storage, configuration and
  *  state stores, as the session opened over it holds them. */

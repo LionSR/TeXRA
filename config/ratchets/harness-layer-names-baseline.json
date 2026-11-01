@@ -1,19 +1,6 @@
 {
   "semantics": "Names the packages/harness/src directories import across an edge that does not point strictly down the layer order in packages/harness/AGENTS.md \"Layer order\" (HARNESS_LAYERS in src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts): an upward edge, an edge within one layer, or either half of a two-way directory pair. Keys are from->to directories (`entries` is the package entry files at the root); each name is module#name under the target directory, prefixed `type ` when every use across the edge is type-only (`*` is a namespace, side-effect, dynamic or export-star import). Downward edges are not listed. The ratchet fails on a new name, on a type name that gains a value use, and on a listed name that is gone or now only a type until the file is shrunk with `npx vitest run src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts -u`.",
   "names": {
-    "platform->shared": [
-      "schemas#AgentSourceSchema",
-      "session/database#DatabaseOpenFailed",
-      "state/stateSettings#settingsCatalog",
-      "type schemas#OwnerId",
-      "type session/database#CurrentValues",
-      "type session/database#GlobalDatabase",
-      "type session/database#ProjectDatabases",
-      "type session/sessionEvents#ProcessIdentity",
-      "type state/stateSettings#SettingsCatalog",
-      "type state/stateSettings#StateSettingEntry",
-      "type usageLog#UsageLog"
-    ],
     "platform->utils": [
       "core/idHash#truncatedHexId",
       "core/perKeyQueue#withPerKeyLane",
@@ -42,13 +29,6 @@
       "text/stringUtils#stripControlCharacters",
       "text/stringUtils#truncateSummary"
     ],
-    "shared->platform": [
-      "type interfaces#ConfigProvider",
-      "type interfaces#ConfigTarget",
-      "type interfaces#ConfigWriteFailed",
-      "type interfaces#StateReadFailed",
-      "type interfaces#StateStore"
-    ],
     "tools->agent": [
       "codeSandbox/codeSandbox#CodeSandbox",
       "codeSandbox/limits#RUN_LOG_MAX_LINES",
@@ -76,9 +56,7 @@
       "runtime/RunCall#RunCall",
       "runtime/RunCall#callerRun",
       "runtime/RunCall#requireFileReadForEdit",
-      "runtime/RunCall#requireRun",
       "runtime/RunCall#requireToolRun",
-      "runtime/RunCall#sessionOf",
       "runtime/childRunBudget#scriptChildBudget",
       "runtime/delegation/AgentTool#agentTool",
       "runtime/delegation/AgentTool#childResult",
@@ -126,8 +104,6 @@
       "type runtime/SessionHandle#SessionHandle",
       "type runtime/SessionHandle#SessionLog",
       "type runtime/ToolServices#PluginToolServices",
-      "type runtime/ToolServices#RuntimeTool",
-      "type runtime/ToolServices#ToolServices",
       "type runtime/childRunLoop#ProcessChildStrategy",
       "type runtime/delegation/bashDelivery#BackgroundBashCall",
       "type runtime/delegation/bashDelivery#BashDeliveryStreamExcerpt",
@@ -207,11 +183,6 @@
       "errors/errorPredicates#isNotADirectoryError",
       "storage/storageLayout#WORKSPACE_STORAGE_LAYOUT"
     ],
-    "utils->platform": [
-      "rootedFs#StorageFs",
-      "rootedFs#WorkspaceFs",
-      "type interfaces#ConfigProvider",
-      "type interfaces#StateReadFailed"
-    ]
+    "utils->platform": ["rootedFs#StorageFs", "rootedFs#WorkspaceFs"]
   }
 }

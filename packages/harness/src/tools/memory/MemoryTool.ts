@@ -4,7 +4,7 @@ import { DateTime, Effect, type FileSystem, Option, Stream } from 'effect';
 
 // Local imports
 import { callerRun, requireFileReadForEdit } from '@agent/runtime/RunCall';
-import type { ToolServices } from '@agent/runtime/ToolServices';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   DIRECTORY_LISTING_DEPTH,
   displayToStoragePath,
@@ -84,7 +84,7 @@ function formatListingRow(
  */
 function executeMemoryTool(
   input: MemoryToolInput,
-): Effect.Effect<ToolResult, Error, ToolServices> {
+): Effect.Effect<ToolResult, Error, PluginToolServices> {
   return Effect.gen(function* () {
     const caller = yield* callerRun;
     const invocation = {
@@ -178,7 +178,7 @@ const writeAttributed = Effect.fn('MemoryTool.writeAttributed')(function* (
 function requireViewBeforeModify(
   inputPath: string,
   operation = 'editing',
-): Effect.Effect<ToolResult | null, never, ToolServices> {
+): Effect.Effect<ToolResult | null, never, PluginToolServices> {
   return requireFileReadForEdit(
     inputPath,
     true,
