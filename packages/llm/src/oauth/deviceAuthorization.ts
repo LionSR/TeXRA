@@ -1,6 +1,6 @@
 /**
- * Device-authorization polling as one Effect program, shared by the Codex
- * custom JSON flow and the xAI RFC 8628 flow.
+ * Device-authorization polling as one Effect program, run by the xAI
+ * RFC 8628 flow.
  *
  * The poll is `Effect.retry` while the endpoint reports "pending", spaced by
  * the server's interval with RFC 8628 `slow_down` growth applied to the
@@ -33,10 +33,7 @@ export interface SubscriptionDeviceCodePrompt {
 /** What a provider's device-code sign-in takes from its host. */
 export interface DeviceLoginOptions<S extends SubscriptionSession> {
   /** The coordinator that stores the session the sign-in grants. */
-  readonly coordinator: Pick<
-    SubscriptionCoordinator<S>,
-    'loginWithCode' | 'storeTokens'
-  >;
+  readonly coordinator: Pick<SubscriptionCoordinator<S>, 'storeTokens'>;
   /** Show the user the verification URL + one-time code. */
   readonly onPrompt: (
     prompt: SubscriptionDeviceCodePrompt,

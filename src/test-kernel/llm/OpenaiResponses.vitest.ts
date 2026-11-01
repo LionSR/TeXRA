@@ -37,6 +37,7 @@ const CONFIG: OpenAIResponsesConfiguration = {
   instructions: { kind: 'optional' },
   continuationInheritsInstructions: false,
   supportsForcedToolChoice: true,
+  toolNamespace: null,
   openaiEndpoint: true,
   requestDialect: 'openai',
   webSocketStreamParameter: 'implicit',

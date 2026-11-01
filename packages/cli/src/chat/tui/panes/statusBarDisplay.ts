@@ -99,9 +99,7 @@ export function subscriptionUsageProviderForStatus({
   readonly usageRoute: UsageRoute | undefined;
   readonly prospectiveRoute: UsageRoute | undefined;
 }): SubscriptionUsageProvider | undefined {
-  const route = usageRoute ?? prospectiveRoute;
-  if (route === 'chatgpt-subscription') return 'chatgpt';
-  return codingPlanForUsageRoute(route)?.usageProvider;
+  return codingPlanForUsageRoute(usageRoute ?? prospectiveRoute)?.usageProvider;
 }
 
 interface StatusBarSegment {

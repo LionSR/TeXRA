@@ -2066,7 +2066,6 @@ type RouteCredential = {
   | { readonly route: 'api-key' | 'xai-subscription' }
   | {
       readonly route: 'chatgpt-subscription';
-      readonly accountId: string | null;
       /** The ChatGPT plan the session's token names; display-only. */
       readonly plan: string | undefined;
     }

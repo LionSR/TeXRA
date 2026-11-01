@@ -115,18 +115,19 @@ const withReset = (
 ): Quota =>
   seconds === undefined ? quota : { ...quota, resetsInMs: seconds * 1000 };
 
-/** The Codex backend's own `usage_limit_reached` reply, unique to the ChatGPT plan. */
+/**
+ * The ChatGPT plan's own limit reply, unique to its token-sharing route. Its
+ * `subscription_sharing_usage_unavailable` is a temporary 503, not a limit.
+ */
 function chatgptPlanLimit(body: unknown): Quota | undefined {
   const candidate = envelopes(body).find(
-    (fields) => stringField(fields, 'type') === 'usage_limit_reached',
+    (fields) =>
+      stringField(fields, 'code') ===
+      'subscription_sharing_usage_limit_exceeded',
   );
   if (candidate === undefined) return undefined;
-  const planType = stringField(candidate, 'plan_type');
   return withReset(
-    {
-      plan: 'chatgpt-subscription',
-      ...(planType === undefined ? {} : { planType }),
-    },
+    { plan: 'chatgpt-subscription' },
     numberField(candidate, 'resets_in_seconds'),
   );
 }

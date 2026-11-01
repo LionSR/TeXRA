@@ -5,29 +5,29 @@ import { FetchHttpClient } from 'effect/http';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { codexLoginWithLoopback as loginWithLoopback } from '@texra-ai/llm/node';
-import type { CodexSession } from '../../../packages/llm/src/oauth/codex/codexProvider.js';
+import { chatgptLoginWithLoopback as loginWithLoopback } from '@texra-ai/llm/node';
+import type { ChatgptSession } from '../../../packages/llm/src/oauth/chatgpt/chatgptProvider.js';
 import type { SubscriptionOAuthCoordinator } from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
 import type { SubscriptionAuthorizeRequest } from '../../../packages/llm/src/oauth/subscriptionCoordinator.js';
 
-/** The callback path ChatGPT's OAuth registration pins. */
+/** The callback path ChatGPT's sign-in returns to. */
 const CALLBACK_PATH = '/auth/callback';
 
 /** The login program with the HTTP client a host provides. */
 const login = (options: Parameters<typeof loginWithLoopback>[0]) =>
   loginWithLoopback(options).pipe(Effect.provide(FetchHttpClient.layer));
 
-// it.live throughout: the flow binds a real loopback socket on the Codex
-// callback port (or its fallback), answers real fetches, and its callback
+// it.live throughout: the flow binds a real loopback socket on the ChatGPT
+// callback port (or any free one), answers real fetches, and its callback
 // wait sits under the live AUTH_CALLBACK_TIMEOUT_MS.
-describe('Codex loopback login', () => {
+describe('ChatGPT loopback login', () => {
   it.live(
     'ignores stale callback errors and accepts a later valid callback',
     () =>
       Effect.gen(function* () {
         const state = 'expected-state';
         const verifier = 'verifier';
-        const expectedSession: CodexSession = {
+        const expectedSession: ChatgptSession = {
           accessToken: 'access-token',
           refreshToken: 'refresh-token',
           expiresAtMs: Date.now() + 60_000,
@@ -35,10 +35,8 @@ describe('Codex loopback login', () => {
         let request!: SubscriptionAuthorizeRequest;
         const loginWithCode = vi.fn(() => Effect.succeed(expectedSession));
         const coordinator = {
-          buildAuthorizeRequest: (
-            port: number,
-          ): SubscriptionAuthorizeRequest => {
-            const redirectUri = `http://localhost:${port}${CALLBACK_PATH}`;
+          buildAuthorizeRequest: (port: number) => {
+            const redirectUri = `http://127.0.0.1:${port}${CALLBACK_PATH}`;
             const url = new URL('https://auth.example.test/oauth/authorize');
             url.searchParams.set('redirect_uri', redirectUri);
             url.searchParams.set('state', state);
@@ -46,19 +44,21 @@ describe('Codex loopback login', () => {
               url: url.toString(),
               verifier,
               state,
+              nonce: 'nonce',
               redirectUri,
+              clientId: 'dynamic_agent_client',
+              registering: true,
             };
-            return request;
+            return Effect.succeed(request);
           },
           loginWithCode,
-        } as unknown as SubscriptionOAuthCoordinator<CodexSession>;
+        } as unknown as SubscriptionOAuthCoordinator<ChatgptSession>;
 
         const session = yield* login({
           coordinator,
           openBrowser: () =>
             Effect.promise(async () => {
               const callback = new URL(request.redirectUri);
-              callback.hostname = '127.0.0.1';
 
               callback.search = new URLSearchParams({
                 state: 'stale-state',
@@ -69,16 +69,17 @@ describe('Codex loopback login', () => {
               callback.search = new URLSearchParams({
                 state,
                 code: 'valid-code',
+                client_id: 'oaiapp_issued',
               }).toString();
               expect((await fetch(callback)).status).toBe(200);
             }),
         });
 
         expect(session).toEqual(expectedSession);
-        expect(loginWithCode).toHaveBeenCalledWith({
+        // The client a registering sign-in was issued reaches the exchange.
+        expect(loginWithCode).toHaveBeenCalledWith(request, {
           code: 'valid-code',
-          verifier,
-          redirectUri: request.redirectUri,
+          clientId: 'oaiapp_issued',
         });
       }),
   );

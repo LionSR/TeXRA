@@ -1,6 +1,6 @@
 /**
  * Canonical catalog of the OAuth subscription providers — "Sign in with
- * ChatGPT" (Codex) and "Sign in with Grok" (xAI).
+ * ChatGPT" (OpenAI's token sharing) and "Sign in with Grok" (xAI).
  *
  * Every host used to restate the same descriptor per provider (coordinator,
  * both login transports, account label, preference setter, display name) and
@@ -17,10 +17,9 @@
 import { Effect } from 'effect';
 
 import {
-  codexCoordinator,
-  codexLoginWithDeviceCode,
-  codexLoginWithLoopback,
-  getCodexStatus,
+  chatgptCoordinator,
+  chatgptLoginWithLoopback,
+  getChatgptStatus,
   getXaiStatus,
   LoopbackTransportUnavailableError,
   type SubscriptionDeviceCodePrompt,
@@ -125,7 +124,11 @@ export interface SubscriptionProvider {
    * The sign-out program. A host runs it at its own edge; a failure is the
    * provider's own auth error or the secret store's rejection.
    */
-  signOut(): Effect.Effect<void, SecretsFailed, Secrets>;
+  signOut(): Effect.Effect<
+    void,
+    SubscriptionStatusError,
+    Secrets | HttpClient.HttpClient
+  >;
   /**
    * The signed-in status. A store that cannot be read, or a stored session
    * that does not parse, fails rather than reading as signed out.
@@ -160,12 +163,17 @@ interface SubscriptionProviderBindings<Coordinator, Session> extends Pick<
   'id' | 'displayName' | 'sessionName' | 'copyTarget' | 'modelFamily'
 > {
   readonly coordinator: (secrets: PlatformSecrets) => Coordinator & {
-    signOut(): Effect.Effect<void, SecretsFailed>;
+    signOut(): Effect.Effect<
+      void,
+      SubscriptionStatusError,
+      HttpClient.HttpClient
+    >;
   };
   readonly getStatus: (
     secrets: PlatformSecrets,
   ) => Effect.Effect<SubscriptionSessionStatus, SubscriptionStatusError>;
-  readonly loginWithDeviceCode: (options: {
+  /** Absent where the provider offers no device-code sign-in. */
+  readonly loginWithDeviceCode?: (options: {
     coordinator: Coordinator;
     onPrompt: (prompt: SubscriptionDeviceCodePrompt) => Effect.Effect<void>;
   }) => Effect.Effect<Session, Error, HttpClient.HttpClient>;
@@ -199,23 +207,32 @@ function defineSubscriptionProvider<
   const deviceCodeLogin = (
     coordinator: Coordinator,
     options: SubscriptionSignInOptions,
-  ) =>
-    loginWithDeviceCode({
-      coordinator,
-      // The prompt is shown beside the poll, not before it: the poll waits on
-      // the user, who may be reading (or dismissing) exactly this prompt. A
-      // child fiber, so cancelling the sign-in closes it with the flow.
-      onPrompt: (prompt) =>
-        Effect.asVoid(
-          Effect.forkChild(options.present.presentDeviceCode(prompt)),
-        ),
-    });
+  ): Effect.Effect<Session, Error, HttpClient.HttpClient> =>
+    loginWithDeviceCode === undefined
+      ? Effect.fail(
+          new Error(
+            `${descriptor.displayName} sign-in has no device code: it returns to a browser on this machine (127.0.0.1). Sign in where TeXRA runs, or forward port 1455 from your browser's machine to this one.`,
+          ),
+        )
+      : loginWithDeviceCode({
+          coordinator,
+          // The prompt is shown beside the poll, not before it: the poll waits on
+          // the user, who may be reading (or dismissing) exactly this prompt. A
+          // child fiber, so cancelling the sign-in closes it with the flow.
+          onPrompt: (prompt) =>
+            Effect.asVoid(
+              Effect.forkChild(options.present.presentDeviceCode(prompt)),
+            ),
+        });
 
   const signIn = Effect.fn(`subscriptionProviders.${descriptor.id}.signIn`)(
     function* (options: SubscriptionSignInOptions) {
       const coordinator = bindCoordinator(yield* Secrets);
+      // A provider without a device code signs in through the browser even
+      // when the host asked for one: on a remote host whose callback port is
+      // forwarded, that still completes.
       const session =
-        options.transport === 'device'
+        options.transport === 'device' && loginWithDeviceCode !== undefined
           ? yield* deviceCodeLogin(coordinator, options)
           : yield* loginWithLoopback({
               coordinator,
@@ -266,8 +283,9 @@ function defineSubscriptionProvider<
 }
 
 /**
- * Experimental "Sign in with ChatGPT": Codex-eligible models then run on the
- * user's ChatGPT Plus/Pro/Team subscription instead of an OpenAI API key.
+ * "Sign in with ChatGPT": Codex-eligible models then run on the user's
+ * ChatGPT plan instead of an OpenAI API key, through OpenAI's token sharing.
+ * The sign-in is browser-only: OpenAI's flow has no device code.
  *
  * Each binding calls through rather than capturing the imported function, so
  * a host suite that swaps `@texra-ai/llm/node` or `@model/subscriptionAccess`
@@ -279,10 +297,9 @@ const CHATGPT_PROVIDER = defineSubscriptionProvider({
   sessionName: 'ChatGPT',
   copyTarget: 'ChatGPT',
   modelFamily: 'Codex models',
-  coordinator: (secrets) => codexCoordinator(secrets),
-  getStatus: (secrets) => getCodexStatus(secrets),
-  loginWithDeviceCode: (options) => codexLoginWithDeviceCode(options),
-  loginWithLoopback: (options) => codexLoginWithLoopback(options),
+  coordinator: (secrets) => chatgptCoordinator(secrets),
+  getStatus: (secrets) => getChatgptStatus(secrets),
+  loginWithLoopback: (options) => chatgptLoginWithLoopback(options),
   accountLabel: (account) => codexAccountLabel(account),
 });
 

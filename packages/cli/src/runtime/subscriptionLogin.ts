@@ -90,12 +90,15 @@ export const signInCliSubscription = Effect.fn(
           { copyable: true },
         );
       }),
+    // A device request reaches the browser flow only for a provider without
+    // a device code (ChatGPT); the shell that asked for one cannot open a
+    // browser, so the URL is printed.
     presentSignInUrl: (url) =>
       presentCliSignInUrl({
         writeProgress: options.writeProgress,
         displayName,
         url,
-        noBrowser: init.noBrowser,
+        noBrowser: init.noBrowser || init.device,
       }).pipe(Effect.provideService(ChildProcessSpawner, spawner)),
   };
 

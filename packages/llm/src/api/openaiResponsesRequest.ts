@@ -162,15 +162,18 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
         : {}),
       ...(turn.tools.length > 0
         ? {
-            tools: turn.tools.map((tool): OpenAI.Responses.FunctionTool =>
-              config.requestDialect === 'openai'
-                ? { type: 'function', ...tool, strict: false }
-                : // The vendor endpoints take no `strict`, which the
-                  // OpenAI typings require.
-                  ({
-                    type: 'function',
-                    ...tool,
-                  } as OpenAI.Responses.FunctionTool),
+            tools: groupedTools(
+              config.toolNamespace,
+              turn.tools.map((tool): OpenAI.Responses.FunctionTool =>
+                config.requestDialect === 'openai'
+                  ? { type: 'function', ...tool, strict: false }
+                  : // The vendor endpoints take no `strict`, which the
+                    // OpenAI typings require.
+                    ({
+                      type: 'function',
+                      ...tool,
+                    } as OpenAI.Responses.FunctionTool),
+              ),
             ),
             parallel_tool_calls: turn.controls.parallelToolCalls,
             tool_choice:
@@ -186,6 +189,22 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
     return { turn, parameters };
   },
 );
+
+/** The function tools, inside the route's one namespace when it requires one. */
+const groupedTools = (
+  namespace: string | null,
+  tools: OpenAI.Responses.FunctionTool[],
+): OpenAI.Responses.Tool[] =>
+  namespace === null
+    ? tools
+    : [
+        {
+          type: 'namespace',
+          name: namespace,
+          description: 'The tools this agent can call.',
+          tools,
+        },
+      ];
 
 /** OpenAI's abort signature: the raw abort reason, or the SDK's wrapper around it. */
 export const openaiAbortMatch = (
@@ -203,14 +222,9 @@ export const ResponseAuthenticationSchema = Schema.Union([
     ),
   }),
   Schema.Struct({
-    kind: Schema.Literal('codex'),
+    kind: Schema.Literal('chatgpt'),
     accessToken: Schema.String.check(Schema.isMinLength(1)).check(
       Schema.isPattern(/^[^\r\n]+$/),
-    ),
-    accountId: Schema.NullOr(
-      Schema.String.check(Schema.isMinLength(1)).check(
-        Schema.isPattern(/^[^\r\n]+$/),
-      ),
     ),
   }),
 ]);
@@ -228,18 +242,13 @@ export function responseAuthentication(
   const authentication = Schema.decodeUnknownSync(ResponseAuthenticationSchema)(
     input,
   );
-  return authentication.kind === 'api-key'
-    ? { token: authentication.apiKey, headers: {} }
-    : {
-        token: authentication.accessToken,
-        headers: {
-          ...(authentication.accountId !== null
-            ? { 'chatgpt-account-id': authentication.accountId }
-            : {}),
-          originator: 'texra',
-          'openai-beta': 'responses=experimental',
-        },
-      };
+  return {
+    token:
+      authentication.kind === 'api-key'
+        ? authentication.apiKey
+        : authentication.accessToken,
+    headers: {},
+  };
 }
 
 /** The SDK client for one selected Responses deployment: no retries, no ambient organization. */

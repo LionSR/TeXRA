@@ -23,9 +23,11 @@ import type { ModelRoute } from './modelRoute.js';
 const DEFAULT_EFFORT = ReasoningEffort.MEDIUM;
 
 /**
- * The Codex subscription backend runs every turn synchronously on one
- * connection, so an effort above medium risks the client timing out before
- * it answers: a route ceiling, applied through the one reasoning policy.
+ * The ChatGPT plan route's effort ceiling, applied through the one reasoning
+ * policy. It was set for ChatGPT's Codex backend, which ran every turn
+ * synchronously on one connection so that a higher effort risked a client
+ * timeout; the token-sharing route streams over the public API and keeps the
+ * ceiling until higher efforts are measured there.
  */
 const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[] = [
   ReasoningEffort.LOW,

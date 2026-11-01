@@ -209,7 +209,7 @@ covers, which the operation handle deliberately does not copy.
 | `api/verdict.ts`                  | the verdict on a failure, read off the vendor's reply (`failureReply.ts`): status, retryability, scope, quota                                                           |
 | `providers/`                      | the provider plugins, the API-key providers and their key lookup, `CredentialStore`                                                                                     |
 | `models/`                         | model selection over llm-zoo, the route decision and its config and endpoint, the reasoning choice, a turn's cost                                                       |
-| `oauth/`                          | the ChatGPT (`codex/`) and Grok (`xai/`) sign-in flows over the shared subscription coordinator, loopback and device flows                                              |
+| `oauth/`                          | the ChatGPT (`chatgpt/`) and Grok (`xai/`) sign-in flows over the shared subscription coordinator, loopback and device flows                                            |
 
 ## Who calls it
 

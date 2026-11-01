@@ -7,7 +7,6 @@ import { Schema, Struct } from 'effect';
  * so a plan it lacks does not compile.
  */
 export const SUBSCRIPTION_USAGE_PROVIDERS = Object.freeze([
-  'chatgpt',
   'kimiCode',
   'glmCodingPlan',
 ] as const);

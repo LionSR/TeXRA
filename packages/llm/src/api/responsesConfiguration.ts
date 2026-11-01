@@ -17,8 +17,8 @@ import type { ConfigurationOf, Facts } from './configuration.js';
 
 type ResponsesConfiguration = ConfigurationOf<'openai-responses'>;
 
-/** Instructions the Codex backend requires when the request carries none. */
-const CODEX_DEFAULT_INSTRUCTIONS = "Follow the user's instructions.";
+/** The one namespace a ChatGPT plan's route groups every function tool in. */
+const CHATGPT_TOOL_NAMESPACE = 'texra';
 
 /** The request fields a vendor route sets for itself. */
 interface VendorFields extends Pick<
@@ -50,6 +50,7 @@ function vendorRoute(
     instructions: { kind: 'optional' },
     continuationInheritsInstructions: false,
     supportsForcedToolChoice: fields.supportsForcedToolChoice,
+    toolNamespace: null,
     openaiEndpoint: false,
     requestDialect: 'compatible',
     defaults: {
@@ -85,7 +86,12 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
     config.reasoning === undefined
       ? null
       : { effort, mode: choice.mode, summary };
-  if (credential.kind === 'codex') {
+  if (credential.kind === 'chatgpt') {
+    // OpenAI's token sharing: the public Responses API under a ChatGPT plan's
+    // rules. A request is stateless and streamed (`store: false`, no
+    // `previous_response_id`), takes no temperature or output limit, has no
+    // background mode, and takes function tools only inside a namespace; the
+    // plan's token reaches no Files API either.
     return {
       ...base,
       requestedModel: codexBackendModelId(config),
@@ -93,17 +99,18 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
       background: 'unsupported',
       supportsStorage: false,
       supportsDocumentInput: config.capabilities.supportsNativePdf,
-      webSocketStreamParameter: 'required',
+      webSocketStreamParameter: 'implicit',
       allowedReasoningEfforts: facts.acceptedEfforts,
-      instructions: { kind: 'required', fallback: CODEX_DEFAULT_INSTRUCTIONS },
+      instructions: { kind: 'optional' },
       continuationInheritsInstructions: false,
-      supportsForcedToolChoice: true,
+      // OpenAI documents no `tool_choice` for a namespaced function.
+      supportsForcedToolChoice: false,
+      toolNamespace: CHATGPT_TOOL_NAMESPACE,
       openaiEndpoint: true,
       requestDialect: 'openai',
       defaults: {
-        // The Codex backend takes no output limit.
         maxOutputTokens: null,
-        temperature: controls.temperature,
+        temperature: null,
         store: false,
         parallelToolCalls: controls.parallelToolCalls,
         reasoning,
@@ -132,6 +139,7 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
     instructions: { kind: 'optional' },
     continuationInheritsInstructions: xai,
     supportsForcedToolChoice: true,
+    toolNamespace: null,
     openaiEndpoint: spec.endpoint === OPENAI_DEFAULT_ENDPOINT,
     requestDialect: 'openai',
     defaults: {

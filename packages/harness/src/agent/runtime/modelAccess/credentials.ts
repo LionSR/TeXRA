@@ -17,7 +17,7 @@ import {
   type RouteFacts,
 } from '@texra-ai/llm';
 import {
-  codexCoordinator,
+  chatgptCoordinator,
   SubscriptionOAuthError,
   xaiCoordinator,
 } from '@texra-ai/llm/node';
@@ -42,7 +42,6 @@ export type RouteCredential = {
   | { readonly route: 'api-key' | 'xai-subscription' }
   | {
       readonly route: 'chatgpt-subscription';
-      readonly accountId: string | null;
       /** The ChatGPT plan the session's token names; display-only. */
       readonly plan: string | undefined;
     }
@@ -114,11 +113,10 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
   const { provider } = PLAN_ROUTES[route];
   const session: Effect.Effect<RouteCredential, Error, HttpClient.HttpClient> =
     route === 'chatgpt-subscription'
-      ? Effect.map(codexCoordinator(secrets).getFreshSession(), (fresh) => ({
+      ? Effect.map(chatgptCoordinator(secrets).getFreshSession(), (fresh) => ({
           route,
           provider,
           bearer: fresh.accessToken,
-          accountId: fresh.accountId ?? null,
           plan: fresh.planType,
           endpoint,
         }))
@@ -130,7 +128,7 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
         }));
   const refresh = (token: string) =>
     route === 'chatgpt-subscription'
-      ? codexCoordinator(secrets).refreshRejected(token)
+      ? chatgptCoordinator(secrets).refreshRejected(token)
       : xaiCoordinator(secrets).refreshRejected(token);
   return yield* (
     rejected === undefined

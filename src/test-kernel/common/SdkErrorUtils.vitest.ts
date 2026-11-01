@@ -12,6 +12,7 @@ import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { openaiFailure } from '../../../packages/llm/src/api/openaiError.js';
 import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';
+import { ModelError } from '../../../packages/llm/src/errors.js';
 
 /**
  * An OpenAI SDK failure as the binding raises and judges it, recorded the way
@@ -32,6 +33,25 @@ describe('context-window overflow', () => {
     expect(judged(err).classification).toStrictEqual({
       kind: 'context-window',
     });
+  });
+});
+
+describe('a ChatGPT plan limit', () => {
+  // OpenAI can end a streamed response with `response.failed` once the plan
+  // runs out; the stream's terminal event carries the error as a plain object.
+  it('is the quota verdict when it arrives as a failed response event', () => {
+    const failed = new ModelError({
+      kind: 'provider-rejection',
+      message: 'Usage limit reached.',
+      cause: {
+        code: 'subscription_sharing_usage_limit_exceeded',
+        message: 'Usage limit reached.',
+      },
+    });
+
+    expect(
+      judgeFailure(failed, 'chatgpt-subscription', false).quota,
+    ).toStrictEqual({ plan: 'chatgpt-subscription' });
   });
 });
 

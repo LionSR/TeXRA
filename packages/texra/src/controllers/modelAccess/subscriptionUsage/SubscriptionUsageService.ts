@@ -2,7 +2,6 @@ import { Cache, Cause, Clock, Duration, Effect } from 'effect';
 import { Secrets, Settings, withLogChannel } from '@texra-ai/harness/host';
 import { HttpClientError } from 'effect/http';
 
-import { codexCoordinator, SubscriptionOAuthError } from '@texra-ai/llm/node';
 import { lookupApiKey } from '@texra-ai/llm';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type {
@@ -13,7 +12,6 @@ import type {
 import { SUBSCRIPTION_USAGE_PROVIDERS } from '@texra/shared/model/subscriptionUsage';
 import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
 
-import { fetchChatGptUsage } from './codexUsageAdapter';
 import {
   fetchGlmCodingPlanUsage,
   GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
@@ -45,15 +43,11 @@ function mapCodingPlanSubscriptions(
   ) as Record<CodingPlanUsageProvider, string>;
 }
 
-const PROVIDER_NAMES: Record<SubscriptionUsageProvider, string> = {
-  chatgpt: 'ChatGPT',
-  ...mapCodingPlanSubscriptions('credentialName'),
-};
+const PROVIDER_NAMES: Record<SubscriptionUsageProvider, string> =
+  mapCodingPlanSubscriptions('credentialName');
 
-const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
-  chatgpt: 'ChatGPT Coding Plan',
-  ...mapCodingPlanSubscriptions('displayName'),
-};
+const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> =
+  mapCodingPlanSubscriptions('displayName');
 
 /** The setting slots this service reads; credentials come from the process
  *  `Secrets`. */
@@ -139,39 +133,6 @@ export class SubscriptionUsageService {
     // so the client's own failure reaches the handler below unchanged.
     // `REQUEST_TIMEOUT_MS` is the one deadline over the request and body read.
     return Object.freeze({
-      chatgpt: {
-        // A 401 on a token its stored expiry still calls fresh refreshes
-        // that token, while it is still the stored one; a refresh the server
-        // refuses clears the session, so the account reads as signed out
-        // instead of "ready to use".
-        fetch: () => {
-          const fetchOnce = Effect.flatMap(
-            this.loadChatGptCredential(),
-            (credential) =>
-              credential
-                ? fetchChatGptUsage(credential, REQUEST_TIMEOUT_MS)
-                : Effect.succeed(null),
-          );
-          return Effect.flatMap(this.loadChatGptCredential(), (sent) =>
-            sent === null
-              ? Effect.succeed(null)
-              : fetchChatGptUsage(sent, REQUEST_TIMEOUT_MS).pipe(
-                  Effect.catchIf(
-                    (error) =>
-                      HttpClientError.isHttpClientError(error) &&
-                      error.reason._tag === 'StatusCodeError' &&
-                      error.reason.response.status === 401,
-                    () =>
-                      Effect.flatMap(Secrets, (secrets) =>
-                        codexCoordinator(secrets).refreshRejected(
-                          sent.accessToken,
-                        ),
-                      ).pipe(Effect.andThen(fetchOnce)),
-                  ),
-                ),
-          );
-        },
-      },
       kimiCode: {
         fetch: () =>
           Effect.flatMap(lookupStoredKey('kimiCode'), (apiKey) =>
@@ -198,24 +159,6 @@ export class SubscriptionUsageService {
       },
     });
   }
-
-  /**
-   * The stored ChatGPT session's usage credential, or `null` when no session
-   * is stored. Refreshing an expiring session is the coordinator's own job, so
-   * a refresh that fails reaches {@link fetchUsage}'s classification as the
-   * `SubscriptionOAuthError` it raised.
-   */
-  private readonly loadChatGptCredential = Effect.fn(
-    'SubscriptionUsage.loadChatGptCredential',
-  )(function* () {
-    const coordinator = codexCoordinator(yield* Secrets);
-    if ((yield* coordinator.loadSession()) === null) return null;
-    const session = yield* coordinator.getFreshSession();
-    return {
-      accessToken: session.accessToken,
-      ...(session.accountId ? { accountId: session.accountId } : {}),
-    };
-  });
 
   /**
    * Drop a provider's cached and in-flight entries after its credentials or
@@ -357,7 +300,7 @@ export class SubscriptionUsageService {
           // unexpected fault, so the cause is named once here.
           const error = Cause.squash(cause);
           // An HttpClientError carries its request, headers included (the
-          // ChatGPT account id unredacted), so only its reason is logged.
+          // plan's API key unredacted), so only its reason is logged.
           const httpError = HttpClientError.isHttpClientError(error)
             ? error.reason
             : undefined;
@@ -373,11 +316,7 @@ export class SubscriptionUsageService {
             }),
             withLogChannel(CHANNEL),
           );
-          const invalidCredentials =
-            (error instanceof SubscriptionOAuthError && error.needsReauth) ||
-            status === 401 ||
-            status === 403;
-          if (invalidCredentials) {
+          if (status === 401 || status === 403) {
             return yield* this.unavailable(provider, 'invalid_credentials');
           }
           if (

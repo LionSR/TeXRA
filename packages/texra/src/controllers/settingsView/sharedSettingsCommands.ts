@@ -81,15 +81,6 @@ type SettingsArms = SettingsViewInboundHandlerRegistry<
   ProcessServices | StorageFs
 >;
 
-/**
- * The usage snapshot a subscription's auth change invalidates (ChatGPT
- * only). The host-neutral subscription catalog does not carry it because it
- * also serves the CLI, which has no settings view.
- */
-const SUBSCRIPTION_USAGE_PROVIDERS_BY_ID: Readonly<
-  Partial<Record<SubscriptionProviderId, SubscriptionUsageProvider>>
-> = { chatgpt: 'chatgpt' };
-
 interface SettingsViewBodyPorts {
   readonly host: 'vscode' | 'desktop';
   readonly roots: WorkspaceRoots;
@@ -204,9 +195,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       reported(failure, work),
       allSettledVoid<Error, ProcessServices>([
         postAuthStatus(providerId),
-        refreshAfterCredentialChange(
-          SUBSCRIPTION_USAGE_PROVIDERS_BY_ID[providerId],
-        ),
+        refreshAfterCredentialChange(),
       ]),
     );
   const signInSubscription = (providerId: SubscriptionProviderId) =>
