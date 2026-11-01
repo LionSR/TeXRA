@@ -35,7 +35,7 @@ import {
 /**
  * The release watermark of the session store:
  * `config/storage/frozen/<name>.v<N>.json` is the JSON Schema of version N of
- * a row kind, plugin arm or current-value family as a release shipped it, and
+ * a row kind, fact kind or current-value family as a release shipped it, and
  * the frozen versions bound that name's released history. A later build reads
  * a released version forever, so its schema never changes in place: a change
  * is a new version with an upcaster from the released one.
