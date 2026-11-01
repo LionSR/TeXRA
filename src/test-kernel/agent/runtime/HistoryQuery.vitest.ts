@@ -115,10 +115,10 @@ describe('HistoryQuery', () => {
             SubscriptionRef.getUnsafe(session.view.ref),
           ),
         };
-        const history = yield* HistoryQuery.make(() => ({
+        const history = yield* HistoryQuery.make({
           log: session.log,
           view: lagging,
-        }));
+        });
         const page = yield* history.query(
           'SELECT (SELECT count(DISTINCT run_id) FROM events), (SELECT count(*) FROM runs)',
           [],

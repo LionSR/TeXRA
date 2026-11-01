@@ -144,11 +144,11 @@ export interface SessionApprovals {
 }
 
 /** Build the session's approvals over its view, its record door and its
- *  config, read from `session` when first used. */
+ *  config. */
 export function createSessionApprovals(
-  session: () => Pick<SessionHandle, 'view' | 'log' | 'roots'>,
+  session: Pick<SessionHandle, 'view' | 'log' | 'roots'>,
 ): SessionApprovals {
-  const view = () => SubscriptionRef.getUnsafe(session().view.ref);
+  const view = () => SubscriptionRef.getUnsafe(session.view.ref);
   // One lane per kind and run, which the run's prompts take in turn;
   // `withPerKeyLane` drops a lane from its map once its last prompt settles.
   const lanes: Record<QueuedKind, Map<RunId | undefined, PerKeyLane>> = {
@@ -162,7 +162,7 @@ export function createSessionApprovals(
     policy: (runId) =>
       runPolicy(
         Settings.getConfig<ApprovalPolicy>(
-          session().roots.config,
+          session.roots.config,
           APPROVAL_POLICY_CONFIG_KEY,
         ),
         view(),
@@ -179,7 +179,7 @@ export function createSessionApprovals(
         const runs = new Map<RunId, { parentId: RunId | null }>();
         const policy = new Map<RunId, ApprovalGrants>();
         for (let id: RunId | null = runId; id !== null && !runs.has(id);) {
-          const facts: RunRows | null = yield* session().log.facts(id);
+          const facts: RunRows | null = yield* session.log.facts(id);
           const parentId: RunId | null = facts?.parent?.id ?? null;
           runs.set(id, { parentId });
           policy.set(id, facts?.grants ?? NO_APPROVAL_GRANTS);
@@ -202,10 +202,10 @@ export function createSessionApprovals(
         sameGrants(shown, edit(shown))
       )
         return Effect.void;
-      return session().log.transact((tx) =>
+      return session.log.transact((tx) =>
         Effect.gen(function* () {
           const recorded =
-            (yield* session().log.facts(runId))?.grants ?? NO_APPROVAL_GRANTS;
+            (yield* session.log.facts(runId))?.grants ?? NO_APPROVAL_GRANTS;
           const next = edit(recorded);
           const all: readonly UnfoldedDraft[] = sameGrants(recorded, next)
             ? rows

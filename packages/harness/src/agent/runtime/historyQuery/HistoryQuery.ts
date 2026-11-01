@@ -260,7 +260,7 @@ const openStore = Effect.fn('HistoryQuery.open')(function* (
 export class HistoryQuery {
   /** Built in the session's scope: the store's process closes with it. */
   static readonly make = (
-    session: () => HistorySession,
+    session: HistorySession,
   ): Effect.Effect<HistoryQuery, never, Scope.Scope | ChildProcessSpawner> =>
     Effect.gen(function* () {
       return new HistoryQuery(
@@ -273,11 +273,11 @@ export class HistoryQuery {
   private readonly lane = Semaphore.makeUnsafe(1);
   private store: Store | undefined;
 
-  private readonly session: () => HistorySession;
+  private readonly session: HistorySession;
   private readonly scope: Scope.Scope;
   private readonly spawner: ChildProcessSpawner['Service'];
   private constructor(
-    session: () => HistorySession,
+    session: HistorySession,
     scope: Scope.Scope,
     spawner: ChildProcessSpawner['Service'],
   ) {
@@ -316,7 +316,7 @@ export class HistoryQuery {
 
   private run(sql: string, params: readonly HistoryCell[]) {
     return Effect.gen({ self: this }, function* () {
-      const { log, view } = this.session();
+      const { log, view } = this.session;
       const now = log.now();
       // One watermark for both tables: the first view that applied every row
       // committed by this call, and `events` through that view's cursor.

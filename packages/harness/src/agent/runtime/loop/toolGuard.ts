@@ -89,11 +89,13 @@ export type ApprovalsWithPermission = SessionApprovals & {
  */
 export const sessionPermission =
   (
-    session: () => Pick<SessionHandle, 'approvals' | 'interactions' | 'roots'>,
+    session: Pick<SessionHandle, 'interactions' | 'roots'> & {
+      readonly approvals: Pick<SessionApprovals, 'policy' | 'bypass'>;
+    },
   ): ApprovalsWithPermission['permission'] =>
   (runId, operation, hook) => {
     const [grant, setting, kind] = OPERATIONS[operation];
-    const { approvals, interactions, roots } = session();
+    const { approvals, interactions, roots } = session;
     const canPresent = !interactions.approvalPromptsUnavailable;
     const policy = approvals.policy(runId);
     const decision = decideApproval({
