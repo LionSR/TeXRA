@@ -32,8 +32,8 @@ its kind is its `type` column.
 - **Aggregate**: A keyed sequence of rows. Kinds are `run` (keyed by run id) and
   `plugin` (keyed `<plugin>:<key>`) (`shared/schemas/identifiers.ts:85-88`).
 - **Run**: One `run` aggregate. It exists while its `run.start` row exists and
-  no `run.removed` has closed it (`controllers/session/Database.ts:648-657`,
-  `:749-761`).
+  no `run.removed` has closed it (`controllers/session/Database.ts:653-662`,
+  `:754-766`).
 - **Turn**: One loop cycle, delimited by `turn.begin` and `turn.end`; usually
   one input answered by the model, but a script's handed-down call or a failed
   or cancelled invocation ends a turn with no answer
@@ -73,29 +73,29 @@ its kind is its `type` column.
 ### 2.1 One file per storage root
 
 The store is one SQLite file named `texra.db` under the storage root
-(`controllers/session/Database.ts:107`, `:200-203`); the file name and the
+(`controllers/session/Database.ts:106`, `:205-208`); the file name and the
 application id (`TeXR`) carry the product's name. An ephemeral session runs the
-same schema in memory (`controllers/session/Database.ts:200-214`).
+same schema in memory (`controllers/session/Database.ts:205-219`).
 
 The store MUST carry application id `0x54655852` and schema version 101 in
 SQLite's `user_version` (`controllers/session/storeSchema.ts:31-37`,
-`:263-264`). A process MUST refuse, unchanged, a file with another application
+`:278-279`). A process MUST refuse, unchanged, a file with another application
 id or a schema stamp at or above 101 other than its own
-(`controllers/session/storeSchema.ts:202-215`). A store stamped below 101 that
+(`controllers/session/storeSchema.ts:217-230`). A store stamped below 101 that
 holds tables of the pre-1.0 format SHALL be copied whole to the first free
 `<file>.pre1` name and started fresh; nothing in it is read again
-(`controllers/session/storeSchema.ts:269-288`). A file SQLite reports damaged at
+(`controllers/session/storeSchema.ts:284-303`). A file SQLite reports damaged at
 open SHALL be moved, with its WAL and shared-memory files, to
 `<file>.corrupt-<ms>`, and a fresh store opened in its place
-(`controllers/session/storeSchema.ts:372-409`).
+(`controllers/session/storeSchema.ts:387-424`).
 
 A persistent store runs in WAL mode with `synchronous = NORMAL` and foreign keys
-on (`controllers/session/storeSchema.ts:241-248`). Every write transaction the
+on (`controllers/session/storeSchema.ts:256-263`). Every write transaction the
 database's transaction wrapper runs MUST begin with `BEGIN IMMEDIATE`
-(`controllers/session/Database.ts:394-401`). File maintenance runs outside it:
+(`controllers/session/Database.ts:399-406`). File maintenance runs outside it:
 the one-time `VACUUM` at setup, page reclaim in autocommit `incremental_vacuum`
 steps, and the `VACUUM INTO` copy a store moved aside takes, none of which
-writes a row (`controllers/session/storeSchema.ts:180-184`, `:316`,
+writes a row (`controllers/session/storeSchema.ts:195-199`, `:331`,
 `controllers/session/storeAside.ts:137-153`).
 
 ### 2.2 The event table and the envelope
@@ -106,20 +106,20 @@ the store stamps and no caller supplies:
 
 - `commit`: SQLite `AUTOINCREMENT` key: strictly increasing across the store,
   never reused (`controllers/session/storeSchema.ts:71`).
-- `seq`: Dense from 1 per aggregate (`controllers/session/Database.ts:118-125`).
+- `seq`: Dense from 1 per aggregate (`controllers/session/Database.ts:117-124`).
 - `origin`: The writing process's identity, not the claim holder's
-  (`controllers/session/Database.ts:704-712`).
+  (`controllers/session/Database.ts:709-717`).
 - `at`: Publish clock in whole milliseconds, one value for a whole batch;
-  informational only (`controllers/session/Database.ts:994-1000`).
+  informational only (`controllers/session/Database.ts:1004-1010`).
 
 The first row of a `run` aggregate MUST be its `run.start`, and seq 1 MUST NOT
-hold any other row (`controllers/session/Database.ts:648-657`). A child's
+hold any other row (`controllers/session/Database.ts:653-662`). A child's
 `run.start` MUST name an open parent; the store stamps the parent's incarnation
 `uid` in the child's creation transaction
-(`controllers/session/Database.ts:666-688`). A `run.removed` row closes its
+(`controllers/session/Database.ts:671-693`). A `run.removed` row closes its
 aggregate and every dependent; it requires this process's claim on every open
 dependent, and a row MUST NOT be appended to a closed aggregate
-(`controllers/session/Database.ts:118-125`, `:749-761`).
+(`controllers/session/Database.ts:117-124`, `:754-766`).
 
 A payload string of 4096 or more characters is stored once per store as a zstd
 blob under the sha256 of its JSON text; the row keeps a reference, and the read
@@ -136,7 +136,7 @@ they were enqueued, one at a time, and the table's commit order is that order
 (`agent/runtime/SessionEvents.ts:181-189`). A job other than an ordering barrier
 (`transact(job, order)`, below) is one SQLite transaction: its appends commit
 together or not at all (`agent/runtime/SessionEvents.ts:174-180`,
-`controllers/session/Database.ts:976-990`).
+`controllers/session/Database.ts:986-1000`).
 
 The publisher offers these doors:
 
@@ -156,7 +156,7 @@ The publisher offers these doors:
 A job MUST NOT wait on its own publisher; doing so is a defect
 (`agent/runtime/SessionEvents.ts:137-142`, `:239`). A job MAY run again whole
 when SQLite reports the database busy, so a job body MUST be database-only
-(`controllers/session/Database.ts:426-444`). Effects a job schedules with
+(`controllers/session/Database.ts:431-449`). Effects a job schedules with
 `afterCommit` SHALL run only after its transaction commits, never for an attempt
 that rolled back (`shared/session/sessionEvents.ts:58-90`). At the close
 deadline the running job is cut and every queued job refused
@@ -184,7 +184,7 @@ Each row kind carries its own version (`shared/schemas/rowVersions.ts:72-197`).
 A row MUST be written at its kind's current version
 (`controllers/session/rowCodec.ts:173-178`). The `stored_kind` table records the
 highest version each kind was written at
-(`controllers/session/Database.ts:581-582`).
+(`controllers/session/Database.ts:586-587`).
 
 The store gate refuses a store that names a core kind this build lacks, or a
 known kind at a version above the one this build reads
@@ -192,9 +192,9 @@ known kind at a version above the one this build reads
 build lacks passes the gate; its rows are left out of every read (below). The
 gate MUST run at open and inside every outermost transaction that writes or
 derives rows, so no build opens a store holding core rows it cannot read, or
-writes beside them (`controllers/session/Database.ts:273`, `:426-442`).
+writes beside them (`controllers/session/Database.ts:278`, `:431-447`).
 Releasing claims is the one write it skips: it writes no row and only gives back
-this process's claims (`controllers/session/Database.ts:426-430`, `:967-975`). A
+this process's claims (`controllers/session/Database.ts:431-435`, `:977-985`). A
 core kind this build lacks and never retired counts as newer
 (`controllers/session/rowCodec.ts:374-380`). Kinds a build deleted are listed as
 retired; their rows fail only their own run's reads
@@ -233,7 +233,7 @@ run the gate: a row of a core kind this build lacks, written by a newer build
 after this one opened the store, reads as corrupt until the next write's gate
 refuses the store; a plugin kind whose plugin this build lacks is left out of
 reads and passes the gate (`controllers/session/rowCodec.ts:287`,
-`controllers/session/Database.ts:431-442`). A run whose rows do not decode
+`controllers/session/Database.ts:436-447`). A run whose rows do not decode
 cannot be opened or resumed (`shared/session/runHistory.ts:140-146`,
 `agent/runtime/resumeRun.ts:258-266`).
 
@@ -622,25 +622,25 @@ operation, the renewed observation repeats with no row and is never a resend
 
 There is no daemon. Several processes MAY open one store at once; each holds its
 own connection, publisher and fold, and sees the others' commits through a 250
-ms poll of SQLite's `data_version` (`controllers/session/Database.ts:333-364`).
+ms poll of SQLite's `data_version` (`controllers/session/Database.ts:338-369`).
 
 ### 7.1 Claims
 
 Each aggregate has at most one owner, the `owner_id` of its sequence row
 (`controllers/session/storeSchema.ts:54-65`). The first append to an aggregate
 creates it and claims it for the writer
-(`controllers/session/Database.ts:118-125`). A later append MUST be refused with
+(`controllers/session/Database.ts:117-124`). A later append MUST be refused with
 `DatabaseNotOwner`, and nothing written, unless the writer holds the claim and
-the aggregate is open (`controllers/session/Database.ts:118-125`, `:615-627`). A
+the aggregate is open (`controllers/session/Database.ts:117-124`, `:620-632`). A
 `plugin.fact` on a `plugin` aggregate borrows an unheld claim for its own
-transaction only (`controllers/session/Database.ts:595-598`, `:743-748`).
+transaction only (`controllers/session/Database.ts:600-603`, `:748-753`).
 
 A process takes a claim in one write transaction that reads the claim state and
-moves it (`controllers/session/Database.ts:882-900`). It MUST NOT take a claim
+moves it (`controllers/session/Database.ts:892-910`). It MUST NOT take a claim
 from another owner unless that owner is proven dead, or its liveness is
 unprovable and the user is deleting a single run
 (`controllers/session/storeAside.ts:70-84`,
-`controllers/session/Database.ts:521-534`). The transaction reads the owners
+`controllers/session/Database.ts:526-539`). The transaction reads the owners
 itself; one it holds no verdict for rolls it back whole, is proven off the write
 lock, and the transaction runs again with that verdict
 (`controllers/session/storeAside.ts:86-113`). A live owner refuses with
@@ -658,7 +658,7 @@ and no hostname (`agent/storage/leaseOwnerLiveness.ts:40-90`):
 | pid exists, start identity unreadable        | `unprovable` |
 
 Releasing a claim sets `owner_id` to null where this process holds it, and
-writes no row (`controllers/session/Database.ts:464-465`, `:967-975`).
+writes no row (`controllers/session/Database.ts:469-470`, `:977-985`).
 
 ### 7.2 Resume under a claim
 
@@ -695,9 +695,9 @@ that does not block its caller (`shared/session/runState.ts:199-229`).
 A process MAY:
 
 - read every committed row its build can read, listing and tail
-  (`controllers/session/Database.ts:775-881`)
+  (`controllers/session/Database.ts:780-891`)
 - create a new run, which it then owns
-  (`controllers/session/Database.ts:118-125`)
+  (`controllers/session/Database.ts:117-124`)
 - fork a conversation another process holds, at a settled turn end
   (`controllers/session/SessionRequests.ts:162-165`,
   `agent/runtime/forkRun.ts:78-81`, `:92-122`)
@@ -707,12 +707,12 @@ A process MAY:
 A process MUST NOT:
 
 - append to an aggregate another process holds
-  (`controllers/session/Database.ts:615-627`)
+  (`controllers/session/Database.ts:620-632`)
 - answer a request of a run a live process holds (`NotOwner`)
   (`controllers/session/SessionRequests.ts:161-173`)
 - resume a run a live process holds (`agent/runtime/resumeRun.ts:184-192`)
 - write rows to a store a newer build wrote (giving back its own claims is
-  allowed) (`controllers/session/Database.ts:439-442`)
+  allowed) (`controllers/session/Database.ts:444-447`)
 
 A run that loses its claim mid-run gets `RunHistoryRefused` `not-owner` from its
 next append, with nothing written (`agent/runtime/RunHistory.ts:167-181`,
