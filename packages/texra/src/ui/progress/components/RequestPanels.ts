@@ -130,8 +130,14 @@ export class RequestPanels extends LitElement {
     if (this.permissions.length === 0) return nothing;
     return html`${repeat(this.permissions, requestKey, (permission) => {
       const tag = cardTag(permission);
-      // No card renders this plugin's request, so this surface shows none.
-      if (tag === undefined) return nothing;
+      // A plugin request with no card in `PLUGIN_CARD_TAG` is a defect of
+      // that table: said, not dropped silently.
+      if (tag === undefined) {
+        console.warn(
+          `No request card is listed for request ${permission.data.requestId}.`,
+        );
+        return nothing;
+      }
       return staticHtml`<${tag}
         data-request-panel
         .permission=${permission}

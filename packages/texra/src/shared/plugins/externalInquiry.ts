@@ -230,12 +230,12 @@ export const EXTERNAL_INQUIRY_THREAD_ARM = {
 /** The inquiry's request, declared once: its `ask` returns at once, so the
  *  run never waits on it, and it is answered or skipped. Each `ask` posts
  *  it with an {@link InquiryRequest} as its data. */
-export const INQUIRY_REQUEST = {
+export const INQUIRY_REQUEST = Object.freeze({
   kind: 'plugin',
   plugin: EXTERNAL_INQUIRY_THREAD_ARM.plugin,
   blocksCaller: false,
-  answers: ['answer', 'skip'],
-} as const;
+  answers: Object.freeze(['answer', 'skip'] as const),
+} as const);
 
 /** The fact that makes `summary` its thread's displayed state: an `ask`
  *  states it in its call's result, so it commits with the `tool.result`.

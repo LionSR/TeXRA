@@ -178,9 +178,10 @@ export function pruneToLive(
 export const attentionRequests = computed((): readonly AttentionRequest[] => {
   const included = sessionRunIds.get();
   const view = sessionView().get();
-  // The session view lists every kind, including an `externalInquiry` a persisted
-  // session carries from another host; this surface renders none of those,
-  // so the narrowing is a filter rather than an assertion. It renders only
+  // The session view lists every kind, including a plugin's request (an
+  // inquiry) a persisted session carries from another host; this surface
+  // renders none of those, so the narrowing is a filter rather than an
+  // assertion. It renders only
   // what this window can answer (`attentionOf`, the rule every host reads):
   // not a stopped run's leftover (its modal would trap the keys `/resume`
   // needs), nor a request on a run another process holds.

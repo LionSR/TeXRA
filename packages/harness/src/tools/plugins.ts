@@ -130,7 +130,7 @@ export interface Plugin {
   /** Session-lifetime services, one per open session, up while the plugin
    *  is switched on or a step of that session pins it. */
   readonly sessionLayer?: SessionPluginLayer;
-  /** Its side of a decision on a pending request of its kind, on or off. */
+  /** Its side of a decision on a pending request it opened, on or off. */
   readonly decision?: RequestDecisionHook;
   /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
   readonly arms?: readonly PluginArm[];
