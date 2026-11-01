@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, PlatformError } from 'effect';
+import { Effect, FileSystem, type PlatformError } from 'effect';
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
@@ -20,7 +20,7 @@ import {
   createRunStorageLocation,
   pathToLocationIn,
 } from './fileLocation';
-import { entryExists, entryTypeIn } from './fsEntryExists';
+import { absentReason, entryExists, entryTypeIn } from './fsEntryExists';
 import {
   CHANNEL,
   createSymlink,
@@ -32,12 +32,6 @@ import {
   shouldSkipRelocation,
 } from './runStorageFs';
 import { locateInWorkspace } from './workspaceFS';
-
-/** `isFileNotFoundError` over the standard library's errors: the one reading
- *  of "nothing is there" the guards below branch on. */
-const isAbsent = (error: Error): boolean =>
-  error instanceof PlatformError.PlatformError &&
-  error.reason._tag === 'NotFound';
 
 /** `createSymlink`'s refusal to replace an entry that is not a link. */
 const isStanding = (error: PlatformError.PlatformError): boolean =>
@@ -177,7 +171,7 @@ export class RunFileService {
         // real snapshot.
         const hasSnapshot = yield* fs.stat(snapshotAbsolute).pipe(
           Effect.as(true),
-          Effect.catchIf(isAbsent, () => Effect.succeed(false)),
+          Effect.catchIf(absentReason, () => Effect.succeed(false)),
           Effect.mapError(
             (error) =>
               new Error(
@@ -197,7 +191,7 @@ export class RunFileService {
       }).pipe(withPerKeyLane(this.pathLanes, target.relativePath));
     }).pipe(
       Effect.catch((error) =>
-        isAbsent(error)
+        absentReason(error)
           ? Effect.succeed(target)
           : Effect.fail(
               new Error(
@@ -449,7 +443,9 @@ export class RunFileService {
             // left unlinked, as the destination guard below does.
             const snapshot = yield* fs.stat(snapshotAbsolute).pipe(
               Effect.as('present' as const),
-              Effect.catchIf(isAbsent, () => Effect.succeed('absent' as const)),
+              Effect.catchIf(absentReason, () =>
+                Effect.succeed('absent' as const),
+              ),
               Effect.catch((error) =>
                 Effect.logWarning(
                   `Skipping run-dir mirror of ${relativePath}: ${toErrorMessage(error)}`,

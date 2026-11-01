@@ -3,6 +3,7 @@ import { realpathSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 import { truncatedHexId } from '@utils/core/idHash';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 const STORAGE_LAYOUT = {
   global: 'global-storage',
@@ -33,7 +34,7 @@ function storageIdentity(workspacePath: string): string {
     return realpathSync.native(workspacePath);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    if (!['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM'].includes(code ?? ''))
+    if (!absentReason(error) && code !== 'EACCES' && code !== 'EPERM')
       throw error;
     return workspacePath;
   }

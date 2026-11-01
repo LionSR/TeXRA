@@ -12,7 +12,6 @@ import {
   FileSystem,
   Layer,
   Option,
-  Predicate,
   RcMap,
   Stream,
   SubscriptionRef,
@@ -30,6 +29,7 @@ import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { ToolRegistry } from '@tools/toolTable';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 import { databaseLayer } from './Database';
 import { deadOwners } from './ownerLiveness';
@@ -53,11 +53,7 @@ const NO_LOCAL_STATE: LocalRuntimeState = {
 const absent = (
   error: DatabaseOpenFailed,
 ): Effect.Effect<boolean, never, FileSystem.FileSystem> => {
-  if (
-    Predicate.hasProperty(error.cause, 'code') &&
-    error.cause.code === 'ENOENT'
-  )
-    return Effect.succeed(true);
+  if (absentReason(error.cause)) return Effect.succeed(true);
   if (!cannotOpen(Cause.fail(error))) return Effect.succeed(false);
   return FileSystem.FileSystem.pipe(
     Effect.flatMap((fs) => fs.exists(error.path)),

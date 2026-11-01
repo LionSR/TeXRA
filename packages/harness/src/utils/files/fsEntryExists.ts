@@ -1,19 +1,25 @@
 // Third-party imports
-import { Effect, FileSystem, PlatformError, Schedule } from 'effect';
+import { Effect, FileSystem, PlatformError, Predicate, Schedule } from 'effect';
 
 // Common imports
 import { isNotADirectoryError } from '@common/errors/errorPredicates';
 
 /**
- * The failures an existence probe reads as absent: the path is not there
+ * Whether a failure means nothing is at the path: it is not there
  * (`ENOENT`), or a parent component is a file rather than a directory
- * (`ENOTDIR`), which the platform reports as `BadResource`. Every other
- * failure propagates.
+ * (`ENOTDIR`), the two cases Node's own `statSync(path, { throwIfNoEntry:
+ * false })` reads as no entry. It answers for the standard library's
+ * `PlatformError`, which reports `ENOTDIR` as `BadResource`, and for a bare
+ * Node error. Every other failure (`EACCES`, `ELOOP`, `EISDIR`, ...) is not
+ * absence and propagates from a caller that recovers only this.
  */
-export const absentReason = (error: PlatformError.PlatformError): boolean =>
-  error.reason._tag === 'NotFound' ||
-  (error.reason._tag === 'BadResource' &&
-    isNotADirectoryError(error.reason.cause));
+export const absentReason = (error: unknown): boolean =>
+  PlatformError.isPlatformError(error)
+    ? error.reason._tag === 'NotFound' ||
+      (error.reason._tag === 'BadResource' &&
+        isNotADirectoryError(error.reason.cause))
+    : isNotADirectoryError(error) ||
+      (Predicate.hasProperty(error, 'code') && error.code === 'ENOENT');
 
 /**
  * Restart schedule for an `fs.watch` stream: up to 5 retries, 1 s doubling,
