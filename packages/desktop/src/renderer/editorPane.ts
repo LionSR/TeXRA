@@ -5,7 +5,7 @@
 // deliberately minimal — open, read, edit, save. No debugger, no extensions, no
 // multi-root workspaces.
 //
-// Monaco arrives through the shared @texra/shared/monaco/monacoLoader so the worker
+// Monaco arrives through the shared @ui/monaco/monacoLoader so the worker
 // setup is identical to the diff viewer's (that config is a module global; two
 // copies would race).
 //
@@ -17,12 +17,9 @@ import '@awesome.me/webawesome/dist/components/tree/tree.js';
 import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
-import { monacoLanguageForPath } from '@texra/shared/monaco/monacoLanguage';
-import {
-  loadMonaco,
-  type MonacoModule,
-} from '@texra/shared/monaco/monacoLoader';
 import type { Theme } from '@texra/shared/ipc';
+import { monacoLanguageForPath } from '@ui/monaco/monacoLanguage';
+import { loadMonaco, type MonacoModule } from '@ui/monaco/monacoLoader';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { applyMonacoTheme } from '@ui/wa/monacoTheme';
 import { monacoPresentationOptions } from '@ui/wa/monacoOptions';

@@ -43,7 +43,7 @@ import { toSignal, type StreamSignal } from '@texra/shared/signals';
 import {
   installWebviewRuntime,
   WebviewSessions,
-} from '@texra/controllers/session/webviewSessionLayer';
+} from '@texra/shared/session/webviewSessionLayer';
 import type { SessionView } from '@texra-ai/harness/schemas';
 
 /** One session's graph as `WebviewSessions.open` hands it out. */

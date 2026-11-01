@@ -445,33 +445,18 @@ importers:
       '@vscode/vsce':
         specifier: ^4.0.0
         version: 4.0.0(supports-color@10.2.2)
-      '@xterm/addon-fit':
-        specifier: ^0.11.0
-        version: 0.11.0
-      '@xterm/xterm':
-        specifier: ^6.0.0
-        version: 6.0.0
       concurrently:
         specifier: ^10.0.6
         version: 10.0.6
-      diff:
-        specifier: 'catalog:'
-        version: 9.0.0
       effect:
         specifier: 'catalog:'
         version: 4.1.0
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
-      katex:
-        specifier: ^0.19.1
-        version: 0.19.1
       lit:
         specifier: ^3.3.3
         version: 3.3.3
-      lru-cache:
-        specifier: 'catalog:'
-        version: 11.5.3
       nanoid:
         specifier: 'catalog:'
         version: 6.0.2
@@ -651,6 +636,12 @@ importers:
       '@texra-ai/llm':
         specifier: workspace:*
         version: link:../llm
+      '@xterm/addon-fit':
+        specifier: ^0.11.0
+        version: 0.11.0
+      '@xterm/xterm':
+        specifier: ^6.0.0
+        version: 6.0.0
       arxiv-client:
         specifier: 'catalog:'
         version: 0.0.9(debug@4.4.3(supports-color@10.2.2))(supports-color@10.2.2)
@@ -660,6 +651,9 @@ importers:
       content-disposition:
         specifier: 'catalog:'
         version: 3.0.0
+      diff:
+        specifier: 'catalog:'
+        version: 9.0.0
       diff-match-patch:
         specifier: 'catalog:'
         version: 1.0.5

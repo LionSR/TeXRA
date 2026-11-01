@@ -3,7 +3,7 @@ import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - progress view
-import { processMarkdownContent } from '@progressView/frontend/formatters/markdownRenderer';
+import { processMarkdownContent } from '@ui/progress/formatters/markdownRenderer';
 
 function renderToDocument(markdown: string): Document {
   const rendered = processMarkdownContent(markdown);

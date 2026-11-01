@@ -24,7 +24,7 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 import { withSessionFs } from '@texra-ai/harness/host';
 import { executeCommand } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { generatePastedImageName } from '@texra/utils/files/pastedImageName';
+import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import {
   type PastedImageSaveFailed,
   savePastedImageBuffer,

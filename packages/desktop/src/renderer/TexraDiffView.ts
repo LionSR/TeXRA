@@ -3,11 +3,8 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared modules
 import { extractErrorMessage } from '@texra-ai/harness/schemas';
-import {
-  loadMonaco,
-  type MonacoModule,
-} from '@texra/shared/monaco/monacoLoader';
 import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
+import { loadMonaco, type MonacoModule } from '@ui/monaco/monacoLoader';
 import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - shared Web Awesome helpers

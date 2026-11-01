@@ -15,19 +15,19 @@ import {
   EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
   executionsWaitTimeoutSeconds,
 } from '@texra-ai/harness/transcript';
-import { TOOL_OUTPUT_LANGUAGES } from '@progressView/frontend/formatters/constants';
+import { TOOL_OUTPUT_LANGUAGES } from '@ui/progress/formatters/constants';
 import {
   buildToolUseSection,
   buildDetailsSummary,
   wrapInPre,
   buildCodeBlock,
   SPINNER_ICON_NAME,
-} from '@progressView/frontend/formatters/htmlBuilders';
+} from '@ui/progress/formatters/htmlBuilders';
 import type { IconName } from '@ui/wa/iconNames';
 import type { TranscriptRowBase } from '@texra-ai/harness/transcript';
 
 // Side-effect import to register <terminal-output> custom element
-import '@progressView/frontend/components/TerminalOutput';
+import '@ui/progress/components/TerminalOutput';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/badge/badge.js';

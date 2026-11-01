@@ -10,9 +10,9 @@ import './shell.css';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import '@ui/wa';
 import 'katex/dist/katex.min.css';
-import '@progressView/frontend/ProgressApp';
-import { mountProgressWebview } from '@progressView/frontend/progressWebview';
-import type { ProgressApp } from '@progressView/frontend/ProgressApp';
+import '@ui/progress/ProgressApp';
+import { mountProgressWebview } from '@ui/progress/progressWebview';
+import type { ProgressApp } from '@ui/progress/ProgressApp';
 import { formatLoopPositionLabel } from '@ui/copy/runStatus';
 
 import { setTraceCut, trace } from './traceHostBridge';

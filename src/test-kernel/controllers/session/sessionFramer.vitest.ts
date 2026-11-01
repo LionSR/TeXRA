@@ -53,7 +53,7 @@ import {
   frameSubscription,
   type FramerSource,
 } from '@texra/controllers/session/SessionFramer';
-import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer';
+import { WebviewSessions } from '@texra/shared/session/webviewSessionLayer';
 
 function textTail(
   text: string,

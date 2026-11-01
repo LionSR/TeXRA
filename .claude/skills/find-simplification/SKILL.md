@@ -47,7 +47,7 @@ Use parallel subagents when the user asks for breadth or many candidates. Give e
 - Model protocol and binding: `packages/llm/src/`, `packages/harness/src/agent/runtime/modelAccess/`.
 - Tools: `packages/harness/src/tools/`, delegation, tool schema defaults.
 - Platform and hosts: port interfaces versus their actual consumers, `packages/texra/src/hosts/`, per-host wiring in `packages/*/`.
-- Webviews and renderers: the extension's `progressView` and `settingsView` trees and the desktop renderer — duplicated logic across them is a recurring find; the shared kit is `packages/texra/src/ui/`.
+- Webviews and renderers: the progress view (`packages/texra/src/ui/progress/`), the extension's `settingsView` tree and the desktop renderer — duplicated logic across them is a recurring find; the shared kit is `packages/texra/src/ui/`.
 - Storage and compatibility: `packages/harness/src/common/storage/`, persisted-state schemas, format readers with introduction dates.
 - Packages, scripts, resources: `packages/extension/resources/`, `scripts/`, `supabase/functions/` — splits and inventories that outlived their consumer.
 

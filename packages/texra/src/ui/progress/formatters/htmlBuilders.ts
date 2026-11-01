@@ -16,7 +16,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { diffWordsWithSpace } from 'diff';
 
 import { copyWithFeedback } from '@texra/shared/utils/clipboard';
-import { highlightSpans } from '@texra/shared/highlighting/highlightCode';
+import { highlightSpans } from '@ui/highlighting/highlightCode';
 import type { IconName } from '@ui/wa/iconNames';
 
 // Local imports - shared utilities

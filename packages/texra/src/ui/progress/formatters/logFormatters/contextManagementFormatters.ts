@@ -10,10 +10,10 @@
 import { html } from 'lit';
 
 // Side-effect import to register the <context-management> custom element
-import '@progressView/frontend/components/ContextManagement';
+import '@ui/progress/components/ContextManagement';
 
 // Local imports - shared schemas and components
-import type { ActionConfig } from '@progressView/frontend/components/ContextManagement';
+import type { ActionConfig } from '@ui/progress/components/ContextManagement';
 import type { IconName } from '@ui/wa/iconNames';
 import type { ContextManagementRow } from '@texra-ai/harness/transcript';
 

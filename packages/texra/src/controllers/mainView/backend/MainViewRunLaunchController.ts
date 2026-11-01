@@ -18,7 +18,7 @@ import {
   formatUnknownTeamMessage,
   resolveTeamLaunch,
 } from '@texra/shared/teamLaunch';
-import { isPastedImage } from '@texra/utils/files/pastedImageName';
+import { isPastedImage } from '@texra/shared/utils/pastedImageName';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';

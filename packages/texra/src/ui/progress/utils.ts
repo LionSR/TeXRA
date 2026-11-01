@@ -1,7 +1,7 @@
 // Shared utility functions for the progress view frontend.
 
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { isOwnDetailsToggle } from '@texra/shared/litControllers/detailsToggle';
+import { isOwnDetailsToggle } from '@ui/litControllers/detailsToggle';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /**

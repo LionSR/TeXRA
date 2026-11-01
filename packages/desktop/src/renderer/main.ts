@@ -18,11 +18,9 @@ import '@awesome.me/webawesome/dist/components/popover/popover.js';
 import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import '@progressView/frontend/ProgressApp';
+import '@ui/progress/ProgressApp';
 import './TexraDiffView';
 import { extractErrorMessage } from '@texra-ai/harness/schemas';
-import type { ProgressApp } from '@progressView/frontend/ProgressApp';
-import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import { hostBridge, postMessage } from '@texra/shared/hostBridge';
 import { type Shell } from '@texra/shared/session/shell';
 import {
@@ -35,6 +33,8 @@ import {
   type DesktopPlatform,
 } from '@texra/shared/commands/accelerators';
 import { DESKTOP_THEME_KIND } from '@texra/shared/ipc';
+import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
+import type { ProgressApp } from '@ui/progress/ProgressApp';
 
 import { applyHostBodyTheme } from '@ui/wa/hostTheme';
 import {

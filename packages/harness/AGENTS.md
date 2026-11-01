@@ -38,7 +38,7 @@ points to a strictly lower layer:
   - A `configTarget: 'global'` row is read from global scope only. The exception is `texra.telemetry.enabled`, read from the merged config, where `projectValueIgnored` (`jsonConfigProvider.ts`, from the row's `projectMayOptOut`) lets a project opt out but never in.
   - A write reachable from a settings UI (extension/desktop `UPDATE_STATE_SETTING`, CLI `/config`) goes through `applyStateSettingUpdate` (`packages/texra/src/shared/settingsView/handlers/stateSettingWrite.ts`), which adds the open-workspace guard; its callers apply the row's write consequences (`onWrite`, the approval-policy repaint).
 - **Files.** Inside Effect, use the rooted services (`WorkspaceFs`, `StorageFs`, `GlobalStorageFs` in `@platform/rootedFs`), which refuse a path escaping their root. Workspace path math is pure in the root (`@utils/files/workspaceFS`); outside Effect, every run-storage helper in `@utils/files/runStorageFs` takes the root as its first parameter. Nothing in `@utils/files` resolves a root on its own.
-- Pasted images: names from `@texra/utils/files/pastedImageName`, paths from `@texra/utils/files/pastedImageUtils` (keeps Node filesystem code out of browser bundles).
+- Pasted images: names from `@texra/shared/utils/pastedImageName`, paths from `@texra/utils/files/pastedImageUtils` (keeps Node filesystem code out of browser bundles).
 - Discover files with `listWorkspaceFiles` (`packages/texra/src/common/files/workspaceFileListing.ts`) and agents with `AgentCatalog`; don't duplicate discovery.
 
 ## Agent execution

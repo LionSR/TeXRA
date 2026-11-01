@@ -22,7 +22,7 @@ import {
   deliveryTagOf,
   formatScriptDeliverySummary,
 } from '@texra-ai/harness/transcript';
-import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
+import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { designTokens } from '@ui/styles';
 import { buttonStyles, focusRingStyles } from '@ui/styles/controlStyles';
 import { markdownStyles } from '@ui/styles/markdownStyles';
