@@ -15,11 +15,7 @@ import {
 import { WebSocket, createWebSocketStream } from 'ws';
 
 // Local imports - canonical model contract
-import {
-  decodeModelConfiguration,
-  type Model,
-  type OpenAIResponsesConfiguration,
-} from '../turn.js';
+import { type Model, type OpenAIResponsesConfiguration } from '../turn.js';
 import { ModelError, authOrRejectionKind, fillModelError } from '../errors.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
 import { responseEvents } from './openaiResponsesCodec.js';
@@ -35,6 +31,7 @@ import {
   responseAuthentication,
   responseParameters,
 } from './openaiResponsesRequest.js';
+import type { ClientRequest, IncomingMessage } from 'node:http';
 
 const decodeFrame = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Unknown),
@@ -46,15 +43,9 @@ const decodeRejection = Schema.decodeUnknownResult(WebSocketErrorSchema);
 export const openaiResponsesWebSocketModel = Effect.fn(
   'llm.responses.webSocketModel',
 )(function* (
-  configuration: OpenAIResponsesConfiguration,
+  config: OpenAIResponsesConfiguration,
   authentication: typeof ResponseAuthenticationSchema.Type,
 ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
-  const config = decodeModelConfiguration(configuration);
-  if (config.protocol !== 'openai-responses')
-    return yield* new ModelError({
-      kind: 'unsupported',
-      message: 'This model implements the Responses protocol.',
-    });
   const origin = originOf(config);
   const selected = yield* Effect.try({
     try: () => responseAuthentication(authentication),
@@ -185,8 +176,8 @@ export const openaiResponsesWebSocketModel = Effect.fn(
       resume(Effect.fail(invalid ?? failure(cause)));
     };
     const onUnexpected = (
-      request: import('node:http').ClientRequest,
-      response: import('node:http').IncomingMessage,
+      request: ClientRequest,
+      response: IncomingMessage,
     ) => {
       const status = response.statusCode;
       const error = new ModelError({
@@ -224,7 +215,7 @@ export const openaiResponsesWebSocketModel = Effect.fn(
   }).pipe(Effect.forkScoped);
 
   const prepareTurn: Model['prepareTurn'] = (request) =>
-    prepareResponsesTurn(config, origin, transport, request, null);
+    prepareResponsesTurn(config, origin, transport, request, null, undefined);
   const streamTurn: Model['streamTurn'] = (input) =>
     Stream.suspend(() => {
       let responseId: string | undefined;

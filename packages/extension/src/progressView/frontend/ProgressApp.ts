@@ -1,5 +1,5 @@
 /**
- * `<progress-app>`: the one conversation shell of the extension (PRD 12.1).
+ * `<progress-app>`: the one conversation shell of the extension.
  * It is the root, the only element that holds the three records, and it
  * renders exactly one of two states from `surface.selected`: the New task
  * empty state (hero, the context disclosure, the Active now strip, the
@@ -46,6 +46,7 @@ import {
   LAUNCH_FILE_LISTS,
 } from '@ui/copy/fileSelectConfigs';
 import { designTokens } from '@ui/styles';
+import { texraGuideUrl } from '@ui/copy/guide';
 import {
   renderIconActionButton,
   renderIconActionButtonParts,
@@ -217,7 +218,7 @@ export class ProgressApp extends LitElement {
           ${
             error._tag === 'Rejected' && error.docsPage
               ? html`<a
-                  href=${`https://texra.ai/guide/${error.docsPage}`}
+                  href=${texraGuideUrl(error.docsPage)}
                   target="_blank"
                   rel="noopener noreferrer"
                   >Read the file management guide</a
@@ -372,7 +373,7 @@ export class ProgressApp extends LitElement {
     `;
   }
 
-  /** The hero slot holds one card (PRD 12.1): setup while the funnel is
+  /** The hero slot holds one card: setup while the funnel is
    *  pending, else the project starter while the folder has no LaTeX
    *  files, else the prompt. Without a credential the welcome card
    *  replaces the whole state (see below). */

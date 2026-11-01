@@ -35,9 +35,15 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     );
     const model = switches.at(-1)?.model;
     if (model === undefined) return yield* cell.current;
-    const consumed = consumedRows(run.runId, controls, 'model');
+    const requests = consumedRows(run.runId, 'model');
+    // The run's model is its newest `run.config`, the fold's; the binding
+    // is the resource bound for it. A switch to that model changes nothing.
+    if ((yield* cell.current).modelId === model)
+      return yield* cell.append(
+        requests(controls, { kind: 'dropped', reason: 'noop' }),
+      );
+    const consumed = requests(controls, { kind: 'applied' });
     const current = yield* SynchronizedRef.get(run.model);
-    if (current.modelId === model) return yield* cell.append(consumed);
     const selected = selectModel(model);
     // A switch that cannot apply fails the run: its `run.end` consumes the
     // request, so no resume meets it again.
@@ -70,11 +76,9 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
   },
 );
 
-const control = { kind: 'compact' } as const;
-
-/** The host port's queued requests: a model switch (whether `model` can
- *  replace the run's, and the admission the loop applies at its next model
- *  boundary) and a `/compact`, each answered once its row commits. */
+/** The host port's model switch: whether `model` can replace the run's, and
+ *  the admission the loop applies at its next model boundary, answered once
+ *  its row commits. */
 export function modelSwitchPort(
   run: AgentRunShape,
   access: ModelAccess['Service'],
@@ -87,16 +91,6 @@ export function modelSwitchPort(
       run.declinedRoutes,
     );
   return {
-    requestImmediateCompaction: () =>
-      run.session.followUps
-        .send(run.runId, { text: '/compact', from: { kind: 'user' }, control })
-        .pipe(
-          Effect.filterOrFail(
-            (sent) => sent.kind !== 'refused',
-            () => new Error('This conversation takes no more input.'),
-          ),
-          Effect.asVoid,
-        ),
     modelSwitchDisabledReason: (model: string) =>
       Effect.map(admission(model), (refused) => refused?.reason),
     switchModel: Effect.fn('toolUse.switchModel')(function* (model: string) {

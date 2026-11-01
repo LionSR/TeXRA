@@ -17,19 +17,13 @@
  * there it means the history is corrupt. The session view may hold only
  * part of a run's rows (a listing or a tail), so there it means the row that
  * opened the request was not read.
+ *
+ * Every other reader holds a `RunRows`, folded from the rows its read
+ * selects by `runRowReads.ts`, which applies the shared rows through here.
  */
-import {
-  type PositionAt,
-  type PermissionPayload,
-  type RequestDecision,
-  RUN_PHASE,
-  type RunFamily,
-  type RunOutcome,
-  type RunPhase,
-  type RunId,
-  type SessionEvent,
-} from '@shared/schemas';
+import { type RunId, type SessionEvent } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import type { RunPosition, RunRowVerdict, RunRows } from './runRowsShape';
 import type { RunView } from './sessionView';
 
 /** The rows this module owns, and the only rows it accepts. A type listed
@@ -53,17 +47,10 @@ export const isSharedRunRow = <E extends Pick<SessionEvent, 'type'>>(
 ): row is Extract<E, SharedRunRow> =>
   Object.hasOwn(SHARED_RUN_ROW_TYPES, row.type);
 
-type RequestState = {
-  readonly payload: PermissionPayload;
-  /** The recorded decision: the `request.decided` row's, null while
-   *  the request is open. */
-  readonly decision: RequestDecision | null;
-};
-
 /** A follow-up queued for the run and not yet consumed, as its row holds it. */
 export type QueuedFollowUp = Pick<
   Extract<SessionEvent, { type: 'followup.queued' }>,
-  'followUpId' | 'content' | 'holdUntil' | 'control'
+  'followUpId' | 'content' | 'holdUntil' | 'control' | 'commit'
 >;
 
 /** A pending follow-up that is a message, not one of the run's own requests
@@ -88,37 +75,6 @@ export const pendingMessages = (
   run: RunLookup,
 ): QueuedFollowUp[] =>
   rows.filter((f) => isMessage(f) && !isStaleNotice(f, run));
-
-/**
- * What these rows say about one run's position: everything but its pending
- * input. `RunState` has every field of it, so the run state copies the
- * fields `applyRunRow` returns onto itself.
- */
-export type RunPosition = {
-  readonly family: RunFamily | null;
-  readonly at: PositionAt | null;
-  readonly outcome: RunOutcome | null;
-  readonly turn: number;
-  /** By request id, in the order the rows opened them. */
-  readonly requests: Readonly<Record<string, RequestState>>;
-};
-
-/**
- * What these rows say about one run: its position and the input it has not
- * taken. The session view keeps one per run and builds its request and
- * follow-up lists from it. The loop reads its pending input from the rows
- * (`Inbox.read`), so `RunState` carries only the position.
- */
-export type RunRows = RunPosition & {
-  /** Queued without consumed, in commit order. */
-  readonly followUps: readonly QueuedFollowUp[];
-  /**
-   * Every follow-up id a row named, queued or consumed: the unique key. A
-   * delivery its producer replays after a restart is a second row
-   * under an id already here, and it is queued once, never twice.
-   */
-  readonly followUpIds: ReadonlySet<string>;
-};
 
 /**
  * A record keyed by an id the state carries: call and request ids come from
@@ -174,22 +130,32 @@ export const freshRunPosition = (): RunPosition => ({
   requests: byId([]),
 });
 
-/** The `RunRows` before any of these rows. */
+/** The `RunRows` before any row. */
 export const freshRunRows = (): RunRows => ({
   ...freshRunPosition(),
   followUps: [],
-  followUpIds: new Set(),
+  taken: new Map(),
+  start: null,
+  parent: null,
+  activation: null,
+  end: null,
+  removed: null,
+  inputClosed: false,
+  heldParks: [],
+  park: null,
+  report: null,
+  result: null,
+  config: null,
+  position: null,
+  title: null,
+  grants: null,
+  facts: {},
+  childTurn: { active: null, lastCompleted: null },
+  lifecycles: [],
+  positions: [],
+  results: [],
+  scriptCalls: [],
 });
-
-export type RunRowVerdict =
-  | { readonly kind: 'applied'; readonly rows: Partial<RunRows> }
-  /** The row changes nothing: an id already recorded, or a row that needs
-   *  a run this reader holds no rows for. */
-  | { readonly kind: 'unchanged' }
-  /** A decision naming a request this reader does not hold. */
-  | { readonly kind: 'unresolved'; readonly requestId: string }
-  /** The rows contradict each other under any reader. */
-  | { readonly kind: 'contradiction'; readonly detail: string };
 
 const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
   kind: 'applied',
@@ -197,16 +163,12 @@ const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
 });
 
 /** The shared rows that change a run's pending input, not its position. */
-export const FOLLOW_UP_TYPES = [
-  'followup.queued',
-  'followup.consumed',
-] as const;
 type FollowUpRow = Extract<
   SharedRunRow,
-  { type: (typeof FOLLOW_UP_TYPES)[number] }
+  { type: 'followup.queued' | 'followup.consumed' }
 >;
 
-const copySet = (ids: ReadonlySet<string>) => new Set(ids);
+const copyMap = <V>(entries: ReadonlyMap<string, V>) => new Map(entries);
 
 /**
  * Apply one shared row. `current` is `null` for a reader that holds nothing
@@ -244,9 +206,10 @@ export function applyRunRow(
           detail: `turn ${p.turn} is below ${rows.turn}`,
         };
       }
+      // A halt records its outcome where the loop stood; `at` keeps that spot.
       return applied({
         family: p.family,
-        at: p.at,
+        at: p.at === 'halted' ? rows.at : p.at,
         turn: p.turn ?? rows.turn,
         outcome: p.at === 'halted' ? (p.outcome ?? null) : rows.outcome,
       });
@@ -277,97 +240,34 @@ export function applyRunRow(
       // Queued input may come before everything else a run writes, so it
       // starts the reader's state; a replayed delivery id is queued once.
       const rows = slice ?? freshRunRows();
-      if (rows.followUpIds.has(row.followUpId)) return { kind: 'unchanged' };
+      const seen = rows.followUps.some((f) => f.followUpId === row.followUpId);
+      if (seen || rows.taken.has(row.followUpId)) return { kind: 'unchanged' };
       const followUps = ownCopy(copies, rows.followUps, (f) => [...f]);
       followUps.push({
         followUpId: row.followUpId,
+        commit: row.commit,
         content: row.content,
         ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
         ...(row.control ? { control: row.control } : {}),
       });
-      const followUpIds = ownCopy(copies, rows.followUpIds, copySet);
-      followUpIds.add(row.followUpId);
-      return applied({ followUps, followUpIds });
+      return applied({ followUps });
     }
     case 'followup.consumed': {
-      // The consumer commits this with the message the follow-up became. An
-      // id this reader never queued (another writer queued it while the loop
-      // ran, or the read that delivered this row did not carry the queuing)
-      // consumes nothing, and is recorded so the queuing cannot land twice.
-      if (slice === null) return { kind: 'unchanged' };
+      // The consumer commits this beside the rows that took the follow-up and
+      // says why. An id this reader never queued (queued by another writer
+      // while the loop ran, or not carried by the read that delivered this
+      // row) consumes nothing and is recorded, so the queuing cannot land twice.
+      const { followUpId, disposition, commit } = row;
+      if (slice === null || slice.taken.has(followUpId))
+        return { kind: 'unchanged' };
       const followUps = slice.followUps.filter(
-        (f) => f.followUpId !== row.followUpId,
+        (f) => f.followUpId !== followUpId,
       );
       const removed = followUps.length !== slice.followUps.length;
-      if (!removed && slice.followUpIds.has(row.followUpId)) {
-        return { kind: 'unchanged' };
-      }
       if (removed) copies?.add(followUps);
-      const followUpIds = ownCopy(copies, slice.followUpIds, copySet);
-      followUpIds.add(row.followUpId);
-      return applied({ ...(removed ? { followUps } : {}), followUpIds });
+      const taken = ownCopy(copies, slice.taken, copyMap);
+      taken.set(followUpId, { disposition, commit });
+      return applied({ ...(removed ? { followUps } : {}), taken });
     }
   }
-}
-
-/**
- * The `RunRows` of one run's whole committed aggregate, for a reader that
- * holds every row of the run and needs only what these rows say (is this
- * request open, is this follow-up queued) without building a `RunState`.
- * A whole aggregate answers every decision it holds, so a contradiction or
- * an unknown request means corrupt history and throws, as `applyRunRows`
- * rejects it.
- */
-export function runRowsFrom(rows: readonly SessionEvent[]): RunRows {
-  let slice = freshRunRows();
-  const copies: BatchCopies = new WeakSet();
-  for (const row of rows) {
-    if (!isSharedRunRow(row)) continue;
-    const verdict = applyRunRow(slice, row, copies);
-    if (verdict.kind === 'contradiction' || verdict.kind === 'unresolved') {
-      throw new Error(
-        `${row.type} on ${row.aggregateId}: ${
-          verdict.kind === 'unresolved'
-            ? `decision names no request ${verdict.requestId}`
-            : verdict.detail
-        }`,
-      );
-    }
-    if (verdict.kind === 'applied') slice = { ...slice, ...verdict.rows };
-  }
-  return slice;
-}
-
-/**
- * The phase a lifecycle row puts its run in, or null for a row that changes
- * none: an activation and every loop step but `waiting` and `halted` open
- * the run window, `waiting` and a child's wait rest it, `run.end` ends it on
- * its outcome. `halted` is the loop's own word and leaves the phase to
- * `run.end`. The one statement of the rule: the session view's run window,
- * the transcript boundary, the held chunk text and the publisher's open
- * streams all follow it.
- */
-export function phaseMoveOf(row: SessionEvent): RunPhase | null {
-  switch (row.type) {
-    case 'run.activate':
-      return RUN_PHASE.RUNNING;
-    case 'run.position':
-      if (row.payload.at === 'halted') return null;
-      return row.payload.at === 'waiting'
-        ? RUN_PHASE.WAITING
-        : RUN_PHASE.RUNNING;
-    case 'child.park':
-      return row.phase === 'resumed' ? RUN_PHASE.RUNNING : RUN_PHASE.WAITING;
-    case 'run.end':
-      return row.outcome;
-    default:
-      return null;
-  }
-}
-
-/** Whether the row's phase rests or ends the run: the change that closes
- *  its run window, every open stream and every held chunk with it. */
-export function closesRunWindow(row: SessionEvent): boolean {
-  const phase = phaseMoveOf(row);
-  return phase !== null && phase !== RUN_PHASE.RUNNING;
 }

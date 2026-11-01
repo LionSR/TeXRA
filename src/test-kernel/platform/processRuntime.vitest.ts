@@ -2,9 +2,9 @@ import { it } from '@effect/vitest';
 import { Effect, ManagedRuntime } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { setLogSink } from '@logger/logSink';
-import { withForkFailureReporting } from '@platform/processRuntime';
+import { withForkFailureReporting } from '@texra-ai/harness/transcript';
+import { effectDiagnosticsLayer } from '@texra-ai/harness/node';
+import { setLogSink } from '@texra-ai/harness/host';
 
 import {
   captureLogEntries,

@@ -10,13 +10,11 @@
  * its last release; a failed or interrupted build is dropped.
  */
 import {
-  Cause,
   Context,
   Effect,
   Exit,
   Layer,
   RcMap,
-  Schedule,
   Scope,
   Stream,
   SubscriptionRef,
@@ -33,17 +31,13 @@ import {
   type ToolEntry,
 } from '@tools/catalogEntries';
 import type { Plugin } from '@tools/plugins';
-import {
-  PluginHold,
-  type InstalledToolReader,
-  type SessionPluginLayer,
-} from '@tools/toolTable';
+import { PluginHold, type SessionPluginLayer } from '@tools/toolTable';
 import {
   projectServers,
+  type InstalledToolReader,
   type PluginLoader,
   type ProjectServers,
 } from '@tools/mcp/mcpConfig';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** What one step pinned: its tools and the plugins they come from. */
 export interface ToolStep {
@@ -135,10 +129,9 @@ export const buildPluginLayer = <R>(
  * Keep `hold(id)` up for each of `ids` the latest `on` names, forked in the
  * caller's scope: a change holds the new set before it lets the old go, so
  * a plugin on in both is never rebuilt. Each hold has its own scope, closed
- * at once if it fails (dropping the failed entry). A failed hold is logged
- * and tried again in the background, backing off to once a minute, until
- * it holds or the next change replaces the set, so a plugin left on keeps
- * its standing services after a transient failure.
+ * at once if it fails (dropping the failed entry). A hold that fails is
+ * told once: the next step that uses the plugin builds its layer again
+ * (`ToolStep.services`), and fails with it if it still cannot.
  */
 export const follow = (
   on: Stream.Stream<ReadonlySet<string>>,
@@ -153,30 +146,19 @@ export const follow = (
         const next = yield* Scope.fork(scope);
         yield* Effect.forEach(
           ids.filter((id) => switchedOn.has(id)),
-          (id) => {
-            const attempt = Effect.flatMap(Scope.fork(next), (own) =>
+          (id) =>
+            Effect.flatMap(Scope.fork(next), (own) =>
               hold(id).pipe(
                 Scope.provide(own),
                 Effect.onError(() => Scope.close(own, Exit.void)),
               ),
             ).pipe(
               Effect.sandbox,
-              Effect.tapError((cause) =>
-                Effect.logError(
-                  `Plugin ${id}'s services did not come up: ${toErrorMessage(Cause.squash(cause))}`,
-                ),
-              ),
-            );
-            return attempt.pipe(
-              Effect.catch(() =>
-                attempt.pipe(
-                  Effect.retry({ schedule: HOLD_RETRY }),
-                  Effect.ignore({ log: 'Error' }),
-                  Effect.forkIn(next),
-                ),
-              ),
-            );
-          },
+              Effect.ignore({
+                log: 'Error',
+                message: `Plugin ${id}'s services did not come up; the next step that uses them builds them again.`,
+              }),
+            ),
           { concurrency: 'unbounded', discard: true },
         );
         if (standing !== undefined) yield* Scope.close(standing, Exit.void);
@@ -184,12 +166,6 @@ export const follow = (
       }),
     );
   }).pipe(Effect.forkScoped, Effect.asVoid);
-
-/** A failed standing hold's retries: from a second, doubling, to a minute. */
-const HOLD_RETRY = Schedule.min([
-  Schedule.exponential('1 second'),
-  Schedule.spaced('1 minute'),
-]);
 
 /** Reads no plugins, from configuration or installed. */
 export const NONE = Effect.succeed({ plugins: [], warnings: [] });
@@ -236,7 +212,7 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
           id,
           new Map(
             held.flatMap(({ tools, revision }) => [
-              ...entriesOf(id, tools, { revision }),
+              ...entriesOf(id, tools.values(), { revision }),
             ]),
           ),
         ] as const,
@@ -325,7 +301,7 @@ export const sessionTools = Effect.fnUntraced(function* (
         loaded: new Map(held.map(({ id, failure }) => [id, failure])),
         entries: new Map(
           held.flatMap(({ id, tools, revision }) => [
-            ...entriesOf(id, tools, { revision }),
+            ...entriesOf(id, tools.values(), { revision }),
           ]),
         ),
       })),

@@ -1,6 +1,5 @@
 /**
- * The progress webview's root wiring (PRD one-fold-three-renderers, 7.7, 8,
- * 9): the one session of this webview, opened through the shared session
+ * The progress webview's root wiring: the one session of this webview, opened through the shared session
  * surfaces, assigned to the `<progress-app>` element on every change, the
  * window's one message listener, and the three shell events forwarded to
  * the surfaces. The sidebar port also reports which state it shows, so the
@@ -53,23 +52,14 @@ export function mountProgressWebview(app: ProgressApp): () => void {
     app.surface = session.surface$.get();
     app.host = session.host$.get();
   };
-  // Seen only while the window has focus: a run finishing behind another app
-  // is news when the user comes back.
-  const markShownRunSeen = () => {
-    if (document.hasFocus())
-      sessions.act(sessionKey, { kind: 'seen', view: session.view$.get() });
-  };
-  const unsubscribe = sessions.onChange(() => {
-    assign();
-    markShownRunSeen();
-  });
-  window.addEventListener('focus', markShownRunSeen);
+  const unsubscribe = sessions.onChange(assign);
+  const stopFollowingSeen = sessions.followSeen(() => sessionKey);
   assign();
 
   const dispose = (): void => {
     window.removeEventListener('pagehide', dispose);
-    window.removeEventListener('focus', markShownRunSeen);
     window.removeEventListener('message', receive);
+    stopFollowingSeen();
     unsubscribe();
     sessions.dispose();
   };

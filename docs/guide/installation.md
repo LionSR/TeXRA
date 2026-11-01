@@ -303,7 +303,7 @@ Read the [TeXRA CLI guide](./texra-cli.md) for provider keys, subscriptions, and
 
 ::: info Getting API Keys
 
-- **OpenAI API Key**: Available from [OpenAI API](https://platform.openai.com/api-keys)
+- **OpenAI API Key**: Available from [OpenAI API](https://platform.openai.com/api-keys); a ChatGPT Pro or Business plan includes [monthly API credits](https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions) that this key can spend once you claim them for an API organization you own
 - **Anthropic API Key**: Available from [Claude Console](https://platform.claude.com/settings/keys); a Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) that this key can spend once you link a Console organization to the plan
 - **Google API Key**: Available from [Google AI Studio](https://aistudio.google.com/app/apikey)
 - **xAI API Key**: Available from [xAI Console](https://console.x.ai/)

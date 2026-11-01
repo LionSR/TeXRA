@@ -88,8 +88,8 @@ function runHistoryShow(
 /**
  * Export a stored conversation to stdout as a standalone document.
  *
- * `md` mirrors the progress-view ChatExportController.buildExportInput so the
- * CLI and the GUI render the same conversation identically.
+ * `md` uses the same input loader and formatter as the progress view, so
+ * the CLI and the GUI render the same conversation identically.
  *
  * `html` assembles the run's trace (`assembleTrace`, shared with the
  * progress-view "Export transcript" button) and embeds it into the
@@ -163,7 +163,7 @@ function runHistoryDelete(
   return Effect.gen(function* () {
     const stores = yield* initCliPlatform(context);
     // Both deletion paths read the same session: opened once here, in the
-    // one program the run arm runs.
+    // one program the run case runs.
     const session = yield* stores.session;
 
     // `--all` is destructive and unrecoverable. Refuse it unless the caller

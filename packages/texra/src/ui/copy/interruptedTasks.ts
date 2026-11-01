@@ -4,7 +4,7 @@
  * every host prints for them. The progress view paints it as a notice above
  * the composer, the TUI above its input; neither blocks typing.
  *
- * The list is the fold's: a root task in the `interrupted` group that this
+ * The list is the view's: a root task in the `interrupted` group that this
  * window can resume. What blocks one (`RunView.resumeBlocked`) comes from
  * the session's follower, and the fix it names has one home, Settings ›
  * Plugins (the TUI's `/plugins`), which the notice links to.

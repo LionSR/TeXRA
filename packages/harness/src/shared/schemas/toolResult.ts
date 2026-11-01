@@ -2,7 +2,7 @@ import { Schema, SchemaGetter, SchemaIssue, Struct } from 'effect';
 
 import { JsonValueSchema } from './jsonValue';
 import { LineChangesSchema } from './lineChanges';
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 
 /**
  * Base schema for file references (metadata only, no binary data).
@@ -202,6 +202,9 @@ const ErrorToolResultSchema = Schema.Struct({
 /** The synthetic tool a run with an output schema submits its structured
  *  output through: its settled result's `value` is the run's output. */
 export const STRUCTURED_OUTPUT_TOOL_NAME = 'submit_output';
+
+/** The tool that runs a named agent as a child of the calling run. */
+export const AGENT_TOOL_NAME = 'agent' as const;
 
 export const ToolResultSchema = Schema.Union([
   ExecutedToolResultSchema,

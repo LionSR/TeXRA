@@ -6,63 +6,46 @@ import type { FileLocation } from './output';
  */
 
 /**
- * Host-agnostic action tokens for {@link RequestShowInstructionPayload}.
- * The agent core emits a token; each host maps it to its own UI affordance
- * (the VS Code extension to a command + button title, other hosts as they see
- * fit). This keeps host-specific command IDs and labels out of the VS Code-free
- * agent core.
+ * The instruction keys the harness itself emits as
+ * {@link RequestShowInstructionPayload.key}. A key names the notice for the
+ * host's "never remind again" state; an embedder decides what each of these
+ * offers beside the message (TeXRA: the buttons that set a key or open a
+ * guide). An embedder's own notices use keys of their own.
  */
-export const INSTRUCTION_ACTION = {
-  SET_API_KEY: 'set-api-key',
-  OPEN_CONFIGURATION_GUIDE: 'open-configuration-guide',
-  OPEN_MODELS_DOC: 'open-models-doc',
+export const HARNESS_INSTRUCTION_KEY = {
+  MISSING_API_KEY: 'missingApiKey',
+  MODEL_NOT_RECOGNIZED: 'modelNotRecognized',
+  RESUME_REFUSED: 'resumeRefused',
 } as const;
 
-export type InstructionAction =
-  (typeof INSTRUCTION_ACTION)[keyof typeof INSTRUCTION_ACTION];
+export type HarnessInstructionKey =
+  (typeof HARNESS_INSTRUCTION_KEY)[keyof typeof HARNESS_INSTRUCTION_KEY];
 
-/** Request the frontend to open a file, and build and show it if it can. */
-export interface RequestOpenFilePayload {
+/** Open a file for the person, beside what they are looking at, and build
+ *  and show it if the host can. */
+export interface OpenFilePayload {
   location: FileLocation;
   preserveFocus: boolean;
 }
 
-/** Request the frontend to show a suppressible instruction message. */
+/** Show a suppressible instruction message. */
 export interface RequestShowInstructionPayload {
+  /** Names the notice: the host's suppression state, and what an embedder
+   *  offers beside it ({@link HARNESS_INSTRUCTION_KEY} for the harness's). */
   key: string;
   message: string;
-  /**
-   * Host-agnostic action tokens rendered as buttons. The host maps each
-   * token to its own UI affordance (see {@link INSTRUCTION_ACTION}).
-   */
-  actions?: readonly InstructionAction[];
   showSuppress?: boolean;
 }
 
-/** Request the frontend to show the agent-config banner in the main webview,
- *  for the agent that could not launch. */
-export interface ShowAgentConfigBannerPayload {
+/** The agent a launch named is not in the catalog. */
+export interface AgentNotFoundPayload {
   agentName: string;
 }
 
-/** Request the frontend to show an error message via a host notification. */
+/** Show an error message via a host notification. */
 export interface RequestShowErrorPayload {
   message: string;
   /** Docs page of the refusing request (e.g. 'file-management'); the host
    *  offers it as a guide link or action beside the message. */
   docsPage?: string;
-}
-
-/**
- * Request the frontend to ensure the progress view is visible.
- * If the view cannot be opened and a fallback notification is provided,
- * show a toast notification as a last resort.
- */
-export interface RequestEnsureProgressViewPayload {
-  fallbackNotification?: {
-    agentName: string;
-    modelName: string;
-    inputName: string;
-    outputInfo: string;
-  };
 }

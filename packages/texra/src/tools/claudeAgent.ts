@@ -157,7 +157,6 @@ function claudeCostLines(turn: TurnResult): string[] | undefined {
 function runStreamedTurn(params: {
   prompt: string;
   logger: AgentTrace;
-  signal: AbortSignal;
   /** The API model ID. */
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
@@ -171,8 +170,9 @@ function runStreamedTurn(params: {
   pathToClaudeCodeExecutable: string | undefined;
 }): Effect.Effect<TurnResult, Error> {
   // Draining `query()` is this module's foreign edge: its iterator is
-  // consumed as a Stream whose finalizer unlinks the abort and ends every
-  // tool card still open. Loading the SDK is the importer's own edge.
+  // consumed as a Stream whose finalizer ends every tool card still open.
+  // Loading the SDK is the importer's own edge. A stop interrupts the turn,
+  // which aborts the SDK's request.
   return Effect.gen(function* () {
     const { logger, prompt } = params;
     logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
@@ -180,11 +180,8 @@ function runStreamedTurn(params: {
     const query = yield* importClaudeAgentSdk();
 
     // The SDK takes a controller, not a signal: this one exists only at that
-    // boundary and follows the turn's signal until the stream is drained.
+    // boundary, aborted when the turn is interrupted.
     const abortController = new AbortController();
-    const forwardAbort = () => abortController.abort(params.signal.reason);
-    if (params.signal.aborted) forwardAbort();
-    else params.signal.addEventListener('abort', forwardAbort, { once: true });
     const sdkOptions: ClaudeAgentSdkOptions = {
       abortController,
       model: params.model,
@@ -270,9 +267,9 @@ function runStreamedTurn(params: {
       Stream.runForEach((raw) =>
         Effect.try({ try: () => onMessage(raw), catch: ensureError }),
       ),
+      Effect.onInterrupt(() => Effect.sync(() => abortController.abort())),
       Effect.ensuring(
         Effect.sync(() => {
-          params.signal.removeEventListener('abort', forwardAbort);
           backgroundTasks.finish();
           toolCards.failOpen();
         }),
@@ -431,13 +428,12 @@ function buildClaudeAgentLaunch(params: {
     registry: params.registry,
     releaseFallbackClaim: params.releaseFallbackClaim,
     // The shared loop calls this inside its own `Effect.suspend`, so the
-    // reads below happen per turn, as the awaited closure they replace did.
-    runProviderTurn: (prompt, signal) => {
+    // reads below happen per turn.
+    runProviderTurn: (prompt) => {
       const forkSession = isFirstTurn && params.forkSession;
       return runStreamedTurn({
         prompt,
         logger,
-        signal,
         model: params.run.model,
         permissionMode: params.permissionMode,
         effort: params.run.effort,
@@ -536,7 +532,6 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
 
 export const ClaudeAgentTool = defineTool({
   name: CLAUDE_AGENT_NAME,
-  requiresApproval: true,
   description:
     'Spin off a Claude Code agent (via @anthropic-ai/claude-agent-sdk) to perform code analysis, generation, or research. ' +
     'The agent runs the native `claude` binary locally and can read files, run commands, and make edits within its permission mode. ' +
@@ -547,10 +542,12 @@ export const ClaudeAgentTool = defineTool({
     'Set fork_session to branch from that session while leaving the original unchanged. Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in its own workspace with independent file editing, search, and shell access, async and multi-turn like `agent`. codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
   schema: ClaudeAgentInputSchema,
   guard: {
-    bash: (input: ClaudeAgentInput) =>
-      agentCliApprovalCommand(CLAUDE_AGENT_NAME, input.prompt, (stores) =>
-        claudeAgentPermissionMode(input, stores),
-      ),
+    command: {
+      text: (input: ClaudeAgentInput) =>
+        agentCliApprovalCommand(CLAUDE_AGENT_NAME, input.prompt, (stores) =>
+          claudeAgentPermissionMode(input, stores),
+        ),
+    },
   },
   execute: run,
 });
@@ -594,7 +591,13 @@ const launchClaudeAgentSession = Effect.fn(
       ),
     );
   const pathToClaudeCodeExecutable = yield* findClaudeBinaryPath().pipe(
-    Effect.orDie,
+    Effect.mapError(
+      (failure) =>
+        new ToolError(
+          `Could not locate the Claude Code binary: ${failure.message}`,
+          { cause: failure },
+        ),
+    ),
   );
   return yield* launchAgentCliSession({
     resumeId: input.fork_session ? undefined : (input.session_id ?? undefined),

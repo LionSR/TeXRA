@@ -40,7 +40,7 @@ export const chatCommand = withUsageSections(
     },
     setup: (ctx) => rejectHeadlessOnlyFlags(ctx.rawArgs, 'chat'),
     // The update check is the program; the session it hands the terminal to
-    // is `defineCliCommand`'s to mount once the check has settled. An unusable
+    // is `defineCliCommand`'s to mount once the check has finished. An unusable
     // terminal is refused here, in the builder, before the runtime installs.
     run: (context, ctx) => {
       const modelOverride = assertExplicitModelKnown(optString(ctx.args.model));

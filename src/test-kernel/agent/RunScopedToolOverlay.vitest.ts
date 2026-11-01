@@ -8,16 +8,23 @@ import { it } from '@effect/vitest';
 import { Effect, Layer, Schema } from 'effect';
 import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
-import type { ITool } from '@agent/core/tools/ToolTypes';
-import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
+import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+import {
+  AppSignals,
+  AppState,
+  mcpConfigPathOf,
+  Secrets,
+} from '@texra-ai/harness/host';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { stepFor } from '@agent/runtime/loop/step';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import { AgentRun, agentRunLayer } from '@agent/runtime/run/AgentRun';
-import { AppSignals } from '@platform/appSignals';
-import { AppState } from '@platform/interfaces';
-import { AgentConfigSchema } from '@shared/schemas';
+import {
+  AgentRun,
+  agentRunLayer,
+  type RunLaunch,
+} from '@agent/runtime/run/AgentRun';
+import { validationModelLayer } from '@cli/runtime/validationModel';
 import { RunHistory } from '@shared/session/runHistory';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -27,14 +34,16 @@ import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import {
+  createFakeWorkspaceRoots,
+  FakeSecrets,
+} from '@test/support/FakePlatform';
 import { texraPlugins } from '@texra/tools/registry';
-import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
-import { generateRunId } from '@utils/core';
 
 import { sessionWithInteractions } from './progressTestUtils';
 import { createTestLaunchContext } from './runtime/launchContextTestUtils';
+import type { ITool } from '@texra-ai/harness';
 
 function tool(name: string): ITool {
   return {
@@ -46,14 +55,13 @@ function tool(name: string): ITool {
 /** A launch whose model binds without a credential (the validation model). */
 function validationLaunch(
   init: Parameters<typeof createTestLaunchContext>[0],
-  config: AgentLaunchContext['config'],
-): AgentLaunchContext {
+  config: RunLaunch['config'],
+): RunLaunch {
   return {
     ...createTestLaunchContext(init),
     config: { ...config, instruction: 'Do the thing.' },
     // Headless: the turn ends the run instead of parking for input.
     toolPolicy: { stopAfterCycle: true },
-    modelConfig: buildTestModelConfig(),
   };
 }
 
@@ -70,21 +78,25 @@ function observingInvokerLayer(seen: InvokeRequest[]) {
 }
 
 /** The run's layer over a launch, with the given run-scoped tools. */
-function runLayer(
-  ctx: AgentLaunchContext,
-  tools: ITool[],
-  seen: InvokeRequest[] = [],
-) {
+function runLayer(ctx: RunLaunch, tools: ITool[], seen: InvokeRequest[] = []) {
   return Layer.mergeAll(
     observingInvokerLayer(seen),
     nativeToolTestLayer(),
   ).pipe(
-    Layer.provideMerge(agentRunLayer(ctx, { tools, callbacks: {} })),
+    Layer.provideMerge(
+      agentRunLayer(ctx, {
+        modelConfig: buildTestModelConfig(),
+        tools,
+        callbacks: {},
+      }),
+    ),
     Layer.provideMerge(Layer.succeed(RunHistory, ctx.session.runHistory)),
     Layer.provideMerge(testHttpClientLayer),
+    // No key is read: every launch here binds the validation model.
+    Layer.provideMerge(Secrets.layer(new FakeSecrets())),
     Layer.provideMerge(
       pluginCatalogLayer(
-        texraPlugins(),
+        texraPlugins({ name: 'vscode' }),
         mcpConfigPathOf(createFakeWorkspaceRoots().storageRoot),
       ).pipe(
         Layer.provide(
@@ -97,6 +109,7 @@ function runLayer(
       ),
     ),
     Layer.provideMerge(nodeSpawnerLayer),
+    Layer.provideMerge(validationModelLayer),
   );
 }
 
@@ -104,14 +117,10 @@ function runLayer(
 // real route: the guarded package-validation gate, opened as validation opens it.
 beforeAll(() => {
   const flag = path.join(mkdtempSync(path.join(tmpdir(), 'texra-vm-')), 'flag');
-  writeFileSync(flag, 'overlay');
+  writeFileSync(flag, 'texra-cli-run-validation');
   for (const [name, value] of Object.entries({
-    TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
-    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_ENV: 'TEXRA_OVERLAY_VALIDATION',
-    TEXRA_OVERLAY_VALIDATION: '1',
-    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV: 'TEXRA_OVERLAY_FLAG',
-    TEXRA_OVERLAY_FLAG: flag,
-    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT: 'overlay',
+    TEXRA_INTERNAL_VALIDATE_MODEL: '1',
+    TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
   }))
     vi.stubEnv(name, value);
 });

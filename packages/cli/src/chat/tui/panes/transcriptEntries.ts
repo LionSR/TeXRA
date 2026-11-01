@@ -72,7 +72,7 @@ function trimAssistantTranscriptLead(text: string): string {
  * Body lines come from the row itself (`transcriptRowBodyLines`) at the
  * painter's own width — nothing is cut here.
  *
- * Memoized on the row object, which the fold replaces (never mutates) when its
+ * Memoized on the row object, which the session view replaces (never mutates) when its
  * content changes, so a hit is always current and a dropped row takes its
  * cache slot with it. Without the memo the renderable/split/scan walks would
  * re-run the markdown normalize and terminal-sanitize passes for every row on every
@@ -142,8 +142,8 @@ export function isRenderableTranscriptEntry(row: TranscriptRow): boolean {
   );
 }
 
-/** Whether the row at `index` is inside the fold's settled prefix
- *  (`transcript.settledRows`, PRD 5.1), the one rule for what append-only
+/** Whether the row at `index` is inside the session view's settled prefix
+ *  (`transcript.settledRows`), the one rule for what append-only
  *  scrollback may print. */
 function isFinalizedTranscriptRow(index: number, settledRows: number): boolean {
   return index < settledRows;
@@ -283,7 +283,7 @@ const EMPTY_TRANSCRIPT_ENTRIES: readonly TranscriptRow[] = Object.freeze([]);
 
 /** Cursor over the settled prefix of a stream's projected entries. The static
  *  transcript appends only entries after this cursor on ordinary syncs; a
- *  cursor mismatch (fold rebuild, owner switch, hard reset) forces a full
+ *  cursor mismatch (view rebuild, owner switch, hard reset) forces a full
  *  rebuild through {@link orderedStaticTranscriptEntries}. */
 export interface StaticTranscriptScanCursor {
   /** The `slice.entries` array the cursor was advanced against. */

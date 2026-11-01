@@ -8,7 +8,6 @@
 import { Effect } from 'effect';
 import { turnCost, type TurnResult } from '@texra-ai/llm';
 
-import { usageRouteOf } from '@agent/runtime/modelAccess/credentials';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import type { NormalizedUsage, RunId } from '@shared/schemas';
 import type { UsageLog } from '@shared/usageLog';
@@ -25,7 +24,7 @@ export function priceTurnUsage(
   responseTimeMs: number,
 ): NormalizedUsage | null {
   if (usage === null) return null;
-  const usageRoute = usageRouteOf(bound.route);
+  const usageRoute = bound.billing;
   const provider = usage.providerUsage;
   const inputTokens = usage.inputTokens ?? 0;
   const cached = usage.cachedInputTokens ?? undefined;
@@ -48,14 +47,12 @@ export function priceTurnUsage(
     outputTokens: usage.outputTokens ?? 0,
     cost: turnCost(bound.config, usage, {
       plan: usageRoute !== 'api-key',
-      tier: bound.billing.serviceTier,
+      tier: bound.serviceTier ?? undefined,
     }),
     responseTimeMs,
     provider: bound.origin.protocol,
     usageRoute,
-    ...(bound.billing.plan !== undefined
-      ? { usagePlan: bound.billing.plan }
-      : {}),
+    ...(bound.plan !== undefined ? { usagePlan: bound.plan } : {}),
     ...(cached !== undefined ? { cachedInputTokens: cached } : {}),
     ...(cached !== undefined && inputTokens >= cached
       ? { cacheMissInputTokens: inputTokens - cached }
@@ -78,7 +75,8 @@ export interface UsageAttribution {
 /**
  * Report one priced call to the process usage log, which bills per call. It
  * writes no session row: a turn's usage is its `response` row and a
- * compaction's its `context.edit` row.
+ * compaction's its `context.edit` row. The log cannot fail: its sender
+ * owns delivery (queued, batched, retried) and says so when it gives up.
  */
 export const reportUsage = Effect.fn('pricing.reportUsage')(function* (
   usageLog: UsageLog['Service'],
@@ -90,37 +88,28 @@ export const reportUsage = Effect.fn('pricing.reportUsage')(function* (
   if (usage === null) return;
   const env = yield* environment;
   const cachedInputTokens = usage.cachedInputTokens ?? 0;
-  yield* usageLog
-    .log(
-      {
-        model: bound.config.id,
-        provider: usage.provider,
-        agentName: attribution.agentName,
-        // Billing needs a real number, so a provider that reported no
-        // cache-miss count is billed the derived estimate (input minus
-        // cache-read). Display never guesses.
-        inputTokens:
-          usage.cacheMissInputTokens ??
-          Math.max(0, usage.inputTokens - cachedInputTokens),
-        outputTokens: usage.outputTokens,
-        cost: Number(usage.cost.toFixed(6)),
-        responseTimeMs: Math.round(usage.responseTimeMs),
-        cachedInputTokens,
-        reasoningTokens: usage.reasoningTokens ?? 0,
-        usageRoute: usageRouteOf(bound.route),
-        // The usage-log edge function's wire key, which stores the run id
-        // in its `stream_id` column; a server-side rename, not ours.
-        ...(attribution.runId === null ? {} : { streamId: attribution.runId }),
-      },
-      config,
-      env,
-    )
-    .pipe(
-      // Best-effort billing edge: a failed log never fails the call.
-      Effect.catchDefect((error) =>
-        Effect.logWarning('Backend usage logging failed').pipe(
-          Effect.annotateLogs({ error }),
-        ),
-      ),
-    );
+  yield* usageLog.log(
+    {
+      model: bound.config.id,
+      provider: bound.origin.protocol,
+      agentName: attribution.agentName,
+      // Billing needs a real number, so a provider that reported no
+      // cache-miss count is billed the derived estimate (input minus
+      // cache-read). Display never guesses.
+      inputTokens:
+        usage.cacheMissInputTokens ??
+        Math.max(0, usage.inputTokens - cachedInputTokens),
+      outputTokens: usage.outputTokens,
+      cost: Number(usage.cost.toFixed(6)),
+      responseTimeMs: Math.round(usage.responseTimeMs),
+      cachedInputTokens,
+      reasoningTokens: usage.reasoningTokens ?? 0,
+      usageRoute: bound.billing,
+      // The usage-log edge function's wire key, which stores the run id
+      // in its `stream_id` column; a server-side rename, not ours.
+      ...(attribution.runId === null ? {} : { streamId: attribution.runId }),
+    },
+    config,
+    env,
+  );
 });

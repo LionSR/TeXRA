@@ -1,4 +1,4 @@
-import { Effect, Schema, Struct, type Types } from 'effect';
+import { Schema, Struct, type Types } from 'effect';
 
 export const TokenCountSchema = Schema.Int.check(
   Schema.isGreaterThanOrEqualTo(0),
@@ -124,41 +124,31 @@ export type ExtendedTokenUsageStats =
  * premiums). No extra adjustments are applied here.
  */
 export const RunUsageTotalsSchema = Schema.Struct({
-  firstInputTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalInputTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalOutputTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalCost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalCacheReadInputTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalCacheMissInputTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalCacheCreationInputTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalReasoningTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalToolUsePromptTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
+  firstInputTokens: TokenCountSchema,
+  totalInputTokens: TokenCountSchema,
+  totalOutputTokens: TokenCountSchema,
+  totalCost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  totalCacheReadInputTokens: TokenCountSchema,
+  totalCacheMissInputTokens: TokenCountSchema,
+  totalCacheCreationInputTokens: TokenCountSchema,
+  totalReasoningTokens: TokenCountSchema,
+  totalToolUsePromptTokens: TokenCountSchema,
 });
 
 export type RunUsageTotals = typeof RunUsageTotalsSchema.Type;
 
 /** A run's usage before its first turn: every counter at its zero. */
-export const EMPTY_RUN_USAGE_TOTALS: RunUsageTotals = Object.freeze(
-  Schema.decodeUnknownSync(RunUsageTotalsSchema)({}),
-);
+export const EMPTY_RUN_USAGE_TOTALS: RunUsageTotals = Object.freeze({
+  firstInputTokens: 0,
+  totalInputTokens: 0,
+  totalOutputTokens: 0,
+  totalCost: 0,
+  totalCacheReadInputTokens: 0,
+  totalCacheMissInputTokens: 0,
+  totalCacheCreationInputTokens: 0,
+  totalReasoningTokens: 0,
+  totalToolUsePromptTokens: 0,
+});
 
 /** `totals` summed field by field; the first input is the first's. */
 export function sumRunUsageTotals(

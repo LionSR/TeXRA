@@ -29,7 +29,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { toolCatalogLayer } from '@tools/liveTools';
 import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import { readDisabledTools, type Plugin } from '@tools/plugins';
-import { toolTable, type InstalledToolReader } from '@tools/toolTable';
+import { toolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** A switch apply's backoff: 200 ms doubling, over six retries. */
@@ -71,7 +71,7 @@ export const pluginCatalogLayer = (
       // The installed plugins a step loads: the enabled, trusted ones, and
       // why each other enabled one loads nothing. One that ships only
       // skills loads with no servers.
-      const installed: InstalledToolReader = Effect.gen(function* () {
+      const installed = Effect.gen(function* () {
         const {
           loadable,
           withheld,

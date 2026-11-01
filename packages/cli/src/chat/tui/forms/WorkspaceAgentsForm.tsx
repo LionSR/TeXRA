@@ -7,12 +7,7 @@ import {
   type AgentEntry,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
-import {
-  type AgentModePreset,
-  AGENT_MODE_PRESETS,
-  agentKeyOf,
-  STARTER_AGENT_MODE_PRESET,
-} from '@texra-ai/harness/schemas';
+import { agentKeyOf } from '@texra-ai/harness/schemas';
 import {
   readCliWorkspaceAgents,
   type CliWorkspaceAgentsRecord,
@@ -23,6 +18,7 @@ import { COLOR_ERROR, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { CROSS, TICK, WARNING } from '@cli/tui/ui/glyphs';
 import type { SelectItem } from '@cli/tui/ui/Select';
 
+import { workspaceTeams, type TeamPreset } from '@texra/shared/agentTeams';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
 import { ListForm } from './_shared/ListForm';
@@ -38,7 +34,7 @@ type WorkspaceAgentsFormMode =
 
 interface WorkspaceAgentsData {
   readonly record: CliWorkspaceAgentsRecord;
-  readonly presets: readonly AgentModePreset[];
+  readonly presets: readonly TeamPreset[];
   readonly agents: readonly AgentEntry[];
 }
 
@@ -109,9 +105,7 @@ export function WorkspaceAgentsForm(
         Effect.map(
           Effect.all({
             record: readCliWorkspaceAgents(roots),
-            presets: Effect.flatMap(workspaceAgentsOf(roots), (agents) =>
-              agents.allPresets(),
-            ),
+            presets: workspaceTeams(roots.repoState),
             catalog: AgentCatalog,
           }),
           ({ record, presets, catalog }): WorkspaceAgentsData => ({
@@ -263,11 +257,15 @@ export function WorkspaceAgentsForm(
           label: 'No default team',
           description: 'Inherited workspaces show all agents',
         },
-        ...[STARTER_AGENT_MODE_PRESET, ...AGENT_MODE_PRESETS].map((preset) => ({
-          value: preset.id,
-          label: preset.name,
-          description: preset.description,
-        })),
+        // Only a built-in team can be the user default: a saved team belongs
+        // to one workspace.
+        ...data.presets
+          .filter((preset) => preset.source === 'built-in')
+          .map((preset) => ({
+            value: preset.id,
+            label: preset.name,
+            description: preset.description,
+          })),
       ],
       (value) => {
         write(

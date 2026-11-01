@@ -1,25 +1,18 @@
 // esbuild plugin that keeps the package-validation model
-// (`packages/harness/src/agent/runtime/run/validationModel.ts`) out of a shipped bundle. Every
-// import that resolves to that file, through the `@agent/*` alias or a
-// relative path, loads a stand-in instead: its gate is an Effect of `false`
-// (matching the real module's Effect-returning gate) and its canned model
-// throws. The CLI, desktop main, extension host and agent SDK builds install
-// it, so none carries the canned output or a gate the environment can open.
+// (`packages/cli/src/runtime/validationModel.ts`) out of a shipped CLI
+// bundle. Every import that resolves to that file loads a stand-in instead,
+// which serves no validation model, so the bundle carries neither the canned
+// output nor a gate the environment can open.
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const realModule = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  '../packages/harness/src/agent/runtime/run/validationModel.ts',
+  '../packages/cli/src/runtime/validationModel.ts',
 );
 
-const STUB = `import { Effect } from 'effect';
-export function shouldUseInternalValidationModel() {
-  return Effect.succeed(false);
-}
-export function validationModel() {
-  throw new Error('The validation model is not available in this build.');
-}
+const STUB = `import { Layer } from 'effect';
+export const validationModelLayer = Layer.empty;
 `;
 
 /** @type {import('esbuild').Plugin} */

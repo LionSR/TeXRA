@@ -2,7 +2,10 @@
 import { Effect, type Scope } from 'effect';
 
 // Local imports - runtime
-import { formatInstructionActionHint } from '@ui/copy/instructionActionHint';
+import {
+  formatInstructionActionHint,
+  instructionActions,
+} from '@ui/copy/instructionActions';
 
 // Local imports - CLI runtime
 import {
@@ -65,15 +68,14 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
 
   /**
    * The one runtime-presentation handler map, both modes. Every event returns
-   * `true` when it rendered a user-visible record. `showAgentConfigBanner` is
+   * `true` when it rendered a user-visible record. `agentNotFound` is
    * rendered as a visible, actionable
    * "agent not found" error so CLI launch failures surface once through the
    * targeted path. Reproduced per-key rather than as a catch-all, so a future
    * `RuntimePresentationEventPayloads` addition is a compile error to decide
    * on rather than a silent fall-through.
    *
-   * `requestOpenFile` and `requestEnsureProgressView` have no presentation of
-   * their own in either mode.
+   * `openFile` has no presentation of its own in either mode.
    * `runProgress?.preserve()` is inert in NDJSON mode: production never builds
    * a renderer there (`shouldRenderRunProgress`), and where a test context
    * does, `preserve()` no-ops behind its own `ansi && liveLine` guard.
@@ -90,21 +92,22 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
         // progress noise. The action hint is a text-mode affordance; NDJSON
         // carries the actions as fields instead.
         runProgress?.preserve();
-        const hint = ndjson ? '' : formatInstructionActionHint(payload.actions);
+        const actions = instructionActions(payload.key);
+        const hint = ndjson ? '' : formatInstructionActionHint(actions);
+        // A notice with nothing to offer carries no `actions` field, as before.
         present('info', `${payload.message}${hint}`, {
           key: payload.key,
-          actions: payload.actions,
+          ...(actions.length > 0 ? { actions } : {}),
           showSuppress: payload.showSuppress,
         });
         return true;
       },
-      requestOpenFile: () => false,
-      showAgentConfigBanner: ({ agentName }) => {
+      openFile: () => false,
+      agentNotFound: ({ agentName }) => {
         runProgress?.preserve();
         present('error', missingAgentMessage(agentName));
         return true;
       },
-      requestEnsureProgressView: () => false,
     };
 
   return {

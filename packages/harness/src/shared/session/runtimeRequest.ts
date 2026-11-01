@@ -12,13 +12,42 @@
  * The union carries the arms the runtime answers today; a lane that routes
  * another retained command adds its arm with its handler.
  */
-import { Schema } from 'effect';
+import { type Context, Effect, Schema, Struct } from 'effect';
 
 import {
   APPROVAL_BYPASS_KINDS,
   APPROVAL_POLICY_LIMITS,
 } from '@shared/approvalBypassKind';
-import { RequestDecisionSchema, RunIdSchema } from '@shared/schemas';
+import {
+  RequestDecisionSchema,
+  RunIdSchema,
+  StoredMediaSchema,
+  ToolEditContentSchema,
+  type ToolEditContent,
+  type ToolEditPermission,
+} from '@shared/schemas';
+import type { Database } from './database.js';
+
+// Null records a missing file; an empty string records an existing empty one.
+// The preview wire contract renders either as empty text.
+const StoredToolEditContentSchema = ToolEditContentSchema.mapFields(
+  Struct.assign({ originalContent: Schema.NullOr(Schema.String) }),
+);
+
+/** Read the proposal named by a durable edit request. A missing or malformed
+ *  blob is a corrupt store, never permission to use a recomputed proposal. */
+export const readToolEditContent = (
+  readBlobs: Context.Service.Shape<typeof Database>['readBlobs'],
+  address: ToolEditPermission['content'],
+): Effect.Effect<typeof StoredToolEditContentSchema.Type> =>
+  Effect.map(Effect.orDie(readBlobs([address])), (held) => {
+    const text = held.get(address);
+    if (text === undefined)
+      throw new Error(`The store holds no tool edit proposal at ${address}`);
+    return Schema.decodeUnknownSync(StoredToolEditContentSchema)(
+      JSON.parse(text),
+    );
+  });
 
 const runScoped = { runId: RunIdSchema };
 
@@ -89,7 +118,13 @@ export const RuntimeRequestSchema = Schema.Union([
     ...runScoped,
     text: Schema.String.check(Schema.isMinLength(1)),
     displayText: Schema.optional(Schema.NullOr(Schema.String)),
-    mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+    /** What the message attaches: a file (a pasted image's), read and
+     *  stored once here, or media the store already holds (a fork's). */
+    media: Schema.optional(
+      Schema.NullOr(
+        Schema.Array(Schema.Union([Schema.String, StoredMediaSchema])),
+      ),
+    ),
     /** `turn`: the run reads the message when its current turn ends, not
      *  at the turn's next model request. Absent: at the next request. */
     holdUntil: Schema.optional(Schema.NullOr(Schema.Literal('turn'))),
@@ -98,18 +133,23 @@ export const RuntimeRequestSchema = Schema.Union([
    * The one answer to a `request.opened` (one run model, section 3.7): the
    * decision lands as that run's `request.decided` row, which is what the
    * waiting run, the recovery bindings, and every surface read. A decision
-   * for a request its run is not parked on is delivered as a follow-up.
+   * for a request its run is not blocked on is delivered as a follow-up.
    * `useOwnApiKey` is the host command that ends in
-   * `{ action: 'retry', credentials: 'personal' }` here.
+   * `{ action: 'retry', credentials: 'personal' }` here. `grant` approves
+   * for the session: the run's bypass of that kind turns on with the
+   * decision, recorded as its `approval.policy` row, never in the decision.
    */
   Schema.Struct({
     kind: Schema.Literal('request.decide'),
     ...runScoped,
     requestId: Schema.String.check(Schema.isMinLength(1)),
     decision: RequestDecisionSchema,
+    grant: Schema.optional(
+      Schema.NullOr(Schema.Literals(APPROVAL_BYPASS_KINDS)),
+    ),
   }),
-  /** A pending tool edit's preview, as the session's host staged it beside
-   *  the request: answered `preview`, null when none is staged. */
+  /** A pending tool edit's content, stored with its request: answered
+   *  `preview`, null once the request is no longer pending. */
   Schema.Struct({
     kind: Schema.Literal('request.preview'),
     ...runScoped,
@@ -124,12 +164,9 @@ export const RuntimeRequestSchema = Schema.Union([
         field: Schema.Literal('bypass'),
         ...runScoped,
         bypass: Schema.Literals(APPROVAL_BYPASS_KINDS),
-        enabled: Schema.Boolean,
         /** Turning a bypass on also approves the run's requests already
-         *  pending under it. This one is the surface's own, decided by the
-         *  `request.decide` that follows, which may carry more than a plain
-         *  approval. */
-        exceptRequestId: Schema.optional(Schema.String),
+         *  pending under it. */
+        enabled: Schema.Boolean,
       }),
       /** Narrow the run's limit at once (a chat's `/approval`): it only
        *  ever lowers, never raises, the run's own limit. */
@@ -143,32 +180,6 @@ export const RuntimeRequestSchema = Schema.Union([
 ]);
 /** One request a surface issues to its session's runtime. */
 export type RuntimeRequest = typeof RuntimeRequestSchema.Type;
-
-/** One unified-diff hunk: the line ranges it spans on each side, and its
- *  lines, each marked ` `, `-` or `+` (`\` notes a missing final newline). */
-const DiffHunkSchema = Schema.Struct({
-  oldStart: Schema.Int,
-  oldLines: Schema.Int,
-  newStart: Schema.Int,
-  newLines: Schema.Int,
-  lines: Schema.Array(Schema.String),
-});
-
-/** What a pending tool edit would change: the original and proposed
- *  content a host shows beside the request's path and line counts, and
- *  the diff between them, computed once where the request is built: its
- *  hunks and the 0-based line of the proposed text a diff view reveals
- *  first (null when nothing changed). */
-export const ToolEditContentSchema = Schema.Struct({
-  originalContent: Schema.String,
-  proposedContent: Schema.String,
-  hunks: Schema.Array(DiffHunkSchema),
-  firstChangedLine: Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-});
-/** A pending tool edit's staged content (`request.preview`). */
-export type ToolEditContent = typeof ToolEditContentSchema.Type;
 
 /**
  * Hunks as unified-diff text lines, each preceded by its header. One header
@@ -217,6 +228,36 @@ export const OutcomeSchema = Schema.Union([
 ]);
 /** What the runtime answers a request with. */
 export type Outcome = typeof OutcomeSchema.Type;
+
+/** The requests answered with something other than `done`, by kind. */
+const OUTCOME_KIND = {
+  'run.fork': 'forked',
+  'run.files': 'runFiles',
+  'followUp.send': 'followUp',
+  'request.preview': 'preview',
+} as const satisfies Partial<Record<RuntimeRequest['kind'], Outcome['kind']>>;
+
+/** What a request of kind `K` is answered with: `done` unless it is one of
+ *  the kinds above. */
+export type OutcomeOf<K extends RuntimeRequest['kind']> = Extract<
+  Outcome,
+  {
+    kind: K extends keyof typeof OUTCOME_KIND
+      ? (typeof OUTCOME_KIND)[K]
+      : 'done';
+  }
+>;
+
+/** Whether `outcome` answers a request of `kind`: how a client reads an
+ *  answer that crossed a process boundary. */
+export const isOutcomeOf = <K extends RuntimeRequest['kind']>(
+  kind: K,
+  outcome: Outcome,
+): outcome is OutcomeOf<K> => {
+  const kinds: Partial<Record<RuntimeRequest['kind'], Outcome['kind']>> =
+    OUTCOME_KIND;
+  return outcome.kind === (kinds[kind] ?? 'done');
+};
 
 // How a runtime request fails. Yieldable `Schema.TaggedError`s in the
 // runtime, carried over the RPC edge as themselves (`RequestErrorSchema`);

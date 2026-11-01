@@ -7,10 +7,10 @@ packages:
 # its own patch), so `effect` and every @effect/* move together, here and in
 # the `peers` catalog below.
 catalog:
-  '@anthropic-ai/claude-agent-sdk': '^0.3.310'
-  '@effect/platform-node': '4.0.6'
-  '@effect/sql-sqlite-node': '4.0.6'
-  '@effect/vitest': '4.0.6'
+  '@anthropic-ai/claude-agent-sdk': '^0.3.311'
+  '@effect/platform-node': '4.1.0'
+  '@effect/sql-sqlite-node': '4.1.0'
+  '@effect/vitest': '4.1.0'
   '@google/genai': '^2.23.0'
   '@jitl/quickjs-wasmfile-release-sync': '0.32.0'
   '@openai/codex-sdk': '^0.164.0'
@@ -20,7 +20,7 @@ catalog:
   content-disposition: '^3.0.0'
   diff: '^9.0.0'
   diff-match-patch: '^1.0.5'
-  effect: '4.0.6'
+  effect: '4.1.0'
   esbuild: '^0.28.2'
   escape-string-regexp: '^5.0.0'
   glob: '^13.0.6'
@@ -30,7 +30,6 @@ catalog:
   image-size: '^2.0.4'
   ipaddr.js: '^2.5.0'
   is-wsl: '^3.1.1'
-  llm-zoo: '^4.2.0'
   lru-cache: '^11.5.3'
   mime-types: '^3.0.1'
   nanoid: '^6.0.2'
@@ -57,9 +56,9 @@ catalog:
 # `catalog` versions above); raise both together.
 catalogs:
   peers:
-    '@effect/platform-node': '^4.0.6'
-    '@effect/sql-sqlite-node': '^4.0.6'
-    effect: '^4.0.6'
+    '@effect/platform-node': '^4.1.0'
+    '@effect/sql-sqlite-node': '^4.1.0'
+    effect: '^4.1.0'
 supportedArchitectures:
   os:
     - current

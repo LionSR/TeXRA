@@ -7,23 +7,22 @@
  * schema without importing the catalog.
  */
 
-export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
-  'texra.toolUse.requireEditApproval';
+export const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'toolUse.requireEditApproval';
 
-export const BASH_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireBashApproval';
+export const BASH_APPROVAL_CONFIG_KEY = 'toolUse.requireBashApproval';
 
-/** Canonical config key for the per-session child-run concurrency budget. */
+/** Config key for the per-session child-run concurrency budget. */
 export const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY =
-  'texra.childRunConcurrencyBudget';
+  'childRunConcurrencyBudget';
 
 /**
- * Canonical config key for `texra.logger.debugMode`, whose one meaning is
+ * Config key for `logger.debugMode`, whose one meaning is
  * transcript verbosity: the debug tier of the transcript fold and the detail
  * of the payloads it shows. A log surface's own level filter decides what
  * that surface prints, so no producer reads this key to widen or narrow a
  * log — only a fold's view build does.
  */
-export const DEBUG_MODE_KEY = 'texra.logger.debugMode';
+export const DEBUG_MODE_KEY = 'logger.debugMode';
 
 /**
  * Bounds, default, and copy for `model.retry.maxAttempts`. The value is the
@@ -31,7 +30,7 @@ export const DEBUG_MODE_KEY = 'texra.logger.debugMode';
  * catalog row's schema and its copy so the two cannot disagree about the range.
  */
 export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = Object.freeze({
-  configKey: 'texra.model.retry.maxAttempts',
+  configKey: 'model.retry.maxAttempts',
   defaultValue: 2,
   min: 0,
   max: 5,
@@ -46,7 +45,7 @@ export const MODEL_RETRY_MAX_ATTEMPTS_SETTING = Object.freeze({
  * reader so the two cannot disagree about the range.
  */
 export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
-  configKey: 'texra.model.compactionThresholdPercent',
+  configKey: 'model.compactionThresholdPercent',
   defaultValue: 75,
   min: 0,
   max: 100,
@@ -66,7 +65,7 @@ export const MODEL_COMPACTION_THRESHOLD_SETTING = Object.freeze({
  * and the failure then names a number the user never meant to set.
  */
 export const CHATGPT_CODEX_CONTEXT_WINDOW_SETTING = Object.freeze({
-  configKey: 'texra.chatgptCodex.contextWindowK',
+  configKey: 'chatgptCodex.contextWindowK',
   /** Tokens per stored unit; the sole reader multiplies by this. */
   tokensPerUnit: 1_000,
   min: 1,
@@ -101,7 +100,7 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
  * neither, whatever this says.
  */
 export const RESUME_ON_OPEN_SETTING = Object.freeze({
-  configKey: 'texra.resumeOnOpen',
+  configKey: 'resumeOnOpen',
   values: ['ask', 'auto'],
   defaultValue: 'ask',
   description:
@@ -118,7 +117,7 @@ export type ResumeOnOpen = (typeof RESUME_ON_OPEN_SETTING.values)[number];
  * range.
  */
 export const GOAL_MAX_COST_SETTING = Object.freeze({
-  configKey: 'texra.goal.maxCostUsd',
+  configKey: 'goal.maxCostUsd',
   defaultValue: 5,
   min: 0,
   max: 10_000,

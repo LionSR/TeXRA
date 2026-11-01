@@ -4,18 +4,17 @@
  * as the desktop opens its folders), the detached start a client asks for
  * when no service answers, and the connection the chat TUI holds.
  */
-import { hostname } from 'node:os';
 import * as path from 'node:path';
 
 import {
   Clock,
+  Context,
   Duration,
   Effect,
   Exit,
+  FileSystem,
+  Path,
   Scope,
-  type Context,
-  type FileSystem,
-  type Path,
 } from 'effect';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
@@ -42,10 +41,10 @@ import {
   ownerIdentity,
   type OwnerId,
 } from '@texra-ai/harness/schemas';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
-import type { EditorHostShape } from '@texra/tools/editorHost';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
 import type {
   ServiceProject,
@@ -68,25 +67,19 @@ import { loginShellEnvironment } from './loginShellEnv';
 import { cliEnvValue, readCliEntrypointPath } from './cliContext';
 import { silentLogSink } from './logSinks';
 import type { CliContext } from './cliContext';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** The service's own log channel. */
 const CHANNEL = 'cliService';
 
 /**
  * The service's projects over the CLI's node roots, opened in `scope` and
- * closed with it. The process bootstrap (skills, the tool seed) runs once
- * here over the no-workspace roots, as the desktop's does, so serving never
- * records a folder of its own as a project.
+ * closed with it. The process bootstrap (the tool seed) runs once here over
+ * the no-workspace roots, as the desktop's does, so serving never records a
+ * folder of its own as a project.
  */
 export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
-  context: Pick<
-    CliContext,
-    'storageRoot' | 'resourcesPath' | 'skillSourceOptions'
-  >,
+  context: Pick<CliContext, 'storageRoot'>,
   scope: Scope.Scope,
-  /** The editor registry this process's plugins read. */
-  editors: EditorHostShape,
   /** The process's sessions, which each project's session is also opened
    *  through. */
   sessions: Context.Service.Shape<typeof Sessions>,
@@ -114,7 +107,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
         (yield* StateStores).project(storage, workspace),
         (yield* StateStores).repo(storage, workspace),
         openTexraWorkspaceConfigStores(
-          TEXRA_SETTINGS,
+          TEXRA_SETTINGS.catalog,
           storage,
           workspace,
           (message) => warnings.push(message),
@@ -127,29 +120,36 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
     );
     return createNodeWorkspaceRoots({
-      host: 'cli',
       workspacePath: workspace,
       storageRoot,
       storage,
-      config: { ...configs, global: globalConfig, catalog: TEXRA_SETTINGS },
+      config: {
+        ...configs,
+        global: globalConfig,
+        catalog: TEXRA_SETTINGS.catalog,
+      },
       workspaceState,
       repoState,
       globalState,
     });
   });
-  yield* bootstrapHost({
-    roots: yield* openRoots(undefined, scope),
-    skills: {
-      resourcesPath: context.resourcesPath,
-      skillSourceOptions: context.skillSourceOptions,
-    },
-  });
+  yield* bootstrapHost({ roots: yield* openRoots(undefined, scope) });
 
   // What opening a project reads, captured once: `open` is the port's,
-  // called from handlers that hold no process context of their own.
-  const services = yield* Effect.context<
-    ChildProcessSpawner | FileSystem.FileSystem | Path.Path | StateStores
-  >();
+  // called from handlers that hold no process context of their own. Exactly
+  // these services, never the build's scope with them: provided over a
+  // handler's lease, that scope would hold the lease's release until the
+  // service exits, so no project would ever go idle.
+  const services = Context.pick(
+    ChildProcessSpawner,
+    FileSystem.FileSystem,
+    Path.Path,
+    StateStores,
+  )(
+    yield* Effect.context<
+      ChildProcessSpawner | FileSystem.FileSystem | Path.Path | StateStores
+    >(),
+  );
   // Each project's approval policy is its persisted setting, which the
   // session reads at every decision through these following config stores:
   // a change any client writes applies to the next request, and nothing a
@@ -238,7 +238,6 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     }).pipe(withPerKeyLane(lanes, root), Effect.provideContext(services));
   return {
     storageRoot,
-    editors,
     open,
     opened: Effect.sync(
       () =>
@@ -334,8 +333,8 @@ export function heldByService(
     if (yield* envFlag(NO_SERVICE)) return false;
     const info = yield* probeCliService;
     if (info === null) return false;
-    const { hostname: host, pid } = ownerIdentity(owner);
-    return pid === info.pid && host.toLowerCase() === hostname().toLowerCase();
+    // It answered on this machine's socket; a recorded hostname may be stale.
+    return ownerIdentity(owner).pid === info.pid;
   });
 }
 

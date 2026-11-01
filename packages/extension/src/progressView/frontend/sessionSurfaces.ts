@@ -1,6 +1,5 @@
 /**
- * The open sessions of one webview (PRD one-fold-three-renderers, 7.7, 8,
- * 9, 12.2): one fold per session on the one webview runtime, one `Surface`
+ * The open sessions of one webview : one session view per session on the one webview runtime, one `Surface`
  * per session owned and persisted here, and the request round trip whose
  * responses land back on the surface (a follow-up rejected keeps its
  * draft, a picker returns its paths, a polish its text). The sidebar and
@@ -95,6 +94,11 @@ export interface SessionSurfaces {
   submit(key: string): void;
   /** Fires after any session's view, surface, or host changed. */
   onChange(listener: () => void): () => void;
+  /** Record the run the `shown` session shows as seen after every change
+   *  and when the window regains focus, but only while the window has
+   *  focus: a run finishing behind another app is news when the user comes
+   *  back. Returns the unsubscribe. */
+  followSeen(shown: () => string): () => void;
   dispose(): void;
 }
 
@@ -191,7 +195,7 @@ export function createSessionSurfaces(options: {
       subscribedTranscript: '',
       unsubscribe: () => undefined,
     };
-    // The per-run maps drop what the view no longer holds (PRD 9), the
+    // The per-run maps drop what the view no longer holds, the
     // launcher's selections follow the host's catalogs, and the transcript
     // subscription follows the selection.
     entry.unsubscribe = subscribeToSignalChanges(
@@ -252,7 +256,7 @@ export function createSessionSurfaces(options: {
     }
   }
 
-  /** The response of a `host.request`, folded onto the surface. */
+  /** The response of a `host.request`, applied to the surface. */
   function settleHost(
     entry: Held,
     request: HostRequest,
@@ -298,7 +302,7 @@ export function createSessionSurfaces(options: {
           patch: {
             images: draft.images.map((image) =>
               image.fileName === request.fileName
-                ? { ...image, path: outcome.fileName }
+                ? { ...image, media: outcome.fileName }
                 : image,
             ),
           },
@@ -479,19 +483,19 @@ export function createSessionSurfaces(options: {
     if (runId !== null) {
       const run = view.runs.get(runId);
       const draft = surface.drafts.get(runId) ?? EMPTY_DRAFT;
-      // The same decision the composer's Send takes, from the same fold
+      // The same decision the composer's Send takes, from the same view
       // fields: a run that ended or that another process owns takes no
       // follow-up, however the send was reached.
       if (!run || !canSendFollowUp(run, draft)) return;
       const text = draft.text.trim();
-      const mediaFiles = draft.images.flatMap((image) =>
-        image.path === null ? [] : [image.path],
+      const media = draft.images.flatMap((image) =>
+        image.media === null ? [] : [image.media],
       );
       void runtimeRequestFor(entry, {
         kind: 'followUp.send',
         runId,
         text: text === '' ? '(image)' : text,
-        mediaFiles: mediaFiles.length > 0 ? mediaFiles : null,
+        media: media.length > 0 ? media : null,
       });
       return;
     }
@@ -586,6 +590,20 @@ export function createSessionSurfaces(options: {
       listeners.add(listener);
       return () => {
         listeners.delete(listener);
+      };
+    },
+    followSeen(shown) {
+      const markSeen = () => {
+        const entry = held.get(shown());
+        if (entry && document.hasFocus()) {
+          act(entry, { kind: 'seen', view: entry.view$.get() });
+        }
+      };
+      listeners.add(markSeen);
+      window.addEventListener('focus', markSeen);
+      return () => {
+        listeners.delete(markSeen);
+        window.removeEventListener('focus', markSeen);
       };
     },
     dispose() {

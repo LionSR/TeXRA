@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ReasoningEffort as E, type ModelConfig } from 'llm-zoo';
 
-import { chooseReasoning, ReasoningChoiceError } from '@texra-ai/llm';
+import {
+  chooseReasoning,
+  type ModelConfig,
+  ReasoningChoiceError,
+  ReasoningEffort as E,
+} from '@texra-ai/llm';
 
 type Spec = Pick<ModelConfig, 'label' | 'reasoning' | 'modes'>;
 

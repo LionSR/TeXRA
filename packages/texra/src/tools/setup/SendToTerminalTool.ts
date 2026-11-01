@@ -94,17 +94,19 @@ const sendToTerminal = Effect.fn('SendToTerminalTool.execute')(function* (
 
 export const SendToTerminalTool = defineTool({
   name: 'send_to_terminal',
-  // Requires a VS Code terminal.
-  unavailableHosts: ['cli', 'desktop', 'sdk'],
-  requiresApproval: true,
+  // Offered where the host passes its terminal (VS Code).
+  hostCapability: 'terminal' satisfies keyof SetupPlatform['Service'],
   description: `Run a command in a VS Code integrated terminal: use this instead of \`bash\` when the command needs a real TTY: \`sudo\` password prompts, package managers that ask for confirmation (e.g. \`brew install --cask\`), or anything that drops the user into an interactive UI. Approval reuses the regular \`bash\` approval dialog. Returns an exit code and an ANSI-stripped output tail of up to ${TERMINAL_OUTPUT_MAX_CHARS} characters when shell integration is active (bash/zsh/pwsh/fish in VS Code-launched terminals); otherwise the exit code is unknown and the result says the output could not be captured: re-probe with \`probe_environment\` to confirm what actually happened. Do NOT use this to bypass \`bash\` approvals on commands that would work in \`bash\`.`,
   schema: SendToTerminalInputSchema,
   // Approval reuses the regular bash dialog: the loop gates the same trimmed
   // command the terminal receives. No cwd: the command goes to a named
   // terminal whose shell keeps its own directory, which this tool never sets.
   guard: {
-    bash: (input: SendToTerminalInput) => Effect.succeed(input.command.trim()),
-    cwd: 'unknown',
+    command: {
+      text: (input: SendToTerminalInput) =>
+        Effect.succeed(input.command.trim()),
+      cwd: 'unknown',
+    },
   },
   execute: sendToTerminal,
 });

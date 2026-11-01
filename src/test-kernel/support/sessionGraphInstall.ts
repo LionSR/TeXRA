@@ -1,7 +1,8 @@
-import { Context, Effect, type Layer, ManagedRuntime } from 'effect';
+import { Context, Effect, Layer, ManagedRuntime } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
 import { processLayer } from '@texra-ai/harness/host';
+import { validationModelLayer } from '@cli/runtime/validationModel';
 import {
   type ProcessServices,
   type SessionOwner,
@@ -49,11 +50,14 @@ export async function installTestSessionGraph(
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
       // cast: `processLayer` serves the internal `SessionOwner` beside
-      // `Sessions` (provideMerge); the suites' root launches ask it.
+      // `Sessions` (provideMerge); the suites' root launches ask it. Over
+      // the CLI's validation model, which the suites open as validation does.
       processLayer({
         ...testProcessOptions(plugins, storageRoot),
         processStart: Effect.succeed('vitest'),
-      }) as Layer.Layer<ProcessServices | Sessions | SessionOwner>,
+      }).pipe(Layer.provide(validationModelLayer)) as Layer.Layer<
+        ProcessServices | Sessions | SessionOwner
+      >,
     ),
   );
   initTestProcessRuntime(

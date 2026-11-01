@@ -186,7 +186,7 @@ type BillingRoute = PlanRoute | 'api-key';
 ## checkPreparedHistory
 
 The history a turn sends: each assistant's local calls answered by the
-next message, in call order. Only the next request needs them settled.
+next message, in call order. Only the next request needs them answered.
 Returns the schema issues found, one per offending message.
 
 ```ts
@@ -217,7 +217,7 @@ function chooseReasoning(
 
 ## ChooseReasoningOptions
 
-How {@link chooseReasoning} settles a request the model cannot serve.
+How {@link chooseReasoning} resolves a request the model cannot serve.
 
 ```ts
 interface ChooseReasoningOptions {
@@ -263,10 +263,10 @@ function codexBackendModelId(
 
 ## completedTurn
 
-A foreground turn's completed result: the fold over `streamTurn`'s events.
+A foreground turn's completed result: assembled from `streamTurn`'s events.
 
 ```ts
-const completedTurn: (events: Stream<{ readonly kind: "completed"; readonly result: { readonly usage: { readonly reasoningTokens: number | null; readonly inputTokens: number | null; readonly outputTokens: number | null; readonly totalTokens: number | null; readonly cachedInputTokens: number | null; readonly providerUsage?: { readonly kind: "google"; readonly toolUsePromptTokens: number | null; } | { readonly kind: "xai"; readonly costInUsdTicks: number | null; } | { readonly kind: "anthropic"; readonly uncachedInputTokens: number | null; readonly cacheCreationTokens: number | null; readonly cacheCreation5mTokens: number | null; readonly cacheCreation1hTokens: number | null; } | undefined; } | null; readonly kind: "http"; readonly content: readonly ({ readonly kind: "message"; readonly content: readonly ({ readonly kind: "text"; readonly text: string; } | { readonly kind: "refusal"; readonly text: string; })[]; readonly evidence?: { readonly kind: "openai-responses-message"; readonly status: "completed" | "incomplete"; readonly itemId: string; readonly phase?: "commentary" | "final_answer" | null | undefined; } | undefined; } | { readonly kind: "reasoning"; readonly summary: readonly { readonly kind: "text"; readonly text: string; }[]; readonly evidence: { readonly kind: "google-interactions-thought-signature"; readonly signature: string; } | { readonly kind: "openai-responses-reasoning"; readonly itemId: string; readonly status?: "completed" | "incomplete" | undefined; readonly encryptedContent?: string | null | undefined; } | { readonly kind: "anthropic-thinking-signature"; readonly signature: string; } | { readonly kind: "anthropic-redacted-thinking"; readonly data: string; } | null; readonly content?: readonly { readonly kind: "text"; readonly text: string; }[] | undefined; } | { readonly kind: "local-call"; readonly name: string; readonly providerCallId: string; readonly argumentsText: string; readonly evidence?: { readonly kind: "openai-responses-function-call"; readonly status?: "completed" | undefined; readonly itemId?: string | undefined; } | undefined; })[]; readonly providerResponseId: string | null; readonly returnedModel: string | null; readonly modelFingerprint: string | null; readonly finishReason: "length" | "stop" | "refusal" | "content-filter" | "tool-calls" | "stop-sequence" | "context-window-exceeded"; readonly requestedOrigin: { readonly requestedModel: string; readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly protocol: "google-interactions" | "openai-responses" | "anthropic-messages"; readonly codecVersion: 1; }; readonly stopSequence?: string | undefined; readonly finishEvidence?: { readonly kind: "google-interactions"; readonly status: string; readonly terminalReason: string | null; } | { readonly kind: "openai-responses"; readonly status: "completed" | "cancelled" | "failed" | "in_progress" | "queued" | "incomplete"; readonly incompleteReason: "max_output_tokens" | "content_filter" | null; } | undefined; readonly refusalEvidence?: { readonly kind: "anthropic-refusal"; readonly category: "cyber" | "bio" | "frontier_llm" | "reasoning_extraction" | "general_harms" | null; readonly explanation: string | null; } | null | undefined; readonly continuation?: { readonly coveredMessages: number; readonly prefixFingerprint: string; readonly origin: { readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly requestedModel: string; readonly codecVersion: 1; readonly protocol: "google-interactions"; }; readonly anchor: { readonly interactionId: string; readonly coveredSteps: number; }; } | { readonly coveredMessages: number; readonly prefixFingerprint: string; readonly origin: { readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly requestedModel: string; readonly codecVersion: 1; readonly protocol: "openai-responses"; }; readonly anchor: { readonly responseId: string; readonly coveredItems: number; readonly kind: "stored"; }; } | undefined; }; } | { readonly providerResponseId: string; readonly requestedOrigin: { readonly requestedModel: string; readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly protocol: "google-interactions" | "openai-responses" | "anthropic-messages"; readonly codecVersion: 1; }; readonly returnedModel: string | null; readonly kind: "identified"; } | { readonly kind: "delta"; readonly part: "text" | "refusal" | "reasoning"; readonly text: string; }, ModelError, never>) => Effect<{ readonly usage: { readonly reasoningTokens: number | null; readonly inputTokens: number | null; readonly outputTokens: number | null; readonly totalTokens: number | null; readonly cachedInputTokens: number | null; readonly providerUsage?: { readonly kind: "google"; readonly toolUsePromptTokens: number | null; } | { readonly kind: "xai"; readonly costInUsdTicks: number | null; } | { readonly kind: "anthropic"; readonly uncachedInputTokens: number | null; readonly cacheCreationTokens: number | null; readonly cacheCreation5mTokens: number | null; readonly cacheCreation1hTokens: number | null; } | undefined; } | null; readonly kind: "http"; readonly content: readonly ({ readonly kind: "message"; readonly content: readonly ({ readonly kind: "text"; readonly text: string; } | { readonly kind: "refusal"; readonly text: string; })[]; readonly evidence?: { readonly kind: "openai-responses-message"; readonly status: "completed" | "incomplete"; readonly itemId: string; readonly phase?: "commentary" | "final_answer" | null | undefined; } | undefined; } | { readonly kind: "reasoning"; readonly summary: readonly { readonly kind: "text"; readonly text: string; }[]; readonly evidence: { readonly kind: "google-interactions-thought-signature"; readonly signature: string; } | { readonly kind: "openai-responses-reasoning"; readonly itemId: string; readonly status?: "completed" | "incomplete" | undefined; readonly encryptedContent?: string | null | undefined; } | { readonly kind: "anthropic-thinking-signature"; readonly signature: string; } | { readonly kind: "anthropic-redacted-thinking"; readonly data: string; } | null; readonly content?: readonly { readonly kind: "text"; readonly text: string; }[] | undefined; } | { readonly kind: "local-call"; readonly name: string; readonly providerCallId: string; readonly argumentsText: string; readonly evidence?: { readonly kind: "openai-responses-function-call"; readonly status?: "completed" | undefined; readonly itemId?: string | undefined; } | undefined; })[]; readonly providerResponseId: string | null; readonly returnedModel: string | null; readonly modelFingerprint: string | null; readonly finishReason: "length" | "stop" | "refusal" | "content-filter" | "tool-calls" | "stop-sequence" | "context-window-exceeded"; readonly requestedOrigin: { readonly requestedModel: string; readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly protocol: "google-interactions" | "openai-responses" | "anthropic-messages"; readonly codecVersion: 1; }; readonly stopSequence?: string | undefined; readonly finishEvidence?: { readonly kind: "google-interactions"; readonly status: string; readonly terminalReason: string | null; } | { readonly kind: "openai-responses"; readonly status: "completed" | "cancelled" | "failed" | "in_progress" | "queued" | "incomplete"; readonly incompleteReason: "max_output_tokens" | "content_filter" | null; } | undefined; readonly refusalEvidence?: { readonly kind: "anthropic-refusal"; readonly category: "cyber" | "bio" | "frontier_llm" | "reasoning_extraction" | "general_harms" | null; readonly explanation: string | null; } | null | undefined; readonly continuation?: { readonly coveredMessages: number; readonly prefixFingerprint: string; readonly origin: { readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly requestedModel: string; readonly codecVersion: 1; readonly protocol: "google-interactions"; }; readonly anchor: { readonly interactionId: string; readonly coveredSteps: number; }; } | { readonly coveredMessages: number; readonly prefixFingerprint: string; readonly origin: { readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly requestedModel: string; readonly codecVersion: 1; readonly protocol: "openai-responses"; }; readonly anchor: { readonly responseId: string; readonly coveredItems: number; readonly kind: "stored"; }; } | undefined; }, ModelError, never>
+const completedTurn: (events: Stream<{ readonly kind: "completed"; readonly result: { readonly kind: "http"; readonly usage: { readonly reasoningTokens: number | null; readonly inputTokens: number | null; readonly outputTokens: number | null; readonly totalTokens: number | null; readonly cachedInputTokens: number | null; readonly providerUsage?: { readonly kind: "google"; readonly toolUsePromptTokens: number | null; } | { readonly kind: "xai"; readonly costInUsdTicks: number | null; } | { readonly kind: "anthropic"; readonly uncachedInputTokens: number | null; readonly cacheCreationTokens: number | null; readonly cacheCreation5mTokens: number | null; readonly cacheCreation1hTokens: number | null; } | undefined; } | null; readonly content: readonly ({ readonly kind: "message"; readonly content: readonly ({ readonly kind: "text"; readonly text: string; } | { readonly kind: "refusal"; readonly text: string; })[]; readonly evidence?: { readonly kind: "openai-responses-message"; readonly status: "completed" | "incomplete"; readonly itemId: string; readonly phase?: "commentary" | "final_answer" | null | undefined; } | undefined; } | { readonly kind: "reasoning"; readonly summary: readonly { readonly kind: "text"; readonly text: string; }[]; readonly evidence: { readonly kind: "google-interactions-thought-signature"; readonly signature: string; } | { readonly kind: "openai-responses-reasoning"; readonly itemId: string; readonly status?: "completed" | "incomplete" | undefined; readonly encryptedContent?: string | null | undefined; } | { readonly kind: "anthropic-thinking-signature"; readonly signature: string; } | { readonly kind: "anthropic-redacted-thinking"; readonly data: string; } | null; readonly content?: readonly { readonly kind: "text"; readonly text: string; }[] | undefined; } | { readonly kind: "local-call"; readonly name: string; readonly providerCallId: string; readonly argumentsText: string; readonly evidence?: { readonly kind: "openai-responses-function-call"; readonly status?: "completed" | undefined; readonly itemId?: string | undefined; } | undefined; })[]; readonly providerResponseId: string | null; readonly returnedModel: string | null; readonly modelFingerprint: string | null; readonly finishReason: "length" | "stop" | "refusal" | "content-filter" | "tool-calls" | "stop-sequence" | "context-window-exceeded"; readonly requestedOrigin: { readonly requestedModel: string; readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly protocol: "google-interactions" | "openai-responses" | "anthropic-messages"; readonly codecVersion: 1; }; readonly stopSequence?: string | undefined; readonly finishEvidence?: { readonly kind: "google-interactions"; readonly status: string; readonly terminalReason: string | null; } | { readonly kind: "openai-responses"; readonly status: "completed" | "cancelled" | "failed" | "in_progress" | "queued" | "incomplete"; readonly incompleteReason: "max_output_tokens" | "content_filter" | null; } | undefined; readonly refusalEvidence?: { readonly kind: "anthropic-refusal"; readonly category: "cyber" | "bio" | "frontier_llm" | "reasoning_extraction" | "general_harms" | null; readonly explanation: string | null; } | null | undefined; readonly continuation?: { readonly coveredMessages: number; readonly prefixFingerprint: string; readonly origin: { readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly requestedModel: string; readonly codecVersion: 1; readonly protocol: "google-interactions"; }; readonly anchor: { readonly interactionId: string; readonly coveredSteps: number; }; } | { readonly coveredMessages: number; readonly prefixFingerprint: string; readonly origin: { readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly requestedModel: string; readonly codecVersion: 1; readonly protocol: "openai-responses"; }; readonly anchor: { readonly responseId: string; readonly coveredItems: number; readonly kind: "stored"; }; } | undefined; }; } | { readonly providerResponseId: string; readonly requestedOrigin: { readonly requestedModel: string; readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly protocol: "google-interactions" | "openai-responses" | "anthropic-messages"; readonly codecVersion: 1; }; readonly returnedModel: string | null; readonly kind: "identified"; } | { readonly kind: "delta"; readonly part: "text" | "refusal" | "reasoning"; readonly text: string; }, ModelError, never>) => Effect<{ readonly kind: "http"; readonly usage: { readonly reasoningTokens: number | null; readonly inputTokens: number | null; readonly outputTokens: number | null; readonly totalTokens: number | null; readonly cachedInputTokens: number | null; readonly providerUsage?: { readonly kind: "google"; readonly toolUsePromptTokens: number | null; } | { readonly kind: "xai"; readonly costInUsdTicks: number | null; } | { readonly kind: "anthropic"; readonly uncachedInputTokens: number | null; readonly cacheCreationTokens: number | null; readonly cacheCreation5mTokens: number | null; readonly cacheCreation1hTokens: number | null; } | undefined; } | null; readonly content: readonly ({ readonly kind: "message"; readonly content: readonly ({ readonly kind: "text"; readonly text: string; } | { readonly kind: "refusal"; readonly text: string; })[]; readonly evidence?: { readonly kind: "openai-responses-message"; readonly status: "completed" | "incomplete"; readonly itemId: string; readonly phase?: "commentary" | "final_answer" | null | undefined; } | undefined; } | { readonly kind: "reasoning"; readonly summary: readonly { readonly kind: "text"; readonly text: string; }[]; readonly evidence: { readonly kind: "google-interactions-thought-signature"; readonly signature: string; } | { readonly kind: "openai-responses-reasoning"; readonly itemId: string; readonly status?: "completed" | "incomplete" | undefined; readonly encryptedContent?: string | null | undefined; } | { readonly kind: "anthropic-thinking-signature"; readonly signature: string; } | { readonly kind: "anthropic-redacted-thinking"; readonly data: string; } | null; readonly content?: readonly { readonly kind: "text"; readonly text: string; }[] | undefined; } | { readonly kind: "local-call"; readonly name: string; readonly providerCallId: string; readonly argumentsText: string; readonly evidence?: { readonly kind: "openai-responses-function-call"; readonly status?: "completed" | undefined; readonly itemId?: string | undefined; } | undefined; })[]; readonly providerResponseId: string | null; readonly returnedModel: string | null; readonly modelFingerprint: string | null; readonly finishReason: "length" | "stop" | "refusal" | "content-filter" | "tool-calls" | "stop-sequence" | "context-window-exceeded"; readonly requestedOrigin: { readonly requestedModel: string; readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly protocol: "google-interactions" | "openai-responses" | "anthropic-messages"; readonly codecVersion: 1; }; readonly stopSequence?: string | undefined; readonly finishEvidence?: { readonly kind: "google-interactions"; readonly status: string; readonly terminalReason: string | null; } | { readonly kind: "openai-responses"; readonly status: "completed" | "cancelled" | "failed" | "in_progress" | "queued" | "incomplete"; readonly incompleteReason: "max_output_tokens" | "content_filter" | null; } | undefined; readonly refusalEvidence?: { readonly kind: "anthropic-refusal"; readonly category: "cyber" | "bio" | "frontier_llm" | "reasoning_extraction" | "general_harms" | null; readonly explanation: string | null; } | null | undefined; readonly continuation?: { readonly coveredMessages: number; readonly prefixFingerprint: string; readonly origin: { readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly requestedModel: string; readonly codecVersion: 1; readonly protocol: "google-interactions"; }; readonly anchor: { readonly interactionId: string; readonly coveredSteps: number; }; } | { readonly coveredMessages: number; readonly prefixFingerprint: string; readonly origin: { readonly deployment: { readonly endpoint: string; readonly credentialScope: string; }; readonly requestedModel: string; readonly codecVersion: 1; readonly protocol: "openai-responses"; }; readonly anchor: { readonly responseId: string; readonly coveredItems: number; readonly kind: "stored"; }; } | undefined; }, ModelError, never>
 ```
 
 ## Continuation
@@ -312,6 +312,25 @@ function decideModelRoute(
 ): ModelRoute
 ```
 
+## DEFAULT_MODEL_CAPABILITIES
+
+Base model capabilities with sensible defaults.
+Models should spread this and override specific capabilities.
+
+```ts
+const DEFAULT_MODEL_CAPABILITIES: ModelCapabilities
+```
+
+## EFFORT_SCALE
+
+The shared effort scale, lowest first. Every model's accepted levels are a
+subset of it, so a requested level can be compared with any model's list.
+`none` means "do not think".
+
+```ts
+const EFFORT_SCALE: readonly ReasoningEffort[]
+```
+
 ## EndpointProviderId
 
 Providers with an HTTP endpoint of their own, which a host may override.
@@ -344,6 +363,19 @@ function exposeApiKey(key: Redacted.Redacted<string>): string
 type FileUpload = typeof FileUploadSchema.Type;
 ```
 
+## fillModelError
+
+A `ModelError` completed with what an outer scope knows. A field the error
+already carries is never overwritten: the scope nearest the failure, such
+as the turn assembly that learned the returned model, recorded it first.
+`message` and `cause` live on `Error` as own non-enumerable properties, so
+the spread that carries every other field would drop both; restating them
+keeps a re-thrown error's text and origin.
+
+```ts
+const fillModelError: (error: ModelError, known: Partial<ModelErrorFields>) => ModelError
+```
+
 ## findModelProviderPlugin
 
 Look up a provider plugin by id.
@@ -367,12 +399,26 @@ function hasUsableApiKey(
 ): Effect.Effect<boolean, SecretsFailed>
 ```
 
-## HostRouteFacts
+## hint
 
-The host half of {@link RouteFacts}, shared by every model.
+Generate a dynamic hint string for a model, suitable for dropdown tooltips.
+Combines context window size and pricing info.
+
+- `@example` ```typescript
+  hint('anthropic/claude-sonnet-4-5');
+  // → "200K context, $3/$15 per 1M tokens"
+  
+  hint('openai/gpt-4o-2024-11-20');
+  // → "128K context, $2.50/$10 per 1M tokens"
+  
+  // Also accepts a ModelConfig directly
+  const model = lookup('anthropic/claude-opus-4-6');
+  hint(model);
+  // → "200K context, $15/$75 per 1M tokens"
+  ```
 
 ```ts
-type HostRouteFacts = Omit<RouteFacts, 'validation'>;
+declare function hint(model: ModelConfig | string): string;
 ```
 
 ## isApiProvider
@@ -512,6 +558,23 @@ interface Model {
 }
 ```
 
+## MODEL_CONFIGS
+
+Complete registry of all available model configurations, keyed by
+`${provider}/${id}`.
+
+- `@example` ```typescript
+  import { MODEL_CONFIGS } from 'llm-zoo';
+  
+  const opus = MODEL_CONFIGS['anthropic/claude-opus-5'];
+  console.log(opus.contextWindow);      // 1000000
+  console.log(opus.reasoning?.efforts); // ['low', 'medium', 'high', 'xhigh', 'max']
+  ```
+
+```ts
+const MODEL_CONFIGS: Readonly<Record<ModelRef, ModelConfig>>
+```
+
 ## MODEL_PROVIDER_PLUGINS
 
 Every model provider plugin, in display order.
@@ -526,6 +589,133 @@ The registry entry a stored model string names.
 
 ```ts
 function modelConfig(id: string): ModelConfig | undefined
+```
+
+## ModelConfig
+
+Complete configuration for a language model.
+Contains all metadata needed to work with the model including
+pricing, capabilities, and provider-specific settings.
+
+```ts
+interface ModelConfig {
+    /** Registry key: `${provider}/${id}`. */
+    ref: ModelRef;
+    /**
+     * The model ID the provider's API takes (e.g. "claude-opus-5", "gpt-4o-2024-11-20").
+     * This is the string sent to the provider.
+     */
+    id: string;
+    /**
+     * Unpinned API model name without date suffix (e.g., "gpt-5.4", "claude-opus-4-1").
+     * Equals `id` when the model has no date-pinned variant.
+     * Useful for providers/clients that prefer non-date-pinned model identifiers.
+     */
+    shortName: string;
+    /** The model's provider */
+    provider: ModelProvider;
+    /** Maximum tokens the model can generate in a single response */
+    maxOutputTokens: number;
+    /** Cost per million input tokens in USD */
+    inputPrice: number;
+    /** Cost per million output tokens in USD */
+    outputPrice: number;
+    /** Maximum context window size in tokens */
+    contextWindow: number;
+    /** Model capability flags */
+    capabilities: ModelCapabilities;
+    /** How the model reasons; absent when it never thinks. */
+    reasoning?: ReasoningSpec;
+    /** Request modes the model accepts beyond the default. OpenAI's `pro` exists only in the Responses API. */
+    modes?: readonly ReasoningMode[];
+    /**
+     * Service tiers beyond standard, with their prices (e.g. OpenAI
+     * `service_tier: 'fast'`). Choosing a tier is a routing decision of the
+     * caller, never part of a model selection. A tier can carry its own
+     * long-context rates; read them through `requestRates` with that tier.
+     */
+    tiers?: {
+        fast?: TokenPrices & {
+            longContextPricing?: LongContextPricing;
+        };
+    };
+    /**
+     * Long-prompt pricing tier, when the provider documents one. Absent means
+     * the flat rates apply at every prompt size. Read through `requestRates`.
+     */
+    longContextPricing?: LongContextPricing;
+    /** Where these facts were checked. Required for every model that is not retired. */
+    source?: ModelSource;
+    /**
+     * Whether this model is only available through OpenRouter.
+     * When true, direct API access is not available.
+     */
+    openRouterOnly: boolean;
+    /**
+     * Model identifier for OpenRouter API.
+     * Example: "anthropic/claude-sonnet-4.5"
+     */
+    openrouterFullName?: string;
+    /**
+     * Model identifier for the VS Code Language Model API (`vscode.lm`).
+     * Example: "claude-sonnet-4.5" (matches the `id` field of a vscode.lm ChatModel).
+     */
+    vscodeLMFullName?: string;
+    /** Exact model identifier documented for GitHub Copilot model selection. */
+    copilotFullName?: string;
+    /**
+     * Custom base URL for this specific model.
+     * Overrides the provider's default endpoint.
+     */
+    baseUrl?: string;
+    /**
+     * Whether this model requires OpenAI's Responses API format.
+     * Used for special models like deep research that bypass standard chat completions.
+     */
+    requiresResponsesAPI?: boolean;
+    /**
+     * Human-friendly display name for the model.
+     * Used as the label in model dropdowns so users can identify models at a glance.
+     */
+    label: string;
+    /**
+     * Present when the Codex backend (ChatGPT subscription) currently serves
+     * this model, with the input context window that backend grants it, which
+     * is smaller than the API's. Source of truth: the backend's model catalog
+     * (`chatgpt.com/backend-api/codex/models`, the `context_window` the Codex
+     * CLI caches in `~/.codex/models_cache.json`; it needs a ChatGPT sign-in)
+     * cross-checked against the manifest embedded in the Codex CLI
+     * (`codex-rs/models-manager/models.json`) and
+     * https://developers.openai.com/codex/models —
+     * serving status is not derivable from the model name, reasoning tier, or
+     * deprecation status.
+     */
+    codexSubscription?: {
+        contextWindow: number;
+    };
+    /**
+     * Whether the Kimi Code backend (Moonshot coding-subscription plan) serves
+     * this model. Kimi Code models are exclusive to the managed endpoint
+     * `https://api.kimi.com/coding/v1` (OAuth device-flow token or console API
+     * key) — they are NOT served by the Moonshot open platform, and open-platform
+     * keys do not work on the coding endpoint. Source of truth: kimi-cli's
+     * platform registry and https://www.kimi.com/code/docs/en/.
+     * @default false
+     */
+    kimiSubscription?: boolean;
+    /**
+     * Whether this model is deprecated and no longer recommended for use.
+     * Deprecated models are still functional but have been superseded by newer versions.
+     * @default false
+     */
+    deprecated?: boolean;
+    /**
+     * Whether this model has been retired and is no longer served by the provider.
+     * Retired models cannot be used for inference — API calls will fail.
+     * @default false
+     */
+    retired?: boolean;
+}
 ```
 
 ## ModelError
@@ -568,6 +758,40 @@ Selected binding, distinct from an optional returned model version.
 const ModelOriginSchema: Struct<{ readonly requestedModel: String; readonly deployment: Struct<{ readonly endpoint: String; readonly credentialScope: String; }>; readonly protocol: Literals<readonly ["google-interactions", "openai-responses", "anthropic-messages"]>; readonly codecVersion: Literal<1>; }>
 ```
 
+## ModelProvider
+
+Supported language model providers.
+Each provider has specific API formats, capabilities, and pricing structures.
+
+```ts
+declare enum ModelProvider {
+    /** Anthropic (Claude models) */
+    ANTHROPIC = "anthropic",
+    /** OpenAI (GPT, o-series models) */
+    OPENAI = "openai",
+    /** Google (Gemini models) */
+    GOOGLE = "google",
+    /** DeepSeek (V3, R1 models) */
+    DEEPSEEK = "deepseek",
+    /** xAI (Grok models) */
+    XAI = "xai",
+    /** Moonshot AI (Kimi models) */
+    MOONSHOT = "moonshot",
+    /** Alibaba DashScope (Qwen models) */
+    DASHSCOPE = "dashscope",
+    /** MiniMax (M-series models) */
+    MINIMAX = "minimax",
+    /** GitHub Copilot */
+    COPILOT = "copilot",
+    /** Zhipu AI (GLM models) */
+    GLM = "glm",
+    /** Meta (Muse Spark models via Meta Model API) */
+    META = "meta",
+    /** Other providers (OpenRouter-only models, etc.) */
+    OTHERS = "others"
+}
+```
+
 ## ModelProviderPlugin
 
 One model provider plugin.
@@ -592,6 +816,15 @@ interface ModelProviderPlugin {
 }
 ```
 
+## ModelRef
+
+A model's identity: its provider and the model ID that provider's API takes,
+e.g. `anthropic/claude-opus-5`. This is the registry key.
+
+```ts
+type ModelRef = `${ModelProvider}/${string}`;
+```
+
 ## modelRefOf
 
 The model reference a stored model string names, without its effort or
@@ -607,10 +840,9 @@ The route a model's next request takes, decided by {@link decideModelRoute}.
 
 ```ts
 type ModelRoute =
-  | { readonly kind: 'validation' }
   | {
       readonly kind: 'chatgpt-subscription';
-      /** The input window the Codex backend grants this model. */
+      /** The input window: the user's override, else what the Codex backend grants. */
       readonly contextWindow: number;
     }
   | { readonly kind: 'xai-subscription' }
@@ -623,6 +855,14 @@ type ModelRoute =
   | { readonly kind: 'no-api-key' }
   /** No route TeXRA reaches serves the model (see {@link isUnservedModel}). */
   | { readonly kind: 'unserved' };
+```
+
+## MODELS
+
+All model references.
+
+```ts
+const MODELS: ModelRef[]
 ```
 
 ## originOf
@@ -704,6 +944,57 @@ class ReasoningChoiceError extends Schema.TaggedError<ReasoningChoiceError>()(
   'ReasoningChoiceError',
   { message: Schema.String },
 )
+```
+
+## ReasoningEffort
+
+Reasoning effort levels for models that support configurable reasoning depth.
+Higher effort typically results in better reasoning quality but increased latency and cost.
+
+```ts
+declare enum ReasoningEffort {
+    /** Maximum reasoning effort - highest tier, above extra high */
+    MAX = "max",
+    /** Extra high reasoning effort - maximum depth analysis */
+    XHIGH = "xhigh",
+    /** High reasoning effort - thorough analysis */
+    HIGH = "high",
+    /** Medium reasoning effort - balanced analysis */
+    MEDIUM = "medium",
+    /** Low reasoning effort - quick analysis */
+    LOW = "low",
+    /** Minimal reasoning effort - near-direct response */
+    MINIMAL = "minimal",
+    /** No explicit reasoning - standard model behavior */
+    NONE = "none"
+}
+```
+
+## ReasoningEffortSchema
+
+Effect Schema validation schemas for llm-zoo types.
+Requires effect ^4.0.0 as peer dependency.
+
+- `@example` ```typescript
+  import { Result, Schema } from 'effect';
+  import { ModelConfigSchema } from 'llm-zoo/schemas';
+  
+  const result = Schema.decodeUnknownResult(ModelConfigSchema)(myConfig);
+  if (Result.isFailure(result)) {
+    console.error(result.failure.message);
+  }
+  ```
+
+```ts
+const ReasoningEffortSchema: Schema.Enum<typeof ReasoningEffort>
+```
+
+## ReasoningMode
+
+Request modes beyond the provider default. OpenAI's Responses API accepts `reasoning.mode: 'pro'`.
+
+```ts
+type ReasoningMode = 'pro';
 ```
 
 ## ReasoningRequest
@@ -828,7 +1119,6 @@ route itself names the credential and endpoint (`./routeEndpoint.ts`).
 function routeConfig(
   config: ModelConfig,
   route: ModelRoute,
-  facts: Pick<RouteFacts, 'chatgptContextWindow'>,
 ): ModelConfig
 ```
 
@@ -837,10 +1127,7 @@ function routeConfig(
 The facts {@link decideModelRoute} reads.
 
 ```ts
-type RouteDecisionFacts = Omit<
-  RouteFacts,
-  'chatgptContextWindow' | 'endpoints'
->;
+type RouteDecisionFacts = Omit<RouteFacts, 'endpoints'>;
 ```
 
 ## RouteFacts
@@ -849,8 +1136,6 @@ The facts a route reads, and nothing else.
 
 ```ts
 interface RouteFacts {
-  /** A guarded package-validation run: every model binds the validation model. */
-  readonly validation: boolean;
   /** The provider reasoning mode the request asks for (OpenAI `pro`), if any. */
   readonly mode?: ReasoningMode;
   /** ChatGPT subscription preferred, signed in, and not declined. */
@@ -950,11 +1235,11 @@ function selectModel(id: string): SelectedModel | undefined
 
 The cost of one turn, never negative. A plan route (ChatGPT/Codex, Grok,
 the GLM coding plan, Kimi Code) is covered by the subscription, so every
-rate is zero and a receipt the provider settled bills an API key this turn
+rate is zero and a receipt the provider finalized bills an API key this turn
 did not use. An API-key route bills the catalog's rates on its service
 tier; a model with a long-context tier bills the whole request at it once
 the prompt, cached tokens included, is above it (llm-zoo's
-`requestRates`). An xAI receipt carries its own settled cost, which wins
+`requestRates`). An xAI receipt carries its own final cost, which wins
 over the computed one.
 
 ```ts

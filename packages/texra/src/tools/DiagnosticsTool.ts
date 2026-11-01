@@ -221,7 +221,6 @@ export const DiagnosticsTool = defineTool({
   // (`EditorHost`): the extension's own session, or a service task with
   // one of its windows.
   hostCapability: 'diagnostics' satisfies EditorCapability,
-  unavailableHosts: ['desktop', 'sdk'],
   description:
     'Inspect or annotate diagnostics for a file. Use "list"/"count" to retrieve linter diagnostics; use "add" to push a critique annotation as a VS Code diagnostic (squiggle + Problems panel entry) instead of inserting a literal \\criticize{...}{...}{...} macro. The "add" command requires the experimental "texra.inlineCriticism.enabled" setting and reports "not accepted" if disabled; criticisms pushed this way are read back by "list".',
   schema: DiagnosticsInputSchema,

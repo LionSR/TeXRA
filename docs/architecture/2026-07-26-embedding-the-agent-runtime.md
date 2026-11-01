@@ -49,7 +49,7 @@ one of two owners, and an embedder supplies each one there:
   configuration and its state stores) are a `WorkspaceRoots`
   (`@platform/workspaceRoots`) carried by each `SessionHandle`, so one process
   can hold sessions rooted in several folders. Build one with
-  `createNodeWorkspaceRoots` (`packages/harness/src/platform/defaults/nodeHost.ts:65-82`), which
+  `createNodeWorkspaceRoots` (`packages/harness/src/platform/defaults/nodeHost.ts:52-69`), which
   picks the config provider.
 
 `agentDirectories` is the port that names the three directories the registry
@@ -59,11 +59,14 @@ packaged resources tree; its `builtIn()` reads that tree
 in place. Nothing is copied into global storage, so there is no bundle-copy
 step to run and no version state key to keep.
 
-Beside that layer, a Node root calls `bootstrapHost`
-(`packages/texra/src/controllers/hostBootstrap.ts:61-77`) once, on its own process runtime: it
-registers the runtime skill sources and seeds the first-install disabled
-tools. The model HTTP dispatcher is installed by `processLayer` itself.
-An embedder that skips it gets a runtime without those, not a broken one.
+The runtime skill sources are a `processLayer` option (`skills`: the
+bundled resources tree, and the CLI's source flags), which the layer serves
+as `HostSkillSources` beneath every session; the model HTTP dispatcher is
+installed by `processLayer` itself. Beside that layer, a Node root calls
+`bootstrapHost` (`packages/texra/src/controllers/hostBootstrap.ts:46-54`)
+once, on its own process runtime: it seeds the first-install disabled
+tools. An embedder that skips either gets a runtime without them, not a
+broken one.
 
 Only a composition root imports `processLayer`; ESLint pins the import
 to the files in `COMPOSITION_ROOT_FILES` (`eslint.config.mjs`).
@@ -71,7 +74,7 @@ to the files in `COMPOSITION_ROOT_FILES` (`eslint.config.mjs`).
 ### Feature-parity step — the `lean4` plugin's process layer
 
 TeXRA's Lean tools are the `lean4` plugin
-(`packages/texra/src/tools/integrationPlugins.ts`), and its process layer is
+(`packages/texra/src/tools/lean/plugin.ts`), and its process layer is
 the Lean language-server pool. By default that is the direct
 `lake env lean --server` pool (`directLeanLanguageServices`,
 `packages/texra/src/tools/lean/direct/directLspAdapter.ts`); a host passes its
@@ -119,7 +122,7 @@ const agentDirectories = new AgentDirectoryService({
   state: { get: () => Effect.succeed(undefined) },
 });
 // Served as `AgentDirectories` by the Step 1 layer:
-// processLayer({ …, agentDirectories: AgentDirectories.layer(agentDirectories) });
+// processLayer({ …, agentDirectories: Layer.succeed(AgentDirectories)(agentDirectories) });
 ```
 
 `state.get()` reads the stored setting that names the user-configured
@@ -301,7 +304,7 @@ agents unless the files exist on disk.
   points `custom()` at your own YAML directory.
 - **Choosing where custom agents live.** The CLI builds its port with
   `new AgentDirectoryService({ channel: 'cli', resourcesPath, state })`
-  (`packages/cli/src/runtime/cliProcessRuntime.ts:231-235`,
+  (`packages/cli/src/runtime/cliProcessRuntime.ts:235-239`,
   `packages/harness/src/agent/index/AgentDirectoryService.ts`). An embedder can
   supply a literal implementation instead:
 
@@ -375,7 +378,7 @@ an option of the root launch, and `RootLaunchOptions` has no such property. The
 session's `interactions.approvalPromptsUnavailable` getter reads the attached
 host's answer (`HostInteractions.ts:218-222`). Each step
 applies the session's approval policy to it (`liveToolGates`,
-`packages/harness/src/agent/runtime/requestPolicy.ts:185-208`) when it resolves the tools it offers
+`packages/harness/src/agent/runtime/requestPolicy.ts:186-209`) when it resolves the tools it offers
 (`packages/harness/src/agent/runtime/loop/step.ts:204-207`), so a policy change or a host
 attached mid-run reaches the next step's offer, and a delegated child, which
 runs on its parent's session, and a run the session wakes on its own get the
@@ -388,7 +391,8 @@ requests those tools would raise. Tools an embedder supplies in
 offered them, so a run-scoped tool that needs approval is left to the
 approval guard, which may deny the call, rather than removed. The tools that open
 `toolEdit`, `bash`, `proposal`, `planApproval`, `externalInquiry` and
-`userQuestion` requests all declare `requiresApproval: true`.
+`userQuestion` requests all declare `requiresApproval` or a command
+(`guard.bash`), which `asksApproval` reads.
 
 The headless CLI host answers it from its mode alone
 (`packages/cli/src/runtime/approvalAdapter.ts`); the session applies its
@@ -440,15 +444,13 @@ when it opens.
 
 ## 4. What degrades gracefully (safe to skip)
 
-- **`initializeNodeRuntimeSkills({…}, pluginIds)`:** Runtime skills
-  degrade to an empty catalog: with no installed skill contributions the
-  fold yields no sources and discovery finds nothing
-  (`installSkillContributions` in `packages/harness/src/skills/runtimeSkills.ts`; registration
-  in `packages/harness/src/platform/defaults/nodeHost.ts`). An embedder that does call it must
-  pass the ids of the tool plugins (`bootstrapHost` passes every plugin's;
-  each ships the skills under `<resourcesPath>/plugins/<id>/skills`, today
-  `lean4` and `multi-agent`); an empty list drops those plugins' bundled
-  skills.
+- **`skills` (`Composition.skills`, `ProcessLayerOptions.skills`):** Runtime
+  skills degrade to an empty catalog: with no skill sources the process's
+  `HostSkillSources` holds no contributions, the fold yields no sources and
+  discovery finds nothing (`packages/harness/src/skills/runtimeSkills.ts`).
+  Given a resources tree, the process also reads each of its plugins'
+  bundled skills under `<resourcesPath>/plugins/<id>/skills` (today `lean4`
+  and `multi-agent`).
 - **`seedDisabledToolDefaults(key)`:** No first-install tool defaults are
   written, so no plugin whose switch starts `off` is default-disabled. More tools
   are available, not fewer (`packages/harness/src/tools/toolAvailability.ts:77-95`).
@@ -472,7 +474,7 @@ port's `resourcesRoot` (`enabledBuiltInRoots`,
 
 ## 5. Reading the CLI: obligations vs. product features
 
-`initCliPlatform` (`packages/cli/src/runtime/initPlatform.ts:278-466`) is one
+`initCliPlatform` (`packages/cli/src/runtime/initPlatform.ts:280-463`) is one
 Effect program that builds the process runtime, the process roots and the
 process session, and every `texra` command runs it. An embedder reading it cannot tell
 which steps are runtime requirements and which are `texra`-the-product. The
@@ -480,30 +482,30 @@ following classification makes that distinction.
 
 ### Runtime bootstrap and shipped-feature parity
 
-- **`:295-303` — `installCliProcessRuntime(...)`:** Required. The one process
+- **`:297-306` — `installCliProcessRuntime(...)`:** Required. The one process
   runtime, a `ManagedRuntime` over `processLayer`
-  (`packages/cli/src/runtime/cliProcessRuntime.ts:238-242`), which also
-  builds the agent-directories port
-  (`:226-237`). The `lean4` plugin's direct Lean language-server pool
+  (`packages/cli/src/runtime/cliProcessRuntime.ts:242-246`), which also
+  builds the agent-directories port (`:230-241`) and passes the runtime
+  skill sources. The `lean4` plugin's direct Lean language-server pool
   (`packages/texra/src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; a composition may
   leave the plugin out. The `memory` and `plan` injections are manifest data
   (`packages/harness/src/tools/plugins.ts`).
-- **`:349-358` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
+- **`:352-361` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
   roots every session is opened over.
-- **`:392-398` — `bootstrapHost({ roots, skills })`:**
-  The shared once-per-process install every host runs beside its runtime
-  (`packages/texra/src/controllers/hostBootstrap.ts:61-77`): the runtime skill
-  sources and the first-install disabled-tool seed. (The model HTTP dispatcher is installed by
-  `processLayer()` itself, the host path; `Sessions.layer` never sets it.) An embedder that skips it gets a runtime
-  without those, not a broken one. The CLI runs it before publishing its roots
+- **`:395` — `bootstrapHost({ roots })`:**
+  The shared once-per-process write every host runs beside its runtime
+  (`packages/texra/src/controllers/hostBootstrap.ts:46-54`): the
+  first-install disabled-tool seed. (The runtime skill sources and the model HTTP dispatcher are
+  `processLayer()`'s own; `Sessions.layer` never sets the dispatcher.) An embedder that skips it gets a runtime
+  without the seed, not a broken one. The CLI runs it before publishing its roots
   so the fallible seed fails while they are still private.
 
 ### CLI initialization choices — not runtime obligations
 
-- **`:337-343` — `StateStores.project(...)` and `StateStores.repo(...)`:** The
+- **`:340-346` — `StateStores.project(...)` and `StateStores.repo(...)`:** The
   CLI's own on-disk workspace state stores under its storage root. An embedder supplies its own
   stores to `createNodeWorkspaceRoots`.
-- **`:363-385` — the memoized session open:** Opens the process session lazily
+- **`:366-388` — the memoized session open:** Opens the process session lazily
   (`Sessions.open(roots, { persistent: true, … })`), so a command that needs
   no session never opens one. An embedder calls `Sessions.open` directly (§1,
   Prerequisite A).
@@ -523,11 +525,11 @@ following classification makes that distinction.
 The desktop main process makes the same runtime choices, showing how a shipped
 host obtains full feature parity rather than proving that every call is a
 minimum runtime requirement: it builds its agent-directories port at
-`packages/desktop/src/main/platform/index.ts:114-125`, runs the same
-`bootstrapHost` at `:176`. Product policy is
-not necessarily CLI-only: the disabled-tool seed and the runtime skill sources
-reach both hosts through that one shared call rather than being repeated per
-host.
+`packages/desktop/src/main/platform/index.ts:102-113`, passes the same
+skill sources to its `processLayer` and runs the same `bootstrapHost` at
+`:164`. Product policy is not necessarily CLI-only: the disabled-tool seed
+reaches both hosts through that one shared call, and the skill sources
+through the one `processLayer` option, rather than being repeated per host.
 
 ---
 

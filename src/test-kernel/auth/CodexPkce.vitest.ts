@@ -1,13 +1,14 @@
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  ReasoningEffort,
-  type ModelConfig,
-} from 'llm-zoo';
 
-import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@texra-ai/llm';
+import {
+  decideModelRoute,
+  DEFAULT_MODEL_CAPABILITIES,
+  type ModelConfig,
+  ModelProvider,
+  OWN_KEY_ROUTE_FACTS,
+  ReasoningEffort,
+} from '@texra-ai/llm';
 
 /** A minimal OpenAI `ModelConfig` fixture, overridable per test. */
 function openAIModel(overrides: Partial<ModelConfig> = {}): ModelConfig {

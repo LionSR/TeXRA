@@ -8,6 +8,10 @@ import {
   fileLocationDisplayPath,
   type FileLocation,
 } from '@texra-ai/harness/schemas';
+
+import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
+
+import { pairOutputsWithBases } from './lineageMapping';
 import type { AgentTrace } from '@texra-ai/harness/plugins';
 
 /** A LaTeX `\input` path trimmed, with POSIX separators and `.`/`..` resolved. */
@@ -16,81 +20,38 @@ function normalizeLatexPath(value: string): string {
   return trimmed ? toPosixPath(trimmed) : '';
 }
 
-/**
- * Map each source file to the target whose file name contains the source's
- * name without its extension, the longest such name winning (`paper` matches
- * `paper_revised.tex`). Uses string keys (comparable paths) for robust
- * lookups, FileLocation values for data, so lookups work even when
- * FileLocation objects are reconstructed.
- *
- * @returns Map from source path to target FileLocation
- */
-export function createFileMapping(
-  sourceFiles: FileLocation[],
-  targetFiles: FileLocation[],
-): Map<string, FileLocation> {
-  const fileMapping = new Map<string, FileLocation>();
-
-  if (sourceFiles.length === 0 || targetFiles.length === 0) {
-    return fileMapping;
-  }
-
-  const baseNameOf = (filePath: string): string =>
-    path.parse(path.basename(filePath)).name;
-
-  // Source names do not depend on the target, so derive them once up front.
-  const sources = sourceFiles.map((sourceFile) => {
-    const sourcePath = fileLocationDisplayPath(sourceFile);
-    return { sourcePath, sourceName: baseNameOf(sourcePath) };
-  });
-
-  for (const target of targetFiles) {
-    const targetPath = fileLocationDisplayPath(target);
-    const targetBaseName = path.basename(targetPath);
-
-    let bestMatchSourcePath: string | null = null;
-    let bestMatchScore = 0;
-
-    for (const { sourcePath, sourceName } of sources) {
-      if (
-        targetBaseName.includes(sourceName) &&
-        sourceName.length > bestMatchScore
-      ) {
-        bestMatchScore = sourceName.length;
-        bestMatchSourcePath = sourcePath;
-      }
-    }
-
-    if (bestMatchSourcePath) {
-      fileMapping.set(bestMatchSourcePath, target);
-    }
-  }
-
-  return fileMapping;
-}
-
 const TEX_EXTENSION_REGEX = /\.tex$/i;
 
 /**
  * Update \input commands in output files to reference new file paths.
  *
+ * Each output is paired with its base the way lineage tracing pairs them: by
+ * its model-reported `source` first, so two bases that share a file name in
+ * different directories each keep their own output, and by file name for an
+ * output the model renamed.
+ *
  * @param baseFiles Base file paths
- * @param outputFiles Output file paths
+ * @param outputs The round's outputs with their reported sources
  * @param logger Optional logger for debug messages
  */
 export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
   function* (
     baseFiles: FileLocation[],
-    outputFiles: FileLocation[],
+    outputs: readonly Pick<OutputFileInfo, 'source' | 'location'>[],
     logger?: AgentTrace,
   ): Effect.fn.Return<void, never, FileSystem.FileSystem> {
     const fs = yield* FileSystem.FileSystem;
-    if (baseFiles.length === 0 || outputFiles.length === 0) {
+    if (baseFiles.length === 0 || outputs.length === 0) {
       logger?.debug('No files to process for input command replacement');
       return;
     }
 
-    const baseToOutputMap = createFileMapping(baseFiles, outputFiles);
+    const baseToOutputMap = new Map<string, FileLocation>();
+    const bases = pairOutputsWithBases(baseFiles, outputs);
+    for (const { location } of outputs) {
+      const base = bases.get(fileLocationDisplayPath(location))?.base;
+      if (base) baseToOutputMap.set(fileLocationDisplayPath(base), location);
+    }
 
     if (baseToOutputMap.size === 0) {
       logger?.debug('No valid file mappings for input command replacement');
@@ -148,8 +109,8 @@ export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
 
     // Each output is its own file, so they are rewritten concurrently.
     yield* Effect.forEach(
-      outputFiles,
-      (outputLocation) => {
+      outputs,
+      ({ location: outputLocation }) => {
         const outputPath = fileLocationDisplayPath(outputLocation);
 
         return Effect.gen(function* () {

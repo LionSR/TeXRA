@@ -312,7 +312,7 @@ export class RepoPollingSource extends PollingSourceBase<
         () => {},
         state.reviewComments,
         (c) => {
-          const prNumber = parsePRNumberFromReviewCommentUrl(c.html_url);
+          const prNumber = matchPositiveInt(PR_NUMBER_RE, c.html_url);
           if (prNumber === undefined) return Effect.void;
           return this.emit(
             state,
@@ -385,7 +385,7 @@ export class RepoPollingSource extends PollingSourceBase<
     // Pulls list is already sorted by updated_at desc, so slicing yields
     // the freshest candidates when the per-tick cap bites.
     const probes = candidates.slice(0, MAX_MERGEABLE_PROBES_PER_TICK);
-    // Each probe settles on its own: one PR's failed GET must not drop the
+    // Each probe finishes on its own: one PR's failed GET must not drop the
     // readings of the others, which is what `Promise.allSettled` gave here.
     const probeResults = yield* Effect.forEach(
       probes,
@@ -545,6 +545,3 @@ function parseTargetNumberFromIssueUrl(c: GhIssueComment): number | undefined {
  * `html_url` is `…/pull/{number}#discussion_r…`.
  */
 const PR_NUMBER_RE = /\/pull\/(\d+)(?:[?#/]|$)/;
-function parsePRNumberFromReviewCommentUrl(url: string): number | undefined {
-  return matchPositiveInt(PR_NUMBER_RE, url);
-}

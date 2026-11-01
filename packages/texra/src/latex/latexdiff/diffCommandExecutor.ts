@@ -76,12 +76,17 @@ class LatexdiffFailed extends Schema.TaggedError<LatexdiffFailed>()(
 }
 
 export class DiffCommandExecutor {
+  private readonly channel: string;
+  private readonly roots: WorkspaceRoots;
   constructor(
-    private readonly channel: string,
+    channel: string,
     /** The roots of the workspace this diff belongs to; its settings are read
      *  from these slots, never from the calling context's. */
-    private readonly roots: WorkspaceRoots,
-  ) {}
+    roots: WorkspaceRoots,
+  ) {
+    this.channel = channel;
+    this.roots = roots;
+  }
 
   private setting<T>(key: string) {
     return Settings.get<T>(this.roots, key);

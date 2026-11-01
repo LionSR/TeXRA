@@ -48,7 +48,6 @@ vi.mock('@texra/tools/codexImport', async (importActual) => {
 import '@test/support/sessionGraphTestSetup';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
@@ -63,6 +62,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { CodexThreads as CodexThreadsService } from '@texra/tools/agentCliSessionStores';
 import { AgentCliSessionRegistry } from '@texra/tools/agentCliSessionRegistry';
 import { CodexTool } from '@texra/tools/codex';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The tool's call layer under `run`, serving `registry` as the step would. */
 const toolLayer = (

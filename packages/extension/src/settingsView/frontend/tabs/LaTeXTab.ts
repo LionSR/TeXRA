@@ -7,6 +7,7 @@ import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -56,6 +57,7 @@ import {
   renderStateSettingSelectRow,
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
+import { settingSignal } from '../settingsState';
 import { latexTabStyles } from './LaTeXTab.styles';
 
 /** Path keys in LatexSettingsStatus for tool paths. */
@@ -139,7 +141,7 @@ const DEPENDENCIES: DependencyInfo[] = [
 ];
 
 @customElement('latex-tab')
-export class LaTeXTab extends LitElement {
+export class LaTeXTab extends SignalWatcher(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -155,16 +157,6 @@ export class LaTeXTab extends LitElement {
     'dependencies';
   @property({ type: Boolean }) loaded = false;
   @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
-
-  // Catalog-backed values, one per row the page renders.
-  @property({ type: Boolean }) autoCompile = true;
-  @property({ type: Boolean }) autoOpenPdf = true;
-  @property({ type: Boolean }) rejectOnCompileFailure = true;
-  @property({ type: Boolean }) diffBetweenRounds = false;
-  @property({ type: Boolean }) diffChangesOnly = true;
-  @property() diffMathMarkup = 'coarse';
-  @property() formatter = 'latexindent';
-  @property({ type: Boolean }) inlineCriticismEnabled = false;
 
   private handleApply(
     field?: LatexRecommendedSettingField,
@@ -474,6 +466,9 @@ export class LaTeXTab extends LitElement {
   }
 
   private renderCompileDiffSettings(): TemplateResult {
+    const autoCompile = settingSignal<boolean>(
+      DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
+    ).get();
     return html`
       <div class="settings-section">
         ${renderSettingsSectionHeading({
@@ -482,32 +477,18 @@ export class LaTeXTab extends LitElement {
             'What TeXRA does with the LaTeX an agent writes in this workspace.',
           icon: 'bolt',
         })}
-        ${renderStateSettingToggleRow({
-          key: DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
-          checked: this.autoCompile,
-        })}
-        ${renderStateSettingToggleRow({
-          key: DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
-          checked: this.autoOpenPdf,
-          disabled: !this.autoCompile,
-        })}
-        ${renderStateSettingToggleRow({
-          key: DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-          checked: this.rejectOnCompileFailure,
-          disabled: !this.autoCompile,
-        })}
-        ${renderStateSettingToggleRow({
-          key: DocumentsStateKey.LATEXDIFF_CHANGES_ONLY,
-          checked: this.diffChangesOnly,
-        })}
-        ${renderStateSettingSelectRow({
-          key: DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
-          value: this.diffMathMarkup,
-        })}
-        ${renderStateSettingToggleRow({
-          key: DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-          checked: this.diffBetweenRounds,
-        })}
+        ${renderStateSettingToggleRow(DocumentsStateKey.WORKFLOW_AUTO_COMPILE)}
+        ${renderStateSettingToggleRow(
+          DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
+          { disabled: !autoCompile },
+        )}
+        ${renderStateSettingToggleRow(
+          DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+          { disabled: !autoCompile },
+        )}
+        ${renderStateSettingToggleRow(DocumentsStateKey.LATEXDIFF_CHANGES_ONLY)}
+        ${renderStateSettingSelectRow(DocumentsStateKey.LATEXDIFF_MATH_MARKUP)}
+        ${renderStateSettingToggleRow(DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS)}
       </div>
     `;
   }
@@ -519,18 +500,14 @@ export class LaTeXTab extends LitElement {
           title: 'Formatting and review',
           icon: 'wand-magic-sparkles',
         })}
-        ${renderStateSettingSelectRow({
-          key: TexraStateKey.LATEX_FORMATTER,
-          value: this.formatter,
-        })}
+        ${renderStateSettingSelectRow(TexraStateKey.LATEX_FORMATTER)}
         ${
           // Editor diagnostics are a VS Code surface; the desktop has none.
           this.desktopHost
             ? nothing
-            : renderStateSettingToggleRow({
-                key: TexraStateKey.INLINE_CRITICISM_ENABLED,
-                checked: this.inlineCriticismEnabled,
-              })
+            : renderStateSettingToggleRow(
+                TexraStateKey.INLINE_CRITICISM_ENABLED,
+              )
         }
       </div>
     `;

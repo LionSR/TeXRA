@@ -23,8 +23,6 @@ const CONFIG: OpenAIResponsesConfiguration = {
     endpoint: 'https://synthetic.invalid/v1',
     credentialScope: 'synthetic-account',
   },
-  supportsTemperature: true,
-  supportsMaxOutputTokens: true,
   supportsStorage: true,
   supportsDocumentInput: true,
   allowedReasoningEfforts: [

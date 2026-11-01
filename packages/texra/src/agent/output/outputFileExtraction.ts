@@ -150,9 +150,8 @@ export const extractFilesFromXml = Effect.fn('documents.extractFilesFromXml')(
         return;
       }
 
-      const locations = processedPairs.map((p) => p.location);
       if (deps.baseFiles.length > 0) {
-        yield* replaceInputCommands(deps.baseFiles, locations, logger);
+        yield* replaceInputCommands(deps.baseFiles, processedPairs, logger);
       }
       data.outputs = processedPairs;
     }).pipe(

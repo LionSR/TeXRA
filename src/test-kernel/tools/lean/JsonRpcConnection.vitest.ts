@@ -8,7 +8,7 @@ import { it } from '@effect/vitest';
 import { Effect, Fiber, Queue, Sink, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { makeJsonRpcConnection } from '@tools/jsonRpc';
+import { makeJsonRpcConnection } from '@texra-ai/harness/plugins';
 
 /** The peer's output as chunks; the listeners go when the consumer does. */
 const chunksOf = (stream: PassThrough) =>

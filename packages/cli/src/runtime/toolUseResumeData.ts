@@ -28,11 +28,11 @@ export const HISTORY_RUN_STATUS_LABEL = {
   [HISTORY_RUN_STATUS.UNKNOWN]: 'Unknown',
 } as const satisfies Record<HistoryRunStatus, string>;
 
-/** What a run's history standing is decided from: the view's folded facts
+/** What a run's history standing is decided from: the view's facts
  *  and `records(id).readResumable()`'s answer. */
 export interface CliRunFacts {
   readonly resumable: boolean;
-  /** The run's folded status; a terminal outcome phase is its durable
+  /** The run's status; a terminal outcome phase is its durable
    *  outcome, anything else means no outcome has landed. */
   readonly phase?: RunLifecycleStatus;
   /** A stop rested the run instead of ending it (a paused child). */

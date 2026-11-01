@@ -8,12 +8,12 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import type { RunId } from '@shared/schemas';
+import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { publishCompiledPdfArtifact } from '@texra/agent/output/compiledPdfArtifacts';
-import { createRunStorageLocation } from '@utils/files/fileLocation';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 describe('compiled PDF artifacts', () => {
   const tempDirs = useTempDirs();

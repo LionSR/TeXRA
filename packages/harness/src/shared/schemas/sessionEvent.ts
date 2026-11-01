@@ -1,8 +1,7 @@
 /**
- * The durable session events every process applies to its `SessionView`
- * (.agents/docs/implemented/architecture/2026-09-03-prd-one-fold-three-renderers.md
- * sections 5.2 and 6). The other view inputs, which never carry a seq, are
- * in `sessionViewInput.ts`.
+ * The durable session events every process applies to its `SessionView`.
+ * The other view inputs, which never carry a seq, are in
+ * `sessionViewInput.ts`.
  *
  * Every durable arm rides one envelope: the aggregate it belongs to, its
  * per-aggregate `seq`, the store-local `commit` cursor, the writing `origin`
@@ -10,7 +9,7 @@
  * its `seq`. The arms mirror the trace (`AgentEvent`) shapes field for field
  * where the fold reads them, so a publisher translates by naming fields.
  *
- * One run owns one aggregate, `('run', runId)` (one run model, section 3.1):
+ * One run owns one aggregate, `('run', runId)`:
  * display rows and the run's private records land on the same aggregate, and
  * whether a row reaches a renderer is a property of its type
  * (`isDisplaySessionEvent`), not of a second aggregate.
@@ -36,9 +35,8 @@ import {
   ResultMetaSchema,
 } from './runRecords';
 import { RunIdSchema } from './identifiers';
-import { FollowUpContentSchema } from './followUp';
+import { FollowUpContentSchema, FollowUpDispositionSchema } from './followUp';
 import { PermissionPayloadSchema } from './progressView/data';
-import { RunFactSchema } from './rowValues';
 import { RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import { RunBindingSchema } from './runFacts';
@@ -53,7 +51,6 @@ import {
 import { ContextBlobSchema, ToolsOfferedPayloadSchema } from './offeredTools';
 import { HookOutcomePayloadSchema } from './hookOutcome';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
-import { ConversationProgressSchema } from './runState';
 import { TranscriptEventSchema } from './traceEvent';
 
 /** Per-aggregate append order; `run.start` is seq 1 of its run. Dense from
@@ -135,7 +132,7 @@ const onRunAggregate = Struct.lambda<OnRunAggregate>((schema) =>
 );
 
 /**
- * The parent edge (one run model, section 3.2): the whole of it. `id` is the
+ * The parent edge: the whole of it. `id` is the
  * launching run; `uid` is that run's incarnation, stamped by the database
  * inside the child's creation transaction so a logical id a retry reuses
  * can never redirect the child to a later incarnation of its parent. Any other spelling of the edge is `parent !== null`, computed from
@@ -245,15 +242,13 @@ const DisplayRowDraftSchema = Schema.Union([
    *  fact after `run.start` that moves the edge. */
   durable('run.detach', {}),
   /**
-   * The terminal fact (one run model, section 3.3): outcome, the classified
-   * error behind a failure, and a tool-use run's reply (usage and workflow
-   * files have their own rows). Written once per lifecycle, by the storage
-   * finalizer, after the run's last transcript row; the fold derives the
-   * terminal phase from it and from nothing else.
+   * The terminal fact: outcome, the classified error behind a failure, and
+   * a tool-use run's reply (usage and workflow files have their own rows).
+   * Written once per lifecycle, by the storage finalizer, after the run's
+   * last transcript row; the fold derives the terminal phase from it and
+   * from nothing else.
    */
   durable('run.end', RunEndRowSchema.fields),
-  durable('conversation.progress', { progress: ConversationProgressSchema }),
-  durable('run.fact', { fact: RunFactSchema }),
   /**
    * A child driven by the child loop, which has no run history or rounds, parks
    * on its own row (one run model, 3.3): `parked` before the loop blocks on
@@ -277,9 +272,9 @@ const DisplayRowDraftSchema = Schema.Union([
     by: Schema.Literals(['model', 'user']),
   }),
   PluginFactDraftSchema,
-  /** Input a run has not taken yet (one run model, section 3.7), whole, so
-   *  a crash loses nothing; `followUpId` is the producer's delivery id or
-   *  minted. Pending is queued without consumed. */
+  /** Input a run has not taken yet, whole, so a crash loses nothing;
+   *  `followUpId` is the producer's delivery id or minted. Pending is
+   *  queued without consumed. */
   durable('followup.queued', {
     followUpId: Schema.String.check(Schema.isMinLength(1)),
     content: FollowUpContentSchema,
@@ -298,15 +293,15 @@ const DisplayRowDraftSchema = Schema.Union([
       ]),
     ),
   }),
-  /** The follow-up became the message a turn carries, in that
-   *  message's batch: never delivered twice. */
+  /** The follow-up left the queue, in the batch of the rows that took it,
+   *  and why (`disposition`: part of a turn's message, answered, applied,
+   *  or dropped with its reason): never delivered twice. */
   durable('followup.consumed', {
     followUpId: Schema.String.check(Schema.isMinLength(1)),
+    disposition: FollowUpDispositionSchema,
   }),
-  /**
-   * A run asking a person (one run model, section 3.7): what the UI shows,
-   * never host handles. Pending is opened without decided.
-   */
+  /** A run asking a person: what the UI shows, never host handles.
+   *  Pending is opened without decided. */
   durable('request.opened', {
     requestId: Schema.String.check(Schema.isMinLength(1)),
     payload: PermissionPayloadSchema,
@@ -418,7 +413,7 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
  * transaction that appends it: the parent a `run.start` stamps, the
  * aggregate a row hangs its target under (a plugin's aggregate under its
  * `parent` run, or none), the claim a plugin's aggregate borrows for that
- * transaction alone, and the closure a tombstone makes.
+ * transaction alone, and the closure a deletion marker makes.
  * {@link referencedAggregates} reads the same edges off committed rows.
  */
 export interface AggregateEdges {
@@ -455,17 +450,17 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
  * The listing types the fold keys `latest` by: every durable arm
  * but the transcript tier. The request pair shares one entry because it
  * folds to one set, the follow-up pair likewise, and the lifecycle pair (`run.start`, `run.removed`)
- * shares one because it folds to one existence: a tombstone's commit then
+ * shares one because it folds to one existence: a deletion marker's commit then
  * outranks a replayed `run.start` below it, which is what makes the
- * tombstone final under every read. `run.position` is a
+ * deletion marker final under every read. `run.position` is a
  * listing key of its own: the phase is folded from it, so a cold listing
  * that dropped it would paint every parked run as ready. `stage.start` is
  * transcript tier alone: its display arm is a no-op and only the transcript
  * fold reads it over the whole aggregate, so listing it would pull the latest
  * one of every run into every renderer for no reader.
  *
- * `run.fact` and `plugin.fact` hold several families on one type, so they
- * are read grouped by family as well (`listingKeyOf`, `Database`).
+ * `plugin.fact` holds several kinds on one type, so it is read grouped by
+ * kind as well (`listingKeyOf`, `Database`).
  */
 export function listingTypeOf(
   event: Pick<SessionEvent, 'type'>,
@@ -490,7 +485,7 @@ export function listingTypeOf(
     case 'hook.outcome':
     case 'child.turn':
       // A priced turn is never "latest of type" (`listingKeyOf`). Run-history
-      // rows stay out: a cold hydrate never pulls one into every
+      // rows stay out: a cold initial load never pulls one into every
       // renderer (`run.position` is a listing row). Keyed
       // records fold whole; the fold suite pins this list.
       return null;
@@ -512,8 +507,8 @@ export function listingTypeOf(
  * The `latest` key one row folds under: its listing type, qualified by the
  * row's own discriminator where it carries one. The mirror of the listing
  * query's `GROUP BY`, so "the newest row the fold holds" means the same
- * thing on a cold read and on a replay: one `run.fact` family's newest row
- * never suppresses another's.
+ * thing on a cold read and on a replay: one plugin kind's newest row never
+ * suppresses another's.
  */
 export function listingKeyOf(event: SessionEvent): string | null {
   // A run's spend: the listing returns its total at its newest priced row,
@@ -526,7 +521,7 @@ export function listingKeyOf(event: SessionEvent): string | null {
   // Both a run's latest model title and its latest user title are kept:
   // the fold lets the user's win.
   if (event.type === 'run.description') return `${type}/${event.by}`;
-  return event.type === 'run.fact' ? `${type}/${event.fact.key}` : type;
+  return type;
 }
 
 /**
@@ -549,6 +544,10 @@ export function pendingKeyOf(
       return null;
   }
 }
+
+/** Every `AgentEvent` arm but the chunk: each is stored as a row of its run. */
+// prettier-ignore
+export const TRACE_ROW_TYPES = Object.freeze(['log', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplaySessionEvent['type'][]);
 
 export const DISPLAY_EVENT_TYPES: readonly string[] = Object.freeze(
   DisplaySessionEventDraftSchema.members.map(

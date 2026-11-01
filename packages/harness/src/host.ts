@@ -15,9 +15,12 @@
 
 // The process every host composes: one `processLayer`, built once.
 export { processLayer } from './effect/processLayer.js';
+// A run's trace read back from a session's rows, for a session whose runs
+// run elsewhere (a window over the background service).
+export { replayTrace } from '@controllers/session/runTrace';
 // A project's view read cold from its store, for a multi-project listing.
 export { readSessionView } from '@controllers/session/readSessionView';
-export type { RunRejection } from '@agent/runtime/runClassification';
+export type { RunRejection } from '@agent/storage/resumability';
 export { ExportNodeSchema, type ExportNode } from '@agent/export/schemas';
 export {
   formatConversationMessage,
@@ -59,8 +62,6 @@ export {
   type WorkspaceAgentsControllerDeps,
   type WorkspaceAgentsEntry,
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
-export * from '@common/teams/TeamPresets';
-export * from '@common/teams/TeamPlan';
 export type { AgentDelegationScope } from '@shared/schemas';
 export {
   AgentCustomizeRefused,
@@ -103,14 +104,14 @@ export {
 export {
   SessionHostInteractions,
   type HostInteractions,
+  presentRunFailure,
 } from '@agent/runtime/HostInteractions';
-export type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+// One program per pending request a host follows, while the view lists it.
+export { followPendingRequests } from './effect/requestAnswerer.js';
 export { buildDiffHunks, type DiffHunks } from '@utils/text/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
-export { presentRunFailure } from '@agent/runtime/terminalResultToast';
 // Which side of a trace event a run wrote.
 export type { TraceArm } from '@agent/trace';
-export type { SettingHost } from '@shared/state/stateSettings';
 export type { AggregateId, SessionCloseReport } from '@shared/schemas';
 // The platform's ports, their stores' failures, and the services plugins read.
 export {
@@ -142,6 +143,8 @@ export {
 export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 // Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
+// The canned model a package-validation build provides beneath the process.
+export { ValidationModel } from '@agent/runtime/modelAccess/routeDecision';
 export type { RouteCredential } from '@agent/runtime/modelAccess/credentials';
 // The models a host offers: each visible model's option, the enabled list and
 // its writer, run-model precedence, the reasoning policy, the helper model.
@@ -151,7 +154,6 @@ export {
   readModelOptions,
   setModelEnabled,
   type ModelOption,
-  type ModelOptionStores,
 } from '@model/computeModelOptions';
 export {
   decideRunModel,
@@ -190,16 +192,19 @@ export {
   pathToLocationIn,
 } from '@utils/files/fileLocation';
 // The user's MCP servers: their config file, and a namespaced tool's server.
-export { mcpConfigPathOf, readMcpConfig } from '@tools/mcp/mcpConfig';
+export { readMcpConfig } from '@tools/mcp/mcpConfig';
+export { mcpConfigPathOf } from '@common/plugins/mcpServers';
 export type { McpServerConfig } from '@common/plugins/mcpServers';
-export { mcpServerOfToolName } from '@tools/mcp/mcpServer';
+export { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 // The skills a session's roots discover (the settings inventory, the enabled
-// ones a person activates) with their issues, and a host's source options.
+// ones a person activates) with their issues, and a host's skill sources and
+// source options.
 export {
   Skills,
   type EnabledSkill,
   type SkillRoots,
 } from '@skills/runtimeSkills';
+export type { HostSkillOptions } from '@platform/processRuntime';
 export type { SkillSourceOptions } from '@skills/skillSources';
 export type {
   SkillIssueCode,
@@ -230,11 +235,7 @@ export {
 // Failures as hosts and plugins read them: the agent error, predicates, cause
 // chain, abort, provider message (`toErrorMessage` is in `./schemas`).
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
-export {
-  agentErrorPresentation,
-  type AgentErrorKind,
-  type AgentErrorPresentation,
-} from '@common/errors/agentErrorClassification';
+export type { AgentErrorKind } from '@common/errors/agentErrorClassification';
 export { causeChain } from '@utils/errors/errorMessage';
 export {
   isFileNotFoundError,
@@ -276,6 +277,7 @@ export {
   entryMessage,
   LOG_CHANNEL,
   setLogSink,
+  writeLogLine,
   type LogEntry,
   type LogSink,
 } from '@logger/logSink';

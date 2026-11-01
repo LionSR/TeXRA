@@ -5,14 +5,15 @@ import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
 
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect, Fiber, Schema } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
-import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 
-import { type ExecResult, RunIdSchema, type RunId } from '@shared/schemas';
+import { type RunId, RunIdSchema } from '@texra-ai/harness/schemas';
+import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import { startAwaited } from '@test/support/runHandleFixtures';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   createProcessSession,
@@ -22,6 +23,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { BashTool } from '@tools/bash';
 import * as execUtils from '@utils/system/execUtils';
+import type { ExecResult } from '@texra-ai/harness/node';
 
 const PARENT_RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('ba5e00000001');
 
@@ -56,7 +58,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
     );
     // The completion commits on the parent's input; its wake follows.
     const followUp = vi
-      .spyOn(toolUseFollowUp, 'startFollowUpWake')
+      .spyOn(toolUseFollowUp, 'wakeRun')
       .mockReturnValue(Effect.succeed(Effect.void));
 
     publishTestRunStart(testDefaultSession(), PARENT_RUN_ID);
@@ -119,7 +121,7 @@ function readOutput(runId: RunId, viewRange?: [number, number]) {
 describe('ExecutionsTool /executions/{id}/output', () => {
   setupPlatform({
     workspacePath: '/workspace',
-    config: { 'texra.toolUse.requireBashApproval': false },
+    config: { 'toolUse.requireBashApproval': false },
   });
 
   beforeEach(async () => {
@@ -156,6 +158,43 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         );
 
         yield* Effect.promise(() => run.finish());
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: {
+              session: testDefaultSession(),
+              runId: PARENT_RUN_ID,
+              toolPolicy: {},
+            },
+          }),
+        ),
+      ),
+  );
+
+  it.live(
+    'kills a child whose launch is in flight before its program runs',
+    () =>
+      Effect.gen(function* () {
+        const session = testDefaultSession();
+        publishTestRunStart(session, PARENT_RUN_ID);
+        const childId = publishTestRunStart(session, undefined, {
+          parent: PARENT_RUN_ID,
+        });
+        yield* session.log.settled;
+        // Launched and admitted, its program not yet past its setup: the
+        // window between `start` and the child's loop being under way.
+        const launch = yield* Effect.forkChild(
+          startAwaited(session.runs, childId, Effect.never, PARENT_RUN_ID),
+          { startImmediately: true },
+        );
+
+        const result = yield* ExecutionsTool.call({
+          path: `/executions/${childId}`,
+          action: 'kill',
+        });
+
+        assert.equal(result.output, `Run ${childId} terminated.`);
+        yield* Fiber.await(launch);
       }).pipe(
         Effect.provide(
           nativeToolTestLayer({

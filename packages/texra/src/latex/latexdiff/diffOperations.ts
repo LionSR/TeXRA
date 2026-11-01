@@ -4,8 +4,8 @@
  * which the run's own `document_diff` shares.
  *
  * Takes the run's recorded round outputs (its documents, as the host's view
- * of the session folds them), builds one diff operation per pair each round's
- * outputs call for, and runs them. That fold is the only source: run storage
+ * of the session applies them), builds one diff operation per pair each round's
+ * outputs call for, and runs them. That view is the only source: run storage
  * is never rescanned and no workspace filename is parsed, so a run with no
  * recorded outputs has no diff operations. Every host (VS Code command,
  * desktop) keeps only its own UX (progress chrome, prompts, result rendering)

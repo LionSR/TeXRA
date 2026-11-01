@@ -1,5 +1,5 @@
 // Installing Claude Code and Codex plugins: fetch or reference one, pin it,
-// and record it in `texra.plugins.installed`, the one install record the
+// and record it in `plugins.installed`, the one install record the
 // CLI, the extension and the desktop read and write. Nothing from a plugin
 // runs here: git only fetches, and an install records the plugin disabled
 // until the user enables it and trusts the version it is at (`./pluginTrust`).

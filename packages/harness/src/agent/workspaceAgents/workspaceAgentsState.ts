@@ -18,10 +18,8 @@ import {
 } from '@platform/interfaces';
 import {
   AGENT_SOURCE,
-  type AgentModePreset,
   agentKeyOf,
   agentMatchesIdentifier,
-  type WorkspaceAgentsSelection,
   WorkspaceAgentsSelectionSchema,
   type AgentSource,
   HiddenCustomAgentKeysSchema,
@@ -184,17 +182,6 @@ export function forgetHiddenAgent(
       }),
     ),
   );
-}
-
-/** The identifiers a selection lists; `undefined` means every agent. */
-export function selectedIdentifiers(
-  selection: Exclude<WorkspaceAgentsSelection, { readonly kind: 'inherit' }>,
-  presets: readonly AgentModePreset[],
-): readonly string[] | undefined {
-  if (selection.kind === 'all') return undefined;
-  if (selection.kind === 'custom') return selection.agentKeys;
-  const preset = presets.find((candidate) => candidate.id === selection.teamId);
-  return preset?.agents;
 }
 
 /** `entries` less the custom agents the user hid. */

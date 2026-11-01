@@ -9,11 +9,13 @@
 import { Schema, Struct } from 'effect';
 import {
   getBasename,
-  ModelOptionDataSchema,
-  TeamOptionDataSchema,
   ApprovalPolicySchema,
   APPROVAL_POLICY_DEFAULT,
 } from '@texra-ai/harness/schemas';
+import {
+  ModelOptionDataSchema,
+  TeamOptionDataSchema,
+} from '@texra/shared/pickerOptions';
 
 import { DocumentAgentOptionSchema } from '@texra/shared/plugins/documents';
 

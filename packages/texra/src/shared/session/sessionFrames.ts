@@ -12,7 +12,7 @@
  *
  * `SessionFrames` supplies one ordered queue for the current generation.
  * It collects a replay through its completion marker before releasing it
- * to the fold, then delivers each frame's events before its text chunks.
+ * to the view, then delivers each frame's events before its text chunks.
  * A new generation discards the superseded queue and incomplete replay.
  */
 import {
@@ -31,6 +31,7 @@ import {
   RequestErrorSchema,
   RuntimeRequestSchema,
   RunIdSchema,
+  StoredMediaSchema,
 } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
@@ -79,7 +80,7 @@ export const EventsFrameSchema = Schema.Struct({
   chunks: Schema.Array(TextChunkSchema),
   local: Schema.NullOr(LocalRuntimeStateSchema),
   host: Schema.NullOr(HostSnapshotSchema),
-  /** Fold policy sampled by the process reader for this replay. */
+  /** Update policy sampled by the process reader for this replay. */
   debug: Schema.NullOr(Schema.Boolean),
   /** True on the frame that ends the reads this `Subscribe` started. */
   replayComplete: Schema.Boolean,
@@ -151,13 +152,13 @@ const SurfaceActionMessageSchema = Schema.Struct({
      *  selection, a follow-up to the selected stream or a launch. */
     Schema.Struct({ kind: Schema.Literal('submit') }),
     /** A fork's composer holds the message "Fork from here" cut before,
-     *  with the files it attached as the composer's images. */
+     *  with the media it attached as the composer's images. */
     Schema.Struct({
       kind: Schema.Literal('draft'),
       runId: RunIdSchema,
       text: Schema.String,
       images: Schema.Array(
-        Schema.Struct({ fileName: Schema.String, path: Schema.String }),
+        Schema.Struct({ fileName: Schema.String, media: StoredMediaSchema }),
       ),
     }),
     /** A workflow run of this session left running for finished or

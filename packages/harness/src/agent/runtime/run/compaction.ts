@@ -25,12 +25,12 @@ import {
   type RunId,
 } from '@shared/schemas';
 import type { CellError, RunCell } from '@shared/session/runHistory';
+import { turnText } from '@shared/session/runFacts';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { contextTokens, estimateMessageTokens } from './contextTokens';
-import { turnText } from './turnText';
 import type { ModelInvoker } from '../ModelInvoker';
 import type { CallResult } from './modelCall';
 
@@ -44,7 +44,7 @@ export const COMPACTION_REQUEST =
   'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
 
 /** System prompt used for conversation compaction. */
-export const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Preserve:
+const COMPACTION_SYSTEM_PROMPT = `Summarize the conversation below. Preserve:
 - The original user request and goals
 - All key decisions made
 - File paths and code changes discussed or made

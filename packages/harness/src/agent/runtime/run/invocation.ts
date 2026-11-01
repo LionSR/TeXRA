@@ -16,10 +16,8 @@ import { ModelError } from '@texra-ai/llm';
 
 import type { AgentTrace } from '@agent/trace';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import {
-  offersRetry,
-  type CallFailure,
-} from '@agent/runtime/modelAccess/failureInfo';
+import { type CallFailure } from '@agent/runtime/modelAccess/failureInfo';
+import { offersRetry } from '@common/errors/sdkError/providerErrorFormat';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import {
   type FailedNext,
@@ -35,7 +33,7 @@ import {
   type NextAttempt,
   type RetryCredentials,
 } from '@shared/session/inFlight';
-import type { RunPosition } from '@shared/session/runRows';
+import type { RunPosition } from '@shared/session/runRowsShape';
 
 import type { ModelRetryGate } from '../ModelRetryGate';
 
@@ -76,8 +74,8 @@ interface Asker<E, R> {
   /** Wait for the answer to the open retry request; false when nobody
    *  will answer it (the session closed). */
   readonly await: (requestId: string) => Effect.Effect<boolean, E, R>;
-  /** Ask again about `attempt`, which a person admitted and whose outcome
-   *  no row records. */
+  /** Ask again about `attempt`, whose outcome no row records: one a person
+   *  allowed, or one past the automatic retries. */
   readonly reask: (attempt: Attempt) => Effect.Effect<void, E, R>;
   /** Mint the id of a retry request the next failure may open. */
   readonly requestId: () => string;
@@ -176,7 +174,7 @@ const credentialRenewal = <R>(
 
 /** Rebind before sending `ref` on a person's retry answer, or when the
  *  binding in force is the Responses WebSocket the last attempt `failedOn`
- *  (it died with it, #13407). A failed rebind is `ref`'s failure, recorded
+ *  (the connection died with it). A failed rebind is `ref`'s failure, recorded
  *  unsent, so nothing goes out on the binding it meant to leave: false. */
 const rebound = Effect.fn('ModelInvoker.rebound')(function* <A, E, R>(
   driver: InvocationDriver<A, E, R>,
@@ -366,7 +364,8 @@ export const runInvocation = Effect.fn('ModelInvoker.invocation')(function* <
   let failedOn: BoundModel | null = null;
   for (;;) {
     const { invocation, requests } = yield* driver.read;
-    const move: NextAttempt = again ?? nextAttempt(invocation, requests);
+    const move: NextAttempt =
+      again ?? nextAttempt(invocation, requests, driver.retries);
     again = null;
     if (move.kind === 'fail' || move.kind === 'cancel') return ended(move);
     if (move.kind === 'await' || move.kind === 'reask') {

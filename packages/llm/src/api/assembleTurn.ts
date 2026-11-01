@@ -195,7 +195,7 @@ function finish(turn: Assembly, event: Of<'finish'>): Folded {
   return none;
 }
 
-/** One part folded into the assembly, with the turn events it emits. */
+/** One part applied to the assembly, with the turn events it emits. */
 function step(turn: Assembly, event: PartEvent): Folded {
   switch (event.kind) {
     case 'identity':
@@ -293,7 +293,7 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
 });
 
 /**
- * The fold every codec feeds, for one response. It owns the response
+ * The assembly every codec feeds, for one response. It owns the response
  * identity, the parts by position, delta emission, call argument assembly,
  * finish and tool-call agreement, terminal validation, and failures
  * enriched with the identity.

@@ -129,7 +129,7 @@ const reviewLines = Effect.fn('pluginTrust.reviewLines')(function* (
   if (hooks.length === 0) lines.push('Hooks: none');
   else {
     lines.push(
-      'Hooks (each runs as a process in the workspace, as you, with only PATH, HOME and the CLAUDE_* paths set; it can deny a tool call, add text the model reads, and keep a run going past the end of a turn once):',
+      'Hooks (each runs as a process in the workspace, as you, with only PATH, HOME and the CLAUDE_* paths set; it can deny a tool call, rewrite its input, answer the approval the call would ask for or ask a person instead, add text the model reads, and keep a run going past the end of a turn once; it cannot approve what the approval policy denies):',
     );
     for (const hook of hooks) {
       lines.push(`  ${describeHook(hook)}`);

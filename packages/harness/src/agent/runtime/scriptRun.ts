@@ -13,7 +13,7 @@ import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import type { NativeChildStrategy } from '@agent/runtime/childRunLoop';
 import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
+import type { RunReport } from '@agent/runtime/runReport';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import {
@@ -59,31 +59,30 @@ const statusOf = (settled: ToolResultPayload | undefined): ScriptCallStatus => {
 
 /**
  * The run's script call's settlement and the calls its script issued, in
- * issue order, from the run's `script.call` and `tool.result` rows. The
- * script's own host functions (`searchTools()`, `describeTool()`) answer
- * from the catalog and open no card, so they are not among the calls.
+ * issue order, from the run's script calls and its calls' results (the
+ * `script` read). The script's own host functions (`searchTools()`,
+ * `describeTool()`) answer from the catalog and open no card, so they are
+ * not among the calls.
  */
 export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
   session: SessionHandle,
   runId: RunId,
 ) {
-  const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
-    'script.call',
-    'tool.result',
-  ]);
+  const { scriptCalls, results } = yield* session.log.runRows(
+    qualifyAggregateId('run', runId),
+    'script',
+  );
   const settled = new Map<string, ToolResultPayload>();
-  for (const row of rows) {
-    if (row.type !== 'tool.result') continue;
-    const known = settled.get(row.payload.callId);
-    if (known === undefined || known.attempt <= row.payload.attempt)
-      settled.set(row.payload.callId, row.payload);
+  for (const payload of results) {
+    const known = settled.get(payload.callId);
+    if (known === undefined || known.attempt <= payload.attempt)
+      settled.set(payload.callId, payload);
   }
   const script =
     [...settled.values()].find(({ callId }) => !callId.includes('/')) ?? null;
-  const calls = rows.flatMap((row): ScriptCallCard[] => {
-    if (row.type !== 'script.call' || row.payload.toolName.endsWith('()'))
-      return [];
-    const { seq, toolName, phase, callId } = row.payload;
+  const calls = scriptCalls.flatMap((call): ScriptCallCard[] => {
+    if (call.toolName.endsWith('()')) return [];
+    const { seq, toolName, phase, callId } = call;
     const result = settled.get(callId);
     const error =
       result?.result.status === 'error' ? result.result.error : null;
@@ -245,7 +244,7 @@ export function createScriptRunStrategy(
   params: Parameters<typeof createNativeSubagentStrategy>[0] & {
     readonly title: string;
   },
-): NativeChildStrategy<RunEndResult, AgentRunServices> {
+): NativeChildStrategy<RunReport, AgentRunServices> {
   const { session, runId, title, startedAt } = params;
   const attributes = [{ name: 'title', value: title }];
   const native = createNativeSubagentStrategy(params);

@@ -3,12 +3,11 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { apiKeySecretName } from '@texra-ai/llm';
+import { selectAvailableDelegationModel } from '@agent/runtime/delegation/delegationAvailability';
 import {
   fakeProcessServices,
-  hostStores,
   installedHost,
 } from '@test/support/setupPlatform';
-import { selectAvailableDelegationModel } from '@tools/delegation/delegationAvailability';
 
 describe('delegation model availability', () => {
   // Only an OpenAI key is stored, so a named Anthropic model cannot run: the
@@ -25,7 +24,7 @@ describe('delegation model availability', () => {
           selectAvailableDelegationModel({
             requestedModel: 'anthropic/claude-opus-5-5',
             parentModel: 'anthropic/claude-sonnet-5-5',
-            settings: hostStores(),
+            settings: installedHost().roots,
           }),
         );
 

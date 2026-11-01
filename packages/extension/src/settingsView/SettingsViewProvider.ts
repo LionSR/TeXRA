@@ -15,11 +15,7 @@ import {
   SettingsViewMessageHandler,
 } from './SettingsViewMessageHandler';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type {
-  ProcessRuntime,
-  ProcessServices,
-  PlatformSecrets,
-} from '@texra-ai/harness/host';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 
 export class SettingsViewProvider {
   public static readonly viewType = 'texra.settingsView';
@@ -35,13 +31,14 @@ export class SettingsViewProvider {
   private readonly contentProvider: BundledViewContentProvider;
   private readonly messageHandler: SettingsViewMessageHandler;
 
+  private readonly runtime: ProcessRuntime;
   constructor(
     context: vscode.ExtensionContext,
-    secrets: PlatformSecrets,
-    private readonly runtime: ProcessRuntime,
+    runtime: ProcessRuntime,
     roots: WorkspaceRoots,
     progressView: ProgressViewProvider,
   ) {
+    this.runtime = runtime;
     this.contentProvider = new BundledViewContentProvider(
       context,
       'SettingsView',
@@ -49,7 +46,6 @@ export class SettingsViewProvider {
     );
     this.messageHandler = new SettingsViewMessageHandler(
       context,
-      secrets,
       runtime,
       roots,
       progressView,

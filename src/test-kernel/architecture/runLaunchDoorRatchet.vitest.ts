@@ -34,19 +34,13 @@ const DETACHED_FORK = /\b(?:forkDetach|FiberMap\.run|FiberSet\.run)\s*\(/g;
 const DETACHED_FORK_ALLOWLIST: Readonly<Record<string, number>> = {
   // A host presentation notice, reported rather than awaited.
   'packages/harness/src/agent/runtime/HostInteractions.ts': 1,
-  // The host's `onRun` observer, which may last as long as the run.
-  'packages/harness/src/agent/runtime/AgentRunLifecycle.ts': 1,
   // A late child-loop failure's diagnosis, joined on the launched fiber.
-  'packages/harness/src/tools/delegation/detachedChildRun.ts': 1,
+  'packages/harness/src/agent/runtime/delegation/detachedChildRun.ts': 1,
   // A guest script's issued calls, in the script's own scoped set: each runs
   // the caller's handler, which launches any run through the door itself.
   'packages/harness/src/agent/codeSandbox/codeSandbox.ts': 1,
   // A GitHub delivery into its poller's own set.
   'packages/texra/src/tools/github/PollingSourceBase.ts': 1,
-  // The package boundary: the awaiter of a launch (a root launch or
-  // `resumeRun`, whose run starts at the door) and the view drain a `Run`
-  // owns.
-  'packages/harness/src/effect/runHandle.ts': 2,
   // A host's approval prompt, in its handler's own set so a newer host's
   // attach withdraws it: it decides a request and starts no run.
   'packages/harness/src/effect/requestAnswerer.ts': 1,
@@ -58,7 +52,8 @@ const DETACHED_FORK_ALLOWLIST: Readonly<Record<string, number>> = {
  * allowed only for optional ports: a process port a host may omit, and a
  * plugin's port (its process layer's, never run- or session-scoped) that a
  * host omits (`InlineComments`) or that its probe reads only while the
- * layer is up (`LeanLanguageServices`).
+ * layer is up (`LeanLanguageServices`). The validation model is a process
+ * port only the CLI's validation build provides.
  */
 const SERVICE_OPTION = /\bEffect\.serviceOption\(\s*([A-Za-z_$][\w$]*)/g;
 
@@ -66,6 +61,7 @@ const OPTIONAL_PROCESS_PORTS = new Set([
   'InlineComments',
   'LeanLanguageServices',
   'ToolMissingReporter',
+  'ValidationModel',
 ]);
 
 function source(file: string): string {

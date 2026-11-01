@@ -9,7 +9,6 @@
 import { Schema } from 'effect';
 
 import type { ApprovalPolicy } from './approvalPolicy';
-import type { RunId, SessionEvent } from './schemas';
 
 export const APPROVAL_BYPASS_KINDS = ['bash', 'toolEdit', 'superYolo'] as const;
 
@@ -182,27 +181,6 @@ export function grantsKept<Id>(
     policy: new Map(source.policy).set(runId, own),
   };
   return { ...inheritedGrants(seeded, runId), goal: own.goal };
-}
-
-/** {@link grantsKept} from a child's own rows, its `run.start` and newest
- *  `approval.policy`; `undefined` for a child with no start (unborn). */
-export function grantsKeptFromRows(
-  source: ApprovalGrantSource<RunId>,
-  runId: RunId,
-  parentId: RunId,
-  rows: readonly SessionEvent[],
-): ApprovalGrants | undefined {
-  const start = rows.find((row) => row.type === 'run.start');
-  if (start?.type !== 'run.start') return undefined;
-  const own = rows.findLast((row) => row.type === 'approval.policy');
-  return grantsKept(
-    source,
-    runId,
-    start.parent?.id ?? parentId,
-    own?.type === 'approval.policy'
-      ? own.snapshot
-      : (start.approvalPolicy ?? NO_APPROVAL_GRANTS),
-  );
 }
 
 /** The human values a run's ancestry gives it, as grants of its own: what a

@@ -1,6 +1,5 @@
 /**
- * The webview side of the events transport (PRD one-fold-three-renderers,
- * 7.4, 7.7, 8.1): the decoder that turns host-bridge messages into frame
+ * The webview side of the events transport: the decoder that turns host-bridge messages into frame
  * deliveries, request responses, and surface actions, and the signals the
  * root reads. The runtime and the per-session graphs are
  * `webviewSessionLayer`'s; the rest of the frontend reads signals and posts
@@ -84,7 +83,7 @@ export interface WebviewTransport {
     message: Extract<UpMessage, { requestId: string }>,
     timeoutMs?: number,
   ): Promise<Response['result']>;
-  /** A `host.request` settled with the host's outcome, or failed with its
+  /** A `host.request` finished with the host's outcome, or failed with its
    *  refusal (a session that closes first, or `timeoutMs` passing, is a
    *  refusal too). */
   answer(
@@ -95,7 +94,7 @@ export interface WebviewTransport {
     listener: (session: string, action: WireSurfaceAction) => void,
   ): void;
   /** Release a session's graph: its signals, its scope (the LayerMap
-   *  entry, the fold fiber, the frames), and its slot, so a later `open`
+   *  entry, the session view fiber, the frames), and its slot, so a later `open`
    *  of the key builds a fresh one. A key that is not open is a no-op. */
   close(session: string): void;
   dispose(): void;
@@ -329,7 +328,7 @@ export function installWebviewTransport(
         aggregates,
       };
       // Begin the generation and replace the shell's transcript set before
-      // the host answers (PRD 8.1): the fold reopens its reads on the set.
+      // the host answers: the session view reopens its reads on the set.
       const open = sessions.get(session.key);
       if (!open) throw new Error(`Session ${session.key} is not open`);
       const { graph } = open;

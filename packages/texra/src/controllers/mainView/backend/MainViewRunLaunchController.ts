@@ -17,8 +17,7 @@ import {
   formatTeamLaunchBlockedMessage,
   formatUnknownTeamMessage,
   resolveTeamLaunch,
-  TEAM_SELECTION_REQUIRED_MESSAGE,
-} from '@texra-ai/harness/host';
+} from '@texra/shared/teamLaunch';
 import { isPastedImage } from '@texra/utils/files/pastedImageName';
 import {
   validateRunRequest,
@@ -182,7 +181,7 @@ export const prepareSurfaceLaunch = Effect.fn('prepareSurfaceLaunch')(
     } else {
       const teamId = launch.selectedTeamId || undefined;
       if (!teamId)
-        return yield* new Rejected({ reason: TEAM_SELECTION_REQUIRED_MESSAGE });
+        return yield* new Rejected({ reason: 'Team selection required.' });
       const resolution = resolveTeamLaunch({
         teamId,
         ...(yield* createTeamCatalogPorts(roots.repoState)),

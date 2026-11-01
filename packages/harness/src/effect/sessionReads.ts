@@ -11,21 +11,19 @@ import { Effect, type PlatformError, Stream, SubscriptionRef } from 'effect';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExportNode } from '@agent/export/schemas';
 import type { LiveRun } from '@agent/runtime/runs';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  deriveResumability,
   runRejection,
   type RunRejection,
-} from '@agent/runtime/runClassification';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { deriveResumability } from '@agent/storage/resumability';
+} from '@agent/storage/resumability';
 import { listRuns } from '@agent/storage/runListing';
 import { getRunRecords, type RunResult } from '@agent/storage/runRecords';
 import {
   listRunWorkspaceFiles,
   type RunWorkspaceFile,
 } from '@agent/storage/runWorkspaceFiles';
-import { withLogChannel } from '@logger/effectLog';
 import {
-  aggregateTarget,
   type RunEnd,
   type RunId,
   type TranscriptSubscription,
@@ -39,8 +37,6 @@ import {
 } from '@transcript/traceAssembler';
 
 import type { LocalSession } from './sessions.js';
-
-const CHANNEL = 'sessionReads';
 
 /**
  * One run's committed records ({@link LocalSession.records}), read from the
@@ -90,11 +86,10 @@ export interface RunRecords {
   readonly readTrace: () => Effect.Effect<AssembleTraceResult, Error>;
 }
 
-/** What this process holds of one run ({@link LocalSession.held}). */
+/** What this process holds of one run ({@link LocalSession.held}): a launch
+ *  of it in flight here; a run with none has no record. */
 export interface HeldRun {
   readonly runId: RunId;
-  /** A generation of it is live here: its fiber, a hold, or a launch. */
-  readonly live: boolean;
   /** Resolves once every owner of it here has left. */
   readonly drained: Effect.Effect<void>;
   /** Why its running loop would refuse to switch to `model`; undefined
@@ -122,7 +117,6 @@ let readerPorts = 0;
 
 const heldRun = (run: LiveRun): HeldRun => ({
   runId: run.runId,
-  live: run.live,
   drained: run.drained,
   modelSwitchDisabledReason: (model) =>
     run.controls?.modelSwitchDisabledReason(model) ?? Effect.succeed(undefined),
@@ -149,30 +143,14 @@ const deleteRuns =
   (handle: SessionHandle): LocalSession['deleteRuns'] =>
   (target) =>
     Effect.gen(function* () {
-      const rows = yield* Stream.runCollect(handle.log.listing());
-      const removed = new Set(
-        rows.flatMap((row) =>
-          row.type === 'run.removed' ? [row.aggregateId] : [],
-        ),
+      // The listing as the cold view folds it: each run it still holds, at
+      // the commit of its `run.start`.
+      const { runs } = yield* handle.view.read([]);
+      const listed = [...runs.values()].flatMap((run) =>
+        target === 'all' || run.id === target
+          ? [{ runId: run.id, commit: run.createdAt }]
+          : [],
       );
-      const starts = rows.filter(
-        (row) => row.type === 'run.start' && !removed.has(row.aggregateId),
-      );
-      const listed = starts.flatMap((row) => {
-        const run = aggregateTarget(row.aggregateId);
-        return run.kind === 'run' && (target === 'all' || run.id === target)
-          ? [{ runId: run.id, commit: row.commit }]
-          : [];
-      });
-      // A `run.start` opens a run aggregate: one on any other is a damaged
-      // listing, said rather than skipped.
-      const strays = starts.filter(
-        (row) => aggregateTarget(row.aggregateId).kind !== 'run',
-      );
-      if (strays.length > 0)
-        yield* Effect.logWarning(
-          `The run listing holds a run.start on a non-run aggregate: ${strays.map((row) => row.aggregateId).join(', ')}`,
-        ).pipe(withLogChannel(CHANNEL));
       const deleted: RunId[] = [];
       const active: RunId[] = [];
       const failed: { runId: RunId; error: RequestError }[] = [];

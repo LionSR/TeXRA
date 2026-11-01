@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
-import type { TranscriptRow } from '@shared/transcript/transcriptRow';
+import { MESSAGE_TYPES, type RunId } from '@texra-ai/harness/schemas';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
+import type { TranscriptRow } from '@texra-ai/harness/transcript';
 
 /** The model-response rows' texts. */
 function assistantRows(rows: readonly TranscriptRow[]) {

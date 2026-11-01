@@ -16,7 +16,7 @@ import type { RunView } from '@texra-ai/harness/schemas';
 // Local imports - TUI state
 import type { PendingApprovalKind } from '../state/approvalQueue';
 
-/** The fold owns status meaning; terminal colors express only its tone. */
+/** The session view owns status meaning; terminal colors express only its tone. */
 export const CHILD_TONE_COLOR: Readonly<Record<RunView['tone'], string>> =
   Object.freeze({
     running: COLOR_HINT,

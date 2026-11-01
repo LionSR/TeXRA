@@ -6,17 +6,17 @@
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
-import {
-  INSTRUCTION_ACTION,
-  type InstructionAction,
-  ensureError,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import {
   ExternalOpenFailed,
   type NotificationFailed,
 } from '@texra/hosts/uiHosts';
+import {
+  INSTRUCTION_ACTION,
+  type InstructionAction,
+} from '@ui/copy/instructionActions';
+import { texraGuideUrl } from '@ui/copy/guide';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import { createDesktopDialogs } from './desktopDialogs.js';
 import { createDesktopDiffHost } from './desktopDiffHost.js';
@@ -25,7 +25,6 @@ import { DESKTOP_RELEASES_PAGE_URL } from './desktopUpdateChecker.js';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { DesktopProject } from './desktopProjects.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
-import type { DesktopAgentRunOptions } from './desktopAgentRun.js';
 import type { DesktopHostBridge } from './hostBridge.js';
 import type { DesktopSpawn } from './desktopWindows.js';
 
@@ -57,8 +56,7 @@ export function createDesktopWindowHost(options: {
   };
 
   const dialogs = createDesktopDialogs(window, {
-    openGuide: (docsPage) =>
-      openExternalInBackground(`https://texra.ai/guide/${docsPage}`),
+    openGuide: (docsPage) => openExternalInBackground(texraGuideUrl(docsPage)),
     dispatchInstructionAction: (action) => dispatchInstructionAction(action),
   });
   const { showErrorMessage, showInfoMessage, showWarningMessage } = dialogs;
@@ -177,10 +175,10 @@ export function createDesktopWindowHost(options: {
         postDesktopSettingsView(post, 'models/keys');
         return;
       case INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE:
-        openExternalInBackground('https://texra.ai/guide/configuration.html');
+        openExternalInBackground(texraGuideUrl('configuration'));
         return;
       case INSTRUCTION_ACTION.OPEN_MODELS_DOC:
-        openExternalInBackground('https://texra.ai/guide/models.html');
+        openExternalInBackground(texraGuideUrl('models'));
         return;
     }
   };
@@ -332,7 +330,7 @@ export function createDesktopWindowHost(options: {
           ...dialogsOfProject,
           openDiff: diff.openDiff,
           openBuildDisplay: previewHost.openBuildDisplayIn(roots),
-        } satisfies DesktopAgentRunOptions['host'],
+        } satisfies DesktopAgentRunHost,
         toolEditPreview: {
           openPath: requestPreviewHost.openPath,
           openBuildDisplay: requestPreviewHost.openBuildDisplayIn(roots),

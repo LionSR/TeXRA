@@ -10,7 +10,7 @@ import {
   type RootedFileSystem,
   WorkspaceFs,
 } from '@texra-ai/harness/host';
-import { executeCommand, findCommand } from '@texra-ai/harness/node';
+import { executeCommand } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -28,6 +28,7 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
+import { findCommand } from '@texra/utils/system/binaryResolver';
 import { COMMIT_HASH_PATTERN } from '@texra/utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@texra/utils/git/commitLogFormat';
 import type { WorkspaceRoots } from '@texra-ai/harness';

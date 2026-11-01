@@ -5,7 +5,7 @@
  * still needs. Built from settlement evidence, never from the runtime's whole
  * mutation vocabulary.
  */
-import type { ToolFileAttachment, ToolResult } from '@shared/schemas';
+import type { ToolResult } from '@shared/schemas';
 import { appendHead, appendTail } from '@utils/text/appendTail';
 
 /** Max character length for tool result text (200KB ~ 50-66k tokens). */
@@ -21,15 +21,20 @@ export const TOOL_RESULT_TRUNCATION_TAIL_CHARS = 50_000;
 
 /**
  * The summary of an attachment set the model must read back itself: the list
- * of paths and MIME types, plus the hint naming the tool that opens them.
+ * of paths and MIME types, each with why it reaches the model as a mention
+ * only when it does (`note`), plus the hint naming the tool that opens them.
  */
 export function formatAttachmentSummary(
-  attachments: readonly ToolFileAttachment[],
+  attachments: readonly {
+    readonly path: string;
+    readonly mimeType: string;
+    readonly note?: string;
+  }[],
 ): string {
   const notes = attachments
     .map(
       (file) =>
-        `- ${file.path || 'attachment'} (${file.mimeType || 'application/octet-stream'})`,
+        `- ${file.path || 'attachment'} (${file.mimeType || 'application/octet-stream'})${file.note === undefined ? '' : `: ${file.note}`}`,
     )
     .join('\n');
   return `Attachments available:\n${notes}\nUse the read_file tool to read them.`;

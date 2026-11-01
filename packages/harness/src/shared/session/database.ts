@@ -292,7 +292,7 @@ export class Database extends Context.Service<
     readonly observedCommit: SubscriptionRef.SubscriptionRef<CommitOrdinal>;
     /** The display rows from `fromCommit`, filtered in SQL (a tail never
      *  decodes private records to drop them), a page at a time; each page is
-     *  its own snapshot, so a tombstone a page saw is delivered regardless. */
+     *  its own snapshot, so a deletion marker a page saw is delivered regardless. */
     readonly readDisplay: (
       fromCommit: CommitOrdinal,
     ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
@@ -301,8 +301,8 @@ export class Database extends Context.Service<
     readonly readBlobs: (
       digests: readonly string[],
     ) => Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
-    /** The latest listing row of each type on one open run: its private
-     *  records beside its creation, status and tombstone. */
+    /** The latest listing row of each type on one open run, its requests
+     *  and follow-ups left out: its private records beside its status. */
     readonly readRunRecords: (id: AggregateId) => EventsRead;
     /** The bounded CLI input rows, oldest first, and a new last one. */
     readonly inputHistory: {
@@ -347,7 +347,7 @@ export class Database extends Context.Service<
       DatabaseReadFailed | DatabaseClaimError
     >;
     /** Prove the tree's owners off the publisher, then answer its job
-     *  (`SessionEvents.removeRun`): reread, claim, append the tombstone. */
+     *  (`SessionEvents.removeRun`): reread, claim, append the deletion marker. */
     readonly prepareRunRemoval: (
       id: AggregateId,
       mode: DeletionMode,
@@ -356,7 +356,7 @@ export class Database extends Context.Service<
       Effect.Effect<readonly SessionEvent[], DatabaseClaimError>,
       DatabaseReadFailed | DatabaseWriteFailed
     >;
-    /** The tombstones not collected yet, and one's collection: `cleanup`
+    /** The deletion markers not collected yet, and one's collection: `cleanup`
      *  removes its run directories, then its closed aggregate, dependents, rows
      *  and orphaned blobs go; a failed cleanup keeps it for the next pass. */
     readonly deletions: {

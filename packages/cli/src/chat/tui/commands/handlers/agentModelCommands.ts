@@ -4,11 +4,6 @@ import {
   toErrorMessage,
   agentName as bareAgentName,
 } from '@texra-ai/harness/schemas';
-import {
-  formatTeamLaunchBlockedMessage,
-  formatUnknownTeamMessage,
-  resolveTeamLaunch,
-} from '@texra-ai/harness/host';
 import { resolveCliRunAgent } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
@@ -28,6 +23,11 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
+import {
+  formatTeamLaunchBlockedMessage,
+  formatUnknownTeamMessage,
+  resolveTeamLaunch,
+} from '@texra/shared/teamLaunch';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
@@ -156,11 +156,7 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
       const selection = yield* selectCliRunnableModel(
         [{ model: nextModel, reason: 'explicit-override' }],
         {
-          stores: {
-            ...context.stores,
-            secrets: context.secrets,
-            runtime: context.runtime,
-          },
+          stores: { ...context.stores, runtime: context.runtime },
           noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
             CHAT_API_MODE_MODEL_RECOVERY,
           ),

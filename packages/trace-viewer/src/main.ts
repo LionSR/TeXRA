@@ -53,7 +53,7 @@ function positionLabel(position: TracePosition): string {
 
 /**
  * The scrubber over the run's `run.position` rows: a position slider whose
- * change remounts the shell, so the folded view is read at that position. The
+ * change remounts the shell, so the session view is read at that position. The
  * last position is the whole document, which is what a fresh page shows.
  */
 function installScrubber(loaded: TraceDocument, remount: () => void): void {
@@ -87,7 +87,7 @@ const app = document.querySelector<ProgressApp>('progress-app');
 if (!app) throw new Error('The trace viewer HTML carries no <progress-app>');
 let mounted = { app, unmount: mountProgressWebview(app) };
 
-/** Replace the shell with a fresh one: a new graph, generation, and fold. */
+/** Replace the shell with a fresh one: a new graph, generation, and session view. */
 function remount(): void {
   mounted.unmount();
   const fresh = mounted.app.cloneNode(false) as ProgressApp;

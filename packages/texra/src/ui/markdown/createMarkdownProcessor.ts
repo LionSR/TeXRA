@@ -125,7 +125,7 @@ function restoreLatexReferences(
  * window churns far more than 2000 distinct bodies), so two lanes run with
  * different primes and are joined by a delimiter (concatenating two
  * variable-length forms would re-import collisions across the boundary), with
- * the length folded in as a third component.
+ * the length mixed in as a third component.
  */
 function hashContent(str: string): string {
   let a = 2166136261;

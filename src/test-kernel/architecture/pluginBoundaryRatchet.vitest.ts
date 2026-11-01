@@ -6,16 +6,17 @@ import { resolve } from 'node:path';
 import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import type { ToolRun } from '@agent/core/tools/ToolTypes';
+import {
+  harnessBuiltins,
+  type PluginDefinition,
+  type ToolRun,
+} from '@texra-ai/harness/plugins';
 import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ToolResult } from '@shared/schemas';
 
-import { TEXRA_PLUGIN_CARDS } from '@texra/tools/pluginCards';
 import { texraPlugins } from '@texra/tools/registry';
-import { harnessBuiltins } from '@tools/builtinPlugins';
-import { armsOf, type Plugin, type PluginDefinition } from '@tools/plugins';
+import { armsOf } from '@tools/plugins';
 import {
   ALL_HOST_PRODUCTION_ROOTS,
   collectModuleSpecifiers,
@@ -25,6 +26,7 @@ import {
   REPO_ROOT,
   stripComments,
 } from '../support/repoScan';
+import type { Plugin, ToolResult } from '@texra-ai/harness';
 
 /**
  * Invariants 1 and 6 of the core concepts, for what a plugin brings: its
@@ -62,7 +64,7 @@ const PLUGIN_SERVICES: readonly {
   {
     tag: 'GitHubSubscriptions',
     users:
-      /^packages\/texra\/src\/(?:tools\/(?:github\/|integrationPlugins\.ts$)|controllers\/settingsView\/githubSubscriptions\.ts$)/,
+      /^packages\/texra\/src\/(?:tools\/github\/|controllers\/settingsView\/githubSubscriptions\.ts$)/,
   },
   { tag: 'CodexThreads', users: /^packages\/texra\/src\/tools\/codex\.ts$/ },
   {
@@ -89,7 +91,8 @@ const PLUGIN_SERVICES: readonly {
 /** Where the services are declared, typed and built. */
 const SERVICE_HOMES = new Set([
   'packages/texra/src/tools/agentCliSessionStores.ts',
-  'packages/texra/src/tools/integrationPlugins.ts',
+  'packages/texra/src/tools/claudeAgentPlugin.ts',
+  'packages/texra/src/tools/codexPlugin.ts',
   'packages/texra/src/tools/registry.ts',
   'packages/harness/src/platform/processRuntime.ts',
 ]);
@@ -153,7 +156,10 @@ describe('plugin boundaries (invariants 1 and 6)', () => {
 
 /** Each plugin of a list, with the tools it offers the model, in order. */
 const roster = (plugins: readonly Plugin[]) =>
-  plugins.map(({ id, tools }) => [id, Object.keys(tools ?? {})]);
+  plugins.map(({ id, tools }) => [
+    id,
+    (tools ?? []).map((tool) => tool.definition.name),
+  ]);
 
 /**
  * One case pins each list a host or embedder composes the
@@ -164,7 +170,7 @@ const roster = (plugins: readonly Plugin[]) =>
  */
 describe('plugin rosters', () => {
   it("pins TeXRA's plugins and their tools, in dashboard order", () => {
-    expect(roster(texraPlugins())).toEqual([
+    expect(roster(texraPlugins({ name: 'vscode' }))).toEqual([
       [
         'file-ops',
         ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
@@ -226,25 +232,26 @@ describe('plugin rosters', () => {
     ]);
   });
 
-  it('gives every switchable plugin a dashboard card, and every card a plugin', () => {
+  it('gives every switchable plugin a dashboard card', () => {
     // A switch with no card would be off with nothing to turn it on.
-    const plugins = texraPlugins();
-    const carded = new Set(TEXRA_PLUGIN_CARDS.map(({ id }) => id));
-    const listed = new Set(plugins.map(({ id }) => id));
-    expect({
-      switchedWithoutCard: plugins
-        .filter(({ id, toggle }) => toggle !== undefined && !carded.has(id))
+    expect(
+      texraPlugins({ name: 'vscode' })
+        .filter(
+          ({ toggle, card }) => toggle !== undefined && card === undefined,
+        )
         .map(({ id }) => id),
-      cardWithoutPlugin: [...carded].filter((id) => !listed.has(id)),
-    }).toEqual({ switchedWithoutCard: [], cardWithoutPlugin: [] });
+    ).toEqual([]);
   });
 
   it('pins the row kinds plugins write', () => {
     // `armsOf` refuses an arm of another plugin's id, or a kind twice.
-    expect(Object.keys(armsOf(texraPlugins())).toSorted()).toEqual([
+    expect(
+      Object.keys(armsOf(texraPlugins({ name: 'vscode' }))).toSorted(),
+    ).toEqual([
       'documents/accepted',
       'documents/output',
       'external-inquiry/thread',
+      'goal/plan',
     ]);
   });
 
@@ -271,7 +278,7 @@ describe('plugin rosters', () => {
   // `plugins` entry does not export it (the deep-import ratchet holds the
   // rest).
   it('refuses a plugin tool that requires the session runs', () => {
-    type PluginTool = NonNullable<Plugin['tools']>[string];
+    type PluginTool = NonNullable<Plugin['tools']>[number];
     const requiring = <R>(service: R): RuntimeTool<Error, R> => ({
       definition: { name: 'probe' },
       call: () => Effect.die(service),
@@ -289,7 +296,7 @@ describe('plugin rosters', () => {
   // A root launch requires the composition root's `SessionOwner`, which no
   // tool is served: the compiler refuses it.
   it('refuses a plugin tool that launches a root run', () => {
-    type PluginTool = NonNullable<Plugin['tools']>[string];
+    type PluginTool = NonNullable<Plugin['tools']>[number];
     const calling = <R>(
       call: () => Effect.Effect<ToolResult, Error, R>,
     ): RuntimeTool<Error, R> => ({ definition: { name: 'probe' }, call });

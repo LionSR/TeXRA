@@ -1,20 +1,27 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 import { afterEach, describe, expect } from 'vitest';
 
 // Local imports
 import {
   apiKeySecretName,
   decideModelRoute,
+  MODEL_CONFIGS,
+  type ModelConfig,
   resolveRouteEndpoint,
 } from '@texra-ai/llm';
-import { readModelOptions } from '@model/computeModelOptions';
+import {
+  type DeclinableUsageRoute,
+  GlobalStateKey,
+} from '@texra-ai/harness/schemas';
+import { readModelOptions, Secrets } from '@texra-ai/harness/host';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
-import type { DeclinableUsageRoute } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
-import { hostStores, setupPlatform } from '@test/support/setupPlatform';
+import {
+  fakeHostSecrets,
+  installedHost,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 
 const GLM53 = MODEL_CONFIGS['glm/glm-5.3'];
 
@@ -25,13 +32,12 @@ const boundEndpoint = (
 ) =>
   Effect.gen(function* () {
     const facts = routeFactsFor(
-      yield* readModelSettings(hostStores()),
+      yield* readModelSettings(installedHost().roots).pipe(
+        Effect.provideService(Secrets, fakeHostSecrets),
+      ),
       declinedRoutes ?? [],
     );
-    const route = decideModelRoute(config, {
-      ...facts,
-      validation: false,
-    });
+    const route = decideModelRoute(config, facts);
     if (route.kind !== 'api-key') {
       throw new Error(`unexpected ${route.kind} route`);
     }
@@ -53,13 +59,16 @@ describe('coding-plan subscription runtime', () => {
   afterEach(async () => {
     delete MODEL_CONFIGS['glm/glm-5.3'].baseUrl;
     await Effect.runPromise(
-      hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, ''),
+      installedHost().roots.globalState.update('endpoint.glm', ''),
     );
     await Effect.runPromise(
-      hostStores().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true),
+      installedHost().roots.globalState.update(
+        GlobalStateKey.GLM_CODING_PLAN,
+        true,
+      ),
     );
     await Effect.runPromise(
-      hostStores().globalState.update(GlobalStateKey.GLM_USE_CHINA, true),
+      installedHost().roots.globalState.update('glm.useChina', true),
     );
   });
 
@@ -89,8 +98,8 @@ describe('coding-plan subscription runtime', () => {
     'keeps the bound endpoint and subscription usage aligned for $name',
     ({ providerEndpoint, modelBaseUrl, baseUrl, usageRoute }) =>
       Effect.gen(function* () {
-        yield* hostStores().globalState.update(
-          GlobalStateKey.ENDPOINT_GLM,
+        yield* installedHost().roots.globalState.update(
+          'endpoint.glm',
           providerEndpoint,
         );
         if (modelBaseUrl) MODEL_CONFIGS['glm/glm-5.3'].baseUrl = modelBaseUrl;
@@ -105,8 +114,9 @@ describe('coding-plan subscription runtime', () => {
           ...(usageRoute && { usageRoute }),
         });
         expect(
-          (yield* readModelOptions(hostStores(), ['glm/glm-5.3']))[0]
-            ?.usageRoute,
+          (yield* readModelOptions(installedHost().roots, ['glm/glm-5.3']).pipe(
+            Effect.provideService(Secrets, fakeHostSecrets),
+          ))[0]?.usageRoute,
         ).toBe(usageRoute);
       }),
   );
@@ -115,7 +125,7 @@ describe('coding-plan subscription runtime', () => {
     'leaves the stored preference alone for a run that declined the plan',
     () =>
       Effect.gen(function* () {
-        yield* hostStores().globalState.update(
+        yield* installedHost().roots.globalState.update(
           GlobalStateKey.GLM_CODING_PLAN,
           true,
         );
@@ -129,7 +139,9 @@ describe('coding-plan subscription runtime', () => {
         // The decline is the asking run's, so the user's switch is untouched and
         // a concurrent run still routes through the plan.
         expect(
-          yield* hostStores().globalState.get(GlobalStateKey.GLM_CODING_PLAN),
+          yield* installedHost().roots.globalState.get(
+            GlobalStateKey.GLM_CODING_PLAN,
+          ),
         ).toBe(true);
       }),
   );

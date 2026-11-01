@@ -1,39 +1,35 @@
 import { type Effect, Schema } from 'effect';
 
 import type {
-  RequestEnsureProgressViewPayload,
-  RequestOpenFilePayload,
+  AgentNotFoundPayload,
+  OpenFilePayload,
   RequestShowErrorPayload,
   RequestShowInstructionPayload,
-  ShowAgentConfigBannerPayload,
 } from '@shared/schemas';
 
 /**
- * Host-presentation requests emitted by agent/runtime code.
- *
- * These are not progress facts and do not belong to the frozen host progress
- * compatibility vocabulary. Hosts may render them, ignore them, or route them
- * to their own presentation channel without changing the agent loop.
- * Presentation is fire-and-forget: a host that cannot render an event logs
- * the cause itself.
+ * The notices the runtime and an embedder's tools show a person through the
+ * session's host, each named for what it says, never for a screen of one
+ * application. They are not progress facts and are not stored. Hosts may
+ * render them, ignore them, or route them to their own presentation channel
+ * without changing the agent loop. Presentation is fire-and-forget: a host
+ * that cannot render an event logs the cause itself.
  */
 export interface RuntimePresentationEventPayloads {
-  requestOpenFile: RequestOpenFilePayload;
+  openFile: OpenFilePayload;
   requestShowInstruction: RequestShowInstructionPayload;
-  showAgentConfigBanner: ShowAgentConfigBannerPayload;
+  agentNotFound: AgentNotFoundPayload;
   requestShowError: RequestShowErrorPayload;
-  requestEnsureProgressView: RequestEnsureProgressViewPayload;
 }
 
 export type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
 
 /** Every event name, as {@link HostPresentationFailed} records it. */
 const RuntimePresentationEventSchema = Schema.Literals([
-  'requestOpenFile',
+  'openFile',
   'requestShowInstruction',
-  'showAgentConfigBanner',
+  'agentNotFound',
   'requestShowError',
-  'requestEnsureProgressView',
 ] as const satisfies readonly RuntimePresentationEvent[]);
 
 export interface AgentRuntimeEmitOptions {

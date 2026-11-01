@@ -1,19 +1,18 @@
 /**
- * Tool for viewing and managing run history, generated files, and running
- * processes. Supports viewing past runs, waiting for status changes, reading
- * output from background processes, and killing live runs.
+ * Query and manage run history, generated files and live processes.
  *
  * Every fact about a run — what it is, what it is called, how far it got,
  * whose child it is, what it still has to do — is read off the session fold
- * (`SessionView`). The fold is the one reading of the durable rows, so this
- * surface never resolves liveness, parentage or a task list a second time.
+ * (`SessionView`), and whether it is live here off `Runs`. The fold is the
+ * one reading of the durable rows, so this surface never resolves
+ * parentage or a task list a second time.
  */
 
 // Third-party imports
 import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
-import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
+import { getRunRecords } from '@agent/storage/runRecords';
 import {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
@@ -21,7 +20,6 @@ import {
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { Runs } from '@agent/runtime/runRegistry';
-import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
 import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { StorageFs } from '@platform/rootedFs';
@@ -189,9 +187,7 @@ const EXECUTION_ROUTES: ReadonlyArray<{
           yield* waitForRuns(context, input.timeout, [runId]);
           // The child's deliveries still queued on the caller: this result
           // answers them, and its settlement consumes them with it.
-          const queued = yield* context.session.followUps
-            .read(context.runId)
-            .pipe(Effect.orDie);
+          const queued = yield* context.session.followUps.read(context.runId);
           const answered = queued.followUps
             .map(({ followUpId }) => followUpId)
             .filter((followUpId) => followUpId.startsWith(`${runId}:`));
@@ -288,8 +284,8 @@ const EXECUTION_PATH_LIST = EXECUTION_ROUTES.map(
 
 /**
  * Every line of logic below is one Effect program. A storage or filesystem
- * read failure dies at its read site (`Effect.orDie`): nothing here recovers
- * from one, and the tool runner surfaces the collaborator's own error.
+ * read failure stays in the error channel: nothing here recovers from one,
+ * and the tool runner surfaces the collaborator's own error.
  */
 const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
   input: ExecutionsToolInput,
@@ -413,13 +409,13 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   }
 
   // A report the caller already received as a follow-up is elided; a wait
-  // answers one still queued and shows it here. Only a live handle proves
-  // the child-run loop delivered it (a background bash run included).
+  // answers one still queued and shows it here. Only a launch in flight here
+  // proves the child-run loop delivered it (a background bash run included).
   const suppressReport =
     options.suppressAutoDeliveredSubagentReport === true &&
     run.identity.kind === 'agent' &&
     run.parentId === context.runId &&
-    (yield* Runs).get(runId)?.handle !== undefined;
+    (yield* Runs).get(runId) !== undefined;
 
   lines.push(
     ...buildSummaryTailLines(
@@ -445,17 +441,15 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   }
 
   const runs = yield* Runs;
-  if (!runs.get(runId)?.handle) {
+  if (runs.get(runId) === undefined) {
     return yield* Effect.fail(
       new ToolError(`Run ${runId} not found or already completed.`),
     );
   }
 
-  // Only your own children, by the edge the rows leave (a detach may be in).
-  const owner = (yield* getRunRecords(context.session, runId).exists())
-    ? yield* persistedParentRunId(context.session, runId)
-    : (runs.get(runId)?.parent ?? null);
-  if (owner !== context.runId) {
+  // Only your own children, by the attached parent the fold reads.
+  const view = yield* context.session.view.read([]);
+  if (view.runs.get(runId)?.parentId !== context.runId) {
     return yield* Effect.fail(
       new ToolError(`Cannot kill run ${runId}: not a child of this session.`),
     );
@@ -467,11 +461,9 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
     return yield* Effect.fail(new ToolError(killDenial));
   }
 
-  const detachActiveChildren = yield* detachSubagentsOnStop(
-    context.session.roots,
-  );
+  // Its children follow the session's stop policy (`RunRegistry.stop`).
   const success = yield* Effect.suspend(() => {
-    const stop = runs.stop(runId, { detachActiveChildren, reason: 'user' });
+    const stop = runs.stop(runId, { reason: 'user' });
     // Asked after the settlement: a detaching stop interrupts the run
     // only once its children have left it, so that is when it knows
     // whether a live target took the stop.
@@ -566,7 +558,7 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
     const conversation = yield* readCompletedRunConversation(
       runId,
       context.session,
-    ).pipe(Effect.orDie);
+    );
 
     if (conversation.length === 0) {
       // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
@@ -603,7 +595,7 @@ const listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
   runId: RunId,
 ) {
   const { storage } = session.roots;
-  const files = yield* listRunGeneratedFiles(runId, storage).pipe(Effect.orDie);
+  const files = yield* listRunGeneratedFiles(runId, storage);
   if (files.length === 0) {
     return executed('No files generated for this run.');
   }
@@ -627,7 +619,7 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
     context.session.roots.storage,
     runId,
     filePath,
-  ).pipe(Effect.orDie);
+  );
   if (!fullPath) {
     return yield* Effect.fail(new ToolError(`File not found: ${displayPath}`));
   }
@@ -646,9 +638,7 @@ const listWorkspaceFiles = Effect.fn('ExecutionsTool.listWorkspaceFiles')(
       [records.readRunRecord(), records.readWorkspaceFiles()],
       { concurrency: 2 },
     );
-    const entries = yield* listRunWorkspaceFiles(record, paths).pipe(
-      Effect.orDie,
-    );
+    const entries = yield* listRunWorkspaceFiles(record, paths);
 
     if (entries.length === 0) {
       return executed(`No workspace files recorded for run ${runId}.`);
@@ -722,6 +712,8 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
 export const ExecutionsTool = defineTool({
   name: 'executions',
   slow: true,
+  scriptReturns:
+    '{ columns: string[]; rows: (string | number | null)[][]; more: boolean } | ToolOutput',
   description: `View run history and manage live runs.
 
 Paths:
@@ -734,7 +726,7 @@ Use action: "wait" on /executions or /executions/{id} to wait for a status chang
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed runs to change.
 Use action: "kill" on /executions/{id} to terminate a live run.
 Use action: "send" with message on /executions/{id} to message any other run in this project: your subagent (a follow-up it continues from), your orchestrator, a sibling, or any other run. It reads the message after its current turn; an idle run wakes to read it. A one-shot run (a headless run, or a subagent its orchestrator waits on in band) reads none, and a message to it is refused.
-Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). Children: SELECT * FROM runs WHERE parent_id = ?. Views:
+Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). In a script, query returns { columns, rows, more }; other actions return { output, summary }. Queries return at most 200 rows and refuse a JSON page larger than 4 MiB; use LIMIT or substr() to narrow it. Children: SELECT * FROM runs WHERE parent_id = ?. Views:
 ${HISTORY_VIEW_SUMMARY}
 Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
   schema: ExecutionsToolInputSchema,

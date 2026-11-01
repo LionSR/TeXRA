@@ -30,7 +30,6 @@ import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   ToolError,
-  type AgentDelegationScope,
   type PermissionPayload,
   type ToolResult,
   type ToolDefinition,
@@ -41,6 +40,7 @@ import { errorResult } from '@tools/core/result';
 import type { RunFileService } from '@utils/files/runStorage';
 
 import type { InvokeError } from './ModelInvoker';
+import type { ToolServices } from './ToolServices';
 import type { BoundModel } from './modelAccess/ModelAccess';
 import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
 import type {
@@ -112,13 +112,6 @@ export interface ScriptDoor {
   ) => Effect.Effect<ToolResultPayload['result'], ScriptDiverged | InvokeError>;
   /** The sandbox delivered `seq`'s settlement to the guest. */
   readonly delivered: (seq: number) => Effect.Effect<void>;
-  /**
-   * Settles, as skipped, every call the script issued that has no result
-   * yet. Run once the guest has ended and no issued call runs any more, and
-   * before the script's own result commits, so no row of the script's stays
-   * open behind it: a resume then finds nothing to replay or re-adopt.
-   */
-  readonly settleAbandoned: Effect.Effect<void, InvokeError>;
 }
 
 /**
@@ -148,8 +141,8 @@ export interface ScriptScope extends ScriptSource {
 /**
  * The rest of what a plugin's tool reads of its run (`ToolRun`, whose id
  * the core declares): exactly the fields the app's tools read. Its policy,
- * configuration, model, delegation scope, scope (a tool that starts
- * something the run should stop registers that stop there), opening,
+ * configuration (which holds its delegation scope), model, scope (a tool that
+ * starts something the run should stop registers that stop there), opening,
  * trace and stage (what a plugin's own stages nest under); and its run
  * files, which hold what the run read (`fileService.readFiles`). Never its
  * session: a plugin reaches the session's runs through `ChildRuns`, and
@@ -161,7 +154,6 @@ declare module '../core/tools/ToolTypes.js' {
     readonly toolPolicy: ToolPolicy;
     readonly config: AgentConfig;
     readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
-    readonly delegationAgentScope?: AgentDelegationScope | null;
     readonly scope: Scope.Scope;
     readonly opening: TemplateOpening | null;
     readonly logger: AgentTrace;
@@ -212,8 +204,14 @@ export interface RunCallShape {
   /** The script that issued this call; null for a call a response issued. */
   readonly script: ScriptScope | null;
   /** For a `script` call, the door its guest calls the run's tools through,
-   *  built on the first `yield*`; null for any other call. */
-  readonly scriptCalls: Effect.Effect<ScriptDoor> | null;
+   *  built in the scope that yields it, which owns the calls the guest
+   *  issues: an end of it other than an interrupt settles each still without
+   *  a result as skipped, before the script's own result commits; an
+   *  interrupt leaves the rows for the resume. Null for any other call. */
+  readonly scriptCalls: Effect.Effect<ScriptDoor, never, ToolServices> | null;
+  /** What the call's `PreToolUse` hooks said, for the review its body
+   *  opens (an edit, a plan, a delegation proposal); absent: no answer. */
+  readonly hook?: 'allow' | 'ask';
 }
 
 /** The current call's place in its run, which the run loop provides beside

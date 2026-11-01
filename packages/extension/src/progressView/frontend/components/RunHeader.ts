@@ -66,7 +66,7 @@ const RENAME_TASK = 'renameTask';
 const FORK_TASK = 'forkTask';
 const OPEN_FORK = 'openFork:';
 
-/** The status dot's hue per tone (G4: the fold spells the tone). */
+/** The status dot's hue per tone (the session view spells the tone). */
 const TONE_INDICATOR_CLASS: Record<RunView['tone'], string> = {
   running: 'is-running',
   success: 'is-completed',
@@ -76,7 +76,7 @@ const TONE_INDICATOR_CLASS: Record<RunView['tone'], string> = {
 };
 
 /**
- * `<run-header>`: the one header row of a selected run (PRD 12.1). The
+ * `<run-header>`: the one header row of a selected run. The
  * shell slots its own controls around it (the Sessions button at `start`,
  * New task at `end`), so a run never shows two rows of chrome: path and
  * title, status, time, an active run grant, Stop, and one menu holding the
@@ -361,7 +361,7 @@ export class RunHeader extends LitElement {
       run.group !== 'waiting' &&
       acceptsFollowUp(run);
     const statusLabel = canContinue ? 'Ready' : runStatusLabel(run.statusKey);
-    // The header offers exactly what the fold's `actions` licenses.
+    // The header offers exactly what the session view's `actions` licenses.
     const canStop = run.actions.includes('stop');
     const idle =
       run.status === 'waiting' &&

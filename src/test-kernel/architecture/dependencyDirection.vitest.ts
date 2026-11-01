@@ -53,9 +53,9 @@ const AGENT_IMPORT_PATTERNS = [
 
 // The one pre-existing shared-to-agent edge (packages/harness/src/shared/agent/
 // terminalResultPresentation.ts) was deleted by folding its mapper back into
-// `@agent/runtime/terminalResultToast.ts` — the file it always needed
-// `ResultEvent` from. Keep this allowlist empty; a new entry would recreate
-// the inversion.
+// the agent runtime (now `@agent/runtime/HostInteractions.ts`, the host
+// presentation surface) — where `ResultEvent` lives. Keep this allowlist
+// empty; a new entry would recreate the inversion.
 const SHARED_AGENT_IMPORT_ALLOWLIST: readonly string[] = [];
 const SHARED_AGENT_IMPORT_ALLOWLIST_SET = new Set<string>(
   SHARED_AGENT_IMPORT_ALLOWLIST,

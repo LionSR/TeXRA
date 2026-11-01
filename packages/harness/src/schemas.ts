@@ -18,8 +18,7 @@
  *   [`ApprovalPolicySchema`](#approvalpolicyschema), [`resolveBypass`](#resolvebypass).
  * - **Agent definitions & run outcomes**: [`AgentConfigSchema`](#agentconfigschema),
  *   [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
- *   [`RunEndResult`](#runendresult), [`RunIdSchema`](#runidschema),
- *   [`RunOutcomeSchema`](#runoutcomeschema).
+ *   [`RunIdSchema`](#runidschema).
  * - **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
  *   [`configTreeRows`](#configtreerows), [`GlobalStateKey`](#globalstatekey),
  *   [`WorkspaceStateKey`](#workspacestatekey), [`TraceDocumentSchema`](#tracedocumentschema).
@@ -32,9 +31,6 @@ export type {
 // and its JSON with the fields its category hides dropped.
 export type { RunRecord } from '@agent/core/definition/RunRecord';
 export { serializeFilteredConfig } from '@tools/executions/configView';
-// `RunEndResult` comes from its own module so declaration emit does not pull
-// the provider SDK types in (the leak check in `scripts/validate-artifacts.mjs`).
-export type { RunEndResult } from '@agent/runtime/RunEndResult';
 export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
 // A fresh run id, for a caller that names a run before a session launches it.
 export { generateRunId } from '@utils/core';
@@ -115,7 +111,7 @@ export type {
   FollowUpSender,
   HookEvent,
   InlinePersona,
-  InstructionAction,
+  HarnessInstructionKey,
   JsonValue,
   LoadedMediaMetadata,
   LocalRuntimeState,
@@ -131,8 +127,7 @@ export type {
   PermissionPayload,
   Persona,
   ProposalFileGroup,
-  RequestEnsureProgressViewPayload,
-  RequestOpenFilePayload,
+  OpenFilePayload,
   RequestShowErrorPayload,
   RequestShowInstructionPayload,
   ResultMeta,
@@ -147,12 +142,13 @@ export type {
   ScriptDeliverySummary,
   SessionEvent,
   SessionEventDraft,
-  ShowAgentConfigBannerPayload,
+  AgentNotFoundPayload,
   TaskGroup,
   TaskGroupStatus,
   ToolCallStatus,
   ToolCard,
   ToolDefinition,
+  ToolEditContent,
   ToolEditPermission,
   ToolFact,
   ToolUseLog,
@@ -189,6 +185,7 @@ export {
 // The approvals a run may skip, and how a run's own and inherited grants
 // resolve against the policy.
 export {
+  APPROVAL_BYPASS_KINDS,
   resolveBypass,
   runBypasses,
   stricterPolicy,
@@ -202,15 +199,12 @@ export {
   Cancelled,
   formatHunkLines,
   Invalid,
-  NotOwner,
   OutcomeSchema,
   Rejected,
   RequestErrorSchema,
   RuntimeRequestSchema,
-  ToolEditContentSchema,
   type RequestError,
   type RuntimeRequest,
-  type ToolEditContent,
 } from '@shared/session/runtimeRequest';
 // A memory as a memory list shows it.
 export {
@@ -242,21 +236,17 @@ export { getBasename, getFileStem, normalizeFilePath } from '@utils/core';
 export {
   configTreeRows,
   settingsCatalog,
-  type ModelsTabSurface,
   type SettingsCatalog,
   type SettingStore,
-  type SettingSurfaces,
-  type SettingsViewSnapshot,
-  type SettingsViewStateSettingEntry,
-  type SettingWriteEffects,
   type StateSettingEntry,
-  type SurfacedSettingEntry,
 } from '@shared/state/stateSettings';
 // What a `ConfigProvider` (root) writes to and reads back per scope.
 export type { ConfigInspection, ConfigTarget } from '@platform/interfaces';
 export { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-// A provider's custom-endpoint key and China-region toggle, if it has them.
+// The providers with a custom-endpoint setting, and a provider's
+// custom-endpoint key and China-region toggle, if it has them.
 export {
+  PROVIDER_ENDPOINT_STATE_ENTRIES,
   providerEndpointKey,
   providerRegionSetting,
 } from '@shared/state/providerSettings';
@@ -280,7 +270,6 @@ export { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 export {
   type ActiveSkillSourceScope,
   ActiveSkillSourceScopeSchema,
-  AGENT_MODE_PRESETS,
   AGENT_SKILLS_CONFIG_KEY,
   AGENT_SOURCE,
   AgentConfigSchema,
@@ -288,11 +277,7 @@ export {
   agentKey,
   agentKeyOf,
   agentMatchesIdentifier,
-  type AgentModePreset,
-  AgentModePresetSchema,
   agentName,
-  type AgentOptionData,
-  AgentOptionDataSchema,
   type AgentProposalPermission,
   type AgentScanIssue,
   AgentScanIssueSchema,
@@ -321,7 +306,7 @@ export {
   type InquiryThreadId,
   InquiryThreadIdSchema,
   InstalledPluginSchema,
-  INSTRUCTION_ACTION,
+  HARNESS_INSTRUCTION_KEY,
   isEmptyUsage,
   isLoopDriven,
   isModelOptionAvailable,
@@ -336,15 +321,13 @@ export {
   MODEL_AVAILABILITY_STATUS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  ModelAvailabilityFieldsSchema,
-  type ModelOptionData,
-  ModelOptionDataSchema,
+  ModelAvailabilityKindSchema,
   NullableFileFieldsSchema,
   type OpenInquiryTurn,
   ownerIdentity,
-  parseAgentModePresets,
   type Plan,
   type PlanApprovalPermission,
+  planOf,
   planSummaryLine,
   type ProgressPermissionKind,
   type ProposalFileFields,
@@ -364,7 +347,6 @@ export {
   runIdentityDisplayName,
   runIdentityName,
   RunIdSchema,
-  RunOutcomeSchema,
   RunRecordFieldsSchema,
   runStorageFilePath,
   type SkillDisplayIssue,
@@ -372,15 +354,13 @@ export {
   type SkillDisplayItem,
   SkillDisplayItemSchema,
   SkillNameSchema,
-  STARTER_AGENT_MODE_PRESET,
+  type StoredMedia,
+  StoredMediaSchema,
   sumUsageStats,
-  type TeamOptionData,
-  TeamOptionDataSchema,
   toJsonValue,
   type TokenUsageStats,
   TOOL_CALL_STATUS,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
-  ToolEditPermissionSchema,
   type UserQuestionAnswers,
   UserQuestionAnswersSchema,
   type UserQuestionPermission,

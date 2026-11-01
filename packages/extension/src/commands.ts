@@ -36,7 +36,7 @@ import { dispatchCommandFromRegistry } from '@texra/shared/commands/registry';
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessRuntime, PlatformSecrets } from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 
 /*
  * Duplicate-registration audit (#3787 follow-up):
@@ -62,7 +62,6 @@ import type { ProcessRuntime, PlatformSecrets } from '@texra-ai/harness/host';
 export function registerCommands(
   context: vscode.ExtensionContext,
   progressViewProvider: ProgressViewProvider,
-  secrets: PlatformSecrets,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
   /** Where this window's runs run. */
@@ -70,7 +69,6 @@ export function registerCommands(
 ): SettingsViewProvider {
   const settingsViewProvider = new SettingsViewProvider(
     context,
-    secrets,
     runtime,
     roots,
     progressViewProvider,
@@ -78,7 +76,7 @@ export function registerCommands(
 
   const actions: ExtensionCommandActions = {
     showSettings: (tab) => settingsViewProvider.showSettingsView(tab),
-    // New Task is the header's "+" (PRD 12.4): the New-task state into
+    // New Task is the header's "+": the New-task state into
     // view with the launcher's selections as they are.
     newTask: () => progressViewProvider.showLauncher(),
     cleanBuild: () => confirmCleanBuild,
@@ -89,8 +87,7 @@ export function registerCommands(
       launchSetupAssistant(
         roots,
         runSession,
-        (runId) =>
-          Effect.sync(() => progressViewProvider.presentLaunchedRun(runId)),
+        progressViewProvider.runValidated,
         progressViewProvider.showConnectModel(),
         progressViewProvider.showProgressView(),
       ).pipe(

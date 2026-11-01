@@ -1,4 +1,4 @@
-// The install record (`texra.plugins.installed`) in the global state every
+// The install record (`plugins.installed`) in the global state every
 // host shares, the trust given to each plugin included: read and validated
 // whole, and changed only as one read-modify-write at the store's authority,
 // so two hosts changing it at once lose nothing and no lock is taken.

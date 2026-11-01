@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { Schema } from 'effect';
+import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
-import { AgentConfigSchema } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';

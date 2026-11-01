@@ -51,7 +51,15 @@ vi.mock('@agent/runtime/modelAccess/ModelAccess', async (importActual) => {
 });
 
 // Local imports - agent runtime
-import { AgentCatalog } from '@agent/index/agentCatalog';
+import {
+  AgentConfigSchema,
+  generateRunId,
+  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  RUN_PHASE,
+  type RunId,
+} from '@texra-ai/harness/schemas';
+import { type BoundModel, RunFileService } from '@texra-ai/harness/plugins';
+import { AgentCatalog, withProcessServices } from '@texra-ai/harness/host';
 import { getRunRecords, readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import type { AppendedMessage } from '@agent/runtime/storedTurn';
@@ -61,17 +69,9 @@ import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared/runtime boundaries
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
+import { submitFollowUp, wakeRun } from '@agent/followUp/ToolUseFollowUp';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import { withProcessServices } from '@platform/processRuntime';
-import {
-  AgentConfigSchema,
-  MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  RUN_OUTCOME,
-  RUN_PHASE,
-  type RunId,
-} from '@shared/schemas';
+import { launchDetachedSubagent } from '@agent/runtime/delegation/subagentRun';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { noopTrace } from '@test/support/noopTrace';
@@ -94,10 +94,7 @@ import {
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { launchDetachedSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript/completedRunArchive';
-import { generateRunId } from '@utils/core';
-import { RunFileService } from '@utils/files/runStorage';
 import { ResolvedTurnSchema } from '../../../packages/llm/src/turn.js';
 
 const PARENT_RUN_ID = 'a9531a9531a9' as RunId;
@@ -275,7 +272,10 @@ function scriptedBoundModel(
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
     forcedToolChoice: true,
     persistentConnection: false,
-    billing: {},
+    billing: 'api-key',
+    maxOutputTokens: 1024,
+    background: false,
+    serviceTier: null,
     routes: routePolicies(['openai', 'api-key', config.id], config.ref),
     delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
@@ -466,7 +466,6 @@ async function launchWaitingChild(options: {
         Effect.flatMap((definition) =>
           executeAgent(definition, PARENT_RUN_ID, {
             session,
-            parentRunId: OUTER_RUN_ID,
             registration: {
               identity: { kind: 'agent', agent: PARENT_AGENT },
               parentRunId: OUTER_RUN_ID,
@@ -551,9 +550,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     childId = undefined;
     // Every resume a send started: the run owed one.
     resumedRuns = [];
-    const runs = session.runs;
-    const resume = runs.resume.bind(runs);
-    vi.spyOn(runs, 'resume').mockImplementation((runId, ...rest) => {
+    const { programs } = registryOf(session.runs);
+    const resume = programs.resume;
+    vi.spyOn(programs, 'resume').mockImplementation((runId, ...rest) => {
       resumedRuns.push(runId);
       return resume(runId, ...rest);
     });
@@ -588,7 +587,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(
           observedRequests.find(({ model }) => model === CHILD_MODEL)?.tools,
         ).toContain('grep');
-        const firstHandle = session.runs.get(runId)?.handle;
+        const firstControls = session.runs.get(runId)?.controls;
         const initialBindings = bindingMocks.bindModel.mock.calls.length;
         yield* waitForParentTurns(1);
         const budget = yield* registryOf(session.runs).childRunBudget(1);
@@ -599,7 +598,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
         yield* waitForParentTurns(2);
-        expect(session.runs.get(runId)?.handle).toBe(firstHandle);
+        expect(session.runs.get(runId)?.controls).toBe(firstControls);
         expect(bindingMocks.bindModel).toHaveBeenCalledTimes(initialBindings);
 
         // The next turn asks the model with the follow-up as its last message
@@ -668,14 +667,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* waitForParentTurns(3);
         expect(
           yield* Fiber.join(recovered).pipe(Effect.timeout('5 seconds')),
-        ).toEqual({
-          started: true,
-          delivered: true,
-          outcome: RUN_PHASE.WAITING,
-          completion: expect.anything(),
-        });
-        const recoveredHandle = session.runs.get(runId)?.handle;
-        expect(recoveredHandle).toBeDefined();
+        ).toEqual({ activation: expect.any(Number) });
+        const recoveredControls = session.runs.get(runId)?.controls;
+        expect(recoveredControls).toBeDefined();
         childTurns.push({ text: 'Recovered result D.' });
         parentTurns.push({ text: 'Parent received recovered result D.' });
         yield* submitFollowUp(
@@ -692,26 +686,16 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           waitForPersistedResult(runId, 'Recovered result D.'),
         );
         yield* waitForParentTurns(4);
-        expect(session.runs.get(runId)?.handle).toBe(recoveredHandle);
+        expect(session.runs.get(runId)?.controls).toBe(recoveredControls);
         yield* session.runs.stop(runId, { reason: 'user' }).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
 
         // An already idle saved run needs no new input or model turn to
         // acknowledge recovery, and its live driver still owns later input.
-        expect(
-          yield* withProcessServices(
-            testRuntime(),
-            resumeRun(runId, {
-              session,
-            }),
-          ).pipe(Effect.timeout('5 seconds')),
-        ).toEqual({
-          started: true,
-          delivered: true,
-          outcome: RUN_PHASE.WAITING,
-          completion: expect.anything(),
-        });
-        expect(session.runs.get(runId)?.handle).toBeDefined();
+        yield* Effect.flatten(wakeRun(runId, session)).pipe(
+          Effect.timeout('5 seconds'),
+        );
+        expect(session.runs.get(runId)?.controls).toBeDefined();
         yield* session.view.changes.pipe(
           Stream.filter(
             (view) => view.runs.get(runId)?.status === RUN_PHASE.WAITING,
@@ -728,21 +712,14 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         parentTurns.push({ text: 'Parent received failed recovery.' });
         yield* queueRecovery(runId, 'Keep this unconsumed input.');
-        const failedRecovery = yield* withProcessServices(
-          testRuntime(),
-          resumeRun(runId, { session }),
-        );
-        expect(failedRecovery).toEqual({
-          started: true,
-          delivered: false,
-          outcome: RUN_OUTCOME.FAILED,
-          completion: expect.anything(),
-        });
-        // A resumed child's lifetime ends with its own result, as a root's.
-        if (!('started' in failedRecovery)) throw new Error('resume refused');
-        expect((yield* failedRecovery.completion).outcome).toBe(
-          RUN_OUTCOME.FAILED,
-        );
+        // Its turn fails before it opens: the resume hands no run over, and
+        // the parent hears the failure.
+        expect(
+          (yield* withProcessServices(
+            testRuntime(),
+            Effect.flip(resumeRun(runId, { session })),
+          )).message,
+        ).toBe('The run ended without entering the session.');
         yield* waitForParentTurns(5);
       }),
     60_000,

@@ -1,6 +1,6 @@
 ---
 created: 2026-09-21
-status: proposed
+status: parked (2026-10-30: no reading taken; #12076 carries the three readings, and #13736 requires them for release only if the accepted contract does)
 ---
 
 # Runtime performance measurement record
@@ -16,8 +16,9 @@ Every other runtime criterion once proposed is struck and not re-listed
 here: live idle memory, replay memory, two-project operation, bytes written
 versus retained file size, and missed event-loop deadlines.
 
-Still open as of 2026-10-22: no reading has been taken, no measurement
-harness exists on `main`, and nothing schedules one. The procedures below
+Still open as of 2026-10-30: no reading has been taken, no measurement
+harness exists on `main`, production code has no `Metric` use, and nothing
+schedules a reading. #12076 (open) owns taking them. The procedures below
 were written against the 2026-09-21 tree; the code paths they cite are
 updated to today's.
 

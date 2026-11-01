@@ -1,5 +1,5 @@
 /**
- * The Sessions drawer (PRD 12.1): a slide-over with a scrim, headed by the
+ * The Sessions drawer: a slide-over with a scrim, headed by the
  * project name with search and close, the real `<run-tabs>` in group
  * sections as its body, and "Open tasks in editor" as its footer. New
  * task has one home, the shell header; the drawer carries no second one.

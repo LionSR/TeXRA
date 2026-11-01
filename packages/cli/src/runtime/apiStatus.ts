@@ -6,6 +6,7 @@ import {
   providerDisplayName,
 } from '@texra-ai/llm';
 import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
+import { Secrets, type SettingsStores } from '@texra-ai/harness/host';
 import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import { formatSubscriptionUsageSummary } from '@texra/shared/subscriptionUsagePresentation';
 import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
@@ -15,14 +16,12 @@ import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 
 import {
   formatCliCodingPlanPreference,
-  formatCliModelAccessRoute,
   formatCliSubscriptionPreference,
   cliCodingPlanStatus,
   subscriptionAccountLabel,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
 import { readCliModelAccessStatus } from './modelAccessSelection';
-import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness/host';
 
 function formatAccountStatus(signedIn: boolean, accountLabel?: string): string {
   if (!signedIn) return 'signed out';
@@ -37,12 +36,12 @@ interface CliModelAccessOverview {
 /**
  * Read the subscription sessions and the effective model-access route. A program,
  * because the coding-plan key status underneath it is one: the chat surface
- * yields it, and a Promise-facing caller settles it on its own runtime.
+ * yields it, and a Promise-facing caller runs it on its own runtime.
  */
 export const loadCliModelAccessOverview = Effect.fn(
   'apiStatus.loadCliModelAccessOverview',
-)(function* (stores: SettingsStores, secrets: PlatformSecrets) {
-  const access = yield* readCliModelAccessStatus(stores, secrets);
+)(function* (stores: SettingsStores) {
+  const access = yield* readCliModelAccessStatus(stores);
   const lines = [
     ...SUBSCRIPTION_AUTH_PROVIDERS.map(
       (provider) =>
@@ -52,7 +51,7 @@ export const loadCliModelAccessOverview = Effect.fn(
       (plan) =>
         `${plan.displayName} preference: ${formatCliCodingPlanPreference(access, plan)}`,
     ),
-    `Otherwise: ${formatCliModelAccessRoute('api-key')}`,
+    `Otherwise: ${OWN_API_KEYS.label}`,
   ];
   return { access, lines } satisfies CliModelAccessOverview;
 });
@@ -88,19 +87,19 @@ function formatModelPreferenceLine(
 /** Render each detailed account/access fact on its owning route. */
 export const loadCliDetailedAccountStatusLines = Effect.fn(
   'apiStatus.loadCliDetailedAccountStatusLines',
-)(function* (stores: SettingsStores, secrets: PlatformSecrets) {
+)(function* (stores: SettingsStores) {
   const [access, keyStatuses] = yield* Effect.all(
     [
-      readCliModelAccessStatus(stores, secrets),
-      loadApiKeyStatusMap(secrets),
+      readCliModelAccessStatus(stores),
+      Effect.flatMap(Secrets, loadApiKeyStatusMap),
     ] as const,
     { concurrency: 'unbounded' },
   );
   // Detailed `/login status` is user-invoked, so reopening it is the manual refresh
   // path. Ordinary chat startup and the status bar never call this service, and
   // every read below forces a refresh, so the service is built over the caller's
-  // secret store here rather than held as a module singleton.
-  const usageReader = new SubscriptionUsageService({ secrets, stores });
+  // stores here rather than held as a module singleton.
+  const usageReader = new SubscriptionUsageService({ stores });
   const [chatGptUsage, codingPlanUsageEntries] = yield* Effect.all(
     [
       access.subscriptions.chatgpt.signedIn
@@ -165,7 +164,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
     if (line) lines.push(withUsage(line, codingPlanUsage.get(plan.id)));
   }
 
-  lines.push(`Otherwise: ${formatCliModelAccessRoute('api-key')}`);
+  lines.push(`Otherwise: ${OWN_API_KEYS.label}`);
 
   const otherPersonalKeys = formatPersonalApiKeysLine(
     API_KEY_PROVIDER_IDS.filter(

@@ -7,7 +7,7 @@
 import { Schema, Struct } from 'effect';
 
 import { ACTIVATED_SKILLS_MAX } from './activeSkills';
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 import { QualifiedSkillNameSchema } from './skillName';
 import { StoredProtocolSchema } from './storedTurn';
 import {
@@ -97,7 +97,7 @@ export function addTurnUsage(
 // ------------------------------------------------------------ launch facts
 
 /** An attached memory the opening could not read, and why. */
-export const AttachedMemoryMissSchema = Schema.Struct({
+const AttachedMemoryMissSchema = Schema.Struct({
   path: Schema.String,
   reason: Schema.String,
 });

@@ -8,6 +8,7 @@
  * missing or unknown command is a compile error. Handlers mutate the
  * module-level signals in `settingsState.ts` directly.
  */
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@texra/shared/settingsView/settingsViewMessages';
 import type {
@@ -22,26 +23,24 @@ import {
   customAgentDir,
   customAgentDirIsDefault,
   customAgentScanIssues,
-  customPresets,
   githubTokenStatus,
   gitSettingsLoaded,
-  helperModel,
   latexSettingsLoaded,
   latexSettingsStatus,
   memoryItems,
   modelSelectionItems,
   settingsSnapshotRevisions,
   orchestratorAgents,
-  preferShortModelNames,
   prSubscriptions,
   providerKeyStatuses,
-  selectedPanel,
-  selectedSections,
+  selectSettingsPage,
+  settingSignal,
   skillLoadIssues,
   skillsList,
   subscriptionAuth,
   subscriptionUsage,
   pluginsPage,
+  teamPresets,
 } from './settingsState';
 
 export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
@@ -52,9 +51,7 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
       SettingsTabPanelName,
       SettingsSectionName?,
     ];
-    selectedPanel.set(page);
-    if (section)
-      selectedSections.set({ ...selectedSections.get(), [page]: section });
+    selectSettingsPage(page, section);
   },
 
   // Memory.
@@ -93,8 +90,10 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   // Model selection.
   [SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION]: (data) => {
     modelSelectionItems.set(data.models);
-    helperModel.set(data.helperModel);
-    preferShortModelNames.set(data.preferShortModelNames);
+    settingSignal<string>(GlobalStateKey.HELPER_MODEL).set(data.helperModel);
+    settingSignal<boolean>(GlobalStateKey.PREFER_SHORT_MODEL_NAMES).set(
+      data.preferShortModelNames,
+    );
   },
 
   // Agent selection.
@@ -127,7 +126,7 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
 
   // Agent teams.
   [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS]: (data) => {
-    customPresets.set(data.customPresets);
+    teamPresets.set(data.presets);
     orchestratorAgents.set(data.orchestratorAgents);
     activePresetId.set(data.activePresetId);
   },

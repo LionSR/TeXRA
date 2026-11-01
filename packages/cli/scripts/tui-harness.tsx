@@ -21,10 +21,13 @@ import { nanoid } from 'nanoid';
 import React from 'react';
 
 import { apiKeySecretName } from '@texra-ai/llm';
-import { AgentCatalog, describeFollowUpFailure } from '@texra-ai/harness/host';
+import {
+  AgentCatalog,
+  describeFollowUpFailure,
+  Secrets,
+} from '@texra-ai/harness/host';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { SessionOwner } from '@platform/processRuntime';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { runBypasses } from '@shared/approvalBypassKind';
@@ -62,6 +65,8 @@ import {
   type UserQuestionPermission,
   aggregateTarget,
 } from '@shared/schemas';
+import type { DraftBlob } from '@shared/session/historyTurns';
+import type { ToolEditContent } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   isInFlightPhase,
@@ -80,10 +85,16 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+import { blobAddress } from '@utils/core/idHash';
+import { nodeFileServices } from '@utils/files/fsDurability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import {
+  buildDiffHunks,
+  countLineChanges,
+  firstChangedLine,
+} from '@utils/text/unifiedDiff';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
@@ -249,7 +260,7 @@ const HARNESS_RESOURCES_PATH = await Effect.runPromise(
 const HARNESS_CLI_CONTEXT: CliContext = {
   storageRoot: HARNESS_STORAGE_ROOT,
   approvalPolicy: APPROVAL_POLICY_DEFAULT,
-  config: new MemoryConfigProvider(TEXRA_SETTINGS),
+  config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog),
   commandName: 'texra',
   configWarnings: [],
   configDegradations: [],
@@ -487,7 +498,7 @@ HARNESS_DISPOSERS.push(
   Effect.runSync(
     session().interactions.use(
       createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
-        requests: session().requests,
+        requests: { request: session().requests.request, view: session().view },
         settings: HARNESS_PLATFORM_SERVICES,
         runtime: harnessRuntime,
       }),
@@ -988,6 +999,7 @@ function makeAgentProposalPayload(): AgentProposalPermission {
     instruction: AGENT_PROPOSAL_INSTRUCTION,
     memories: [],
     workingDirectory: HARNESS_CWD,
+    allowBypass: true,
     ...(SCRIPT_PROPOSAL
       ? {
           script: {
@@ -1103,9 +1115,13 @@ function requestHarnessApproval(
   runId: RunId,
   payload: PermissionPayload,
   onSettled: (decision: RequestDecision) => void | Promise<void>,
+  /** What the payload names by address, stored with the request's row. */
+  blobs?: readonly DraftBlob[],
 ): void {
   void harnessRuntime
-    .runPromise(session().requests.ask(runId, payload))
+    .runPromise(
+      session().requests.ask(runId, payload, { ...(blobs && { blobs }) }),
+    )
     .then(onSettled)
     .catch((error: unknown) => {
       appendLocalErrorTranscript(
@@ -1323,17 +1339,18 @@ if (SHOW_CHILDREN) {
 
 if (SHOW_PLAN) {
   publish({
-    type: 'run.fact',
+    type: 'plugin.fact',
     aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
-    fact: {
-      key: 'plan',
-      plan: {
-        objective: [
-          'Coordinate a small math proof through nested CLI work.',
-          'Route proof obligations to the right specialist.',
-          'Have a subagent inspect the Lean-style finite case.',
-        ].join('\n'),
-      },
+    plugin: 'goal',
+    kind: 'plan',
+    version: 1,
+    parent: null,
+    value: {
+      objective: [
+        'Coordinate a small math proof through nested CLI work.',
+        'Route proof obligations to the right specialist.',
+        'Have a subagent inspect the Lean-style finite case.',
+      ].join('\n'),
     },
   });
 }
@@ -1341,29 +1358,36 @@ if (SHOW_PLAN) {
 if (SHOW_EDIT_APPROVAL) {
   const showApproval = () => {
     const request = makeEditApprovalRequest();
-    const { permission, hunks, firstChangedLine } =
-      prepareToolEditApprovalPrompt(session(), {
-        requestId: 'harness-edit-approval',
-        request,
-        relativePath: request.path,
-      });
-    // The preview the durable payload cannot carry is staged on the host,
-    // exactly as `requestToolEditApproval` stages it. Staging hands back the
-    // release for an open that never commits; this request is opened right
-    // below, so the harness holds that program and never runs it.
-    const _releaseStagedPreview = harnessRuntime.runSync(
-      session().interactions.presentToolEdit({
-        ...request,
-        roots: session().roots,
-        permission,
-        hunks,
-        firstChangedLine,
-      }),
+    // The payload and the content `requestToolEditApproval` builds, the
+    // content stored with the request's row as it stores it.
+    const { hunks } = buildDiffHunks(
+      request.originalContent,
+      request.proposedContent,
     );
+    const lines = countLineChanges(hunks);
+    const content: ToolEditContent = {
+      originalContent: request.originalContent,
+      proposedContent: request.proposedContent,
+      hunks,
+      firstChangedLine: firstChangedLine(hunks, request.proposedContent),
+    };
+    const text = JSON.stringify(content);
+    const permission = {
+      requestId: 'harness-edit-approval',
+      path: request.path,
+      relativePath: request.path,
+      sourceTool: request.sourceTool,
+      allowBypass: true,
+      runId: request.runId,
+      addedLines: lines.added,
+      removedLines: lines.removed,
+      content: blobAddress(text),
+    };
     requestHarnessApproval(
       request.runId,
       { kind: 'toolEdit', data: permission },
       () => undefined,
+      [{ digest: permission.content, text }],
     );
   };
 
@@ -1431,9 +1455,8 @@ if (SHOW_RETRY_APPROVAL) {
     // every read of it (`prepareRetry`'s card lookup, the retry gate,
     // `/model`'s access rows) is driven by the approval requested below or by
     // a keypress after it, so nothing can have cached `openai` as absent.
-    HARNESS_PLATFORM_SERVICES.secrets.set(
-      apiKeySecretName('openai'),
-      'sk-harness-openai-key',
+    Effect.flatMap(Secrets, (secrets) =>
+      secrets.set(apiKeySecretName('openai'), 'sk-harness-openai-key'),
     ),
   );
   // The credential the retry lands on is the decision's own field: the TUI
@@ -1662,7 +1685,6 @@ function handleHarnessSlashCommand(line: string): boolean {
 const harnessSession = new TuiSession();
 
 registerBuiltinSlashCommands({
-  secrets: HARNESS_PLATFORM_SERVICES.secrets,
   stores: HARNESS_PLATFORM_SERVICES,
   runtime: HARNESS_PLATFORM_SERVICES.runtime,
   runtimeSession: harnessRunSession,
@@ -1756,7 +1778,6 @@ function handleHarnessCtrlC(): void {
 function renderHarnessApp(): React.JSX.Element {
   return (
     <App
-      secrets={HARNESS_PLATFORM_SERVICES.secrets}
       stores={HARNESS_PLATFORM_SERVICES}
       runtime={harnessRuntime}
       session={harnessRunSession}
@@ -1832,7 +1853,6 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
               {
                 runId: interrupted,
                 reason: { kind: 'pluginOff', name: 'zotero' },
-                retry: false,
               },
             ]
           : [],

@@ -5,7 +5,7 @@ import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { safeHomedir } from '@utils/system/platformPaths';
+import { homeDirectory } from '@utils/system/platformPaths';
 
 import { readNormalizedFile } from './fsDurability';
 import { entryExists } from './fsEntryExists';
@@ -34,7 +34,7 @@ export const loadAgentsMd = Effect.fn('agentsMd.loadAgentsMd')(function* (
   // root whose file is absent or blank falls through to the next one.
   const candidates: Array<{ root: string; source: string }> = [];
   if (workspace) candidates.push({ root: workspace, source: 'workspace' });
-  const homeDir = safeHomedir();
+  const homeDir = yield* homeDirectory;
   if (homeDir) {
     candidates.push({ root: path.join(homeDir, '.texra'), source: 'user' });
   }

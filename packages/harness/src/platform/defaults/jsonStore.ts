@@ -6,33 +6,19 @@ import { readFileSync, statSync } from 'node:fs';
 import {
   Effect,
   FileSystem,
-  Layer,
   Path,
   type PlatformError,
   Predicate,
 } from 'effect';
-import { NodePath } from '@effect/platform-node';
 
 // Local imports
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { writeLogLine } from '@logger/logSink';
 import { ensureError } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import {
-  nodeFileSystemLayer,
-  writeFileAtomic,
-} from '@utils/files/fsDurability';
+import { nodeFileServices, writeFileAtomic } from '@utils/files/fsDurability';
 
 type JsonRecord = Record<string, unknown>;
-
-/**
- * The filesystem services a `JsonStore` reads and writes over, as a layer a
- * caller can provide itself. This store provides them for its own write
- * ({@link JsonStore.set}) and for `update`'s runner, so no consumer of a
- * requirement-free port carries `FileSystem | Path` in its type.
- */
-export const nodeFileServices: Layer.Layer<FileSystem.FileSystem | Path.Path> =
-  Layer.mergeAll(nodeFileSystemLayer, NodePath.layer);
 
 /** Preserve the Node error identity exposed by this store's existing callers. */
 function storageError(error: PlatformError.PlatformError): Error {
@@ -101,8 +87,8 @@ const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
     Effect.catchIf(isFileNotFoundError, () => Effect.void),
   );
   if (content === undefined) return { ...missingFallback };
-  const parsed = yield* Effect.try({
-    try: () => JSON.parse(content) as unknown,
+  const parsed: unknown = yield* Effect.try({
+    try: () => JSON.parse(content),
     catch: (cause) => cause as SyntaxError,
   });
   if (Predicate.isObject(parsed)) return parsed;
@@ -179,12 +165,16 @@ export class JsonStore {
   private version: string | undefined;
   private readonly follow: boolean;
 
+  readonly filePath: string;
+  private data: JsonRecord;
   private constructor(
     /** The file this store reads and writes; warnings name it. */
-    readonly filePath: string,
-    private data: JsonRecord,
+    filePath: string,
+    data: JsonRecord,
     follow: boolean,
   ) {
+    this.filePath = filePath;
+    this.data = data;
     this.follow = follow;
   }
 
@@ -222,8 +212,7 @@ export class JsonStore {
   /**
    * Opening is read-only: a missing file reads as an empty store, and the
    * containing directory is not created here — that happens in
-   * {@link flush}, so pure reads work on read-only or unowned storage
-   * (#8220).
+   * {@link flush}, so pure reads work on read-only or unowned storage.
    */
   static readonly open = Effect.fn('JsonStore.open')(function* (
     filePath: string,

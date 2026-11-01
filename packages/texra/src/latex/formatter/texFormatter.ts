@@ -77,7 +77,7 @@ export function resolveLatexFormatter(stores: SettingsStores) {
     const selected = LATEX_FORMATTERS[formatter];
     return {
       ...selected,
-      configPath: stores.config.get(selected.configKey, ''),
+      configPath: yield* Settings.get<string>(stores, selected.configKey),
       settings: stores,
     };
   });

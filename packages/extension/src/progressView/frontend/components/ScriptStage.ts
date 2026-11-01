@@ -20,7 +20,11 @@ import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { TALK_TO_AGENT } from '@ui/copy/nestedRuns';
 import { requestErrorText } from '@ui/copy/requestErrors';
-import { SCRIPT_CALL_STATUS_LABEL } from '@ui/copy/scriptStage';
+import {
+  SCRIPT_CALL_STATUS_LABEL,
+  scriptCallSummary,
+  scriptStageSummary,
+} from '@ui/copy/scriptStage';
 import { designTokens } from '@ui/styles';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -277,7 +281,7 @@ export class ScriptStage extends LitElement {
     // its conversation, where the composer talks to it.
     const target = call.askingRunId ?? child?.id;
     const talk = call.talkable;
-    const last = call.summary ?? '';
+    const last = scriptCallSummary(call) ?? '';
     const rejected =
       child === undefined ? undefined : this.surface.rejected.get(child.id);
     return html`<div
@@ -351,10 +355,9 @@ export class ScriptStage extends LitElement {
   }
 
   override render(): TemplateResult {
+    const summary = scriptStageSummary(this.stage);
     return html`${
-        this.stage.summary === ''
-          ? nothing
-          : html`<div class="summary">${this.stage.summary}</div>`
+        summary === '' ? nothing : html`<div class="summary">${summary}</div>`
       }
       <div role="list">
         ${repeat(

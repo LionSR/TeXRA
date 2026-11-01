@@ -13,7 +13,6 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { Effect } from 'effect';
 import type { AgentPlatform } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { Client, type Dispatcher, EnvHttpProxyAgent } from 'undici';
@@ -157,7 +156,7 @@ export async function makeExampleWorkspace(
       unknown
     >;
 
-    if (rawBody.includes('Generate a short TeXRA session label')) {
+    if (rawBody.includes('Generate a short session label')) {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       res.end(formatAnthropicSse({ text: 'Reviewing manuscript section' }, 0));
       return;
@@ -200,13 +199,6 @@ export async function makeExampleWorkspace(
     storageDir: join(workspace, 'storage'),
     workspaceDir: workspace,
   });
-  await Effect.runPromise(
-    platform.roots.globalState.update(
-      'polishModel',
-      'anthropic/claude-sonnet-5-5',
-    ),
-  );
-
   return {
     workspace,
     agentsDir,

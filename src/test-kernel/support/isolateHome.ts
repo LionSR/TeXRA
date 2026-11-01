@@ -13,7 +13,7 @@
  * TeXRA root a host opens. The temp folder itself may sit under the real
  * home (Windows keeps temp in `%USERPROFILE%\AppData\Local\Temp`).
  */
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -40,7 +40,8 @@ if (process.env[SWAPPED_BY] !== String(process.pid)) {
     [REAL_DIRECTORIES]: JSON.stringify(real),
     [SWAPPED_BY]: String(process.pid),
   });
-  process.once('exit', () => rmSync(home, { recursive: true, force: true }));
+  // Under the run's temp folder, which the run's teardown removes
+  // (`testTempRoot.ts`): the pool ends a worker without its exit handlers.
 }
 
 // Loaded only now, so no module of the repository reads the home first.

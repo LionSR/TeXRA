@@ -2,8 +2,8 @@
  * Desktop preview port for {@link ToolEditApprovalController}.
  *
  * Each request gets its own temp directory; the renderer opens the staged
- * copies through the window's diff and file viewers, and the user's edits are
- * read back from the proposed copy on disk.
+ * copies through the window's diff and file viewers, and an approval reads
+ * the user's edits back from the proposed copy on disk.
  */
 
 // Third-party imports
@@ -15,19 +15,18 @@ import { NotificationFailed, type DiffSource } from '@texra/hosts/uiHosts';
 import type {
   ToolEditApprovalHost,
   ToolEditPreview,
-  ToolEditPreviewContext,
+  ToolEditPreviewRequest,
 } from '@texra/controllers/approval/ToolEditApprovalController';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 
 import type { HostRequestFailure } from '@texra-ai/harness';
-import type { ToolEditApprovalRequest } from '@texra-ai/harness/host';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopSpawn } from './desktopWindows.js';
 
-export type DesktopToolEditApprovalUi = Pick<
+type DesktopToolEditApprovalUi = Pick<
   DesktopAgentRunHost,
   'openPath' | 'openBuildDisplay' | 'showErrorMessage'
 > & {
@@ -54,18 +53,26 @@ interface DesktopToolEditApprovalHostOptions {
   ui: DesktopToolEditApprovalUi;
   /** Runs the error report on a fiber of the window's scope. */
   spawn: DesktopSpawn;
+  /** Whether the window is focused and shows this project. */
+  focused(): boolean;
 }
 
 export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
-  constructor(private readonly options: DesktopToolEditApprovalHostOptions) {}
+  private readonly options: DesktopToolEditApprovalHostOptions;
+  constructor(options: DesktopToolEditApprovalHostOptions) {
+    this.options = options;
+  }
 
   get openBuildDisplay(): BuildDisplayFn {
     return this.options.ui.openBuildDisplay;
   }
 
+  focused(): boolean {
+    return this.options.focused();
+  }
+
   stagePreview(
-    request: ToolEditApprovalRequest,
-    context: ToolEditPreviewContext,
+    request: ToolEditPreviewRequest,
   ): Effect.Effect<ToolEditPreview, HostRequestFailure, FileSystem.FileSystem> {
     const { ui } = this.options;
     return FileSystem.FileSystem.use((fs) =>
@@ -81,7 +88,7 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
         }).pipe(
           Effect.map(
             ({ originalPath, proposedPath }) =>
-              new DesktopToolEditPreview(ui, context, {
+              new DesktopToolEditPreview(ui, request, {
                 tempDir,
                 originalPath,
                 proposedPath,
@@ -131,11 +138,18 @@ interface DesktopStagedFiles {
 }
 
 class DesktopToolEditPreview implements ToolEditPreview {
+  private readonly ui: DesktopToolEditApprovalUi;
+  private readonly request: ToolEditPreviewRequest;
+  private readonly staged: DesktopStagedFiles;
   constructor(
-    private readonly ui: DesktopToolEditApprovalUi,
-    private readonly context: ToolEditPreviewContext,
-    private readonly staged: DesktopStagedFiles,
-  ) {}
+    ui: DesktopToolEditApprovalUi,
+    request: ToolEditPreviewRequest,
+    staged: DesktopStagedFiles,
+  ) {
+    this.ui = ui;
+    this.request = request;
+    this.staged = staged;
+  }
 
   get originalPath(): string {
     return this.staged.originalPath;
@@ -145,24 +159,13 @@ class DesktopToolEditPreview implements ToolEditPreview {
     return this.staged.proposedPath;
   }
 
-  /**
-   * The prompt carries the request on its own, but the diff beside it is
-   * part of the presentation the controller tracks: settling before it is
-   * open would let a release settle, and the temp directory below go, while
-   * the Review tab was still reading the staged files. A failure here
-   * reaches the `present` call the host runs, which reports it.
-   */
-  present(): Effect.Effect<void, HostRequestFailure> {
-    return this.showDiff();
-  }
-
   showDiff(): Effect.Effect<void, HostRequestFailure> {
     return this.ui
       .openDiff(
         { filePath: this.staged.originalPath },
         { filePath: this.staged.proposedPath },
-        `Tool edit: ${this.context.relativePath}`,
-        this.context.requestId,
+        `Tool edit: ${this.request.relativePath}`,
+        this.request.requestId,
       )
       .pipe(
         Effect.mapError((cause) => hostFailure('approval.openDiff', cause)),
@@ -192,7 +195,7 @@ class DesktopToolEditPreview implements ToolEditPreview {
    */
   dispose(): Effect.Effect<void, HostRequestFailure, FileSystem.FileSystem> {
     return this.ui
-      .closeDiff(this.context.requestId)
+      .closeDiff(this.request.requestId)
       .pipe(
         Effect.andThen(
           FileSystem.FileSystem.use((fs) =>

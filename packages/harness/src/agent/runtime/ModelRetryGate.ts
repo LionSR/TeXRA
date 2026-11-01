@@ -96,9 +96,11 @@ export class ModelRetryGate {
     });
 
   private readonly routes = new Map<string, RouteState>();
-  private closed = false;
 
-  private constructor(private readonly scope: Scope.Scope) {}
+  private readonly scope: Scope.Scope;
+  private constructor(scope: Scope.Scope) {
+    this.scope = scope;
+  }
 
   /**
    * Run `attempt` gated on every route in `routes`, narrowest first (see
@@ -208,7 +210,6 @@ export class ModelRetryGate {
   /** Interrupt every call still waiting; the scope interrupts the probe fibers. */
   private close(): Effect.Effect<void> {
     return Effect.suspend(() => {
-      this.closed = true;
       const waiting = [...this.routes.values()].flatMap((state) =>
         state.waiters.splice(0),
       );
@@ -233,7 +234,7 @@ export class ModelRetryGate {
   ): Effect.Effect<RetryPermit> {
     return Effect.uninterruptibleMask((restore) =>
       Effect.gen({ self: this }, function* () {
-        if (this.closed) return yield* Effect.interrupt;
+        if (this.scope.state._tag === 'Closed') return yield* Effect.interrupt;
         const healthyPermit = this.acquireHealthy(route);
         if (healthyPermit) return healthyPermit;
         // Safe: acquireHealthy only returns undefined when it found an

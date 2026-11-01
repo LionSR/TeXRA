@@ -6,18 +6,22 @@
 
 import { Effect } from 'effect';
 
-import { type RunEndResult } from '@agent/runtime/RunEndResult';
+import { type RunReport } from '@agent/runtime/runReport';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
-import type { RegisterRunOptions } from '@agent/storage/runLifecycle';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   registryOf,
   type AgentRunServices,
   Runs,
 } from '@agent/runtime/runRegistry';
 import type { NativeChildStrategy } from '@agent/runtime/childRunLoop';
-import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
+import {
+  prepareAgentDefinition,
+  type PreparedAgentDefinition,
+} from '@agent/runtime/AgentLaunchContext';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
+import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { emptyRunEndOutput, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { readRecipeResult } from './recipeResult';
@@ -28,11 +32,10 @@ import { formatSubagentDelivery, formatSubagentError } from './subagentResults';
  * native subagent callers — durable in-band (`InBandSubagentRunBaseOptions`)
  * and detached (`NativeSubagentStrategyParams`) — so a new launch option has a
  * single home and can't drift between the two interfaces or the executeInBand
- * field mapping.
+ * field mapping. The child's parent is not one: a fresh child's is its
+ * registration's, a resumed one's its rows'.
  */
 export interface ChildRunLaunchOptions {
-  /** The launching run: the child's parent edge. */
-  readonly parentRunId: RunId;
   readonly session: SessionHandle;
   /** The history a fresh child is born on: a fork's (`forkSeed`). */
   readonly seed?: RegisterRunOptions['seed'];
@@ -53,30 +56,36 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
         readonly definition: PreparedAgentDefinition;
         /** The child's registration, which its opening commits. */
         readonly registration: RegisterRunOptions;
+        /** Told the commit of the child's opening (`ExecuteAgentOptions`). */
+        readonly onAdmitted?: ExecuteAgentOptions['onAdmitted'];
         readonly resume?: never;
       }
     | {
         readonly definition?: never;
-        readonly resume: {
-          readonly identity: import('@agent/runtime/executeAgent').ResumeTurnIdentity;
-          readonly options: import('@agent/runtime/executeAgent').ResumeToolUseFromResumeDataOptions;
+        /** A persisted child, resumed under its stored config with the
+         *  parent its rows hold (`parent`), read as its run starts, under
+         *  the claim its loop holds. */
+        readonly resume: Pick<ExecuteAgentOptions, 'onAdmitted' | 'tools'> & {
+          readonly config: AgentConfig;
+          readonly parent: Effect.Effect<RunId | undefined, Error>;
+          readonly stopAfterCycle?: boolean;
         };
       }
   );
 
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
-): NativeChildStrategy<RunEndResult, AgentRunServices> {
+): NativeChildStrategy<RunReport, AgentRunServices> {
   const config = params.definition
     ? params.definition.config
-    : params.resume.identity.agentConfig;
-  // A child's provider/runtime failure rides its turn's `error`
-  // (`runWithLifecycle` returns a terminal failed result rather than
-  // rejecting); a thrown call reaches `formatError` as its `err`.
-  let lastResult: RunEndResult | undefined;
+    : params.resume.config;
+  // A child's provider/runtime failure rides its report's `failure`
+  // (`endRun` returns a terminal failed result rather than rejecting); a
+  // thrown call reaches `formatError` as its `err`.
+  let lastResult: RunReport | undefined;
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
-    call: Effect.Effect<RunEndResult, Error, AgentRunServices>,
+    call: Effect.Effect<RunReport, Error, AgentRunServices>,
   ) {
     lastResult = undefined;
     return yield* call.pipe(
@@ -102,50 +111,50 @@ export function createNativeSubagentStrategy(
       runNative(
         Effect.gen(function* () {
           const { programs } = registryOf(yield* Runs);
-          const executeOptions: Omit<ExecuteAgentOptions, 'registration'> = {
-            ...params.resume?.options,
+          const options = {
             session: params.session,
             onProgress: notify,
-            ...(params.inBand === true && { stopAfterCycle: true }),
             turns: {
               turnPermit: turns.turnPermit,
-              finishTurn: (turn: RunEndResult) =>
+              finishTurn: (turn: RunReport) =>
                 Effect.suspend(() => {
                   lastResult = turn;
                   return turns.finishTurn(turn);
                 }),
-              finishLastTurn: (turn: RunEndResult) =>
+              finishLastTurn: (turn: RunReport) =>
                 Effect.suspend(() => {
                   lastResult = turn;
                   return turns.finishLastTurn(turn);
                 }),
             },
           };
-          if (params.resume)
-            return yield* programs.resumeTurn(
-              params.resume.identity,
-              executeOptions,
-            );
-          const turn = yield* programs.executeAgent(
-            params.definition,
-            params.runId,
-            {
-              ...executeOptions,
-              registration: { ...params.registration, seed: params.seed },
-              // The live handle owns this edge, including a later detach.
-              parentRunId: params.parentRunId,
-            },
-          );
-          return turn;
+          if (params.resume) {
+            const { config, parent, stopAfterCycle, ...launch } = params.resume;
+            const definition = yield* prepareAgentDefinition({
+              config,
+              session: params.session,
+              stopAfterCycle,
+            });
+            return yield* programs.executeAgent(definition, params.runId, {
+              ...launch,
+              ...options,
+              parentRunId: yield* parent,
+            });
+          }
+          return yield* programs.executeAgent(params.definition, params.runId, {
+            ...options,
+            registration: { ...params.registration, seed: params.seed },
+            ...(params.onAdmitted && { onAdmitted: params.onAdmitted }),
+          });
         }),
       ),
 
     isTurnInterrupted: (turn) =>
       params.inBand !== true && turn.outcome === RUN_OUTCOME.CANCELLED,
-    isTurnError: (turn) => turn.error !== undefined,
+    isTurnError: (turn) => turn.failure !== undefined,
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
-      turn: RunEndResult,
+      turn: RunReport,
       /** The turn's wall time, measured by the loop. */
       wallTimeMs: number,
     ) {
@@ -183,7 +192,7 @@ export function createNativeSubagentStrategy(
       return formatSubagentError(
         params.runId,
         config.agent,
-        turn?.error ?? normalizeProviderError(err),
+        turn?.failure ?? normalizeProviderError(err),
         {
           wallTimeMs,
           workingDirectory: params.workingDirectory,

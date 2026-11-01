@@ -20,12 +20,6 @@
       "name": "isAllowedExternalUrl"
     },
     {
-      "file": "packages/harness/src/tools/approval/toolEditApproval.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "prepareToolEditApprovalPrompt"
-    },
-    {
       "file": "packages/llm/src/oauth/oauthRequest.ts",
       "category": "unused",
       "kind": "exports",

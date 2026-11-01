@@ -8,89 +8,108 @@
  * and the process's `AppState` service. Each host wires its own
  * implementation at startup.
  */
+import { Result, Schema } from 'effect';
 
-export enum WorkspaceStateKey {
+/** The harness's workspace-scoped state keys (`roots.workspaceState`). */
+export const WorkspaceStateKey = Object.freeze({
   // Agent visibility
   /** Workspace agents selection; the `custom` member carries a category-keyed record. */
-  WORKSPACE_AGENTS = 'texra.workspaceAgents',
-  CUSTOM_TEAMS = 'texra.customTeams',
+  WORKSPACE_AGENTS: 'workspaceAgents',
   /** Custom agents the user turned off; every other custom agent is shown. */
-  HIDDEN_CUSTOM_AGENTS = 'texra.hiddenCustomAgents',
+  HIDDEN_CUSTOM_AGENTS: 'hiddenCustomAgents',
 
   // Skill availability
-  DISABLED_SKILLS = 'texra.skills.disabled',
-  DISABLED_SKILL_SOURCES = 'texra.skills.disabledSources',
+  DISABLED_SKILLS: 'skills.disabled',
+  DISABLED_SKILL_SOURCES: 'skills.disabledSources',
 
   // Git commit author settings
-  GIT_MARK_COMMITS = 'texra.git.markCommits',
-  GIT_AUTHOR_NAME = 'texra.git.authorName',
-  GIT_AUTHOR_EMAIL = 'texra.git.authorEmail',
+  GIT_MARK_COMMITS: 'git.markCommits',
+  GIT_AUTHOR_NAME: 'git.authorName',
+  GIT_AUTHOR_EMAIL: 'git.authorEmail',
 
   // Git worktree support
-  GIT_WORKTREE_SUPPORT = 'texra.git.worktreeSupport',
+  GIT_WORKTREE_SUPPORT: 'git.worktreeSupport',
 
   // Tool path safety
-  TOOL_PATH_PROTECTION_ENABLED = 'texra.tools.restrictPathsToWorkingDirectory',
-}
+  TOOL_PATH_PROTECTION_ENABLED: 'tools.restrictPathsToWorkingDirectory',
+} as const);
+export type WorkspaceStateKey =
+  (typeof WorkspaceStateKey)[keyof typeof WorkspaceStateKey];
 
-export enum GlobalStateKey {
-  MEMORY_ENABLED = 'texra.memory.enabled',
+export const GlobalStateKey = Object.freeze({
+  MEMORY_ENABLED: 'memory.enabled',
   /** Code mode's "only" stage: every chat run gets `script`, and the model
    *  sees no other tool; the rest are callable from scripts alone. */
-  SCRIPT_ONLY = 'texra.codeMode.scriptOnly',
+  SCRIPT_ONLY: 'codeMode.scriptOnly',
 
   // Child-work policy. Global rather than per-workspace: these describe how the
   // user wants their own child runs handled, not anything about a checkout.
-  ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
-  DETACH_SUBAGENTS_ON_STOP = 'texra.detachSubagentsOnStop',
+  ALLOW_ORCHESTRATOR_KILL: 'allowOrchestratorKill',
+  DETACH_SUBAGENTS_ON_STOP: 'detachSubagentsOnStop',
 
   // Model selection settings
   /** `{ enabledExtras, disabledDefaults }`: the user's delta over `DEFAULT_MODELS`. */
-  MODEL_SELECTION = 'texra.modelSelection',
-  HELPER_MODEL = 'texra.helperModel',
-  REASONING_LEVELS = 'texra.reasoningLevels',
-  PREFER_SHORT_MODEL_NAMES = 'texra.preferShortModelNames',
+  MODEL_SELECTION: 'modelSelection',
+  HELPER_MODEL: 'helperModel',
+  REASONING_LEVELS: 'reasoningLevels',
+  PREFER_SHORT_MODEL_NAMES: 'preferShortModelNames',
 
   // Agent settings (migrated from VS Code config)
-  CUSTOM_AGENT_DIR = 'texra.customAgentDir',
-
-  // Endpoint settings
-  ENDPOINT_OPENAI = 'texra.endpoint.openai',
-  ENDPOINT_ANTHROPIC = 'texra.endpoint.anthropic',
-  ENDPOINT_GOOGLE = 'texra.endpoint.google',
-  ENDPOINT_DEEPSEEK = 'texra.endpoint.deepseek',
-  ENDPOINT_XAI = 'texra.endpoint.xai',
-  ENDPOINT_MOONSHOT = 'texra.endpoint.moonshot',
-  ENDPOINT_DASHSCOPE = 'texra.endpoint.dashscope',
-  ENDPOINT_MINIMAX = 'texra.endpoint.minimax',
-  ENDPOINT_GLM = 'texra.endpoint.glm',
-  ENDPOINT_META = 'texra.endpoint.meta',
-
-  // Region settings
-  DASHSCOPE_USE_CHINA = 'texra.dashscope.useChina',
-  MINIMAX_USE_CHINA = 'texra.minimax.useChina',
-  GLM_USE_CHINA = 'texra.glm.useChina',
-  MOONSHOT_USE_CHINA = 'texra.moonshot.useChina',
+  CUSTOM_AGENT_DIR: 'customAgentDir',
 
   // Coding plan settings
-  GLM_CODING_PLAN = 'texra.glm.codingPlan',
-  KIMI_CODE_PREFER = 'texra.kimiCode.prefer',
+  GLM_CODING_PLAN: 'glm.codingPlan',
+  KIMI_CODE_PREFER: 'kimiCode.prefer',
 
   // Transport settings
-  WEBSOCKET_OPENAI = 'texra.websocket.openai',
+  WEBSOCKET_OPENAI: 'websocket.openai',
 
   // Tool settings
-  DISABLED_TOOLS = 'texra.tools.disabled',
+  DISABLED_TOOLS: 'tools.disabled',
 
   /** The per-install key MCP env values are digested under (`mcpConfig`). */
-  MCP_REVISION_KEY = 'texra.mcp.revisionKey',
+  MCP_REVISION_KEY: 'mcp.revisionKey',
 
   // Installed Claude Code and Codex plugins, and the trust given to each
-  INSTALLED_PLUGINS = 'texra.plugins.installed',
+  INSTALLED_PLUGINS: 'plugins.installed',
 
-  // Onboarding funnel (user-scoped; see texra's onboardingFunnel)
-  /** Canonical shared key; the CLI-originated spelling is intentionally stable. */
-  ONBOARDING_DECLINED = 'texra.cli.onboardingDeclined',
-  ONBOARDING_FIRST_RUN_DONE = 'texra.onboarding.firstRunDone',
-  ONBOARDING_DEFAULT_TEAM_ID = 'texra.onboarding.defaultTeamId',
+  /** The team a workspace runs (`apply_team`, the settings view). The stored
+   *  key keeps the spelling it was first written under. */
+  ACTIVE_TEAM_ID: 'onboarding.defaultTeamId',
+} as const);
+export type GlobalStateKey =
+  (typeof GlobalStateKey)[keyof typeof GlobalStateKey];
+
+const DisabledToolIdsSchema = Schema.Array(Schema.String);
+
+/**
+ * The tool switch record ({@link GlobalStateKey.DISABLED_TOOLS}) as stored,
+ * checked: the plugin ids the user holds off, or `undefined` while nothing
+ * (neither the first-install seed nor the user) has written it. A present
+ * value that is not a list of ids is corruption and fails with the reason,
+ * rather than reading as "nothing off", which would switch every opt-in
+ * plugin on. The one decoder of the record; each reader turns the failure
+ * into its own error.
+ */
+export function decodeDisabledTools(stored: unknown): Result.Result<
+  ReadonlySet<string> | undefined,
+  {
+    readonly key: string;
+    readonly message: string;
+    readonly cause: Schema.SchemaError;
+  }
+> {
+  if (stored === undefined) return Result.succeed(undefined);
+  const key = GlobalStateKey.DISABLED_TOOLS;
+  return Result.mapBoth(
+    Schema.decodeUnknownResult(DisabledToolIdsSchema)(stored),
+    {
+      onSuccess: (ids): ReadonlySet<string> => new Set(ids),
+      onFailure: (cause) => ({
+        key,
+        message: `The tool switch record (${key}) is unreadable: ${cause.message}`,
+        cause,
+      }),
+    },
+  );
 }

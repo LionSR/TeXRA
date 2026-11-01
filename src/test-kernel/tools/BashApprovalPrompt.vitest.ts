@@ -5,11 +5,11 @@ import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Stream } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
+import { type BashPermission, generateRunId } from '@texra-ai/harness/schemas';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { type BashPermission } from '@shared/schemas';
 import {
   setTestApprovalPolicy,
   createTestSession,
@@ -19,7 +19,6 @@ import {
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { requestBashApproval } from '@tools/approval/bashApproval';
-import { generateRunId } from '@utils/core';
 
 /** Watch bash requests in a scoped fiber, as a real host surface does. */
 function watchBashRequests(session: SessionHandle) {
@@ -61,46 +60,33 @@ describe('requestBashApproval queueing', () => {
   // The project's policy is the fake host's setting, shared by the file.
   beforeEach(() => setTestApprovalPolicy('ask'));
 
-  it.effect('lets never override a run bypass at the shared boundary', () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const session = yield* createTestSession();
-        yield* Effect.addFinalizer(() => closeSessionOf(session));
-        const runId = generateRunId();
-        let policyDenials = 0;
-        yield* session.interactions.use({
-          approvalDenied: () => {
-            policyDenials += 1;
-          },
-        });
-        setTestApprovalPolicy('never');
-        publishTestRunStart(session, runId);
-        yield* session.approvals.change(runId, humanGrant(['bash'], true));
-        const requests = yield* watchBashRequests(session);
+  it.effect(
+    'lets never override a run bypass and a hook allow at the shared boundary',
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const session = yield* createTestSession();
+          yield* Effect.addFinalizer(() => closeSessionOf(session));
+          const runId = generateRunId();
+          let policyDenials = 0;
+          yield* session.interactions.use({
+            approvalDenied: () => {
+              policyDenials += 1;
+            },
+          });
+          setTestApprovalPolicy('never');
+          publishTestRunStart(session, runId);
+          yield* session.approvals.change(runId, humanGrant(['bash'], true));
+          const requests = yield* watchBashRequests(session);
 
-        const result = yield* requestBashApproval({
-          command: 'echo denied',
-          grant: 'shell',
-        }).pipe(
-          Effect.provide(
-            nativeToolTestLayer({
-              run: {
-                runId,
-                session,
-                toolPolicy: {},
-              },
-            }),
-          ),
-        );
-
-        expect(result).toEqual({
-          action: 'deny',
-          reason: 'Denied by the approval policy.',
-        });
-        expect(policyDenials).toBe(1);
-        expect(requests.opened).toEqual([]);
-      }),
-    ),
+          expect(session.approvals.permission(runId, 'bash', 'allow')).toEqual({
+            action: 'deny',
+            reason: 'Denied by the approval policy.',
+          });
+          expect(policyDenials).toBe(1);
+          expect(requests.opened).toEqual([]);
+        }),
+      ),
   );
 
   it.effect(
@@ -116,7 +102,7 @@ describe('requestBashApproval queueing', () => {
           const requests = yield* watchBashRequests(session);
 
           const request = (command: string) =>
-            requestBashApproval({ command, grant: 'shell' }).pipe(
+            requestBashApproval({ command, grant: 'bash' }).pipe(
               Effect.provide(
                 nativeToolTestLayer({
                   run: { runId, session, toolPolicy: {} },

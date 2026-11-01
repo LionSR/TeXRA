@@ -2,7 +2,7 @@
  * What one completed turn cost, in USD, from the usage evidence its protocol
  * reported and the catalog's rates. The billing rules are wire facts: which
  * token classes a provider bills apart, and which receipt carries its own
- * settled cost.
+ * final cost.
  */
 import { requestRates, type ModelConfig } from 'llm-zoo';
 
@@ -83,11 +83,11 @@ function standardCost(
 /**
  * The cost of one turn, never negative. A plan route (ChatGPT/Codex, Grok,
  * the GLM coding plan, Kimi Code) is covered by the subscription, so every
- * rate is zero and a receipt the provider settled bills an API key this turn
+ * rate is zero and a receipt the provider finalized bills an API key this turn
  * did not use. An API-key route bills the catalog's rates on its service
  * tier; a model with a long-context tier bills the whole request at it once
  * the prompt, cached tokens included, is above it (llm-zoo's
- * `requestRates`). An xAI receipt carries its own settled cost, which wins
+ * `requestRates`). An xAI receipt carries its own final cost, which wins
  * over the computed one.
  */
 export function turnCost(

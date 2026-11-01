@@ -65,7 +65,7 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
   const catalog = yield* AgentCatalog;
   const agent = (yield* catalog.visible(
     call.env.roots,
-    call.run.delegationAgentScope ?? undefined,
+    call.run.config.delegationAgentScope ?? undefined,
   )).find((entry) => agentMatchesIdentifier(entry, input.agentName));
   if (agent !== undefined && documentTaskOf(agent) === null)
     return errorResult(
@@ -143,7 +143,6 @@ function withDocuments(result: ToolResult): ToolResult {
 export const DocumentTaskTool = defineTool({
   name: 'document_task',
   launchesTasks: true,
-  requiresApproval: 'inBody',
   replay: 'safe',
   lane: 'own',
   scriptGlobal: { positional: 'prompt' },

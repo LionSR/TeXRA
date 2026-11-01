@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Schema, Stream } from 'effect';
+import { Deferred, Effect, Fiber, Schema, Stream } from 'effect';
 import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
@@ -156,13 +156,15 @@ describe('canonical Google Interactions protocol', () => {
             },
           ],
         });
-        fetchModel.mockImplementationOnce(async () =>
-          Response.json({
+        const firstPoll = yield* Deferred.make<void>();
+        fetchModel.mockImplementationOnce(async () => {
+          Deferred.doneUnsafe(firstPoll, Effect.void);
+          return Response.json({
             id: 'int_1',
             status: 'in_progress',
             model: 'gemini-returned',
-          }),
-        );
+          });
+        });
         fetchModel.mockImplementationOnce(async () =>
           Response.json({
             id: 'int_1',
@@ -209,6 +211,7 @@ describe('canonical Google Interactions protocol', () => {
         const observation = yield* Stream.runCollect(
           background.observe(turn, operation, { deadlineAtMs: 10_000 }),
         ).pipe(Effect.forkChild);
+        yield* Deferred.await(firstPoll);
         yield* TestClock.adjust('5 seconds');
         const events = yield* Fiber.join(observation);
         expect(

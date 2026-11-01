@@ -5,20 +5,19 @@ import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
 
 // Third-party imports
-import { Deferred, Effect, Fiber, Schedule } from 'effect';
+import { Deferred, Effect, Fiber, Schedule, SubscriptionRef } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
-import { getRunRecords } from '@agent/storage/runRecords';
 
 import {
-  RUN_OUTCOME,
   qualifyAggregateId,
+  RUN_OUTCOME,
   RUN_PHASE,
-  type ExecResult,
   type RunId,
-  type ToolResult,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { registryOf } from '@agent/runtime/runRegistry';
+import { getRunRecords } from '@agent/storage/runRecords';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -28,7 +27,10 @@ import {
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { BashTool } from '@tools/bash';
+import { shouldSkipWait } from '@tools/executions/waitCoordination';
 import * as execUtils from '@utils/system/execUtils';
+import type { ToolResult } from '@texra-ai/harness';
+import type { ExecResult } from '@texra-ai/harness/node';
 
 /**
  * Stub `executeCommand` to park until the test settles it. Returns the
@@ -75,7 +77,7 @@ async function parkRunWaiting(runId: RunId): Promise<void> {
 // Unit tests exercise the tool directly — no approval host is wired.
 const BASH_PLATFORM_OPTIONS = {
   workspacePath: '/workspace',
-  config: { 'texra.toolUse.requireBashApproval': false },
+  config: { 'toolUse.requireBashApproval': false },
 } as const;
 
 /** The run id a background launch reports in its output. */
@@ -164,7 +166,7 @@ describe('BashTool', () => {
     '#8093 regression: finalizes the background run before its wake step resolves, so a resumed parent never self-stalls waiting on it',
     () =>
       Effect.gen(function* () {
-        // Regression: waking a WAITING parent (`resumeOnSession`) can
+        // Regression: waking a WAITING parent (`wakeRun`) can
         // await the ENTIRE resumed parent turn. If that wake were awaited before
         // this run's own finalize (as it used to be, delivering via a
         // single wake-aware call before `finalizeBackground`), a resumed parent
@@ -184,19 +186,22 @@ describe('BashTool', () => {
         );
 
         const parentRunId = publishTestRunStart(testDefaultSession());
-        let handleAtResumeTime: unknown;
+        let skippedAtResumeTime: boolean | undefined;
         let runId = '' as RunId;
         const wakeReached = Deferred.makeUnsafe<void>();
         // The resume a wake starts is the run's one resume in flight.
-        const followUps = testDefaultSession().followUps;
-        const resumeOnce = followUps.resumes.once.bind(followUps.resumes);
-        vi.spyOn(followUps.resumes, 'once').mockImplementation(
-          (resumed, resume) => {
-            Deferred.doneUnsafe(wakeReached, Effect.void);
-            handleAtResumeTime ??= testDefaultSession().runs.get(runId)?.handle;
-            return resumeOnce(resumed, resume);
-          },
-        );
+        const { programs } = registryOf(testDefaultSession().runs);
+        const decide = programs.resume;
+        vi.spyOn(programs, 'resume').mockImplementation((...args) => {
+          const session = testDefaultSession();
+          skippedAtResumeTime ??= shouldSkipWait(
+            session,
+            SubscriptionRef.getUnsafe(session.view.ref),
+            runId,
+          );
+          Deferred.doneUnsafe(wakeReached, Effect.void);
+          return decide(...args);
+        });
         yield* Effect.promise(() => parkRunWaiting(parentRunId));
 
         yield* Effect.addFinalizer(() =>
@@ -209,11 +214,10 @@ describe('BashTool', () => {
         runId = launched;
 
         yield* Deferred.await(wakeReached);
-        // The wake step was reached — this run must already be untracked
-        // (finalized), never still RUNNING, so a resumed parent that waits on
-        // it right now resolves immediately instead of racing its own wake.
-        assert.equal(handleAtResumeTime, undefined);
-        assert.equal(testDefaultSession().runs.get(runId)?.handle, undefined);
+        // The wake step was reached — this run must already be finalized,
+        // never still RUNNING, so a resumed parent that waits on it right now
+        // resolves immediately instead of racing its own wake.
+        assert.equal(skippedAtResumeTime, true);
       }),
   );
 

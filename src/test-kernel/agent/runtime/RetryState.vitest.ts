@@ -24,11 +24,11 @@ import {
 } from 'effect';
 import { TestClock } from 'effect/testing';
 import { it } from '@effect/vitest';
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import {
   type Model,
+  MODEL_CONFIGS,
   ModelError,
   type ModelOrigin,
   RemoteOperationSchema,
@@ -39,34 +39,34 @@ import {
 } from '@texra-ai/llm';
 
 // Local imports
-import { appendRow, positionRow } from '@agent/runtime/loop/rows';
-import { ModelInvoker, modelInvokerLayer } from '@agent/runtime/ModelInvoker';
-import type { InvokeRequest } from '@agent/runtime/run/requestContext';
-import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
-import { RouteRetries } from '@agent/runtime/run/invocation';
-import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
+import { DatabaseReadFailed } from '@texra-ai/harness';
 import {
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   RUN_PHASE,
   type RunId,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
 import {
-  DatabaseReadFailed,
   DatabaseWriteFailed,
-} from '@shared/session/database';
+  Secrets,
+  Settings,
+  UsageLog,
+} from '@texra-ai/harness/host';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
+import { RouteRetries } from '@agent/runtime/run/invocation';
+import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
+import type { InvokeRequest } from '@agent/runtime/run/requestContext';
+import { ModelInvoker, modelInvokerLayer } from '@agent/runtime/ModelInvoker';
+import { appendRow, positionRow } from '@agent/runtime/loop/rows';
+import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
+import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
 import {
   RunHistory,
   RunHistoryRefused,
   type RunCell,
 } from '@shared/session/runHistory';
-import { UsageLog } from '@shared/usageLog';
 import { freshRunState, type RunState } from '@shared/session/runState';
-import { Settings } from '@shared/config/settings';
 import {
   setTestApprovalPolicy,
   publishTestRunStart,
@@ -76,7 +76,11 @@ import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import {
+  fakeHostSecrets,
+  installedHost,
+  installPlatform,
+} from '@test/support/setupPlatform';
 import { judgeFailure } from '../../../../packages/llm/src/api/verdict.js';
 import {
   BackgroundEventSchema,
@@ -90,6 +94,7 @@ import {
   seedActiveRun,
   sessionWithInteractions,
 } from '../progressTestUtils';
+import type { BoundModel } from '@texra-ai/harness/plugins';
 
 const GPT54 = 'openai/gpt-5.4-2026-03-05';
 
@@ -237,7 +242,10 @@ function boundModel(
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
     forcedToolChoice: true,
     persistentConnection: false,
-    billing: {},
+    billing: 'api-key',
+    maxOutputTokens: 1024,
+    background: false,
+    serviceTier: null,
     routes: routePolicies(['openai', 'api-key', ORIGIN.requestedModel], GPT54),
     delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
@@ -336,7 +344,11 @@ const openRun = Effect.fn('openRun')(function* (
       Layer.mergeAll(
         Layer.succeed(AgentRun, agentRun(runId, session, bound)),
         UsageLog.disabled,
-        modelAccessLayer(hostStores()).pipe(Layer.provide(testHttpClientLayer)),
+        modelAccessLayer(installedHost().roots).pipe(
+          Layer.provide(
+            Layer.merge(testHttpClientLayer, Secrets.layer(fakeHostSecrets)),
+          ),
+        ),
       ),
     ),
     Layer.merge(Layer.succeed(RunHistory, session.runHistory)),
@@ -407,7 +419,7 @@ describe('ModelInvoker retry', () => {
   it.effect('cancels the run when the user declines the retry', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
-        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+        installPlatform({ config: { 'model.retry.maxAttempts': 0 } }),
       );
       const session = yield* sessionWithInteractions(undefined);
       const requests = autoDecideRequests(session, () => ({
@@ -435,7 +447,7 @@ describe('ModelInvoker retry', () => {
       yield* Effect.promise(() =>
         installPlatform({
           config: {
-            'texra.model.retry.maxAttempts':
+            'model.retry.maxAttempts':
               MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
           },
         }),
@@ -467,7 +479,7 @@ describe('ModelInvoker retry', () => {
   it.effect('admits a manual retry through a durable approval', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
-        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+        installPlatform({ config: { 'model.retry.maxAttempts': 0 } }),
       );
       const session = yield* sessionWithInteractions(undefined);
       const pump = yield* pumpClock;
@@ -521,7 +533,7 @@ describe('ModelInvoker retry', () => {
     () =>
       Effect.gen(function* () {
         yield* Effect.promise(() =>
-          installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+          installPlatform({ config: { 'model.retry.maxAttempts': 0 } }),
         );
         const session = yield* sessionWithInteractions(undefined);
         const pump = yield* pumpClock;
@@ -553,6 +565,47 @@ describe('ModelInvoker retry', () => {
       }),
   );
 
+  // Failure mode: a response that kills the process while it is handled is
+  // sent again on every open, without bound, because the attempt it cut
+  // records no outcome.
+  it.effect('spends a retry on each attempt the process stopped during', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() =>
+        installPlatform({ config: { 'model.retry.maxAttempts': 1 } }),
+      );
+      const session = yield* sessionWithInteractions(undefined);
+      const requests = autoDecideRequests(session, () => ({
+        action: 'deny',
+        reason: 'Denied by the approval policy.',
+      }));
+      const stub = stubModel([
+        { hang: true },
+        { hang: true },
+        { ok: completedTurn('sent again') },
+      ]);
+      const kit = yield* openRun(session, stub.model);
+      yield* Effect.promise(() => seedActiveRun(session, kit.runId));
+      // Each open sends one attempt, and the process stops while it runs.
+      let cell = kit.cell;
+      for (const sent of [1, 2]) {
+        const fiber = yield* Effect.forkChild(invokeOn({ ...kit, cell }));
+        while (stub.attempts() < sent) yield* settle;
+        yield* Fiber.interrupt(fiber);
+        cell = yield* session.runHistory.open(kit.runId);
+      }
+      const resumed = yield* invokeOn({ ...kit, cell });
+
+      // The second open resent within the budget; the third asks before
+      // sending, and the denial ends the invocation with its failure.
+      expect(resumed.kind).toBe('failed');
+      expect(resumed.state.lastError).not.toBeNull();
+      expect(stub.attempts()).toBe(2);
+      expect(requests.opened).toHaveLength(1);
+      requests.detach();
+      yield* closeSessionOf(session);
+    }),
+  );
+
   // A denial does not retry and — crucially — is NOT a user cancel, so the
   // run resumes to RUNNING to let the failure terminalize (#7331); a
   // cancelled zero-output run would report COMPLETED. The session's policy
@@ -560,7 +613,7 @@ describe('ModelInvoker retry', () => {
   it.effect('classifies a policy retry denial as failed, not cancelled', () =>
     Effect.gen(function* () {
       yield* Effect.promise(() =>
-        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
+        installPlatform({ config: { 'model.retry.maxAttempts': 0 } }),
       );
       const session = yield* sessionWithInteractions(undefined);
       setTestApprovalPolicy('yolo');

@@ -345,7 +345,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const outputDir = resumeWorkflowOutputDirectory(config);
     const recoveryProcessCwd = tryReadCliCwd();
     const { recoveryInputIsDurable } = options;
-    // Not a run a model failure stopped (its folded `lastError`): read from
+    // Not a run a model failure stopped (its `lastError` in the view): read from
     // the rows, so no verdict held in memory can be missed by an interrupt.
     const canAdvertiseInterruptedRun: CheckpointRefinement = (runId) =>
       Effect.map(session.records(runId).readModelFailed(), (failed) => !failed);
@@ -366,7 +366,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     };
     const maybeAdvertiseRecovery = (runId: RunId) =>
       Effect.gen(function* () {
-        if (!run.ok || !run.outcomePersisted) return;
+        if (!run.ok) return;
         const resumable = yield* session.records(runId).readResumable();
         if (
           yield* advertisesInterruptedRun(
@@ -389,7 +389,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       // run's): output that cannot be written fails this command, never the
       // recorded run. Inside the finalization a shutdown waits for.
       afterRun: Effect.fn('workflow.afterRun')(function* (ended) {
-        if (ended.error) return;
         // The defaults the run executed, as its recorded configuration
         // states them (the launch resolves an empty output list to the
         // agent's declared ones); the input-derived

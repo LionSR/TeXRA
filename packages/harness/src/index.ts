@@ -77,7 +77,6 @@ export {
   ResumeRefused,
   RunFailure,
   ToolsRefused,
-  TraceUnavailable,
 } from './effect/errors.js';
 export type { LaunchError } from './effect/errors.js';
 export { AgentNotFound } from '@agent/index/agentCatalog';
@@ -100,4 +99,9 @@ export {
   type RequestError,
   type RequestRefusal,
 } from '@shared/session/runtimeRequest';
-export type { Outcome, RunStopReason } from '@shared/session/runtimeRequest';
+export {
+  isOutcomeOf,
+  type Outcome,
+  type OutcomeOf,
+  type RunStopReason,
+} from '@shared/session/runtimeRequest';

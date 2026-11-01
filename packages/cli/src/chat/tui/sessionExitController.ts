@@ -76,7 +76,7 @@ interface SessionExitControllerContext {
   readonly terminal: TuiTerminal;
   /** The process runtime the exit drain runs on: one run per exit path. */
   readonly runtime: ProcessRuntime;
-  /** Settles once every message the chat was sending is sent (or started
+  /** Finishes once every message the chat was sending is sent (or started
    *  its run); a graceful exit waits on it before it returns. */
   readonly submitted: Effect.Effect<void>;
   /** Reads the live approval policy for the resume hint. */
@@ -174,7 +174,7 @@ export function createSessionExitController(
   const shutdownPlatform = () =>
     cliPlatformShutdownSequence({ quiet: ctx.quiet });
   // Drain artifact writes and canonical event publication before shutdown.
-  // Platform shutdown then settles executions whose leases are still held,
+  // Platform shutdown then finishes executions whose leases are still held,
   // including the WAITING flow whose checkpoint this exit preserves. Every
   // exit persists best-effort: a failed flush is reported and the exit goes
   // on, since the resume hint still names the session and the terminal must
@@ -306,7 +306,7 @@ export function createSessionExitController(
     //
     // One residual divergence, deliberately left alone: `clean-exit` calls
     // `interruptActive()` itself before `requestInputExit()`, outside this
-    // predicate. On a COMPLETED root `chatTuiRunPending` is false, so this arm
+    // predicate. On a COMPLETED root `chatTuiRunPending` is false, so this case
     // skips the interrupt while `clean-exit` still runs one — and
     // `RunRegistry.stop`'s child sweep fires even with no root handle. So Ctrl-C
     // on a finished turn still detaches background children where `/exit` does
@@ -337,9 +337,9 @@ export function createSessionExitController(
         interrupted = interruptPendingRun() || interrupted;
         const idle = session.isResumableIdle();
         // Only await a run we actually interrupted/finished. A resumableIdle
-        // run is parked at the WAIT node and never settles, so awaiting it
+        // run is waiting at the WAIT node and never finishes, so awaiting it
         // would hang the process here. The run's own outcome is not the exit's
-        // concern: an interrupt-only settle must not skip the teardown below.
+        // concern: an interrupt-only finish must not skip the teardown below.
         if (interrupted && session.runSettled) {
           yield* Effect.ignoreCause(session.runSettled);
         }
@@ -355,7 +355,7 @@ export function createSessionExitController(
       printResumeHintOnExit(resumeHint);
       resetCliState();
       if (resumableIdle) {
-        // The run parked at the WAIT node keeps the event loop alive, so a normal return
+        // The run waiting at the WAIT node keeps the event loop alive, so a normal return
         // would never let the process exit. Force-exit here, AFTER persistence is
         // flushed and the resume hint is printed, preserving the suspended flow
         // record on disk for `texra resume`. Run platform shutdown first so queued

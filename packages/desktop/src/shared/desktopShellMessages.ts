@@ -1,4 +1,5 @@
 import { Schema } from 'effect';
+import { SettingsTargetSchema } from '@texra/shared/settingsView/settingsTarget';
 
 export const DESKTOP_SHELL_COMMANDS = {
   OPEN_WORKBENCH: 'desktop:openWorkbench',
@@ -15,9 +16,11 @@ export const DesktopOpenWorkbenchMessageSchema = Schema.Struct({
   kind: DesktopWorkbenchKindSchema,
 });
 
-/** Settings is a popup dialog over the shell, not a workbench tab. */
+/** Settings is a popup dialog over the shell, not a workbench tab. It opens
+ *  on `tab` when one is named, else where it was left. */
 export const DesktopOpenSettingsMessageSchema = Schema.Struct({
   command: Schema.Literal(DESKTOP_SHELL_COMMANDS.OPEN_SETTINGS),
+  tab: Schema.optional(SettingsTargetSchema),
 });
 
 export const DesktopSaveFileMessageSchema = Schema.Struct({

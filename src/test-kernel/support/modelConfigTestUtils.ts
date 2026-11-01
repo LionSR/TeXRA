@@ -1,13 +1,12 @@
 // Third-party imports
 import {
   DEFAULT_MODEL_CAPABILITIES,
-  type ModelCapabilities,
   type ModelConfig,
   ModelProvider,
-} from 'llm-zoo';
+} from '@texra-ai/llm';
 
 type TestModelConfig = Partial<Omit<ModelConfig, 'capabilities'>> & {
-  capabilities?: Partial<ModelCapabilities>;
+  capabilities?: Partial<ModelConfig['capabilities']>;
 };
 
 /** Build a complete model config while keeping each test's meaningful overrides visible. */

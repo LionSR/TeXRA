@@ -1,10 +1,18 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, SubscriptionRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { RunHandle } from '@agent/runtime/RunHandle';
+import {
+  generateRunId,
+  RUN_PHASE,
+  type RunId,
+  type RunPhase,
+  type RunView,
+  type SessionEventDraft,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
 import { RunRegistry, RunLive } from '@agent/runtime/runRegistry';
 import type {
   SessionHandle,
@@ -12,34 +20,19 @@ import type {
   SessionTransaction,
 } from '@agent/runtime/SessionHandle';
 import { runStateAppend } from '@shared/session/runHistory';
-import {
-  aggregateTarget,
-  RUN_PHASE,
-  type RunId,
-  type RunPhase,
-  type SessionEventDraft,
-} from '@shared/schemas';
-import type { RunView, SessionView } from '@shared/session/sessionView';
+import { aggregateTarget } from '@shared/schemas';
 import {
   startAwaited,
   admitInterruptibleRun,
   testRunFork,
   testRunPrograms,
-  testRunHandle,
 } from '@test/support/runHandleFixtures';
-import { untrackRun } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { generateRunId } from '@utils/core';
 
 // Local file imports
 
 setupPlatform({ workspacePath: '/workspace' });
-
-/** Builds a `RunHandle` for a toolUse test-subagent, the shape most tests need. */
-function createHandle(runId: RunId, parent: RunId | null = null): RunHandle {
-  return testRunHandle({ runId, parent, agent: 'test-subagent' });
-}
 
 /**
  * Wires a registry over the default session. The registry holds no phase of
@@ -114,47 +107,33 @@ function createRegistry(): {
   return { setPhase, registry };
 }
 
-/** Tracks a handle whose run a stop reaches the way production stops a run:
- * a live generation fiber on the run registry, interrupted by run id. */
-function trackInterruptibleHandle(
-  registry: RunRegistry,
-  runId: RunId,
-  parent: RunId | null,
-  interrupt: () => void,
-): void {
-  registry.track(createHandle(runId, parent));
-  admitInterruptibleRun(registry, runId, interrupt);
-}
-
 describe('runRegistry', () => {
   it.effect(
-    'keeps shutdown draining after terminal untrack until run cleanup releases its lane',
+    "keeps shutdown draining after the run's terminal until run cleanup releases its lane",
     () =>
       Effect.gen(function* () {
         const { registry } = createRegistry();
         yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
         const runId = generateRunId();
-        const untracked = yield* Deferred.make<void>();
+        const ended = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
         const drained = yield* Deferred.make<void>();
         const generation = yield* Effect.forkChild(
           startAwaited(
             registry,
             runId,
-            Effect.sync(() => registry.track(createHandle(runId))).pipe(
+            Effect.void.pipe(
               Effect.ensuring(
-                Effect.gen(function* () {
-                  untrackRun(registry, runId);
-                  yield* Deferred.succeed(untracked, undefined);
-                  yield* Deferred.await(release);
-                }),
+                Deferred.succeed(ended, undefined).pipe(
+                  Effect.andThen(Deferred.await(release)),
+                ),
               ),
             ),
           ),
         );
-        yield* Deferred.await(untracked);
-        yield* registry.stopAll();
-        expect(registry.get(runId)?.live === true).toBe(true);
+        yield* Deferred.await(ended);
+        registry.stopAll();
+        expect(registry.get(runId)).toBeDefined();
         const drain = yield* Effect.forkChild(
           registry
             .awaitDrained()
@@ -167,7 +146,7 @@ describe('runRegistry', () => {
         // The close stopped the generation: it ends interrupted.
         yield* Fiber.await(generation);
         yield* Fiber.join(drain);
-        expect(registry.get(runId)?.live === true).toBe(false);
+        expect(registry.get(runId)).toBeUndefined();
       }),
   );
 
@@ -183,46 +162,51 @@ describe('runRegistry', () => {
         const postFoldChildRunId = generateRunId();
         const childInterrupt = vi.fn();
 
-        trackInterruptibleHandle(registry, rootRunId, null, vi.fn());
-        trackInterruptibleHandle(
-          registry,
-          childRunId,
-          rootRunId,
-          childInterrupt,
+        // The parent's generation unwinds from its stop until `ended`, as a
+        // terminal writing its `run.end` does.
+        const ended = yield* Deferred.make<void>();
+        const root = yield* Effect.forkChild(
+          startAwaited(
+            registry,
+            rootRunId,
+            Effect.never.pipe(Effect.onInterrupt(() => Deferred.await(ended))),
+          ),
+          { startImmediately: true },
         );
+        admitInterruptibleRun(registry, childRunId, childInterrupt, rootRunId);
         setPhase(rootRunId, RUN_PHASE.RUNNING);
+        /** The refusal a child launched under the root meets, if any. */
+        const refusal = (childRunId: RunId) =>
+          Effect.map(
+            Effect.exit(
+              registry.start(childRunId, Effect.void, (run) => run, rootRunId),
+            ),
+            (exit) => Exit.isFailure(exit) && Cause.squash(exit.cause),
+          );
+        const stopped = {
+          message: expect.stringMatching(/that run was stopped/),
+        };
 
         // The detaching stop settles completely, its children severed,
         // while the parent's `run.end` has not folded yet. The stop still
-        // stands on the parent's entry, so a child whose lineage read
+        // stands on the parent's activation, so a child whose lineage read
         // preceded the stop is refused as it registers.
         yield* registry.stop(rootRunId, {
           detachActiveChildren: true,
           reason: 'user',
         }).settlement;
-        expect(registry.parentOf(childRunId)).toBeNull();
-        expect(() =>
-          registry.track(createHandle(lateChildRunId, rootRunId)),
-        ).toThrow(/that run was stopped/);
-        expect(registry.get(lateChildRunId)?.handle).toBeUndefined();
+        expect(registry.bornDetached(childRunId)).toBe(true);
+        expect(yield* refusal(lateChildRunId)).toMatchObject(stopped);
 
         // The fold changes nothing for the detached child: its sever stands.
         setPhase(rootRunId, RUN_PHASE.CANCELLED);
+        yield* Deferred.succeed(ended, undefined);
+        yield* Fiber.await(root);
         expect(childInterrupt).not.toHaveBeenCalled();
-        expect(registry.parentOf(childRunId)).toBeNull();
+        expect(registry.bornDetached(childRunId)).toBe(true);
 
         // From the fold on, admission itself refuses the stopped parent.
-        expect(() =>
-          registry.track(createHandle(postFoldChildRunId, rootRunId)),
-        ).toThrow(/that run was stopped/);
-        expect(() =>
-          registry.reserveChildActivation({
-            runId: postFoldChildRunId,
-            launchParent: rootRunId,
-            interrupt: vi.fn(),
-          }),
-        ).toThrow(/that run was stopped/);
-        expect(registry.get(postFoldChildRunId)?.handle).toBeUndefined();
+        expect(yield* refusal(postFoldChildRunId)).toMatchObject(stopped);
       }),
   );
 });
@@ -255,12 +239,6 @@ it.effect(
       yield* Deferred.succeed(finish, undefined);
       yield* Fiber.join(generation);
       yield* Effect.yieldNow;
-
-      // A parked turn may have no running generation, but its handle retains ownership.
-      const parked = createHandle(runId, generateRunId());
-      registry.track(parked);
-      expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
-      untrackRun(registry, runId);
 
       const admitted = yield* Deferred.make<void>();
       const collected = yield* Deferred.make<void>();

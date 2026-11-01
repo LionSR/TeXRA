@@ -11,10 +11,7 @@ import type {
   StateStore,
   StateReadFailed,
 } from '@platform/interfaces';
-import type {
-  SettingHost,
-  StateSettingEntry,
-} from '@shared/state/stateSettings';
+import type { StateSettingEntry } from '@shared/state/stateSettings';
 
 const CHANNEL = 'settings';
 
@@ -36,8 +33,6 @@ const CHANNEL = 'settings';
 
 /** The setting slots a caller holds: a `WorkspaceRoots` is one. */
 export interface SettingsStores {
-  /** The host these stores belong to (`WorkspaceRoots.host`). */
-  readonly host: SettingHost;
   readonly config: ConfigProvider;
   readonly workspaceState: StateStore;
   readonly repoState: StateStore;
@@ -191,7 +186,7 @@ function inspect<T>(
 /**
  * {@link get} for a row whose slot is `config`, over a `ConfigProvider`
  * alone and synchronously. The CLI resolves its startup rows
- * (`texra.approvalPolicy`, `texra.outputFormat`) before the state stores of
+ * (`approvalPolicy`, `outputFormat`) before the state stores of
  * that process exist, and this is the whole rule for a config-backed row, so
  * both readers run the same body rather than two that can drift.
  */

@@ -53,6 +53,8 @@ export interface AgentDirectoryServiceOptions {
   resourcesPath: string;
   /** Where the configured custom agent directory is read from. */
   state: Pick<StateStore, 'get'>;
+  /** The app's team membership read (`AgentDirectoriesPort.teamMembers`). */
+  teamMembers?: AgentDirectoriesPort['teamMembers'];
   /** Defaults to logging the issue at `warn`; hosts with an interactive
    * notification surface (e.g. the VS Code extension) can override it. */
   issueReporter?: {
@@ -62,8 +64,12 @@ export interface AgentDirectoryServiceOptions {
 
 export class AgentDirectoryService {
   readonly resourcesRoot?: string;
+  readonly teamMembers?: AgentDirectoriesPort['teamMembers'];
 
-  constructor(private readonly options: AgentDirectoryServiceOptions) {
+  private readonly options: AgentDirectoryServiceOptions;
+  constructor(options: AgentDirectoryServiceOptions) {
+    this.options = options;
+    if (options.teamMembers) this.teamMembers = options.teamMembers;
     if (options.resourcesPath !== '')
       this.resourcesRoot = options.resourcesPath;
   }

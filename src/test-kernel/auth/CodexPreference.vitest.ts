@@ -4,11 +4,11 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { SubscriptionPreference } from '@model/subscriptionAccess';
+import { SubscriptionPreference } from '@texra-ai/harness/host';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 
-const CODEX_PREFER_SUBSCRIPTION_KEY = 'texra.chatgptCodex.preferSubscription';
+const CODEX_PREFER_SUBSCRIPTION_KEY = 'chatgptCodex.preferSubscription';
 
 describe('Codex subscription preference (packages/harness/src/model/subscriptionAccess.ts)', () => {
   it.effect(

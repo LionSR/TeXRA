@@ -14,6 +14,17 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import {
+  formatBashDelivery,
+  formatBashError,
+  type BackgroundBashCall,
+  type BashDeliveryStreamExcerpt,
+} from '@agent/runtime/delegation/bashDelivery';
+import {
+  childRunDescription,
+  createChildRun,
+} from '@agent/runtime/delegation/childRun';
+import { startDetachedChildRunLoop } from '@agent/runtime/delegation/detachedChildRun';
+import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
   backgroundBashOutputData,
@@ -26,12 +37,6 @@ import {
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settings';
-import {
-  formatBashDelivery,
-  formatBashError,
-  type BackgroundBashCall,
-  type BashDeliveryStreamExcerpt,
-} from '@tools/delegation/bashDelivery';
 import { executed } from '@tools/core/result';
 import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -42,8 +47,6 @@ import { appendHead, appendTail } from '@utils/text/appendTail';
 // Local file imports
 import { defineTool } from './core/definition';
 import { nullishWithDefault } from './core/inputSchema';
-import { childRunDescription, createChildRun } from './delegation/childRun';
-import { startDetachedChildRunLoop } from './delegation/detachedChildRun';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
@@ -279,22 +282,14 @@ function createBackgroundBashStrategy(params: {
 
   return {
     stageLabel: 'Background command',
-    // A background shell's result survives its own kill.
-    deliverAfterInterrupt: true,
-
-    launch: (signal) =>
+    launch: () =>
       executeCommand(command, {
         cwd: params.cwd,
         settings: params.settings,
         timeout: params.timeoutMs,
         buffer: false,
-        // The child run's own stop signal, not the fiber's: this strategy
-        // sets `deliverAfterInterrupt`, so a stopped background command must
-        // still come back with a result. The string command form gets shell
-        // teardown — abort/timeout signal the whole process group so
-        // backgrounded jobs and piped children are torn down rather than
-        // left running.
-        signal,
+        // A stop interrupts this call: its release signals the shell's whole
+        // process group, so no backgrounded job or piped child is left.
         onStdout: (chunk) => {
           stdout.append(chunk);
           logChunk(chunk, 'info');
@@ -304,6 +299,14 @@ function createBackgroundBashStrategy(params: {
           logChunk(chunk, 'warn');
         },
       }),
+
+    interruptedTurn: () => ({
+      success: false,
+      stdout: '',
+      stderr: 'Command aborted by user',
+      timedOut: false,
+      exitCode: 130,
+    }),
 
     // `executeCommand` never fails on a non-zero exit — it answers with the
     // exit code, so the failure is an application-level one.
@@ -400,7 +403,7 @@ const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
   const result = yield* executeCommand(command, {
     cwd,
     // The call's own session roots: a `git commit` the agent runs
-    // carries this paper's configured identity.
+    // carries this project's configured identity.
     settings: toolCall.env.roots,
     buffer: false,
     timeout: timeoutMs,
@@ -494,14 +497,7 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
         parentRunId,
         agentName: 'bash',
         createChildRun: () =>
-          restore(Effect.void).pipe(
-            Effect.andThen(
-              createChildRun(session, runId, parentRunId, {
-                kind: 'process',
-                tool: 'bash',
-              }),
-            ),
-          ),
+          restore(Effect.void).pipe(Effect.as(createChildRun(session, runId))),
         buildLaunch: (childRun) =>
           Effect.sync(() =>
             createBackgroundBashStrategy({
@@ -531,12 +527,16 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
 
 export const BashTool = defineTool({
   name: 'bash',
-  requiresApproval: true,
   slow: true,
   description:
     'Execute shell commands directly in the workspace directory. Commands run from the project root automatically. Available environment variables: $PROJECT_DIR (workspace path), $PROJECT_NAME (project name). Returns stdout on success, throws error with stderr on failure. Use run_in_background for long-running commands.',
   schema: BashInputSchema,
   // The command this call runs; the loop gets it approved before the body.
-  guard: { bash: (input: BashInput) => Effect.succeed(input.command) },
+  guard: {
+    command: {
+      text: (input: BashInput) => Effect.succeed(input.command),
+      grant: 'bash',
+    },
+  },
   execute: executeBashTool,
 });

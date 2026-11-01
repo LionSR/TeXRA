@@ -30,7 +30,10 @@ interface AttentionSurface {
 export class RequestAttention {
   private badge: vscode.ViewBadge | undefined;
 
-  constructor(private readonly surface: AttentionSurface) {}
+  private readonly surface: AttentionSurface;
+  constructor(surface: AttentionSurface) {
+    this.surface = surface;
+  }
 
   /** A newly resolved sidebar view starts with the current count. */
   paint(view: vscode.WebviewView): void {

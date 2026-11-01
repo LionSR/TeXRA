@@ -23,7 +23,7 @@ import { COLOR_ERROR, COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import {
-  approvalDecisionArms,
+  approvalDecisionArm,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import type { ServiceConnection } from '@texra/controllers/server/client';
@@ -229,10 +229,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
         ready
           .request({ kind: 'request.preview', runId: pending.runId, requestId })
           .pipe(
-            Effect.map((outcome) =>
-              outcome.kind === 'preview' ? outcome.preview : null,
-            ),
-            Effect.map((preview) =>
+            Effect.map(({ preview }) =>
               setPreviews((held) => new Map(held).set(requestId, preview)),
             ),
           ),
@@ -275,8 +272,8 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
 
   const decide = (decision: SurfaceDecision): void => {
     if (!pending) return;
-    const arms = approvalDecisionArms(pending.payload, decision);
-    if (arms.some((arm) => 'host' in arm)) {
+    const arm = approvalDecisionArm(pending.payload, decision);
+    if ('host' in arm) {
       setNotice(
         'That choice needs the window running the task; approve or reject here instead.',
       );
@@ -285,13 +282,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     const { requestId } = pending;
     setDecided((held) => new Set(held).add(requestId));
     act(
-      (ready) =>
-        Effect.forEach(
-          arms,
-          (arm) =>
-            'runtime' in arm ? ready.request(arm.runtime) : Effect.void,
-          { discard: true },
-        ),
+      (ready) => ready.request(arm.runtime),
       // Refused: the request is still open, so it comes back.
       () =>
         setDecided((held) => {
@@ -376,13 +367,9 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
                       })
                       .pipe(
                         Effect.map((outcome) => {
-                          if (outcome.kind !== 'followUp') return;
                           // Queued but not taken: the run did not wake, and
                           // waits for a resume before it reads the message.
-                          const shown = presentFollowUpResult({
-                            status: outcome.status,
-                            ...(outcome.wake == null ? {} : { wake: 'failed' }),
-                          });
+                          const shown = presentFollowUpResult(outcome);
                           if (shown.severity !== 'none') say(shown.message);
                         }),
                       ),

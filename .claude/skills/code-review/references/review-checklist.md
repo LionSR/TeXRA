@@ -37,7 +37,7 @@ Design rules in `AGENTS.md` → "Effect Schema Patterns" (compat rules in "Compa
 - **A retry outside the one retry loop** (a `p-retry` around a model call, a provider SDK retry re-enabled, a hand-rolled prompt loop) → every model call retries in `runInvocation` (`packages/harness/src/agent/runtime/run/invocation.ts`).
 - **Plain `console.log` or untagged `logger.info` in agent flows** → use `AgentTrace` (`@agent/trace`) for grouped, tool-use-aware channels; log elsewhere with `Effect.log*` on a channel named by `withLogChannel` (`@logger/effectLog`).
 - **Log payloads built by string interpolation** (file lists, missing outputs, latexdiff results, usage stats) → pass via the structured `data` argument so the progress view can render them.
-- **Commands invoking flow factories directly** → must launch via `session.runs.launch({ request, options })` (`packages/harness/src/agent/runtime/runRegistry.ts`) so the run gets a `runId`, is registered in storage, and session filters and resume actions stay coherent. `executeAgent` is correct only when the caller already owns the `runId` (subagent dispatch, resume paths); a resume goes through `resumeToolUseFromResumeData`.
+- **Commands invoking flow factories directly** → must launch via `session.runs.launch({ request, options })` (`packages/harness/src/agent/runtime/runRegistry.ts`) so the run gets a `runId`, is registered in storage, and session filters and resume actions stay coherent. `executeAgent` is correct only when the caller already owns the `runId` (subagent dispatch, resume paths); a resume goes through `resumeRun`, which runs `executeAgent` without a registration.
 
 ## 4. Configuration, storage, files
 

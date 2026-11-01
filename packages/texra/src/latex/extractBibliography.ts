@@ -169,7 +169,7 @@ export const loadBibliographyEntries = Effect.fn(
 ): Effect.fn.Return<BibliographyEntriesResult, Error, FileSystem.FileSystem> {
   // Citation keys are matched case-insensitively; the first definition of a
   // key across the bibliography files wins, so the files are read as one
-  // bounded fan-out and folded back in their declared order.
+  // bounded fan-out and merged back in their declared order.
   const contents = yield* Effect.forEach(
     bibliographyFiles,
     readBibliographyFile,

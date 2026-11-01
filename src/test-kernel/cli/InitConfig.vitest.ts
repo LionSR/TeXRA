@@ -8,9 +8,9 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { Settings } from '@texra-ai/harness/host';
 import { ensureTexraGitignored } from '@cli/runtime/initConfig';
 import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
-import { Settings } from '@shared/config/settings';
 import { errnoError } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -26,23 +26,22 @@ describe('setWorkspaceCliChatAgent', () => {
         yield* Effect.promise(() =>
           installPlatform({
             config: {
-              'texra.model': 'deepseek/deepseek-v4-flash',
-              'texra.chat': {
+              model: 'deepseek/deepseek-v4-flash',
+              chat: {
                 agent: 'chat',
                 model: 'deepseek/deepseek-v4-flash',
               },
             },
           }),
         );
-        const chatSection = () =>
-          Settings.get(testWorkspaceRoots(), 'texra.chat');
+        const chatSection = () => Settings.get(testWorkspaceRoots(), 'chat');
 
         yield* setWorkspaceCliChatAgent(testWorkspaceRoots(), 'builtIn:review');
         expect(yield* chatSection()).toEqual({
           agent: 'builtIn:review',
           model: 'deepseek/deepseek-v4-flash',
         });
-        expect(yield* Settings.get(testWorkspaceRoots(), 'texra.model')).toBe(
+        expect(yield* Settings.get(testWorkspaceRoots(), 'model')).toBe(
           'deepseek/deepseek-v4-flash',
         );
 

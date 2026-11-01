@@ -139,7 +139,7 @@ export const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   // committed, and the log read after it is complete. A status read after
   // the log could call finished a log that misses the final chunks.
   const { lines, chars } = projectProcessOutput(
-    yield* session.log.display(runId).pipe(Effect.orDie),
+    yield* session.log.display(runId),
   );
   // The footer states the same reading as the header, and both come from
   // the fold: "no handle in this process" alone never justifies calling a

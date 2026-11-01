@@ -44,7 +44,7 @@ import {
   type TranscriptContext,
   type TranscriptWork,
 } from './transcriptState';
-import { phaseMoveOf } from './runRows';
+import { phaseMoveOf } from './runRowReads';
 import type { TranscriptView } from './sessionView';
 
 /** A stage start opens its task group whole; a stage end closes the group

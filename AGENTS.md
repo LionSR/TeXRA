@@ -124,7 +124,7 @@ llm import no host layer. ESLint also fails:
 - an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and
   the named runtime entries (`EFFECT_RUN_ENTRIES`); the SDK's entry files run
   nothing;
-- `new AbortController()` outside its two permanent residents;
+- `new AbortController()` outside its one permanent resident;
 - in the core (`CORE_QUALITY_DIRS`), `new Promise`, `.then(` and `any`, with
   no disable comment honored;
 - any `@adapter-until` marker: there are no temporary adapters.
@@ -220,10 +220,13 @@ bag, or a second writer of the run history. Every model call goes through
 `runtime/modelAccess/ModelAccess.ts`, and retries in the one loop in
 `runtime/run/invocation.ts`.
 
-Launch runs with `session.runs.launch({ request, options })` (requires the
-composition root's `SessionOwner`) and resume with `resumeRun`; call
-`executeAgent` only when you already own the `runId`. Run-loop rules, write
-points, and the event and card channels: `packages/harness/AGENTS.md`.
+Hosts and the app start a run with `session.start(...)` and continue a
+stored one with `session.resume(runId, ...)` on the `LocalSession`
+(`packages/harness/src/effect/sessions.ts`); everything else goes through
+`session.request`. Inside the harness, `Runs.launch` assigns the `runId` and
+requires the composition root's `SessionOwner`; call `executeAgent` only
+when you already own the `runId`. Run-loop rules, write points, and the
+event and card channels: `packages/harness/AGENTS.md`.
 
 Agents are flat persona YAML (`name`, `description`, `prompt`, `tools`,
 `temperature`) in `packages/extension/resources/agents/`, created with the
@@ -336,11 +339,24 @@ Decode with `{ errors: 'all' }`. Union branches and defaults:
   projections rebuilt from history, one owner per fact. Then write the fewest
   lines that do the job; build nothing speculative. Trust data from code you
   control and validate only at real boundaries.
-- **Find the design problem.** Reduce change amplification and cognitive load
-  before adding features, deepen shallow modules, and aim for the structure you
-  would have designed with the change in mind. When a hotspot is too complex,
-  look for the data structure, duplicated fact or misplaced owner behind it;
-  never split a file mechanically.
+- **Find the design problem** (Ousterhout, _A Philosophy of Software Design_).
+  Reduce change amplification, cognitive load and unknown unknowns before
+  adding features, and aim for the structure you would have designed with the
+  change in mind. Deep modules: a small interface over much behavior, with
+  each entry exporting what its consumer writes against (`shallow-modules`,
+  `wide-records`, the API reports). Different layer, different abstraction:
+  no method or module that only forwards (`pass-through`). Those three rules
+  hold everywhere, the core's rows and the `-outside-core` rows apart. One
+  owner per fact and decision (`factOwnerRatchet`); a general core that takes
+  the app's vocabulary as data; complexity pulled down into the module that
+  owns it; errors defined out of existence by the shape of an operation, never
+  by hiding one; two designs compared before choosing. When a hotspot is too
+  complex, look for the data structure, duplicated fact or misplaced owner
+  behind it; never split a file mechanically. In review, name the red flag a
+  change removes or adds: shallow module, information leakage, temporal
+  decomposition, overexposure, pass-through, repetition, special and general
+  code mixed, conjoined methods, a comment that restates the code, a vague
+  name, non-obvious code.
 - **Flattening abstraction layers.** Entry points run the loop program
   directly. Inline a wrapper that only creates state, runs a program and
   interprets results. Import from the defining module; leave no re-export
@@ -408,6 +424,11 @@ in review beyond this bar. Full rules: `src/test-kernel/AGENTS.md`.
 
 ESLint (`eslint.config.mjs`) and Prettier enforce most style. Beyond them:
 
+- Erasable TypeScript only: `erasableSyntaxOnly` (root and llm `tsconfig.json`)
+  refuses syntax type stripping cannot run. No `enum` (an `as const` table with
+  a same-named `(typeof X)[keyof typeof X]` type), no parameter properties
+  (declare the field, assign it in the constructor), no runtime `namespace`, no
+  `import =`. Type imports are top-level `import type`, never `import('pkg').T`.
 - Group imports by source, each block under a comment
   (`// Third-party imports`, `// Local imports - component`).
 - PascalCase for service singletons (`SessionEvents`, `ModelInvoker`),

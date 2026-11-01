@@ -11,6 +11,7 @@ import {
   AppState,
 } from '@texra-ai/harness/host';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
+import { teamMembers } from '@texra/shared/agentTeams';
 
 const CHANNEL = 'AgentLoad';
 
@@ -29,6 +30,7 @@ export const agentDirectoriesLayer = (extensionPath: string) =>
           channel: CHANNEL,
           resourcesPath: path.join(extensionPath, 'resources'),
           state,
+          teamMembers,
           issueReporter: {
             report: (message, docsId) =>
               showLoggedMessageWithDocs(CHANNEL, message, docsId),

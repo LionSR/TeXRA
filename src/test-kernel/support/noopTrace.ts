@@ -10,20 +10,25 @@ import type {
 } from '@agent/trace/AgentTrace';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import type { RunOutcome } from '@shared/schemas';
-import { generateShortId } from '@utils/core';
 
 const NOOP: () => void = () => undefined;
 
 class NoopStageHandle implements StageHandle {
-  constructor(readonly id: string | undefined) {}
+  readonly id: string | undefined;
+  constructor(id: string | undefined) {
+    this.id = id;
+  }
   end(_status?: RunOutcome): void {}
   child(_label: string, _options?: StageOptions): StageHandle {
-    return new NoopStageHandle(generateShortId());
+    return new NoopStageHandle(crypto.randomUUID());
   }
 }
 
 class NoopStreamHandle implements StreamHandle {
-  constructor(readonly id: string) {}
+  readonly id: string;
+  constructor(id: string) {
+    this.id = id;
+  }
   append(_text: string): void {}
   finalize(_finalText?: string): string {
     return '';
@@ -39,10 +44,10 @@ export const noopTrace: AgentTrace = {
   error: NOOP,
 
   openStage() {
-    return new NoopStageHandle(generateShortId());
+    return new NoopStageHandle(crypto.randomUUID());
   },
   openRun() {
-    return new NoopStreamHandle(generateShortId());
+    return new NoopStreamHandle(crypto.randomUUID());
   },
   // Through `emit`, so a suite that spreads this trace and replaces `emit`
   // sees the card's events.

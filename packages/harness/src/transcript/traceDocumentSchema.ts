@@ -2,6 +2,7 @@ import { Result, Schema } from 'effect';
 
 import {
   DisplaySessionEventSchema,
+  GOAL_PLAN_ARM,
   pluginFactFloor,
   RunIdSchema,
 } from '@shared/schemas';
@@ -38,19 +39,20 @@ const RETIRED_FACTS: ReadonlySet<string> = new Set(['goal/state']);
 
 /**
  * A parsed trace with each plugin fact checked as the store checks it,
- * against the app's plugin arms (`appArms`): a fact
- * outside its arm's versions (`pluginFactFloor`), or whose value the arm's
- * schema rejects, throws, naming it, as does a retired built-in fact no
- * current plugin owns;
- * one whose plugin this build lacks is left out. A trace is display data and runs no upcaster, so a version an
- * upcaster would bring forward is rejected by the schema, never misread.
+ * against the harness's built-in arm (the goal's plan) and the app's plugin
+ * arms (`appArms`). A fact outside its arm's versions (`pluginFactFloor`),
+ * or whose value the arm's schema rejects, throws, naming it, as does a
+ * retired built-in fact no current plugin owns; one whose plugin this build
+ * lacks is left out. A trace is display data and runs no upcaster, so a
+ * version an upcaster would bring forward is rejected by the schema, never
+ * misread.
  */
 export function readTraceFacts(
   document: TraceDocument,
   appArms: readonly TraceFactArm[],
 ): TraceDocument {
   const arms = new Map(
-    appArms.map((arm): [string, TraceFactArm] => [
+    [GOAL_PLAN_ARM, ...appArms].map((arm): [string, TraceFactArm] => [
       `${arm.plugin}/${arm.kind}`,
       arm,
     ]),

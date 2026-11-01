@@ -21,7 +21,6 @@ import {
   AgentDirectories,
   getEnabledModels,
   readModelOptions,
-  type PlatformSecrets,
   type PerKeyLane,
   Settings,
   withPerKeyLane,
@@ -30,7 +29,7 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@texra-ai/harness/schemas';
-import { loadTeamOptions } from '@texra-ai/harness/host';
+import { loadTeamOptions } from '@texra/shared/teamLaunch';
 import type {
   FileOptions,
   HostSnapshot,
@@ -40,7 +39,11 @@ import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import { readRecentCommits } from '@texra/utils/git/repositoryOverview';
-import type { AgentCatalog, SettingsStores } from '@texra-ai/harness/host';
+import type {
+  AgentCatalog,
+  Secrets,
+  SettingsStores,
+} from '@texra-ai/harness/host';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type Banners = HostSnapshot['banners'];
@@ -79,10 +82,6 @@ interface HostSnapshotSourceOptions {
    * to.
    */
   stores: SettingsStores;
-  /** The process secret store, read by the model catalog's availability
-   *  answers. The host root that owns it threads it in beside
-   *  {@link HostSnapshotSourceOptions.stores}. */
-  secrets: PlatformSecrets;
   /** The launcher's single-slot catalogs: base and edited candidates. The
    *  read takes the process `FileSystem` and `Path` from context; the
    *  refresh effects that reach it carry the requirement. */
@@ -95,7 +94,11 @@ interface HostSnapshotSourceOptions {
   workspaceRoots?: () => HostSnapshot['workspaceRoots'];
   /** Hosts that surface these outside Settings answer them; absent means
    *  never shown. */
-  apiKeyBanner?: () => Effect.Effect<Banners['apiKey'], HostSnapshotReadFailed>;
+  apiKeyBanner?: () => Effect.Effect<
+    Banners['apiKey'],
+    HostSnapshotReadFailed,
+    Secrets
+  >;
   dependencyBanner?: () => Effect.Effect<
     Banners['dependency'],
     HostSnapshotReadFailed,
@@ -115,11 +118,15 @@ export interface HostSnapshotSource {
   readonly refresh: Effect.Effect<
     void,
     never,
-    AgentCatalog | FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+    | AgentCatalog
+    | Secrets
+    | FileSystem.FileSystem
+    | Path.Path
+    | ChildProcessSpawner
   >;
   /** The agent, team, and model catalogs changed (an agent list edit, a
-   *  credential, a sign-in). */
-  readonly refreshCatalogs: Effect.Effect<void, never, AgentCatalog>;
+   *  credential, a sign-in). The model catalog reads the process `Secrets`. */
+  readonly refreshCatalogs: Effect.Effect<void, never, AgentCatalog | Secrets>;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<
     void,
@@ -128,7 +135,11 @@ export interface HostSnapshotSource {
   >;
   readonly refreshCommits: Effect.Effect<void, never, ChildProcessSpawner>;
   /** The host's own banners changed (a key stored, a tool installed). */
-  readonly refreshHostBanners: Effect.Effect<void, never, ChildProcessSpawner>;
+  readonly refreshHostBanners: Effect.Effect<
+    void,
+    never,
+    ChildProcessSpawner | Secrets
+  >;
   /** The workspace folders changed. */
   refreshWorkspaceRoots(): Effect.Effect<void>;
   /** The one recorder per process started or stopped. */
@@ -228,7 +239,7 @@ export function createHostSnapshotSource(
 
   const loadModels = Effect.gen(function* () {
     const models = yield* readModelOptions(
-      { ...options.stores, secrets: options.secrets },
+      options.stores,
       yield* getEnabledModels(options.stores.globalState),
     );
     catalogs = { ...catalogs, modelOptions: modelOptionsFrom(models) };
@@ -243,10 +254,7 @@ export function createHostSnapshotSource(
     if (options.root === undefined) return;
     commits = yield* readRecentCommits(
       options.root,
-      yield* Settings.get<number>(
-        options.stores,
-        'texra.git.numberOfCommitsToShow',
-      ),
+      yield* Settings.get<number>(options.stores, 'git.numberOfCommitsToShow'),
       { settings: options.stores, onError: options.onError },
     );
   });
@@ -275,7 +283,7 @@ export function createHostSnapshotSource(
    *  refresh asked for is the last to publish. */
   const refreshLanes = new Map<'refresh', PerKeyLane>();
 
-  /** Each producer settles on its own: one that fails is reported and keeps
+  /** Each producer finishes on its own: one that fails is reported and keeps
    *  its last value, and the snapshot still publishes what the others read,
    *  so a single unavailable source never leaves the shell blank. */
   const guarded = <R>(
@@ -299,9 +307,13 @@ export function createHostSnapshotSource(
 
   return {
     refresh: guarded<
-      AgentCatalog | FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+      | AgentCatalog
+      | Secrets
+      | FileSystem.FileSystem
+      | Path.Path
+      | ChildProcessSpawner
     >(...catalogLoads, loadFiles, loadCommits, loadHostBanners),
-    refreshCatalogs: guarded<AgentCatalog>(...catalogLoads),
+    refreshCatalogs: guarded<AgentCatalog | Secrets>(...catalogLoads),
     refreshFiles: guarded(loadFiles),
     refreshCommits: guarded(loadCommits),
     refreshHostBanners: guarded(loadHostBanners),

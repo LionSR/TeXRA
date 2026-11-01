@@ -21,7 +21,10 @@ describe('withExtendedPath', () => {
   // override spelled `PATH` lands beside the platform's `Path` before this
   // runs. Writing one back would leave the other in place.
   it('collapses an override spelling onto the platform key', () => {
-    const extended = withExtendedPath({ Path: '/from/env', PATH: '/override' });
+    const extended = withExtendedPath(
+      { Path: '/from/env', PATH: '/override' },
+      [],
+    );
 
     expect(pathKeys(extended)).toEqual(['Path']);
     expect(extended.Path).toContain('/override');

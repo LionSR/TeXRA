@@ -3,8 +3,9 @@
  *
  * Owns everything the approval flow needs from the editor: the temp files the
  * diff editor reads, the diff tabs themselves, and reading back what the
- * user typed into the proposed side. The diff tab is evidence only: closing
- * it leaves the request pending on its card, where Open diff reopens it.
+ * user typed into the proposed side, which an approval sends with its
+ * decision. The diff tab is evidence only: closing it leaves the request
+ * pending on its card, where Open diff reopens it.
  */
 
 import { Effect, FileSystem, Scope } from 'effect';
@@ -24,16 +25,13 @@ import {
 import type {
   ToolEditApprovalHost,
   ToolEditPreview,
-  ToolEditPreviewContext,
+  ToolEditPreviewRequest,
 } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import type { ApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import type { HostRequestFailure, WorkspaceRoots } from '@texra-ai/harness';
-import type {
-  ProcessRuntime,
-  ToolEditApprovalRequest,
-} from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -45,17 +43,29 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
       Effect.provideService(Scope.Scope, this.scope),
     );
 
+  private readonly storageDirectory: string;
+  private readonly runtime: ProcessRuntime;
+  private readonly roots: WorkspaceRoots;
+  private readonly scope: Scope.Scope;
   constructor(
-    private readonly storageDirectory: string,
-    private readonly runtime: ProcessRuntime,
-    private readonly roots: WorkspaceRoots,
+    storageDirectory: string,
+    runtime: ProcessRuntime,
+    roots: WorkspaceRoots,
     /** The view's scope, which a scheduled PDF viewer open runs in. */
-    private readonly scope: Scope.Scope,
-  ) {}
+    scope: Scope.Scope,
+  ) {
+    this.storageDirectory = storageDirectory;
+    this.runtime = runtime;
+    this.roots = roots;
+    this.scope = scope;
+  }
+
+  focused(): boolean {
+    return vscode.window.state.focused;
+  }
 
   stagePreview(
-    request: ToolEditApprovalRequest,
-    context: ToolEditPreviewContext,
+    request: ToolEditPreviewRequest,
   ): Effect.Effect<ToolEditPreview, HostRequestFailure, FileSystem.FileSystem> {
     return FileSystem.FileSystem.use((fs) =>
       fs.makeDirectory(this.storageDirectory, { recursive: true }),
@@ -71,12 +81,7 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
       ),
       Effect.map(
         (staged) =>
-          new VscodeToolEditPreview(
-            this.diffViewHost,
-            request,
-            context,
-            staged,
-          ),
+          new VscodeToolEditPreview(this.diffViewHost, request, staged),
       ),
     );
   }
@@ -91,12 +96,17 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
 class VscodeToolEditPreview implements ToolEditPreview {
   private readonly diffSession: DiffSession;
 
+  private readonly diffViewHost: VscodeDiffViewHost;
+  private readonly request: ToolEditPreviewRequest;
+  private readonly staged: ApprovalTempFiles;
   constructor(
-    private readonly diffViewHost: VscodeDiffViewHost,
-    private readonly request: ToolEditApprovalRequest,
-    private readonly context: ToolEditPreviewContext,
-    private readonly staged: ApprovalTempFiles,
+    diffViewHost: VscodeDiffViewHost,
+    request: ToolEditPreviewRequest,
+    staged: ApprovalTempFiles,
   ) {
+    this.diffViewHost = diffViewHost;
+    this.request = request;
+    this.staged = staged;
     this.diffSession = {
       original: { filePath: staged.originalPath },
       proposed: { filePath: staged.proposedPath },
@@ -112,20 +122,8 @@ class VscodeToolEditPreview implements ToolEditPreview {
     return this.staged.proposedPath;
   }
 
-  present(): Effect.Effect<void, HostRequestFailure> {
-    return this.openDiff().pipe(Effect.andThen(this.revealFirstChange()));
-  }
-
   showDiff(): Effect.Effect<void, HostRequestFailure> {
-    return this.openDiff().pipe(
-      Effect.andThen(
-        Effect.suspend(() =>
-          this.context.isSettled()
-            ? this.diffViewHost.closeDiff(this.diffSession)
-            : this.revealFirstChange(),
-        ),
-      ),
-    );
+    return this.openDiff().pipe(Effect.andThen(this.revealFirstChange()));
   }
 
   openProposed(): Effect.Effect<void, HostRequestFailure> {
@@ -170,14 +168,13 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   private title(): string {
-    const { addedLines: added, removedLines: removed } =
-      this.request.permission;
+    const { addedLines: added, removedLines: removed } = this.request;
     const changeParts: string[] = [];
     if (added > 0) changeParts.push(`+${added}`);
     if (removed > 0) changeParts.push(`-${removed}`);
     const changeSuffix = changeParts.length
       ? ` · ${changeParts.join(' / ')} ${pluralize(added + removed, 'line')}`
       : '';
-    return `Tool edit (${this.request.sourceTool}): ${this.context.relativePath}${changeSuffix}`;
+    return `Tool edit (${this.request.sourceTool}): ${this.request.relativePath}${changeSuffix}`;
   }
 }

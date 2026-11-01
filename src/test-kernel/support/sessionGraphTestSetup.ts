@@ -8,4 +8,6 @@ import { texraPlugins } from '@texra/tools/registry';
 import { installTestSessionGraph } from './sessionGraphInstall';
 import { fakeSetupPlatform } from './setupPlatform';
 
-await installTestSessionGraph(texraPlugins({ setup: fakeSetupPlatform }));
+await installTestSessionGraph(
+  texraPlugins({ name: 'vscode', setup: fakeSetupPlatform }),
+);

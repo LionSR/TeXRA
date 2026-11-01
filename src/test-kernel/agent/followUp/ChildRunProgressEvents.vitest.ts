@@ -4,25 +4,25 @@
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber, Schema } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
-import { Runs } from '@agent/runtime/runRegistry';
 
 // Local imports
-import { getRunRecords } from '@agent/storage/runRecords';
-import type { ProcessChildStrategy } from '@agent/runtime/childRunLoop';
 import {
   AgentConfigSchema,
-  aggregateTarget,
   RUN_OUTCOME,
   type RunId,
   type SessionEvent,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { getRunRecords } from '@agent/storage/runRecords';
+import { Runs } from '@agent/runtime/runRegistry';
+import { launchProcessChild } from '@agent/runtime/delegation/detachedChildRun';
+import { aggregateTarget } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
   createProcessSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { seedReport } from '@test/support/runRecordSeeds';
-import { launchProcessChild } from '@tools/delegation/detachedChildRun';
+import type { ProcessChildStrategy } from '@texra-ai/harness/plugins';
 
 const parentRunId = 'c11112' as RunId;
 const config = Schema.decodeUnknownSync(AgentConfigSchema)({
@@ -134,9 +134,8 @@ describe('child run progress events', () => {
             buildLaunch: (context) => {
               childRunId = context.runId;
               // Before the loop reserves its stop target, no stop can find
-              // the handle: a stop never reaches a run it cannot interrupt.
-              visibleBeforeLoop =
-                session.runs.get(context.runId)?.handle !== undefined;
+              // the run: a stop never reaches a run it cannot interrupt.
+              visibleBeforeLoop = session.runs.get(context.runId) !== undefined;
               throw setupError;
             },
           }).pipe(

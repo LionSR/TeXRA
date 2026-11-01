@@ -1,39 +1,9 @@
 /**
- * How a run reads a person's answer to a request it asked: a decision it
- * does not accept is the refusal it is, and a refusal has one wording. The
- * request tools (bash, tool edit, plan, proposal, user question)
- * read their answers through here.
- *
- * Pure and host-neutral: it reaches `@shared/schemas` and nothing else.
+ * How the bash and tool-edit approvals word a declined request. Pure and
+ * host-neutral: it reaches `@shared/schemas` and nothing else.
  */
 
-import type {
-  PermissionPayload,
-  RequestDecision,
-  RefusalDecision,
-} from '@shared/schemas';
-
-/**
- * A decision that is not one the caller accepts, read as the refusal it is
- * or, for an arm the request's kind never offered (a surface defect), as a
- * loud denial naming it: a run never proceeds on an answer it cannot read.
- */
-export function refusalOf(
-  kind: PermissionPayload['kind'],
-  decision: RequestDecision,
-): RefusalDecision {
-  if (
-    decision.action === 'reject' ||
-    decision.action === 'deny' ||
-    decision.action === 'cancel'
-  ) {
-    return decision;
-  }
-  return {
-    action: 'deny',
-    reason: `The ${kind} request was answered with "${decision.action}", which it does not offer.`,
-  };
-}
+import type { RefusalDecision } from '@shared/schemas';
 
 /**
  * The one wording of a declined request, over the union's three refusal

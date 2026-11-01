@@ -33,7 +33,7 @@ export interface CliApprovalPromptHooks {
  * Run `ask` as the one prompt open under `hooks`: the hook's hold is taken
  * first and released however `ask` ends. The hook prepares the terminal, so
  * it can throw; `Effect.try` puts that in the failure channel, where the
- * caller's `Effect.catch` settles it, instead of a defect that would abort
+ * caller's `Effect.catch` handles it, instead of a defect that would abort
  * the tool and the session.
  */
 export const whilePrompting = <A, E, R>(
@@ -240,8 +240,8 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
       // `content.details()` renders caller-supplied content, so it can
       // throw. Left as a bare call inside the gen its throw is a defect,
       // which the `Effect.catch` below does not see: the rejection decision
-      // it settles would be skipped and `runPromise` would abort the tool
-      // and the session, where the outer try/catch this replaced settled it.
+      // it finishes would be skipped and `runPromise` would abort the tool
+      // and the session, where the outer try/catch this replaced handled it.
       // `Effect.try` puts it back in the failure channel, and unlike catching
       // the whole cause it leaves interruption free to propagate.
       while (true) {

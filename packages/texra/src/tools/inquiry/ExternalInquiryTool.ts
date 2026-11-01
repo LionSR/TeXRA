@@ -240,8 +240,10 @@ function executeExternalInquiryTool(input: InquiryInput) {
       case 'list':
         return yield* executeList(input, (yield* callerRun)?.runId);
     }
+  }).pipe(
     // The threads live on the process's global root.
-  }).pipe(Effect.provide(inquiryRecordsLayer));
+    Effect.provide(inquiryRecordsLayer),
+  );
 }
 
 function executeAsk(
@@ -310,16 +312,13 @@ function executeAsk(
         // transaction. A publication that never landed takes the turn back
         // down with it: left open, no surface would list it and no later
         // `ask` could re-dispatch on the thread. `commit` appends before it
-        // waits for the fold to settle, so failing is not proof of a
+        // waits for the view to update, so failing is not proof of a
         // rolled-back append: the committed rows decide, and a turn whose
         // request is durably open stays open with it.
         Effect.onError(() =>
-          runs.rows(runId, ['request.opened']).pipe(
-            Effect.flatMap((rows) =>
-              rows.some(
-                (row) =>
-                  row.type === 'request.opened' && row.requestId === requestId,
-              )
+          runs.requested(runId, requestId).pipe(
+            Effect.flatMap((landed) =>
+              landed
                 ? Effect.void
                 : Effect.asVoid(
                     records.markDropped({
@@ -408,10 +407,13 @@ function executeList(
   });
 }
 
+/** The host capability of a host that shows the inquiry panel. */
+export type InquiryPanelCapability = 'inquiry-panel';
+
 export const ExternalInquiryTool = defineTool({
   name: 'inquiry',
-  // Requires the long-lived graphical inquiry panel.
-  unavailableHosts: ['cli', 'sdk'],
+  // Offered where the host shows the inquiry panel (`texraPlugins`).
+  hostCapability: 'inquiry-panel' satisfies InquiryPanelCapability,
   requiresApproval: 'inBody',
   description: TOOL_DESCRIPTION,
   schema: InquiryInputSchema,

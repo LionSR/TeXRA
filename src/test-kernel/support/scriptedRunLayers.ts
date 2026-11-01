@@ -14,7 +14,6 @@ import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { positionRow } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
-import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
 import {
@@ -22,7 +21,7 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import { registryOf } from '@agent/runtime/runRegistry';
+import { turnText } from '@shared/session/runFacts';
 import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { RunCell } from '@shared/session/runHistory';
 import {
@@ -35,10 +34,8 @@ import {
 } from '@shared/schemas';
 import { testRunTools } from '@test/support/nativeToolTestLayer';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import { testRunHandle } from '@test/support/runHandleFixtures';
-import { untrackRun } from '@test/support/sessionEnd';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { hostStores } from '@test/support/setupPlatform';
+import { installedHost } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -80,7 +77,10 @@ function testBoundModel({
     route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
     forcedToolChoice: true,
     persistentConnection: false,
-    billing: {},
+    billing: 'api-key',
+    maxOutputTokens: null,
+    background: false,
+    serviceTier: null,
     routes: routePolicies(['test-route'], 'test-model'),
     delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
@@ -269,7 +269,7 @@ function scriptedInvoker(
 }
 
 /**
- * The run service a fixture stands on: the launch stores a real run carries,
+ * The run service a fixture stands on: the session a real run carries,
  * no step opened, no callbacks. `over` names what the case under test reads.
  */
 export function testAgentRun(
@@ -285,7 +285,6 @@ export function testAgentRun(
     }),
     persona: Schema.decodeUnknownSync(PersonaSchema)({}),
     parentStage: logger.openStage('Run: chat'),
-    stores: hostStores(),
     toolPolicy: {},
     opening: {
       inputs: {},
@@ -294,13 +293,14 @@ export function testAgentRun(
       attachedMemoryMisses: [],
     },
     entry: {
+      parent: null,
       registration: null,
       opening: Effect.succeed([]),
       entered: () => Effect.void,
       initialUserMessage: 'Do the thing.',
     },
     fileService: new RunFileService(runId, session.roots),
-    ...testRunTools(hostStores()),
+    ...testRunTools(installedHost().roots),
     finalToolName: null,
     swapModel: (next) =>
       SynchronizedRef.updateAndGetEffect(model, (current) =>
@@ -329,7 +329,6 @@ export interface ScriptedRunInit {
   readonly mediaFiles?: readonly string[];
   /** Absent means the launch had no transcript row to write. */
   readonly initialUserMessage?: string | undefined;
-  readonly onIdle?: () => void;
 }
 
 export function agentRunTestLayer(init: ScriptedRunInit) {
@@ -340,15 +339,6 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
       const logger = init.logger ?? new TraceEmitter();
       const scope: Scope.Scope = yield* Effect.scope;
       const tools = init.tools ?? {};
-      const handle = testRunHandle({
-        runId: init.runId,
-        agent: 'chat',
-        parent: init.parentRunId ?? null,
-      });
-      registryOf(init.session.runs).track(handle);
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => untrackRun(init.session.runs, handle.runId)),
-      );
       return testAgentRun(
         { runId: init.runId, session: init.session, logger, model, scope },
         {
@@ -362,19 +352,19 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
             tools: Object.keys(tools).map((name) => ({ name })),
           }),
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
-          ...testRunTools(hostStores(), tools),
+          ...testRunTools(installedHost().roots, tools),
           finalToolName: init.finalToolName ?? null,
-          callbacks: init.onIdle ? { onIdle: init.onIdle } : {},
-          ...('initialUserMessage' in init
-            ? {
-                entry: {
-                  registration: null,
-                  opening: Effect.succeed([]),
-                  entered: () => Effect.void,
-                  initialUserMessage: init.initialUserMessage,
-                },
-              }
-            : {}),
+          callbacks: {},
+          entry: {
+            parent: init.parentRunId ?? null,
+            registration: null,
+            opening: Effect.succeed([]),
+            entered: () => Effect.void,
+            initialUserMessage:
+              'initialUserMessage' in init
+                ? init.initialUserMessage
+                : 'Do the thing.',
+          },
         },
       );
     }),

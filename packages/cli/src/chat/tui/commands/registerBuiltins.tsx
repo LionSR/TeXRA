@@ -5,7 +5,7 @@ import { Effect, Result, type Scope } from 'effect';
 
 import { type RunId, runBypasses } from '@texra-ai/harness/schemas';
 import { type WorkspaceRoots } from '@texra-ai/harness';
-import { InstalledPlugins, type PlatformSecrets } from '@texra-ai/harness/host';
+import { InstalledPlugins } from '@texra-ai/harness/host';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
@@ -88,11 +88,10 @@ type SelectHandler<T> = (value: T) => SlashCommandEffect;
  */
 export function registerBuiltinSlashCommands(options: {
   /**
-   * The process secret store and the three setting slots the built-in forms and handlers
-   * read: every one of them runs outside Effect, so the stores arrive from the
-   * surface that registers the commands.
+   * The setting stores the built-in forms and handlers read: they run
+   * outside Effect, so the stores arrive from the surface that registers the
+   * commands.
    */
-  secrets: PlatformSecrets;
   stores: SettingsStores;
   /** The process runtime the account commands and the `/resume` listing run
    *  their programs on, from the same surface. */
@@ -106,12 +105,12 @@ export function registerBuiltinSlashCommands(options: {
   onAgentSelect?: SelectHandler<string>;
   /** `/agent` → a team preset, by id. */
   onTeamSelect?: SelectHandler<string>;
-  /** After a sign-in, sign-out, preference, or key save settles: the chat
+  /** After a sign-in, sign-out, preference, or key save finishes: the chat
    *  re-checks whether a model can answer now. */
   onAccountChanged?: () => Effect.Effect<void, never, ProcessServices>;
   canSelectAgent?: () => boolean;
   getApprovalPolicy?: () => ApprovalPolicy;
-  /** `/approval`'s choice: the chat's own launch policy, settled once the
+  /** `/approval`'s choice: the chat's own launch policy, finished once the
    *  chat's run has recorded it. */
   onApprovalPolicySelect?: (policy: ApprovalPolicy) => Effect.Effect<void>;
   /** The project's policy `/config` wrote. Stays a plain callback: the
@@ -134,9 +133,8 @@ export function registerBuiltinSlashCommands(options: {
   configRoots?: WorkspaceRoots;
   onError?: ErrorHandler;
 }): void {
-  const { secrets, stores, runtime } = options;
-  const { runSession } = options;
-  const modelStores = { ...stores, secrets, runtime };
+  const { stores, runtime, runSession } = options;
+  const modelStores = { ...stores, runtime };
   const onAgentSelect: SelectHandler<string> =
     options.onAgentSelect ??
     ((agent) => Effect.sync(() => patchSessionMeta({ agent })));
@@ -386,24 +384,21 @@ export function registerBuiltinSlashCommands(options: {
   function configContribution(
     configRoots: WorkspaceRoots,
   ): SlashCommandContribution {
-    const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => {
-      return (
-        <CliConfigForm
-          roots={configRoots}
-          secrets={secrets}
-          runtime={runtime}
-          availableRows={props.availableRows}
-          // The project's policy, written: the status bar follows it, and
-          // the chat's own `/approval` choice stays as it was.
-          onApprovalPolicyChanged={options.onProjectApprovalPolicyChanged}
-          onClose={() => props.onDone(undefined)}
-          onError={async (error) => {
-            props.onPersist?.();
-            await options.onError?.(error);
-          }}
-        />
-      );
-    };
+    const ConfigFormAdapter = (props: SlashFormProps): React.JSX.Element => (
+      <CliConfigForm
+        roots={configRoots}
+        runtime={runtime}
+        availableRows={props.availableRows}
+        // The project's policy, written: the status bar follows it, and
+        // the chat's own `/approval` choice stays as it was.
+        onApprovalPolicyChanged={options.onProjectApprovalPolicyChanged}
+        onClose={() => props.onDone(undefined)}
+        onError={async (error) => {
+          props.onPersist?.();
+          await options.onError?.(error);
+        }}
+      />
+    );
     return {
       pluginId: 'config',
       commands: [
@@ -452,8 +447,7 @@ export function registerBuiltinSlashCommands(options: {
           aliases: ['agents'],
           category: 'configuration',
           echo: 'ifPersists',
-          handler: (remainder, context) =>
-            applyInitialCliAgentSelection(remainder, context),
+          handler: applyInitialCliAgentSelection,
           formComponent: AgentListFormAdapter,
         },
         {
@@ -474,7 +468,6 @@ export function registerBuiltinSlashCommands(options: {
       ],
     },
     modelAccessContribution({
-      secrets,
       stores,
       runtime,
       bindSelection,
@@ -491,8 +484,7 @@ export function registerBuiltinSlashCommands(options: {
           description: 'Set the approval policy',
           category: 'configuration',
           echo: 'ifPersists',
-          handler: (remainder, context) =>
-            applyCliApprovalPolicySelection(remainder, context),
+          handler: applyCliApprovalPolicySelection,
           formRemainders: ['status'],
           formComponent: ApprovalPolicyFormAdapter,
         },

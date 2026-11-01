@@ -139,7 +139,7 @@ export type PreparedHistoryEntry =
       readonly results: readonly { readonly callOrdinal: number }[];
     };
 /** The history a turn sends: each assistant's local calls answered by the
- *  next message, in call order. Only the next request needs them settled.
+ *  next message, in call order. Only the next request needs them answered.
  *  Returns the schema issues found, one per offending message. */
 export function checkPreparedHistory(
   messages: readonly PreparedHistoryEntry[],

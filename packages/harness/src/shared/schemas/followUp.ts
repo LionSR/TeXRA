@@ -7,6 +7,7 @@
 import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
+import { StoredMediaSchema } from './storedTurn';
 
 /**
  * Where one run stands relative to another in the supervision tree: who
@@ -56,11 +57,37 @@ export const FollowUpContentSchema = Schema.Struct({
   text: Schema.String,
   /** What the transcript and the queued list show instead of `text`. */
   displayText: Schema.optional(Schema.NullOr(Schema.String)),
-  /** Media file paths (e.g. pasted images) attached to a user follow-up. */
-  mediaFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+  /** Media a user follow-up attached (e.g. pasted images), by address:
+   *  the row links the blobs, so they live as long as it does. */
+  media: Schema.optional(Schema.Array(StoredMediaSchema)),
   from: FollowUpSenderSchema,
 });
 export type FollowUpContent = typeof FollowUpContentSchema.Type;
+
+/**
+ * Why a follow-up left the queue, stated by the writer of its
+ * `followup.consumed` row: it became part of the user message of turn
+ * `turn`; a child's prompt or delivery was answered by the report or tool
+ * result committed beside it; a control (`/compact`, `/model`) was applied
+ * by the edit or `run.config` beside it; or it was dropped unread and
+ * unapplied: a notice of a child that had ended (`stale`), a control that
+ * changed nothing (`noop`), the run's end (`ended`) or its input's close
+ * (`closed`). `followUpReceipt` reads these.
+ */
+export const FollowUpDispositionSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal('turn'),
+    turn: Schema.Int.check(Schema.isGreaterThan(0)),
+  }),
+  Schema.Struct({ kind: Schema.Literal('answered') }),
+  Schema.Struct({ kind: Schema.Literal('applied') }),
+  Schema.Struct({
+    kind: Schema.Literal('dropped'),
+    reason: Schema.Literals(['stale', 'noop', 'ended', 'closed']),
+  }),
+]);
+/** A `followup.consumed` row's `disposition`. */
+export type FollowUpDisposition = typeof FollowUpDispositionSchema.Type;
 
 /**
  * Why a persisted run is not resumed here: `finished` (nothing left to

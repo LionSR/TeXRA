@@ -64,10 +64,9 @@ import {
   freshRunRows,
   isSharedRunRow,
   pendingMessages,
-  phaseMoveOf,
-  type RunRows,
   type SharedRunRow,
 } from './runRows';
+import { phaseMoveOf } from './runRowReads';
 import { applyTranscriptEvent } from './transcriptUpdate';
 import {
   applyLiveText,
@@ -84,6 +83,7 @@ import {
 
 import { runActions } from './runActions';
 import { emptySessionView, rollupOf } from './sessionView';
+import type { RunRows } from './runRowsShape';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
@@ -334,7 +334,6 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     launchedAt: event.at,
     runStartedAt: null,
     lastTimestamp: event.at,
-    conversationProgress: { toolCallCount: 0 },
     turn: null,
     followUpSupport: event.userFollowUpSupport,
     context: null,
@@ -363,7 +362,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     latestLine: null,
     transcript: emptyTranscript(),
   };
-  return { ...common, recipe: null, plan: null };
+  return { ...common, recipe: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -475,11 +474,7 @@ function withAggregates(u: Update, run: RunView): RunView {
   let statusNotice: RunView['statusNotice'] = null;
   if (unreadable !== undefined) statusNotice = { kind: unreadable };
   else if (blockedEntry !== undefined)
-    statusNotice = {
-      kind: 'resumeBlocked',
-      reason: blockedEntry.reason,
-      retry: blockedEntry.retry,
-    };
+    statusNotice = { kind: 'resumeBlocked', reason: blockedEntry.reason };
   else if (interrupted) statusNotice = { kind: 'interrupted' };
   else if (heldBy !== null)
     statusNotice = { kind: 'held', pid: ownerPid(heldBy) };
@@ -742,8 +737,6 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
         model: event.model,
         modelLabel: getModelLabel(event.model),
       };
-    case 'conversation.progress':
-      return { ...run, conversationProgress: event.progress };
     case 'context.state':
       return {
         ...run,
@@ -756,9 +749,6 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
           ),
         },
       };
-    case 'run.fact':
-      // Each family (and `plugin.fact` kind) is its own latest-only key.
-      return { ...run, plan: event.fact.plan };
     case 'plugin.fact':
       return {
         ...run,

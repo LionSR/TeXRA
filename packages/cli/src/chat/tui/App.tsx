@@ -86,11 +86,7 @@ import {
 import { useSignal } from './state/useSignal';
 import type { EventEmitter } from 'node:events';
 import type { Session } from '@texra-ai/harness';
-import type {
-  ProcessRuntime,
-  PlatformSecrets,
-  SettingsStores,
-} from '@texra-ai/harness/host';
+import type { ProcessRuntime, SettingsStores } from '@texra-ai/harness/host';
 import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 import type { InputHistory } from './history/inputHistory';
 import type { PastedImageEntry } from './input/draftAttachments';
@@ -103,11 +99,6 @@ function focusRunAndPromoteApprovals(runId: RunId): void {
 }
 
 export interface AppProps {
-  /**
-   * The secret store the status bar's subscription probes read, threaded from
-   * the chat surface that opened it — this component runs no Effect.
-   */
-  readonly secrets: PlatformSecrets;
   /** The session's three setting slots, for the status bar's route probe. */
   readonly stores: SettingsStores;
   /**
@@ -141,7 +132,7 @@ export function App(props: AppProps): React.JSX.Element {
   const view = useSignal(sessionView());
   const pending = useSignal(currentApproval);
   // The selection and the reader arrive already resolved against the view
-  // (their signals own that rule), so render derives from settled values.
+  // (their signals own that rule), so render derives from finished values.
   const activeRunId = useSignal(selectedRunIdSignal);
   const sessionViewFailure = useSignal(sessionViewFailureSignal);
   const foregroundForm = useSignal(activeForm);
@@ -288,7 +279,7 @@ export function App(props: AppProps): React.JSX.Element {
       dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
     }
   }, [childListValues]);
-  // Kill, skip and retry; a refusal (a settled call) reads into the transcript.
+  // Kill, skip and retry; a refusal (a finished call) reads into the transcript.
   const request = (req: RuntimeRequest): void => {
     props.runtime.runFork(
       Effect.catch(requests.request(req), (error) =>
@@ -647,7 +638,6 @@ export function App(props: AppProps): React.JSX.Element {
               keyboardActive={!childListFocused}
             />
             <StatusBar
-              secrets={props.secrets}
               stores={props.stores}
               runtime={props.runtime}
               chatInputAvailable={

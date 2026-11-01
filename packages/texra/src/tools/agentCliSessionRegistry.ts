@@ -34,10 +34,13 @@ export class AgentCliSessionRegistry {
   /** Each live child's hold on this registry, ended by `releaseByRunId`. */
   private readonly holds = new Map<RunId, Deferred.Deferred<void>>();
 
+  private readonly hold: (until: Effect.Effect<void>) => Effect.Effect<void>;
   constructor(
     /** The plugin layer's hold (`PluginHold`) on this registry. */
-    private readonly hold: (until: Effect.Effect<void>) => Effect.Effect<void>,
-  ) {}
+    hold: (until: Effect.Effect<void>) => Effect.Effect<void>,
+  ) {
+    this.hold = hold;
+  }
 
   /**
    * Keep this registry up while the child `runId` lives, released with its

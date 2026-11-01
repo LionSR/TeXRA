@@ -6,7 +6,7 @@ import {
   type TokenUsageStats,
   type UsageRoute,
 } from '@texra-ai/harness/schemas';
-import { formatCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
+import { OWN_API_KEYS, usageRouteBadge } from '@ui/copy/modelAccess';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { RUN_GRANT_NOUN, RUN_GRANT_ORDER } from '@ui/copy/delegationApproval';
 import { usageCostLabel } from '@ui/copy/modelAccess';
@@ -27,7 +27,7 @@ export interface CliSessionStatusInput {
   readonly teamName?: string;
   readonly modelAccess: UsageRoute | undefined;
   readonly approvalBypasses?: Partial<BypassState>;
-  /** The fold's status label for the reported stream; undefined before a run. */
+  /** The session view's status label for the reported stream; undefined before a run. */
   readonly statusLabel: string | undefined;
   readonly activeChildSessions?: number;
   /** Skill names in effect for the focused tool-use stream, newest snapshot. */
@@ -55,7 +55,7 @@ interface CliSessionCostStatus {
 }
 
 /**
- * The spend of the task `run` belongs to, read off the fold: its root's
+ * The spend of the task `run` belongs to, read off the session view: its root's
  * `treeUsage`, the root's own calls (`usage`), and each agent the root
  * started that spent anything, with that agent's `treeUsage`.
  */
@@ -122,7 +122,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
     ...(input.teamName ? [`team: ${input.teamName}`] : []),
     `agent: ${input.agent}`,
     `model: ${getModelLabel(input.model)}`,
-    `model access: ${formatCliModelAccessRoute(input.modelAccess)}`,
+    `model access: ${usageRouteBadge(input.modelAccess)?.label ?? OWN_API_KEYS.inline}`,
     `approval: ${formatApprovalPolicy(input.approvalPolicy)}`,
     ...(bypassLabels.length > 0
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]

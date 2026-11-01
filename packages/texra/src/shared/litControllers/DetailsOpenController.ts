@@ -11,10 +11,12 @@ export class DetailsOpenController implements ReactiveController {
   private _open = false;
   private readonly onShow: (() => void) | undefined;
 
+  private readonly host: ReactiveControllerHost;
   constructor(
-    private readonly host: ReactiveControllerHost,
+    host: ReactiveControllerHost,
     options: { onShow?: () => void } = {},
   ) {
+    this.host = host;
     this.onShow = options.onShow;
     host.addController(this);
   }

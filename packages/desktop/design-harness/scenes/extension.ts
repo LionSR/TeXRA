@@ -287,7 +287,6 @@ function interruptedTasksView(): SessionView {
         {
           runId: ABSTRACT_TASK,
           reason: { kind: 'pluginOff', name: 'zotero' },
-          retry: false,
         },
       ],
     }),
@@ -552,6 +551,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
         kind: 'proposal',
         data: {
           requestId: 'req-task',
+          allowBypass: true,
           runId: CHILD,
           task: true,
           agent: 'correct',

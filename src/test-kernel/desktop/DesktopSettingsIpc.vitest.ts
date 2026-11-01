@@ -10,23 +10,19 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
+import { BASH_APPROVAL_CONFIG_KEY } from '@texra-ai/harness/schemas';
 import type { DesktopSettingsIpcOptions } from '@desktop/main/desktopSettingsIpc';
-import { type ConfigProvider } from '@platform/interfaces';
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import {
-  fakeConfig,
-  FakeSecrets,
-  FakeStateStore,
-} from '@test/support/FakePlatform';
+import { fakeConfig, FakeStateStore } from '@test/support/FakePlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   SettingsViewInboundMessageSchema,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import type { ConfigProvider } from '@texra-ai/harness/host';
 
 // The LaTeX page spawns the LaTeX probes; a fixed status keeps the suite off
 // the machine's tools, as the harness's unprobed tool availability does for
@@ -67,7 +63,6 @@ function createStubSettingsBindings(): DesktopSettingsIpcOptions['bindings'] {
     refreshCredentialStatus: Effect.void,
     revealRun: () => Effect.succeed('revealed'),
     runLabel: () => undefined,
-    stateSettingApplied: noOpEffect,
     runInTerminal: noOpEffect,
     latexEditorStatus: () => ({
       outDir: true,
@@ -114,7 +109,6 @@ async function createSettingsFixture(config: ConfigProvider) {
         presentSubscriptionSignInUrl: () => Effect.void,
         presentSubscriptionDeviceCode: () => Effect.void,
       },
-      secrets: new FakeSecrets(),
       resourcesPath: '/resources',
       roots: session.roots,
     }).pipe(
@@ -170,12 +164,12 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(config.get('texra.toolUse.requireBashApproval')).toBe(false);
+    expect(config.get('toolUse.requireBashApproval')).toBe(false);
     // Security-adjacent scope pin: a per-workspace approval bypass must never
     // be written to the global config target (see issue #7085), nor to the
     // project file a cloned repository controls.
     expect(update).toHaveBeenCalledWith(
-      'texra.toolUse.requireBashApproval',
+      'toolUse.requireBashApproval',
       false,
       'local',
     );

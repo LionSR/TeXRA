@@ -1,5 +1,5 @@
 import {
-  INSTRUCTION_ACTION,
+  HARNESS_INSTRUCTION_KEY,
   RUN_OUTCOME,
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
@@ -66,7 +66,7 @@ export type AgentErrorPresentation =
     };
 
 const MISSING_API_KEY_MESSAGE =
-  'API key not found. Set your API key in Settings and run again.';
+  'API key not found. Set your API key and run again.';
 
 /** Map a classified error to host guidance, with no notification for aborts. */
 export function agentErrorPresentation(error: {
@@ -82,12 +82,8 @@ export function agentErrorPresentation(error: {
       return {
         type: 'instruction',
         payload: {
-          key: 'missingApiKey',
+          key: HARNESS_INSTRUCTION_KEY.MISSING_API_KEY,
           message: MISSING_API_KEY_MESSAGE,
-          actions: [
-            INSTRUCTION_ACTION.SET_API_KEY,
-            INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE,
-          ],
           showSuppress: false,
         },
       };

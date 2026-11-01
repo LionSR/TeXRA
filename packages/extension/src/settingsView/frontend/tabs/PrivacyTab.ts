@@ -1,8 +1,9 @@
 /** Privacy and telemetry: the top of the General page. */
 
 // Third-party imports
+import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, css, html, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement } from 'lit/decorators.js';
 
 // Local imports - shared webview
 import { TELEMETRY_ENABLED_KEY } from '@texra/shared/settingsView/texraSettings';
@@ -13,7 +14,7 @@ import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
 
 @customElement('privacy-tab')
-export class PrivacyTab extends LitElement {
+export class PrivacyTab extends SignalWatcher(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -23,8 +24,6 @@ export class PrivacyTab extends LitElement {
       }
     `,
   ];
-
-  @property({ type: Boolean }) telemetryEnabled = true;
 
   override render(): TemplateResult {
     return html`
@@ -37,10 +36,7 @@ export class PrivacyTab extends LitElement {
             icon: 'shield',
           })}
           <div class="settings-section">
-            ${renderStateSettingToggleRow({
-              key: TELEMETRY_ENABLED_KEY,
-              checked: this.telemetryEnabled,
-            })}
+            ${renderStateSettingToggleRow(TELEMETRY_ENABLED_KEY)}
           </div>
         </section>
       </div>

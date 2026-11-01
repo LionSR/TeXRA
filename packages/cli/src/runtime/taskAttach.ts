@@ -1,9 +1,9 @@
 /**
  * `texra tasks attach`: one task, live, from the TeXRA service. The client
  * holds no state of its own: the service's `task.watch` frames feed the
- * same frame-driven fold the webviews run (`WebviewSessions`), and this
- * prints what that fold settles. Text output is the task's transcript, one
- * settled row at a time, laid out as the chat TUI prints scrollback; NDJSON
+ * same frame-driven session view the webviews run (`WebviewSessions`), and this
+ * prints what that view finishes. Text output is the task's transcript, one
+ * finished row at a time, laid out as the chat TUI prints scrollback; NDJSON
  * output is the task's own rows (not its agents') as `progress` records, in
  * the shape `texra run --output-format ndjson` writes.
  *
@@ -27,7 +27,7 @@ import { WebviewSessions } from '@texra/controllers/session/webviewSessionLayer'
 import { writeNdjsonStdout, writeTextStdout } from './logSinks';
 import type { RunView, SessionView } from '@texra-ai/harness/schemas';
 
-/** The subscription port of this client's fold. */
+/** The subscription port of this client's session view. */
 const ATTACH_PORT = 'attach';
 
 /** How the attached task is printed. */
@@ -76,11 +76,11 @@ function writeProgress(
 }
 
 /**
- * The live view of `task`'s session, as the service's frames fold it: one
- * level per change, with `task`'s transcript named so its rows fold. Each
- * frame is handed to `onFrame` before it folds. The stream fails with
+ * The live view of `task`'s session, as the service's frames build it: one
+ * level per change, with `task`'s transcript named so its rows load. Each
+ * frame is handed to `onFrame` before it is applied. The stream fails with
  * {@link TaskWatchEnded} when the service stops sending; it never ends on
- * its own. The fold's graph lives as long as the stream.
+ * its own. The session view's graph lives as long as the stream.
  */
 export function watchTask(
   client: ServiceClient,
@@ -135,7 +135,7 @@ export function watchTask(
       );
       return graph.view.changes.pipe(Stream.interruptWhen(ended));
     }),
-    // The fold's graph lives as long as the stream, one per watch.
+    // The session view's graph lives as long as the stream, one per watch.
   ).pipe(Stream.provide(WebviewSessions.layerNoDeps, { local: true }));
 }
 

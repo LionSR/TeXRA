@@ -147,8 +147,8 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   // ===========================================================================
 
   /**
-   * A script's request for its `agent` calls (Q5): what approving allows,
-   * the first agent it asks for, and, folded, its code and the calls it
+   * A script's request for its `agent` calls: what approving allows,
+   * the first agent it asks for, and, collapsed, its code and the calls it
    * issued before it asked.
    */
   private renderScriptSummary(

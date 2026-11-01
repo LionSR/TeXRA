@@ -21,15 +21,18 @@ import { describe, expect } from 'vitest';
 
 import '@test/support/sessionGraphTestSetup';
 
+import {
+  AgentConfigSchema,
+  generateRunId,
+  type RequestDecision,
+  type RunId,
+} from '@texra-ai/harness/schemas';
+import { withProcessServices } from '@texra-ai/harness/host';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withProcessServices } from '@platform/processRuntime';
-import {
-  AgentConfigSchema,
-  type RequestDecision,
-  type RunId,
-} from '@shared/schemas';
+import { agentTool } from '@agent/runtime/delegation/AgentTool';
+import { executeSubagentInBand } from '@agent/runtime/delegation/inBandSubagentRun';
 import {
   nativeToolTestLayer,
   testModelCell,
@@ -52,9 +55,6 @@ import {
   type StoredRow,
 } from '@test/support/storeFaults';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { agentTool } from '@tools/delegation/AgentTool';
-import { executeSubagentInBand } from '@tools/delegation/inBandSubagentRun';
-import { generateRunId, generateShortId } from '@utils/core';
 
 /** The parent's model, which its children inherit: the validation model
  *  answers it, and the host's OpenAI key makes it available. It is not the
@@ -87,7 +87,7 @@ const delegateReview = (parent: Parent, prompt = 'Check the proof.') =>
       Effect.provide(
         nativeToolTestLayer({
           // The child's run id derives from the call's id.
-          callId: `call-${generateShortId()}`,
+          callId: `call-${crypto.randomUUID()}`,
           run: {
             runId: parent.runId,
             session: parent.session,
@@ -294,7 +294,7 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
         yield* untilStored(parent.storage, (rows) =>
           rows.some((row) => row.run === child && row.type === 'run.report'),
         );
-        expect(registry.parentOf(child)).toBeNull();
+        expect(parent.session.view.run(child)?.parentId).toBeNull();
         expect(yield* queuedFollowUps(parent.session, parent.runId)).toEqual(
           [],
         );

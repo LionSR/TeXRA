@@ -1,16 +1,20 @@
 import '@test/support/defaultSessionTestSetup';
 
+import { rmSync, writeFileSync } from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { Effect, Fiber, Layer, Stream } from 'effect';
+import { describe, expect } from 'vitest';
 
 // Local imports
+import { generateRunId, qualifyAggregateId } from '@texra-ai/harness/schemas';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import { TraceEmitter } from '@agent/trace';
-import { qualifyAggregateId } from '@shared/schemas';
+import { attachedMedia } from '@agent/runtime/run/mediaInput';
 import { RunHistory } from '@shared/session/runHistory';
 import { type RunState } from '@shared/session/runState';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -22,8 +26,9 @@ import {
   type ScriptedRunInit,
   type ScriptedTurn,
 } from '@test/support/scriptedRunLayers';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { publishTestRows } from '@test/support/sessionTestUtils';
-import { generateRunId } from '@utils/core';
 
 import { sessionWithInteractions } from '../progressTestUtils';
 
@@ -55,53 +60,36 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
   );
 }
 
-/** Run one scripted run to its own exit. */
-const runLoop = Effect.fn('test.runLoop')(function* (init: LoopInit) {
-  const requests: InvokeRequest[] = [];
-  const result = yield* loopProgram(init, requests);
-  const state = yield* init.session.runHistory
-    .load(init.runId)
-    .pipe(Effect.orDie);
-  return { result, requests, state };
-});
-
 /**
- * Start a run that parks, for scenarios that drive it while it waits. The
- * loop calls `onIdle` on its own fiber immediately before it blocks for
- * input, after the batch carrying the `waiting` step has committed, so one
- * Deferred per park is the loop's own 'parked for the Nth time' signal:
- * `park(n)` is what those scenarios wait on. The wait resumes
- * inside that callback, before the loop enters `followUps.wait`, so input a
- * scenario enqueues after `park` lands on the queue rather than on a waiting
+ * Start a run that parks, for scenarios that drive it while it waits.
+ * `park(n)` waits for the run's `n`-th committed `waiting` position from the
+ * loop's start: the turn boundary, or a restored park with nothing queued.
+ * Input a scenario enqueues after it lands on the queue or on a waiting
  * consumer; the wait takes what is queued first, so both orders deliver the
  * same batch.
  */
 const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
   const requests: InvokeRequest[] = [];
-  const parks = yield* Effect.forEach(init.script, () => Deferred.make<void>());
-  let parked = 0;
-  const fiber = yield* Effect.forkChild(
-    loopProgram(
-      {
-        ...init,
-        onIdle: () => {
-          init.onIdle?.();
-          const park = parks[parked];
-          parked += 1;
-          if (park) Deferred.doneUnsafe(park, Effect.void);
-        },
-      },
-      requests,
-    ),
-  );
-  /** Wait for the loop's `n`-th park; the n-th invocation precedes it. */
-  const park = (n: number) => {
-    const deferred = parks[n];
-    if (!deferred) throw new Error(`The script has no park ${n}.`);
-    return Deferred.await(deferred);
-  };
+  const from = init.session.log.now();
+  const fiber = yield* Effect.forkChild(loopProgram(init, requests));
+  const run = qualifyAggregateId('run', init.runId);
+  const park = (n: number) =>
+    init.session.log.tail(from).pipe(
+      Stream.filter(
+        (row) =>
+          row.aggregateId === run &&
+          row.type === 'run.position' &&
+          row.payload.at === 'waiting',
+      ),
+      Stream.take(n + 1),
+      Stream.runDrain,
+    );
   return { fiber, requests, park };
 });
+
+/** A 1x1 PNG. */
+const PIXEL =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
 const quietSession = () => sessionWithInteractions({ emit: () => {} });
 
@@ -152,7 +140,7 @@ describe('a parked child run', () => {
           resume: true,
           script: [textTurn('second cycle'), textTurn('never reached')],
         });
-        yield* resumed.park(1);
+        yield* resumed.park(0);
         const resumedState = yield* session.runHistory.load(runId);
         expect(userTexts(resumedState)).toContain(asked);
         expect((yield* session.followUps.read(runId)).followUps).toEqual([]);
@@ -220,45 +208,66 @@ describe('a parked root run', () => {
   );
 });
 
-describe('the batch a parked run consumes', () => {
-  it.effect(
-    'records what was asked and keeps the batch unconsumed when it cannot be applied',
-    () =>
-      Effect.gen(function* () {
-        // A failed follow-up append (corrupt or oversized media, a provider
-        // validation error) must still leave a record of what the user asked
-        // for, and must not acknowledge input that never reached the model.
-        const session = yield* quietSession();
-        const runId = startedRun(session);
-        const logger = new TraceEmitter();
-        const info = vi.spyOn(logger, 'info');
-        yield* session.log.settled;
-        yield* session.followUps.send(runId, {
+describe('a follow-up with media', () => {
+  it.effect('is refused, queueing nothing, when its file cannot be read', () =>
+    Effect.gen(function* () {
+      // The send reads the file once, where it enters: a file that is gone
+      // or unreadable refuses the send rather than a later turn.
+      const session = yield* quietSession();
+      const runId = startedRun(session);
+      yield* session.log.settled;
+      const error = yield* Effect.flip(
+        session.requests.request({
+          kind: 'followUp.send',
+          runId,
           text: 'use this diagram',
-          mediaFiles: ['/tmp/texra-unreadable-figure.png'],
-          from: { kind: 'user' as const },
-        });
+          media: ['/tmp/texra-unreadable-figure.png'],
+        }),
+      );
 
-        const exit = yield* Effect.exit(
-          runLoop({
-            runId,
-            session,
-            logger,
-            bound: { supportsVision: true },
-            script: [textTurn('first')],
-          }),
-        );
+      expect(error._tag).toBe('Rejected');
+      expect((yield* session.followUps.read(runId)).followUps).toEqual([]);
+    }),
+  );
 
-        expect(exit._tag).toBe('Failure');
-        expect(info).toHaveBeenCalledWith(
-          'use this diagram',
-          expect.objectContaining({ messageType: expect.any(String) }),
-        );
-        expect(
-          (yield* session.followUps.read(runId)).followUps.map(
-            (f) => f.content.text,
-          ),
-        ).toEqual(['use this diagram']);
-      }),
+  // #13874: a pasted file swept from storage after its send still reaches
+  // the model, which reads it from the store by address.
+  it.effect('reaches the model from the store once its file is gone', () =>
+    Effect.gen(function* () {
+      const session = yield* quietSession();
+      const runId = startedRun(session);
+      yield* session.log.settled;
+      const file = path.join(os.tmpdir(), `texra-${generateRunId()}.png`);
+      writeFileSync(file, Buffer.from(PIXEL, 'base64'));
+      const attached = yield* attachedMedia([file], session.roots).pipe(
+        Effect.provide(Layer.merge(nodePlatformLayer, nodeSpawnerLayer)),
+      );
+      rmSync(file);
+      yield* session.followUps.send(runId, {
+        text: 'see the pixel',
+        from: { kind: 'user' },
+        ...attached,
+      });
+
+      const run = yield* forkLoop({
+        runId,
+        session,
+        bound: { supportsVision: true },
+        script: [textTurn('first'), textTurn('seen')],
+      });
+      yield* run.park(1);
+      yield* Fiber.interrupt(run.fiber);
+      const state = yield* session.runHistory.load(runId).pipe(Effect.orDie);
+
+      const digest = attached.media?.[0]?.digest ?? '';
+      expect(state?.messages).toContainEqual({
+        role: 'user',
+        content: [
+          { kind: 'text', text: 'see the pixel' },
+          { kind: 'image', mimeType: 'image/png', digest },
+        ],
+      });
+      expect((yield* session.log.blobs([digest])).get(digest)).toBe(PIXEL);
+    }),
   );
 });

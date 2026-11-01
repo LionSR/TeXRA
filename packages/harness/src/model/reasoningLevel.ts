@@ -1,16 +1,18 @@
 import { Effect, Result, Schema } from 'effect';
-import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
-import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import {
   acceptedEfforts,
   BACKEND_PROTOCOLS,
+  type BackendProviderId,
   chooseReasoning,
   CODEX_ROUTE_EFFORTS,
-  type BackendProviderId,
+  type ModelConfig,
   type ModelOrigin,
+  ModelProvider,
   type ModelRoute,
   type ReasoningChoice,
+  ReasoningEffort,
+  ReasoningEffortSchema,
   type ReasoningRequest,
   wireEffort,
 } from '@texra-ai/llm';
@@ -24,7 +26,7 @@ import { ensureError } from '@utils/errors/errorMessage';
  * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary,
  * keyed by model reference (`provider/id`).
  *
- * This is the one boundary between the persisted `texra.reasoningLevels`
+ * This is the one boundary between the persisted `reasoningLevels`
  * record and the runtime: the stored strings are parsed here, so no caller
  * carries a bare string and an entry that is not an effort is reported rather
  * than quietly disappearing. Reads only; the write path keeps the stored
@@ -70,14 +72,12 @@ type _EveryBackendProviderIsStored = AssertNever<
 >;
 
 /**
- * The backend a fresh run on `route` serves `config` from: the model's own
- * provider on a direct route (any credential), or the validation model.
+ * The backend a fresh run serves `config` from off the validation model: the
+ * model's own provider, whatever credential its route bills.
  */
 export function servingBackend(
   config: Pick<ModelConfig, 'provider'>,
-  route: { readonly kind: ModelRoute['kind'] },
 ): ModelBackend | undefined {
-  if (route.kind === 'validation') return 'validation';
   return Result.getOrUndefined(
     Schema.decodeUnknownResult(ModelBackendSchema)(config.provider),
   );
@@ -95,7 +95,7 @@ export interface ReasoningRoute {
  * it. The bind, a model switch and the model options all read it here.
  */
 export function reasoningRouteOf(
-  route: { readonly kind: ModelRoute['kind'] },
+  route: { readonly kind: ModelRoute['kind'] | 'validation' },
   backend: ModelBackend,
 ): ReasoningRoute {
   return {

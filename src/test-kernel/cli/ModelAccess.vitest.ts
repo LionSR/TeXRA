@@ -5,12 +5,14 @@ import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
-import type { ProcessServices } from '@platform/processRuntime';
-import type { ModelOptionData } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { setupPlatform } from '@test/support/setupPlatform';
-import type { RunModelDecisionReason } from '@texra-ai/harness/host';
+import type { ModelOptionData } from '@texra/shared/pickerOptions';
+import type {
+  ProcessServices,
+  RunModelDecisionReason,
+} from '@texra-ai/harness/host';
 
 const readModelOptionsMock = vi.hoisted(() => vi.fn());
 
@@ -66,7 +68,6 @@ function missingKeyModel(value: string): CliModelAccess {
 const fake = makeFakeSettingsStores();
 const stores = {
   ...fake.stores,
-  secrets: fake.secrets,
   // Read when a lookup runs: the kernel builds its runtime after collection.
   get runtime() {
     return testRuntime();

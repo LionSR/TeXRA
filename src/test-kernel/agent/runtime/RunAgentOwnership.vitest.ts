@@ -7,8 +7,9 @@
  * - a second launch of a running run starts it twice;
  * - a run is born without the identity of the agent it runs, or keeps its
  *   claim after its launch ends;
- * - a launch whose opening is refused leaves a run, a claim, or a failure
- *   nobody presents.
+ * - a launch whose opening is refused leaves a run or a claim;
+ * - a run whose claim the store refuses after its opening goes on as if it
+ *   held it, and the refusal is a warning nobody reads.
  */
 import '@test/support/sessionGraphTestSetup';
 
@@ -16,10 +17,14 @@ import { it } from '@effect/vitest';
 import { Effect, Fiber, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
+import {
+  AgentConfigSchema,
+  generateRunId,
+  type RunId,
+} from '@texra-ai/harness/schemas';
+import { withProcessServices } from '@texra-ai/harness/host';
 import type { RootLaunchOptions } from '@agent/runtime/rootLaunch';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withProcessServices } from '@platform/processRuntime';
-import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
   claimHolder,
@@ -32,7 +37,6 @@ import {
 } from '@test/support/storeFaults';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { generateRunId } from '@utils/core';
 
 const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
   agent: 'assistant',
@@ -77,11 +81,10 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
   );
 
   it.live(
-    'a launch whose opening is refused fails as itself, leaves no run or claim, and presents its failure',
+    'a launch whose opening is refused fails as itself and leaves no run or claim',
     () =>
       Effect.gen(function* () {
         const roots = testWorkspaceRoots();
-        // No UI is attached when the launch fails.
         const session = yield* openTestDefaultSession({ roots });
         const runId = generateRunId();
         const faults = yield* sessionStoreFaults(roots.storage);
@@ -93,18 +96,31 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
         expect(
           storedRows(roots.storage).filter((row) => row.run === runId),
         ).toEqual([]);
-        // A UI that attaches after the launch failed is still shown it.
-        const shown: unknown[] = [];
-        yield* session.interactions.use({
-          emit: (event, payload) => {
-            shown.push({ event, payload });
+      }),
+  );
+
+  it.live(
+    'a run whose claim the store refuses after its opening ends failed, naming the refusal',
+    () =>
+      Effect.gen(function* () {
+        const roots = testWorkspaceRoots();
+        const session = yield* openTestDefaultSession({ roots });
+        const runId = generateRunId();
+        const faults = yield* sessionStoreFaults(roots.storage);
+        // The opening's append claims the run; the hold the run takes on
+        // its claim right after is the launch's first `acquireClaims`.
+        yield* faults.failNext('acquireClaims');
+
+        const error = yield* Effect.flip(launch(session, runId));
+        expect(error.message).toContain('injected acquireClaims fault');
+        const end = storedRows(roots.storage).findLast(
+          (row) => row.run === runId && row.type === 'run.end',
+        );
+        expect(end && JSON.parse(end.data)).toMatchObject({
+          outcome: 'failed',
+          error: {
+            message: expect.stringContaining('injected acquireClaims fault'),
           },
-        });
-        expect(shown).toContainEqual({
-          event: 'requestShowError',
-          payload: expect.objectContaining({
-            message: expect.stringContaining('injected appendAll fault'),
-          }),
         });
       }),
   );

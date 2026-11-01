@@ -46,7 +46,7 @@ const APPLICATION_ID = 0x54655852;
  * `AggregateId` to, the durable `uid`, its sequence counter, its claim, its
  * parent edge, and two lifecycle facts written by the transaction that
  * makes them: `start_commit` (the commit of seq 1) and `closed_by` (the
- * tombstone's commit, `NULL` while open). The foreign keys are the
+ * deletion marker's commit, `NULL` while open). The foreign keys are the
  * collection mechanism: deleting an aggregate cascades to its dependents,
  * its events, its projections and their projected rows.
  */
@@ -267,7 +267,8 @@ const prepareStore = Effect.fnUntraced(function* (
       continue;
     }
     // Off outside the transaction (a no-op inside one): a drop then
-    // neither checks nor cascades a foreign key it removes anyway.
+    // neither checks nor cascades a foreign key it removes anyway. A failure
+    // to turn it back on fails the open, as a failed copy does.
     yield* run(sql, 'PRAGMA foreign_keys = OFF');
     const aside = yield* underCopy(
       sql,
@@ -277,9 +278,8 @@ const prepareStore = Effect.fnUntraced(function* (
           yield* run(sql, `DROP TABLE "${table}"`);
         yield* run(sql, 'PRAGMA user_version = 0');
       }),
-    ).pipe(
-      Effect.ensuring(run(sql, 'PRAGMA foreign_keys = ON').pipe(Effect.ignore)),
     );
+    yield* run(sql, 'PRAGMA foreign_keys = ON');
     if (aside === null) continue;
     yield* incrementalVacuum(sql);
     yield* Effect.logWarning(

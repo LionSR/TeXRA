@@ -9,27 +9,29 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports
-import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@texra/shared/constants/latexConfig';
+import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
 
 /** The documents plugin's workspace-scoped keys. */
-export enum DocumentsStateKey {
-  WORKFLOW_AUTO_COMPILE = 'texra.workflow.autoCompileAfterOutput',
-  WORKFLOW_AUTO_COMPILE_TIMEOUT_MS = 'texra.workflow.autoCompileTimeoutMs',
-  WORKFLOW_AUTO_OPEN_PDF = 'texra.workflow.autoOpenPdf',
-  WORKFLOW_REJECT_ON_COMPILE_FAILURE = 'texra.workflow.rejectOnCompileFailure',
-  LATEXDIFF_BETWEEN_ROUNDS = 'texra.latexdiff.generateBetweenRoundDiffs',
-  LATEXDIFF_TIMEOUT_MS = 'texra.latexdiff.timeoutMs',
-  LATEXDIFF_MATH_MARKUP = 'texra.latexdiff.mathMarkup',
-  LATEXDIFF_CHANGES_ONLY = 'texra.latexdiff.changesOnly',
-}
+export const DocumentsStateKey = Object.freeze({
+  WORKFLOW_AUTO_COMPILE: 'workflow.autoCompileAfterOutput',
+  WORKFLOW_AUTO_COMPILE_TIMEOUT_MS: 'workflow.autoCompileTimeoutMs',
+  WORKFLOW_AUTO_OPEN_PDF: 'workflow.autoOpenPdf',
+  WORKFLOW_REJECT_ON_COMPILE_FAILURE: 'workflow.rejectOnCompileFailure',
+  LATEXDIFF_BETWEEN_ROUNDS: 'latexdiff.generateBetweenRoundDiffs',
+  LATEXDIFF_TIMEOUT_MS: 'latexdiff.timeoutMs',
+  LATEXDIFF_MATH_MARKUP: 'latexdiff.mathMarkup',
+  LATEXDIFF_CHANGES_ONLY: 'latexdiff.changesOnly',
+} as const);
+export type DocumentsStateKey =
+  (typeof DocumentsStateKey)[keyof typeof DocumentsStateKey];
 
 /** The documents plugin's rows, in catalog order. */
-export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
+export const DOCUMENTS_SETTINGS: readonly TexraSettingRow[] = [
   {
     key: DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
     schema: Schema.Boolean.pipe(
@@ -43,7 +45,7 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
     category: 'workflow',
     slot: 'workspaceState',
     surfaces: { settingsView: 'latex', cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  } satisfies TexraSettingRow,
   {
     key: DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
     schema: Schema.Int.check(
@@ -61,7 +63,7 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
     category: 'workflow',
     slot: 'workspaceState',
     surfaces: { cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  } satisfies TexraSettingRow,
   {
     key: DocumentsStateKey.WORKFLOW_AUTO_OPEN_PDF,
     schema: Schema.Boolean.pipe(
@@ -74,10 +76,10 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
       'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
     category: 'workflow',
     slot: 'workspaceState',
-    // Read by the documents plugin, but the emitted `requestOpenFile` has no
+    // Read by the documents plugin, but the emitted `openFile` notice has no
     // CLI handler (headless), so the CLI ignores it.
     surfaces: { settingsView: 'latex' },
-  } satisfies SurfacedSettingEntry,
+  } satisfies TexraSettingRow,
   {
     key: DocumentsStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
     schema: Schema.Boolean.pipe(
@@ -91,7 +93,7 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
     category: 'workflow',
     slot: 'workspaceState',
     surfaces: { settingsView: 'latex', cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  } satisfies TexraSettingRow,
   // Run by the documents plugin, so every host honors them. The timeout is
   // kept out of the settings view (an insider knob) and edited from CLI
   // `/config`; the rest are deferred from `/config` by product decision.
@@ -108,7 +110,7 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
     category: 'latexdiff',
     slot: 'workspaceState',
     surfaces: { settingsView: 'latex' },
-  } satisfies SurfacedSettingEntry,
+  } satisfies TexraSettingRow,
   {
     key: DocumentsStateKey.LATEXDIFF_TIMEOUT_MS,
     schema: Schema.Int.check(
@@ -128,7 +130,7 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
     category: 'latexdiff',
     slot: 'workspaceState',
     surfaces: { cliConfig: true },
-  } satisfies SurfacedSettingEntry,
+  } satisfies TexraSettingRow,
   {
     key: DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
     schema: Schema.Literals(LATEXDIFF_MATH_MARKUP_VALUES).pipe(
@@ -147,7 +149,7 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
       'small changes inside equations',
     ],
     surfaces: { settingsView: 'latex' },
-  } satisfies SurfacedSettingEntry,
+  } satisfies TexraSettingRow,
   {
     key: DocumentsStateKey.LATEXDIFF_CHANGES_ONLY,
     schema: Schema.Boolean.pipe(
@@ -161,5 +163,5 @@ export const DOCUMENTS_SETTINGS: readonly SurfacedSettingEntry[] = [
     category: 'latexdiff',
     slot: 'workspaceState',
     surfaces: { settingsView: 'latex' },
-  } satisfies SurfacedSettingEntry,
+  } satisfies TexraSettingRow,
 ];

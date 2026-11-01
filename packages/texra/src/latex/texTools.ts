@@ -216,12 +216,13 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     // revised sibling wins over the original source fallback.
     const documentDir = path.dirname(latexFile);
 
-    const tikzInputDirectory = roots.config.get<string>(
-      'texra.latex.tikzInputDirectory',
+    const tikzInputDirectory = yield* Settings.get<string>(
+      roots,
+      'latex.tikzInputDirectory',
     );
     const includeWorkspace = yield* Settings.get<boolean>(
       roots,
-      'texra.latex.includeWorkspaceInTexinputs',
+      'latex.includeWorkspaceInTexinputs',
     );
     const { texInputParts, bibSearchParts } = buildLatexSearchParts({
       documentDir,

@@ -1,9 +1,12 @@
 # Target designs for the ten costliest tech debts
 
 Date: 2026-10-27
-Status: proposed — designs and PR slices; owner decisions listed below are open.
+Status: proposed — designs and PR slices; most slices have landed, and the open ones
+are listed under "Progress (2026-10-30)".
 Baseline: `main` at `d8a4f66`; `60967d2` adds only dependency bumps.
-Survey: [the ten costliest tech debts](../simplification/2026-10-27-top-ten-tech-debts.md).
+Survey: the 2026-10-27 "ten costliest tech debts" note, deleted as superseded by this
+one on 2026-10-30; read it with
+`git show 8fcd0a3391:.agents/docs/proposed/simplification/2026-10-27-top-ten-tech-debts.md`.
 
 Seven read-only design passes, one per root cause, each checked against
 the rulings ledger. Each target meets the two owner rules below. Line
@@ -146,9 +149,22 @@ exist), so they need no upcaster.
   The top-level `parentCard` is dropped. The card is not redundant with
   the call id, because providers may reuse a call id (`SelfTool.ts:95-99`).
   `RegisterRunOptions` takes one `parentCall`.
-- If D4 is accepted: `followup.queued` v3 and `log` v3 store
+- D4 (landed): `followup.queued` v3 and `log` v3 store
   `media: { name, mimeType, digest }[]` in place of `mediaFiles` paths.
   #14258 found no row carrying base64, so it can close as not planned.
+  `run.config.mediaFiles` stays a path list, and that is not a second
+  media reference. Like `inputFiles` it is a launch input. The opening
+  reads it once and commits the bytes by digest in its `append`, so the
+  run's history never reads media through it. Its later readers (output
+  pairing, figure mirroring, the `MEDIA` template, Run again, chat
+  export, document-task revisions) need the path itself. What remains is
+  that Run again or a revision after the pasted-file sweep fails loudly
+  with "File not found". Making Run again survive that needs the launcher
+  to hold stored media (the follow-up composer's pattern) across the
+  three hosts. A stored PDF reaches a model without native PDF support as
+  page images rasterized from its stored bytes when the follow-up is read
+  (`storedPdfPages`), so a launch's media could pass by address the same
+  way.
 
 **Golden store (#14260).** The race is in the guest script, not the
 generator. `GOLDEN_SCRIPT_SOURCE` (`run/validationModel.ts:62`) runs
@@ -534,6 +550,85 @@ rows on interrupt too is the optional D2.
 | T3    | Stage rows in the batches; `log.publish` calls and the `stageOpened` Ref deleted                                                                                                                              | −20     | the script's stage dual removed                                                          |
 | T4    | Typed shared keys                                                                                                                                                                                             | −10     | type-assertions 2 → 0                                                                    |
 | T5    | Scope finalizer plus `FiberMap`; the sweep (`toolUseDispatch.ts:916-946`), `ScriptDoor.settleAbandoned` (`RunCall.ts:115-121`), `ScriptTool.ts:270-284` and the context capture deleted. Behaviour-preserving | −50     | terminal-row and context duals removed (`moveBoundary` stays for interrupts and crashes) |
+
+## Progress and corrections (2026-10-28)
+
+Landed since this note: #14364 (L2 to L5, H1 to H5, S1, S3 to S5, V1 to V7,
+M3 to M5, T2, T5) and, after it, #14368, #14370, #14371, #14373 and #14375.
+Open: #14367, #14369 and #14372.
+
+- **Liveness, in process (§1):** done by #14373. The registry entry holds the
+  run's controls and `LiveRun.launched` (an open activation) is the one
+  answer for kill, wait and report suppression; `RunHandle`, `track` and
+  `untrackIfCurrent` are deleted. It also fixed a just-launched child reading
+  as gone to `ExecutionsTool`'s kill and to `shouldSkipWait`.
+- **The rest of §1 is extended by the 1.0 PRD**, which owns its order: the
+  activation opened at the call of `launch` and `resume` is the resume
+  attempt (it replaces `Resumes`, the SDK's `resuming` and `starting` maps and
+  the joiner's claim re-take), and an SDK `Run` is a view over the session that
+  owns no fiber, buffer or port. A review of that design found a lost stop: a
+  `run.stop` during a resume's decision phase, before `start` registers the
+  run, takes the ownerless branch of `RunRegistry.stop` and writes a cancelled
+  end, and the resume then activates the cancelled run.
+- **S6:** the history query's `runs` from the view is #14367. It drops the
+  `ended_at` and `error` columns, which the view does not hold and nothing
+  reads.
+- **H1:** the follower the hosts share is now the harness's
+  `followPendingRequests` on `FiberMap` (#14368); `answerRequests` uses it.
+- **Storage (§2), one more stored-shape change before the freeze:** the
+  `conversation.progress` row restates the loop's tool count; #14372 retires
+  it. Retired kinds read as `DatabaseRowCorrupt` until then, which marks the
+  run damaged against the Storage-format rule; #14372 makes a retired kind
+  read as an earlier build's row.
+- **Settings:** the approval policy's write reaction was a port on the shared
+  write function plus a host binding used only for that key; #14370 moves it
+  to each host's caller. The `invalidatesModelOptions` reactions per host stay
+  as they are, which is the intended split.
+- **D5:** done; #14375 deleted the examples' last write of the old
+  `polishModel` key.
+- **V9:** see the general-package design's 2026-10-28 re-check: of the 487
+  names on `./host` and `./schemas`, the forgotten-exports rule keeps all but
+  six; the remaining surface cuts are moves of app vocabulary and narrower
+  root signatures.
+
+## Progress (2026-10-30)
+
+Checked against `main` at `808521a8ed`. Landed since the 2026-10-28 entry:
+
+- **§1.** L3: no `new AbortController` remains under `packages/harness/src`;
+  the ESLint rule still names the ruling's one resident. The run lifecycle
+  moved on with #14382, #14389, #14395, #14396, #14411, #14412, #14414 and
+  #14416. The harness 1.0 release PRD (#14352, open) owns what is left of §1.
+- **§2.** S0: `GOLDEN_SCRIPT_SOURCE` runs its calls in sequence; the `--twice`
+  check was not added. S2: `run.start` carries `parent.call` and no top-level
+  `parentCard`; D4 and D5 are done. S6: #14367. `row-readers-baseline.json`
+  fell from 88 entries in 45 files to 43 entries over 15 row types. D9 is
+  still open.
+- **§3.** H1 to H5 are in: `followPendingRequests`, `runActionPolicy.ts` and
+  `openGuiWindow.ts` exist, and `ToolEditApprovalController.ts` is 365 lines.
+- **§5.** V1 to V8 are in (#14347 made `AppSignals` a process service and
+  #14313 is closed). V9 continues as surface cuts (#14371, #14384, #14388).
+- **§6.** M1 to M5: `enrichModelError` is gone, `api/background.ts` and
+  `turnInput.ts` exist, `backgroundOn` no longer checks the model name, and
+  no file outside `packages/llm` imports llm-zoo.
+- **§7.** T2 and T5: `settleAbandoned` is gone.
+
+Still open:
+
+| Slice      | State                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1, A2     | Landed 2026-10-30: 238 import lines in 151 suites moved onto the public entries; `config/ratchets/test-kernel-deep-import-baseline.json` is the kernel's shrink-only row (169 specifiers). The support modules stay on deep imports as the test composition root: converting them (`FakePlatform.ts`, `setupPlatform.ts`, `toolAvailabilityTestLayer.ts`) changes harness module evaluation order and breaks suites that `vi.mock` an internal module by its alias. |
+| A3 to A6   | Not started. `support/testKernel.ts` does not exist, the four setup modules remain, 58 suites import `defaultSessionTestSetup` or `sessionGraphTestSetup`, and the `kernel` project runs `isolate: true`.                                                                                                                                                                                                                                                           |
+| R1, R2     | Landed in #14335: `ZERO_RULES` holds nine rules at zero with no file, and file-size caps round up in steps (`file-size.json` changed in 5 of the last 50 commits, down from 16). R3, R4 open; D6 approved 2026-10-30.                                                                                                                                                                                                                                               |
+| M6 to M8   | Not started. No `test-live/cassette.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| T1, T3, T4 | Open. `toolUseDispatch.ts` is 1107 lines, its stage rows still go through `log.publish`, and it keeps two type-assertion entries.                                                                                                                                                                                                                                                                                                                                   |
+| D2         | Owner decision, still open. D6 and D9 were approved on 2026-10-30 (rulings ledger, "Ratchet scope"): D9 landed with the approval; D6's R3 and R4 are scheduled after the test-kernel work.                                                                                                                                                                                                                                                                          |
+
+The durable-harness residue note (2026-10-03) was deleted the same day: its
+`parentCard` item landed with S2, its `descriptionBy` item was refuted (the
+field has a reader, `forkRun.ts`), its duplicated error string is gone, and
+the two interrupted-roots readers (the open-time follower on the claim, the
+notice list on the view's `interrupted` group) are the liveness row of §1.
 
 ## Order of work
 

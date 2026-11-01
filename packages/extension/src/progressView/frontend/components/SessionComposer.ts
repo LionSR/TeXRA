@@ -1,5 +1,5 @@
 /**
- * The composer, one component in two states (PRD 12.1). Expanded, it is the
+ * The composer, one component in two states. Expanded, it is the
  * new-task launcher: the instruction, chips for agent and model (and the
  * working directory, only with two or more roots), and the polish,
  * dictation, attach, and send controls. The agent menu lists each agent
@@ -387,7 +387,7 @@ export class SessionComposer extends LitElement {
     );
     // The draft holds each chip's name now and its stored path once the
     // host answers (`sessionSurfaces.settleHost`).
-    const pending = added.map(({ fileName }) => ({ fileName, path: null }));
+    const pending = added.map(({ fileName }) => ({ fileName, media: null }));
     // An empty insert (every image failed, no text) leaves the draft be.
     if (insert !== '') {
       let text = `${this.text}${insert}`;

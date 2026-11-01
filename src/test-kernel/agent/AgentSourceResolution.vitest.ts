@@ -10,24 +10,25 @@ import { afterAll, beforeAll, describe, expect } from 'vitest';
 // Local imports
 import {
   AgentCatalog,
-  findAgentByIdentifier,
   type AgentCatalogShape,
-} from '@agent/index/agentCatalog';
-import type { AgentEntry } from '@agent/index/agentEntry';
-import { AgentDirectories, AppState } from '@platform/interfaces';
-import { GlobalStorageFs } from '@platform/rootedFs';
+  AgentDirectories,
+  type AgentEntry,
+  AppState,
+  GlobalStorageFs,
+  type RootedFileSystem,
+} from '@texra-ai/harness/host';
+import { findAgentByIdentifier } from '@agent/index/agentCatalog';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import {
   fakeHostAgentDirectories,
-  hostStores,
+  installedHost,
   installPlatform,
   storePluginsLayer,
 } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 /** The suite's catalog, loaded once the fake host is installed. */
 let catalog: AgentCatalogShape;
@@ -36,7 +37,7 @@ let catalog: AgentCatalogShape;
  * source the delegation captured at validation time (see `getAgentPath`). */
 function launchAs(entry: AgentEntry | undefined) {
   return entry
-    ? catalog.forLaunch(hostStores(), entry.name, entry.source)
+    ? catalog.forLaunch(installedHost().roots, entry.name, entry.source)
     : Effect.succeed(undefined);
 }
 
@@ -93,7 +94,7 @@ describe('shadowed agent resolution', () => {
           Layer.provide(
             Layer.mergeAll(
               Layer.succeed(GlobalStorageFs)({} as RootedFileSystem),
-              AgentDirectories.layer(fakeHostAgentDirectories),
+              Layer.succeed(AgentDirectories)(fakeHostAgentDirectories),
               AppState.layer(new FakeStateStore()),
               nodePlatformLayer,
               testHttpClientLayer,
@@ -117,7 +118,7 @@ describe('shadowed agent resolution', () => {
         expect(builtIn?.source).toBe('builtIn');
 
         // The entry validation accepts: the name within the visible agents.
-        const visible = yield* catalog.visible(hostStores());
+        const visible = yield* catalog.visible(installedHost().roots);
         const custom = yield* launchAs(
           findAgentByIdentifier(visible, 'assistant'),
         );

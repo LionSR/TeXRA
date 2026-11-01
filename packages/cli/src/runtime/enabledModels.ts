@@ -11,9 +11,13 @@
  * write that follows it hit the same store.
  */
 import { Effect } from 'effect';
-import { MODELS } from 'llm-zoo';
 
-import { isUnservedModel, modelConfig, modelRefOf } from '@texra-ai/llm';
+import {
+  isUnservedModel,
+  modelConfig,
+  modelRefOf,
+  MODELS,
+} from '@texra-ai/llm';
 import {
   getEnabledModels,
   setModelEnabled,

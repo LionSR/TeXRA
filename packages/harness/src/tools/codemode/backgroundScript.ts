@@ -12,16 +12,15 @@ import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
 import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
 import { type RunToolCall } from '@agent/runtime/RunCall';
-import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
-  AgentConfigSchema,
-  USER_FOLLOW_UP_SUPPORT,
-  type RunId,
-} from '@shared/schemas';
+  agentChildRunId,
+  earlierChild,
+} from '@agent/runtime/delegation/agentChild';
+import { childRunDescription } from '@agent/runtime/delegation/childRun';
+import { startDetachedChildRunLoop } from '@agent/runtime/delegation/detachedChildRun';
+import type { ApprovalGrants } from '@shared/approvalBypassKind';
+import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { executed } from '@tools/core/result';
-import { agentChildRunId, earlierChild } from '@tools/delegation/agentChild';
-import { childRunDescription } from '@tools/delegation/childRun';
-import { startDetachedChildRunLoop } from '@tools/delegation/detachedChildRun';
 
 /** What the model reads for a script sent to the background. */
 const receipt = (title: string, runId: RunId, again: boolean) => ({
@@ -76,7 +75,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
       outputSchema: null,
       cli: null,
       workingDirectory: workingDirectory ?? null,
-      delegationAgentScope: run.delegationAgentScope ?? null,
+      delegationAgentScope: run.config.delegationAgentScope ?? null,
       script: {
         code: input.code,
         title,
@@ -90,38 +89,28 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
       },
     }),
     session,
-    suppressErrorNotification: true,
   });
-  yield* Effect.uninterruptibleMask((restore) =>
-    startDetachedChildRunLoop({
-      session,
+  yield* startDetachedChildRunLoop({
+    session,
+    runId,
+    parentRunId,
+    agentName: title,
+    strategy: createScriptRunStrategy({
+      definition,
+      // Registered with its opening, which its run commits.
+      registration: {
+        identity: { kind: 'script', title },
+        parentRunId,
+        parentCall: { callId: call.callId, card: call.logId },
+        description: childRunDescription(title),
+        ...(grants !== undefined && { grants }),
+      },
       runId,
-      parentRunId,
-      agentName: title,
-      buildLaunch: () =>
-        restore(Clock.currentTimeMillis).pipe(
-          Effect.map((startedAt) =>
-            createScriptRunStrategy({
-              definition,
-              // Registered with its opening, which its run commits.
-              registration: {
-                identity: { kind: 'script', title },
-                userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                parentRunId,
-                parentCall: { callId: call.callId, card: call.logId },
-                description: childRunDescription(title),
-                ...(grants !== undefined && { grants }),
-              },
-              runId,
-              parentRunId,
-              session,
-              startedAt,
-              ...(workingDirectory != null && { workingDirectory }),
-              title,
-            }),
-          ),
-        ),
+      session,
+      startedAt: yield* Clock.currentTimeMillis,
+      ...(workingDirectory != null && { workingDirectory }),
+      title,
     }),
-  );
+  });
   return receipt(title, runId, false);
 });

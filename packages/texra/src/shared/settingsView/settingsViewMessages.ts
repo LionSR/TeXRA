@@ -8,20 +8,19 @@
  * dispatchers.
  */
 import { Effect, Schema, Struct } from 'effect';
-import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import {
   SUBSCRIPTION_AUTH_PROVIDERS,
-  type SettingsViewSnapshot,
-  AgentModePresetSchema,
   AgentScanIssueSchema,
   AgentSourceSchema,
-  ModelAvailabilityFieldsSchema,
   RunIdSchema,
   SkillDisplayIssueSchema,
   SkillDisplayItemSchema,
   WorkspaceStateKey,
 } from '@texra-ai/harness/schemas';
+import { type ModelProvider, ReasoningEffortSchema } from '@texra-ai/llm';
+import { AgentModePresetSchema } from '@texra/shared/agentTeams';
+import { ModelAvailabilityFieldsSchema } from '@texra/shared/pickerOptions';
 import { SubscriptionAuthStatusSchema } from '@texra/shared/model/subscriptionAuth';
 import { SubscriptionUsageSnapshotsSchema } from '@texra/shared/model/subscriptionUsage';
 import { settingSchemaWithoutDefault } from '@texra/shared/settingsView/settingRows';
@@ -53,7 +52,6 @@ import {
   PluginActionMessageSchema,
   PluginListItemSchema,
 } from './pluginMessages';
-import type { ModelProvider } from 'llm-zoo';
 
 /** An absolute URL the host may open. */
 const UrlSchema = Schema.String.check(
@@ -79,7 +77,7 @@ const SetTabMessageSchema = Schema.Struct({
  * catalog rows (`profile`, `models`); those arms still declare their own shape
  * below or in their own module.
  */
-const DERIVED_SETTINGS_SNAPSHOTS = [
+export const DERIVED_SETTINGS_SNAPSHOTS = Object.freeze([
   'agents',
   'approval',
   'git-author',
@@ -87,18 +85,22 @@ const DERIVED_SETTINGS_SNAPSHOTS = [
   'telemetry',
   'latex',
   'memory',
-] as const satisfies readonly SettingsViewSnapshot[];
+] as const);
 
 /** A snapshot whose whole payload is derived from the settings catalog. */
 export type DerivedSettingsSnapshot =
   (typeof DERIVED_SETTINGS_SNAPSHOTS)[number];
 
+/** Every settings-view snapshot: what a row's `surfaces.settingsView` names. */
+export type SettingsViewSnapshot =
+  DerivedSettingsSnapshot | 'models' | 'profile';
+
 /**
- * One snapshot's member of the outbound snapshot arm: its name plus one
+ * One snapshot's member of the outbound snapshot case: its name plus one
  * `values` object carrying every catalog row tagged for that snapshot, keyed
  * by its canonical `texra.*` key and validated by the row's own schema.
  *
- * An arm reads the one declared shape instead of restating its fields, so a row added to a snapshot reaches the wire, the
+ * A case reads the one declared shape instead of restating its fields, so a row added to a snapshot reaches the wire, the
  * backend read, and the webview apply step together. Keying by catalog key
  * also matches the inbound generic `UPDATE_STATE_SETTING` `{key, value}`
  * boundary, so both directions address a setting the same way.
@@ -249,10 +251,19 @@ const UpdateCustomAgentDirMessageSchema = Schema.Struct({
 // Agent team data schema
 // ============================================================
 
+/** One team card: a team from the workspace's team catalog and where it came
+ *  from. Only a custom team can be deleted. */
+const SettingsTeamPresetSchema = AgentModePresetSchema.mapFields(
+  Struct.assign({ source: Schema.Literals(['built-in', 'custom']) }),
+);
+export type SettingsTeamPreset = typeof SettingsTeamPresetSchema.Type;
+
 /** Outbound: backend → frontend agent teams (built-in + custom) */
 const UpdateAgentModePresetsMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS),
-  customPresets: Schema.Array(AgentModePresetSchema),
+  /** Every launchable team in catalog order: the built-in teams, then the
+   *  workspace's custom teams. */
+  presets: Schema.Array(SettingsTeamPresetSchema),
   /**
    * Agent names that can lead a team (carry delegation tools), computed from
    * the agent registry so preset cards badge orchestrators by capability

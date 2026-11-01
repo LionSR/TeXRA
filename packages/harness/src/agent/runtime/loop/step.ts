@@ -33,11 +33,12 @@
  * from the latest record unrecorded.
  */
 import { Effect, Exit, Record, Schema, Scope, SynchronizedRef } from 'effect';
-import { ModelProvider } from 'llm-zoo';
+import { ModelProvider } from '@texra-ai/llm';
 import stableStringify from 'safe-stable-stringify';
 
 import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
+import { readDelegationTargets } from '@agent/runtime/delegation/delegationAvailability';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginContext } from '@platform/processRuntime';
@@ -50,11 +51,10 @@ import {
   type SkillCatalogEntry,
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
+import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
-import { mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { readDisabledTools } from '@tools/plugins';
-import { readDelegationTargets } from '@tools/delegation/delegationAvailability';
 import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
@@ -197,7 +197,7 @@ const openStep = Effect.fn('Step.open')(function* (
     const trusted = isTrustedScript(run.config);
     const off = trusted
       ? Effect.succeed(new Set<string>())
-      : readDisabledTools(run.stores.globalState);
+      : readDisabledTools(roots.globalState);
     const pinned = yield* run.session.tools
       .pin(off, { installed: true, held: run.toolInputs.held })
       .pipe(Scope.provide(scope));
@@ -326,8 +326,8 @@ const openStep = Effect.fn('Step.open')(function* (
   const model = yield* SynchronizedRef.get(run.model);
   const delegation = yield* readDelegationTargets(
     step.tools,
-    run.toolInputs.stores,
-    run.delegationAgentScope ?? undefined,
+    roots,
+    run.config.delegationAgentScope ?? undefined,
   );
   const context = {
     ...stepInstructions(step.contributing, listed, {

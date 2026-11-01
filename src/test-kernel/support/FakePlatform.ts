@@ -19,11 +19,8 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import {
-  canonicalConfigKey,
-  type SettingHost,
-} from '@shared/state/stateSettings';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { teamMembers } from '@texra/shared/agentTeams';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import type { SecretsFailed } from '@texra-ai/llm';
 
@@ -31,7 +28,9 @@ import type { SecretsFailed } from '@texra-ai/llm';
  * One real temporary directory per worker process, holding both the fake
  * filesystem root and the shared global-storage directory. Cached on
  * `globalThis` so a suite that resets its module registry keeps the same
- * directories, and removed when the worker exits.
+ * directories. It sits in the run's temp folder, which the run's teardown
+ * removes (`testTempRoot.ts`): the pool ends a worker without its exit
+ * handlers.
  *
  * The realpath is resolved so the paths handed out are canonical: on macOS
  * `os.tmpdir()` traverses the `/tmp` to `/private/tmp` symlink and on Windows
@@ -46,7 +45,6 @@ function workerTempHome(): string {
       mkdtempSync(path.join(os.tmpdir(), 'texra-fake-')),
     );
     globals.__texraFakeHome__ = home;
-    process.on('exit', () => rmSync(home, { recursive: true, force: true }));
   }
   return globals.__texraFakeHome__;
 }
@@ -162,9 +160,9 @@ function seedFakeRoot(files: Record<string, string | Uint8Array>): void {
 export function fakeConfig(
   values: Record<string, unknown> = {},
 ): MemoryConfigProvider {
-  const config = new MemoryConfigProvider(TEXRA_SETTINGS);
+  const config = new MemoryConfigProvider(TEXRA_SETTINGS.catalog);
   for (const [key, value] of Object.entries(values)) {
-    const row = TEXRA_SETTINGS.byKey(canonicalConfigKey(key));
+    const row = TEXRA_SETTINGS.catalog.byKey(key);
     Effect.runSync(config.update(key, value, row?.configTarget ?? 'workspace'));
   }
   return config;
@@ -236,8 +234,6 @@ export interface FakePlatformOptions {
   storagePath?: string;
   /** The global-storage root, as a real path. Worker-shared by default. */
   globalStoragePath?: string;
-  /** The product host the roots name; the extension's by default. */
-  host?: SettingHost;
 }
 
 /** A fake host's shutdown scope and the port it serves as
@@ -274,7 +270,6 @@ export function createFakeWorkspaceRoots(
   > = {},
 ): WorkspaceRoots {
   return {
-    host: options.host ?? 'vscode',
     workspace: Object.hasOwn(options, 'workspacePath')
       ? options.workspacePath
       : fakePath('workspace'),
@@ -294,6 +289,7 @@ const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
   custom: () => Effect.sync(() => fakePath('workspace/.texra/agents')),
   customConfigured: () => Effect.succeed(false),
   builtIn: () => Effect.sync(() => fakePath('workspace/resources/agents')),
+  teamMembers,
 };
 
 export function createFakePlatform(

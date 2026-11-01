@@ -16,8 +16,9 @@ import {
   type RuntimeTool,
 } from '@agent/runtime/ToolServices';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import { sessionFsLayer } from '@platform/rootedFs';
+import type { SettingsStores } from '@shared/config/settings';
+import type { DraftBlob } from '@shared/session/historyTurns';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
@@ -28,7 +29,6 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { testCallPluginServices } from '@test/support/testPluginServices';
-import { generateShortId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
 /** The run a test call is made under: what every fixture names, plus whatever
@@ -49,12 +49,11 @@ export const noStep = () => SynchronizedRef.makeUnsafe<OpenStep | null>(null);
 /** A run fixture's step fields: no step opened yet, and every step offers
  *  exactly `tools`, as the run's own tools over an empty catalog. */
 export const testRunTools = (
-  stores: ModelOptionStores,
+  stores: SettingsStores,
   tools: Readonly<Record<string, RuntimeTool>> = {},
 ): Pick<AgentRunShape, 'toolInputs' | 'steps'> => ({
   toolInputs: {
     tools: [],
-    host: stores.host,
     runTools: Object.values(tools),
     injectTools: false,
     injectInstalled: false,
@@ -80,7 +79,7 @@ export function nativeToolTestLayer(
 ) {
   const roots = options.roots ?? testWorkspaceRoots();
   const { run, readFiles, origin, workingDirectory, stepRoots } = options;
-  const callId = options.callId ?? `call-${generateShortId()}`;
+  const callId = options.callId ?? `call-${crypto.randomUUID()}`;
   // A fixture is the slice of the run its case reads; the run answers for
   // its own config and trace with the inert pair.
   const toolRun: RunCallShape['run'] | undefined = run && {
@@ -147,11 +146,25 @@ export function nativeToolTestLayer(
         // A run's requests open unbound on its session: a test call has no
         // loop to bind them to.
         requests: {
-          nextId: (prefix: string) => `${prefix}-${generateShortId()}`,
-          open: (
-            payload: PermissionPayload,
-            opened?: { readonly onNeverCommitted?: Effect.Effect<void> },
-          ) => toolRun.session.requests.ask(toolRun.runId, payload, opened),
+          nextId: (prefix: string) => `${prefix}-${crypto.randomUUID()}`,
+          open: <P extends PermissionPayload>(
+            payload: P,
+            blobs?: readonly DraftBlob[],
+          ) =>
+            toolRun.session.requests
+              .ask(toolRun.runId, payload, {
+                ...(blobs && { blobs }),
+              })
+              .pipe(
+                Effect.map((decision) => ({
+                  // The fixture always answers the supplied request's kind.
+                  payload: payload as Extract<
+                    PermissionPayload,
+                    { kind: P['kind'] }
+                  >,
+                  decision,
+                })),
+              ),
           post: (requestId: string, payload: PermissionPayload) =>
             toolRun.session.runHistory.open(toolRun.runId).pipe(
               Effect.flatMap((cell) =>

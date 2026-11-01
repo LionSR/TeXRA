@@ -104,6 +104,9 @@ export interface JsonRpcConnectionOptions {
     method: string,
     params: unknown,
   ) => Effect.Effect<unknown> | undefined;
+  /** The `[method, params]` notification telling the peer we stopped waiting
+   *  for unanswered request `id` (its caller was interrupted, a timeout too). */
+  cancel?(id: number, method: string): readonly [string, unknown] | undefined;
 }
 
 type PendingError = JsonRpcRequestError | JsonRpcConnectionDisposed;
@@ -272,19 +275,17 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
         ).pipe(withLogChannel(CHANNEL));
         return;
       }
-      if (message.error) {
-        yield* Deferred.fail(
-          entry.deferred,
-          new JsonRpcRequestError({
-            method: entry.method,
-            message: message.error.message ?? 'JSON-RPC error',
-            code: message.error.code,
-            cause: message.error,
-          }),
-        );
-      } else {
-        yield* Deferred.succeed(entry.deferred, message.result);
-      }
+      yield* message.error
+        ? Deferred.fail(
+            entry.deferred,
+            new JsonRpcRequestError({
+              method: entry.method,
+              message: message.error.message ?? 'JSON-RPC error',
+              code: message.error.code,
+              cause: message.error,
+            }),
+          )
+        : Deferred.succeed(entry.deferred, message.result);
       return;
     }
     if (message.id != null) {
@@ -348,22 +349,29 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   // interruption of its reader.
   yield* Effect.addFinalizer(() => close('JsonRpcConnection disposed'));
 
+  const notify = Effect.fn('JsonRpc.notify')(function* (
+    method: string,
+    params?: unknown,
+  ) {
+    if ((yield* Ref.get(closedReason)) !== undefined) return;
+    yield* send({
+      jsonrpc: '2.0',
+      method,
+      ...(params !== undefined && { params }),
+    });
+  });
+
   const request = Effect.fn('JsonRpc.request')(function* <T>(
     method: string,
     params?: unknown,
   ) {
-    const reason = yield* Ref.get(closedReason);
-    if (reason !== undefined) {
-      return yield* new JsonRpcConnectionDisposed({ message: reason });
-    }
     const id = yield* Ref.updateAndGet(ids, (n) => n + 1);
     const deferred = yield* Deferred.make<unknown, PendingError>();
     yield* Ref.update(pending, (map) =>
       new Map(map).set(id, { method, deferred }),
     );
-    // `close` fails the table it drained, so a close that landed between the
-    // check above and this insert leaves this entry with nobody to fail it and
-    // no frame on the wire: re-read and fail it here rather than await forever.
+    // `close` fails only the table it drained, so an entry inserted after it
+    // would wait forever: read the state after the insert and fail it here.
     const closedSince = yield* Ref.get(closedReason);
     if (closedSince !== undefined) {
       yield* takePending(id);
@@ -375,22 +383,15 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
       method,
       ...(params !== undefined && { params }),
     });
+    const notice = options.cancel?.(id, method);
     const result = yield* Deferred.await(deferred).pipe(
-      Effect.onInterrupt(() => takePending(id)),
+      Effect.onInterrupt(() =>
+        Effect.flatMap(takePending(id), (entry) =>
+          entry && notice ? notify(...notice) : Effect.void,
+        ),
+      ),
     );
     return result as T;
-  });
-
-  const notify = Effect.fn('JsonRpc.notify')(function* (
-    method: string,
-    params?: unknown,
-  ) {
-    if ((yield* Ref.get(closedReason)) !== undefined) return;
-    yield* send({
-      jsonrpc: '2.0',
-      method,
-      ...(params !== undefined && { params }),
-    });
   });
 
   const inputEnded = Deferred.await(inputDone);

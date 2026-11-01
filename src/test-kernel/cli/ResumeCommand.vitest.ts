@@ -5,12 +5,15 @@ import { Effect, Schema } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  type AgentConfig,
+  AgentConfigSchema,
+  qualifyAggregateId,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { AgentConfigSchema, qualifyAggregateId } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';

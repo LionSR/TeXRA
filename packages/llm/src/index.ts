@@ -57,13 +57,26 @@ export {
 export type { ModelOrigin, PreparedHistoryEntry } from './protocol.js';
 export { AssistantMessageSchema, MessageSchema } from './message.js';
 export type { AssistantMessage, Continuation } from './message.js';
-export { ModelError, RemoteOperationSchema } from './errors.js';
+export { ModelError, fillModelError, RemoteOperationSchema } from './errors.js';
 export type {
   BillingRoute,
   ModelErrorFields,
   PlanRoute,
   RemoteOperation,
 } from './errors.js';
+
+// The llm-zoo catalog, so a consumer declares one dependency and one version.
+export {
+  DEFAULT_MODEL_CAPABILITIES,
+  EFFORT_SCALE,
+  hint,
+  MODEL_CONFIGS,
+  MODELS,
+  ModelProvider,
+  ReasoningEffort,
+} from 'llm-zoo';
+export type { ModelConfig, ModelRef, ReasoningMode } from 'llm-zoo';
+export { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 // Credentials and the provider manifest over llm-zoo.
 export { resolveCredential, SecretsFailed } from './providers/credentials.js';
@@ -122,7 +135,6 @@ export {
 } from './models/modelRoute.js';
 export type {
   ApiKeyUsageRoute,
-  HostRouteFacts,
   ModelRoute,
   RouteDecisionFacts,
   RouteFacts,

@@ -17,24 +17,22 @@ import {
   type ScriptScope,
 } from '@agent/runtime/RunCall';
 import { getRunRecords } from '@agent/storage/runRecords';
+import { childResult, failedResult } from '@agent/runtime/delegation/AgentTool';
+import {
+  agentChildRunId,
+  countLaunch,
+  recoverAgentChild,
+} from '@agent/runtime/delegation/agentChild';
+import { executeSubagentInBand } from '@agent/runtime/delegation/inBandSubagentRun';
+import { describeSubagentProgress } from '@agent/runtime/delegation/subagentRun';
 import {
   AgentConfigSchema,
-  type DispatchFacts,
-  qualifyAggregateId,
   ToolError,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult } from '@tools/core/result';
-import { childResult, failedResult } from '@tools/delegation/AgentTool';
-import {
-  agentChildRunId,
-  countLaunch,
-  recoverAgentChild,
-} from '@tools/delegation/agentChild';
-import { executeSubagentInBand } from '@tools/delegation/inBandSubagentRun';
-import { describeSubagentProgress } from '@tools/delegation/subagentRun';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -79,13 +77,11 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
     };
   if (script.kind !== 'background')
     return { config: run.config, source: null, before: 0, boundAt: undefined };
-  const start = (yield* run.session.log.records(run.runId)).find(
-    (row) => row.type === 'run.start',
-  );
+  const start = (yield* run.session.log.facts(run.runId))?.start;
   const missing = new ToolError(
     `self() needs the conversation the script ${run.runId} launched from, and the call that launched it.`,
   );
-  const edge = start?.type === 'run.start' ? start.parent : null;
+  const edge = start?.parent;
   if (edge?.call == null) return yield* Effect.fail(missing);
   const { id: parent } = edge;
   const { card } = edge.call;
@@ -95,31 +91,10 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   // one whose call opened the card the script's start names (a provider
   // may reuse a call id, never a card), or, for a call a script of the
   // conversation made, the response that issued that script.
-  const rows = yield* run.session.log.rows(qualifyAggregateId('run', parent), [
-    'model.message',
-    'script.call',
-  ]);
-  const issues = (
-    row: (typeof rows)[number],
-    ids: (call: DispatchFacts) => boolean,
-  ) =>
-    row.type === 'model.message' &&
-    row.payload.kind === 'response' &&
-    row.payload.calls.some(ids);
-  const at = rows.findIndex(
-    (row) =>
-      issues(row, ({ logId }) => logId === card) ||
-      (row.type === 'script.call' && row.payload.logId === card),
+  const conversation = yield* run.session.runHistory.load(parent);
+  const issued = Object.values(conversation?.calls ?? {}).find(
+    ({ logId }) => logId === card,
   );
-  const owner = rows[at];
-  const issued =
-    owner?.type === 'script.call'
-      ? rows
-          .slice(0, at)
-          .findLast((row) =>
-            issues(row, ({ callId }) => callId === owner.payload.scriptCallId),
-          )
-      : owner;
   if (config === null || issued === undefined)
     return yield* Effect.fail(missing);
   return {

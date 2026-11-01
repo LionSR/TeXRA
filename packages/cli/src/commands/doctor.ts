@@ -24,14 +24,14 @@ import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/cliContext';
 
 /**
- * The whole command as one program: the init fold and the report it feeds,
+ * The whole command as one program: the init and the report it feeds,
  * with no Promise between them.
  */
 function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
   return Effect.gen(function* () {
     // The one step that cannot run on the process runtime, because it is what
     // builds it. Its failure is a row in the report rather than a throw, so
-    // it is folded here and handed to the builder as data — over the whole
+    // it is caught here and handed to the builder as data — over the whole
     // cause, because a platform that dies on the way up is as much "no
     // platform" as one that fails.
     const init = yield* Effect.exit(initCliPlatform(context));
@@ -47,7 +47,7 @@ function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
       }).pipe(Effect.provide(nodePlatformServices));
     }
     const services = init.value;
-    // The healthy report settles on the root's own context — the provision
+    // The healthy report runs on the root's own context — the provision
     // `services.runtime.runPromise` made before this became one program — so
     // the account read's Effect logs reach the CLI's own sink.
     return yield* withProcessServices(
@@ -84,7 +84,7 @@ const DOCTOR_ARGS = {
 } as const;
 
 /** `--prune-storage` is a program on the process runtime, which reads the
- *  global root's store records: the one arm of this command that can take
+ *  global root's store records: the one case of this command that can take
  *  `defineCliCommand`. */
 const pruneStorageCommand = defineCliCommand({
   meta: { name: 'doctor' },
@@ -98,7 +98,7 @@ export const doctorCommand = defineCommand({
   args: DOCTOR_ARGS,
   // The one command that cannot take `defineCliCommand`: that helper installs
   // the process runtime and runs the command's program on it, and this report
-  // can borrow a runtime at neither end — none exists when the init fold
+  // can borrow a runtime at neither end — none exists when the init
   // begins, and an init that fails disposes the one it installed before it
   // re-raises. So the whole command, context build included, is one program
   // run here: the CLI's one pinned no-runtime run of a command

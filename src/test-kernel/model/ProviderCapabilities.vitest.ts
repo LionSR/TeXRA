@@ -1,34 +1,40 @@
 import { it } from '@effect/vitest';
 import { afterEach, describe, expect } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  MODEL_CONFIGS,
-  ModelProvider,
-  ReasoningEffort,
-  type ModelConfig,
-} from 'llm-zoo';
 
 import { Effect } from 'effect';
-import { codexBackendModelId, routeConfig } from '@texra-ai/llm';
+import {
+  codexBackendModelId,
+  DEFAULT_MODEL_CAPABILITIES,
+  MODEL_CONFIGS,
+  type ModelConfig,
+  ModelProvider,
+  ReasoningEffort,
+  routeConfig,
+} from '@texra-ai/llm';
+import { Secrets } from '@texra-ai/harness/host';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
-import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import {
+  fakeHostSecrets,
+  installedHost,
+  installPlatform,
+} from '@test/support/setupPlatform';
 
 /** The input window the Codex backend grants the fixture model. */
 const CODEX_INPUT_LIMIT = 272_000;
 
 /** The config a model runs with on the ChatGPT subscription. */
 const chatgptConfig = (config: ModelConfig) =>
-  readModelSettings(hostStores()).pipe(
+  readModelSettings(installedHost().roots).pipe(
+    Effect.provideService(Secrets, fakeHostSecrets),
     Effect.map((settings) => routeFactsFor(settings, [])),
     Effect.map((facts) =>
-      routeConfig(
-        config,
-        {
-          kind: 'chatgpt-subscription',
-          contextWindow: config.codexSubscription?.contextWindow ?? Number.NaN,
-        },
-        facts,
-      ),
+      routeConfig(config, {
+        kind: 'chatgpt-subscription',
+        contextWindow:
+          facts.chatgptContextWindow ??
+          config.codexSubscription?.contextWindow ??
+          Number.NaN,
+      }),
     ),
   );
 
@@ -61,8 +67,8 @@ describe('provider capabilities', () => {
         yield* Effect.promise(() =>
           installPlatform({
             config: {
-              'texra.chatgptCodex.preferSubscription': true,
-              'texra.chatgptCodex.contextWindowK': 900,
+              'chatgptCodex.preferSubscription': true,
+              'chatgptCodex.contextWindowK': 900,
             },
           }),
         );

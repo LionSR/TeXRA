@@ -19,6 +19,7 @@ import { StatusCodes } from 'http-status-codes';
 // Local imports
 import { type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
+import { Settings } from '@texra-ai/harness/host';
 import {
   isTransportReason,
   scopedClient,
@@ -35,9 +36,9 @@ const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
 /** The configured Zotero port: one port for both the Connector API and the
  *  Better BibTeX JSON-RPC (different paths). Every reader takes it from the
  *  configuration it was handed — a tool from its call
- *  (`call.env.roots.config.get(ZOTERO_PORT_KEY)`), the dashboard's
+ *  (`Settings.get(call.env.roots, ZOTERO_PORT_KEY)`), the dashboard's
  *  availability group from its probe inputs. */
-export const ZOTERO_PORT_KEY = 'texra.bib.zoteroPort';
+export const ZOTERO_PORT_KEY = 'bib.zoteroPort';
 
 /**
  * The `execute` every Zotero tool wants: take the call, read the configured
@@ -58,7 +59,7 @@ export const withZoteroPort =
       const call = yield* ToolContext;
       return yield* run(
         input,
-        call.env.roots.config.get<number>(ZOTERO_PORT_KEY),
+        yield* Settings.get<number>(call.env.roots, ZOTERO_PORT_KEY),
       );
     });
 
@@ -402,7 +403,7 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
       ZOTERO_CONNECTOR_TIMEOUT_MS,
       Effect.gen(function* () {
         // The request scope stays open through the body read, after the
-        // header request has already settled.
+        // header request has already finished.
         const client = yield* scopedClient;
         const response = yield* client.post(
           zoteroUrl(port, `/connector/${endpoint}`),

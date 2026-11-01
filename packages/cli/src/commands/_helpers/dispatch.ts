@@ -385,12 +385,6 @@ function addFlagSpec(specs: CommandFlagSpecs, name: string, def: ArgDef): void {
   }
 }
 
-function addInteractiveHeadlessOnlyFlags(specs: CommandFlagSpecs): void {
-  for (const name of HEADLESS_ONLY_GLOBAL_ARG_NAMES) {
-    addFlagSpec(specs, name, GLOBAL_ARGS[name]);
-  }
-}
-
 async function commandFlagSpecs(
   resolved: ResolvedCliCommand,
 ): Promise<CommandFlagSpecs> {
@@ -408,7 +402,9 @@ async function commandFlagSpecs(
   ) {
     // Keep the existing explicit "interactive command" usage error for these
     // known headless-only global flags instead of downgrading it to "unknown".
-    addInteractiveHeadlessOnlyFlags(specs);
+    for (const name of HEADLESS_ONLY_GLOBAL_ARG_NAMES) {
+      addFlagSpec(specs, name, GLOBAL_ARGS[name]);
+    }
   }
 
   return specs;

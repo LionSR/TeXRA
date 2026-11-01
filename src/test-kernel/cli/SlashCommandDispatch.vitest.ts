@@ -7,6 +7,7 @@ import { Effect } from 'effect';
 
 import { afterEach, describe, expect, vi } from 'vitest';
 
+import { withProcessServices } from '@texra-ai/harness/host';
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
 import { type SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
@@ -15,14 +16,11 @@ import { notices } from '@cli/chat/tui/state/transcript';
 import { resetCliState } from '@cli/chat/tui/state/cliState';
 import { activeForm } from '@cli/chat/tui/state/formSlot';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { withProcessServices } from '@platform/processRuntime';
-import type { ApprovalPolicy } from '@shared/approvalPolicy';
-import { type RunId } from '@shared/schemas';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import type { ApprovalPolicy, RunId } from '@texra-ai/harness/schemas';
 
 afterEach(() => {
   installSlashCommands([]);
@@ -34,8 +32,7 @@ afterEach(() => {
  * pair the chat entry point threads in from its own platform services.
  */
 const services = {
-  secrets: new FakeSecrets(),
-  stores: makeFakeSettingsStores('cli').stores,
+  stores: makeFakeSettingsStores().stores,
   runtime: testRuntime(),
   runtimeSession: testSessionOf(testDefaultSession()),
   runSession: testSessionOf(testDefaultSession()),

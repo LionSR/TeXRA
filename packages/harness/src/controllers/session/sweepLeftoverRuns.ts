@@ -1,65 +1,35 @@
-import { Effect, SubscriptionRef } from 'effect';
+import { Effect } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  aggregateTarget,
-  type SessionEvent,
-  type RunId,
-} from '@shared/schemas';
-import { lastLifecycleRow } from '@shared/session/runFacts';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import type { RunView } from '@shared/session/sessionView';
 
 const CHANNEL = 'LeftoverRunSweep';
 
-/** Runs still going: held by this process, or listed by the view as
- *  running or waiting (a run whose owner process died is listed as
- *  interrupted, so it is swept). */
-function runningRuns(session: SessionHandle): Set<RunId> {
-  const running = new Set(session.runs.get().map((run) => run.runId));
-  for (const run of SubscriptionRef.getUnsafe(session.view.ref).runs.values()) {
-    if (run.group === 'running' || run.group === 'waiting') running.add(run.id);
-  }
-  return running;
-}
-
-/** Remove the nonresumable background-shell cohort captured before session open. */
+/**
+ * Remove the ended background shells of the cohort captured before session
+ * open: a shell is not resumable, and its result reached its parent with
+ * its end. One still running is a live process's, or a dead one's, which
+ * its parent finishes as it resumes (`closeLeftoverChildren`).
+ */
 export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
   session: SessionHandle,
-  rows: readonly SessionEvent[],
+  cohort: Iterable<RunView>,
 ) {
-  // A shell parked holding its result for its parent in its current
-  // lifecycle stays until that result is delivered.
-  const holds = (row: SessionEvent): boolean => {
-    if (row.type !== 'child.park' || row.heldFor === undefined) return false;
-    const target = aggregateTarget(row.aggregateId);
-    if (target.kind !== 'run') return false;
-    const since = lastLifecycleRow(rows, target.id);
-    return since?.type !== 'run.end' && row.commit > (since?.commit ?? 0);
-  };
-  const removed = new Set(
-    rows
-      .filter((row) => row.type === 'run.removed' || holds(row))
-      .map((row) => row.aggregateId),
-  );
-  const running = runningRuns(session);
-  for (const row of rows) {
+  for (const shell of cohort) {
     if (
-      row.type !== 'run.start' ||
-      row.identity.kind !== 'process' ||
-      removed.has(row.aggregateId)
+      shell.identity.kind !== 'process' ||
+      !isTerminalOutcomePhase(shell.status)
     )
       continue;
-    const target = aggregateTarget(row.aggregateId);
-    if (target.kind !== 'run') continue;
-    const runId = target.id;
-    if (running.has(runId)) continue;
     yield* session.requests
-      .removeRun(runId, 'automatic', row.commit)
+      .removeRun(shell.id, 'automatic', shell.createdAt)
       .pipe(
         Effect.catch((error) =>
           Effect.logWarning(
             'A background shell was retained because automatic deletion was refused.',
           ).pipe(
-            Effect.annotateLogs({ data: { runId, error } }),
+            Effect.annotateLogs({ data: { runId: shell.id, error } }),
             withLogChannel(CHANNEL),
           ),
         ),

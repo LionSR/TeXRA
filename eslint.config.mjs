@@ -747,6 +747,20 @@ export default tseslint.config(
       ],
       'local/no-unused-imports': 'error',
       'local/no-vscode-import-in-free-zones': 'error',
+      // The catalog reaches everything outside the model package through
+      // `@texra-ai/llm`, which pins the one llm-zoo version. The core rule's
+      // options are replaced per block, so this uses the typescript-eslint one.
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'llm-zoo', message: 'Import it from @texra-ai/llm.' },
+          ],
+          patterns: [
+            { group: ['llm-zoo/**'], message: 'Import it from @texra-ai/llm.' },
+          ],
+        },
+      ],
       'prefer-const': 'error',
 
       // No temporary adapters (owner ruling 2026-09-06, Effect 4 migration
@@ -793,6 +807,7 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: { project: ['./packages/llm/tsconfig.json'] },
     },
+    rules: { '@typescript-eslint/no-restricted-imports': 'off' },
   },
 
   // The live tier is a separate program over the same package: its own
@@ -1040,7 +1055,7 @@ export default tseslint.config(
   // entries, which are exempt whole-file: that the run is on the entry's own
   // runtime is enforced by review). Everywhere else a run is below the
   // boundary: convert the file and its callers so the run moves to a host
-  // entry. `new AbortController()` is held to its two permanent residents
+  // entry. `new AbortController()` is held to its one permanent resident
   // (rulings ledger, "permanent AbortController residents"). Flat config
   // replaces the `no-restricted-syntax` array for a file, so each file group
   // below lists every selector that applies to it. The core
@@ -1071,7 +1086,7 @@ export default tseslint.config(
     const abort = {
       selector: "NewExpression[callee.name='AbortController']",
       message:
-        'No new AbortController: the two permanent residents are named in eslint.config.mjs (rulings ledger). Use fiber interruption or Effect.abortSignal.',
+        'No new AbortController: the permanent resident is named in eslint.config.mjs (rulings ledger). Use fiber interruption or Effect.abortSignal.',
     };
     const promise = [
       {
@@ -1089,10 +1104,7 @@ export default tseslint.config(
         (dir) => file === dir || file.startsWith(`${dir}/`),
       );
     const entries = EFFECT_RUN_ENTRIES;
-    const residents = [
-      'packages/harness/src/agent/runtime/childRunLoop.ts',
-      'packages/texra/src/tools/claudeAgent.ts',
-    ];
+    const residents = ['packages/texra/src/tools/claudeAgent.ts'];
     const iconFile = 'packages/texra/src/ui/wa/webAwesomeIcons.ts';
     const block = (files, ignores, ...selectors) => ({
       files,
@@ -1139,14 +1151,13 @@ export default tseslint.config(
       block([iconFile], [], ...run, abort),
       block(
         CORE_QUALITY_GLOBS,
-        ['**/*.vitest.ts', ...entries, ...residents],
+        ['**/*.vitest.ts', ...entries],
         waIcon,
         ...run,
         abort,
         ...promise,
       ),
       block(entries.filter(inCore), [], waIcon, abort, ...promise),
-      block(residents.filter(inCore), [], waIcon, ...run, ...promise),
     ];
   })(),
 );

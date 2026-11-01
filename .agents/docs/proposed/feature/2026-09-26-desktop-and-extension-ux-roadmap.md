@@ -65,7 +65,8 @@ Each item is independent and small enough for one PR.
 4. **Command palette reach.** The palette
    (`packages/desktop/src/shared/desktopCommandSurface.ts`) has no Open
    Terminal / Files / Browser or switch-project commands.
-5. **Settings search.** The settings view has no filter across its tabs.
+5. **Settings search.** Each settings catalog has its own search field
+   (`SettingsCatalog.ts`); there is still no filter across the tabs.
    Paragraph-length descriptions that expose internals remain (for example
    "Interactions (submit + poll)" in `stateSettings.ts`). The owner has not
    decided whether the Agents › Advanced switches stay, so wait on that

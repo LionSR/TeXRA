@@ -3,7 +3,7 @@
  * `('plugin', 'external-inquiry:<threadId>')`, and its latest `plugin.fact`
  * of kind `thread` is the summary the Background Tasks panel lists under the
  * run that asked, the row's `parent`. The thread's full record stays in the
- * global database (`InquiryRecords`); this row only displays it. Core folds
+ * global database (`InquiryRecords`); this row only displays it. Core applies
  * the row without reading it (`SessionView.pluginFacts`); this module is its
  * schema, its writer and its one reader, beside the service over the
  * thread records. Browser-safe: it imports only schemas and `effect`.

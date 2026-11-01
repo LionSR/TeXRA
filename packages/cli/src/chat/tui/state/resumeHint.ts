@@ -1,4 +1,5 @@
-import { quote } from 'shell-quote';
+import { Result } from 'effect';
+import * as CommandLine from 'effect/process/CommandLine';
 
 import {
   descendantRuns,
@@ -35,6 +36,12 @@ export interface ResumeCommandOptions {
 }
 
 const DEFAULT_RESUME_COMMAND_NAME = 'texra';
+/** The shell a person pastes the hint into: PowerShell on Windows. */
+const SHELL_FORMAT = process.platform === 'win32' ? 'powershell' : 'posix';
+
+/** A path from argv or the working directory, which holds no NUL to fail on. */
+const shellArgument = (value: string): string =>
+  Result.getOrThrow(CommandLine.quote(value, { format: SHELL_FORMAT }));
 
 export function formatResumeCommand(
   commandName: string | undefined,
@@ -43,7 +50,7 @@ export function formatResumeCommand(
 ): string {
   const cwd = options.cwd;
   const cwdArg =
-    cwd && cwd !== options.processCwd ? ` --cwd ${quote([cwd])}` : '';
+    cwd && cwd !== options.processCwd ? ` --cwd ${shellArgument(cwd)}` : '';
   const policyFlag =
     options.approvalPolicy && options.approvalPolicy !== 'ask'
       ? ` --approval-policy ${options.approvalPolicy}`
@@ -56,7 +63,7 @@ export function formatResumeCommand(
   const interopFlag =
     options.includeInteropSkills === true ? ' --include-interop' : '';
   const sourceFlags = (options.skillSourcePaths ?? [])
-    .map((source) => ` --source ${quote([source])}`)
+    .map((source) => ` --source ${shellArgument(source)}`)
     .join('');
   return `${commandName || DEFAULT_RESUME_COMMAND_NAME} resume ${runId}${cwdArg}${policyFlag}${outputFormatFlag}${printFlag}${interopFlag}${sourceFlags}`;
 }

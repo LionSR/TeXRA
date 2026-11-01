@@ -3,11 +3,11 @@
  * fiber per attached
  * port, the `Subscribe` handler, and the two request handlers. The
  * extension attaches its sidebar webview and its editor tab as two ports,
- * the desktop attaches its renderer per open paper; each port's frames are
+ * the desktop attaches its renderer per open project; each port's frames are
  * cut from the same session graph and each port's transcript set is one
- * member of the union the fold sees. What the host renders but does not own
+ * member of the union the view sees. What the host renders but does not own
  * rides every port's frames as the `host` snapshot, one level per session
- * that the host's producers write through `setHost`.
+ * that the host's producers write.
  *
  * Ownership is scoped: `make` builds the bridge in the scope its host
  * holds and closes; `attach` forks a port scope from it, and the port's
@@ -76,6 +76,9 @@ const RequestEnvelopeSchema = Schema.Struct({
 interface SessionBridgeOptions {
   /** The session this bridge frames and requests through. */
   readonly session: Session;
+  /** The host snapshot every port frames, which the host's producers
+   *  write. */
+  readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>;
   readonly onPortClosed: (port: string) => void;
   /** The host's capabilities, performed on the surface's behalf, as
    *  one program per request that takes the process services from the fiber
@@ -83,9 +86,9 @@ interface SessionBridgeOptions {
    *  `Cancelled` or refuses with `Unavailable` or `Rejected`; anything else
    *  it fails or dies with is a defect, logged here and answered
    *  `Internal`. The channel is {@link HostRequestFailure}: each host lifts
-   *  a Promise-faced capability once, under the member's name, so every arm
+   *  a Promise-faced capability once, under the member's name, so every case
    *  fails with a tag and a bare rejection value can no longer reach this
-   *  fold. The last arm that widened it to `Error` was the transcript
+   *  channel. The last case that widened it to `Error` was the transcript
    *  export; its steps carry tags now. */
   readonly handleHostRequest: (
     request: HostRequest,
@@ -155,28 +158,22 @@ export class SessionBridge {
   static make(
     options: SessionBridgeOptions,
   ): Effect.Effect<SessionBridge, never, Scope.Scope> {
-    return Effect.gen(function* () {
-      const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
-      const scope = yield* Effect.scope;
-      return new SessionBridge(options, host, scope);
-    });
+    return Effect.map(
+      Effect.scope,
+      (scope) => new SessionBridge(options, scope),
+    );
   }
 
   /** The session key on every message: the session's storage root. */
   readonly key: string;
   private readonly ports = new Map<string, PortEntry>();
 
-  private constructor(
-    private readonly options: SessionBridgeOptions,
-    private readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>,
-    private readonly scope: Scope.Scope,
-  ) {
+  private readonly options: SessionBridgeOptions;
+  private readonly scope: Scope.Scope;
+  private constructor(options: SessionBridgeOptions, scope: Scope.Scope) {
+    this.options = options;
+    this.scope = scope;
     this.key = options.session.roots.storage;
-  }
-
-  /** The host's producers write the snapshot every port frames. */
-  setHost(snapshot: HostSnapshot): Effect.Effect<void> {
-    return SubscriptionRef.set(this.host, snapshot);
   }
 
   /** The host acting on surface-owned state: every attached port
@@ -264,7 +261,7 @@ export class SessionBridge {
       const frames = Stream.runForEach(
         frameSubscription(
           { key: this.key, view: this.options.session.view },
-          this.host,
+          this.options.host,
           subscribe,
         ),
         (frame) => Effect.sync(() => entry.port.send(frame)),

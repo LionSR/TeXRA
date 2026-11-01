@@ -16,7 +16,7 @@
 import { Schema } from 'effect';
 
 import { JsonValueSchema } from './jsonValue';
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 
 /** Provider bytes, kept verbatim and never interpreted by storage. */
 const ProviderEvidenceSchema = Schema.Struct({
@@ -24,12 +24,9 @@ const ProviderEvidenceSchema = Schema.Struct({
   data: Schema.Record(Schema.String, JsonValueSchema),
 });
 
-/** Every wire surface a stored turn or usage record names. */
-export const StoredProtocolSchema = Schema.Literals([
-  'google-interactions',
-  'openai-responses',
-  'anthropic-messages',
-]);
+/** The wire surface recorded by a turn or usage fact. Its identity outlives
+ *  the installed adapters; the execution boundary validates support. */
+export const StoredProtocolSchema = Schema.String.check(Schema.isMinLength(1));
 
 /** The selected binding: protocol, deployment and model, never a secret. */
 export const StoredOriginSchema = Schema.Struct({
@@ -57,6 +54,16 @@ const MediaAddress = {
   mimeType: Schema.String.check(Schema.isMinLength(1)),
   digest: Sha256Schema,
 };
+/** Media a message attached, as a follow-up and its transcript row name
+ *  it: the file name it was attached under, and its bytes by address, as
+ *  a media part holds them, so the rows never point at a file that may be
+ *  gone. */
+export const StoredMediaSchema = Schema.Struct({
+  name: Schema.String.check(Schema.isMinLength(1)),
+  ...MediaAddress,
+});
+/** One attached media item by address ({@link StoredMediaSchema}). */
+export type StoredMedia = typeof StoredMediaSchema.Type;
 const StoredInputPartSchema = Schema.Union([
   TextPartSchema,
   Schema.Struct({

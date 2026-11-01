@@ -4,7 +4,7 @@
  * `/executions` listing. Parentage is the view's
  * `parentId`, so a detached run is top level here as everywhere else.
  */
-import type { RunId, RunRelation, SessionEvent } from '@shared/schemas';
+import type { RunId, RunRelation } from '@shared/schemas';
 
 type ParentOf = (runId: RunId) => RunId | null | undefined;
 
@@ -18,17 +18,6 @@ function ancestry(runId: RunId, parentOf: ParentOf): RunId[] {
   }
   return line;
 }
-
-/** The run's parent edge as its rows leave it: null for a root, and for a
- *  child a `run.detach` severed. */
-export const parentEdgeOf = (
-  rows: readonly SessionEvent[],
-): Extract<SessionEvent, { type: 'run.start' }>['parent'] => {
-  const edge = rows.findLast(
-    (row) => row.type === 'run.start' || row.type === 'run.detach',
-  );
-  return edge?.type === 'run.start' ? edge.parent : null;
-};
 
 /** What run `a` is to run `b`. */
 export function runRelation(

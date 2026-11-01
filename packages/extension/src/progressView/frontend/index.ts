@@ -1,5 +1,5 @@
 /**
- * The progress webview entry (PRD one-fold-three-renderers, 7.7): the one
+ * The progress webview entry: the one
  * bundle the sidebar and the editor tab load. It registers the shell and
  * mounts the runtime onto the `<progress-app>` the host's HTML carries.
  */

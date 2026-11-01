@@ -5,10 +5,6 @@ import { Schema } from 'effect';
  * approach, and a verifiable stopping condition. It deliberately has no
  * structured steps, so the document stays a clear objective statement
  * that can seed an autonomous goal verbatim.
- *
- * Pre-June-2026 plans were structured ({summary, steps[]}); those simply
- * fail to parse and read back as "no plan", which is fine — a plan only
- * matters for the session it was approved in.
  */
 export const PlanSchema = Schema.Struct({
   objective: Schema.String.check(Schema.isMinLength(1)).annotate({
@@ -17,6 +13,26 @@ export const PlanSchema = Schema.Struct({
   }),
 });
 export type Plan = typeof PlanSchema.Type;
+
+/** The goal plugin's row kind: the run's approved plan, a fact of the
+ *  `plan` call the user approved. */
+export const GOAL_PLAN_ARM = Object.freeze({
+  plugin: 'goal',
+  kind: 'plan',
+  version: 1,
+  schema: PlanSchema,
+  upcasters: Object.freeze([]),
+} as const);
+
+/** The plan the user last approved in `run` (its `RunView.facts`), if any. */
+export function planOf(run: {
+  readonly facts: Readonly<Record<string, unknown>>;
+}): Plan | null {
+  const value = run.facts[`${GOAL_PLAN_ARM.plugin}/${GOAL_PLAN_ARM.kind}`];
+  return value === undefined
+    ? null
+    : Schema.decodeUnknownSync(PlanSchema)(value);
+}
 
 const MARKDOWN_HEADING_RE = /^#{1,6}\s+/;
 

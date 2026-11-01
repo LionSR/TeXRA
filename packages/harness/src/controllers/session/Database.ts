@@ -31,7 +31,6 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
@@ -40,10 +39,10 @@ import {
   edgesOf,
   isDisplaySessionEvent,
   RunIdSchema,
-  ownerIdentity,
   aggregateTarget,
   referencedAggregates,
   type AggregateId,
+  type OwnerId,
   type RunParent,
   type SessionEvent,
   type SessionEventDraft,
@@ -66,6 +65,7 @@ import { armsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
+import { proveRecorded } from './ownerLiveness';
 import { LISTED_TYPES, projectionUpkeep } from './projections';
 import {
   EVENT_COLUMNS,
@@ -195,8 +195,8 @@ export const databaseLayer = (
       const identity = yield* ProcessIdentity;
       const fs = yield* FileSystem.FileSystem;
       const spawner = yield* ChildProcessSpawner;
-      const liveness = (owner: string) =>
-        proveOwnerLiveness(ownerIdentity(owner)).pipe(
+      const liveness = (owner: OwnerId) =>
+        proveRecorded(identity.owners, owner).pipe(
           Effect.provideService(FileSystem.FileSystem, fs),
           Effect.provideService(ChildProcessSpawner, spawner),
         );
@@ -317,7 +317,7 @@ export const databaseLayer = (
         INDEXED BY event_aggregate_type ${EVENT_JOINS}
         WHERE s.kind = ? AND s.logical_id = ? AND e.seq >= ?
           AND e.type IN (SELECT value FROM json_each(?)) ORDER BY e.seq`;
-      // A tombstone closes its run and stays its last row until collected.
+      // A deletion marker closes its run and stays its last row until collected.
       const pendingDeletions = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e.type = 'run.removed' ORDER BY e."commit"`;
       // One aggregate's display rows, its projected rows among them.
@@ -479,8 +479,8 @@ export const databaseLayer = (
       const pluginRows = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e.aggregate = ? AND e.type = 'plugin.fact' ORDER BY e.seq`;
       const readState = (ids: readonly AggregateId[]) =>
-        Effect.gen(function* () {
-          return (yield* exec(READ_STATE, aggregateLists(ids))).map((row) =>
+        Effect.map(exec(READ_STATE, aggregateLists(ids)), (rows) =>
+          rows.map((row) =>
             Schema.decodeUnknownSync(AggregateStateSchema)({
               ...row,
               aggregateId: aggregateOf(row.kind, row.logicalId),
@@ -489,8 +489,8 @@ export const databaseLayer = (
                   ? null
                   : aggregateOf(row.parentKind, row.parentLogicalId),
             }),
-          );
-        });
+          ),
+        );
       const readDependents = (id: AggregateId) =>
         Effect.gen(function* () {
           return yield* readState(
@@ -690,7 +690,7 @@ export const databaseLayer = (
                   : null,
             };
           }
-          // A tombstone names only run directories this lifecycle owns,
+          // A deletion marker names only run directories this lifecycle owns,
           // derived under the closure's permit and transaction, not a caller.
           const committedDraft = yield* Effect.gen(function* () {
             if (draft.type === 'run.removed') {
@@ -749,7 +749,7 @@ export const databaseLayer = (
           }
           if (edges.closes) {
             // Closing an aggregate requires every open dependent claim, held
-            // in the tombstone's transaction, so no claimant can change between.
+            // in the deletion marker's transaction, so no claimant can change between.
             const unowned = yield* execOne(unownedDependent, [
               ...columns,
               identity.ownerId,
@@ -774,7 +774,7 @@ export const databaseLayer = (
         level,
         currentCommit: query(currentCommit),
         readDisplay: (fromCommit) => {
-          // Pages are separate snapshots: a tombstone seen stays in view.
+          // Pages are separate snapshots: a deletion marker seen stays in view.
           const tombstones = new Map<number, SessionEvent>();
           return Stream.paginate(fromCommit, (from) =>
             projected(

@@ -1,9 +1,10 @@
 /**
  * Session description generation.
  *
- * When a run starts, generates a short AI summary describing what it aims to
- * accomplish, published as the run's `run.description` row so the stream tab,
- * history view, and future agents can quickly understand each session.
+ * When a run starts, or resumes without one, generates a short AI summary
+ * describing what it aims to accomplish, published as the run's
+ * `run.description` row so the stream tab, history view, and future agents
+ * can quickly understand each session.
  */
 
 import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
@@ -13,7 +14,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { helperCall } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
-import type { ModelOptionStores } from '@model/computeModelOptions';
+import type { Secrets } from '@platform/secrets';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
@@ -47,7 +48,7 @@ function cleanSessionDescription(text: string): string {
   return truncateWithEllipsis(cleaned, MAX_DESCRIPTION_LENGTH);
 }
 
-const SYSTEM_PROMPT = `Generate a short TeXRA session label from the agent name, description, and user's instruction. Use at most 10 words and no trailing period. Be specific but terse. Use no full sentences, meta-commentary, or quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Fixing TikZ arrow alignment").`;
+const SYSTEM_PROMPT = `Generate a short session label from the agent name, description, and user's instruction. Use at most 10 words and no trailing period. Be specific but terse. Use no full sentences, meta-commentary, or quotes. Use present-tense verb phrases (e.g. "Reviewing introduction for clarity", "Fixing TikZ arrow alignment").`;
 
 /**
  * Build a user prompt for session description generation.
@@ -91,13 +92,15 @@ const DESCRIPTION_DEADLINE = '20 seconds';
  *
  * Every run qualifies, the children a script's `agent()` calls create
  * included: without one they are labelled by their agent name alone.
+ * A resumed run (`resumed`) is described only while it has no
+ * `run.description` row, as when its process died before the helper
+ * answered, so no run is described twice.
  * Uses the configured helper model for a one-shot, non-streaming call.
  * On success, commits the run's `run.description` row, which the meta fold
  * and every renderer read.
  *
- * `stores` are the process secret store and global state the run already
- * holds (the `Secrets` / `AppState` services), which the helper model is
- * resolved against.
+ * The helper model is resolved against the session's settings slots
+ * (`session.roots`) and the process `Secrets` read from context.
  */
 export const generateSessionDescription = Effect.fn(
   'generateSessionDescription',
@@ -106,17 +109,22 @@ export const generateSessionDescription = Effect.fn(
   config: AgentConfig,
   agentDescription: string | undefined,
   session: SessionHandle,
-  stores: ModelOptionStores,
+  resumed: boolean,
 ): Effect.fn.Return<
   void,
   never,
-  HttpClient.HttpClient | UsageLog | RouteRetries
+  HttpClient.HttpClient | UsageLog | RouteRetries | Secrets
 > {
   const instruction = getDisplayedInstruction(config);
   if (!instruction) return;
   yield* Effect.gen(function* () {
+    if (resumed) {
+      // A run already described, or one gone, keeps what it has.
+      const facts = yield* session.log.facts(runId);
+      if (facts === null || facts.title !== null) return;
+    }
     const text = yield* helperCall(
-      stores,
+      session.roots,
       {
         userPrompt: buildUserPrompt(
           config.agent,

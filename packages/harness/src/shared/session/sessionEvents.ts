@@ -9,13 +9,14 @@ import {
   Layer,
   type Scope,
   type Stream,
-  type SubscriptionRef,
+  SubscriptionRef,
 } from 'effect';
 
 import type {
   AggregateId,
   CommitOrdinal,
   OwnerId,
+  OwnerLiveness,
   SessionEvent,
   DisplaySessionEvent,
   SessionEventDraft,
@@ -124,13 +125,29 @@ export type Append = (
  * `ownerId` stamped on every event the process appends and the `self` entry
  * of its local runtime snapshot. Resolved once at each process entry, where
  * the start identity can be awaited, and provided to the process layer.
+ * Beside it, its liveness verdicts on claim owners, which every liveness
+ * proof goes through (`proveRecorded`): a `dead` one is final.
  */
 export class ProcessIdentity extends Context.Service<
   ProcessIdentity,
-  { readonly ownerId: OwnerId }
+  {
+    readonly ownerId: OwnerId;
+    readonly owners: SubscriptionRef.SubscriptionRef<
+      ReadonlyMap<OwnerId, OwnerLiveness>
+    >;
+  }
 >()('@texra-ai/harness/session/ProcessIdentity') {
   static layer(ownerId: OwnerId): Layer.Layer<ProcessIdentity> {
-    return Layer.succeed(ProcessIdentity)({ ownerId });
+    return Layer.effect(
+      ProcessIdentity,
+      Effect.map(
+        SubscriptionRef.make<ReadonlyMap<OwnerId, OwnerLiveness>>(new Map()),
+        (owners) => ({
+          ownerId,
+          owners,
+        }),
+      ),
+    );
   }
 }
 

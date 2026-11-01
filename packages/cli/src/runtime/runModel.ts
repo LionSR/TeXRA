@@ -44,9 +44,10 @@ function cliRunModelCandidates(
 }
 
 /**
- * `stores` is the secret store and the three setting slots availability and the
- * command's configured default are read from, handed over by the command's own
- * `initCliPlatform` result rather than looked up again here.
+ * `stores` is the three setting slots availability and the command's
+ * configured default are read from, with the runtime that serves `Secrets`,
+ * handed over by the command's own `initCliPlatform` result rather than looked
+ * up again here.
  */
 export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
   context: CliContext,

@@ -90,7 +90,7 @@ interface ProviderApiKeyFormProps {
     provider: ApiKeyProviderId,
     key: string,
   ) => Effect.Effect<string | void, Error, Secrets>;
-  /** The runtime that program settles on, from the surface that mounted this
+  /** The runtime that program runs on, from the surface that mounted this
    *  form — Ink components run no Effect of their own. */
   readonly runtime: ProcessRuntime;
   readonly onDone: (provider: ApiKeyProviderId, modelNotice?: string) => void;

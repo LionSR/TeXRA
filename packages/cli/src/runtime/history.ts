@@ -24,6 +24,7 @@ import { absentReason } from '@texra-ai/harness/node';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
+import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 
 import { CliUsageError } from './cliContext';
@@ -67,7 +68,7 @@ export interface CliHistoryEntry {
   readonly model: string;
   readonly status: HistoryRunStatus;
   /** `records(id).readResumable()`'s answer, the one `texra resume` acts on.
-   *  Ownership and loadability are settled when the run is opened.
+   *  Ownership and loadability are decided when the run is opened.
    *  Independent of the frozen `status`: a failed run can be resumable. */
   readonly resumable: boolean;
   /** The listing's cause when the run cannot resume in this build (its rows
@@ -83,7 +84,7 @@ export interface CliHistoryEntry {
 interface CliHistoryDetails {
   readonly id: RunId;
   readonly status: HistoryRunStatus;
-  /** The run's launch facts as the session's fold holds them. */
+  /** The run's launch facts as the session view holds them. */
   readonly run: Pick<RunView, 'launchedAt' | 'parentId' | 'description'> | null;
   readonly config: AgentConfig | null;
   readonly result: RunResult | null;
@@ -203,7 +204,10 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       ],
       { concurrency: 8 },
     );
-    // The model the run is on, as the view folds it for the listing too.
+    if (!run && !config && conversation.length === 0 && !checkpointPresent) {
+      return null;
+    }
+    // The model the run is on, as the view derives it for the listing too.
     const currentModel = config ? (run?.model ?? undefined) : undefined;
     // The same rule the listing applies, from the same facts: `status` is a
     // frozen contract, so `history show` must not answer it differently from
@@ -227,9 +231,6 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       })),
     );
 
-    if (!run && !config && conversation.length === 0 && !checkpointPresent) {
-      return null;
-    }
     return {
       id,
       status: standing.status,
@@ -269,7 +270,7 @@ type CliHistoryExportInputResult =
  * ChatExportInput} the markdown export formatter consumes (the HTML export path
  * uses `assembleTrace` instead — see `commands/history.ts`). Thin CLI-specific
  * wrapper around the shared {@link loadChatExportInput} loader, which also
- * backs the progress-view `ChatExportController.buildExportInput` — so the CLI
+ * backs the progress-view `writeTranscript` operation — so the CLI
  * and GUI render the same conversation identically.
  *
  * Distinguishes "this run id has no stored data at all" (`not_found`
@@ -297,9 +298,6 @@ export const readCliHistoryExportInput = Effect.fn(
   return { status: 'incomplete' } satisfies CliHistoryExportInputResult;
 });
 
-/** Single-file trace-viewer bundle (file://-safe, inlined assets). */
-const TRACE_VIEWER_DIR_NAME = 'traceViewer';
-
 /**
  * Read the trace-viewer's single-file default bundle — one self-contained
  * `index.html` with no external `assets/` (JS/CSS/fonts all inlined) so the
@@ -313,11 +311,7 @@ const TRACE_VIEWER_DIR_NAME = 'traceViewer';
 export function readCliHistoryStandaloneTemplate(
   resourcesPath: string,
 ): Effect.Effect<string | null, CliUsageError, FileSystem.FileSystem> {
-  const templatePath = path.join(
-    resourcesPath,
-    TRACE_VIEWER_DIR_NAME,
-    'index.html',
-  );
+  const templatePath = traceViewerTemplatePath(resourcesPath);
   return FileSystem.FileSystem.use((fs) =>
     fs.readFileString(templatePath),
   ).pipe(
@@ -500,7 +494,7 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.agent,
-    // The model the run is on, as the listing folds it from the run's
+    // The model the run is on, as the listing derives it from the run's
     // snapshots; the record keeps the model it was launched with.
     model: entry.model ?? config.model,
     status,

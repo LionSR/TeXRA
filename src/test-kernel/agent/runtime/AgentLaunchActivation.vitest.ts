@@ -16,10 +16,11 @@ import { describe, expect } from 'vitest';
 
 import '@test/support/sessionGraphTestSetup';
 
+import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+import { withProcessServices } from '@texra-ai/harness/host';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { withProcessServices } from '@platform/processRuntime';
-import { AgentConfigSchema } from '@shared/schemas';
+import { Runs } from '@agent/runtime/runRegistry';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
   parkedAfter,
@@ -31,7 +32,6 @@ import {
 } from '@test/support/storeFaults';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { generateRunId } from '@utils/core';
 
 const config = (instruction: string) =>
   Schema.decodeUnknownSync(AgentConfigSchema)({
@@ -79,18 +79,18 @@ describe(
               Effect.flatMap((definition) =>
                 executeAgent(definition, runId, {
                   session,
-                  parentRunId,
                   registration: {
                     identity: { kind: 'agent', agent: 'assistant' },
                     parentRunId,
                   },
                 }),
               ),
+              Effect.provideService(Runs, session.runs),
             ),
           );
           expect(ended).toMatchObject({
             outcome: 'failed',
-            error: { message: expect.stringContaining('injected appendAll') },
+            failure: { message: expect.stringContaining('injected appendAll') },
           });
           expect(
             storedRows(roots.storage).filter((row) => row.run === runId),

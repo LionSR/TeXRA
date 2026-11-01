@@ -1,6 +1,6 @@
 /**
  * The run history over one session's log, and every run's cell: reads take
- * the aggregate's every row (`SessionLog.rows`, never the display tail),
+ * the run's history rows (`SessionLog.history`, never the display tail),
  * writes go through the session's one door (`SessionLog.transact`, done
  * once the view has applied them) or the job a cell was opened within, and
  * `applyRunRows` rebuilds the state on both paths.
@@ -28,6 +28,7 @@ import {
 import {
   applyRunRows,
   freshRunState,
+  isRunStateRow,
   RunHistoryInconsistent,
   unboundRequests,
   type RunHistoryDraft,
@@ -129,16 +130,14 @@ function unsafeEndpoint(origin: ModelOrigin): string | null {
     : `${url.protocol}//${url.host}${url.pathname} carries ${violations.join(' and ')}`;
 }
 
-/**
- * The batch at provisional commits above the state's: the row handlers read
- * a `commit` only to require strict increase, so applying these answers
- * "does this batch apply?" exactly as the published rows will.
- */
+/** The batch's history rows at provisional commits above the state's: the
+ *  handlers read a `commit` only for strict increase, so these apply as the
+ *  published rows will. */
 const candidates = (
   state: RunState,
   rows: readonly RunHistoryDraft[],
 ): readonly RunHistoryRow[] =>
-  rows.map((row, i) => ({
+  rows.filter(isRunStateRow).map((row, i) => ({
     ...row,
     ...{ seq: i + 1, commit: state.commit + i + 1, origin: null, at: 0 },
   }));
@@ -189,7 +188,7 @@ const inconsistent = (runId: RunId, cause: RunHistoryInconsistent) =>
     cause,
   });
 
-/** Committed rows applied to `state`, their turns read back first. */
+/** Committed history rows applied to `state`, their turns read back first. */
 const applyStored = (state: RunState | null, rows: readonly SessionEvent[]) =>
   Result.flatMap(runHistoryRows(rows), (live) => applyRunRows(state, live));
 
@@ -295,9 +294,9 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
       ? sessionLog.transact((tx) => job(tx.append))
       : job(within)
   ).pipe(notOwner(run));
-  // The same rows again at the commits the publisher assigned: the state
-  // the run continues from. A failure here is this module's defect.
-  const applied = applyStored(state, committed);
+  // The same history rows again at the commits the publisher assigned: the
+  // state the run continues from. A failure here is this module's defect.
+  const applied = applyStored(state, committed.filter(isRunStateRow));
   if (Result.isSuccess(applied) && applied.success !== null)
     return applied.success;
   const why = Result.isFailure(applied) ? applied.failure.detail : 'nothing';
@@ -310,10 +309,10 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
  * transaction that activates it.
  */
 export function makeRunHistory(
-  sessionLog: Pick<SessionLog, 'transact' | 'rows'>,
+  sessionLog: Pick<SessionLog, 'transact' | 'history'>,
 ): RunHistory['Service'] {
   const stored = (run: RunId) =>
-    sessionLog.rows(qualifyAggregateId('run', run));
+    sessionLog.history(qualifyAggregateId('run', run));
 
   /** `load`, and a read inside a job (`prepared` false: a batch that
    *  changes the history is checked from where it changes). */
@@ -359,7 +358,8 @@ export function makeRunHistory(
           const rows = [...(yield* activation(before)), ...cancels];
           const written =
             rows.length === 0 ? [] : yield* runStateAppend(tx.append)(rows);
-          return yield* loaded(run, applyStored(before, written));
+          const history = written.filter(isRunStateRow);
+          return yield* loaded(run, applyStored(before, history));
         }),
       )
       .pipe(notOwner(run));

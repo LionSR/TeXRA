@@ -280,7 +280,7 @@ export const progressAppStyles = css`
     min-height: 0;
   }
 
-  /* The five banners sit directly above the composer (PRD 12.1); the free
+  /* The five banners sit directly above the composer; the free
      space is above them. */
   .launch-banners {
     flex: 0 0 auto;

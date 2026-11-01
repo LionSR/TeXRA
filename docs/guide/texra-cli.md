@@ -186,6 +186,9 @@ texra run polish --input paper.tex
 
 A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) that an
 Anthropic API key can spend once you link a Console organization to the plan.
+A ChatGPT Pro or Business plan includes [monthly API credits](https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions)
+that an OpenAI API key can spend once you claim them for an API organization
+you own.
 
 A project's `.env` file is read by every task of that project. A key set
 only in this terminal does not reach a task that runs in the TeXRA service;
@@ -433,9 +436,9 @@ closed or crashed TeXRA stopped mid-way. With `"texra.resumeOnOpen":
 "auto"` in `~/.texra/v1/global-storage/config.json` it continues them; the
 default, `ask`, lists them above the input, where `/resume all` continues
 them and anything else you send hides the list. A task whose agent is missing, or
-comes from a plugin that is off or not trusted, waits until that is fixed
-and then continues by itself. `texra run` never resumes anything on its
-own.
+comes from a plugin that is off or not trusted, waits until that is fixed;
+under `auto` it then continues by itself, under `ask` it is listed again.
+`texra run` never resumes anything on its own.
 
 A run another TeXRA process still holds is refused, and the message names
 that process's pid and host. A holder that cannot be reached (it ran on another

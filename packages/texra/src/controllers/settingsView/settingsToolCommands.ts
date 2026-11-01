@@ -30,16 +30,13 @@ import type { WorkspaceRoots } from '@texra-ai/harness';
 export function settingsToolCommands(ports: {
   readonly roots: Pick<
     WorkspaceRoots,
-    | 'host'
-    | 'workspace'
-    | 'config'
-    | 'globalState'
-    | 'globalStorage'
-    | 'storageRoot'
+    'workspace' | 'config' | 'globalState' | 'globalStorage' | 'storageRoot'
   >;
   readonly bindings: SettingsHostBindings;
+  /** The host installs an editor extension a plugin card names. */
+  readonly installsExtensions: boolean;
 }) {
-  const { bindings, roots } = ports;
+  const { bindings, roots, installsExtensions } = ports;
   const refresh = Effect.flatMap(ToolAvailability, (availability) =>
     availability.refresh(roots),
   );
@@ -54,7 +51,10 @@ export function settingsToolCommands(ports: {
     Effect.flatMap(ToolAvailability, (availability) =>
       Effect.flatMap(SubscriptionRef.get(availability.results), (held) =>
         Effect.map(
-          buildPluginRows(roots, held.get(roots.workspace)),
+          buildPluginRows(
+            { ...roots, installsExtensions },
+            held.get(roots.workspace),
+          ),
           (built) => ({
             command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS,
             ...built,
@@ -109,6 +109,7 @@ export function settingsToolCommands(ports: {
           log: 'Warn',
           message: 'The empty plugin page could not be posted either.',
         }),
+        withLogChannel(SETTINGS_LOG_CHANNEL),
         rowsLane.withPermits(1),
         Effect.andThen(refresh),
       ),
@@ -121,7 +122,7 @@ export function settingsToolCommands(ports: {
    * Repaint the rows whenever this workspace's results change, whoever
    * probed: a session opening, the Re-check button, a credential write, an
    * editor extension installed. Runs until interrupted; the host holds it
-   * for the view's life and settles each repaint.
+   * for the view's life and finishes each repaint.
    */
   const followToolAvailability = <E, R>(
     repaint: (post: typeof postPlugins) => Effect.Effect<void, E, R>,
@@ -147,16 +148,18 @@ export function settingsToolCommands(ports: {
       ),
     // The command is looked up from the plugin's card, never taken from
     // the webview.
-    runToolCommand: ({ toolId, kind }) => {
-      const action = planToolTerminalAction({ toolId, commandKind: kind });
-      return action.kind === 'none'
-        ? Effect.fail(
-            new Error(
-              `No ${kind} command for tool "${toolId}" (${action.reason})`,
-            ),
-          )
-        : bindings.runInTerminal(action.name, action.command);
-    },
+    runToolCommand: ({ toolId, kind }) =>
+      Effect.flatMap(
+        planToolTerminalAction({ toolId, commandKind: kind }),
+        (action) =>
+          action.kind === 'none'
+            ? Effect.fail(
+                new Error(
+                  `No ${kind} command for tool "${toolId}" (${action.reason})`,
+                ),
+              )
+            : bindings.runInTerminal(action.name, action.command),
+      ),
     runInstallCommand: ({ installCommand }) =>
       isAllowedLatexInstallCommand(installCommand)
         ? bindings.runInTerminal('TeXRA Install', installCommand)

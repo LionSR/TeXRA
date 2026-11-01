@@ -2,30 +2,24 @@ import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
 import {
-  SessionHostInteractions,
-  type HostInteractions,
-} from '@agent/runtime/HostInteractions';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  qualifyAggregateId,
-  aggregateTarget,
   type BashPermission,
   type DisplaySessionEvent,
+  qualifyAggregateId,
   type RequestDecision,
   type RunId,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import {
+  type HostInteractions,
+  SessionHostInteractions,
+} from '@texra-ai/harness/host';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { aggregateTarget } from '@shared/schemas';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import {
-  prepareToolEditApprovalPrompt,
-  type ToolEditApprovalRequest,
-} from '@tools/approval/toolEditApproval';
-import { generateShortId } from '@utils/core';
-import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 /**
  * Loosely-typed recording of host emissions. The recording host flattens the
@@ -117,8 +111,6 @@ export function createRecordingHost(): {
     emit: (event, payload) => {
       events.push({ event, payload });
     },
-    presentToolEdit: (request) =>
-      events.push({ event: 'presentToolEdit', payload: request.permission }),
   };
   const host = new SessionHostInteractions() as SessionHostInteractions &
     RecordingProgressSink;
@@ -250,35 +242,10 @@ export function bashApprovalRequest(request: {
   readonly runId?: RunId;
 }): BashPermission {
   return {
-    requestId: `bash-${generateShortId()}`,
+    requestId: `bash-${crypto.randomUUID()}`,
     command: request.command,
     ...(request.cwd ? { cwd: request.cwd } : {}),
     allowBypass: true,
     runId: request.runId ?? '',
   };
 }
-
-/** A tool-edit request carrying the prompt the tool boundary prepares. */
-export const toolEditApprovalRequest = Effect.fn('toolEditApprovalRequest')(
-  function* (
-    request: Parameters<typeof prepareToolEditApprovalPrompt>[1]['request'],
-  ) {
-    const session = yield* sessionWithInteractions(undefined);
-    const { permission, hunks, firstChangedLine } =
-      prepareToolEditApprovalPrompt(session, {
-        requestId: `approval-${generateShortId()}`,
-        request,
-        relativePath: workspaceRelativePath(
-          session.roots.workspace,
-          request.path,
-        ),
-      });
-    return {
-      ...request,
-      roots: session.roots,
-      permission,
-      hunks,
-      firstChangedLine,
-    } satisfies ToolEditApprovalRequest;
-  },
-);

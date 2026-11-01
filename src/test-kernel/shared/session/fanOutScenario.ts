@@ -6,26 +6,26 @@
 // the two can never drift.
 
 import { Schema } from 'effect';
-import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
-  qualifyAggregateId,
   AgentConfigSchema,
-  emptyRunEndOutput,
-  MESSAGE_TYPES,
-  RunIdSchema,
-  type SessionViewInput,
-  type LocalRuntimeState,
-  type RunIdentity,
+  type ApprovalGrants,
   type DisplaySessionEvent,
+  emptyRunEndOutput,
+  type LocalRuntimeState,
+  MESSAGE_TYPES,
+  qualifyAggregateId,
   type RunId,
-  type RunParent,
-} from '@shared/schemas';
+  type RunIdentity,
+  RunIdSchema,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
+import type { RunParent } from '@shared/schemas';
 import {
   makeSessionViewUpdater,
   type SessionViewUpdater,
 } from '@shared/session/sessionViewUpdate';
-import type { SessionView } from '@shared/session/sessionView';
 import { DOCUMENTS_OUTPUT_ARM } from '@texra/shared/plugins/documents';
+import type { SessionViewInput } from '@texra-ai/harness/transcript';
 
 /** A process identity, never a lease token. */
 export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
@@ -252,10 +252,6 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'run.position',
     payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
   });
-  log.emit(CHILD, T.childProgress, {
-    type: 'conversation.progress',
-    progress: { toolCallCount: 3 },
-  });
   log.emit(CHILD, T.childApproval, {
     type: 'request.opened',
     requestId: 'req-1',
@@ -370,6 +366,7 @@ export function buildScenario({ proposal = false } = {}) {
         kind: 'proposal',
         data: {
           requestId: 'req-plan',
+          allowBypass: true,
           runId: ROOT,
           task: true,
           agent: 'review',

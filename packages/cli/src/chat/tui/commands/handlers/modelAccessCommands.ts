@@ -1,10 +1,7 @@
 import { Effect } from 'effect';
 
 import { type ApiKeyProviderId } from '@texra-ai/llm';
-import {
-  quotaFallbackRouteFor,
-  type PlatformSecrets,
-} from '@texra-ai/harness/host';
+import { quotaFallbackRouteFor } from '@texra-ai/harness/host';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
@@ -65,8 +62,8 @@ export const applyCliModelAccessSelection = Effect.fn(
 
 /** `/login status`: every sign-in, route preference, and quota in one list. */
 export const showCliAccountStatus = Effect.fn('showCliAccountStatus')(
-  function* (stores: SettingsStores, secrets: PlatformSecrets) {
-    const lines = yield* loadCliDetailedAccountStatusLines(stores, secrets);
+  function* (stores: SettingsStores) {
+    const lines = yield* loadCliDetailedAccountStatusLines(stores);
     transcriptSlashCommandOutput.appendOutcome(lines.join('\n'));
   },
 );

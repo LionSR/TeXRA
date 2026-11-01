@@ -16,16 +16,23 @@ import {
 } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
-import { withLogChannel, getSdkErrorMessage } from '@texra-ai/harness/host';
+import {
+  withLogChannel,
+  getSdkErrorMessage,
+  Settings,
+} from '@texra-ai/harness/host';
 import {
   inheritedEnv,
   withExtendedPath,
-  findCommand,
-  type FoundCommand,
   absentReason,
   pathExists,
 } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
+import {
+  findCommand,
+  type FoundCommand,
+} from '@texra/utils/system/binaryResolver';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ChildProcessHandle,
@@ -40,7 +47,7 @@ const RECORDINGS_DIR = 'recordings';
  * Where this session's recordings live. The roots arrive as data from the
  * caller that owns the session, so a recording writes under that session's
  * storage root without the module entering (or reading) an ambient roots
- * scope — the desktop holds one session per open paper.
+ * scope — the desktop holds one session per open project.
  */
 export function recordingsDir(roots: WorkspaceRoots): string {
   return path.join(roots.storage, RECORDINGS_DIR);
@@ -94,7 +101,10 @@ const resolveSoxCommand = Effect.fnUntraced(function* (
   AudioRecorderError,
   FileSystem.FileSystem | ChildProcessSpawner
 > {
-  const configuredPath = roots.config.get<string>('texra.audio.soxPath');
+  const configuredPath = Settings.getConfig<string>(
+    roots.config,
+    'audio.soxPath',
+  );
   if (configuredPath) {
     // The path is validated before being probed, so a non-absolute
     // `soxPath` fails "Path must be absolute: ..." and the recording
@@ -177,7 +187,7 @@ export function startRecording(
       soxCommand.command,
       [...soxCommand.args, ...soxArgs],
       {
-        env: withExtendedPath(yield* inheritedEnv()),
+        env: withExtendedPath(yield* inheritedEnv(), commandDirs()),
         extendEnv: false,
         stdin: 'ignore',
         stdout: 'ignore',

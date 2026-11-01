@@ -15,7 +15,7 @@ import type { Session } from '@texra-ai/harness';
  * Projects the accumulated spend of the runs currently in flight for the
  * extension status bar.
  *
- * Holds no state of its own: the session's fold is the one reader of which
+ * Holds no state of its own: the session view is the one reader of which
  * runs are live (`isLiveRun`, the reading every host shares) and carries each
  * run's own metered total (`RunView.usage`); a live tree's total is
  * `RunView.treeUsage`, the total every host's session total reads. The pill shows the session's
@@ -26,7 +26,10 @@ import type { Session } from '@texra-ai/harness';
  * the total without any bookkeeping here.
  */
 export class StatusBarUsageTracker {
-  constructor(private readonly session: Pick<Session, 'view'>) {}
+  private readonly session: Pick<Session, 'view'>;
+  constructor(session: Pick<Session, 'view'>) {
+    this.session = session;
+  }
 
   public get activity(): SessionTitleState {
     return sessionActivity(this.session.view.current());

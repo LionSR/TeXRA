@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   Cause,
+  type Context,
   Deferred,
   Effect,
   Exit,
@@ -84,6 +85,7 @@ import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import {
   settingsTabByCommand,
   type CommandId,
@@ -95,10 +97,12 @@ import {
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
-import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
+import { makeEditorHost } from '@texra/tools/editorHost';
+import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { texraPlugins } from '@texra/tools/registry';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
+import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 import {
   formatApprovalPolicy,
   approvalPolicyLabel,
@@ -110,7 +114,6 @@ import { reachExtensionService } from './common/extensionService';
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
-import type { WindowSession } from './progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from './settingsView/SettingsViewProvider';
 
 const EXTENSION_CHANNEL = 'extension';
@@ -151,8 +154,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     defaultNodeStorageRoot(),
     workspaceRoot,
   );
-  // The editor registry the plugins' editor tools read; the progress view
-  // attaches this window's editor to it.
+  // The editor registry the plugins' editor tools read, which this
+  // process's windows answer for.
   const editors = makeEditorHost();
   // Usage logging is anonymous: a runtime service with no account behind it.
   const extensionVersion =
@@ -163,8 +166,12 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     ManagedRuntime.make(
       processLayer({
         storageRoot: defaultNodeStorageRoot(),
+        settings: TEXRA_SETTINGS.catalog,
+        commandDirs: commandDirs,
         plugins: texraPlugins({
+          name: 'vscode',
           editors,
+          inquiryPanel: true,
           // The Comments UI behind the `inline_comment` tool. The provider reads
           // the controller this host registers at activation, so it is a value
           // from module load; nothing about it waits on that registration.
@@ -178,6 +185,9 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           // and the Lean 4 probe.
           setup: vscodeSetupPlatform,
         }),
+        skills: {
+          resourcesPath: path.join(context.extensionPath, 'resources'),
+        },
         // The one credential store every host shares (`~/.texra/secrets/`):
         // the background service reads the keys this window saves.
         secrets: Secrets.announcing(
@@ -201,7 +211,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         // the workspace's `.env`, as its tasks do, without it ever being
         // merged into the extension host's shared `process.env`.
         workspace: workspaceRoot,
-      }),
+      }).pipe(Layer.merge(HostWindows.layer(editors))),
     ),
   );
   const runtime: ProcessRuntime = managed;
@@ -222,7 +232,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     ).pipe(Effect.ensuring(Scope.close(projectScope, Exit.void))),
   );
   return yield* withProcessServices(
-    runtime,
+    managed,
     Effect.gen(function* () {
       const globalState = yield* AppState;
       const reached: Result.Result<ServiceLink, Error> =
@@ -243,7 +253,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       // changes, so the configuration stores stay pinned for this process.
       const config = new JsonConfigProvider(
         yield* openTexraConfigStores(
-          TEXRA_SETTINGS,
+          TEXRA_SETTINGS.catalog,
           defaultNodeStorageRoot(),
           workspaceRoot,
           (message) => {
@@ -263,7 +273,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         ),
       );
       const roots = createNodeWorkspaceRoots({
-        host: 'vscode',
         workspacePath: workspaceRoot,
         storageRoot: defaultNodeStorageRoot(),
         storage,
@@ -272,13 +281,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         repoState: yield* (yield* StateStores).repo(storage, workspaceRoot),
         globalState,
       });
-      // The once-per-process installs, in the order the shared bootstrap owns.
-      yield* bootstrapHost({
-        roots,
-        skills: {
-          resourcesPath: path.join(context.extensionPath, 'resources'),
-        },
-      });
+      // The once-per-process writes the shared bootstrap owns.
+      yield* bootstrapHost({ roots });
       // The one-time telemetry notice, one information message; VS Code's own
       // switch being off means nothing is sent, so nothing to announce.
       const notice = vscode.env.isTelemetryEnabled
@@ -292,7 +296,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
             undefined,
           ),
         );
-      return { runtime, roots, editors, reached };
+      return { runtime, roots, hosts: yield* HostWindows, reached };
     }),
   );
 });
@@ -429,7 +433,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // A folder's window is a client of the one background service, so its
   // tasks keep running when it closes and other windows and terminals see
   // them. Decided once: a reconnect never re-enters it.
-  const { runtime, roots, editors, reached } = yield* initVscodePlatform(
+  const { runtime, roots, hosts, reached } = yield* initVscodePlatform(
     context,
     workspaceRoot,
     {
@@ -445,7 +449,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   const activationScope = yield* Scope.Scope;
   yield* withProcessServices(
     runtime,
-    activateWorkspace(context, runtime, roots, editors, reached).pipe(
+    activateWorkspace(context, runtime, roots, hosts, reached).pipe(
       Effect.provideService(Scope.Scope, activationScope),
     ),
   );
@@ -461,12 +465,11 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
-  editors: EditorRegistry,
+  hosts: Context.Service.Shape<typeof HostWindows>,
   /** The background service, as the activation reached it once. */
   reached: Result.Result<ServiceLink, Error>,
 ) {
   const { globalState } = roots;
-  const secrets = yield* Secrets;
   // A window of the service opens no session of its own: no store, run
   // or claims. Only a window that cannot reach the service runs its
   // tasks here, and says so once. While the link is down, the service's
@@ -481,7 +484,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
         ),
       ),
     );
-  let windowSession: WindowSession;
+  let windowSession: GuiSession;
   if (Result.isSuccess(reached)) {
     windowSession = {
       service: reached.success,
@@ -497,7 +500,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       host: { interruptedTasks: 'offer' },
     });
     yield* recordFirstCompletedRun(session);
-    windowSession = { session };
+    windowSession = { session, link: yield* hosts.localLink(session) };
     const reason = `TeXRA runs this window's tasks here only, so other windows and terminals will not see them: ${reached.failure.message}`;
     yield* Effect.logWarning(reason).pipe(withLogChannel(EXTENSION_CHANNEL));
     yield* warn(reason);
@@ -527,11 +530,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const progressViewProvider = new ProgressViewProvider(
     context,
     globalState,
-    secrets,
     runtime,
     roots,
     windowSession,
-    editors,
     (usable) => (usable ? setupPill.hide() : setupPill.show()),
     (target) =>
       Effect.flatMap(Deferred.await(settingsView), (view) =>
@@ -552,7 +553,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const settingsViewProvider = registerCommands(
     context,
     progressViewProvider,
-    secrets,
     runtime,
     roots,
     session,
@@ -621,6 +621,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
                       log: 'Warn',
                       message: 'Opening the Git settings',
                     }),
+                    withLogChannel(EXTENSION_CHANNEL),
                   )
               : Effect.void,
           ),
@@ -730,7 +731,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // entries can fire before their handlers exist and produce "command not
   // found" errors.
   yield* executeVscodeCommand('setContext', 'texra.activated', true);
-  const welcomeKey = 'texra.welcomeShown';
+  const welcomeKey = 'welcomeShown';
   if (
     !(yield* Settings.state(
       globalState,

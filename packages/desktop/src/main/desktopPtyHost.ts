@@ -16,6 +16,7 @@ import { createRequire } from 'node:module';
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
 import { withExtendedPath } from '@texra-ai/harness/node';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
 
 /**
  * The subset of node-pty this host depends on: node-pty's own module type
@@ -114,7 +115,7 @@ function ptyEnvironment(): Record<string, string> {
   // card would offer `brew install ...` to a shell that then reports
   // `brew: command not found`. `withExtendedPath` also owns the Windows
   // `Path`-vs-`PATH` rule this used to hand-roll.
-  return withExtendedPath(env);
+  return withExtendedPath(env, commandDirs());
 }
 
 /**

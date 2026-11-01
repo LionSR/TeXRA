@@ -15,11 +15,7 @@ import {
 } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 
-import {
-  Secrets,
-  withPerKeyLane,
-  type PerKeyLane,
-} from '@texra-ai/harness/host';
+import { withPerKeyLane, type PerKeyLane } from '@texra-ai/harness/host';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   DESKTOP_PROJECT_COMMANDS,
@@ -102,7 +98,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
 ): Effect.fn.Return<OpenedDesktopWindow, never, Scope.Scope | ProcessServices> {
   const { runtime, projects } = options;
   const scope = yield* Scope.Scope;
-  const secrets = yield* Secrets;
   const spawn = desktopSpawner(runtime, scope);
   const initialProject = projects.active();
   const window = yield* openDesktopBrowserWindow({
@@ -145,14 +140,14 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   // `surface`, `bindings` and `navigation` are declared below and read only
   // inside lazy callbacks; the order cannot flip, since the surface takes the
   // onboarding this call returns.
-  const { onboarding, refreshFunnelAfterLaunch } = yield* openWindowOnboarding({
+  const { onboarding, refreshFunnel } = yield* openWindowOnboarding({
     host,
     runtime,
     projects,
     settings: () => surface.settings(),
     activeRun: () => bindings.active(),
   });
-  yield* refreshFunnelAfterLaunch;
+  yield* refreshFunnel;
 
   const shellActions = createDesktopShellActions(
     { postToRenderer: host.post },
@@ -174,11 +169,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     host,
     runtime,
     projects,
-    secrets,
     resourcesPath: options.resourcesPath,
     draftRequests: options.draftRequests,
     onboarding,
-    refreshFunnelAfterLaunch,
   });
   const surface: ProjectSurface = yield* openProjectSurface({
     host,
@@ -187,7 +180,6 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
     bindings,
     onboarding,
     promptController,
-    secrets,
     resourcesPath: options.resourcesPath,
   });
   const navigation = createProjectNavigation({
@@ -240,7 +232,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
         }
         yield* surface.attach();
         postProjects();
-        if (switched) yield* refreshFunnelAfterLaunch;
+        if (switched) yield* refreshFunnel;
       }),
     );
   /** A document reload destroys its request correlations (an open prompt

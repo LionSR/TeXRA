@@ -1,7 +1,6 @@
 /**
- * Focus-order rules over the session view (PRD one-fold-three-renderers,
- * 9): which stream the child list roots at, which stream Alt+N names, and
- * how a stream is presented. Surface decisions over fold facts; nothing
+ * Focus-order rules over the session view: which stream the child list roots at, which stream Alt+N names, and
+ * how a stream is presented. Surface decisions over session view facts; nothing
  * here derives topology.
  */
 import { formatCompactDuration } from '@texra-ai/harness/transcript';
@@ -14,7 +13,7 @@ import { runViewOf } from './sessionView';
 import type { RunView, SessionView } from '@texra-ai/harness/schemas';
 
 /**
- * When a run's active time started, or nothing: a run parked on the user's
+ * When a run's active time started, or nothing: a run waiting on the user's
  * answer is not working, so no clock or spinner runs for it.
  */
 export function activeStartedAt(
@@ -26,7 +25,7 @@ export function activeStartedAt(
 
 /**
  * How long a running child has been at it, formatted: the caller selects the
- * window (the fold's active-phase `runStartedAt`), and a child that is not
+ * window (the session view's active-phase `runStartedAt`), and a child that is not
  * running shows none.
  */
 export function childElapsed(

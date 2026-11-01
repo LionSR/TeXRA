@@ -45,7 +45,7 @@ Every run executes on the same loop. [`codemode`](./plugins-and-codemode#codemod
 | ------------------------------------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **[`Sessions`](./harness/#sessions)**                                           | Process                | `open(roots, options?)`, `close(roots)`, `closeAll`, `list`. Provided by `Sessions.layer({ platform, plugins })`.                                                                                                                            |
 | **[`Session`](./harness/#session) / [`LocalSession`](./harness/#localsession)** | Project storage root   | `start(input)`, `resume(runId, input?)`, `request(runtimeRequest)`, `attach({ approve })`, `view.current()`, `view.changes`, `view.watch(set, from)`, `view.subscribe(set)`, `view.read(runIds)`, `listRuns()`, `records(runId)`, `settled`. |
-| **[`Run`](./harness/#run)**                                                     | Single agent execution | `runId`, `events` (`Stream<AgentEvent, RunFailure \| TraceUnavailable>`), `view` (`Stream<SessionView>`), `result` (`Effect<RunEndResult, RunFailure>`), `redirectedFrom`, `interrupt`.                                                      |
+| **[`Run`](./harness/#run)**                                                     | Single agent execution | `runId`, `events` (`Stream<AgentEvent, RunFailure>`, readable any number of times), `view` (`Stream<SessionView>`), `result` (`Effect<RunEnd, RunFailure>`), `redirectedFrom`, `interrupt`.                                                  |
 
 ## Package entries
 
@@ -64,7 +64,7 @@ Exports are split by runtime environment so browser and webview bundles never pu
 
 ## Install and minimal example
 
-Requires Node.js `>=22.19.0` (in 22.x) or `>=24.0.0`, ESM only. `effect`, `@effect/platform-node`, and `@effect/sql-sqlite-node` are peer dependencies (`^4.0.6`) so the process shares one copy of `effect` and `@texra-ai/llm`:
+Requires Node.js `>=22.19.0` (in 22.x) or `>=24.0.0`, ESM only. `effect`, `@effect/platform-node`, and `@effect/sql-sqlite-node` are peer dependencies (`^4.1.0`) so the process shares one copy of `effect` and `@texra-ai/llm`:
 
 ```bash
 npm install @texra-ai/harness @texra-ai/llm effect @effect/platform-node @effect/sql-sqlite-node

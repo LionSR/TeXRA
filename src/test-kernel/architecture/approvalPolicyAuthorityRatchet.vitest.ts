@@ -18,17 +18,17 @@ const VOCABULARY_OWNER = 'packages/harness/src/shared/approvalPolicy.ts';
 
 /**
  * Sites allowed to call `decideApproval` / `decideRetryApproval` /
- * `decideHumanInputRequest` / `decideProposalApproval`. Core is the one
+ * `decideHumanInputRequest`. Core is the one
  * authority: `requestPolicy.ts` decides what the policy settles when a request
- * opens, the command and edit tools decide what only they know. A host must not grow a second evaluator — extend
- * this allowlist in the same PR if a new core surface is intentional.
+ * opens, and the run loop's chain decides whether a tool call's operation
+ * runs (`sessionPermission`). A host must not grow a second
+ * evaluator; extend this allowlist in the same PR if a new core surface is
+ * intentional.
  */
 const EVALUATOR_CALL_ALLOWLIST = new Set([
   'packages/harness/src/shared/approvalPolicy.ts',
   'packages/harness/src/agent/runtime/requestPolicy.ts',
-  'packages/harness/src/tools/approval/bashApproval.ts',
-  'packages/harness/src/tools/approval/toolEditApproval.ts',
-  'packages/harness/src/tools/delegation/proposalFlow.ts',
+  'packages/harness/src/agent/runtime/loop/toolGuard.ts',
 ]);
 
 /**
@@ -58,14 +58,14 @@ const BYPASS_WRITE_ALLOWLIST = new Set([
   // `policy.set`, the one host door, committed as its row.
   'packages/harness/src/controllers/session/pendingUnderBypass.ts',
   // A delegated child's grants, from how its proposal was approved.
-  'packages/harness/src/tools/delegation/subagentRun.ts',
-  'packages/harness/src/tools/delegation/AgentTool.ts',
+  'packages/harness/src/agent/runtime/delegation/subagentRun.ts',
+  'packages/harness/src/agent/runtime/delegation/AgentTool.ts',
   // A plan run as a goal: the grants the person chose, on the goal's run.
   'packages/harness/src/tools/plan/PlanTool.ts',
 ]);
 
 const EVALUATOR_CALL =
-  /\b(?:decideApproval|decideRetryApproval|decideHumanInputRequest|decideProposalApproval)\s*\(/;
+  /\b(?:decideApproval|decideRetryApproval|decideHumanInputRequest)\s*\(/;
 const BYPASS_WRITE_CALL =
   /\b(?:humanGrant|goalGrant|delegatedChildGrants)\s*\(|\.approvals\.change\s*\(/;
 const POLICY_OVERRIDE_CALL = /\.approvals\.override\s*\(/;

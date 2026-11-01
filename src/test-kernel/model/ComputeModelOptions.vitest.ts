@@ -1,20 +1,23 @@
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 import { Effect } from 'effect';
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
   apiKeySecretName,
   decideModelRoute,
   isUnservedModel,
+  MODEL_CONFIGS,
   OWN_KEY_ROUTE_FACTS,
 } from '@texra-ai/llm';
-import { readModelOptions } from '@model/computeModelOptions';
-import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
-import { isModelOptionAvailable } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
-  hostStores,
+  GlobalStateKey,
+  isModelOptionAvailable,
+} from '@texra-ai/harness/schemas';
+import { readModelOptions, Secrets } from '@texra-ai/harness/host';
+import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
+import {
+  fakeHostSecrets,
+  installedHost,
   installPlatform,
   setupPlatform,
 } from '@test/support/setupPlatform';
@@ -32,6 +35,12 @@ function onlyEnabled(models: readonly string[]) {
     disabledDefaults: DEFAULT_MODELS.filter((model) => !models.includes(model)),
   };
 }
+
+/** The installed host's options for `models`, over its secret store. */
+const readHostModelOptions = (models: readonly string[]) =>
+  readModelOptions(installedHost().roots, models).pipe(
+    Effect.provideService(Secrets, fakeHostSecrets),
+  );
 
 /** Reinstall the fake platform mid-test with the access state the case needs. */
 function installAccessPlatform(options: {
@@ -74,7 +83,7 @@ describe('model availability', () => {
       });
 
       const [model] = modelOptionsFrom(
-        yield* readModelOptions(hostStores(), [KIMI_CODING]),
+        yield* readHostModelOptions([KIMI_CODING]),
       );
 
       expect(model).toMatchObject({
@@ -89,12 +98,10 @@ describe('model availability', () => {
     () =>
       Effect.gen(function* () {
         yield* installAccessPlatform({
-          config: { 'texra.chatgptCodex.preferSubscription': true },
+          config: { 'chatgptCodex.preferSubscription': true },
         });
 
-        const [model] = modelOptionsFrom(
-          yield* readModelOptions(hostStores(), [GPT55]),
-        );
+        const [model] = modelOptionsFrom(yield* readHostModelOptions([GPT55]));
 
         expect(model.availability).toBe('provider-key');
         expect(isModelOptionAvailable(model)).toBe(true);

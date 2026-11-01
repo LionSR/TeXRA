@@ -79,13 +79,21 @@ const notRun = (reason: string): RoundLatexdiffs => ({
 export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
 
+  private readonly logger: AgentTrace;
+  private readonly runId: RunId;
+  private readonly fileService: RunFileService;
+  private readonly roots: WorkspaceRoots;
   constructor(
-    private readonly logger: AgentTrace,
-    private readonly runId: RunId,
-    private readonly fileService: RunFileService,
+    logger: AgentTrace,
+    runId: RunId,
+    fileService: RunFileService,
     /** The run's session roots: the workspace and setting stores it reads. */
-    private readonly roots: WorkspaceRoots,
+    roots: WorkspaceRoots,
   ) {
+    this.logger = logger;
+    this.runId = runId;
+    this.fileService = fileService;
+    this.roots = roots;
     this.latexdiffService = new LaTeXdiffService(runId, roots);
   }
 

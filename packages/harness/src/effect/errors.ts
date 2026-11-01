@@ -23,7 +23,7 @@ import { ResumeRefusalSchema } from '@shared/schemas';
 /**
  * The plugin list cannot be composed, for a defect `toolTable` refuses: an
  * id that is not lowercase letters, digits and dashes, an id or tool name
- * listed twice, a second plugin continuing parked runs or recording one
+ * listed twice, a second plugin continuing waiting runs or recording one
  * request kind's decisions, or a switch on a plugin with no availability
  * probe.
  */
@@ -60,22 +60,6 @@ export class ResumeRefused extends Schema.TaggedError<ResumeRefused>()(
   {
     runId: Schema.String,
     reason: ResumeRefusalSchema,
-    message: Schema.String,
-  },
-) {}
-
-/**
- * A run's trace that no reader can take any more: `ended` (the run settled
- * with nobody reading, so its buffered trace went with it), `truncated`
- * (it passed the handover buffer before a reader attached, so the trace
- * was detached) or `remote` (the run runs in another process, which keeps
- * its trace). The run itself is unaffected: its `result` still answers.
- */
-export class TraceUnavailable extends Schema.TaggedError<TraceUnavailable>()(
-  'TraceUnavailable',
-  {
-    runId: Schema.String,
-    reason: Schema.Literals(['ended', 'truncated', 'remote']),
     message: Schema.String,
   },
 ) {}

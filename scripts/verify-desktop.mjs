@@ -1624,10 +1624,6 @@ function conversationEvents({ approval = false } = {}) {
     messageType: 'modelResponse',
     message: 'I will inspect the manuscript and report missing citations.',
   });
-  log.emit(RUN, NOW + 1500, {
-    type: 'conversation.progress',
-    progress: { toolCallCount: 1 },
-  });
   if (approval) {
     startRun(log, {
       runId: CHILD_RUN,

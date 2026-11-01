@@ -16,7 +16,6 @@ import { afterEach, beforeEach, vi } from 'vitest';
 
 import type { AgentCatalogShape } from '@agent/index/agentCatalog';
 import type { ProcessLayerOptions } from '@controllers/session/sessionLayer';
-import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   GlobalValues,
   type ProcessServices,
@@ -33,6 +32,8 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { GlobalDatabase, type CurrentValues } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
 import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
+import { teamMembers } from '@texra/shared/agentTeams';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import {
@@ -90,7 +91,7 @@ const BARE_PLUGINS: readonly Plugin[] = [
   defineBuiltinPlugin({
     id: 'goal',
     toggle: 'off',
-    availability: { check: () => Effect.succeed(true) },
+    availability: { check: () => Effect.succeed({ available: true }) },
   }),
   ...ARMED_PLUGINS,
 ];
@@ -105,10 +106,11 @@ export const testProcessOptions = (
   // Under the worker's storage root: its global storage, and its mcp.json
   // rather than the developer's `~/.texra/mcp.json`.
   storageRoot: root,
+  settings: TEXRA_SETTINGS.catalog,
   plugins,
   secrets: Secrets.layer(fakeHostSecrets),
   appState: AppState.layer(fakeHostAppState),
-  agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
+  agentDirectories: Layer.succeed(AgentDirectories)(fakeHostAgentDirectories),
   toolAvailability: unprobedToolAvailability,
   // The harness reports no usage; the telemetry suite starts its own.
   usageLog: UsageLog.disabled,
@@ -203,40 +205,20 @@ export function installedHost(): FakeHost {
 }
 
 /**
- * The installed fake host's stores, as the model-option and CLI history
- * readers take them: the secret store plus the roots' three setting slots.
- * Read per call, not captured: a suite that reinstalls its host mid-test sees
- * the new one.
- */
-export function hostStores(): ModelOptionStores {
-  const { secrets, roots } = installedHost();
-  return { ...roots, secrets };
-}
-
-function installedSetup(): SetupPlatformShape {
-  const { setup } = installedHost();
-  if (!setup) {
-    throw new Error(
-      'The installed fake host has no setup platform: pass `setup` in the host overrides.',
-    );
-  }
-  return setup;
-}
-
-/**
  * The setup platform of every test's TeXRA plugin list: each member reads
  * the installed host's `setup` when called, so a suite that swaps hosts per
- * test swaps setup platforms with them.
+ * test swaps setup platforms with them. A host without one has none of its
+ * members, as a host that passes no setup platform.
  */
 export const fakeSetupPlatform: SetupPlatformShape = {
   get commands() {
-    return installedSetup().commands;
+    return installedHost().setup?.commands;
   },
   get extensions() {
-    return installedSetup().extensions;
+    return installedHost().setup?.extensions;
   },
   get terminal() {
-    return installedSetup().terminal;
+    return installedHost().setup?.terminal;
   },
 };
 
@@ -271,6 +253,7 @@ export const fakeHostAgentDirectories: AgentDirectoriesPort = {
   customConfigured: () =>
     installedHost().platform.agentDirectories.customConfigured(),
   builtIn: () => installedHost().platform.agentDirectories.builtIn(),
+  teamMembers,
 };
 
 /** The process services a fake host provides to a program, and the

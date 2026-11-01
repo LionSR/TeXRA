@@ -171,7 +171,7 @@ function decideCallback(
         return { kind: 'not-found' };
       }
       // A stale or foreign callback answers with the error page but keeps
-      // the wait open; only a state-matched callback settles it.
+      // the wait open; only a state-matched callback finishes it.
       if (url.searchParams.get('state') !== expectedState) {
         return { kind: 'stale-state' };
       }
@@ -204,8 +204,8 @@ function loginWithOAuthLoopback<S extends SubscriptionSession>(
     options;
   // The setup prefix is uninterruptible: it binds the server, arms the
   // callback wait, and starts `openBrowser` before its first cancellation
-  // check, so a launcher that never settles is still started and an abort
-  // still settles the login. The launcher runs on a detached fiber:
+  // check, so a launcher that never finishes is still started and an abort
+  // still finishes the login. The launcher runs on a detached fiber:
   // interruption of the login abandons the join but never the launcher, and a
   // late launch failure dies on that fiber — observed and inert.
   // Interruption is observed from the launcher join onward.

@@ -4,6 +4,8 @@ import {
   type AgentProposalPermission,
   type BashPermission,
   type RetryPermission,
+  type ToolEditContent,
+  type ToolEditPermission,
   type UserQuestionPermission,
   formatHunkLines,
 } from '@texra-ai/harness/schemas';
@@ -17,7 +19,6 @@ import {
 } from '@ui/copy/scriptRequest';
 
 import { type CliApprovalContent } from './approvalPrompts';
-import type { ToolEditApprovalRequest } from '@texra-ai/harness/host';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
 const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;
@@ -228,9 +229,11 @@ export function formatBashApprovalSummary(payload: BashPermission): string {
   return `Command requested:\n${cwd}${payload.command}`;
 }
 
-function toolEditDiffLines(
-  request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
-): readonly string[] {
+/** What a tool edit's prompt shows: its path and tool, and the diff. */
+type ToolEditPrompt = Pick<ToolEditPermission, 'path' | 'sourceTool'> &
+  Pick<ToolEditContent, 'hunks'>;
+
+function toolEditDiffLines(request: ToolEditPrompt): readonly string[] {
   const { hunks } = request;
   if (hunks.length === 0) return [];
 
@@ -254,7 +257,7 @@ function boundedToolEditDiffLines(
 }
 
 function toolEditApprovalSummary(
-  request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
+  request: ToolEditPrompt,
   diffLines: readonly string[],
 ): string {
   const header = `Tool edit requested by ${request.sourceTool}: ${request.path}`;
@@ -266,7 +269,7 @@ function toolEditApprovalSummary(
 }
 
 export function buildToolEditApprovalContent(
-  request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
+  request: ToolEditPrompt,
 ): CliApprovalContent {
   const diffLines = toolEditDiffLines(request);
   const boundedDiffLines = boundedToolEditDiffLines(diffLines);

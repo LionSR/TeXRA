@@ -1,4 +1,4 @@
-import { Effect, Result, Schema } from 'effect';
+import { Context, Effect, Result, Schema } from 'effect';
 
 import {
   readInstalledPluginLoad,
@@ -14,14 +14,18 @@ import {
   type SkillDisplayIssue,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import {
+  decodeDisabledTools,
+  GlobalStateKey,
+  WorkspaceStateKey,
+} from '@shared/state/stateKeys';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { Settings } from '@shared/config/settings';
 import type { SettingsStores } from '@shared/config/settings';
 import { isPathWithin } from '@utils/core/pathCore';
 import { canonicalizePath } from '@utils/files/externalRoots';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { safeHomedir } from '@utils/system/platformPaths';
+import { homeDirectory } from '@utils/system/platformPaths';
 
 import { issue } from './skillLoader';
 import {
@@ -39,36 +43,26 @@ import {
 } from './skillSources';
 
 /**
- * The skill contributions a host installed, with its bundled resources tree
- * and its process-wide source options. Only data is fixed here: project and
- * interop sources live under the workspace folder, so they are resolved per
- * call from the calling session's workspace, and a desktop with several
- * papers open discovers each run's project skills in that run's own folder.
+ * The skill contributions this process discovers, served by `processLayer`
+ * from its `HostSkillOptions` and its plugins. Only data is fixed here:
+ * project and interop sources live under the workspace folder, so they are
+ * resolved per call from the calling session's workspace, and a desktop with
+ * several projects open discovers each run's project skills in that run's own
+ * folder. The default is no contributions.
  */
-interface SkillContributionsInstall {
+export const HostSkillSources = Context.Reference<{
   readonly resourcesPath: string;
   readonly options: SkillSourceOptions;
   readonly contributions: readonly SkillSourceContribution[];
-}
-
-let installed: SkillContributionsInstall = {
-  resourcesPath: '',
-  options: {},
-  contributions: [],
-};
+}>('@texra-ai/harness/HostSkillSources', {
+  defaultValue: () => ({ resourcesPath: '', options: {}, contributions: [] }),
+});
 
 interface DisabledSkills {
   readonly names: readonly string[];
   readonly scopes: readonly ActiveSkillSourceScope[];
   /** The tool plugins switched off, whose bundled skills go with them. */
   readonly plugins: readonly string[];
-}
-
-/** Install the process's skill contributions; the default installs none. */
-export function installSkillContributions(
-  install: SkillContributionsInstall,
-): void {
-  installed = install;
 }
 
 /**
@@ -83,30 +77,30 @@ export type SkillRoots = SettingsStores & {
 };
 
 /**
- * Discover the installed contributions folded for one workspace, with the
+ * Discover the host's contributions folded for one workspace, with the
  * installed plugins that load (`plugins`, as the caller read them): the
  * enabled ones the user trusts as they are. Why each other enabled plugin
  * loads nothing is a discovery issue, so every listing names it. `options`
- * replaces the installed options for one call: the CLI's `skills list`
+ * replaces the host's options for one call: the CLI's `skills list`
  * flags.
  */
 function discoverRuntimeSkills(
   roots: Pick<SkillRoots, 'workspace' | 'storageRoot'>,
   plugins: InstalledPluginLoad,
-  options: SkillSourceOptions = installed.options,
+  options?: SkillSourceOptions,
 ) {
-  // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can raise
-  // UV_ENOENT in containers/CI); `/nonexistent` matches the fallback used by
-  // other agnostic-zone callers (e.g. `claudeAgentConfig.ts`).
-  const home = safeHomedir() ?? '/nonexistent';
   return Effect.gen(function* () {
+    const host = yield* HostSkillSources;
+    // An unresolvable home directory is logged by `homeDirectory`; the
+    // `/nonexistent` root then holds no user skills to discover.
+    const home = (yield* homeDirectory) ?? '/nonexistent';
     const result = yield* discoverSkillSources(
-      foldSkillSources(installed.contributions, {
+      foldSkillSources(host.contributions, {
         cwd: roots.workspace,
         home,
         storageRoot: roots.storageRoot,
-        resourcesPath: installed.resourcesPath,
-        options,
+        resourcesPath: host.resourcesPath,
+        options: options ?? host.options,
         plugins: plugins.loadable,
       }),
     );
@@ -147,22 +141,31 @@ function isSkillDisabled(
  * the roots its prompt is being built for, so the answer is that project's
  * rather than the calling context's.
  */
+function readSkillSwitches(stores: SettingsStores) {
+  return Effect.all({
+    names: Settings.get<string[]>(stores, WorkspaceStateKey.DISABLED_SKILLS),
+    scopes: Settings.get<ActiveSkillSourceScope[]>(
+      stores,
+      WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+    ),
+  });
+}
+
+/**
+ * {@link readSkillSwitches}, with the tool plugins switched off, read as the
+ * tool catalog reads them: an unreadable record fails the listing rather
+ * than showing every plugin's skills.
+ */
 function readDisabledSkills(stores: SettingsStores) {
   return Effect.gen(function* () {
-    return {
-      names: yield* Settings.get<string[]>(
-        stores,
-        WorkspaceStateKey.DISABLED_SKILLS,
-      ),
-      scopes: yield* Settings.get<ActiveSkillSourceScope[]>(
-        stores,
-        WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-      ),
-      plugins: yield* Settings.get<string[]>(
-        stores,
-        GlobalStateKey.DISABLED_TOOLS,
-      ),
-    };
+    const stored = yield* stores.globalState.get(GlobalStateKey.DISABLED_TOOLS);
+    const plugins = yield* Effect.fromResult(
+      Result.mapBoth(decodeDisabledTools(stored), {
+        onSuccess: (ids) => [...(ids ?? [])],
+        onFailure: ({ message, cause }) => new Error(message, { cause }),
+      }),
+    );
+    return { ...(yield* readSkillSwitches(stores)), plugins };
   });
 }
 
@@ -366,7 +369,7 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
   }) {
     // The enabled set the hosts list, with every tool plugin's skills
     // whatever its switch: the step lists those of the plugins it pinned.
-    const disabled = yield* readDisabledSkills(run.roots);
+    const disabled = yield* readSkillSwitches(run.roots);
     const result = yield* loadEnabledRuntimeSkills(run.roots, run.plugins, {
       ...disabled,
       plugins: [],

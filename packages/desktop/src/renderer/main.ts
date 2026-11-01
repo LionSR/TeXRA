@@ -155,7 +155,7 @@ function applyTheme(): void {
 darkScheme.addEventListener('change', applyTheme);
 forcedColors.addEventListener('change', applyTheme);
 
-// The one Shell of this window (PRD 9): which projects are open and which one
+// The one Shell of this window: which projects are open and which one
 // the window shows come from the main process; the collapsed set is the
 // rail's own and persists. Until the first projects report the launcher is
 // assumed usable so the empty state does not flash before the projects arrive.
@@ -183,7 +183,7 @@ function setShell(next: Shell): void {
   persistedShell.setState({ collapsed: [...next.collapsed] });
   rerenderShell();
 }
-// One fold, one surface, and one host snapshot per open project, on the one
+// One session view, one surface, and one host snapshot per open project, on the one
 // webview runtime; the rail, the conversation shell, the palette, and the
 // chrome read those three records and nothing else.
 const sessionWire = resolveSessionWire();
@@ -288,15 +288,7 @@ const projectRail = createProjectRail({
   sessions: projectSessions,
   workbenches: projectWorkbenches,
 });
-// Seen only while the window has focus: a run finishing behind another app is
-// news when the user comes back.
-const markShownRunSeen = () => {
-  const view = projectSessions.get(shell.active)?.view$.get();
-  if (view && document.hasFocus())
-    projectSessions.act(shell.active, { kind: 'seen', view });
-};
-projectSessions.onChange(markShownRunSeen);
-window.addEventListener('focus', markShownRunSeen);
+projectSessions.followSeen(() => shell.active);
 const selectProject = projectRail.selectProject;
 
 function currentWorkbench() {
@@ -733,7 +725,7 @@ const routeMessage = createMessageRoutes({
   },
   'desktop:openWorkbench': (message) =>
     projectWorkbenches.get(shell.active)?.workbench.openKind(message.kind),
-  'desktop:openSettings': () => settingsDialog.open(),
+  'desktop:openSettings': (message) => settingsDialog.open(message.tab),
   'desktop:toggleLayout': (message) => {
     if (projectWorkbenches.has(shell.active)) {
       LAYOUT_PANEL_TOGGLES[message.panel]();
@@ -813,7 +805,8 @@ const routeMessage = createMessageRoutes({
         const conversationView = document.createElement(
           'progress-app',
         ) as ProgressApp;
-        conversationView.placement = 'desktop';
+        // The attribute sets the property, and the desktop styles select it,
+        // as the extension's page markup does.
         conversationView.setAttribute('placement', 'desktop');
         conversationView.setAttribute('data-desktop-view', 'progress');
         const project = createProjectWorkbench({
@@ -865,7 +858,7 @@ window.addEventListener('resize', () => {
 });
 
 // =============================================================================
-// Shell events: the identity translation of PRD 8
+// Shell events: the identity translation of host-bridge messages
 // =============================================================================
 //
 // Every component dispatches the arm it wants as a bubbling, composed event
@@ -900,7 +893,7 @@ appRoot.addEventListener('surface-action', (event) => {
   }
   projectSessions.act(key, event.detail);
   // The rail is bound to one active run across every section: picking
-  // a run in another project's tree picks that project too (PRD 12.2).
+  // a run in another project's tree picks that project too.
   if (event.detail.kind === 'select' && key !== shell.active) {
     selectProject(key);
   }

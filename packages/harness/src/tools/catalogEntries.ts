@@ -149,12 +149,12 @@ export const toolDigests = (
 /** A plugin's tools as catalog entries under one revision. */
 export const entriesOf = (
   plugin: string,
-  tools: ReadonlyMap<string, ITool>,
+  tools: Iterable<ITool>,
   loaded?: { readonly revision: string },
 ): ReadonlyMap<string, ToolEntry> =>
   new Map(
-    [...tools].map(([name, tool]) => [
-      name,
+    [...tools].map((tool) => [
+      tool.definition.name,
       {
         tool,
         plugin,

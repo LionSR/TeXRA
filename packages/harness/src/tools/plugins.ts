@@ -17,7 +17,7 @@
  */
 
 // Third-party imports
-import { Effect, type Layer, Result, Schema, Stream } from 'effect';
+import { Cause, Effect, type Layer, Result, Schema } from 'effect';
 
 // Local imports
 import type { SessionLog } from '@agent/runtime/SessionHandle';
@@ -26,11 +26,12 @@ import type {
   PluginToolServices,
   ToolServices,
 } from '@agent/runtime/ToolServices';
-import { AppSignals } from '@platform/appSignals';
+import { withLogChannel } from '@logger/effectLog';
+import { type AppSignals, emitAppSignal } from '@platform/appSignals';
 import { StateReadFailed, type StateStore } from '@platform/interfaces';
 import {
+  aggregateTarget,
   qualifyAggregateId,
-  type CommitOrdinal,
   type JsonValue,
   type RunId,
   type SessionEvent,
@@ -38,10 +39,10 @@ import {
   type ToolFact,
 } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
+import { recordOf } from '@shared/session/runRowReads';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
-import type { SessionView } from '@shared/session/sessionView';
-import { GlobalStateKey } from '@shared/state/stateKeys';
+import { decodeDisabledTools, GlobalStateKey } from '@shared/state/stateKeys';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
   AgentBlock,
@@ -61,8 +62,8 @@ export interface PluginRow {
 
 /**
  * One row kind a plugin owns (`plugin.fact`): the version it writes, the
- * schema of that version's value, and the adjacent upcasters (`upcasters[i]`
- * maps version `i + 1` to `i + 2`) the store reads an older value through.
+ * schema of that version's value, and adjacent upcasters from
+ * `version - upcasters.length` to `version`, oldest first.
  * The store checks every row of the kind against its arm, and keeps a row
  * whose arm the process's plugins lack (its plugin removed, or not listed
  * here) without reading it. Arms live beside their readers, in modules
@@ -104,8 +105,8 @@ export interface Plugin {
    *  directory): lowercase letters, digits and dashes, starting with a
    *  letter or digit. A list with any other id is refused. */
   readonly id: string;
-  /** Its tools, by registered name. */
-  readonly tools?: Readonly<Record<string, ITool<Error, PluginToolServices>>>;
+  /** Its tools, registered by each tool's `definition.name`, in order. */
+  readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /**
    * Present when the plugin has an external dependency: it is probed, and
    * its tools are withheld while the dependency is missing. Without it the
@@ -155,7 +156,7 @@ export interface PluginDefinition<ROut, C = PluginToolServices> extends Omit<
   Plugin,
   'tools' | 'processLayer' | 'sessionLayer' | 'availability'
 > {
-  readonly tools?: Readonly<Record<string, ITool<Error, C | ROut>>>;
+  readonly tools?: readonly ITool<Error, C | ROut>[];
   readonly processLayer?: ProcessPluginLayer<ROut>;
   readonly sessionLayer?: Layer.Layer<ROut, never, PluginHold>;
   /** Probed outside any step, whether or not the plugin is on: it may
@@ -172,42 +173,19 @@ export const definePlugin: <ROut = never>(
   plugin: PluginDefinition<ROut>,
 ) => Plugin = erase;
 
-const builtins = new WeakSet<object>();
-/** The tools of the harness's own plugins. Only `defineBuiltinPlugin`, which
- *  no public entry exports, adds to it: no app plugin passes for one. */
-export const builtinTools: Pick<WeakSet<object>, 'has'> = builtins;
-
 /** A built-in's value: its tools may read `ToolServices`. */
-export const defineBuiltinPlugin = <ROut = never>(
+export const defineBuiltinPlugin: <ROut = never>(
   plugin: PluginDefinition<ROut, ToolServices>,
-): Plugin => {
-  for (const tool of Object.values(plugin.tools ?? {})) builtins.add(tool);
-  return erase(plugin);
-};
+) => Plugin = erase;
 
-const DisabledToolIdsSchema = Schema.Array(Schema.String);
-
-/**
- * The switch record as stored, checked: the ids the user holds off, or
- * `undefined` while nothing (neither the first-install seed nor the user)
- * has written it. A present value that is not a list of ids is corruption and
- * fails as the read, rather than reading as "nothing off", which would switch
- * every opt-in plugin on.
- */
+/** {@link decodeDisabledTools}, failing as the state read it is. */
 export function storedDisabledTools(
   stored: unknown,
 ): Result.Result<ReadonlySet<string> | undefined, StateReadFailed> {
-  if (stored === undefined) return Result.succeed(undefined);
-  const parsed = Schema.decodeUnknownResult(DisabledToolIdsSchema)(stored);
-  return Result.isSuccess(parsed)
-    ? Result.succeed(new Set(parsed.success))
-    : Result.fail(
-        new StateReadFailed({
-          key: GlobalStateKey.DISABLED_TOOLS,
-          message: `The tool switch record (${GlobalStateKey.DISABLED_TOOLS}) is unreadable: ${parsed.failure.message}`,
-          cause: parsed.failure,
-        }),
-      );
+  return Result.mapError(
+    decodeDisabledTools(stored),
+    (failure) => new StateReadFailed(failure),
+  );
 }
 
 /** The plugin ids the user switched off in `store`'s record; none while it
@@ -220,69 +198,56 @@ export function readDisabledTools(store: StateStore) {
 }
 
 /**
- * Announce the workspace files every run's facts say it wrote above `since`
- * (an arm's `writes`), once each and in commit order: a run that changes
- * the workspace past the editor's own write path records it as a fact on
- * its own rows, and every process that folds the run announces it, so a
- * window hears a background service task's change as it hears its own. The view
- * only says which runs to look at: a run whose announced fact differs from
- * the last level read, the first level included. The rows themselves are
- * read (`rows`), since the view keeps each kind's latest value only and its
- * tail coalesces wakes; a row at or below `since` (the history a reopened
- * session replays) is never announced. A failed read (a busy store) is
- * logged and retried on the next change, from where the last good read left
- * off: it never stops the announcer.
+ * Announce the workspace files a committed row says its run wrote past the
+ * editor's own write path (an arm's `writes`): a run records such a change
+ * as a fact on its own rows, and every process that reads the run's rows
+ * announces it (`workspaceFilesWritten`), so a window hears a background
+ * service task's change as it hears its own. Run over the session's folded
+ * tail, so each row is announced once, in commit order, and the history a
+ * reopened session replays never as news; a plugin's own aggregate
+ * announces nothing.
  */
-export function announceRunFacts(
-  changes: Stream.Stream<SessionView>,
-  rows: (runId: RunId) => Effect.Effect<readonly SessionEvent[], Error>,
-  since: CommitOrdinal,
+export const announceWrites = (
   arms: PluginArms,
-): Effect.Effect<void, never, AppSignals> {
-  return AppSignals.use((signals) => {
-    const writing = new Map(
-      Object.entries(arms).flatMap(([name, { writes }]) =>
-        writes === undefined ? [] : [[name, writes] as const],
+): ((row: SessionEvent) => Effect.Effect<void, never, AppSignals>) => {
+  const writing = new Map(
+    Object.entries(arms).flatMap(([name, { writes }]) =>
+      writes === undefined ? [] : [[name, writes] as const],
+    ),
+  );
+  return (row) => {
+    if (aggregateTarget(row.aggregateId).kind !== 'run') return Effect.void;
+    const [fact] = Object.values(recordOf(row).facts);
+    if (fact === undefined) return Effect.void;
+    const writes = writing.get(`${fact.plugin}/${fact.kind}`);
+    if (writes === undefined) return Effect.void;
+    // File notifications are advisory; a plugin callback must not stop the
+    // reader that acknowledges committed rows.
+    return Effect.sync(() => [...writes(fact.value)]).pipe(
+      Effect.catchDefect((defect) =>
+        Effect.logWarning(
+          'Plugin workspace-write notification failed',
+          Cause.die(defect),
+        ).pipe(
+          Effect.annotateLogs({
+            data: {
+              plugin: fact.plugin,
+              kind: fact.kind,
+              aggregateId: row.aggregateId,
+              commit: row.commit,
+            },
+          }),
+          withLogChannel('plugins'),
+        ),
+      ),
+      Effect.flatMap((absolutePaths) =>
+        absolutePaths === undefined
+          ? Effect.void
+          : emitAppSignal('workspaceFilesWritten', { absolutePaths }),
       ),
     );
-    const seen = new Map<RunId, string>();
-    const announcedTo = new Map<RunId, CommitOrdinal>();
-    const announce = (runId: RunId) =>
-      rows(runId).pipe(
-        Effect.map((stored) => {
-          let last = announcedTo.get(runId) ?? since;
-          for (const row of stored) {
-            if (row.type !== 'plugin.fact' || row.commit <= last) continue;
-            const writes = writing.get(`${row.plugin}/${row.kind}`);
-            if (writes !== undefined)
-              signals.emit('workspaceFilesWritten', {
-                absolutePaths: [...writes(row.value)],
-              });
-            last = row.commit;
-          }
-          announcedTo.set(runId, last);
-        }),
-        Effect.catch((error) => {
-          seen.delete(runId);
-          return Effect.logWarning(
-            `Run ${runId}'s facts were not read; announcing them on the next change`,
-          ).pipe(Effect.annotateLogs({ data: error }));
-        }),
-      );
-    return Stream.runForEach(changes, (view) => {
-      const moved: RunId[] = [];
-      for (const run of view.runs.values()) {
-        const facts = [...writing.keys()].map((key) => run.facts[key]);
-        if (facts.every((fact) => fact === undefined)) continue;
-        const written = JSON.stringify(facts);
-        if (seen.get(run.id) === written) continue;
-        seen.set(run.id, written);
-        moved.push(run.id);
-      }
-      return Effect.forEach(moved, announce, { discard: true });
-    });
-  });
-}
+  };
+};
 
 /** The plugin arms a store reads, by `plugin/kind`. */
 export type PluginArms = Readonly<Record<string, PluginArm>>;
@@ -355,7 +320,7 @@ export function factRows(
   facts: readonly ToolFact[],
   runId: RunId,
   plugin: Plugin | undefined,
-  log: Pick<SessionLog, 'rows'>,
+  log: Pick<SessionLog, 'runRows'>,
 ): {
   readonly run: readonly RunHistoryDraft[];
   readonly alongside: Alongside<DatabaseWriteFailed>;
@@ -375,13 +340,10 @@ export function factRows(
     Effect.gen(function* () {
       const arm = plugin?.arms?.find((one) => one.kind === draft.kind);
       if (arm?.supersedes === undefined) return true;
-      const latest = (yield* log.rows(draft.aggregateId, [
-        'plugin.fact',
-      ])).findLast(
-        (row) => row.type === 'plugin.fact' && row.kind === draft.kind,
-      );
-      if (latest?.type !== 'plugin.fact' || !arm.supersedes(latest, draft))
-        return true;
+      const latest = (yield* log.runRows(draft.aggregateId, 'facts')).facts[
+        `${draft.plugin}/${draft.kind}`
+      ];
+      if (latest === undefined || !arm.supersedes(latest, draft)) return true;
       yield* Effect.logDebug(
         `${arm.plugin}/${arm.kind}: a later row of ${draft.aggregateId} supersedes the call's`,
       );

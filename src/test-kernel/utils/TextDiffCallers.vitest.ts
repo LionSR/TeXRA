@@ -7,13 +7,11 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { approvedWriteConflict } from '@texra-ai/harness/plugins';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import {
-  approvedWriteConflict,
-  writeApprovedContent,
-} from '@tools/approval/approvedWrite';
+import { writeApprovedContent } from '@tools/approval/approvedWrite';
 
 function installFakePlatform(
   files: Record<string, string> = {},

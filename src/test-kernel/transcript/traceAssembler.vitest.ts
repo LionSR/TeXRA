@@ -2,21 +2,19 @@ import { it } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentConfigSchema,
-  qualifyAggregateId,
   emptyRunEndOutput,
-  LOG_LEVELS,
   MESSAGE_TYPES,
+  qualifyAggregateId,
   type RunId,
-  USER_FOLLOW_UP_SUPPORT,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { LOG_LEVELS, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createTestSession,
   publishTestRunStart,
-  publishTestRows,
 } from '@test/support/sessionTestUtils';
 import {
   createTempDirPlatform,
@@ -39,7 +37,12 @@ describe('assembleTrace', () => {
       });
       const runId = 'aa11bb22cc33' as RunId;
       const aggregateId = qualifyAggregateId('run', runId);
-      const plan = { objective: 'Check the argument' };
+      const planFact = {
+        plugin: 'goal',
+        kind: 'plan',
+        version: 1,
+        value: { objective: 'Check the argument' },
+      };
 
       publishTestRunStart(session, runId);
       yield* session.log.settled;
@@ -71,10 +74,9 @@ describe('assembleTrace', () => {
           message: 'hello',
         },
       ]);
-      publishTestRows(session, [
-        { type: 'run.fact', aggregateId, fact: { key: 'plan', plan } },
+      yield* session.log.transact([
+        { type: 'plugin.fact', aggregateId, parent: null, ...planFact },
       ]);
-      yield* session.log.settled;
 
       const result = yield* assembleTrace(runId, session);
       if (result.status !== 'ok') {
@@ -103,10 +105,7 @@ describe('assembleTrace', () => {
         expect.objectContaining({ type: 'run.end', outcome: 'completed' }),
       );
       expect(trace.events).toContainEqual(
-        expect.objectContaining({
-          type: 'run.fact',
-          fact: { key: 'plan', plan },
-        }),
+        expect.objectContaining({ type: 'plugin.fact', ...planFact }),
       );
       // The trace viewer reads the same document the export writes.
       expect(() => parseTraceData(trace)).not.toThrow();

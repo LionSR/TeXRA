@@ -43,7 +43,7 @@ import type {
 const DRAFT_SAVE_DELAY_MS = 400;
 
 /** `Surface.inquiryDrafts` is keyed by inquiry turn, never by stream
- *  (PRD 9): the thread and the number of turns already answered. */
+ * : the thread and the number of turns already answered. */
 function draftKey(permission: {
   readonly data: ExternalInquiryPermission;
 }): string {

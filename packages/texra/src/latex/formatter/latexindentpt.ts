@@ -9,7 +9,7 @@ import { runToolWithCheck } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
-export const LATEXINDENT_CONFIG_KEY = 'texra.latex.latexindentConfig';
+export const LATEXINDENT_CONFIG_KEY = 'latex.latexindentConfig';
 
 /**
  * A missing `latexindent` is reported once per session, then stays quiet.

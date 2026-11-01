@@ -71,25 +71,7 @@ try {
     target: 'node20',
     external: ['fsevents'],
     loader: { '.wasm': 'binary' },
-    define: {
-      ...buildIdentityDefine(),
-      'process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL': JSON.stringify(
-        includeInternalValidationModel ? '1' : '',
-      ),
-      'process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_ENV': JSON.stringify(
-        includeInternalValidationModel ? 'TEXRA_INTERNAL_VALIDATE_MODEL' : '',
-      ),
-      'process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV':
-        JSON.stringify(
-          includeInternalValidationModel
-            ? 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG'
-            : '',
-        ),
-      'process.env.TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT':
-        JSON.stringify(
-          includeInternalValidationModel ? 'texra-cli-run-validation' : '',
-        ),
-    },
+    define: buildIdentityDefine(),
     alias: {
       // Ink statically imports `react-devtools-core` from its `devtools.js`,
       // which is only reached when `process.env.DEV === 'true'`. We never

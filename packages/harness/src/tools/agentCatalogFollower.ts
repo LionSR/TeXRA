@@ -226,7 +226,7 @@ export const agentCatalogFollower = Layer.effectDiscard(
     // this process or another sharing the store, a background service task's
     // among them: every agent list here repaints. The first element is the
     // subscription itself, not a change.
-    yield* appState.changes([GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]).pipe(
+    yield* appState.changes([GlobalStateKey.ACTIVE_TEAM_ID]).pipe(
       Stream.drop(1),
       Stream.runForEach(() =>
         emitAppSignal('workspaceAgentsChanged', undefined),

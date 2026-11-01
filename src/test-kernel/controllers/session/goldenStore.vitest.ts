@@ -9,7 +9,9 @@
  * run or state; a projection that rebuilds to other rows than its
  * incremental tables hold; a listing that differs from the fold over the
  * whole history; a store a newer build wrote that opens, or is rewritten;
- * and the durable harness's row shapes read back other than written: a fork
+ * a stored protocol unavailable for execution being treated as damaged history,
+ * or a malformed protocol being accepted; and the durable harness's row
+ * shapes read back other than written: a fork
  * whose `run.start` does not name its source, a fork's seed
  * `context.edit` missing, an awaited child without the call
  * that owns it. Interrupted states are the crash-point suite's
@@ -38,12 +40,19 @@ import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer, Schema, Stream, SubscriptionRef } from 'effect';
+import { Effect, Layer, Result, Schema, Stream, SubscriptionRef } from 'effect';
 import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
-import { AgentCatalog } from '@agent/index/agentCatalog';
+import {
+  qualifyAggregateId,
+  type RunId,
+  RunIdSchema,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
+import { AgentCatalog, withProcessServices } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
+import { runHistoryRows } from '@agent/runtime/storedTurn';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { databaseLayer } from '@controllers/session/Database';
 import { EVENT_COLUMNS, EVENT_FROM } from '@controllers/session/rowCodec';
@@ -57,17 +66,9 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { makeSessionStore } from '@controllers/session/sessionStore';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { withProcessServices } from '@platform/processRuntime';
-import {
-  qualifyAggregateId,
-  isDisplaySessionEvent,
-  ROW_KINDS,
-  RunIdSchema,
-  type RunId,
-} from '@shared/schemas';
+import { isDisplaySessionEvent, ROW_KINDS } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import type { SessionView } from '@shared/session/sessionView';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -101,13 +102,13 @@ const PARENT = Schema.decodeUnknownSync(RunIdSchema)('a00000000001');
 const CHAT = Schema.decodeUnknownSync(RunIdSchema)('a00000000008');
 /** The goal script the chat's plan launched, named by the plan call, and
  *  its one round, named by the script's `self()` call. */
-const GOAL = Schema.decodeUnknownSync(RunIdSchema)('7c752d59004c85f4a0bda51f');
-const ROUND = '82f40cbccf0abfd6ee57cf6f';
+const GOAL = Schema.decodeUnknownSync(RunIdSchema)('a286c3e6ac6ffc44325e54fe');
+const ROUND = '2b49f9193d96636ca02a91b4';
 /** The chat's Codex child, detached by the user's stop. */
 const CODEX = Schema.decodeUnknownSync(RunIdSchema)('a0000000000b');
 const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000c');
 /** The agent the script defined (`persona`), named by its `agent()` call. */
-const DEFINED = '7636b556c2087511ca08dfde';
+const DEFINED = '6d8096657d434c473cddf020';
 /** A headless run, and the fork `texra resume --fork` made of it. */
 const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
 const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
@@ -121,7 +122,7 @@ const BACKGROUND = Schema.decodeUnknownSync(RunIdSchema)('a00000000013');
 /** The `texra run --output` document task and the revisions its recipe
  *  ran, named by the calls that launched them. */
 const DOCUMENT_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
-const REVISIONS = ['7c94c075941239282f97614c', 'ef9d49598e3ed47c0e6d1015'];
+const REVISIONS = ['c7f87768952686e0f3507090', '07786de16152981e0bb228d2'];
 
 const roots: string[] = [];
 afterAll(() => {
@@ -217,7 +218,7 @@ describe('the golden 1.0 store', () => {
           );
         const events = yield* rowReader(
           storage,
-          armsOf(texraPlugins()),
+          armsOf(texraPlugins({ name: 'vscode' })),
           exec,
         ).read(rows, true);
         expect(events).toHaveLength(rows.length);
@@ -261,18 +262,16 @@ describe('the golden 1.0 store', () => {
           ),
         ]).toEqual(['openai/gpt-5.6-sol', 'google/gemini-3.8-flash@medium']);
         // Each request is a queued control, consumed in the batch that applies
-        // it: the switch's `run.config` (no edit), then the compaction's edit,
-        // right after its consumption.
+        // it, and its consumption says so: the switch's (`run.config`) and
+        // the compaction's (its edit).
         const applied = raw(storage, (db) =>
           db
             .prepare(
               `SELECT json_extract(q.data, '$.control.kind') AS kind,
-               (SELECT json_extract(x.data, '$.payload.trigger') FROM event c
-                JOIN event x ON x.aggregate = c.aggregate AND x.seq = c.seq + 1
-                  AND x.type = 'context.edit'
+               (SELECT json_extract(c.data, '$.disposition.kind') FROM event c
                 WHERE c.type = 'followup.consumed' AND c.aggregate = q.aggregate
                   AND json_extract(c.data, '$.followUpId')
-                    = json_extract(q.data, '$.followUpId')) AS trigger
+                    = json_extract(q.data, '$.followUpId')) AS disposition
              FROM event q JOIN event_sequence s ON s.id = q.aggregate
              WHERE s.logical_id = ? AND q.type = 'followup.queued'
                AND json_extract(q.data, '$.control') IS NOT NULL
@@ -281,8 +280,8 @@ describe('the golden 1.0 store', () => {
             .all(CHAT),
         );
         expect(applied).toEqual([
-          { kind: 'model', trigger: null },
-          { kind: 'compact', trigger: 'user' },
+          { kind: 'model', disposition: 'applied' },
+          { kind: 'compact', disposition: 'applied' },
         ]);
         // The durable harness's row shapes: a fork's start names its
         // source, and its first history row seeds the source's view; an
@@ -372,6 +371,95 @@ describe('the golden 1.0 store', () => {
     },
   );
 
+  it.effect(
+    'reads an unavailable protocol as history, not executable work',
+    () => {
+      const storage = goldenRoot();
+      const setProtocol = (protocol: string | number) =>
+        raw(storage, (db) =>
+          db
+            .prepare(
+              `UPDATE event SET data = json_set(data,
+             '$.payload.turn.requestedOrigin.protocol', ?,
+             '$.payload.usage.provider', ?) WHERE "commit" = 24`,
+            )
+            .run(protocol, protocol),
+        );
+      expect(setProtocol('unavailable-protocol').changes).toBe(1);
+      raw(storage, (db) =>
+        db.exec("DELETE FROM projection_state WHERE name = 'usage'"),
+      );
+      const saved = () =>
+        raw(storage, (db) =>
+          db.prepare('SELECT data FROM event WHERE "commit" = 24').get(),
+        );
+      const before = saved();
+      return Effect.gen(function* () {
+        const db = yield* Database;
+        const read = () =>
+          db.readAggregate(qualifyAggregateId('run', PARENT), 0, [
+            'model.message',
+          ]);
+        const response = (yield* read()).find((event) => event.commit === 24);
+        expect(response).toMatchObject({
+          type: 'model.message',
+          payload: {
+            kind: 'response',
+            turn: {
+              requestedOrigin: { protocol: 'unavailable-protocol' },
+              content: [
+                {
+                  kind: 'local-call',
+                  name: 'read_file',
+                  argumentsText: '{"path":"notes.tex"}',
+                },
+              ],
+            },
+            usage: { provider: 'unavailable-protocol', cost: 0.000024 },
+          },
+        });
+        if (response === undefined)
+          throw new Error('The stored response is missing');
+        const executable = runHistoryRows([response]);
+        if (Result.isSuccess(executable))
+          throw new Error('An unavailable protocol became executable');
+        expect(executable.failure).toMatchObject({
+          reason: 'unreadable-turn',
+          commit: 24,
+        });
+        const listing = yield* db.readListing();
+        const view = makeSessionViewUpdater('golden').apply(
+          listing.filter(isDisplaySessionEvent).map((event) => ({
+            _tag: 'event' as const,
+            read: 'listing' as const,
+            event,
+          })),
+        );
+        expect(view.runs.get(PARENT)?.usage).toMatchObject({
+          inputTokens: 4,
+          outputTokens: 4,
+          cost: 0.000096,
+        });
+        const display = yield* db.readDisplayAggregate(
+          qualifyAggregateId('run', PARENT),
+          0,
+        );
+        expect(display.find((event) => event.commit === 24)).toMatchObject({
+          type: 'usage',
+          usage: { inputTokens: 1, outputTokens: 1, cost: 0.000024 },
+        });
+        expect(saved()).toEqual(before);
+        for (const malformed of ['', 42]) {
+          setProtocol(malformed);
+          expect(yield* Effect.flip(read())).toMatchObject({
+            _tag: 'DatabaseReadFailed',
+            cause: { _tag: 'DatabaseRowCorrupt', commit: 24 },
+          });
+        }
+      }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
+    },
+  );
+
   it.effect('folds to the pinned session view and run states', () => {
     const storage = goldenRoot();
     return Effect.gen(function* () {
@@ -452,8 +540,9 @@ describe('the golden 1.0 store', () => {
           messages: state?.messages.map((message) => message.role),
           openAttempt: state?.invocation != null,
         }));
+      // The stop kept where the loop stood: a halt records only the outcome.
       expect(yield* stateOf(PARENT)).toEqual({
-        at: 'halted',
+        at: 'waiting',
         phase: 'waiting',
         modelId: 'openai/gpt-5.6-sol',
         messages: [
@@ -580,12 +669,6 @@ describe('the golden run killed after its effect', () => {
     };
   });
   const VALIDATION = {
-    TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
-    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_ENV: 'TEXRA_INTERNAL_VALIDATE_MODEL',
-    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV:
-      'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG',
-    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT:
-      'texra-cli-run-validation',
     TEXRA_INTERNAL_VALIDATE_MODEL: '1',
     TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
   };
@@ -645,7 +728,17 @@ describe('the golden run killed after its effect', () => {
         testRuntime(),
         resumeRun(KILLED, { session }),
       );
-      expect(result).toMatchObject({ started: true });
+      if (!('activation' in result)) throw new Error('resume refused');
+      // The resumed activation rests, or ends.
+      yield* Stream.runHead(
+        Stream.filter(session.view.changes, (view) => {
+          const run = view.runs.get(KILLED);
+          return (
+            view.cursor > result.activation &&
+            (run?.status === 'waiting' || run?.durableOutcome != null)
+          );
+        }),
+      );
       yield* closeTestDefaultSession;
       const settled = raw(storage, (db) =>
         db

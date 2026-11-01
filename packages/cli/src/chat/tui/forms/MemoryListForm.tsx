@@ -4,11 +4,11 @@
 import { Text } from 'ink';
 import { Effect } from 'effect';
 
+import { withSessionFs } from '@texra-ai/harness/host';
 import { MemoryStore } from '@texra-ai/harness/plugins';
 import {
   CLI_MEMORY_LIST_LIMIT,
   cliMemoryItemDescription,
-  runCliMemory,
 } from '@cli/runtime/memory';
 
 import { AsyncListForm } from './_shared/ListForm';
@@ -21,10 +21,7 @@ interface MemoryListFormProps {
    *  registered this form. */
   readonly runtime: ProcessRuntime;
   /** The roots the listing's storage view is built from. */
-  readonly roots: Pick<
-    WorkspaceRoots,
-    'workspace' | 'storage' | 'globalStorage'
-  >;
+  readonly roots: Pick<WorkspaceRoots, 'workspace' | 'storage'>;
   readonly availableRows?: number;
   readonly onSelect: (storagePath: string) => void;
   readonly onClose: () => void;
@@ -36,7 +33,7 @@ export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
       title="/memory"
       loadingLabel="Loading memories..."
       load={() =>
-        Effect.map(runCliMemory(props.roots, MemoryStore.list), (items) =>
+        Effect.map(withSessionFs(props.roots, MemoryStore.list), (items) =>
           items.slice(0, CLI_MEMORY_LIST_LIMIT),
         )
       }

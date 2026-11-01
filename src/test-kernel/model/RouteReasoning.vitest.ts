@@ -1,14 +1,18 @@
 import { describe, expect, it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { lookup, ReasoningEffort as E, type ModelConfig } from 'llm-zoo';
 
-import { type ReasoningRequest } from '@texra-ai/llm';
+import {
+  modelConfig,
+  type ModelConfig,
+  ReasoningEffort as E,
+  type ReasoningRequest,
+} from '@texra-ai/llm';
 import { decideReasoning, type ReasoningRoute } from '@model/reasoningLevel';
 
 import { modelFileName } from '@texra/utils/files/outputFileUtils';
 
 const model = (ref: string): ModelConfig => {
-  const config = lookup(ref);
+  const config = modelConfig(ref);
   if (!config) throw new Error(`missing ${ref}`);
   return config;
 };

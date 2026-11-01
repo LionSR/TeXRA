@@ -29,7 +29,7 @@ export const NESTED_AGENT = {
   collapseAction: 'Collapse agents',
   /** The dispatch card's heading while any of them is still working. */
   workingSummary: (count: string) => `${count} working in the background`,
-  /** The same heading once all of them have settled. */
+  /** The same heading once all of them have finished. */
   settledSummary: (count: string) => `${count} in the background`,
 } as const;
 
@@ -70,7 +70,7 @@ export const TASK_ACTIONS = {
   forkedFrom: (title: string) => `Forked from ${title}`,
   /** The source's header menu item for each of its forks. */
   openFork: (title: string) => `Open fork: ${title}`,
-  /** The header menu's title item (the TUI's `/rename`). */
+  /** The header and run-row menus' title item (the TUI's `/rename`). */
   rename: 'Rename…',
   /** The header menu's folder item. */
   openFolder: 'Open task folder',

@@ -8,7 +8,7 @@
  * no row.
  */
 import * as NodeWorker from '@effect/platform-node/NodeWorker';
-import { Cause, Duration, Effect, Exit, Layer, Result, Schema } from 'effect';
+import { Duration, Effect, Layer, Result, Schema } from 'effect';
 
 import {
   CodeSandbox,
@@ -272,16 +272,6 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
       onDelivered: scriptCalls.delivered,
     })
     .pipe(
-      // An interruption of the run leaves every row as it stands, for the
-      // resume that replays the script. Every other exit (the guest returned
-      // or threw, the deadline, a sandbox fault) has ended the calls the
-      // guest issued: one it never awaited to its end is settled before this
-      // call's result, so nothing of the script's stays open behind it.
-      Effect.onExit((exit) =>
-        Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)
-          ? Effect.void
-          : scriptCalls.settleAbandoned,
-      ),
       Effect.map((result) => ({ _tag: 'Returned' as const, result })),
       Effect.catchTag('EndedTurn', (ended) => Effect.succeed(ended)),
       // A script that ends in failure still returns its log tail: the lines

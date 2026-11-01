@@ -3,7 +3,7 @@
  * custom JSON flow and the xAI RFC 8628 flow.
  *
  * The poll is `Effect.retry` while the endpoint reports "pending", spaced by
- * the server's interval with RFC 8628 `slow_down` growth folded into the
+ * the server's interval with RFC 8628 `slow_down` growth applied to the
  * schedule. A transient failure (a network blip, a 5xx) is retried too, but
  * only a few times in a row: it is logged at warn each time, and when the
  * budget runs out, or the deadline passes, the poll fails with the transient's

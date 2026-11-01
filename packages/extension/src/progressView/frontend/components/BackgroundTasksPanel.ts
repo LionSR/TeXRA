@@ -1,15 +1,15 @@
 /**
  * The dispatch card (board E2): what a run has fanned out, in its
  * conversation prelude. A `<wa-details>` headed "N agents working in the
- * background" (or "N agents in the background" once all have settled)
+ * background" (or "N agents in the background" once all have finished)
  * with the `rollup` of the children it lists as badges and "since <time>"
- * from the earliest child still running (the fold clears `runStartedAt` when
- * a run ends, so a settled fan-out carries no since), one row per dispatched
+ * from the earliest child still running (the session view clears `runStartedAt` when
+ * a run ends, so a finished fan-out carries no since), one row per dispatched
  * child run (`dispatchedChildren`: a script's calls are listed by its stage;
  * nested children indented under theirs), the inquiry threads the run opened, and a
  * "Waiting on N agents" line while any run. The `inquiries` scope is the
  * same card over the inquiry threads alone (the workflow body, whose run
- * board already lists every call). Every row is a child of the fold: label,
+ * board already lists every call). Every row is a child of the session view: label,
  * status, tone, latest line, and clock facts come from `view.runs`; the
  * host paints the glyph and the time. The card's open state is the
  * surface's (`Surface.groups`, key {@link DISPATCH_GROUP_KEY}); a toggle
@@ -55,7 +55,7 @@ import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 /** The card's key in `Surface.groups` for its run. */
 const DISPATCH_GROUP_KEY = 'dispatch';
 
-/** Shape cue per tone (G4: the fold spells the tone, the host the glyph). */
+/** Shape cue per tone (the session view spells the tone, the host the glyph). */
 const TONE_ICONS: Record<RunView['tone'], IconName> = {
   running: 'circle',
   success: 'circle-check',
@@ -245,7 +245,7 @@ export class BackgroundTasksPanel extends LitElement {
   /** The card's open state lives here (`groups`, key `dispatch`). */
   @property({ attribute: false }) surface: Surface | null = null;
 
-  /** The clock a running row's elapsed time ticks on (G4). */
+  /** The clock a running row's elapsed time ticks on. */
   private readonly _ticker = new TickerController(this, 1000);
 
   /** The complete card, or only the inquiry threads (a workflow run's
@@ -292,8 +292,8 @@ export class BackgroundTasksPanel extends LitElement {
     // script's calls included: the row to open is the listed one.
     const approval = children.some((child) => child.approval !== 'none');
     // When the fan-out began: the earliest descendant still running, over
-    // the set `rollup.running` counts. The fold clears `runStartedAt` on a
-    // terminal status, so a settled fan-out has no start to name and the
+    // the set `rollup.running` counts. The session view clears `runStartedAt` on a
+    // terminal status, so a finished fan-out has no start to name and the
     // line drops.
     const starts = listed.flatMap(
       (descendant) => descendant.runStartedAt ?? [],

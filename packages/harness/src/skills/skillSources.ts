@@ -25,7 +25,7 @@ export const INTEROP_SKILL_DIRS = Object.freeze([
  * The skill tiers in precedence order. A tier fixes the persisted scope its
  * sources carry, so a contribution never picks its own scope: a tool plugin
  * can only land in `bundled`, and the `ActiveSkillSourceScope` vocabulary in
- * `texra.skills.disabledSources` cannot drift.
+ * `skills.disabledSources` cannot drift.
  * A `source` tier keeps its roots in registration order; the `name` tier
  * pools its roots and orders their skills by directory name, so bundled
  * skills read the same whether one directory or several ship them.
@@ -177,7 +177,7 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
  * A tool plugin's bundled skills, shipped at `resources/plugins/<id>/skills`
  * (a plugin that ships none has no such directory, which reads as no skills)
  * and tagged with the plugin. A plugin is one on/off unit, so its switch
- * (`texra.tools.disabled`) gates them (`readDisabledSkills`), and a run's
+ * (`tools.disabled`) gates them (`readDisabledSkills`), and a run's
  * step lists them while it pins the plugin. Only the switch hides them, not
  * a failed dependency probe: the probe answers per workspace and can be
  * stale, and a plugin's skills are often what tells the user how to install

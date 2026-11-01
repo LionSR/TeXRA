@@ -18,9 +18,12 @@ import { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { SessionCloseReport } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
+import { HostSkillSources } from '@skills/runtimeSkills';
+import { hostSkillContributions } from '@skills/skillSources';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { toolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { CommandDirs } from '@utils/system/platformPaths';
 
 import { PluginsRefused } from './errors.js';
 import { makeSessions } from './sessionPrograms.js';
@@ -38,8 +41,9 @@ export class Sessions extends Context.Service<
       options?: OpenOptions,
     ) => Effect.Effect<LocalSession, SessionOpenError>;
     /**
-     * Refuse new runs, settle the ones it owns inside the runtime's
-     * shutdown-phase budget, flush, release.
+     * Refuse new runs, stop the ones it owns, cascading, and wait for them
+     * within the close budget; report the ones still live abandoned, flush,
+     * release.
      */
     readonly close: (
       roots: WorkspaceRoots,
@@ -58,7 +62,7 @@ export class Sessions extends Context.Service<
    * this layer's lifetime; the layer's release closes every session still
    * open. A plugin list the harness cannot compose (the defects `toolTable`
    * refuses: an id that is not lowercase letters, digits and dashes, an id
-   * or tool name listed twice, a second plugin continuing parked runs or
+   * or tool name listed twice, a second plugin continuing waiting runs or
    * recording one request kind's decisions, a switch on a plugin with no
    * availability probe) fails with {@link PluginsRefused}, before anything
    * is built.
@@ -70,6 +74,7 @@ export class Sessions extends Context.Service<
   static layer({
     platform,
     plugins,
+    skills,
   }: Composition): Layer.Layer<Sessions, PluginsRefused> {
     // The list is checked before anything is composed, so a refusal names
     // the plugin rather than failing the first session open, and leaves the
@@ -92,11 +97,16 @@ export class Sessions extends Context.Service<
         Effect.map(() =>
           sessionsLayer({
             storageRoot: platform.roots.storageRoot,
+            settings: platform.roots.config.catalog,
             plugins,
+            skills,
             secrets: Secrets.layer(platform.secrets),
             appState: AppState.layer(platform.roots.globalState),
-            agentDirectories: AgentDirectories.layer(platform.agentDirectories),
+            agentDirectories: Layer.succeed(AgentDirectories)(
+              platform.agentDirectories,
+            ),
             toolMissingReporter: platform.toolMissingHandler,
+            commandDirs: platform.commandDirs,
             // An embedder's console has no live level filter of its own, so
             // the package speaks at the informational level, not flooding it.
             minimumLogLevel: 'Info',
@@ -137,8 +147,27 @@ function sessionsLayer(
       return yield* makeSessions(
         yield* SessionOwner,
         yield* Effect.context<ProcessServices>(),
-        yield* Effect.scope,
       );
     }),
-  ).pipe(Layer.provideMerge(ownerProcessLayer(options)));
+  ).pipe(
+    Layer.provideMerge(ownerProcessLayer(options)),
+    // Beneath every session the process builds, so its runs' steps list
+    // what the hosts' settings pages list.
+    Layer.provideMerge(
+      options.skills === undefined
+        ? Layer.empty
+        : Layer.succeed(HostSkillSources)({
+            resourcesPath: options.skills.resourcesPath,
+            options: options.skills.skillSourceOptions ?? {},
+            contributions: hostSkillContributions(
+              options.plugins.map(({ id }) => id),
+            ),
+          }),
+    ),
+    Layer.provideMerge(
+      options.commandDirs === undefined
+        ? Layer.empty
+        : Layer.succeed(CommandDirs)(options.commandDirs),
+    ),
+  );
 }

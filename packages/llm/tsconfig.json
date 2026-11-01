@@ -5,6 +5,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
+    "erasableSyntaxOnly": true,
     "skipLibCheck": true,
     "types": ["node"]
   },

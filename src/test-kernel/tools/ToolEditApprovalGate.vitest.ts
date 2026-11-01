@@ -9,13 +9,18 @@ import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import { Effect, Fiber, FileSystem } from 'effect';
 import { describe, beforeEach, afterEach, vi } from 'vitest';
-import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
-import type { ToolServices } from '@agent/runtime/ToolServices';
 
-import { WorkspaceFs } from '@platform/rootedFs';
-import type { RequestDecision, RunId } from '@shared/schemas';
+import {
+  generateRunId,
+  type RequestDecision,
+  type RunId,
+} from '@texra-ai/harness/schemas';
+import { requestToolEditApproval } from '@texra-ai/harness/plugins';
+import { WorkspaceFs } from '@texra-ai/harness/host';
+import type { ToolServices } from '@agent/runtime/ToolServices';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import {
   setTestApprovalPolicy,
   publishTestRunStart,
@@ -27,11 +32,6 @@ import { fakePath } from '@test/support/FakePlatform';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { EditFileTool } from '@tools/EditTool';
 import { writeFileTool } from '@tools/WriteTool';
-import {
-  requestToolEditApproval,
-  type ToolEditApprovalRequest,
-} from '@tools/approval/toolEditApproval';
-import { generateRunId } from '@utils/core';
 
 // Local file imports
 import { autoDecideRequests, decideRequest } from '../agent/progressTestUtils';
@@ -52,15 +52,16 @@ let decisions: ReturnType<typeof autoDecideRequests> | undefined;
 let detachHostInteractions = (): void => {};
 let policyDenials = 0;
 let readFiles = new Set<string>();
-// The previews the host staged; tests override the decision when they need to
-// reject or adjust, and assert on this list otherwise.
-let approvalRequests: ToolEditApprovalRequest[] = [];
+// The tool edits the run opened, as their rows reached the log; tests
+// override the decision when they need to reject or adjust, and assert on
+// this list otherwise.
+const openedEdits = () =>
+  decisions?.opened.filter((event) => event.payload.kind === 'toolEdit') ?? [];
 
 async function installPlatform(
   config: Record<string, unknown> = {},
   files: Record<string, string | Uint8Array> = {},
 ) {
-  approvalRequests = [];
   nextDecision = () => ({ action: 'approve' });
   await installFakePlatform({
     workspacePath: WORKSPACE_PATH,
@@ -72,9 +73,6 @@ async function installPlatform(
     testDefaultSession().interactions.use({
       approvalDenied: () => {
         policyDenials += 1;
-      },
-      presentToolEdit: (request) => {
-        approvalRequests.push(request);
       },
     }),
   );
@@ -195,7 +193,7 @@ describe('Tool edit approval gating', () => {
       assert.strictEqual(result.status, 'error');
       assert.match(result.error ?? '', /require a prior read/);
       assert.strictEqual(workspaceWrites.mock.calls.length, 0);
-      assert.strictEqual(approvalRequests.length, 0);
+      assert.strictEqual(openedEdits().length, 0);
     }),
   );
 
@@ -221,7 +219,7 @@ describe('Tool edit approval gating', () => {
   it.effect('lets never override a disabled approval setting', () =>
     Effect.gen(function* () {
       yield* Effect.tryPromise(() =>
-        installPlatform({ 'texra.toolUse.requireEditApproval': false }),
+        installPlatform({ 'toolUse.requireEditApproval': false }),
       );
       setTestApprovalPolicy('never', testDefaultSession().roots);
 
@@ -234,7 +232,7 @@ describe('Tool edit approval gating', () => {
         writeFileTool().call({ path: 'denied.txt', content: 'blocked' }),
       );
 
-      assert.strictEqual(approvalRequests.length, 0);
+      assert.strictEqual(openedEdits().length, 0);
       assert.strictEqual(write.mock.calls.length, 0);
       assert.strictEqual(result.status, 'error');
       assert.strictEqual(policyDenials, 1);
@@ -259,8 +257,8 @@ describe('Tool edit approval gating', () => {
       const firstRequest = yield* Effect.forkChild(requestInRun('first.txt'));
       const secondRequest = yield* Effect.forkChild(requestInRun('second.txt'));
       yield* Effect.tryPromise(() =>
-        waitForCondition(() => approvalRequests.length === 1, {
-          timeoutMessage: 'Timed out waiting for the first edit to be staged',
+        waitForCondition(() => openedEdits().length === 1, {
+          timeoutMessage: 'Timed out waiting for the first edit to be opened',
         }),
       );
 
@@ -270,7 +268,7 @@ describe('Tool edit approval gating', () => {
       );
       decideRequest(
         testDefaultSession(),
-        { runId, requestId: approvalRequests[0]!.permission.requestId },
+        { runId, requestId: openedEdits()[0]!.requestId },
         { action: 'approve', content: 'first.txt' },
       );
 
@@ -283,7 +281,64 @@ describe('Tool edit approval gating', () => {
         ['apply', 'apply'],
       );
       // The bypassed second request never reaches a surface.
-      assert.strictEqual(approvalRequests.length, 1);
+      assert.strictEqual(openedEdits().length, 1);
     }),
+  );
+
+  it.live(
+    "stores a pending edit's proposal with its request, where any process reads it",
+    () =>
+      Effect.gen(function* () {
+        // Left pending: the proposal must be readable while nothing but the
+        // rows holds it, as it is after the process that opened it is gone.
+        nextDecision = () => null;
+        const request = yield* Effect.forkChild(
+          inRun(
+            requestToolEditApproval({
+              path: 'draft.txt',
+              originalContent: 'alpha\n',
+              proposedContent: 'beta\n',
+              sourceTool: 'write_file',
+            }),
+          ),
+        );
+        yield* Effect.tryPromise(() =>
+          waitForCondition(() => openedEdits().length === 1, {
+            timeoutMessage: 'Timed out waiting for the edit to be opened',
+          }),
+        );
+        const opened = openedEdits()[0]!;
+        const address =
+          opened.payload.kind === 'toolEdit'
+            ? opened.payload.data.content
+            : undefined;
+        assert.ok(address, 'the request names its proposal by address');
+        const session = testDefaultSession();
+        const stored = (yield* session.log.blobs([address])).get(address);
+        assert.ok(stored, 'the store holds the proposal under that address');
+        const content: unknown = JSON.parse(stored);
+        assert.ok(typeof content === 'object' && content !== null);
+        assert.strictEqual(
+          (content as { originalContent?: unknown }).originalContent,
+          'alpha\n',
+        );
+        assert.strictEqual(
+          (content as { proposedContent?: unknown }).proposedContent,
+          'beta\n',
+        );
+        // The door a surface reads the diff through answers from the store.
+        const { preview } = yield* session.requests.request({
+          kind: 'request.preview',
+          runId,
+          requestId: opened.requestId,
+        });
+        assert.deepStrictEqual(preview, content);
+        decideRequest(
+          session,
+          { runId, requestId: opened.requestId },
+          { action: 'reject' },
+        );
+        assert.strictEqual((yield* Fiber.join(request)).action, 'reject');
+      }),
   );
 });

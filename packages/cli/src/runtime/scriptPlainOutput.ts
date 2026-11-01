@@ -1,8 +1,7 @@
 /**
- * The plain-text script progress of `texra run` (PRD
- * one-fold-three-renderers, 10.3): what the session view's script stages
+ * The plain-text script progress of `texra run`: what the session view's script stages
  * say, printed as their lines change. It reads `LocalSession.view` and
- * derives nothing the fold already states; it keeps only what it last
+ * derives nothing the session view already states; it keeps only what it last
  * printed.
  */
 import { Effect, Scope, ScopedRef, Stream } from 'effect';
@@ -24,7 +23,7 @@ import { scriptCallLine } from '@ui/copy/scriptStage';
 import type { LocalSession } from '@texra-ai/harness';
 
 /** The plain script output also subscribes the transcripts it prints,
- *  since transcript rows fold only for subscribed aggregates. */
+ *  since transcript rows load only for subscribed aggregates. */
 type ScriptPlainSession = Pick<LocalSession, 'view'>;
 
 interface ScriptPlainOutputOptions {
@@ -69,9 +68,9 @@ function scriptPlainLines(
 /**
  * The plain-text script progress of `texra run` (text output): what the
  * script stages of the launched run and the background script runs under it
- * say, printed as they change between consecutive view levels (PRD 10.3).
+ * say, printed as they change between consecutive view levels.
  * A line prints when its entry is new or reads differently than at the
- * previous level; nothing here folds, gates, or relabels.
+ * previous level; nothing here reduces, gates, or relabels.
  */
 export function attachScriptPlainOutput(
   session: ScriptPlainSession,
@@ -124,7 +123,7 @@ export function attachScriptPlainOutput(
           if (key !== subscribed) {
             subscribed = key;
             // ScopedRef.set holds the new set before it lets the old one go,
-            // so no run printed in both leaves the fold in between.
+            // so no run printed in both leaves the session view in between.
             yield* ScopedRef.set(
               interest,
               session.view.subscribe(

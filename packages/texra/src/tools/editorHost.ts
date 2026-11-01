@@ -1,10 +1,10 @@
 /**
  * The host editor's capabilities TeXRA's tools use: a file's diagnostics, an
  * inline criticism, and a PDF in the host's viewer. One registry per
- * composition, keyed by a session's storage root: a host attaches what it
- * offers for a session for its scope (the VS Code window for its own
- * session; the service, routing to that project's windows), and the newest
- * attachment answers. The same registry serves the harness's
+ * composition, keyed by a session's storage root: the process's windows
+ * (`HostWindows`) attach what a session's project's windows offer, routed to
+ * the one focused last, while a window of it is attached. The same registry
+ * serves the harness's
  * `HostCapabilities`, so the `diagnostics` tool is offered exactly while an
  * implementation is attached: one owner for the capability and its code.
  */
@@ -84,7 +84,7 @@ export interface EditorHostShape {
     storage: string,
     capabilities: EditorCapabilities,
   ) => Effect.Effect<void, never, Scope.Scope>;
-  /** What the newest attachment for `storage` offers ({} for none). */
+  /** What the attachment for `storage` offers ({} for none). */
   readonly at: (storage: string) => EditorCapabilities;
 }
 
@@ -103,25 +103,17 @@ export type EditorRegistry = ReturnType<typeof makeEditorHost>;
 export function makeEditorHost(): EditorHostShape & {
   readonly of: (storage: string) => ReadonlySet<EditorCapability>;
 } {
-  const attached = new Map<string, EditorCapabilities[]>();
+  const attached = new Map<string, EditorCapabilities>();
   const at = (storage: string): EditorCapabilities =>
-    attached.get(storage)?.at(-1) ?? {};
+    attached.get(storage) ?? {};
   return {
     attach: (storage, capabilities) =>
       Effect.acquireRelease(
-        Effect.sync(() =>
-          attached.set(storage, [
-            ...(attached.get(storage) ?? []),
-            capabilities,
-          ]),
-        ),
+        Effect.sync(() => attached.set(storage, capabilities)),
         () =>
           Effect.sync(() => {
-            const rest = (attached.get(storage) ?? []).filter(
-              (entry) => entry !== capabilities,
-            );
-            if (rest.length === 0) attached.delete(storage);
-            else attached.set(storage, rest);
+            if (attached.get(storage) === capabilities)
+              attached.delete(storage);
           }),
       ).pipe(Effect.asVoid),
     at,

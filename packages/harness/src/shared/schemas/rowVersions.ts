@@ -27,7 +27,8 @@ type RowData = { readonly [field: string]: JsonValue };
 interface RowKind {
   /** The version this build writes. */
   readonly version: number;
-  /** `upcast[i]` maps stored version `i + 1` to `i + 2`, over plain JSON. */
+  /** Adjacent conversions from `version - upcast.length` to `version`,
+   *  oldest first, over plain JSON. */
   readonly upcast: readonly ((data: RowData) => RowData)[];
 }
 
@@ -35,16 +36,18 @@ const V1 = { version: 1, upcast: [] } as const satisfies RowKind;
 
 /**
  * The row kinds this build deleted from `ROW_KINDS`. A store that holds one
- * is not a newer build's: its rows fail the reads of their own run
- * (`DatabaseRowCorrupt`) and the rest of the store opens. A kind moves here
+ * is not a newer build's: its run reads as an earlier build's
+ * (`DatabaseRowEarlier`) and the rest of the store opens. A kind moves here
  * from `ROW_KINDS` in the change that deletes it; every kind ever stored is
  * listed in `config/storage/row-kinds-ever.json`, which never shrinks.
  */
 export const RETIRED_ROW_KINDS: ReadonlySet<string> = new Set<string>([
+  'conversation.progress',
   'inquiryThreadUpdated',
   'model.compaction',
   'model.retry',
   'output.produced',
+  'run.fact',
   'run.snapshot',
   'tool.binding',
   'workflow.attempt',
@@ -90,8 +93,6 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v2: a recipe's value is `structured`, with no `documents` (no upcaster,
   // as `run.config`).
   'run.end': { version: 2, upcast: [] },
-  'conversation.progress': V1,
-  'run.fact': V1,
   'child.park': V1,
   'run.removed': V1,
   'run.description': V1,
@@ -100,13 +101,22 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // notice is known by `holdUntil: 'generation'`, no longer by its text: a
   // v1 notice would read as an ordinary message (no upcaster, as
   // `run.config`).
-  'followup.queued': { version: 2, upcast: [] },
-  'followup.consumed': V1,
+  // v3: attached media by blob address (`media`), no `mediaFiles` paths (no
+  // upcaster: a v2 row's paths would be read as no media).
+  'followup.queued': { version: 3, upcast: [] },
+  // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
+  // it and fails to decode (no upcaster, as `run.config`).
+  'followup.consumed': { version: 2, upcast: [] },
   // v2: a task proposal carries its plugin's `options`, not `toolConfig`
   // (no upcaster, as `run.config`).
   // v3: a retry's credential switch names no OpenRouter key (no upcaster,
   // as `run.config`).
-  'request.opened': { version: 3, upcast: [] },
+  // v4: a task proposal records whether approving it may bypass later
+  // prompts (`allowBypass`); a v3 proposal lacks the field and fails to
+  // decode (no upcaster, as `run.config`).
+  // v5: tool edits require their stored proposal, whose original content
+  // distinguishes a missing file from an empty one (no upcaster).
+  'request.opened': { version: 5, upcast: [] },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options (no upcaster, as `run.config`).
   'request.decided': { version: 2, upcast: [] },
@@ -114,7 +124,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'run.position': V1,
   // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
   // holds both (no upcaster, as `run.config`).
-  log: { version: 2, upcast: [] },
+  // v3: a user message names its attached media by blob address (`media`),
+  // not by `mediaFiles` paths (no upcaster, as `followup.queued`).
+  log: { version: 3, upcast: [] },
   // v2: no `phase` kind and no `index`/`total` (no upcaster, as
   // `run.config`: an earlier build's workflow phase stage would fail its
   // run as damaged rather than read as that build's).
@@ -168,6 +180,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // row would resume a script against the modules shipped now.
   'tools.offered': { version: 4, upcast: [] },
   'context.blob': V1,
-  'hook.outcome': V1,
+  // v2: a `PreToolUse` answer is `decision` (allow, deny, ask) with its
+  // `reason` and `updatedInput`, not a `deny` reason alone (no upcaster: an
+  // earlier build's row has no decision to read).
+  'hook.outcome': { version: 2, upcast: [] },
   'child.turn': V1,
 };

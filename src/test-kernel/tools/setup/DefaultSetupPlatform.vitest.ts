@@ -7,7 +7,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import * as codexAuth from '@texra-ai/llm/node';
 import {
   fakeProcessServices,
-  hostStores,
+  installedHost,
   setupPlatform,
 } from '@test/support/setupPlatform';
 import { getChatGptSubscriptionStatus } from '@texra/tools/setup/platform';
@@ -31,7 +31,9 @@ describe('shared setup capabilities', () => {
           }),
         );
 
-        const status = yield* getChatGptSubscriptionStatus(hostStores());
+        const status = yield* getChatGptSubscriptionStatus(
+          installedHost().roots,
+        );
 
         expect(status.signedIn).toBe(true);
         expect(status).not.toHaveProperty('account');

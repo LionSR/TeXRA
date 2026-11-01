@@ -4,8 +4,11 @@ import { Effect, Layer, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { AgentCatalog } from '@agent/index/agentCatalog';
-import { AgentDirectories, AppState } from '@platform/interfaces';
+import {
+  AgentCatalog,
+  AgentDirectories,
+  AppState,
+} from '@texra-ai/harness/host';
 import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
@@ -42,7 +45,7 @@ function onGlobalStorage<A, E>(
           storePluginsLayer,
           nodePlatformLayer,
           testHttpClientLayer,
-          AgentDirectories.layer({
+          Layer.succeed(AgentDirectories)({
             ...fakeHostAgentDirectories,
             builtIn: () => Effect.succeed(BUNDLED_AGENTS),
           }),

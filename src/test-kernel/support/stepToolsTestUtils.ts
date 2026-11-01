@@ -45,8 +45,7 @@ export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
   const resolved = yield* resolveStepTools(pinned.entries, {
     runTools: [],
     approvalPromptsUnavailable: false,
-    // The extension's own session reads its editor's diagnostics.
-    hostCapabilities: new Set(input.host === 'vscode' ? ['diagnostics'] : []),
+    hostCapabilities: new Set(),
     injectInstalled: false,
     ...input,
     held,

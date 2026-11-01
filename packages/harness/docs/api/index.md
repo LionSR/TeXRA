@@ -44,20 +44,7 @@ Discriminated union of every event the SDK surface emits.
 
 ```ts
 type AgentEvent =
-  | TraceArm<
-      | 'log'
-      | 'stage.start'
-      | 'stage.end'
-      | 'tool.start'
-      | 'tool.end'
-      | 'usage'
-      | 'conversation.progress'
-      | 'run.fact'
-      | 'context.state'
-      | 'stream.start'
-      | 'stream.end'
-    >
-  | StreamChunkEvent;
+  TraceArm<(typeof TRACE_ROW_TYPES)[number]> | StreamChunkEvent;
 ```
 
 ## AgentNotFound
@@ -85,6 +72,8 @@ interface AgentPlatform {
    *  `ToolMissingReporter`; absent, a missing-tool probe answers without
    *  surfacing. */
   readonly toolMissingHandler?: ToolMissingHandler;
+  /** The app's directories on every command's PATH (`CommandDirs`). */
+  readonly commandDirs?: () => readonly string[];
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;
@@ -131,8 +120,8 @@ A host's answer to each request a run of the session waits on: an
 approval, a denial with its reason, or for a retry, `retry` or `cancel`.
 The session records it as the request's `request.decided`, through the
 same `request.decide` a {@link Session.request} sends. A handler that
-fails, throws, or has not answered within ten minutes is a denial, with
-the cause logged.
+fails, throws, answers with a decision the request's kind does not take,
+or has not answered within ten minutes is a denial, with the cause logged.
 
 ```ts
 type ApprovalHandler = (
@@ -153,14 +142,16 @@ class Cancelled extends Schema.TaggedError<Cancelled>()(
 
 ## Composition
 
-What an embedder composes the process from: its platform and its
-plugins (the harness's built-ins among them). The setting rows its
-plugins read travel with the platform's config (`ConfigProvider.catalog`).
+What an embedder composes the process from: its platform, its plugins
+(the harness's built-ins among them) and its skill sources, without
+which it discovers no skills. The setting rows its plugins read travel
+with the platform's config (`ConfigProvider.catalog`).
 
 ```ts
 interface Composition {
   readonly platform: AgentPlatform;
   readonly plugins: readonly Plugin[];
+  readonly skills?: HostSkillOptions;
 }
 ```
 
@@ -192,10 +183,11 @@ A defined tool: plain data plus a `call` that validates and normalizes
 failures. An anonymous object type so the SDK's `.d.ts` inlines it.
 
 ```ts
-type DefinedTool<T, R = never> = Omit<
+type DefinedTool<T, R = never, Name extends string = string> = Omit<
   ITool<Error, R>,
-  'call' | 'guard'
+  'call' | 'guard' | 'definition'
 > & {
+  readonly definition: ToolDefinition & { readonly name: Name };
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
@@ -210,20 +202,19 @@ and turn ordinary failures into `{ status: 'error' }` feedback.
 Interruption, run history refusals and database write failures propagate.
 
 ```ts
-function defineTool<T, R = never>(
-  def: DefineToolOptions<T, R>,
-): DefinedTool<T, R>
+function defineTool<T, R = never, const Name extends string = string>(
+  def: DefineToolOptions<T, R> & { readonly name: Name },
+): DefinedTool<T, R, Name>
 ```
 
 ## HeldRun
 
-What this process holds of one run ({@link LocalSession.held}).
+What this process holds of one run ({@link LocalSession.held}): a launch
+of it in flight here; a run with none has no record.
 
 ```ts
 interface HeldRun {
   readonly runId: RunId;
-  /** A generation of it is live here: its fiber, a hold, or a launch. */
-  readonly live: boolean;
   /** Resolves once every owner of it here has left. */
   readonly drained: Effect.Effect<void>;
   /** Why its running loop would refuse to switch to `model`; undefined
@@ -261,6 +252,15 @@ class Internal extends Schema.TaggedError<Internal>()('Internal', {
 })
 ```
 
+## isOutcomeOf
+
+Whether `outcome` answers a request of `kind`: how a client reads an
+answer that crossed a process boundary.
+
+```ts
+const isOutcomeOf: <K extends RuntimeRequest["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly status: "sent" | "queued"; readonly wake?: "failed" | null | undefined; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
+```
+
 ## isRequestRefusal
 
 Whether a failure is one of the three the bridge answers on the wire.
@@ -280,8 +280,6 @@ ToolResult values; unexpected/programmer failures should throw and let
 ```ts
 interface ITool<E = Error, R = never> {
   readonly definition: ToolDefinition;
-  /** Hosts this tool is statically excluded from; an omitted host supports it. */
-  readonly unavailableHosts?: readonly SettingHost[];
   /** The host capability (named by the plugin that serves it,
    *  `HostCapabilities`) the session's host must serve for this tool to be
    *  offered, read live each step: a window that attaches mid-run brings it. */
@@ -330,16 +328,14 @@ interface ITool<E = Error, R = never> {
    */
   readonly replay?: 'safe' | 'unsafe';
   /**
-   * Whether a call needs a person's approval, and who asks for it. `true`:
-   * the run loop asks before the body runs, spelling the call as `guard.bash`
-   * does when the guard names one and as the tool's name and arguments
-   * otherwise, so a tool cannot declare approval and run unasked.
-   * `'inBody'`: the body opens its own request (a file-edit review, a plan, a
-   * question, a delegation proposal, an external inquiry) and the loop does
-   * not ask again. Either
-   * way, a run that cannot present a prompt is not offered the tool.
+   * Whether a call needs a person's approval, and who asks. `true` (implied
+   * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
+   * body's own request (an edit's review, a plan, a delegation proposal, a
+   * question, an external inquiry), which answers what the call's hooks
+   * said. A run that cannot present a prompt is not offered such a tool
+   * (`asksApproval`).
    */
-  readonly requiresApproval?: boolean | 'inBody';
+  readonly requiresApproval?: true | 'inBody';
   /** Its card opens before the call runs; a fast tool's opens and closes
    *  with its settlement. */
   readonly slow?: boolean;
@@ -426,7 +422,7 @@ interface LocalSession extends Session {
   readonly deleteRuns: (
     target: RunId | 'all',
   ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
-  /** Show a notice through the most recently attached host. With
+  /** Show a notice through the attached host. With
    *  `replayWhenAttached`, a notice raised while no host is attached waits
    *  for the next one. */
   readonly emit: SessionHostInteractions['emit'];
@@ -470,7 +466,7 @@ interface OpenOptions {
    * `interruptedTasks` handles runs that a closed or crashed process left
    * unfinished. Both values resume such a run once what it was missing (an
    * agent, a plugin) is back. `offer` also lists them when the session
-   * opens, and continues them when the `texra.resumeOnOpen` setting is
+   * opens, and continues them when the `resumeOnOpen` setting is
    * `auto`.
    */
   readonly host?: { readonly interruptedTasks?: 'offer' | 'retry' };
@@ -483,6 +479,22 @@ What the runtime answers a request with.
 
 ```ts
 type Outcome = typeof OutcomeSchema.Type;
+```
+
+## OutcomeOf
+
+What a request of kind `K` is answered with: `done` unless it is one of
+the kinds above.
+
+```ts
+type OutcomeOf<K extends RuntimeRequest['kind']> = Extract<
+  Outcome,
+  {
+    kind: K extends keyof typeof OUTCOME_KIND
+      ? (typeof OUTCOME_KIND)[K]
+      : 'done';
+  }
+>;
 ```
 
 ## Plugin
@@ -498,8 +510,8 @@ interface Plugin {
    *  directory): lowercase letters, digits and dashes, starting with a
    *  letter or digit. A list with any other id is refused. */
   readonly id: string;
-  /** Its tools, by registered name. */
-  readonly tools?: Readonly<Record<string, ITool<Error, PluginToolServices>>>;
+  /** Its tools, registered by each tool's `definition.name`, in order. */
+  readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /**
    * Present when the plugin has an external dependency: it is probed, and
    * its tools are withheld while the dependency is missing. Without it the
@@ -543,7 +555,7 @@ interface Plugin {
 
 The plugin list cannot be composed, for a defect `toolTable` refuses: an
 id that is not lowercase letters, digits and dashes, an id or tool name
-listed twice, a second plugin continuing parked runs or recording one
+listed twice, a second plugin continuing waiting runs or recording one
 request kind's decisions, or a switch on a plugin with no availability
 probe.
 
@@ -640,11 +652,13 @@ interface Run {
    *  this names the child you asked for. */
   readonly redirectedFrom?: RunId;
   /**
-   * How the run ended. A failed run fails this with its own
-   * {@link RunFailure}. A finished run's result arrives once the session
-   * view shows its stored outcome, so a view read afterwards includes it.
+   * How this activation ended: the end it stored, whatever its outcome. A
+   * failed run's end carries its classified `error`, a stopped one's is
+   * `cancelled`. It fails with {@link RunFailure} only when the activation
+   * stored no end that can be read. It arrives once the session view shows
+   * that end, so a view read afterwards includes it.
    */
-  readonly result: Effect.Effect<RunEndResult, RunFailure>;
+  readonly result: Effect.Effect<RunEnd, RunFailure>;
   /**
    * The session view while this run lasts: from the first snapshot that
    * shows the run to the first that shows its stored outcome. It cannot
@@ -654,14 +668,14 @@ interface Run {
   /**
    * What the run does as it does it: streamed text, tool calls, stages,
    * usage. Pipe it through `responseText` for just the answer's text.
-   * Ends when the run ends, and fails with {@link RunFailure} if the run
-   * failed. Read it once, from the moment `start` returns: events wait
-   * for you only briefly, and stopping early stops your reading, not the
-   * run. A reader that comes too late fails with {@link TraceUnavailable}
-   * instead of seeing nothing.
+   * Ends when the run ends, and fails as {@link result} does. Read it as
+   * often as you like and whenever you like: each read is this activation's
+   * events read back from the session, from the activation's start, and
+   * stopping early stops your reading, not the run. A stream that ended
+   * before the read reached it arrives whole, as one chunk.
    */
-  readonly events: Stream.Stream<AgentEvent, RunFailure | TraceUnavailable>;
-  /** Stop the run. */
+  readonly events: Stream.Stream<AgentEvent, RunFailure>;
+  /** Stop the run, as the user's `run.stop` does. */
   readonly interrupt: Effect.Effect<void>;
 }
 ```
@@ -823,13 +837,15 @@ interface Session {
   /** Everything else you ask of the session, as one typed request
    *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
    *  approval, stop, fork or delete a run, switch its model, and so on).
-   *  Answered exactly once, with an outcome or a {@link RequestError}. */
-  readonly request: (
-    request: RuntimeRequest,
-  ) => Effect.Effect<Outcome, RequestError>;
-  /** Attach `host` until the caller's scope closes. The most recently
-   *  attached host shows notices, and its `approve` answers the runs'
-   *  approval requests. */
+   *  Answered exactly once, with the outcome its kind is answered with
+   *  (`OutcomeOf`) or a {@link RequestError}. A decision a request's kind
+   *  does not take is `Rejected`. */
+  readonly request: <R extends RuntimeRequest>(
+    request: R,
+  ) => Effect.Effect<OutcomeOf<R['kind']>, RequestError>;
+  /** Attach `host` until the caller's scope closes: it shows notices, and
+   *  its `approve` answers the runs' approval requests. A session has one
+   *  host at a time; attaching a second while one is attached is a defect. */
   readonly attach: (
     host: SessionHost,
   ) => Effect.Effect<void, never, Scope.Scope>;
@@ -889,8 +905,9 @@ class Sessions extends Context.Service<
       options?: OpenOptions,
     ) => Effect.Effect<LocalSession, SessionOpenError>;
     /**
-     * Refuse new runs, settle the ones it owns inside the runtime's
-     * shutdown-phase budget, flush, release.
+     * Refuse new runs, stop the ones it owns, cascading, and wait for them
+     * within the close budget; report the ones still live abandoned, flush,
+     * release.
      */
     readonly close: (
       roots: WorkspaceRoots,
@@ -979,25 +996,6 @@ class ToolsRefused extends Schema.TaggedError<ToolsRefused>()(
 )
 ```
 
-## TraceUnavailable
-
-A run's trace that no reader can take any more: `ended` (the run settled
-with nobody reading, so its buffered trace went with it), `truncated`
-(it passed the handover buffer before a reader attached, so the trace
-was detached) or `remote` (the run runs in another process, which keeps
-its trace). The run itself is unaffected: its `result` still answers.
-
-```ts
-class TraceUnavailable extends Schema.TaggedError<TraceUnavailable>()(
-  'TraceUnavailable',
-  {
-    runId: Schema.String,
-    reason: Schema.Literals(['ended', 'truncated', 'remote']),
-    message: Schema.String,
-  },
-)
-```
-
 ## Unavailable
 
 The stream, request, or run the request names is gone or not in a state
@@ -1017,13 +1015,6 @@ state stores, as the session opened over it holds them.
 
 ```ts
 interface WorkspaceRoots {
-  /**
-   * The product host this process is, named by its composition root. The
-   * catalog rows whose slot differs by host and the tool gate's
-   * `unavailableHosts` read it from here, so a read answers for the host that
-   * opened these roots rather than for a default.
-   */
-  readonly host: SettingHost;
   /** Canonical physical workspace root, or undefined when no folder is open. */
   readonly workspace: string | undefined;
   /**

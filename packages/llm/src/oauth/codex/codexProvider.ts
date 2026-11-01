@@ -20,7 +20,6 @@
 import { Effect, Option, Schema, SchemaGetter, Struct } from 'effect';
 import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
-import { createSecretBackedCoordinator } from '../sessionAccess.js';
 import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
 import {
   SubscriptionSessionBaseSchema,
@@ -169,7 +168,7 @@ export const CodexDeviceTokenSchema = Schema.Struct({
 // (`catchDecoding`) so a single malformed field degrades to `undefined` rather
 // than dropping the whole payload — preserving the old per-location probing
 // where a valid account id survives garbage in a sibling claim. The same
-// schema folds the three locations into the canonical `{ accountId, email }`
+// schema maps the three locations into the canonical `{ accountId, email }`
 // shape.
 
 /** Account id, email, and plan distilled from a JWT (each may be absent). */
@@ -243,6 +242,7 @@ function extractCodexClaims(
  * storage races, and error mapping live in the shared machine.
  */
 const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
+  secretKey: CODEX_SESSION_SECRET_KEY,
   sessionSchema: CodexSessionSchema,
   tokenEndpoint: {
     tokenUrl: CODEX_TOKEN_URL,
@@ -284,11 +284,8 @@ const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
  */
 export const codexCoordinator: (
   secrets: CredentialStore,
-) => SubscriptionCoordinator<CodexSession> = createSecretBackedCoordinator({
-  secretKey: CODEX_SESSION_SECRET_KEY,
-  makeCoordinator: (storage) =>
-    new SubscriptionOAuthCoordinator({ storage, policy: CODEX_POLICY }),
-});
+) => SubscriptionCoordinator<CodexSession> =
+  SubscriptionOAuthCoordinator.forProvider(CODEX_POLICY);
 
 /** Signed-in status, read from the caller's secret store. A store that
  *  cannot be read, or a stored session that does not parse, fails. */

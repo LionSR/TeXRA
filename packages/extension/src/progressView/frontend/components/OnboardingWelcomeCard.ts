@@ -4,7 +4,7 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { ANTHROPIC_PLAN_CREDITS } from '@ui/copy/modelAccess';
+import { PLAN_CREDITS_SUMMARY } from '@ui/copy/modelAccess';
 import {
   ONBOARDING_CARD_LEDE,
   ONBOARDING_CARD_TITLE,
@@ -18,7 +18,7 @@ import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 /**
- * State 0 "Connect a model" card (PRD: agent-native onboarding), the one
+ * State 0 "Connect a model" card, the one
  * credential prompt in the extension and the desktop — a port of the CLI
  * first-run picker, not a new design: ChatGPT subscription first, the API-key
  * alternative, and a quiet "Skip for now" link last. The setup assistant
@@ -249,9 +249,7 @@ export class OnboardingWelcomeCard extends LitElement {
               <span class="choice-description" aria-hidden="true">
                 ${ONBOARDING_CHOICE_API_KEY.description}
               </span>
-              <span class="choice-description">
-                ${ANTHROPIC_PLAN_CREDITS.hint}
-              </span>
+              <span class="choice-description"> ${PLAN_CREDITS_SUMMARY} </span>
             </div>
           </div>
           <div class="skip-row">

@@ -3,29 +3,28 @@ import * as path from 'node:path';
 import { DateTime, Effect, type FileSystem, Option, Stream } from 'effect';
 
 // Local imports
-import { Runs } from '@agent/runtime/runRegistry';
 import {
   callerRun,
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@agent/runtime/RunCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { withLogChannel } from '@logger/effectLog';
-import { StorageFs } from '@platform/rootedFs';
-import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import {
   DIRECTORY_LISTING_DEPTH,
   displayToStoragePath,
   MAX_PINNED_MEMORIES,
   MEMORY_DISPLAY_ROOT,
   toDisplayPath,
-} from '@tools/memory/memoryUtils';
+} from '@agent/memory/memoryUtils';
 import {
   createMeta,
   formatAttribution,
   type MemoryFileMeta,
-} from '@tools/memory/memoryMeta';
+} from '@agent/memory/memoryMeta';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import { withLogChannel } from '@logger/effectLog';
+import { StorageFs } from '@platform/rootedFs';
+import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
 import {
   deleteMemoryPath,
@@ -91,15 +90,13 @@ function executeMemoryTool(
   input: MemoryToolInput,
 ): Effect.Effect<ToolResult, Error, ToolServices> {
   return Effect.gen(function* () {
-    const runs = yield* Runs;
-    const runId = (yield* callerRun)?.runId;
+    const caller = yield* callerRun;
     const invocation = {
-      runId,
-      agentName:
-        runId === undefined ? undefined : runs.get(runId)?.handle?.agentName,
+      runId: caller?.runId,
+      agentName: caller?.config.agent,
     } satisfies MemoryInvocation;
     return yield* run(input, invocation).pipe(onMemoryTreeLane);
-  }).pipe(Effect.catchTag('PlatformError', (error) => Effect.die(error)));
+  });
 }
 
 const run = Effect.fn('MemoryTool.run')(function* (

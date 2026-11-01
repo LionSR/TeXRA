@@ -1,5 +1,5 @@
 /** LaTeXDiff section with base/edited file selectors, commit selector, and
- *  diff actions. The Tools sheet is its container (PRD 12.1); it carries no
+ *  diff actions. The Tools sheet is its container; it carries no
  *  disclosure of its own. */
 
 // Side-effect imports - register WA button, button-group, select, option & tooltip components

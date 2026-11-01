@@ -1,5 +1,5 @@
 /**
- * The transcript of one run, on the fold's transcript slice. It keeps one
+ * The transcript of one run, on the session view's transcript slice. It keeps one
  * `<task-group-list>` per recently shown run so a switch back restores
  * scroll and render windows, and it maps the file and label links
  * inside rows to `host-request` arms. Group expansion is the surface's

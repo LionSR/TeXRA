@@ -21,7 +21,7 @@ function git(
   const commandLine = `git ${args.join(' ')}`;
   return Effect.gen(function* () {
     const handle = yield* ChildProcess.make('git', args, {
-      env: makeMachineGitEnv(),
+      env: yield* makeMachineGitEnv,
       extendEnv: false,
       stdin: 'ignore',
       detached: false,

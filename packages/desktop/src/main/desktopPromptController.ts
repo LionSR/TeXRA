@@ -37,7 +37,10 @@ export class DesktopPromptController {
     ),
   };
 
-  constructor(private readonly renderer: DesktopPromptRenderer) {}
+  private readonly renderer: DesktopPromptRenderer;
+  constructor(renderer: DesktopPromptRenderer) {
+    this.renderer = renderer;
+  }
 
   /**
    * Ask the renderer, and settle with what it answers. The request is

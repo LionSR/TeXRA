@@ -17,7 +17,6 @@ import {
   type RunId,
   type AgentConfigPayload,
   generateRunId,
-  type RunEndResult,
   isLiveRun,
   ensureError,
   toErrorMessage,
@@ -55,7 +54,6 @@ import { writeTextStderr, writeTextStderrAndWait } from './logSinks';
 import {
   type CliRunResult,
   readCliPluginPins,
-  readCliRunOutcomeState,
   runOutcomeExitCode,
 } from './terminalStatus';
 import {
@@ -69,7 +67,7 @@ import type { DatabaseNotOwner } from '@texra-ai/harness/schemas';
 import type { LocalSession, SessionOpenError } from '@texra-ai/harness';
 
 /** What a headless run starts: a host's whole configuration (the
- *  `StartInput` arm a host launches with), under the id the CLI minted. */
+ *  `StartInput` case a host launches with), under the id the CLI minted. */
 type CliRunRequest = Required<
   Pick<Extract<StartInput, { readonly config: unknown }>, 'config' | 'runId'>
 >;
@@ -99,7 +97,7 @@ export interface CliExecuteOptions {
    *  document task's output copy and result record), with its committed
    *  outcome: part of the finalization a shutdown waits for, so a signal
    *  never cuts it short. Its failure fails the finalization. */
-  readonly afterRun?: (result: RunEndResult) => Effect.Effect<void, Error>;
+  readonly afterRun?: (result: CliRunResult) => Effect.Effect<void, Error>;
   /** The persisted run `texra resume` continues through the session's
    *  resume; unset, the run starts fresh under a minted id. */
   readonly runId?: RunId;
@@ -108,7 +106,6 @@ export interface CliExecuteOptions {
 export type CliConfigExecuteResult =
   | {
       readonly ok: true;
-      readonly outcomePersisted: boolean;
       readonly result: CliRunResult;
     }
   | {
@@ -223,7 +220,7 @@ export function executeCliConfig(
     }
     // The run id is decided before launch: a shutdown stops the launch
     // through the session's registry under it (`runs.stop`), which the
-    // launch tracks (or attaches to a parked predecessor) before the first
+    // launch tracks (or attaches to a waiting predecessor) before the first
     // resume lineage read, so this kill has a target from that first await on.
     const request: CliRunRequest = {
       config: parsed.success,
@@ -292,10 +289,10 @@ export function executeCliConfig(
     let admitted = false;
     let ended = false;
     const shutdownFinalizationDone = Deferred.makeUnsafe<void>();
-    /** The run's end as the view folds it: a level that holds the run (its
-     *  committed opening always folds) and shows it no longer live here, or
+    /** The run's end as the view shows it: a level that holds the run (its
+     *  committed opening always appears) and shows it no longer live here, or
      *  one without it once it was seen or once its rows are gone (it was
-     *  deleted). The wait also ends with the session's fold. */
+     *  deleted). The wait also ends with the session view. */
     const settledHere = (runId: RunId): Effect.Effect<void> =>
       Effect.suspend(() => {
         let seen = false;
@@ -307,7 +304,7 @@ export function executeCliConfig(
               return Effect.succeed(!run.ownedHere || !isLiveRun(run));
             }
             if (seen) return Effect.succeed(true);
-            // Not folded yet, or deleted before it was: its rows decide.
+            // Not in the view yet, or deleted before it was: its rows decide.
             return session
               .records(runId)
               .exists()
@@ -337,7 +334,9 @@ export function executeCliConfig(
             admitted = true;
           }),
         ),
-        Effect.flatMap((run) => run.result),
+        Effect.flatMap((run) =>
+          Effect.map(run.result, (end) => ({ ...end, runId: run.runId })),
+        ),
       ),
     );
     const shutdownStatus = Effect.suspend(() =>
@@ -469,15 +468,8 @@ export function executeCliConfig(
       ),
     );
 
-    // A finalization notice is not the run's own failure, so it goes
-    // straight to this host and never sets `failurePresented` (§15).
-    const reportFinalizationFailure = (error: unknown): void => {
-      presentationHost.emit('requestShowError', {
-        message: toErrorMessage(error),
-      });
-    };
     let runResult:
-      | { readonly ok: true; readonly result: RunEndResult }
+      | { readonly ok: true; readonly result: CliRunResult }
       | { readonly ok: false } = { ok: false };
     let primaryRunFailure: { readonly error: unknown } | undefined;
     let shutdownLaunchAborted = false;
@@ -488,9 +480,10 @@ export function executeCliConfig(
     const detachPresentation = Scope.close(presentationScope, Exit.void);
     const exit = yield* Fiber.await(launched);
     ended = true;
-    // A run the shutdown stopped after admission commits its CANCELLED end
-    // and re-raises the stop, so its result is an interrupt too: only one
-    // interrupted before admission aborted its launch.
+    // A run the shutdown stopped after admission stores its cancelled end,
+    // which is its result (exit 130, from its outcome); an interrupts-only
+    // exit is a launch the shutdown interrupted, and a user abort below is a
+    // stop too.
     let interrupted = false;
     if (Exit.isSuccess(exit)) {
       runResult = { ok: true as const, result: exit.value };
@@ -578,18 +571,8 @@ export function executeCliConfig(
         // presenter, which `settled` waits for: the presentation host stays
         // attached until it has.
         yield* session.settled;
-        if (!runResult.ok) return undefined;
-        const state = yield* readCliRunOutcomeState(
-          session,
-          runResult.result,
-          reportFinalizationFailure,
-        );
-        if (options.afterRun)
-          yield* options.afterRun({
-            ...runResult.result,
-            outcome: state.outcome,
-          });
-        return state;
+        if (runResult.ok && options.afterRun)
+          yield* options.afterRun(runResult.result);
       }),
     );
     Deferred.doneUnsafe(shutdownFinalizationDone, Effect.void);
@@ -620,14 +603,8 @@ export function executeCliConfig(
       };
     }
 
-    return yield* Effect.sync(() => {
-      const { outcome, outcomePersisted } = finalization.success!;
-      return {
-        ok: true as const,
-        outcomePersisted,
-        result: { ...runResult.result, outcome, plugins },
-      };
-    }).pipe(Effect.ensuring(detachPresentation));
+    yield* detachPresentation;
+    return { ok: true as const, result: { ...runResult.result, plugins } };
   }).pipe(
     Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
   );

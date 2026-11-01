@@ -1,5 +1,5 @@
 /** Canonical run metadata records, independent of runtime machinery. */
-import { Effect, Schema, SchemaGetter, Struct } from 'effect';
+import { Schema, SchemaGetter, Struct } from 'effect';
 
 import { normalizeFilePath } from '@utils/core';
 
@@ -67,11 +67,9 @@ const RunEndErrorSchema = Schema.Union([
  * `run.end` row ({@link RunEndRowSchema}).
  */
 const RunEndOutputSchema = Schema.Struct({
-  response: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(''))),
+  response: Schema.String,
   /** Workspace-relative paths of files edited by tool calls during the run. */
-  files: Schema.Array(Schema.String).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
+  files: Schema.Array(Schema.String),
   /** Value captured by the `submit_output` terminal tool, or the value a
    *  recipe's script returned (its plugin's block reads it:
    *  `AgentBlock.result`). */
@@ -81,7 +79,7 @@ export type RunEndOutput = typeof RunEndOutputSchema.Type;
 
 /** The output of a run that ended before its flow produced one. */
 export function emptyRunEndOutput(): RunEndOutput {
-  return Schema.decodeUnknownSync(RunEndOutputSchema)({});
+  return { response: '', files: [] };
 }
 
 /**

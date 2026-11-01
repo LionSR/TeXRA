@@ -1,19 +1,18 @@
-// The window's onboarding surface: the funnel a settled launch recomputes and
-// the cards' actions.
+// The window's onboarding surface: the funnel, refreshed as the first-run
+// flag changes, and the cards' actions.
 
 import { Effect, Schema, Scope } from 'effect';
 
 import {
   AppState,
-  Secrets,
   withProcessServices,
   type ProcessRuntime,
   withLogChannel,
 } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
+import { followFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { kickoffDesktopSetup } from '@texra/controllers/onboarding/setupLaunch';
-import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { createDesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type { StateReadFailed, StateWriteFailed } from '@texra-ai/harness/host';
 import type { DesktopProjectRegistry } from './desktopProjects.js';
@@ -43,29 +42,30 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
     /** The settings surface and the launch path of the shown project, read
      *  when a card asks, since both are built after this surface. */
     readonly settings: () => DesktopSettingsIpc | undefined;
-    readonly activeRun: () => Pick<HostRunActions, 'runValidated'> | undefined;
+    readonly activeRun: () =>
+      Parameters<typeof kickoffDesktopSetup>[0]['run'] | undefined;
   }): Effect.fn.Return<
     {
       readonly onboarding: ReturnType<typeof createDesktopOnboardingIpc>;
-      /** Recompute the funnel on a fiber of the window's scope, so a launch
-       *  settles without waiting on it; it reports its own failures. */
-      readonly refreshFunnelAfterLaunch: Effect.Effect<void>;
+      /** Recompute the funnel on a fiber of the window's scope, so the
+       *  caller does not wait on it; it reports its own failures. */
+      readonly refreshFunnel: Effect.Effect<void>;
     },
     never,
-    Scope.Scope | AppState | Secrets
+    Scope.Scope | AppState
   > {
     const { host, runtime, projects } = options;
     const scope = yield* Scope.Scope;
-    const secrets = yield* Secrets;
     const onboarding = createDesktopOnboardingIpc({
       state: yield* AppState,
       // Single source of truth for "does the user have a usable
       // credential", shared by every host (extension, desktop, CLI) so this
       // credential-gating logic can't drift between them.
       hasCredential: () =>
-        hasUsableSetupCredential(projects.active().roots, secrets).pipe(
-          withLogChannel('Setup Credentials'),
-        ),
+        withProcessServices(
+          runtime,
+          hasUsableSetupCredential(projects.active().roots),
+        ).pipe(withLogChannel('Setup Credentials')),
       // Suspended so the project and its launch path are read when the user
       // clicks "Run Setup", not when the port is built. The per-session
       // `setupKickoffStarted` dedup guard inside the onboarding IPC keeps
@@ -77,7 +77,6 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
             kickoffDesktopSetup({
               project: projects.active(),
               run: options.activeRun(),
-              secrets,
             }),
           ),
         ),
@@ -92,7 +91,7 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
           return settings.signInSubscription('chatgpt');
         }),
     });
-    const refreshFunnelAfterLaunch: Effect.Effect<void> = Effect.suspend(() =>
+    const refreshFunnel: Effect.Effect<void> = Effect.suspend(() =>
       withProcessServices(runtime, onboarding.refreshOnboardingFunnel()).pipe(
         Effect.catch((error: StateWriteFailed | StateReadFailed) =>
           Effect.sync(() =>
@@ -111,9 +110,7 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
         Effect.asVoid,
       ),
     );
-    return {
-      onboarding,
-      refreshFunnelAfterLaunch,
-    };
+    yield* Effect.forkIn(followFirstRunDone(refreshFunnel), scope);
+    return { onboarding, refreshFunnel };
   },
 );

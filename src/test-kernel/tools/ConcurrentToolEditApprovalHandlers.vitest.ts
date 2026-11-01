@@ -6,6 +6,7 @@ import { Effect, Fiber, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { requestToolEditApproval } from '@texra-ai/harness/plugins';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -15,7 +16,6 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 
 type PendingToolEdit = Parameters<typeof requestToolEditApproval>[0];
 
@@ -37,17 +37,12 @@ describe('Concurrent session tool edit approval handlers', () => {
         function attachWindow(session: SessionHandle, appliedContent: string) {
           return Effect.gen(function* () {
             const seen: string[] = [];
-            Effect.runSync(
-              session.interactions.use({
-                presentToolEdit: (staged) =>
-                  seen.push(staged.permission.relativePath),
-              }),
-            );
             yield* Effect.forkScoped(
               Stream.runForEach(session.log.tail(session.log.now()), (event) =>
                 Effect.sync(() => {
                   if (event.type !== 'request.opened') return;
                   if (event.payload.kind !== 'toolEdit') return;
+                  seen.push(event.payload.data.relativePath);
                   publishTestRows(session, [
                     {
                       type: 'request.decided',

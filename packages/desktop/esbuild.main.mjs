@@ -10,7 +10,6 @@ import { fileURLToPath } from 'node:url';
 import { buildIdentityDefine } from '../../scripts/build-identity.mjs';
 import { codeSandboxWorker } from '../../scripts/code-sandbox-worker.mjs';
 import { esmCjsGlobalsBanner } from '../../scripts/esm-cjs-globals-banner.mjs';
-import { stubInternalValidationModel } from '../../scripts/stub-internal-validation-model.mjs';
 
 const packageDir = dirname(fileURLToPath(import.meta.url));
 const outdir = resolve(packageDir, 'dist/main');
@@ -66,7 +65,7 @@ const options = {
   target: 'node22',
   banner: { js: esmCjsGlobalsBanner },
   define: buildIdentityDefine(),
-  plugins: [stubInternalValidationModel, codeSandboxWorker],
+  plugins: [codeSandboxWorker],
 };
 
 if (watch) {

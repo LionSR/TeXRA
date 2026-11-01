@@ -1,7 +1,7 @@
 /**
  * Injectable language services for Lean tools.
  *
- * Provides a seam between the platform-agnostic tool implementations
+ * Provides a boundary between the platform-agnostic tool implementations
  * in `packages/texra/src/tools/lean/` and the host-specific integrations (VS Code
  * extension in `packages/extension/src/frontend/lean/`, direct LSP for
  * CLI / desktop in `packages/texra/src/tools/lean/direct/`).
@@ -33,7 +33,7 @@ import type {
  * is composed directly by the native tool dispatcher. Run ownership is passed
  * explicitly at invocation; adapters never recover it from ambient state. The adapters' failure
  * channels are disjoint (the VS Code bridge fails with its editor, command
- * and extension tags, the direct pool with its own) and every consumer folds
+ * and extension tags, the direct pool with its own) and every consumer converts
  * a failure into a `ToolError`, so the port declares `Error` rather than a
  * union no caller switches on; a file command, whose cause the tool reports,
  * fails with {@link LeanFileCommandFailed}, which each adapter maps to.
@@ -123,7 +123,7 @@ export interface LeanLanguageServicesShape {
 
 /**
  * The Lean 4 plugin's port, its process layer (`lean4` in
- * `@texra/tools/integrationPlugins`): the direct `lake env lean --server` pool, or
+ * `./plugin`): the direct `lake env lean --server` pool, or
  * the VS Code extension's Lean 4 bridge, which that host passes with TeXRA's
  * plugins (`texraPlugins`). A Lean tool reads it with
  * `yield* LeanLanguageServices`, served by the step that pinned the plugin;

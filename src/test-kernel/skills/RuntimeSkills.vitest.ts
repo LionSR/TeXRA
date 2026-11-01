@@ -4,8 +4,12 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
-import { ToolError } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
+import {
+  resolveToolPath,
+  type StepRoot,
+  ToolError,
+} from '@texra-ai/harness/plugins';
 import {
   activatedSkillNames,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
@@ -13,10 +17,8 @@ import {
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { installTestSkillRoots, writeSkill } from '@test/support/skillFixtures';
+import { testSkillRoots, writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { resolveToolPath } from '@tools/pathResolution';
-import type { StepRoot } from '@utils/files/externalRoots';
 
 const tempRoots = useTempDirs();
 /** The run catalog of `workspacePath`, with no installed plugin loading. */
@@ -33,7 +35,6 @@ const WORKSPACE_ROOT = '/workspace';
 setupPlatform({ workspacePath: WORKSPACE_ROOT });
 
 afterEach(async () => {
-  installTestSkillRoots([]);
   await Effect.runPromise(
     testWorkspaceRoots().config.update(
       WorkspaceStateKey.DISABLED_SKILLS,
@@ -59,10 +60,6 @@ describe('runtime skills', () => {
           description: 'User skill.',
         }),
       );
-      installTestSkillRoots([
-        { tier: 'project', path: projectRoot },
-        { tier: 'user', path: userRoot },
-      ]);
       yield* testWorkspaceRoots().config.update(
         WorkspaceStateKey.DISABLED_SKILLS,
         ['project-skill'],
@@ -70,6 +67,13 @@ describe('runtime skills', () => {
 
       const result = yield* loadRuntimeSkillCatalogEffect(
         runCatalog(WORKSPACE_ROOT),
+      ).pipe(
+        Effect.provide(
+          testSkillRoots([
+            { tier: 'project', path: projectRoot },
+            { tier: 'user', path: userRoot },
+          ]),
+        ),
       );
 
       expect(result.catalog.map(({ name }) => name)).toStrictEqual([
@@ -95,11 +99,13 @@ describe('runtime skills', () => {
             'Read the notes.',
           ),
         );
-        installTestSkillRoots([{ tier: 'user', path: skillsRoot }]);
         const projectA = path.resolve(path.sep, 'project-a');
         const { catalog } = yield* loadRuntimeSkillCatalogEffect(
           runCatalog(projectA),
-        ).pipe(Effect.provide(nodePlatformLayer));
+        ).pipe(
+          Effect.provide(testSkillRoots([{ tier: 'user', path: skillsRoot }])),
+          Effect.provide(nodePlatformLayer),
+        );
         const rootsOf = (listed: typeof catalog) =>
           listed.flatMap(({ name, directory }) =>
             directory === null

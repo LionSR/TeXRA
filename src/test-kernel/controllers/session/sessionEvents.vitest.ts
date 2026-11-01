@@ -12,7 +12,7 @@
  * `waiting`; the same log with the owner gone folds to `interrupted`.
  */
 // Node imports
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   existsSync,
   mkdtempSync,
@@ -49,7 +49,6 @@ import { TestClock } from 'effect/testing';
 import * as Reactivity from 'effect/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
-import * as toast from '@agent/runtime/terminalResultToast';
 
 vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   ...(await importOriginal<
@@ -57,38 +56,39 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   >()),
 }));
 
-import { makeRunHistory } from '@agent/runtime/RunHistory';
-import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import {
-  databaseLayer,
-  globalDatabaseLayer,
-} from '@controllers/session/Database';
-import { deletionCollector } from '@controllers/session/deletionCleanup';
-import { openStore } from '@controllers/session/storeSchema';
-import { sessionRequests } from '@controllers/session/SessionRequests';
-import { makeSessionStore } from '@controllers/session/sessionStore';
+  emptyRunEndOutput,
+  GlobalStateKey,
+  qualifyAggregateId,
+  RUN_PHASE,
+  type RunId,
+  RunIdSchema,
+  type SessionEvent,
+  type SessionEventDraft,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
+import { LocalRuntimeStateSchema } from '@texra-ai/harness/transcript';
+import * as toast from '@agent/runtime/HostInteractions';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
+import { makeRunHistory } from '@agent/runtime/RunHistory';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { sessionInputsLayer } from '@controllers/session/sessionInputs';
+import { SessionViewService } from '@controllers/session/SessionView';
 import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
 } from '@controllers/session/sessionSources';
-import { SessionViewService } from '@controllers/session/SessionView';
-import { sessionInputsLayer } from '@controllers/session/sessionInputs';
-import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { type GlobalValues } from '@platform/processRuntime';
-import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
+import { makeSessionStore } from '@controllers/session/sessionStore';
+import { sessionRequests } from '@controllers/session/SessionRequests';
+import { openStore } from '@controllers/session/storeSchema';
+import { deletionCollector } from '@controllers/session/deletionCleanup';
 import {
-  qualifyAggregateId,
-  emptyRunEndOutput,
-  LocalRuntimeStateSchema,
-  RUN_PHASE,
-  RunIdSchema,
-  type RunId,
-  type SessionEvent,
-  type SessionEventDraft,
-} from '@shared/schemas';
+  databaseLayer,
+  globalDatabaseLayer,
+} from '@controllers/session/Database';
 import {
   runStateAppend,
   RunHistory,
@@ -97,10 +97,8 @@ import {
 } from '@shared/session/runHistory';
 import { Database } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
-import type { SessionView } from '@shared/session/sessionView';
 import { closeSessionOf, openTestSession } from '@test/support/sessionEnd';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
@@ -119,6 +117,8 @@ import { REPO_ROOT } from '@test/support/repoScan';
 import type { InquiryThreadSummary } from '@texra/shared/plugins/externalInquiry';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { toolTable } from '@tools/toolTable';
+import type { GlobalValues } from '@texra-ai/harness/host';
+import type { ProcessProbe } from '@texra-ai/harness/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 vi.mock('node:os', async (importOriginal) => ({
@@ -205,8 +205,11 @@ async function bundleStoreWriter(dir: string): Promise<string> {
   return outfile;
 }
 
-const SELF = '["test-host",4242,"self-start"]';
-const OTHER = '["test-host",4343,"other-start"]';
+/** Two processes' owner ids: live pids (this one and its parent) whose start
+ *  identity was never read, so no proof ties either record to a process and
+ *  each reads `unprovable` to the other. */
+const SELF = JSON.stringify(['test-host', process.pid, null]);
+const OTHER = JSON.stringify(['test-host', process.ppid, null]);
 /** The run every case here is about; one id, the key of its one aggregate. */
 const RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
 const OLDER = Schema.decodeUnknownSync(RunIdSchema)('ab12ce');
@@ -484,6 +487,7 @@ describe('Sessions owner', () => {
         ),
       ),
       Effect.provide(nodePlatformLayer),
+      Effect.provide(nodeSpawnerLayer),
     );
 
   it.effect(
@@ -518,7 +522,10 @@ describe('Sessions owner', () => {
           local,
           plugins: toolTable([]),
           services: yield* Effect.context<
-            GlobalValues | FileSystem.FileSystem | Path.Path
+            | GlobalValues
+            | FileSystem.FileSystem
+            | Path.Path
+            | ChildProcessSpawner
           >(),
           closed: () => false,
         });
@@ -546,10 +553,10 @@ describe('Sessions owner', () => {
         }));
         // A released claim is not held, even while the display still says so.
         expect(yield* requests.request(request)).toEqual({ kind: 'done' });
-        // A stop that leaves the child policy unset takes the session's
-        // configured "Keep subagents running".
+        // A stop that leaves the child policy unset leaves it to the stop,
+        // which reads the session's "Keep subagents running".
         expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, {
-          detachActiveChildren: true,
+          detachActiveChildren: undefined,
           reason: 'user',
         });
       }).pipe(withRequestServices),
@@ -579,7 +586,10 @@ describe('Sessions owner', () => {
           ),
           plugins: toolTable([]),
           services: yield* Effect.context<
-            GlobalValues | FileSystem.FileSystem | Path.Path
+            | GlobalValues
+            | FileSystem.FileSystem
+            | Path.Path
+            | ChildProcessSpawner
           >(),
           closed: () => false,
         });
@@ -688,13 +698,16 @@ describe('Sessions owner', () => {
           ]);
           yield* session.log.settled;
           // The live run's `run.end` reaches the folded tail once the view
-          // has folded it, and a `waiting` step never does.
+          // has folded it, and a `waiting` step never does: of the rows the
+          // presenter saw, one is an end, the live run's.
           yield* Effect.promise(() =>
-            vi.waitFor(() => expect(presented).toHaveBeenCalledOnce()),
-          );
-          expect(presented).toHaveBeenCalledWith(
-            expect.anything(),
-            expect.objectContaining({ runId: OLDER }),
+            vi.waitFor(() =>
+              expect(
+                presented.mock.calls.flatMap(([, row]) =>
+                  row.type === 'run.end' ? [row.aggregateId] : [],
+                ),
+              ).toEqual([qualifyAggregateId('run', OLDER)]),
+            ),
           );
         } finally {
           presented.mockRestore();
@@ -1001,10 +1014,20 @@ describe('the session event table and its one publisher', () => {
     },
   );
 
-  it.effect(
-    "lists a run with an earlier build's row as that build's, not as damaged",
-    () => {
-      // `model.message` v1 has no upcaster to this build's version.
+  // `model.message` v1 has no upcaster to this build's version, and a
+  // retired kind has no reader at all.
+  it.effect.each([
+    [
+      'model.message',
+      `UPDATE event SET version = 1 WHERE type = 'model.message'`,
+    ],
+    [
+      'conversation.progress',
+      `UPDATE event SET type = 'conversation.progress' WHERE type = 'model.message'`,
+    ],
+  ])(
+    "lists a run with an earlier build's %s row as that build's, not as damaged",
+    ([type, rewrite]) => {
       const storage = workspace();
       return Effect.gen(function* () {
         yield* Database.pipe(
@@ -1027,19 +1050,16 @@ describe('the session event table and its one publisher', () => {
           Effect.provide(substrate(storage)),
         );
         const raw = reader(storage);
-        raw.exec(`UPDATE event SET version = 1 WHERE type = 'model.message'`);
+        raw.exec(rewrite);
         raw.close();
         const read = yield* Effect.flip(
           Effect.flatMap(Database, (db) =>
             db.readAggregate(runStart.aggregateId, 0),
           ).pipe(Effect.provide(substrate(storage))),
         );
-        expect(read.cause).toMatchObject({
-          _tag: 'DatabaseRowEarlier',
-          type: 'model.message',
-        });
+        expect(read.cause).toMatchObject({ _tag: 'DatabaseRowEarlier', type });
         // A record read (history, resume, follow-up) refuses it the same way,
-        // though the records never select its `model.message` row.
+        // though the records never select that row.
         const records = yield* Effect.flip(
           Effect.flatMap(Database, (db) =>
             db.readRunRecords(runStart.aggregateId),
@@ -1728,18 +1748,20 @@ describe('the session event table and its one publisher', () => {
    * process's claim is proving its recorded owner dead. A restart that meets
    * a stale claim it cannot disprove never resumes the run, for the life of
    * the store, so this is the one window whose regression costs every run
-   * that was live at the crash. The recorded owner here is this pid under a
-   * start identity from before the crash: the pid resolves, its identity
-   * differs, and that is `proveOwnerLiveness`'s pid-reuse verdict. The
+   * that was live at the crash. Both owners here recorded the name another
+   * network gave this machine (macOS takes its hostname from DHCP or
+   * reverse DNS), which no proof reads: the crashed one's pid names no
+   * process, so it is dead, and this process under that name is alive. The
    * follow-up the crash left queued reaches the restarted publisher's
    * pending set where the claim moves.
    */
   it.live('reclaims a run whose recorded owner is provably dead', () => {
     const storage = workspace();
+    const renamed = `${os.hostname().toLowerCase()}.elsewhere`;
     const CRASHED = JSON.stringify([
-      os.hostname().toLowerCase(),
-      process.pid,
-      'an-earlier-process',
+      renamed,
+      spawnSync(process.execPath, ['-e', '']).pid,
+      'exited',
     ]);
     const target = qualifyAggregateId('run', RUN);
     const followUp = {
@@ -1747,6 +1769,16 @@ describe('the session event table and its one publisher', () => {
       content: { text: 'deliver me', from: { kind: 'user' as const } },
     };
     return Effect.gen(function* () {
+      const { nodeProcesses } = yield* Effect.promise(
+        () => import('@platform/defaults/nodeProcesses'),
+      );
+      const running = JSON.stringify([
+        renamed,
+        process.pid,
+        (yield* nodeProcesses
+          .selfIdentity()
+          .pipe(Effect.provide(nodePlatformLayer))) ?? null,
+      ]);
       yield* Database.pipe(
         Effect.flatMap((crashed) =>
           crashed.appendAll([
@@ -1756,8 +1788,15 @@ describe('the session event table and its one publisher', () => {
         ),
         Effect.provide(substrate(storage, CRASHED)),
       );
+      yield* Database.pipe(
+        Effect.flatMap((live) => live.appendAll([olderStart])),
+        Effect.provide(substrate(storage, running)),
+      );
       yield* Effect.gen(function* () {
         const restarted = yield* Database;
+        expect(
+          yield* restarted.claimOwner(qualifyAggregateId('run', OLDER)),
+        ).toEqual({ ownerId: running, liveness: 'alive' });
         expect(yield* restarted.claimOwner(target)).toEqual({
           ownerId: CRASHED,
           liveness: 'dead',
@@ -1773,7 +1812,7 @@ describe('the session event table and its one publisher', () => {
           SELF,
         );
         // The resumed run appends onto the rows the crash left behind.
-        expect((yield* restarted.appendAll([waiting]))[0]?.commit).toBe(3);
+        expect((yield* restarted.appendAll([waiting]))[0]?.seq).toBe(3);
       }).pipe(
         Effect.provide(
           runHistoryOverStore.pipe(

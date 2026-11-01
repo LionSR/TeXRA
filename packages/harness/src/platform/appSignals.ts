@@ -114,15 +114,14 @@ export interface AppSignalPayloads {
   workspaceAgentsChanged: undefined;
 
   /**
-   * The session's approval policy changed through a settings update.
-   * Surfaces that re-paint the status-bar policy line.
+   * The approval policy was written from a settings view (the shared
+   * settings commands' `updateStateSetting`).
    *
-   * Extension-only: it exists because VS Code's status-bar tooltip is painted
-   * outside the settings webview's own round-trip and has no other refresh
-   * trigger. The desktop's write path re-posts the approval snapshot inline
-   * (the shared settings commands' `updateStateSetting`), and the CLI
-   * holds the policy in TUI state that its `/approval` command updates
-   * directly, so a subscription on either host would be a duplicate repaint.
+   * Consumed by: the extension's status-bar tooltip, painted outside the
+   * settings webview's round-trip. The settings views repaint their own
+   * approval snapshot inline, and the CLI repaints its session line from the
+   * `/config` form and `/approval` directly. Enforcement reads the config
+   * live, so this signal only repaints.
    */
   approvalPolicyChanged: undefined;
 

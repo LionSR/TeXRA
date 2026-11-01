@@ -1,10 +1,10 @@
 /**
  * Tool dashboard data builder.
  *
- * Projects TeXRA's plugin cards (`@texra/tools/pluginCards`) over the process's
- * plugins ({@link @tools/plugins}) onto the Tools dashboard, enriched with
- * runtime availability; this controller module keeps that tool-layer
- * dependency out of shared settings-view code.
+ * Projects the process's plugins that carry a card (`TexraPlugin`,
+ * `@texra/tools/registry`) onto the Tools dashboard, enriched with runtime
+ * availability; this controller module keeps that tool-layer dependency out
+ * of shared settings-view code.
  */
 
 // Third-party imports
@@ -17,18 +17,17 @@ import {
   ToolAvailability,
   ToolCatalog,
   type ExternalToolCheckResult,
-  type SettingHost,
 } from '@texra-ai/harness/host';
 import { ToolRegistry } from '@texra-ai/harness/plugins';
 import type {
   ToolCommandKind,
   ToolDashboardItem,
 } from '@texra/shared/settingsView/settingsViewMessages';
-import {
-  TEXRA_PLUGIN_CARDS,
-  type PluginCard,
-  type ToolPluginSetup,
-} from '@texra/tools/pluginCards';
+import type {
+  PluginCard,
+  TexraPlugin,
+  ToolPluginSetup,
+} from '@texra/tools/registry';
 
 // ============================================================
 // Tool terminal actions
@@ -45,6 +44,11 @@ type ToolTerminalAction =
       readonly reason: 'unknownTool' | 'missingCommand';
     };
 
+/** The card a plugin of TeXRA's list carries (`texraPlugins`), which the
+ *  table holds as listed; none for a plugin another list adds. */
+const cardOf = (plugin: Plugin | undefined): PluginCard | undefined =>
+  (plugin as TexraPlugin | undefined)?.card;
+
 /**
  * Plan the terminal command for a tool-dashboard install/auth action.
  *
@@ -52,21 +56,23 @@ type ToolTerminalAction =
  * a command string supplied by the webview, and report which of the two
  * failure reasons applies instead of silently doing nothing.
  */
-export function planToolTerminalAction(input: {
+export const planToolTerminalAction = (input: {
   readonly toolId: string;
   readonly commandKind: ToolCommandKind;
-}): ToolTerminalAction {
-  const card = TEXRA_PLUGIN_CARDS.find(({ id }) => id === input.toolId);
-  if (card?.setup === undefined) return { kind: 'none', reason: 'unknownTool' };
+}) =>
+  Effect.map(ToolRegistry, ({ entries }): ToolTerminalAction => {
+    const card = cardOf(entries.get(input.toolId));
+    if (card?.setup === undefined)
+      return { kind: 'none', reason: 'unknownTool' };
 
-  const command =
-    input.commandKind === 'install'
-      ? card.setup.installCommand
-      : card.setup.authCommand;
-  if (!command) return { kind: 'none', reason: 'missingCommand' };
+    const command =
+      input.commandKind === 'install'
+        ? card.setup.installCommand
+        : card.setup.authCommand;
+    if (!command) return { kind: 'none', reason: 'missingCommand' };
 
-  return { kind: 'terminal', name: `TeXRA: ${card.name}`, command };
-}
+    return { kind: 'terminal', name: `TeXRA: ${card.name}`, command };
+  });
 
 /** The card's inline settings rows, as the dashboard item carries them. */
 function settingRows(card: PluginCard): Pick<ToolDashboardItem, 'settings'> {
@@ -80,57 +86,54 @@ function settingRows(card: PluginCard): Pick<ToolDashboardItem, 'settings'> {
 // ============================================================
 
 /**
- * The cards on `host`'s dashboard, each with its plugin, in card order. A
- * card whose plugin this process does not list, or whose plugin's every
- * tool declares itself unavailable on the asking host, is not shown there and cannot be
- * installed, authed or toggled from it: host exclusion removes those tools
- * from the resolved agent list, so they can never be called there.
+ * The plugins on this process's dashboard, each with its card, in the order
+ * the process lists them. A plugin without a card is not shown and cannot
+ * be installed, authed or toggled from it.
  */
 export function visibleToolPlugins(
   plugins: ReadonlyMap<string, Plugin>,
-  host: SettingHost,
 ): readonly { readonly card: PluginCard; readonly plugin: Plugin }[] {
-  return TEXRA_PLUGIN_CARDS.flatMap((card) => {
-    const plugin = plugins.get(card.id);
-    if (plugin === undefined) return [];
-    const tools = Object.values(plugin.tools ?? {});
-    return tools.length === 0 ||
-      tools.some((tool) => tool.unavailableHosts?.includes(host) !== true)
-      ? [{ card, plugin }]
-      : [];
+  return [...plugins.values()].flatMap((plugin) => {
+    const card = cardOf(plugin);
+    return card === undefined ? [] : [{ card, plugin }];
   });
 }
+
+/** The asking workspace, and whether its host installs an editor extension
+ *  (VS Code's settings view does; the desktop app and the CLI do not). */
+export type DashboardInputs = ToolProbeInputs & {
+  readonly installsExtensions?: boolean;
+};
 
 /**
  * Build the complete tool dashboard items list.
  *
- * Built-in plugins come first, then the probed plugins, each in card order.
+ * Built-in plugins come first, then the probed plugins, each in list order.
  *
- * @param probeInputs - the asking host (see {@link visibleToolPlugins}), its
- *   workspace folder and configuration,
+ * @param probeInputs - the asking workspace folder and configuration,
  *   carried as data for the probes that need them (the GitHub group asks
- *   whether the folder is a git repository, the Zotero group reads its port).
- *   Ignored when `cachedResults` skips the probes.
+ *   whether the folder is a git repository, the Zotero group reads its port),
+ *   and whether the host installs editor extensions. The probes are skipped
+ *   when `cachedResults` is given.
  * @param cachedResults - when provided, skips network probes and uses
  *   these results (including their `statusDetail`). Used by the toggle
  *   handler for instant UI updates.
  */
 export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
   function* (
-    probeInputs: ToolProbeInputs,
+    probeInputs: DashboardInputs,
     cachedResults?: readonly ExternalToolCheckResult[],
   ) {
-    const visible = visibleToolPlugins(
-      (yield* ToolRegistry).entries,
-      probeInputs.host,
-    );
+    const visible = visibleToolPlugins((yield* ToolRegistry).entries);
     const builtinItems: ToolDashboardItem[] = visible
       .filter(({ plugin }) => plugin.availability === undefined)
       .map(({ card, plugin }) => ({
-        id: card.id,
+        id: plugin.id,
         name: card.name,
         description: card.description,
-        tools: Object.keys(plugin.tools ?? {}).map((name) => ({ name })),
+        tools: (plugin.tools ?? []).map(({ definition: { name } }) => ({
+          name,
+        })),
         status: 'available' as const,
         installActions: [],
         requiresSetup: false,
@@ -149,7 +152,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     );
     const externalItems: ToolDashboardItem[] = [];
     for (const { card, plugin } of visible) {
-      const result = results.get(card.id);
+      const result = results.get(plugin.id);
       if (result === undefined) continue;
       const { tools, status, statusLabel, statusDetail } = result;
       const {
@@ -162,7 +165,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         authNote,
       }: ToolPluginSetup = card.setup ?? {};
       externalItems.push({
-        id: card.id,
+        id: plugin.id,
         name: card.name,
         description: card.description,
         tools: tools.map((name) => ({ name })),
@@ -179,10 +182,10 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
           ...(authCommand
             ? [{ kind: 'auth' as const, command: authCommand }]
             : []),
-          // The desktop app cannot host VS Code extensions, so it gets no
-          // "Install Extension" button; the install guide and URL still
-          // describe the standalone path (Lean 4's `lake` build, for one).
-          ...(installExtensionId && probeInputs.host !== 'desktop'
+          // Only a host that installs editor extensions gets an "Install
+          // Extension" button; the install guide and URL still describe the
+          // standalone path (Lean 4's `lake` build, for one).
+          ...(installExtensionId && probeInputs.installsExtensions
             ? [
                 {
                   kind: 'extension' as const,
@@ -196,7 +199,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         statusDetail,
         authNote,
         toggleable: plugin.toggle !== undefined,
-        enabled: !disabledIds.has(card.id),
+        enabled: !disabledIds.has(plugin.id),
         ...settingRows(card),
       });
     }

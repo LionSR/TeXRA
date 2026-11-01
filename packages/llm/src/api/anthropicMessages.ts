@@ -19,16 +19,14 @@ import {
 
 // Local imports - canonical model contract
 import {
-  decodeModelConfiguration,
   FILE_UPLOAD_LIFETIME_SECONDS,
-  ResolvedTurnSchema,
   type AnthropicMessagesConfiguration,
   type Model,
   type ResolvedTurn,
   type TurnResult,
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
-import { decodeTurnRequest, fitLimit } from './turnInput.js';
+import { fitLimit, resolveTurn } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
 import { ModelError, fillModelError, sdkModelError } from '../errors.js';
@@ -392,7 +390,7 @@ function blockPart(
 /**
  * One response's Messages events as parts. The wire opens one block at a
  * time, in order; message_delta carries the stop and cumulative usage, and
- * message_stop settles them.
+ * message_stop finishes them.
  */
 function anthropicWire() {
   let started = false;
@@ -576,15 +574,13 @@ function anthropicWire() {
 
 /** Stable Messages protocol, without a transcript owner, uploads or SDK emitters. */
 export function anthropicMessagesModel(
-  configuration: AnthropicMessagesConfiguration,
+  config: AnthropicMessagesConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
-  const config = decodeModelConfiguration(configuration);
-  if (config.protocol !== 'anthropic-messages' || !transport.apiKey) {
+  if (!transport.apiKey) {
     throw new ModelError({
       kind: 'invalid-request',
-      message:
-        'Anthropic Messages requires its selected configuration and an explicit API key.',
+      message: 'Anthropic Messages requires an explicit API key.',
     });
   }
   // The SDK otherwise lets these ambient headers override selected credentials and protocol.
@@ -625,47 +621,37 @@ export function anthropicMessagesModel(
       ),
     remove: (fileId, signal) => client.files.delete(fileId, null, { signal }),
   });
-  const prepareTurn: Model['prepareTurn'] = Effect.fn(
-    'llm.anthropic.prepareTurn',
-  )(function* (request) {
-    const input = yield* decodeTurnRequest(
+  const prepareTurn: Model['prepareTurn'] = (request) =>
+    resolveTurn(
       request,
-      'The canonical Anthropic input is invalid.',
+      origin,
+      undefined,
+      (input) =>
+        // Anthropic keeps no response state a later turn could chain on.
+        input.store !== undefined
+          ? Effect.fail(
+              new ModelError({
+                kind: 'unsupported',
+                message: 'Anthropic does not store responses.',
+              }),
+            )
+          : Effect.succeed({
+              ...origin,
+              mode: 'foreground',
+              system: input.system,
+              messages: input.messages,
+              tools: input.tools ?? [],
+              controls: {
+                ...fitLimit(config.defaults, input.maxOutputTokens),
+                parallelToolCalls: config.defaults.parallelToolCalls,
+                toolChoice: input.toolChoice ?? 'auto',
+                effort: config.defaults.effort,
+                cache: config.defaults.cache,
+                stopSequences: config.defaults.stopSequences,
+              },
+            }),
+      (turn) => invocationBody(turn, origin, config, uploads),
     );
-    if (
-      input.mode === 'background' ||
-      input.continuation !== undefined ||
-      input.store !== undefined
-    )
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message:
-          'The selected Anthropic model does not support these authored controls.',
-      });
-    const prepared = Schema.decodeUnknownResult(ResolvedTurnSchema)({
-      ...origin,
-      mode: 'foreground',
-      system: input.system,
-      messages: input.messages,
-      tools: input.tools ?? [],
-      controls: {
-        ...fitLimit(config.defaults, input.maxOutputTokens),
-        parallelToolCalls: config.defaults.parallelToolCalls,
-        toolChoice: input.toolChoice ?? 'auto',
-        effort: config.defaults.effort,
-        cache: config.defaults.cache,
-        stopSequences: config.defaults.stopSequences,
-      },
-    });
-    if (!Result.isSuccess(prepared))
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message: 'Anthropic requires complete supported invocation controls.',
-        cause: prepared.failure,
-      });
-    yield* invocationBody(prepared.success, origin, config, uploads);
-    return prepared.success;
-  });
 
   const streamTurn: Model['streamTurn'] = (input) =>
     Stream.unwrap(
@@ -681,7 +667,7 @@ export function anthropicMessagesModel(
         return assembleTurn(
           chunks.pipe(
             Stream.mapEffect(wire.parts),
-            // message_stop settles the response; HTTP EOF is not an additional condition.
+            // message_stop finishes the response; HTTP EOF is not an additional condition.
             Stream.takeUntil(() => wire.stopped()),
           ),
           { origin, provider: 'Anthropic' },

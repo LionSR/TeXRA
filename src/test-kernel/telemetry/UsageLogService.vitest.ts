@@ -2,11 +2,11 @@ import { it } from '@effect/vitest';
 import { Context, Effect, Exit, Layer, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { setLogSink } from '@logger/logSink';
+import { AGENT_SOURCE } from '@texra-ai/harness/schemas';
+import { effectDiagnosticsLayer } from '@texra-ai/harness/node';
+import { setLogSink, UsageLog } from '@texra-ai/harness/host';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
-import { AGENT_SOURCE } from '@shared/schemas';
-import { UsageLog, usageAgentName } from '@shared/usageLog';
+import { usageAgentName } from '@shared/usageLog';
 import {
   usageLogLayer,
   type UsageLogOptions,
@@ -101,7 +101,10 @@ describe('UsageLogService', () => {
     // is shared — and a stray `enabled: false` silently disables logging for
     // every suite that runs afterwards.
     // The real provider, so the project-file scope rule is the one tested.
-    setupPlatform({}, { config: new MemoryConfigProvider(TEXRA_SETTINGS) });
+    setupPlatform(
+      {},
+      { config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog) },
+    );
 
     // Optional entries must be discarded without a request.
     async function expectNoOptionalUsageSent(): Promise<void> {

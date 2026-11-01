@@ -90,7 +90,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   for (const message of replayableHistory(messages, turn)) {
     if (message.role === 'tool') {
       for (const result of message.results) {
-        // A settlement that carries only text keeps the plain string output
+        // A result that carries only text keeps the plain string output
         // the API has always taken. Attachments keep `result.content` order
         // so a label still sits next to the file it names.
         let output: string | OpenAI.Responses.ResponseInputContent[];

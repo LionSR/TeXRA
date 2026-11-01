@@ -1,7 +1,6 @@
 import { Effect, Fiber, SubscriptionRef } from 'effect';
 
 // Local imports
-import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
 import {
   registryOf,
   RunRegistry,
@@ -12,34 +11,13 @@ import {
 import type { RunsShape } from '@agent/runtime/runs';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { emptySessionView } from '@shared/session/sessionView';
-import type { RunId, RunIdentity } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { testRuntime } from './testProcessRuntime';
 
 /** A registry's launch door over the harness's process runtime, standing in
  *  for the session context the session layer forks runs from. */
 export const testRunFork: RunRegistryInit['fork'] = (effect) =>
   testRuntime().runFork(effect);
-
-/**
- * A live run handle for tests.
- *
- * The run struct is assembled here and typed as the canonical
- * {@link RunFacts}, so a schema change breaks every fixture in one place.
- */
-export function testRunHandle(input: {
-  runId: RunId;
-  /** The parent edge; omitted (or null) for a root. */
-  parent?: RunId | null;
-  agent: string;
-  /** Defaults to a native agent identity for `agent`. */
-  identity?: RunIdentity;
-}): RunHandle {
-  const run: RunFacts = {
-    runId: input.runId,
-    identity: input.identity ?? { kind: 'agent', agent: input.agent },
-  };
-  return new RunHandle(run, input.parent ?? null);
-}
 
 /** A registry over an empty fold: no run has a view, which is what a
  *  fixture that never publishes a phase-moving row would see. */
@@ -74,15 +52,10 @@ export const testRunPrograms: RunPrograms = {
       Effect.promise(() => import('@agent/runtime/executeAgent')),
       (module) => module.executeAgent(...args),
     ),
-  resumeTurn: (...args) =>
-    Effect.flatMap(
-      Effect.promise(() => import('@agent/runtime/executeAgent')),
-      (module) => module.resumeToolUseFromResumeData(...args),
-    ),
   resume: (...args) =>
     Effect.flatMap(
       Effect.promise(() => import('@agent/runtime/resumeRun')),
-      (module) => module.resumeRun(...args),
+      (module) => module.decideResume(...args),
     ),
 };
 
@@ -102,6 +75,7 @@ export function admitInterruptibleRun(
   runs: RunsShape,
   runId: RunId,
   onInterrupt: () => void,
+  launchParent: RunId | null = null,
 ): Fiber.Fiber<void> {
   const interruptEffect = Effect.sync(onInterrupt);
   // Awaited as a root launch awaits: interrupting this fiber stops the run.
@@ -110,6 +84,7 @@ export function admitInterruptibleRun(
       runs,
       runId,
       Effect.never.pipe(Effect.onInterrupt(() => interruptEffect)),
+      launchParent,
     ).pipe(Effect.ignore),
   );
 }
@@ -120,9 +95,10 @@ export function startAwaited<A, E, R extends AgentRunServices>(
   runs: RunsShape,
   runId: RunId,
   program: Effect.Effect<A, E, R>,
+  launchParent: RunId | null = null,
 ): Effect.Effect<A, E | Error> {
   return Effect.flatMap(
-    registryOf(runs).start(runId, program, (run) => run),
+    registryOf(runs).start(runId, program, (run) => run, launchParent),
     (fiber) =>
       Fiber.join(fiber).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber))),
   );

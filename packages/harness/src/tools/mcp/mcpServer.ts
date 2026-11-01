@@ -30,10 +30,11 @@ import {
 import type { McpServerConfig } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import type { ToolResult } from '@shared/schemas';
+import { MCP_TOOL_PREFIX } from '@shared/tools/toolDisplayName';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
 import { environment, ProjectEnvironment } from '@utils/system/nodeWorkspace';
-import { IS_WINDOWS, withExtendedPath } from '@utils/system/platformPaths';
+import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendHead, appendTail } from '@utils/text/appendTail';
@@ -42,9 +43,10 @@ import type { LoadedPluginTools } from './mcpConfig';
 
 const CHANNEL = 'mcp';
 
-/** Every MCP tool's name starts with this, then `<server>__<tool>`. */
-const MCP_TOOL_PREFIX = 'mcp__';
-/** The protocol revision the harness speaks; a server answers its own. */
+/** The protocol revision the harness asks for. A server that does not speak
+ *  it answers with its own, which is accepted: effect/ai's McpClient fails
+ *  any answer but the revision it asked for, so a server on an older one
+ *  would start with no tools. */
 const PROTOCOL_VERSION = '2025-06-18';
 const START_TIMEOUT = Duration.seconds(30);
 const CALL_TIMEOUT = Duration.seconds(60);
@@ -106,19 +108,6 @@ const CallToolResultSchema = Schema.Struct({
 /** A call's arguments: the JSON object the server's schema describes. */
 const McpArgumentsSchema = Schema.Record(Schema.String, Schema.Unknown);
 
-/** The plugin id of the server named `server`. */
-export const mcpPluginId = (server: string): string => `mcp:${server}`;
-
-/** The server an MCP tool name (or `mcp__<server>__*` wildcard) names, or
- *  `undefined` for any other tool name. */
-export function mcpServerOfToolName(name: string): string | undefined {
-  if (!name.startsWith(MCP_TOOL_PREFIX)) return undefined;
-  const separator = name.indexOf('__', MCP_TOOL_PREFIX.length);
-  return separator > MCP_TOOL_PREFIX.length
-    ? name.slice(MCP_TOOL_PREFIX.length, separator)
-    : undefined;
-}
-
 /**
  * The model-facing name of one server tool: `mcp__<server>__<tool>` when
  * that is already a valid function name, else the name with invalid
@@ -151,7 +140,7 @@ const serverEnv = (config: McpServerConfig) =>
     }
     for (const [name, value] of Object.entries(config.env))
       env[isPathName(name) ? 'PATH' : name] = value;
-    return { ...env, PATH: withExtendedPath({ PATH: env.PATH }).PATH };
+    return yield* withCommandDirs(env);
   });
 
 const decode = <T>(
@@ -207,7 +196,6 @@ function mcpTool(
       // `type`, and a tool's arguments are always an object.
       parameters: { ...listed.inputSchema, type: 'object' },
     },
-    requiresApproval: true,
     slow: true,
     // A server tool re-runs after an interruption only when its server calls
     // it read-only or idempotent: a repeat changes nothing either way.
@@ -219,8 +207,10 @@ function mcpTool(
     // The call as the approval prompt shows it; the loop asks the session's
     // one approval authority before the body runs.
     guard: {
-      bash: (input: unknown) => Effect.succeed(describe(input)),
-      cwd: 'unknown',
+      command: {
+        text: (input: unknown) => Effect.succeed(describe(input)),
+        cwd: 'unknown',
+      },
     },
     call: (rawInput) => {
       if (!Schema.is(McpArgumentsSchema)(rawInput))
@@ -313,6 +303,12 @@ const connect = (config: McpServerConfig) =>
         ),
       onRequest: (method) =>
         method === 'ping' ? Effect.succeed({}) : undefined,
+      // A stopped run or a timed-out call stops the server's work too. The
+      // protocol forbids cancelling `initialize`.
+      cancel: (id, method) =>
+        method === 'initialize'
+          ? undefined
+          : ['notifications/cancelled', { requestId: id }],
     });
     // Once its output is read ('exit' can precede it), fail what waits on
     // the process with its exit code. Its stderr (which may hold credentials)

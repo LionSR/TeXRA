@@ -7,13 +7,13 @@
 
 // Local imports
 import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { agentTool } from '@agent/runtime/delegation/AgentTool';
+import { GOAL_PLAN_ARM } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import { BashTool } from '@tools/bash';
 import { codeSandboxLayer, ScriptTool } from '@tools/codemode/ScriptTool';
 import { SelfTool } from '@tools/codemode/SelfTool';
-import { agentTool } from '@tools/delegation/AgentTool';
 import { EditFileTool } from '@tools/EditTool';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { GlobTool } from '@tools/glob';
@@ -28,16 +28,17 @@ import { WebFetchTool } from '@tools/web/WebFetchTool';
 import { WebSearchTool } from '@tools/web/WebSearchTool';
 import { writeFileTool, type WriteFilter } from '@tools/WriteTool';
 
-const fileTools = (writeFilter?: WriteFilter) => ({
-  bash: BashTool,
-  read_file: ReadFileTool,
-  write_file: writeFileTool(writeFilter),
-  edit_file: EditFileTool,
-  glob: GlobTool,
-  grep: GrepTool,
-});
+const fileTools = (writeFilter?: WriteFilter) =>
+  [
+    BashTool,
+    ReadFileTool,
+    writeFileTool(writeFilter),
+    EditFileTool,
+    GlobTool,
+    GrepTool,
+  ] as const;
 
-const SCRIPT_TOOLS = { script: ScriptTool, self: SelfTool };
+const SCRIPT_TOOLS = [ScriptTool, SelfTool] as const;
 
 /**
  * A built-in plugin: as a plugin's definition, but its tools may read the
@@ -55,7 +56,8 @@ type AssertNever<T extends never> = T;
 type _CanonicalDisplayNamesAreBuiltIns = AssertNever<
   Exclude<
     CanonicalToolDisplayName,
-    keyof ReturnType<typeof fileTools> | keyof typeof SCRIPT_TOOLS
+    | ReturnType<typeof fileTools>[number]['definition']['name']
+    | (typeof SCRIPT_TOOLS)[number]['definition']['name']
   >
 >;
 
@@ -72,17 +74,14 @@ export const fileOps = (
 /** The web: `web_search` and `web_fetch`. */
 export const web: Plugin = builtin({
   id: 'web',
-  tools: { web_search: WebSearchTool, web_fetch: WebFetchTool },
+  tools: [WebSearchTool, WebFetchTool],
 });
 
 /** Memory and past runs: the `memory` tool, offered while memory is on,
  *  and `executions`. */
 export const memoryWorkflow: Plugin = builtin({
   id: 'memory-workflow',
-  tools: {
-    memory: MemoryTool,
-    executions: ExecutionsTool,
-  },
+  tools: [MemoryTool, ExecutionsTool],
   injectedWhen: { memory: GlobalStateKey.MEMORY_ENABLED },
   prompt: memoryPromptSection,
 });
@@ -94,7 +93,8 @@ export const memoryWorkflow: Plugin = builtin({
  */
 export const goal: Plugin = builtin({
   id: 'goal',
-  tools: { plan: PlanTool },
+  tools: [PlanTool],
+  arms: [GOAL_PLAN_ARM],
   // A goal is a script whose rounds are `self()`.
   requires: ['codemode'],
   injectedWhen: { plan: true },
@@ -105,7 +105,7 @@ export const goal: Plugin = builtin({
 /** Child agents: the `agent` tool. */
 export const multiAgent: Plugin = builtin({
   id: 'multi-agent',
-  tools: { [AGENT_TOOL_NAME]: agentTool() },
+  tools: [agentTool()],
   // The one delegation tool: the built-in orchestrators need it.
   toggle: 'on',
   availability: ALWAYS_AVAILABLE,

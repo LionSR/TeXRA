@@ -1,7 +1,7 @@
 /**
  * The setting rows of the two external coding-agent plugins, `codex` and
  * `claude-agent`: TeXRA's catalog lists them (`./texraSettings`) and their
- * dashboard cards render them inline (`@texra/tools/pluginCards`). They live here,
+ * dashboard cards render them inline (`PluginCard.settings`). They live here,
  * in a browser-safe module, because the settings view's webview renders them.
  */
 
@@ -9,7 +9,6 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports
-import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 import {
   AGENT_CLI_EFFORT_SETTING,
   CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
@@ -22,32 +21,36 @@ import {
   CodexSandboxModeSchema,
 } from '@texra/shared/agentCliSettings';
 import { type PluginSettingRow } from '@texra/shared/settingsView/settingRows';
+import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
 
 /** The `codex` plugin's repository-scoped keys. */
-export enum CodexStateKey {
-  MODEL = 'texra.codexModel',
-  SANDBOX_MODE = 'texra.codexSandboxMode',
-  REASONING_EFFORT = 'texra.codexReasoningEffort',
-  APPROVAL_POLICY = 'texra.codexApprovalPolicy',
-}
+export const CodexStateKey = Object.freeze({
+  MODEL: 'codexModel',
+  SANDBOX_MODE: 'codexSandboxMode',
+  REASONING_EFFORT: 'codexReasoningEffort',
+  APPROVAL_POLICY: 'codexApprovalPolicy',
+} as const);
+export type CodexStateKey = (typeof CodexStateKey)[keyof typeof CodexStateKey];
 
 /** The `claude-agent` plugin's repository-scoped keys. */
-export enum ClaudeAgentStateKey {
-  MODEL = 'texra.claudeAgentModel',
-  PERMISSION_MODE = 'texra.claudeAgentPermissionMode',
-  EFFORT = 'texra.claudeAgentEffort',
-}
+export const ClaudeAgentStateKey = Object.freeze({
+  MODEL: 'claudeAgentModel',
+  PERMISSION_MODE: 'claudeAgentPermissionMode',
+  EFFORT: 'claudeAgentEffort',
+} as const);
+export type ClaudeAgentStateKey =
+  (typeof ClaudeAgentStateKey)[keyof typeof ClaudeAgentStateKey];
 
 /** An external coding agent's row: repo-scoped, on the approval tab and in `/config`. */
 function agentCliSetting(
-  entry: Omit<SurfacedSettingEntry, 'category' | 'slot' | 'surfaces'>,
-): SurfacedSettingEntry {
+  entry: Omit<TexraSettingRow, 'category' | 'slot' | 'surfaces'>,
+): TexraSettingRow {
   return {
     ...entry,
     category: 'ai-agents',
     slot: 'repoState',
     surfaces: { settingsView: 'approval', cliConfig: true },
-  } satisfies SurfacedSettingEntry;
+  } satisfies TexraSettingRow;
 }
 
 /** The `codex` plugin's rows, in its card's order. */

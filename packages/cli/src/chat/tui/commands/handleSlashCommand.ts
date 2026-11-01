@@ -26,7 +26,7 @@ import type { ProcessServices } from '@texra-ai/harness/host';
  * Run a command body with centralized echo and error persistence. A typed
  * failure and a throw from the body alike reach the transcript, which is what
  * the `try`/`catch` around the awaited handler did before it became a
- * program. Interruption is not folded in: a fiber the runtime is tearing down
+ * program. Interruption is not turned into a failure: a fiber the runtime is tearing down
  * did not fail the command.
  */
 function runGuardedSlashCommand(

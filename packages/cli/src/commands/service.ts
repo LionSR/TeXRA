@@ -19,7 +19,6 @@ import {
   connectCliService,
   probeCliService,
 } from '../runtime/cliService';
-import { CliEditors } from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
 import { writeTextStderr } from '../runtime/logSinks';
 
@@ -99,16 +98,14 @@ function runServe(context: CliContext, idleSeconds: number) {
             process.off('SIGTERM', onSignal);
           }),
       );
-      // The registry the runtime's plugins read: windows attach their
-      // editors to it. The stores its roots open live in this scope.
+      // The stores the projects' roots open live in this scope.
       const projects = yield* cliServiceProjects(
         context,
         yield* Effect.scope,
-        yield* CliEditors,
         sessions,
       );
       // Finalizers run last-added first: the sessions close, their runs
-      // stopped and settled; then the stores their roots opened.
+      // stopped and finished; then the stores their roots opened.
       yield* Effect.addFinalizer(() => sessions.closeAll);
       return yield* serve({
         idleAfter: `${idleSeconds} seconds`,

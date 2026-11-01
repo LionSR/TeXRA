@@ -3,14 +3,19 @@
  *
  * Every state-backed control in this view writes through the one
  * `UPDATE_STATE_SETTING` command keyed by a `stateSettings` catalog key, and
- * reads its allowed values from that same catalog. These helpers own both
- * halves so no tab re-derives "read the control, post the write" or re-derives
- * the enum option list from the catalog.
+ * reads its value from that key's setting signal and its copy and allowed
+ * values from that same catalog. These helpers own both halves so no tab
+ * passes a value down, re-derives "read the control, post the write" or
+ * re-derives the enum option list from the catalog.
  */
 
 // Local imports - shared webview
 import { html, type TemplateResult } from 'lit';
 
+import {
+  settingSignal,
+  settingsSnapshotRevisions,
+} from '@settingsView/frontend/settingsState';
 import type { SettingEnumChoice } from '@texra/shared/settingsView/settingRows';
 import { settingEnumChoices } from '@texra/shared/settingsView/settingRows';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
@@ -18,7 +23,11 @@ import { postMessage } from '@texra/shared/hostBridge';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { StateSettingValue } from '@texra/shared/settingsView/settingsViewMessages';
 import { readSelectValue } from '@ui/wa/selectTemplates';
-import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
+import {
+  renderSettingsNumberRow,
+  renderSettingsToggleRow,
+  type SettingsNumberRowOptions,
+} from '@ui/wa/settingsSection';
 
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/select/select.js';
@@ -53,48 +62,73 @@ export function catalogEnumChoices<T extends string>(
   return settingEnumChoices<T>(entry) ?? [];
 }
 
-interface StateSettingToggleRowOptions {
-  /** Canonical catalog key this switch writes and takes its copy from. */
-  readonly key: string;
-  readonly checked: boolean;
-  readonly disabled?: boolean;
+/**
+ * The catalog row a control renders, with the title every control labels it
+ * with. A key with no settings-view row, or one with no title, is a defect.
+ */
+function titledRow(key: string) {
+  const entry = TEXRA_SETTINGS.settingsViewByKey(key);
+  if (!entry?.title) {
+    throw new Error(
+      `Settings-view catalog row "${key}" is missing or has no title`,
+    );
+  }
+  return { ...entry, title: entry.title };
 }
 
 /**
  * The shared switch row, bound to a catalog key: the label and description are
- * the catalog row's own — the same copy every other host shows for that key —
- * and flipping it posts the write itself, so a tab supplies only the key and
- * the current value.
+ * the catalog row's own (the same copy every other host shows for that key),
+ * the value is the key's setting signal, and flipping it posts the write
+ * itself, so a tab supplies only the key. The calling component must be a
+ * `SignalWatcher` so a new value repaints it.
  */
 export function renderStateSettingToggleRow(
-  options: StateSettingToggleRowOptions,
+  key: string,
+  options: { readonly disabled?: boolean } = {},
 ): TemplateResult {
-  const entry = TEXRA_SETTINGS.settingsViewByKey(options.key);
-  if (!entry) {
-    throw new Error(
-      `No settings-view catalog row for setting "${options.key}"`,
-    );
-  }
-  if (!entry.title) {
-    throw new Error(`Settings-view catalog row "${options.key}" needs a title`);
-  }
+  const entry = titledRow(key);
   return renderSettingsToggleRow({
     label: entry.title,
     description: entry.description,
-    checked: options.checked,
+    checked: settingSignal<boolean>(key).get(),
     disabled: options.disabled,
     onChange: (event: Event) =>
       postStateSetting(
-        options.key,
+        key,
         Boolean((event.target as WaSwitch | null)?.checked),
       ),
   });
 }
 
-interface StateSettingSelectRowOptions {
-  /** Canonical enum catalog key this select writes and takes its copy from. */
-  readonly key: string;
-  readonly value: string;
+/** A number row's own options. The label and help text default to the
+ *  catalog row's; the value, write and acknowledgement are the key's. */
+type StateSettingNumberRowOptions = Omit<
+  SettingsNumberRowOptions,
+  'label' | 'description' | 'value' | 'onChange' | 'ackGeneration'
+> &
+  Partial<Pick<SettingsNumberRowOptions, 'label' | 'description'>>;
+
+/**
+ * The number counterpart of {@link renderStateSettingToggleRow}. A committed
+ * value posts the write, and the row repaints on every rebroadcast of its
+ * catalog snapshot, so a rejected edit gives way to the saved value. Bounds,
+ * step and unit stay the caller's, read from the setting's own constants.
+ */
+export function renderStateSettingNumberRow(
+  key: string,
+  options: StateSettingNumberRowOptions,
+): TemplateResult {
+  const entry = titledRow(key);
+  return renderSettingsNumberRow({
+    label: entry.title,
+    description: entry.description,
+    ...options,
+    value: settingSignal<number | null>(key).get() ?? undefined,
+    ackGeneration:
+      settingsSnapshotRevisions.get()[entry.surfaces.settingsView] ?? 0,
+    onChange: (value) => postStateSetting(key, value),
+  });
 }
 
 /**
@@ -102,16 +136,9 @@ interface StateSettingSelectRowOptions {
  * text, and options (with their per-value descriptions) all come from the
  * catalog row, and a change posts the write itself.
  */
-export function renderStateSettingSelectRow(
-  options: StateSettingSelectRowOptions,
-): TemplateResult {
-  const entry = TEXRA_SETTINGS.settingsViewByKey(options.key);
-  if (!entry?.title) {
-    throw new Error(
-      `Settings-view catalog row "${options.key}" is missing or has no title`,
-    );
-  }
-  const id = `settings-select-${options.key.replaceAll('.', '-')}`;
+export function renderStateSettingSelectRow(key: string): TemplateResult {
+  const entry = titledRow(key);
+  const id = `settings-select-${key.replaceAll('.', '-')}`;
   return html`
     <div class="settings-row">
       <div class="settings-row-text">
@@ -121,13 +148,13 @@ export function renderStateSettingSelectRow(
       <div class="settings-row-control">
         <wa-select
           id=${id}
-          .value=${options.value}
+          .value=${settingSignal<string>(key).get()}
           @change=${(event: Event) => {
             const selected = readSelectValue(event);
-            if (selected) postStateSetting(options.key, selected);
+            if (selected) postStateSetting(key, selected);
           }}
         >
-          ${catalogEnumChoices(options.key).map(
+          ${catalogEnumChoices(key).map(
             (choice) => html`
               <wa-option value=${choice.value}
                 >${

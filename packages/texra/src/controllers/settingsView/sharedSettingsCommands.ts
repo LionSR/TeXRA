@@ -1,7 +1,7 @@
 /**
  * The settings view's body, once for both GUI hosts. The extension and the
  * desktop each answered the same commands with the same controllers, the same
- * refresh tails and the same error sentences, drifting apart one arm at a
+ * refresh tails and the same error sentences, drifting apart one case at a
  * time; the body lives here and a host binds a table of what it performs its
  * own way: how a message reaches its view, how it asks and tells the user,
  * how it opens a file or picks a folder, and how its launchers reload.
@@ -29,7 +29,7 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   SUBSCRIPTION_AUTH_PROVIDERS,
 } from '@texra-ai/harness/schemas';
-import { appSignalStream } from '@texra-ai/harness/host';
+import { appSignalStream, emitAppSignal } from '@texra-ai/harness/host';
 import type { SubscriptionUsageProvider } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { codingPlanForUsageSetting } from '@texra/model/codingPlanSubscriptions';
@@ -63,17 +63,18 @@ import {
 import { buildSettingsSnapshotMessage } from '@texra/shared/settingsView/handlers/settingsSnapshot';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
 import {
+  DERIVED_SETTINGS_SNAPSHOTS,
   type DerivedSettingsSnapshot,
   type SettingsViewInboundMessage,
   type SettingsViewOutboundMessage,
+  type SettingsViewSnapshot,
 } from '@texra/shared/settingsView/settingsViewMessages';
 import { GITHUB_TOKEN_CREATE_URL } from '@texra/tools/github/githubAuth';
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
-import type { SettingsViewSnapshot } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { PlatformSecrets, ProcessServices } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 type SettingsArms = SettingsViewInboundHandlerRegistry<
@@ -92,7 +93,6 @@ const SUBSCRIPTION_USAGE_PROVIDERS_BY_ID: Readonly<
 interface SettingsViewBodyPorts {
   readonly host: 'vscode' | 'desktop';
   readonly roots: WorkspaceRoots;
-  readonly secrets: PlatformSecrets;
   /** The packaged resources root; the agent templates live under it. */
   readonly resourcesPath: string;
   readonly bindings: SettingsHostBindings;
@@ -114,17 +114,21 @@ interface SettingsViewBodyPorts {
 
 /** Build the settings body over one host's bindings. */
 export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
-  const { bindings, secrets, roots } = ports;
+  const { bindings, roots } = ports;
 
   const present = settingsPresentation(bindings);
   const { notice, report, reported } = present;
 
   // ── Controllers ──
 
-  const usage = new SubscriptionUsageService({ secrets, stores: roots });
+  const usage = new SubscriptionUsageService({ stores: roots });
   const memoryPage = settingsMemoryCommands({ bindings, present });
-  const gitPage = settingsGitCommands({ bindings, present, secrets });
-  const toolsPage = settingsToolCommands({ roots, bindings });
+  const gitPage = settingsGitCommands({ bindings, present });
+  const toolsPage = settingsToolCommands({
+    roots,
+    bindings,
+    installsExtensions: ports.host === 'vscode',
+  });
   const pluginsPage = settingsPluginCommands({
     roots,
     bindings,
@@ -144,10 +148,8 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   // ── Posts ──
 
-  const postProfile = bindings.post(buildProfileMessage(roots, secrets));
-  const postModelSelection = bindings.post(
-    buildModelSelectionMessage(roots, secrets),
-  );
+  const postProfile = bindings.post(buildProfileMessage(roots));
+  const postModelSelection = bindings.post(buildModelSelectionMessage(roots));
   const postSnapshot = (snapshot: DerivedSettingsSnapshot) =>
     bindings.post(buildSettingsSnapshotMessage(snapshot, roots));
   const postSkills = bindings.post(
@@ -165,19 +167,16 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     );
   const postAuthStatus = (providerId: SubscriptionProviderId) =>
     bindings.post(
-      Effect.map(
-        subscriptionAuthStatus(providerId, roots, secrets),
-        (status) => ({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS,
-          status,
-        }),
-      ),
+      Effect.map(subscriptionAuthStatus(providerId, roots), (status) => ({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS,
+        status,
+      })),
     );
   // ── Refresh tails ──
 
   /**
    * Every surface a credential feeds: the probes outside this view first,
-   * since model availability reads the key state they settle, then the
+   * since model availability reads the key state they produce, then the
    * launchers' catalogs, the profile, the Models page and, when the
    * credential is a coding plan's, its usage.
    */
@@ -194,10 +193,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
         ...(usageProvider ? [postUsage(false)] : []),
       ]);
     });
-  const refreshAfterProviderKeyChange = (provider: string) =>
-    refreshAfterCredentialChange(
-      CODING_PLAN_BY_API_PROVIDER.get(provider)?.usageProvider,
-    );
   /** Run a subscription mutation, report its failure, and repaint what the
    *  subscription feeds whatever the mutation did. */
   const subscriptionChange = <E>(
@@ -226,7 +221,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       providerId,
       ports.accountCopy.signOutFailed(provider.displayName),
       Effect.andThen(
-        provider.signOut(secrets),
+        provider.signOut(),
         notice(ports.accountCopy.signedOut(provider.displayName)),
       ),
     );
@@ -245,7 +240,8 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   // ── Catalog-backed settings rows ──
 
-  // A `Record`, so a new snapshot variant fails this literal's type check.
+  // One poster per snapshot, so a new snapshot variant fails this literal's
+  // type check.
   const stateSnapshotPosters: Record<SettingsViewSnapshot, () => HostEffect> = {
     approval: () => postSnapshot('approval'),
     'git-author': () => postSnapshot('git-author'),
@@ -285,8 +281,8 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       }
       if (key === APPROVAL_POLICY_CONFIG_KEY) {
         yield* bindings.refreshCatalogs();
+        yield* emitAppSignal('approvalPolicyChanged', undefined);
       }
-      yield* bindings.stateSettingApplied(key);
     });
 
   // One read-modify-write at a time per list: two switches handled at once
@@ -329,17 +325,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     );
 
   const postAll = allSettledVoid<Error, ProcessServices | StorageFs>([
-    ...(
-      [
-        'memory',
-        'agents',
-        'git-author',
-        'approval',
-        'skills',
-        'telemetry',
-        'latex',
-      ] as const
-    ).map(postSnapshot),
+    ...DERIVED_SETTINGS_SNAPSHOTS.map(postSnapshot),
     postSkills,
     memoryPage.postMemoryData,
     postProfile,
@@ -416,11 +402,13 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       const provider = apiProviderOfSecretName(key);
       return provider === undefined
         ? undefined
-        : refreshAfterProviderKeyChange(provider);
+        : refreshAfterCredentialChange(
+            CODING_PLAN_BY_API_PROVIDER.get(provider)?.usageProvider,
+          );
     },
   };
 
-  // ── The boundary every settings program settles on ──
+  // ── The boundary every settings program finishes on ──
 
   const settle = <E>(
     work: Effect.Effect<void, E, ProcessServices | StorageFs>,
@@ -437,7 +425,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   return {
     handlers,
-    /** Settle the program one message the host already parsed selects. */
+    /** Finish the program one message the host already parsed selects. */
     handleMessage(
       message: SettingsViewInboundMessage,
       registry: SettingsArms,
@@ -456,7 +444,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
      * workspace's tool availability (the Plugins page) and each app signal
      * `repaintOn` names. Every follower is a child fiber started at once,
      * so it is subscribed by the end of the turn that forks this. `start`
-     * is how the host runs a repaint nobody awaits; each is settled and
+     * is how the host runs a repaint nobody awaits; each is finished and
      * reported as a message's would be.
      */
     followRepaints: (

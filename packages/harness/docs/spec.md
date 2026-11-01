@@ -58,11 +58,11 @@ its kind is its `type` column.
 - **Request**: A decision that may wait on a person: a `request.opened` row,
   closed by one `request.decided` row; an approval policy that answers at once
   commits both in one batch (`shared/schemas/sessionEvent.ts:371-384`,
-  `agent/runtime/requestPolicy.ts:340-352`).
+  `agent/runtime/requestPolicy.ts:326-336`).
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row (`controllers/session/storeSchema.ts:54-65`).
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
-  `RunState` the loop continues from (`shared/session/runState.ts:533-546`).
+  `RunState` the loop continues from (`shared/session/runState.ts:504-517`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
   (`agent/runtime/SessionEvents.ts:219-370`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
@@ -131,7 +131,7 @@ Every row a session writes is written by a job on one inbox drained by one
 fiber. Claims are not rows: a hold inside a job takes its claim in that job's
 transaction, a hold outside one in a write transaction of its own, and either is
 released in the transaction of the scope that closes it, which need not be a job
-(`controllers/session/sessionStore.ts:143-202`). Jobs SHALL run in the order
+(`controllers/session/sessionStore.ts:144-203`). Jobs SHALL run in the order
 they were enqueued, one at a time, and the table's commit order is that order
 (`agent/runtime/SessionEvents.ts:241-249`). A job other than an ordering barrier
 (`transact(job, order)`, below) is one SQLite transaction: its appends commit
@@ -151,7 +151,7 @@ The publisher offers these doors:
   (`agent/runtime/SessionEvents.ts:311-319`).
 - `drain`: End the inbox and run what it holds within the close deadline of
   5,000 ms (`agent/runtime/SessionEvents.ts:252-290`,
-  `agent/runtime/SessionHandle.ts:405`).
+  `agent/runtime/SessionHandle.ts:395`).
 
 A job MUST NOT wait on its own publisher; doing so is a defect
 (`agent/runtime/SessionEvents.ts:197-202`, `:299`). A job MAY run again whole
@@ -166,17 +166,17 @@ is a defect; a detached one is logged and dropped
 
 Above the publisher, the session's own door (`SessionLog.transact`) SHALL return
 only after the session's fold has folded every commit the job made
-(`controllers/session/sessionStore.ts:254-263`). A claim a failed transaction
+(`controllers/session/sessionStore.ts:255-264`). A claim a failed transaction
 took is released best effort: a refused release is logged and the claim stays
 until another process proves this one dead
-(`controllers/session/sessionStore.ts:222-234`, `:261`). A trace row emitted on
+(`controllers/session/sessionStore.ts:223-235`, `:262`). A trace row emitted on
 its own reaches the publisher through `SessionLog.publish`
 (`agent/runtime/SessionHandle.ts:97-100`); a call's card rows and a turn's
 closing rows commit inside the run's own batches instead
-(`agent/runtime/loop/toolUseDispatch.ts:544-547`,
+(`agent/runtime/loop/toolUseDispatch.ts:550-554`,
 `agent/runtime/loop/toolUse.ts:497-500`). `SessionLog.settled` is the barrier
 after every job enqueued before it
-(`controllers/session/sessionStore.ts:305-307`).
+(`controllers/session/sessionStore.ts:306-308`).
 
 ### 2.4 Row versions and the store gate
 
@@ -235,17 +235,17 @@ refuses the store; a plugin kind whose plugin this build lacks is left out of
 reads and passes the gate (`controllers/session/rowCodec.ts:287`,
 `controllers/session/Database.ts:431-442`). A run whose rows do not decode
 cannot be opened or resumed (`shared/session/runHistory.ts:140-146`,
-`agent/runtime/resumeRun.ts:251-252`).
+`agent/runtime/resumeRun.ts:258-266`).
 
 ## 3. Row kinds
 
 The vocabulary is one Effect Schema union, `SessionEventDraftSchema`, built
 from three groups (`shared/schemas/sessionEvent.ts:439-443`). The groups below
 follow it. A "folded" kind is one `applyRunRows` reads
-(`shared/session/runState.ts:343-472`,
-`shared/session/turnRowHandlers.ts:161-255`, `:267-371`); every other kind on a
+(`shared/session/runState.ts:342-471`,
+`shared/session/turnRowHandlers.ts:174-268`, `:284-396`); every other kind on a
 run aggregate is ignored by name, and an unknown kind is refused
-(`shared/session/runState.ts:166-202`, `:496-499`).
+(`shared/session/runState.ts:166-201`, `:495-498`).
 
 ### 3.1 Run history rows (private to the runtime)
 
@@ -267,7 +267,7 @@ never sent to a renderer (`shared/schemas/sessionEvent.ts:410-438`).
 - `tool.intent` (folded: yes): The point after which a call's body may have run,
   at an attempt number; it commits just before the body starts, so it does not
   prove the body ran (`shared/schemas/runHistoryEvent.ts:375-382`,
-  `agent/runtime/loop/toolUseDispatch.ts:538-555`).
+  `agent/runtime/loop/toolUseDispatch.ts:545-557`).
 - `script.call` (folded: yes): A call a `script` guest issued, with its
   arguments (`shared/schemas/runHistoryEvent.ts:339-360`).
 - `tool.result` (folded: yes): A call's one settlement and its disposition
@@ -277,7 +277,7 @@ never sent to a renderer (`shared/schemas/sessionEvent.ts:410-438`).
 - `context.blob` (folded: yes): Model-facing content stored by sha256 address
   (`shared/schemas/sessionEvent.ts:423`).
 - `hook.outcome` (folded: yes): A hook point's recorded outcome; a recorded
-  point never runs again (`shared/session/runState.ts:464-471`).
+  point never runs again (`shared/session/runState.ts:463-470`).
 - `child.turn` (folded: no): A child loop's turn identity and fate, `accepted`
   or `settled` (`shared/schemas/sessionEvent.ts:433-437`).
 
@@ -291,7 +291,7 @@ The `model.message` arms:
 - `cancelled`: A user stop the provider confirmed for an accepted operation.
 - `failed`: The attempt failed, or its outcome is unknown: a person-admitted
   attempt found with no outcome on resume is re-asked under a `failed` row
-  (`agent/runtime/ModelInvoker.ts:731-746`). Carries its error and the move
+  (`agent/runtime/ModelInvoker.ts:703-718`). Carries its error and the move
   after it (`retry`, `unchain`, `ask`, `stop`, `cancel`).
 - `response`: The completed turn, its dispatch facts per call, and its priced
   usage.
@@ -304,7 +304,7 @@ The `model.message` arms:
 `run.report` holds the run's report text, `run.result` its result metadata, and
 `followup.closed` marks its input closed until the run's next `run.activate`
 reopens it (`shared/schemas/sessionEvent.ts:402-409`,
-`agent/followUp/Inbox.ts:38-41`, `:361-371`); taking the run's claim does not.
+`shared/session/runRowReads.ts` `recordFacts`, `agent/followUp/Inbox.ts:339-344`); taking the run's claim does not.
 
 ### 3.3 Display rows (session-authored and run-authored)
 
@@ -323,8 +323,6 @@ line numbers are in that file). Kinds marked "folded" are also read by
 - `run.detach` (folded: no): A stop severed the parent edge (`:312-314`).
 - `run.end` (folded: no): The terminal fact: outcome, classified error, output
   (`:315-322`).
-- `conversation.progress` (folded: no): Conversation progress (`:323`).
-- `run.fact` (folded: no): One family of run facts, latest per key (`:324`).
 - `child.park` (folded: no): A child loop's park: `parked`, `resumed`, `paused`
   (`:325-341`).
 - `run.removed` (folded: no): The tombstone: last row of its aggregate, final
@@ -350,7 +348,7 @@ stores none), `context.state`, `stream.start`, `stream.end`, and
 asks for its final tool may record another,
 `agent/runtime/loop/toolUse.ts:301-313`). `response.finalized` is read by the
 fold, which marks that response's answer final
-(`shared/session/runState.ts:387-390`).
+(`shared/session/runState.ts:386-389`).
 
 Streamed text (`stream.chunk`) is transient. It is not an arm of the vocabulary
 and never a row (`agent/runtime/loop/toolUseDispatch.ts:497-514`).
@@ -362,37 +360,37 @@ one batch per call (`agent/runtime/RunHistory.ts:386-397`). The loop's write
 points are normative:
 
 - **W1**, `model.message` `attempt`: for a turn or a summary, commits before the
-  billed request leaves the process (`agent/runtime/ModelInvoker.ts:477-499`;
-  summary: `:783-795`).
+  billed request leaves the process (`agent/runtime/ModelInvoker.ts:454-476`;
+  summary: `:751-763`).
 - **W2**, `model.message` `response`: commits, with `run.position`
   `response.ready`, before any tool call dispatches
-  (`agent/runtime/ModelInvoker.ts:363-379`;
+  (`agent/runtime/ModelInvoker.ts:348-364`;
   `agent/runtime/loop/toolUse.ts:324-331`).
 - **W3**, `tool.intent`: commits after PreToolUse hooks and the guard, before
   the body runs, once per attempt
-  (`agent/runtime/loop/toolUseDispatch.ts:523-555`;
-  `agent/runtime/loop/toolGuard.ts:119-129`).
+  (`agent/runtime/loop/toolUseDispatch.ts:528-557`;
+  `agent/runtime/loop/toolGuard.ts:251-271`).
 - **W4**, `tool.result`: commits, with the call's card rows, before the delivery
   that lets the loop continue (`agent/runtime/loop/toolUseDispatch.ts:380-406`,
-  `:656-680`, `:1103-1107`).
+  `:656-680`, `:1019-1024`).
 - **W5**, `run.position`: commits at every loop-boundary wait and every halt; a
   request's wait keeps the position in force and writes `request.opened` instead
   (`agent/runtime/loop/toolUse.ts:245`, `:274-276`, `:443`, `:497-508`;
   `agent/storage/runLifecycle.ts:243-277`).
 - **W6**, `model.message` `failed`: for a turn or a summary, commits for every
   recorded failure, naming the next move
-  (`agent/runtime/ModelInvoker.ts:610-670`, `:702-704`;
-  `agent/runtime/run/invocation.ts:383-393`).
+  (`agent/runtime/ModelInvoker.ts:585-645`, `:678`;
+  `agent/runtime/run/invocation.ts:381-391`).
 - **W7**, `request.opened` / `request.decided`: the opening commits before any
-  wait; a decision commits once (`agent/runtime/requestPolicy.ts:271-289`,
-  `:340-352`).
+  wait; a decision commits once (`agent/runtime/requestPolicy.ts:260-278`,
+  `:333-345`).
 
 **W1.** The invoker MUST commit the attempt's rows, the blobs of its request
 context and the `attempt` row, before it streams or submits the request
-(`agent/runtime/ModelInvoker.ts:477-499`,
+(`agent/runtime/ModelInvoker.ts:454-476`,
 `agent/runtime/run/requestContext.ts:138-166`). A compaction summary records its
 attempt the same way, with `purpose: 'summary'`
-(`agent/runtime/ModelInvoker.ts:766-813`). A helper call belongs to no run
+(`agent/runtime/ModelInvoker.ts:737-785`). A helper call belongs to no run
 history and records no row, its attempts and failures included
 (`agent/runtime/run/modelCall.ts:66-67`, `:142-144`, `:166`).
 
@@ -401,20 +399,20 @@ a loop turn may hold none, or several as the loop calls the model again after
 tool results) MUST commit once, as one `response` row with a fresh `responseId`,
 in the batch that moves the position to `response.ready`. It carries one
 dispatch fact per local call (`agent/runtime/run/tools.ts:58-62`)
-(`agent/runtime/ModelInvoker.ts:357-379`,
+(`agent/runtime/ModelInvoker.ts:342-364`,
 `shared/schemas/runHistoryEvent.ts:235-287`). The loop MUST dispatch only the
 pending response its fold holds (`agent/runtime/loop/toolUse.ts:324-331`). W2
 does not cover a compaction summary, whose answer its caller lands as a
 `context.edit`, or a helper call, which records no row (W1).
 
 **W3.** A call's `tool.intent` MUST commit after its PreToolUse hooks and its
-guard, and before its body (`agent/runtime/loop/toolUseDispatch.ts:523-555`,
-`agent/runtime/loop/toolGuard.ts:119-129`). The guard asks for a command's
-approval (`agent/runtime/loop/toolGuard.ts:40-47`, `:103-113`). A slow tool's
+guard, and before its body (`agent/runtime/loop/toolUseDispatch.ts:528-557`,
+`agent/runtime/loop/toolGuard.ts:251-271`). The guard asks for a command's
+approval (`agent/runtime/loop/toolGuard.ts:163-167`, `:226-245`). A slow tool's
 `tool.start` card MUST commit in the intent's batch
-(`agent/runtime/loop/toolUseDispatch.ts:544-547`). An attempt whose intent is
+(`agent/runtime/loop/toolUseDispatch.ts:550-554`). An attempt whose intent is
 already committed MUST NOT commit another
-(`agent/runtime/loop/toolUseDispatch.ts:543`).
+(`agent/runtime/loop/toolUseDispatch.ts:550`).
 
 **W4.** A call that settles from its body MUST commit its `tool.result` with its
 whole card: a slow tool's `tool.end`, a fast tool's `tool.start` and `tool.end`
@@ -425,9 +423,9 @@ call skipped by a replan, a duplicate, a call after the turn ended) commits its
 `tool.result` with no card (`agent/runtime/loop/toolUseDispatch.ts:386`, `:702`,
 `:984-995`); one that settles a started call as outcome unknown commits its
 card's close, and its open for a fast tool
-(`agent/runtime/loop/toolUseDispatch.ts:709-714`). The delivering `append` MUST
+(`agent/runtime/loop/toolUseDispatch.ts:711-716`). The delivering `append` MUST
 commit only once every call of the response has settled, as one tool group bound
-to the response (`agent/runtime/loop/toolUseDispatch.ts:1103-1107`). A delivery
+to the response (`agent/runtime/loop/toolUseDispatch.ts:920-926`). A delivery
 its settlements do not match is a defect
 (`agent/runtime/RunHistory.ts:258-260`).
 
@@ -447,10 +445,10 @@ child loop drives has no run history and writes no position; it parks on
 recording MUST commit a `failed` row whose `next` is the move after it; a
 renewed observation of an accepted operation repeats without one (section 6),
 and a helper call records none (`agent/runtime/run/modelCall.ts:166`)
-(`agent/runtime/run/invocation.ts:383-393`,
-`agent/runtime/ModelInvoker.ts:610-627`). A `failed` row that asks MUST be
+(`agent/runtime/run/invocation.ts:381-391`,
+`agent/runtime/ModelInvoker.ts:585-602`). A `failed` row that asks MUST be
 preceded, in its batch, by the `request.opened` of its retry request
-(`agent/runtime/ModelInvoker.ts:658-669`, `shared/session/runHistory.ts:183`).
+(`agent/runtime/ModelInvoker.ts:633-644`, `shared/session/runHistory.ts:183`).
 
 ## 5. The fold
 
@@ -465,20 +463,20 @@ requests, and the offered tools and contents
 ### 5.2 Grammar
 
 `applyRunRows(state, rows)` folds rows in order
-(`shared/session/runState.ts:533-546`). It MUST refuse a row whose commit is not
-above the last folded one (`shared/session/runState.ts:495-499`). Each folded
+(`shared/session/runState.ts:504-517`). It MUST refuse a row whose commit is not
+above the last folded one (`shared/session/runState.ts:469-473`). Each folded
 kind has one handler in a table keyed by row type: the state it requires (any
 state, an existing one, or an opened run) and its move
-(`shared/session/runState.ts:293-310`, `:343-472`). A handler that requires an
+(`shared/session/runState.ts:257-275`, `:310-438`). A handler that requires an
 opened run refuses a row before the opening `run.position`
-(`shared/session/runState.ts:506-510`). Every other row kind is listed by name
-as one the fold skips, so a kind in neither list is refused as `unknown-run-row`
-and a new kind does not compile until it is placed
-(`shared/session/runState.ts:166-202`, `:496-499`). A refusal is a typed
+(`shared/session/runState.ts:481-485`). A row of any other kind is refused as
+`unknown-run-row`: its reader selects the kinds the fold reads
+(`RUN_STATE_ROW_TYPES`, `isRunStateRow`; `shared/session/runState.ts:440-452`,
+`:474`), so no display row reaches it. A refusal is a typed
 `RunHistoryInconsistent` with a reason: `out-of-order`, `orphan-settlement`,
 `unknown-run-row`, `mismatched-delivery` or `unreadable-turn`
 (`shared/session/runState.ts:75-86`). The fold never defaults a row it cannot
-apply (`shared/session/runState.ts:525-534`).
+apply (`shared/session/runState.ts:494-503`).
 
 A run is opened by its first `run.position`. Run history rows without an opening
 position MUST fail the load as `inconsistent`
@@ -489,10 +487,10 @@ position MUST fail the load as `inconsistent`
 The fold maps a position to a loop phase: `turn.ready` and `waiting` to
 `waiting`, `turn.begin` to `model.ready`, `response.ready` to `model.submitted`,
 `results.ready` to `results.ready`, and `turn.end` to `halted`
-(`shared/session/runRows.ts:97-110`).
+(`shared/runs/runStatus.ts:92-105`).
 
 A `halted` position keeps the phase the loop stopped in, so a resume continues
-from there (`shared/session/runRows.ts:110`).
+from there (`shared/runs/runStatus.ts:105`).
 
 ### 5.4 The commit path
 
@@ -521,10 +519,10 @@ row of its batch (`agent/runtime/RunHistory.ts:72-83`).
 The loop holds no copy of the conversation. It reads every branch off the fold,
 so the live path and the resume path are the same steps
 (`agent/runtime/loop/toolUse.ts:408-421`, `:423-477`). A resume enters the same
-program, `runToolUse`, with `resume: true`
-(`agent/runtime/executeAgent.ts:128-137`), reached from `resumeRun` through
-`resumeToolUseFromResumeData` (`agent/runtime/resumeRun.ts:315-319`,
-`agent/runtime/executeAgent.ts:352-355`).
+program, `runToolUse`, with `resume: true`, through the same run program as a
+fresh launch, `executeAgent` without a registration
+(`agent/runtime/executeAgent.ts:127-130`), reached from `resumeRun`
+(`agent/runtime/resumeRun.ts:314`).
 
 A resume MUST be refused when the rows hold no opened run
 (`agent/runtime/loop/runProgram.ts:81-87`). A fresh launch MUST be refused when
@@ -533,19 +531,21 @@ the run already holds history state (`agent/runtime/loop/runProgram.ts:96-101`).
 ## 6. Retry
 
 Every model call the harness makes MUST go through one loop, `runInvocation`
-(`agent/runtime/run/invocation.ts:355-395`; callers
-`agent/runtime/ModelInvoker.ts:676`, `agent/runtime/run/modelCall.ts:119`). Its
-next move is `nextAttempt(invocation, requests)`, read off the invocation's rows
-before every move but the repeat of a renewed observation
-(`agent/runtime/run/invocation.ts:367-369`, `:384-387`,
-`shared/session/inFlight.ts:203-238`):
+(`agent/runtime/run/invocation.ts:353-394`; callers
+`agent/runtime/ModelInvoker.ts:651`, `agent/runtime/run/modelCall.ts:123`). Its
+next move is `nextAttempt(invocation, requests, retries)`, read off the
+invocation's rows before every move but the repeat of a renewed observation
+(`agent/runtime/run/invocation.ts:365-368`, `:383-386`,
+`shared/session/inFlight.ts:202-246`):
 
 | Rows show                                                        | Move                                        |
 | ---------------------------------------------------------------- | ------------------------------------------- |
 | no open invocation                                               | send attempt 1                              |
 | open attempt, no outcome, an accepted operation                  | observe it; never resubmit                  |
 | open attempt, no outcome, an earlier `failed` row asked a person | ask again (`reask`)                         |
+| open attempt, no outcome, the automatic retries spent            | ask again (`reask`)                         |
 | open attempt, no outcome, otherwise                              | send the next attempt                       |
+| open attempt a clean close stopped (its halt says `closed`)      | as above; the stopped attempt spent nothing |
 | `failed` with `retry` or `unchain`                               | send the next attempt                       |
 | `failed` with `stop`                                             | end the invocation failed                   |
 | `failed` with `cancel`                                           | end the invocation cancelled                |
@@ -555,62 +555,68 @@ before every move but the repeat of a renewed observation
 | `failed` with `ask`, any other decision                          | end the invocation cancelled                |
 
 The move a `failed` row records is decided once, by `failedNext`
-(`shared/session/inFlight.ts:259-278`), except for two rows that name their move
+(`shared/session/inFlight.ts:266-283`), except for two rows that name their move
 themselves: a renewed credential's resend, `retry`
-(`agent/runtime/run/invocation.ts:343-346`), and a re-ask, `ask` under a fresh
-request id (`agent/runtime/ModelInvoker.ts:731-747`):
+(`agent/runtime/run/invocation.ts:341-344`), and a re-ask, `ask` under a fresh
+request id (`agent/runtime/ModelInvoker.ts:703-718`):
 
 - A `continuation-gone` failure of an attempt that sent a continuation answers
-  `unchain`, once per invocation (`shared/session/inFlight.ts:265-270`,
-  `agent/runtime/run/invocation.ts:292-296`).
+  `unchain`, once per invocation (`shared/session/inFlight.ts:272-277`,
+  `agent/runtime/run/invocation.ts:290-294`).
 - A retryable failure answers `retry` while the invocation's earlier failures,
   `unchain` ones excluded, are fewer than the budget
-  (`shared/session/inFlight.ts:81-89`, `:271-274`). Every earlier failure
-  counts, whichever move followed it: one that a person's retry admitted spends
-  the budget as an automatic resend does, and an attempt with no recorded
-  failure spends none. For a turn's invocation the budget is counted from rows,
-  so a crash does not refill it. A compaction summary or a helper call holds its
+  (`shared/session/inFlight.ts:81-89`, `:196-200`, `:278-279`). Every earlier
+  failure counts, whichever move followed it: one that a person's retry allowed
+  spends the budget as an automatic resend does, and so does an attempt with no
+  recorded outcome, which may have been billed, so a crash that recurs on every
+  open does not resend it every time. An attempt a clean session close stopped
+  is the exception: the halt its `run.end` commits with says `closed`
+  (`run.position` `reason`), its request was cut by the stop, not lost, and the
+  fold leaves it out of the count (`shared/session/inFlight.ts`, `closedBy`).
+  For a turn's invocation the budget is
+  counted from rows, so a crash does not refill it. A compaction summary or a helper call holds its
   invocation in memory (`agent/runtime/run/modelCall.ts:107-123`); a summary's
   `attempt` and `failed` rows are an audit the run fold skips
-  (`shared/session/turnRowHandlers.ts:272-282`, `:373-378`), so a resumed
+  (`shared/session/turnRowHandlers.ts:289-304`, `:278-280`), so a resumed
   summary starts a fresh budget.
 - Past the budget, a failure a person may retry answers `ask` under a fresh
   request id; where nobody can be asked, `stop`
   (`shared/session/inFlight.ts:275-277`).
 - A failed observation of an accepted operation never resubmits it automatically
-  (`agent/runtime/run/invocation.ts:292-301`). The one automatic repeat is a
+  (`agent/runtime/run/invocation.ts:290-299`). The one automatic repeat is a
   renewed observation after a rejected subscription token, which observes the
-  same operation again (`agent/runtime/run/invocation.ts:336-346`, `:383-386`).
+  same operation again (`agent/runtime/run/invocation.ts:334-344`, `:381-384`).
 
 Every automatic send MUST run under the process's `ModelRetryGate`
-(`agent/runtime/run/invocation.ts:42-47`, `:205-221`). The gate cools two keys
+(`agent/runtime/run/invocation.ts:40-45`, `:203-219`). The gate cools two keys
 per binding: a 429 the provider scoped to the model cools that model on its wire
 route, and a failure scoped to the route cools the wire route itself, which
 every model on that route shares. The wire key is the binding's own tuple:
 provider, credential route, endpoint and key fingerprint for a credential-backed
 HTTP route; provider for the validation model
 (`agent/runtime/modelAccess/binding.ts:208-220`, `:140`)
-(`agent/runtime/modelAccess/failureInfo.ts:125-159`). An observation
-runs outside it (`agent/runtime/run/invocation.ts:222`). The loop pauses 1,000
+(`agent/runtime/modelAccess/failureInfo.ts:43-77`). An observation
+runs outside it (`agent/runtime/run/invocation.ts:220`). The loop pauses 1,000
 ms before a `retry` or `unchain` that follows a recorded failure
-(`agent/runtime/run/invocation.ts:50`, `:257-274`, `:388-393`); a resend after a
+(`agent/runtime/run/invocation.ts:48`, `:255-272`, `:386-391`); a resend after a
 crash, of an attempt no row recorded an outcome for, goes out without it.
 
 An attempt of an invocation a person admitted, whose outcome no row recorded and
 which holds no accepted operation, MUST be asked about again and MUST NOT be
-resent unasked (`shared/session/inFlight.ts:211-217`); one that holds an
-accepted operation is observed (`shared/session/inFlight.ts:211-212`). The ask
+resent unasked (`shared/session/inFlight.ts`); one that holds an
+accepted operation is observed before another submission is considered. The ask
 is a new `failed` row on that attempt, with `next: ask`
-(`agent/runtime/ModelInvoker.ts:731-747`). An attempt no person admitted, whose
-outcome no row recorded, is resent (`shared/session/inFlight.ts:217`).
+(`agent/runtime/ModelInvoker.ts:703-718`). An attempt no person admitted, whose
+outcome no row recorded, is resent only while automatic retries remain;
+otherwise it is asked about again (`shared/session/inFlight.ts`).
 
 A rejected subscription token MAY be renewed once per execution of
-`runInvocation` (`agent/runtime/run/invocation.ts:152-175`, `:362`). The limit
+`runInvocation` (`agent/runtime/run/invocation.ts:150-173`, `:360`). The limit
 is held in memory, not in a row, so a resume may renew the same invocation
 again. On a send, the renewal records a `failed` row with `next: retry` (a
 helper call records none) and the attempt is resent; while observing an accepted
 operation, the renewed observation repeats with no row and is never a resend
-(`agent/runtime/run/invocation.ts:336-348`, `:378-393`).
+(`agent/runtime/run/invocation.ts:334-346`, `:376-391`).
 
 ## 7. Claims and several processes
 
@@ -641,12 +647,11 @@ lock, and the transaction runs again with that verdict
 `DatabaseClaimRefused`, and so does an unprovable one on every other path
 (`controllers/session/storeAside.ts:79-83`).
 
-Liveness is proven from the owner identity alone, with no clock
-(`agent/storage/leaseOwnerLiveness.ts:42-90`):
+Liveness is proven from the owner's pid and start identity alone, with no clock
+and no hostname (`agent/storage/leaseOwnerLiveness.ts:40-90`):
 
 | Observed                                     | Verdict      |
 | -------------------------------------------- | ------------ |
-| owner recorded on another host               | `unprovable` |
 | `kill(pid, 0)` reports `ESRCH`               | `dead`       |
 | pid exists, start identity equals the record | `alive`      |
 | pid exists, start identity differs           | `dead`       |
@@ -659,26 +664,31 @@ writes no row (`controllers/session/Database.ts:464-465`, `:967-975`).
 
 A resume MUST hold the run's claim before it folds the run's history or decides
 who owns the run, and holds it until the launched run holds its own
-(`agent/runtime/resumeRun.ts:188-200`). Its earlier reads only refuse a run
+(`agent/runtime/resumeRun.ts:180-192`). Its earlier reads only refuse a run
 whose records are gone, and one deleted or whose input closed while they ran
-(`agent/runtime/resumeRun.ts:175-187`). A run another live process holds answers
-`owned_elsewhere` (`agent/runtime/resumeRun.ts:196`). A second resume of a run
-another resume in this process is already handling joins that resume and gets
-its result (`agent/runtime/resumeRun.ts:6`, `:130`); otherwise a run live in
-this process is refused (`agent/runtime/resumeRun.ts:174`). A child an open call
+(`agent/runtime/resumeRun.ts:168-179`). A run another live process holds answers
+`owned_elsewhere` (`agent/runtime/resumeRun.ts:192`). A resume is the run's
+activation from the call: a second resume of the run joins it and gets its
+result, a stop reaches it before it admits the run (a user's stop ends the run
+cancelled, and nothing is admitted after), and the last caller to leave before
+any took its answer stops it (`agent/runtime/resumeRun.ts`,
+`agent/followUp/ToolUseFollowUp.ts`); a run another launch holds in this
+process is refused. A child an open call
 of its parent owns resumes through that parent
-(`agent/runtime/resumeRun.ts:199-200`, `:104-114`).
+(`agent/runtime/resumeRun.ts:193-196`; a resume a wake took follows it
+itself, whoever opened it, `agent/followUp/ToolUseFollowUp.ts:262-263`, and
+the package's resume through `effect/sessionPrograms.ts:222`).
 
 The resume first takes the run's claim in its own transaction, before its
-ownership, admission and blocker checks (`agent/runtime/resumeRun.ts:158-166`,
-`:195`); a crash after it leaves the claim moved and no activation row. The
+ownership, admission and blocker checks (`agent/runtime/resumeRun.ts:184-192`,
+`:193-211`); a crash after it leaves the claim moved and no activation row. The
 activation is then one transaction: it verifies the claim the process holds,
 folds the stored rows, and commits the activation rows with a `request.decided`
 `cancel` for every request the previous owner left unbound
 (`agent/runtime/RunHistory.ts:336-366`). A request is unbound unless it is the
 turn's open retry ask, the request a pending call's resumed attempt re-enters,
 the request a pending `script` call's guest calls share (attempt 0), or an
-`externalInquiry` (`shared/session/runState.ts:243-264`).
+`externalInquiry` (`shared/session/runState.ts:242-263`).
 
 ### 7.3 What a second process may and may not do
 
@@ -700,7 +710,7 @@ A process MUST NOT:
   (`controllers/session/Database.ts:615-627`)
 - answer a request of a run a live process holds (`NotOwner`)
   (`controllers/session/SessionRequests.ts:161-173`)
-- resume a run a live process holds (`agent/runtime/resumeRun.ts:195-196`)
+- resume a run a live process holds (`agent/runtime/resumeRun.ts:184-192`)
 - write rows to a store a newer build wrote (giving back its own claims is
   allowed) (`controllers/session/Database.ts:439-442`)
 
@@ -708,7 +718,7 @@ A run that loses its claim mid-run gets `RunHistoryRefused` `not-owner` from its
 next append, with nothing written (`agent/runtime/RunHistory.ts:167-181`,
 `:293-298`, `shared/session/runHistory.ts:101-127`). A tool call that meets a
 storage refusal fails the dispatch instead of settling
-(`agent/runtime/loop/toolUseDispatch.ts:594-596`).
+(`agent/runtime/loop/toolUseDispatch.ts:596-598`).
 
 ## 8. Requests
 
@@ -739,25 +749,24 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 
 ### 8.3 Protocol
 
-- A request's id is part of its payload (`agent/runtime/requestPolicy.ts:324`).
+- A request's id is part of its payload (`agent/runtime/requestPolicy.ts:313`).
   A tool call's request id is derived from the response, call, attempt and
   ordinal, so a resumed attempt rejoins the request it left standing
   (`shared/session/inFlight.ts:309-312`).
 - The opening and any decision the approval policy gives at once MUST commit in
   one batch, so no surface lists it pending
-  (`agent/runtime/requestPolicy.ts:340-352`).
+  (`agent/runtime/requestPolicy.ts:326-336`).
 - A decision MUST commit only if its request is open and undecided; the first
   decision wins, and a later one writes nothing
-  (`agent/runtime/requestPolicy.ts:271-289`).
+  (`agent/runtime/requestPolicy.ts:260-278`).
 - The asker waits on the committed `request.decided` row, read from the tail
-  (`agent/runtime/requestPolicy.ts:291-317`). If the session closes first, the
+  (`agent/runtime/requestPolicy.ts:280-306`). If the session closes first, the
   asker goes on as cancelled with no row written, and the request stays open
-  (`agent/runtime/requestPolicy.ts:353-366`).
-- An interrupted asker decides its request `cancel` through the same door,
-  unless the session is closed. This is best effort: a write the session refuses
-  (it is draining, or the claim is gone) is logged and leaves the request open,
-  for the next resume to cancel as unbound
-  (`agent/runtime/requestPolicy.ts:369-394`).
+  (`agent/runtime/requestPolicy.ts:337-350`).
+- An interrupted asker writes nothing: the request a stopped or failed run
+  leaves open is cancelled with the run's end, in the end's batch, so no
+  surface keeps offering it (`agent/storage/runLifecycle.ts:170-187`); one a
+  dead process left is the next resume's to cancel as unbound.
 - A request is a row, so it outlives its process. A resume cancels the unbound
   ones (section 7.2) and re-enters the bound ones under the same id
   (`shared/session/inFlight.ts:347-371`). An open `externalInquiry` is neither:
@@ -766,7 +775,7 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   run, which retires it with no decision row
   (`controllers/session/SessionRequests.ts:147-158`). Delivering the answer (or
   the drop) as a follow-up is a separate, best-effort step
-  (`shared/session/runState.ts:243-264`).
+  (`shared/session/runState.ts:242-263`).
 
 ## 9. Crash guarantees
 
@@ -800,7 +809,7 @@ The guarantees, numbered as in the package README:
 - **I5**: An owned child that ended cleanly answers its call; it is not launched
   again without a person's retry; no child is left without a terminal row,
   except one deliberately paused with a `child.park` `paused` row so it can be
-  called again (`tools/delegation/childRun.ts:163-172`). Asserted by
+  called again (`agent/runtime/delegation/childRun.ts:101-111`). Asserted by
   `src/test-kernel/support/crashConformance.ts:38-39`, `:867`.
 - **I6**: A child's result is delivered to its parent at most once and is not
   lost while the parent was held elsewhere; a result whose child was detached,
@@ -843,17 +852,18 @@ What survives at each commit point follows from sections 2 to 8:
   one decided since this process activated the run, the call runs again and
   rejoins that request under its id (`shared/session/inFlight.ts:347-370`).
   Otherwise it is re-run only if both the stored and the current tool declare
-  `replay: 'safe'` and the stored arguments validate; else settled as outcome
-  unknown (`agent/runtime/loop/toolUseDispatch.ts:688-715`,
-  `agent/runtime/run/tools.ts:106-137`).
+  `replay: 'safe'`, the stored arguments validate, and it has not started three
+  times already; else settled as outcome unknown, naming spent starts as the
+  reason (`agent/runtime/loop/toolUseDispatch.ts:690-711`,
+  `agent/runtime/run/tools.ts:98-158`).
 - `tool.result`: The settlement is reused; the call is not run again
-  (`agent/runtime/loop/toolUseDispatch.ts:982-983`).
+  (`agent/runtime/loop/toolUseDispatch.ts:850-851`).
 - **delivery `append`**: The loop continues to the next step from
-  `results.ready` (`shared/session/runRows.ts:97-105`).
+  `results.ready` (`shared/runs/runStatus.ts:92-100`).
 - `request.opened`: The request stays pending under the same id, or is cancelled
   if unbound (section 7.2).
 - `run.end` with `halted`: The lifecycle is over. A recipe task stays finished,
-  and a resume answers `finished` (`agent/runtime/resumeRun.ts:203-206`); a
+  and a resume answers `finished` (`agent/runtime/resumeRun.ts:200-201`); a
   loop-driven conversation continues on a resume in a new lifecycle, from the
   phase `halted` kept (`shared/session/runActions.ts:94-96`).
 
@@ -863,7 +873,7 @@ place a cut between an effect and its result. One real kill covers that case: a
 process killed after its command's effect and before its result reports the
 command as outcome unknown and never reruns it automatically; the model may
 still issue a new command, which runs under I4
-(`src/test-kernel/controllers/session/goldenStore.vitest.ts:666`).
+(`src/test-kernel/controllers/session/goldenStore.vitest.ts:660`).
 
 ## 10. Conformance
 
@@ -905,7 +915,7 @@ These existing suites check the sections above.
 - **8 requests**: `src/test-kernel/support/crashConformance.ts:48-51`
 - **9 crash guarantees**:
   `src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts`,
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:636`
+  `src/test-kernel/controllers/session/goldenStore.vitest.ts:630`
 
 ## 11. Non-goals
 
@@ -929,8 +939,9 @@ These existing suites check the sections above.
   "SDK and typed-RPC deferral (D11)").
 - **No exactly-once external effects.** The protocol promises one settlement per
   call, not one execution of an arbitrary external effect (section 9).
-- **No once-only billing.** The code resends an attempt that no person admitted
-  and whose outcome no row recorded (`shared/session/inFlight.ts:217`); the
+- **No once-only billing.** The code may resend an attempt that no person admitted
+  and whose outcome no row recorded while automatic retries remain
+  (`shared/session/inFlight.ts`); the
   earlier attempt may have been billed. The suite asserts at most one committed
   response per invocation (I3), not one billing.
 
@@ -938,9 +949,10 @@ These existing suites check the sections above.
 
 1. `packages/harness/AGENTS.md` says `tool.intent` commits after a call's hooks,
    guard and approval. The guard asks only for tools with a declared command
-   guard or `requiresApproval`; a tool whose body opens its own request, such as
-   a file edit's approval (`tools/approval/toolEditApproval.ts:236`), asks after
-   its intent committed (`agent/runtime/loop/toolGuard.ts:45-47`). Resume
+   guard or `requiresApproval: true`, or when a `PreToolUse` hook asks; a tool
+   whose body opens its own request, such as a file edit's review
+   (`tools/approval/toolEditApproval.ts`), asks after its intent committed
+   (`agent/runtime/loop/toolGuard.ts`). Resume
    handles that case (`shared/session/inFlight.ts:347-371`), but the stated
    order is not universal.
 2. The durable-harness note says "The tests are the contract." This document

@@ -6,6 +6,50 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **SDK: a tool edit's proposal is the request's, not the session's.**
+  `ToolEditPermission.content` names the proposal (`ToolEditContent`) by its
+  address in the session's blob store, written with the `request.opened`
+  row; `request.preview` answers it from the store, and `request.edit` is
+  gone: an approve carries the proposed file as the person left it as the
+  decision's `content`. `StagedToolEdit` leaves `@texra-ai/harness/schemas`;
+  `CallRequests.open` takes the blobs a payload names. A blocked resume
+  (`RunView.statusNotice` `resumeBlocked`, `LocalRuntimeState.resumeBlocked`)
+  carries no `retry`: whether an unblocked task continues by itself is the
+  `resumeOnOpen` setting's, read once at open.
+- **SDK: settings-view snapshot ids are the app's.** `SettingsViewSnapshot`
+  leaves `@texra-ai/harness/schemas`; a row's `surfaces.settingsView` and
+  `snapshotEntries` take the app's id as a string.
+- **SDK: the package-validation model is the CLI's.** The harness reads it
+  as the `ValidationModel` service (`@texra-ai/harness/host`), provided
+  beneath `processLayer`; absent, no run takes the validation route and one
+  recorded on it fails to bind. The stand-in that kept it out of every
+  bundle now applies to the CLI's alone.
+- **SDK: the harness adds no directories of its own to a command's PATH.**
+  An app names them as `AgentPlatform.commandDirs` (or `processLayer`'s
+  `commandDirs`), served as `CommandDirs`; `withExtendedPath` and
+  `whichOnExtendedPath` take them as an argument, and `makeMachineGitEnv` is
+  an Effect. `findCommand` and `probeTool` leave `@texra-ai/harness/node`.
+- **SDK: script stages and model availability carry keys, not words.**
+  `ScriptCallView.detail` is `error` (with its text), `notRun`,
+  `interrupted` or `request` (with the request's payload), and its
+  `summary` is only the answer; `ScriptStageView.summary` gives way to the
+  counts `agents` and `needsYou`. `MODEL_AVAILABILITY_STATUS` entries lose
+  their `label`. A host words them itself.
+- **SDK: teams are the app's.** The built-in team presets
+  (`AGENT_MODE_PRESETS`, `STARTER_AGENT_MODE_PRESET`), `AgentModePresetSchema`
+  and `parseAgentModePresets` leave `@texra-ai/harness/schemas`, and
+  `teamPresets`/`launchableTeamPresets` leave `./host`. An app supplies its
+  teams as `AgentDirectoriesPort.teams`; `loadTeamOptions` and
+  `resolveTeamLaunch` take the `presets` list instead of the raw saved teams.
+  `AgentDirectories.layer(port)` is gone: provide
+  `Layer.succeed(AgentDirectories)(port)`.
+- **SDK: a settings catalog names its namespace, and keys are relative.**
+  `settingsCatalog({ namespace, rows })` replaces `settingsCatalog(rows)`,
+  and `nodePlatform({ settings })` takes that catalog instead of rows. Code
+  names a key without the namespace (`'memory.enabled'`); the config and
+  state stores add it, so TeXRA's stored keys are unchanged.
+  `ConfigProvider.get` no longer takes a default (the catalog row's default
+  answers), and `processLayer` takes the catalog as `settings`.
 - **The helper model is stored as `texra.helperModel`.** It was the one
   setting stored outside the `texra.` namespace (`polishModel`), and the old
   key is no longer read: if you picked a helper model, pick it again in
@@ -73,13 +117,29 @@ All notable changes to this project will be documented in this file.
   with attachments that an earlier build saved show as written by that
   build and cannot be resumed by this one; their files and transcripts are
   unaffected.
+- **Images pasted into a follow-up are kept with the conversation.** A
+  follow-up's pasted image is read once, when you send it, and stored with
+  the conversation, so the clean-up of old pasted files no longer breaks a
+  queued message, a resume, or "Fork from here", which now always brings the
+  message's images back. A file that cannot be read is refused when you send
+  it, not at the next turn. Conversations saved by an earlier build show as
+  written by that build and cannot be resumed by this one. For SDK users, the
+  `followUp.send` request takes `media` (a file path, or stored media by
+  address) in place of `mediaFiles`, and a user row's and an `InboxItem`'s
+  `mediaFiles` is `media: { name, mimeType, digest }[]`.
 
-- **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.0.6 (peer
-  floor `^4.0.6`).** Their Effect peers (`effect`, plus
+- **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.1.0 (peer
+  floor `^4.1.0`).** Their Effect peers (`effect`, plus
   `@effect/platform-node` and `@effect/sql-sqlite-node` for the harness) now
-  start at `^4.0.6`. Effect 4.0.6 changed how a SQL transaction acquires its
-  connection, and the harness's session database follows the new contract,
-  which 4.0.5 lacks.
+  start at `^4.1.0`. Effect 4.0.6 changed how a SQL transaction acquires its
+  connection, and Effect 4.1.0 derives a file system's `glob` from a typed
+  directory listing; the harness's session database and its rooted file
+  systems (`WorkspaceFs`, `StorageFs`, `GlobalStorageFs`) follow both
+  contracts, which earlier versions lack. A `glob` on those file systems now
+  reads Effect's pattern syntax: its wildcards match case-sensitively on every
+  platform (they ignored case on macOS and Windows), `\` escapes the next
+  character instead of separating paths, and extended globs such as `@(a|b)`
+  are not interpreted.
 - **Goal mode is a script.** **Run as goal** on a plan now runs the goal
   template, a background script of the conversation whose rounds are the
   same agent again: each round continues the conversation as it stood when
@@ -196,12 +256,11 @@ All notable changes to this project will be documented in this file.
   `@texra-ai/harness/schemas`, which puts your rows after the harness's. Each
   composition resolves settings against its own rows, so two in one
   process no longer share one catalog.
-- **SDK: a run whose trace cannot be read says why.** A run's `events`
-  stream fails with `TraceUnavailable` instead of ending with no events.
-  Its reason is `ended` (the run finished before anyone read its trace),
-  `truncated` (the trace outgrew what is kept for a reader that had not
-  attached yet) or `remote` (the run runs in the TeXRA service, which keeps
-  its trace). The run's result is unaffected.
+- **SDK: anyone can read a run's events, at any time.** `run.events` reads
+  the run's events back from its session, from the start of the run's
+  current activation: a second reader, a reader after the run ended, and a
+  window whose task the TeXRA service runs all get them. A text stream that
+  finished before the reader reached it arrives whole, as one chunk.
 - **A failed task in the TeXRA service always reports failure**, even
   when the service recorded no error for it.
 - **A VS Code window of the TeXRA service opens no session of its own.**
@@ -798,12 +857,15 @@ history`, a resume and a follow-up say it was "written by an earlier
   route through a ChatGPT subscription, since the Codex backend no longer
   serves them.
 
-- **Claude Max and Team plans' API credits are pointed out where you add an
-  Anthropic key.** The welcome card, the Anthropic row in Settings → API
-  keys, and the terminal's key entry note that these plans include monthly
-  Claude API credits, spent through a Console API key once a Console
-  organization is linked to the plan in claude.ai's Billing settings. The
-  Anthropic "Get API key" link opens the Console's API keys page.
+- **Claude and ChatGPT plans' API credits are pointed out where you add a
+  key.** The welcome card, the Anthropic and OpenAI rows in Settings → API
+  keys, and the terminal's key entry note that Claude Max and Team plans
+  include monthly Claude API credits, spent through a Console API key once a
+  Console organization is linked to the plan in claude.ai's Billing settings,
+  and that ChatGPT Pro and Business plans include monthly OpenAI API credits,
+  spent through an OpenAI API key once claimed in ChatGPT's Billing settings
+  for an API organization you own. The ChatGPT sign-in does not draw on
+  them. The Anthropic "Get API key" link opens the Console's API keys page.
 
 - **A dockable desktop workspace.** Arrange Agent, Files, editors, terminals,
   and Browser in movable tab groups. Drag previews show the destination,
@@ -1256,6 +1318,66 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A lost durable fact is a row or a failure, never a warning.** A
+  subagent's result held for a parent open in another process is delivered
+  under a claim its park let go, so the delivery no longer polls for the
+  child's process to exit; a request a stopped or failed run leaves open is
+  cancelled with the run's end; a run that cannot hold its claim, or record
+  a finished compaction as it stops, ends failed naming the refusal; a
+  subagent launch that fails before its run exists fails the `agent` call
+  that launched it; and a file a model cannot take, or a tool attachment it
+  cannot read inline, is told to the model in the message that carried it.
+  Before, each scrolled by as a warning and the fact was lost.
+- **An approved tool edit keeps the person's changes across a crash.** The
+  proposed file as the person left it in the diff view now travels with the
+  approval and is recorded with it, and the proposal itself is stored with
+  the request, so a task resumed in a new process applies what was approved
+  and shows the same diff. Before, both lived only in the process that
+  opened the request, and a resume applied the tool's own proposal. A
+  window that closes mid-review takes its unsent edits with it, as an
+  editor does.
+- **A task interrupted by a crash is no longer held forever after the
+  network changes.** On macOS the computer's name follows the network (a
+  router-assigned name at home, `name.local` elsewhere), and a task whose
+  process stopped under one name was treated as running on another
+  computer: it was never shown as interrupted and could not be resumed.
+  TeXRA now identifies the process itself, not the computer's name.
+- **A model request cut off by a crash counts against its retries.** When
+  the process died while a model request was running (for example, a
+  response that ran it out of memory), every reopen sent the request again
+  without asking, and with **Interrupted tasks** set to continue them all
+  it could be billed again on every start. Each such attempt now uses one
+  of the automatic retries; once they are spent, TeXRA asks before sending
+  it again, and a run with nobody to answer, such as a headless one, ends
+  there instead.
+- **A tool call that crashes TeXRA is not run on every start.** A tool call
+  that is safe to repeat (a file read, say), cut short by the process
+  stopping, was run again each time the task resumed, so a call that ran the
+  process out of memory stopped every start. After three such starts, TeXRA
+  no longer runs it and tells the model the call may be what stops the
+  process.
+- **A background subagent or script a crash cut short continues when its
+  task resumes.** A task that sent work to the background (a subagent, a
+  script, a command) and whose process then died left that work as it was:
+  the task, told the result would arrive on its own, waited for it in vain,
+  and the subagent or script was never continued. When the task resumes it
+  now resumes each such child under its own id, and the result arrives as
+  it would have; one that cannot continue (a command, a document task) is
+  reported to the task as interrupted with its outcome unknown, once. The
+  same holds for children a clean close of the app or CLI stopped: they
+  continue when their task does.
+- **Closing TeXRA during a model request no longer costs the task a
+  retry.** A request the app or CLI closing cut off was counted like one a
+  crash cut, so a task resumed after a close had one automatic retry fewer
+  for that request. The close now records that it stopped the request, and
+  the resume sends it again without spending a retry; a crash still counts.
+- **Work a crash interrupted is reported or finished.** A background
+  command that was running when the app or CLI stopped was deleted at the
+  next start, and the task that launched it, told the result would arrive
+  on its own, waited for it in vain. That task now receives a message that
+  a restart interrupted the command and its outcome is unknown. A task that
+  had not been given its title before the crash now gets one when it
+  resumes.
 - **One notice when a message cannot wake its task.** A message sent to a
   task whose agent or plugin is missing or off showed two notices, the
   second a generic "could not be resumed automatically" that suggested a
@@ -2241,6 +2363,10 @@ view` on a sub-agent the parent waited for shows its report instead of
   heading, hash marks included, as its one-line summary in the terminal's
   plan panel and in the plan notice an orchestrator receives. A heading is
   used only when the plan has no other text, without its marks.
+- **An MCP server hears when TeXRA stops waiting.** When you stopped a run
+  during an MCP tool call, or the call hit its 60-second limit, the server
+  was never told and kept working on it. TeXRA now sends the protocol's
+  cancellation notice, so the server can stop.
 
 ### Extension (VS Code)
 
@@ -2503,6 +2629,10 @@ view` on a sub-agent the parent waited for shows its report instead of
   opens where the new text differs from the old. The card's title names the
   file relative to the workspace instead of wrapping its absolute path over
   several lines.
+- **The resume command printed on Windows pastes into PowerShell** — its
+  `--cwd` and `--source` paths are quoted the way PowerShell reads them, so a
+  path holding an apostrophe pastes as written instead of with every
+  backslash doubled.
 
 ## [0.40.10] - 2026-09-06
 

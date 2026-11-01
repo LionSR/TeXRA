@@ -537,8 +537,9 @@ class ArxivSourceProcessor {
       // The tolerant listing is the facade's `readDir`: the provider typed
       // ordinary entries from the `readdir` dirent, but a *symlink* dirent
       // still ran one `stat` (`fileTypeFor` → `resolveSymlinkType`). The
-      // strict form lstats every entry, and its EACCES would abort the
-      // download -- turning "the source is already here" into a failure.
+      // strict form fails the whole listing on one unreadable entry, which
+      // would abort the download -- turning "the source is already here"
+      // into a failure.
       const entries = yield* permanentFs(
         readDirectoryTypedTolerant(paperDirFull),
       );

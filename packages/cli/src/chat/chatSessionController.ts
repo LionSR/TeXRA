@@ -14,14 +14,17 @@ import {
   Stream,
 } from 'effect';
 
-import { type RunStopReason, type Session } from '@texra-ai/harness';
+import {
+  isRequestRefusal,
+  type RunStopReason,
+  type Session,
+} from '@texra-ai/harness';
 import {
   describeFollowUpFailure,
   hasErrorPresentationClaimed,
   heldElsewhereBy,
   presentFollowUpResult,
   type PerKeyLane,
-  type PlatformSecrets,
   type ProcessRuntime,
   type ProcessServices,
   withPerKeyLane,
@@ -53,6 +56,7 @@ import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
+import { resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
@@ -78,6 +82,7 @@ import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
 import {
   appendLocalErrorTranscript,
   appendLocalNotice,
+  appendLocalRequestRefusal,
   appendLocalUserTranscript,
   clearLocalTranscript,
   moveLocalTranscriptToRun,
@@ -224,11 +229,10 @@ export interface ChatSessionControllerInit {
   readonly cwd: string;
   readonly getSlashCommandContext: () => SlashCommandContext;
   /**
-   * The process secret store and the three setting slots a retry's credential
-   * work reads, threaded from the `CliPlatformServices` the chat entry point
-   * already holds rather than looked up again here.
+   * The three setting slots a retry's credential work reads, threaded from
+   * the `CliPlatformServices` the chat entry point already holds rather than
+   * looked up again here.
    */
-  readonly secrets: PlatformSecrets;
   readonly stores: SettingsStores;
   /** The process runtime this controller runs its programs on, captured once
    *  here: the controller lives for the length of the chat session, and its
@@ -298,7 +302,6 @@ export function createChatSessionController(
     shutdownScope,
     cwd,
     getSlashCommandContext,
-    secrets,
     stores,
     runtime,
   } = init;
@@ -390,7 +393,7 @@ export function createChatSessionController(
     const runId = session.runId;
     if (!runId) return;
     if (runId !== admitted && !runViewOf(currentView(), runId)) return;
-    // Ctrl-C leaves the child policy unset, so the session's request handler
+    // Ctrl-C leaves the child policy unset, so the stop itself (`Runs.stop`)
     // applies the configured "Keep agents running".
     const reason: RunStopReason = session.leaving ? 'shutdown' : 'user';
     runtime.runFork(request({ kind: 'run.stop', runId, reason }));
@@ -436,25 +439,7 @@ export function createChatSessionController(
     presentationHost,
     sessionContext,
     {
-      requests,
-      preview: !served
-        ? undefined
-        : (runId, requestId) =>
-            requests
-              .request({ kind: 'request.preview', runId, requestId })
-              .pipe(
-                // `request.preview` answers with a preview, null included;
-                // any other outcome is a broken protocol, not a missing one.
-                Effect.flatMap((outcome) =>
-                  outcome.kind === 'preview'
-                    ? Effect.succeed(outcome.preview)
-                    : Effect.die(
-                        new Error(
-                          `request.preview answered with a ${outcome.kind} outcome`,
-                        ),
-                      ),
-                ),
-              ),
+      requests: runSession,
       settings: stores,
       runtime,
     },
@@ -604,15 +589,25 @@ export function createChatSessionController(
             appendLocalNotice(`Resuming document task ${id}. Tab lists it.`),
           );
           yield* Effect.forkDetach(
-            runSession
-              .resume(id, { interactive: true })
-              .pipe(
-                Effect.catch((refused) =>
-                  Effect.sync(() =>
-                    appendLocalErrorTranscript(toErrorMessage(refused)),
-                  ),
+            resumeRun(runSession, id).pipe(
+              Effect.map((resumed) =>
+                resumed === 'waiting'
+                  ? describeFollowUpFailure('blocked')
+                  : undefined,
+              ),
+              Effect.catch((refused) =>
+                Effect.succeed(
+                  isRequestRefusal(refused)
+                    ? requestErrorText(refused)
+                    : refused.message,
                 ),
               ),
+              Effect.flatMap((notResumed) =>
+                notResumed === undefined
+                  ? Effect.void
+                  : Effect.sync(() => appendLocalErrorTranscript(notResumed)),
+              ),
+            ),
           );
           return;
         }
@@ -653,24 +648,27 @@ export function createChatSessionController(
         yield* Effect.forkIn(
           recoverRun(
             Effect.gen(function* () {
-              const run = yield* runSession
-                .resume(id, { interactive: true })
-                .pipe(
-                  // A refusal is the resume's answer, not a failure: the chat
-                  // says it in the session's words and exits as a usage error.
-                  Effect.catchTag('ResumeRefused', (refusal) =>
-                    Effect.sync(() => {
-                      if (session.stopRequested) {
-                        session.settleExitCode(claim, CliExitCode.Interrupted);
-                      } else {
-                        appendLocalErrorTranscript(refusal.message);
-                        session.settleExitCode(claim, CliExitCode.Usage);
-                      }
-                      return undefined;
-                    }),
-                  ),
-                );
-              if (run === undefined) return;
+              // A refusal, or a run that waits for what blocks it, is the
+              // resume's answer, not a failure: the chat says it in the
+              // session's words and exits as a usage error.
+              const run = yield* resumeRun(runSession, id).pipe(
+                Effect.catchIf(isRequestRefusal, (refusal) =>
+                  Effect.succeed(refusal),
+                ),
+              );
+              if (run === 'waiting' || isRequestRefusal(run)) {
+                if (session.stopRequested) {
+                  session.settleExitCode(claim, CliExitCode.Interrupted);
+                } else {
+                  if (run === 'waiting')
+                    appendLocalErrorTranscript(
+                      describeFollowUpFailure('blocked'),
+                    );
+                  else appendLocalRequestRefusal(run);
+                  session.settleExitCode(claim, CliExitCode.Usage);
+                }
+                return;
+              }
               yield* adoptResumedRun(run.runId);
               // A root acknowledges at idle, so its result holds this chain,
               // and the root-run slot it settles, until the run ends.
@@ -815,7 +813,7 @@ export function createChatSessionController(
           const selection = yield* selectCliRunnableModel(
             [{ model: meta.model, reason: meta.modelSource }],
             {
-              stores: { ...stores, secrets, runtime },
+              stores: { ...stores, runtime },
               noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
                 CHAT_API_MODE_MODEL_RECOVERY,
               ),
@@ -913,7 +911,7 @@ export function createChatSessionController(
             runId: target,
             text: prepared.instruction,
             displayText: prepared.displayInstruction,
-            mediaFiles: mediaFiles ? [...mediaFiles] : undefined,
+            media: mediaFiles ? [...mediaFiles] : undefined,
             holdUntil,
           })
           .pipe(
@@ -922,13 +920,7 @@ export function createChatSessionController(
                 kind: 'refused' as const,
                 reason: requestErrorText(error),
               }),
-              onSuccess: (value) =>
-                value.kind === 'followUp'
-                  ? { kind: 'sent' as const, value }
-                  : {
-                      kind: 'refused' as const,
-                      reason: describeFollowUpFailure('not_resumable'),
-                    },
+              onSuccess: (value) => ({ kind: 'sent' as const, value }),
             }),
             // `match` recovers only the typed refusal; a defect is read the
             // way `SessionBridge` answers `Internal`: logged and worded.
@@ -965,11 +957,7 @@ export function createChatSessionController(
             ),
             shutdownScope,
           );
-        const presentation = presentFollowUpResult(
-          outcome.value.status === 'sent'
-            ? { status: 'sent' }
-            : { status: 'queued', wake: outcome.value.wake ?? undefined },
-        );
+        const presentation = presentFollowUpResult(outcome.value);
         if (presentation.severity !== 'none') {
           appendLocalNotice(presentation.message, target);
         }

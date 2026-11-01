@@ -3,11 +3,13 @@ import '@test/support/sessionGraphTestSetup';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
+import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
@@ -26,6 +28,7 @@ import {
  * 5. A run history row, a private record, or the session database's own tables
  *    are reachable from a query.
  * 6. A statement writes to the store or runs a second statement.
+ * 7. `runs` comes from a view that lags the rows fed into `events`.
  */
 
 const withSession = <A, E>(
@@ -92,6 +95,36 @@ describe('HistoryQuery', () => {
         const kept = yield* query(session, 'SELECT count(*) FROM events');
         expect(kept.rows).toEqual([[1]]);
       }),
+    ),
+  );
+
+  it.live('fills runs from a view that reached the rows in events', () =>
+    withSession((session) =>
+      Effect.gen(function* () {
+        yield* session.log.settled.pipe(Effect.orDie);
+        const before = SubscriptionRef.getUnsafe(session.view.ref);
+        publishTestRunStart(session);
+        yield* session.log.settled.pipe(Effect.orDie);
+        // A view whose current snapshot predates the run, and whose next
+        // one has applied it.
+        const lagging = {
+          ...session.view,
+          ref: yield* SubscriptionRef.make(before),
+          changes: Stream.make(
+            before,
+            SubscriptionRef.getUnsafe(session.view.ref),
+          ),
+        };
+        const history = yield* HistoryQuery.make(() => ({
+          log: session.log,
+          view: lagging,
+        }));
+        const page = yield* history.query(
+          'SELECT (SELECT count(DISTINCT run_id) FROM events), (SELECT count(*) FROM runs)',
+          [],
+        );
+        expect(page.rows).toEqual([[1, 1]]);
+      }).pipe(Effect.scoped, Effect.provide(nodeSpawnerLayer)),
     ),
   );
 });

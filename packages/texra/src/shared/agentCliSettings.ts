@@ -1,11 +1,11 @@
 import { Effect, Schema } from 'effect';
 import {
   MODEL_CONFIGS,
-  ModelProvider,
-  ReasoningEffort,
   type ModelConfig,
+  ModelProvider,
   type ModelRef,
-} from 'llm-zoo';
+  ReasoningEffort,
+} from '@texra-ai/llm';
 
 /**
  * Agent CLI setting value schemas shared by settings IPC and tool runtimes.

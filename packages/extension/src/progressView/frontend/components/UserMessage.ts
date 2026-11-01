@@ -41,7 +41,10 @@ import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 // Local imports - formatter helpers
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { formatDisplayTimestamp } from '../formatters/timestampUtils';
-import type { ScriptDeliverySummary } from '@texra-ai/harness/schemas';
+import type {
+  ScriptDeliverySummary,
+  StoredMediaSchema,
+} from '@texra-ai/harness/schemas';
 
 // Derived from the single owned DELIVERY_TAGS list (`@texra-ai/harness/transcript`) so
 // a new child-run kind only needs one entry there. See that module for the
@@ -51,11 +54,11 @@ const XML_ESCAPED_TAGS = new Set(
 );
 
 /** A user message's "Fork from here": the cut and the message with the
- *  files it attached, which the fork's composer holds. */
+ *  media it attached, which the fork's composer holds. */
 export interface ForkFromHere {
   readonly at: number;
   readonly draft: string;
-  readonly mediaFiles: readonly string[];
+  readonly media: readonly (typeof StoredMediaSchema.Type)[];
 }
 const FORK_FROM_HERE = 'fork-from-here';
 
@@ -175,9 +178,10 @@ export class UserMessage extends LitElement {
    *  conversation that owns the row turns the event into its run's fork. */
   @property({ attribute: false }) forkAt: number | null = null;
 
-  /** The files the message attached (`UserRow.mediaFiles`), which "Fork
-   *  from here" carries with its text. */
-  @property({ attribute: false }) mediaFiles: readonly string[] = [];
+  /** The media the message attached (`UserRow.media`), which "Fork from
+   *  here" carries with its text. */
+  @property({ attribute: false })
+  media: readonly (typeof StoredMediaSchema.Type)[] = [];
 
   private copyController = new CopyButtonController(this, {
     defaultTitle: 'Copy message',
@@ -207,7 +211,7 @@ export class UserMessage extends LitElement {
         detail: {
           at: this.forkAt,
           draft: this.text,
-          mediaFiles: this.mediaFiles,
+          media: this.media,
         },
         bubbles: true,
         composed: true,

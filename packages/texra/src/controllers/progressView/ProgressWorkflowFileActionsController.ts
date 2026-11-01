@@ -10,27 +10,24 @@ import { withLogChannel } from '@texra-ai/harness/host';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
+import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
 import { type AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
 import type { AppSignals } from '@texra-ai/harness/host';
-import type { HostRequestFailure } from '@texra-ai/harness';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { HostRunActions } from '../session/hostRunActions';
-import type { RunOutputsSource } from './runOutputs';
 
 const CHANNEL = 'ProgressWorkflowFileActions';
-
-type ProgressWorkflowFileActionsState = RunOutputsSource;
 
 /**
  * One file action. Its failure channel is the host's own vocabulary: every
  * host answers a request with a tag ({@link HostRequestFailure}), so a
  * refusal a host already worded — the desktop error notice is one — travels
- * as itself and no arm re-enters a runtime to settle this. It runs on the
+ * as itself and no case re-enters a runtime to finish this. It runs on the
  * process `FileSystem` its run-storage reads take, and an accept announces
  * its write on the process's signal hub; both hosts' request dispatchers
- * already carry them, so it is `yield*`ed there, not settled here.
+ * already carry them, so it is `yield*`ed there, not finished here.
  */
 type FileAction<A> = Effect.Effect<
   A,
@@ -48,11 +45,10 @@ interface ProgressWorkflowFileActionsHost {
   latexdiffFile(baseFile: string, editedFile: string): FileAction<void>;
   openDirectory(directory: string): FileAction<void>;
   showInfo(message: string): FileAction<void>;
-  showError(message: string): FileAction<void>;
 }
 
 interface ProgressWorkflowFileActionsControllerDeps {
-  state: ProgressWorkflowFileActionsState;
+  state: HostRunActions['runOutputs'];
   host: ProgressWorkflowFileActionsHost;
   /** Storage root of the session whose runs this controller acts on. */
   storageRoot: string;
@@ -72,9 +68,10 @@ export class ProgressWorkflowFileActionsController {
     string
   >();
 
-  constructor(
-    private readonly deps: ProgressWorkflowFileActionsControllerDeps,
-  ) {}
+  private readonly deps: ProgressWorkflowFileActionsControllerDeps;
+  constructor(deps: ProgressWorkflowFileActionsControllerDeps) {
+    this.deps = deps;
+  }
 
   /** Apply an output-file request from either GUI host. */
   handle(
@@ -112,8 +109,10 @@ export class ProgressWorkflowFileActionsController {
         Effect.logError('Failed to open run folder', error).pipe(
           withLogChannel(CHANNEL),
           Effect.andThen(
-            this.deps.host.showError(
-              `Failed to open run folder: ${toErrorMessage(error)}`,
+            Effect.fail(
+              new Rejected({
+                reason: `Failed to open run folder: ${toErrorMessage(error)}`,
+              }),
             ),
           ),
         ),

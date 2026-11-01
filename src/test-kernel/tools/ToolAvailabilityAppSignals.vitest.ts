@@ -11,22 +11,27 @@ import {
 } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import type {
-  PluginToolServices,
-  RuntimeTool,
-} from '@agent/runtime/ToolServices';
-import { AppSignals, emitAppSignal } from '@platform/appSignals';
-import type { ConfigProvider } from '@platform/interfaces';
-import { Secrets, type PlatformSecrets } from '@platform/secrets';
+import {
+  type PluginToolServices,
+  type ToolProbeInputs,
+  ToolRegistry,
+} from '@texra-ai/harness/plugins';
+import {
+  AppSignals,
+  type ConfigProvider,
+  emitAppSignal,
+  type PlatformSecrets,
+  Secrets,
+  ToolAvailability,
+  ToolCatalog,
+} from '@texra-ai/harness/host';
+import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
-import type { Plugin } from '@tools/plugins';
-import type { ToolProbeInputs } from '@tools/toolProbes';
-import { ToolCatalog } from '@tools/liveTools';
-import { ToolRegistry, toolTable } from '@tools/toolTable';
-import { ToolAvailability } from '@tools/toolAvailabilityService';
+import { toolTable } from '@tools/toolTable';
+import type { Plugin } from '@texra-ai/harness';
 
 /** The mocked tool defs read no secrets, so any call here is a test error. */
 const unreadSecret = (): never => {
@@ -46,9 +51,8 @@ const probeInputs: ToolProbeInputs = {
     get: unreadConfig,
     update: unreadConfig,
     inspect: unreadConfig,
-    catalog: TEXRA_SETTINGS,
+    catalog: TEXRA_SETTINGS.catalog,
   } satisfies ConfigProvider,
-  host: 'cli',
 };
 
 const secretsLayer = Secrets.layer({
@@ -73,16 +77,11 @@ const probeServices = Layer.mergeAll(
 /** Tools under `names`, which the availability service only lists. */
 const named = (
   ...names: string[]
-): Record<string, RuntimeTool<Error, PluginToolServices>> =>
-  Object.fromEntries(
-    names.map((name) => [
-      name,
-      {
-        definition: { name, description: name, parameters: {} },
-        call: vi.fn(),
-      },
-    ]),
-  );
+): readonly RuntimeTool<Error, PluginToolServices>[] =>
+  names.map((name) => ({
+    definition: { name, description: name, parameters: {} },
+    call: vi.fn(),
+  }));
 
 /** The process's availability service over `plugins`, as a composition root
  *  builds it. */
@@ -123,9 +122,11 @@ describe('tool availability service', () => {
             tools: named('token'),
             availability: {
               reprobeOnSecrets: ['token.key'],
-              probe: ({ workspace }: ToolProbeInputs) =>
-                Effect.sync(() => probedRoots.push(workspace)),
-              check: () => Effect.succeed(true),
+              check: ({ workspace }: ToolProbeInputs) =>
+                Effect.sync(() => {
+                  probedRoots.push(workspace);
+                  return { available: true };
+                }),
             },
           },
         ];

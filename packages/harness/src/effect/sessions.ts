@@ -13,7 +13,6 @@ import type {
   HostInteractions,
   SessionHostInteractions,
 } from '@agent/runtime/HostInteractions';
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { AgentRunListingEntry } from '@agent/storage/runListing';
 import type {
   AgentDirectoriesPort,
@@ -21,6 +20,7 @@ import type {
 } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { HostSkillOptions } from '@platform/processRuntime';
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
 import type {
   CommitOrdinal,
@@ -28,6 +28,7 @@ import type {
   SessionViewInput,
   InlinePersona,
   RequestDecision,
+  RunEnd,
   RunId,
   TranscriptSubscription,
 } from '@shared/schemas';
@@ -36,7 +37,7 @@ import type {
   SessionStoreMovedAside,
 } from '@shared/session/database';
 import type { RequestError } from '@shared/session/runtimeRequest';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { OutcomeOf, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type {
   PendingRequest,
   SessionView,
@@ -49,7 +50,6 @@ import type {
   ResumeRefused,
   RunFailure,
   ToolsRefused,
-  TraceUnavailable,
 } from './errors.js';
 import type { HeldRun, RunDeletion, RunRecords } from './sessionReads.js';
 
@@ -65,17 +65,21 @@ export interface AgentPlatform {
    *  `ToolMissingReporter`; absent, a missing-tool probe answers without
    *  surfacing. */
   readonly toolMissingHandler?: ToolMissingHandler;
+  /** The app's directories on every command's PATH (`CommandDirs`). */
+  readonly commandDirs?: () => readonly string[];
   readonly roots: WorkspaceRoots;
   /** The secret store this process's `Secrets` service reads from. */
   readonly secrets: PlatformSecrets;
 }
 
-/** What an embedder composes the process from: its platform and its
- *  plugins (the harness's built-ins among them). The setting rows its
- *  plugins read travel with the platform's config (`ConfigProvider.catalog`). */
+/** What an embedder composes the process from: its platform, its plugins
+ *  (the harness's built-ins among them) and its skill sources, without
+ *  which it discovers no skills. The setting rows its plugins read travel
+ *  with the platform's config (`ConfigProvider.catalog`). */
 export interface Composition {
   readonly platform: AgentPlatform;
   readonly plugins: readonly Plugin[];
+  readonly skills?: HostSkillOptions;
 }
 
 /**
@@ -83,8 +87,8 @@ export interface Composition {
  * approval, a denial with its reason, or for a retry, `retry` or `cancel`.
  * The session records it as the request's `request.decided`, through the
  * same `request.decide` a {@link Session.request} sends. A handler that
- * fails, throws, or has not answered within ten minutes is a denial, with
- * the cause logged.
+ * fails, throws, answers with a decision the request's kind does not take,
+ * or has not answered within ten minutes is a denial, with the cause logged.
  */
 export type ApprovalHandler = (
   request: PendingRequest,
@@ -109,7 +113,7 @@ export interface OpenOptions {
    * `interruptedTasks` handles runs that a closed or crashed process left
    * unfinished. Both values resume such a run once what it was missing (an
    * agent, a plugin) is back. `offer` also lists them when the session
-   * opens, and continues them when the `texra.resumeOnOpen` setting is
+   * opens, and continues them when the `resumeOnOpen` setting is
    * `auto`.
    */
   readonly host?: { readonly interruptedTasks?: 'offer' | 'retry' };
@@ -175,11 +179,13 @@ export interface Run {
    *  this names the child you asked for. */
   readonly redirectedFrom?: RunId;
   /**
-   * How the run ended. A failed run fails this with its own
-   * {@link RunFailure}. A finished run's result arrives once the session
-   * view shows its stored outcome, so a view read afterwards includes it.
+   * How this activation ended: the end it stored, whatever its outcome. A
+   * failed run's end carries its classified `error`, a stopped one's is
+   * `cancelled`. It fails with {@link RunFailure} only when the activation
+   * stored no end that can be read. It arrives once the session view shows
+   * that end, so a view read afterwards includes it.
    */
-  readonly result: Effect.Effect<RunEndResult, RunFailure>;
+  readonly result: Effect.Effect<RunEnd, RunFailure>;
   /**
    * The session view while this run lasts: from the first snapshot that
    * shows the run to the first that shows its stored outcome. It cannot
@@ -189,14 +195,14 @@ export interface Run {
   /**
    * What the run does as it does it: streamed text, tool calls, stages,
    * usage. Pipe it through `responseText` for just the answer's text.
-   * Ends when the run ends, and fails with {@link RunFailure} if the run
-   * failed. Read it once, from the moment `start` returns: events wait
-   * for you only briefly, and stopping early stops your reading, not the
-   * run. A reader that comes too late fails with {@link TraceUnavailable}
-   * instead of seeing nothing.
+   * Ends when the run ends, and fails as {@link result} does. Read it as
+   * often as you like and whenever you like: each read is this activation's
+   * events read back from the session, from the activation's start, and
+   * stopping early stops your reading, not the run. A stream that ended
+   * before the read reached it arrives whole, as one chunk.
    */
-  readonly events: Stream.Stream<AgentEvent, RunFailure | TraceUnavailable>;
-  /** Stop the run. */
+  readonly events: Stream.Stream<AgentEvent, RunFailure>;
+  /** Stop the run, as the user's `run.stop` does. */
   readonly interrupt: Effect.Effect<void>;
 }
 
@@ -245,13 +251,15 @@ export interface Session {
   /** Everything else you ask of the session, as one typed request
    *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
    *  approval, stop, fork or delete a run, switch its model, and so on).
-   *  Answered exactly once, with an outcome or a {@link RequestError}. */
-  readonly request: (
-    request: RuntimeRequest,
-  ) => Effect.Effect<Outcome, RequestError>;
-  /** Attach `host` until the caller's scope closes. The most recently
-   *  attached host shows notices, and its `approve` answers the runs'
-   *  approval requests. */
+   *  Answered exactly once, with the outcome its kind is answered with
+   *  (`OutcomeOf`) or a {@link RequestError}. A decision a request's kind
+   *  does not take is `Rejected`. */
+  readonly request: <R extends RuntimeRequest>(
+    request: R,
+  ) => Effect.Effect<OutcomeOf<R['kind']>, RequestError>;
+  /** Attach `host` until the caller's scope closes: it shows notices, and
+   *  its `approve` answers the runs' approval requests. A session has one
+   *  host at a time; attaching a second while one is attached is a defect. */
   readonly attach: (
     host: SessionHost,
   ) => Effect.Effect<void, never, Scope.Scope>;
@@ -309,7 +317,7 @@ export interface LocalSession extends Session {
   readonly deleteRuns: (
     target: RunId | 'all',
   ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
-  /** Show a notice through the most recently attached host. With
+  /** Show a notice through the attached host. With
    *  `replayWhenAttached`, a notice raised while no host is attached waits
    *  for the next one. */
   readonly emit: SessionHostInteractions['emit'];

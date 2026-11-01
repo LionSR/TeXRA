@@ -10,11 +10,11 @@
  * unused one is otherwise stopped after thirty minutes.
  *
  * The pool's operations are already Effect programs, so each port method is
- * the pool's program plus the interruption fold documented below; the one run
+ * the pool's program plus the interruption conversion documented below; the one run
  * of a tool-facing program sits in the calling tool's `execute()`. The pool
  * itself is a layer the process runtime builds once and closes when the
  * runtime is disposed, which is when the remaining servers stop: every host
- * disposes its runtime after run settlement, so no run is still attributed
+ * disposes its runtime after the run ends, so no run is still attributed
  * to a server by then.
  */
 
@@ -152,7 +152,7 @@ const portOverPool = (
     ),
 
   // The run-end hook: an interrupted stop is a no-op exactly as the
-  // tool-facing folds are, and any other cause reaches the lifecycle's guard.
+  // tool-facing conversions are, and any other cause reaches the lifecycle's guard.
   stopSessionsForRun: (runId) =>
     foldStopped(pool.stopSessionsForRun(runId), () => undefined),
 });
@@ -166,13 +166,13 @@ const stoppedLspResult = <T>(): LspResult<T> => ({
 });
 
 /**
- * Fold an interrupted pool operation into the value that same call gets
+ * Convert an interrupted pool operation into the value that same call gets
  * after the pool's scope has closed. Closing the scope interrupts an
  * in-flight build and, with it, the fiber awaiting it; interruption is not a
- * failure the pool can fold into its total results, so the fold happens at
+ * failure the pool can convert into its total results, so the conversion happens at
  * this port edge, keeping {@link LeanAdapterStopped} the one shape a stopped
- * adapter reports. This is the same fold the old Promise edge applied at
- * `runPromiseExit`, so a tool-call interruption is folded exactly as it was
+ * adapter reports. This is the same conversion the old Promise edge applied at
+ * `runPromiseExit`, so a tool-call interruption is converted exactly as it was
  * there.
  */
 const foldStopped = <A, E>(
