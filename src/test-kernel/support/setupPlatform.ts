@@ -91,7 +91,7 @@ const BARE_PLUGINS: readonly Plugin[] = [
   defineBuiltinPlugin({
     id: 'goal',
     toggle: 'off',
-    availability: { check: () => Effect.succeed(true) },
+    availability: { check: () => Effect.succeed({ available: true }) },
   }),
   ...ARMED_PLUGINS,
 ];
