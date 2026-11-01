@@ -92,7 +92,7 @@ export const RULES = {
   'try-catch-effect':
     '`try/catch` around Effect code: errors belong in the typed error channel.',
   'silent-degradation':
-    'Empty `catch {}`, `.catch(() => value)`, `Effect.orElseSucceed`, and `Effect.ignore` without a log: a failure turned into a quiet default.',
+    'Empty `catch {}`, `.catch(() => value)`, `Effect.orElseSucceed`, `Effect.ignore` without a log, and `Effect.catch`, `catchCause` or `catchDefect` whose handler ignores its error and answers `Effect.succeed(...)` or `Effect.void`: a failure turned into a quiet default. `catchIf` and `catchTag` name the condition they absorb.',
   'missing-readme':
     'A core directory without a README holding a purpose line and a mermaid diagram.',
   'entry-files':
@@ -262,6 +262,57 @@ function returnsQuietValue(handler) {
     ts.isNoSubstitutionTemplateLiteral(body) ||
     (ts.isArrayLiteralExpression(body) && body.elements.length === 0) ||
     (ts.isObjectLiteralExpression(body) && body.properties.length === 0)
+  );
+}
+
+const CATCH_ALLS = new Set(['catch', 'catchCause', 'catchDefect']);
+
+/** Whether `node` reads the identifier `name`: a property name of the same
+ *  spelling (`config.error`, `{ error: 1 }`) is not a read. */
+function mentions(node, name) {
+  if (ts.isIdentifier(node)) return node.text === name;
+  if (ts.isPropertyAccessExpression(node))
+    return mentions(node.expression, name);
+  if (ts.isPropertyAssignment(node)) {
+    const computed = ts.isComputedPropertyName(node.name);
+    if (computed && mentions(node.name.expression, name)) return true;
+    return mentions(node.initializer, name);
+  }
+  return (
+    ts.forEachChild(node, (child) => mentions(child, name) || undefined) ??
+    false
+  );
+}
+
+/** A catch-all whose handler never reads its error and answers
+ *  `Effect.succeed(...)` or `Effect.void`, as its body or its one `return`. */
+function dropsError(node) {
+  const call = node.parent;
+  if (!ts.isCallExpression(call) || call.expression !== node) return false;
+  const handler = call.arguments.at(-1);
+  if (
+    handler == null ||
+    !(ts.isArrowFunction(handler) || ts.isFunctionExpression(handler))
+  )
+    return false;
+  let body = handler.body;
+  if (ts.isBlock(body)) {
+    const [only, ...rest] = body.statements;
+    if (rest.length > 0 || only == null || !ts.isReturnStatement(only)) {
+      return false;
+    }
+    if (only.expression == null) return false;
+    body = only.expression;
+  }
+  while (ts.isParenthesizedExpression(body)) body = body.expression;
+  const readsError = handler.parameters.some(
+    ({ name }) => !ts.isIdentifier(name) || mentions(handler.body, name.text),
+  );
+  if (readsError) return false;
+  return (
+    body.getText() === 'Effect.void' ||
+    (ts.isCallExpression(body) &&
+      body.expression.getText() === 'Effect.succeed')
   );
 }
 
@@ -1105,6 +1156,12 @@ function measureAst(rootDir, files, byRule) {
           isQuietIgnore(node)
         ) {
           site('silent-degradation', node, `Effect.${member} without a log`);
+        } else if (CATCH_ALLS.has(member) && dropsError(node)) {
+          site(
+            'silent-degradation',
+            node,
+            `Effect.${member} dropping its error`,
+          );
         }
       }
       ts.forEachChild(node, visit);
