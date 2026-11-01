@@ -208,7 +208,8 @@ view. The paragraph above records the option, not the plan.
 
 The subpaths are: `./schemas` (a named manifest with storage and view sections,
 and no `texra.*` constant), `./plugins` (the whole authoring closure), `./node`,
-`./host` (host composition only), and `./promise`, which ships last.
+`./host` (host composition only), and `./promise`, refused for 1.0 (see
+the note below).
 
 ```ts
 import { Effect, Stream } from 'effect';
@@ -249,8 +250,8 @@ Superseded: the 2026-09-21 ruling holds (rulings ledger, "The agent SDK's
 public surface is Effect") and the 2026-10-06 decision on item 8 of the tracking issue #13723
 ("./promise ... no implementation for now") stands
 ([harness package split](../../implemented/architecture/2026-10-02-harness-package-split.md),
-"There is no Promise API"); `./promise` is not built for 1.0 and the entry
-stays in the table above as the refused option.
+"There is no Promise API"); `./promise` is not built for 1.0; the subpath list above and lane 8 of the
+lanes table below keep it as the refused option.
 
 ### Plugin contract
 
