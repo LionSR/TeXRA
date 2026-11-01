@@ -72,12 +72,12 @@ export const adapterStopped = (): LeanUnavailable =>
 
 /**
  * The session errors that mean the root's server ended under the call or its
- * connection failed: a stop or a crash, never a missing toolchain.
+ * connection closed: a stop or a crash, never a missing toolchain. A request
+ * error is the server's answer, not an end, so it is not one of them.
  */
 const SERVER_ENDED = [
   'LeanSessionDisposed',
   'LeanSessionNotRunning',
-  'JsonRpcRequestError',
   'JsonRpcConnectionDisposed',
 ] as const;
 
@@ -517,6 +517,9 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
           new LeanFileUnreadable({ message: error.message, cause: error }),
         ),
       ),
+      // Diagnostics only send notifications, so no request can be refused:
+      // a request error here is a defect, never a file's verdict.
+      Effect.catchTag('JsonRpcRequestError', (error) => Effect.die(error)),
       Effect.tapError((error) =>
         Effect.logWarning(
           `fetchDiagnosticsForFile: no diagnostics for ${file}: ${error.message}`,
@@ -538,10 +541,15 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
         Effect.catchTag('LeanStartError', (error) =>
           Effect.fail(noToolchain(error)),
         ),
-        Effect.catchTag(['LeanFileReadError', 'PlatformError'], (error) =>
-          Effect.fail(
-            new LeanFileCommandFailed({ message: error.message, cause: error }),
-          ),
+        Effect.catchTag(
+          ['LeanFileReadError', 'PlatformError', 'JsonRpcRequestError'],
+          (error) =>
+            Effect.fail(
+              new LeanFileCommandFailed({
+                message: error.message,
+                cause: error,
+              }),
+            ),
         ),
       );
     },
