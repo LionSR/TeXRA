@@ -1,5 +1,5 @@
 /**
- * The documents plugin's rows (its `arms`, `@tools/plugins`): a
+ * The documents plugin's rows (its `factKinds`, `@tools/plugins`): a
  * document task's documents are its latest `plugin.fact` of kind
  * `documents/output`, which carries every revision's outputs, and the files
  * a run last accepted into the workspace are its `documents/accepted`. Core
@@ -40,7 +40,7 @@ const DocumentsOutputSchema = Schema.Struct({
 });
 
 /** The documents plugin's one row kind. */
-export const DOCUMENTS_OUTPUT_ARM = {
+export const DOCUMENTS_OUTPUT_KIND = {
   plugin: 'documents',
   kind: 'output',
   // v2: a proposed task's fact carries its `diffs`. v3: each round holds
@@ -50,10 +50,12 @@ export const DOCUMENTS_OUTPUT_ARM = {
   version: 3,
   schema: DocumentsOutputSchema,
   upcasters: [],
+  // A document task runs a recipe script, which is never forked.
+  fork: 'drop',
 } as const;
 
 /** The key a run's documents are kept under in `RunView.facts`. */
-const DOCUMENTS_OUTPUT_KEY = `${DOCUMENTS_OUTPUT_ARM.plugin}/${DOCUMENTS_OUTPUT_ARM.kind}`;
+const DOCUMENTS_OUTPUT_KEY = `${DOCUMENTS_OUTPUT_KIND.plugin}/${DOCUMENTS_OUTPUT_KIND.kind}`;
 
 /** The fact that makes `rounds` (and, once proposed, the final `diffs`)
  *  the calling run's documents, for its call's result (`ToolResult.facts`). */
@@ -62,9 +64,9 @@ export function documentsOutputFact(
   diffs: DocumentDiffs = {},
 ): ToolFact {
   return {
-    plugin: DOCUMENTS_OUTPUT_ARM.plugin,
-    kind: DOCUMENTS_OUTPUT_ARM.kind,
-    version: DOCUMENTS_OUTPUT_ARM.version,
+    plugin: DOCUMENTS_OUTPUT_KIND.plugin,
+    kind: DOCUMENTS_OUTPUT_KIND.kind,
+    version: DOCUMENTS_OUTPUT_KIND.version,
     value: Schema.decodeUnknownSync(DocumentsOutputSchema)({
       rounds,
       ...diffs,
@@ -82,12 +84,14 @@ const DocumentsAcceptedSchema = Schema.Struct({
 /** The files a run last accepted into the workspace, past the editor's own
  *  write path: what every process that applies the run announces
  *  (`workspaceFilesWritten`). */
-export const DOCUMENTS_ACCEPTED_ARM = {
+export const DOCUMENTS_ACCEPTED_KIND = {
   plugin: 'documents',
   kind: 'accepted',
   version: 1,
   schema: DocumentsAcceptedSchema,
   upcasters: [],
+  // The source wrote those files; a fork wrote none.
+  fork: 'drop',
   writes: (value: unknown): readonly string[] =>
     Schema.decodeUnknownSync(DocumentsAcceptedSchema)(value).absolutePaths,
 } as const;
@@ -99,9 +103,9 @@ export function documentsAcceptedFact(
   acceptedAt: number,
 ): ToolFact {
   return {
-    plugin: DOCUMENTS_ACCEPTED_ARM.plugin,
-    kind: DOCUMENTS_ACCEPTED_ARM.kind,
-    version: DOCUMENTS_ACCEPTED_ARM.version,
+    plugin: DOCUMENTS_ACCEPTED_KIND.plugin,
+    kind: DOCUMENTS_ACCEPTED_KIND.kind,
+    version: DOCUMENTS_ACCEPTED_KIND.version,
     value: Schema.decodeUnknownSync(DocumentsAcceptedSchema)({
       absolutePaths: [...absolutePaths],
       acceptedAt,

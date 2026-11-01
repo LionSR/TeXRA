@@ -8,7 +8,7 @@
 // Local imports
 import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
 import { agentTool } from '@agent/runtime/delegation/AgentTool';
-import { GOAL_PLAN_ARM } from '@shared/schemas';
+import { GOAL_PLAN_KIND } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import { BashTool } from '@tools/bash';
@@ -87,7 +87,7 @@ export const memoryWorkflow: Plugin = definePlugin({
 export const goal: Plugin = definePlugin({
   id: 'goal',
   tools: [PlanTool],
-  arms: [GOAL_PLAN_ARM],
+  factKinds: [GOAL_PLAN_KIND],
   // A goal is a script whose rounds are `self()`.
   requires: ['codemode'],
   injectedWhen: { plan: true },

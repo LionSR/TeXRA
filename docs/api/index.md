@@ -37,7 +37,7 @@ Service tags hold capabilities fixed for their scope; per-run values (`runId`, a
 
 ### 4. One loop, one `script` tool, everything else a plugin
 
-Every run executes on the same loop. [`codemode`](./plugins-and-codemode#codemode-script-and-tool-discovery) provides the `script` tool—a QuickJS worker that calls the run's tools (`await tools.read_file(...)`, `await agent(...)`, `await self(...)`) with deterministic replay across crashes—and [`Plugin`](./harness/#plugin)s contribute tools, prompt sections, Effect layers, versioned durable rows (`PluginArm`), and custom YAML blocks (`AgentBlock`).
+Every run executes on the same loop. [`codemode`](./plugins-and-codemode#codemode-script-and-tool-discovery) provides the `script` tool—a QuickJS worker that calls the run's tools (`await tools.read_file(...)`, `await agent(...)`, `await self(...)`) with deterministic replay across crashes—and [`Plugin`](./harness/#plugin)s contribute tools, prompt sections, Effect layers, versioned durable rows (`FactKind`), and custom YAML blocks (`AgentBlock`).
 
 ## Handles: `Sessions`, `Session`, and `Run`
 

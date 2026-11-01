@@ -85,7 +85,7 @@ import {
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { texraPlugins } from '@texra/tools/registry';
-import { armsOf } from '@tools/plugins';
+import { factKindsOf } from '@tools/plugins';
 
 const GOLDEN = readFileSync(
   resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/golden-1.0.sql'),
@@ -218,7 +218,7 @@ describe('the golden 1.0 store', () => {
           );
         const events = yield* rowReader(
           storage,
-          armsOf(texraPlugins({ name: 'vscode' })),
+          factKindsOf(texraPlugins({ name: 'vscode' })),
           exec,
         ).read(rows, true);
         expect(events).toHaveLength(rows.length);

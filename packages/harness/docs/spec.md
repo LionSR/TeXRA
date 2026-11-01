@@ -202,7 +202,7 @@ retired; their rows fail only their own run's reads
 
 Before 1.0 a core kind changes with no upcaster. Its version is bumped when an
 older build's row would read wrong (`shared/schemas/rowVersions.ts:72-197`). A
-plugin's arm versions its own `value` and may carry upcasters for it
+plugin's fact kind versions its own `value` and may carry upcasters for it
 (`tools/plugins.ts:78`, `controllers/session/rowCodec.ts:329`). A row is then
 classified by the reader (`controllers/session/rowCodec.ts:268-334`):
 
