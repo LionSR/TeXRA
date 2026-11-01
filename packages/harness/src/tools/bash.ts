@@ -37,8 +37,8 @@ import {
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settings';
+import { generateRunId } from '@shared/schemas';
 import { executed } from '@tools/core/result';
-import { generateRunId } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 import { previewLabel, stripControlCharacters } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';

@@ -10,7 +10,7 @@ import {
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
 import type { CommitOrdinal, RunId, SessionCloseReport } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
-import { generateRunId } from '@utils/core';
+import { generateRunId } from '@shared/schemas';
 import { humanGrant } from './runApprovalQueue';
 import {
   activationIfOpened,

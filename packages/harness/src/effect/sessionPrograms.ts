@@ -34,7 +34,7 @@ import {
   InlinePersonaSchema,
   type RunId,
 } from '@shared/schemas';
-import { generateRunId } from '@utils/core';
+import { generateRunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {

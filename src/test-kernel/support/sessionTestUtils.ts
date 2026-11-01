@@ -30,13 +30,13 @@ import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
 } from '@shared/approvalPolicy';
+import { generateRunId } from '@shared/schemas';
 import {
   closeSessionOf,
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
 import { testSessionOwner } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { generateRunId } from '@utils/core';
 
 /** What a test supplies: the isolated roots are this helper's job. */
 /** An open's init; `persistent` keeps the root's own store. */

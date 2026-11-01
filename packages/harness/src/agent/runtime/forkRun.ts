@@ -27,7 +27,7 @@ import {
 import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { Rejected } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import { generateRunId } from '@utils/core';
+import { generateRunId } from '@shared/schemas';
 
 import { configRow, positionRow } from './loop/rows';
 import { addressedMessages } from './storedTurn';

@@ -32,8 +32,6 @@ export type {
 export type { RunRecord } from '@agent/core/definition/RunRecord';
 export { serializeFilteredConfig } from '@tools/executions/configView';
 export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
-// A fresh run id, for a caller that names a run before a session launches it.
-export { generateRunId } from '@utils/core';
 // The subscriptions a model call can route through, and each one's switch
 // and sign-in names.
 export {
@@ -302,6 +300,8 @@ export {
   fileLocationDisplayPath,
   FileLocationSchema,
   fileLocationShortDisplayPath,
+  // A fresh run id, for a caller that names a run before a session launches it.
+  generateRunId,
   getProposalFileGroups,
   GOAL_MAX_COST_SETTING,
   InlinePersonaSchema,
