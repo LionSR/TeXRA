@@ -376,7 +376,7 @@ const invokeOn = ({ layer, cell }: InvokerKit) =>
 
 /** A failure as the package's binding raises it: judged against its reply. */
 const judged = (error: ModelError): ModelError =>
-  judgeFailure(error, 'api-key');
+  judgeFailure(error, 'api-key', false);
 
 /**
  * What the package raises over an SDK reply: its kind, status and

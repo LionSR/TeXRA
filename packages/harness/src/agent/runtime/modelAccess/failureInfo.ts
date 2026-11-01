@@ -5,7 +5,6 @@
  * `providerErrorOf` words either; this module records that wording for the
  * run's retry request and reads the scope the gate cools.
  */
-import { StatusCodes } from 'http-status-codes';
 import { ModelError } from '@texra-ai/llm';
 
 import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
@@ -42,9 +41,7 @@ export function failureInfo(
 
 /** Which route a 429 cools: the model's, where the provider scoped it, else the wire's. */
 const modelScoped = (error: Error): boolean =>
-  error instanceof ModelError &&
-  error.status === StatusCodes.TOO_MANY_REQUESTS &&
-  error.scope === 'model';
+  error instanceof ModelError && error.scope === 'model';
 
 /**
  * The retry gate's two routes for one binding, narrowest first: `model` on

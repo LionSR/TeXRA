@@ -18,7 +18,7 @@ import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';
  * the run records it: the package owns every verdict on a provider's reply.
  */
 const judged = (cause: unknown) =>
-  failureInfo(judgeFailure(openaiFailure(cause), 'api-key'), 'openai');
+  failureInfo(judgeFailure(openaiFailure(cause), 'api-key', false), 'openai');
 
 describe('context-window overflow', () => {
   it("is the verdict on OpenAI's native error code even when the message wording is unfamiliar", () => {
