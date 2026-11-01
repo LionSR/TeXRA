@@ -4,6 +4,9 @@
  * details of `vscode-languageserver-protocol`.
  */
 
+// Third-party imports
+import { Schema } from 'effect';
+
 // Local imports - utils
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
 
@@ -179,28 +182,53 @@ export interface LeanDiagnostic extends GenericDiagnostic {
 }
 
 /**
- * Result of {@link LeanLanguageServices.fetchDiagnosticsForFile}. A
- * discriminated result so callers can tell a genuinely missing/unopenable file
- * apart from a broken or absent Lean toolchain (no `lake`/`lean`, or the file
- * is not inside a Lake project) — the two failure modes the old
- * `LeanDiagnostic[] | null` contract conflated, which forced every failure to
- * read as "could not open file".
+ * A file's diagnostics, the answer of
+ * {@link LeanLanguageServices.fetchDiagnosticsForFile}. A file that could not
+ * be opened and a Lean that could not serve it are that call's failures, not
+ * values here.
  */
-export type FetchDiagnosticsResult =
-  | {
-      readonly ok: true;
-      readonly diagnostics: LeanDiagnostic[];
-      /**
-       * False when Lean had not reported the file elaborated by the end of
-       * the wait: `diagnostics` are the ones so far, not the file's verdict.
-       */
-      readonly complete: boolean;
-    }
-  | {
-      readonly ok: false;
-      readonly kind: 'file_missing' | 'toolchain_unavailable';
-      readonly message: string;
-    };
+export interface FetchDiagnosticsResult {
+  readonly diagnostics: LeanDiagnostic[];
+  /**
+   * False when Lean had not reported the file elaborated by the end of the
+   * wait: `diagnostics` are the ones so far, not the file's verdict.
+   */
+  readonly complete: boolean;
+}
+
+/**
+ * Lean cannot serve the call: no Lake project above the file (`no-project`),
+ * no usable toolchain (no `lake`/`lean` to start a server, no Lean 4
+ * extension: `toolchain`, the one reason the tool answers with setup
+ * guidance), or the adapter or its server stopped under the call (`stopped`,
+ * a crash included).
+ */
+export class LeanUnavailable extends Schema.TaggedError<LeanUnavailable>()(
+  'LeanUnavailable',
+  {
+    reason: Schema.Literals(['no-project', 'toolchain', 'stopped']),
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+/** The file to diagnose could not be read or opened. */
+export class LeanFileUnreadable extends Schema.TaggedError<LeanFileUnreadable>()(
+  'LeanFileUnreadable',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+/** A `lean_file` command ran into a failure of its own, reported by `message`. */
+export class LeanFileCommandFailed extends Schema.TaggedError<LeanFileCommandFailed>()(
+  'LeanFileCommandFailed',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 // Helpers
 

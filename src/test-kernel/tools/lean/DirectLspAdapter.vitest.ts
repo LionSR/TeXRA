@@ -248,9 +248,10 @@ describe('LeanServerPool', () => {
         expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
         yield* dispose;
-        expect(yield* Fiber.join(pending)).toMatchObject({
-          ok: false,
-          kind: 'toolchain_unavailable',
+        // A server stopped under the call is a stop, not a missing toolchain.
+        expect(yield* Effect.flip(Fiber.join(pending))).toMatchObject({
+          _tag: 'LeanUnavailable',
+          reason: 'stopped',
         });
         expect(activeServerRoots(pool)).toEqual([]);
       }),
