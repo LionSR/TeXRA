@@ -298,9 +298,9 @@ agents unless the files exist on disk.
   empty path (`packages/harness/src/agent/index/agentYamlScanner.ts:71`), so
   `builtIn: () => Effect.succeed('')` skips the packaged resources tree and
   points `custom()` at your own YAML directory.
-- **Choosing where custom agents live.** The CLI builds its port with
-  `new AgentDirectoryService({ channel: 'cli', resourcesPath, state })`
-  (`packages/cli/src/runtime/cliProcessRuntime.ts:235-239`,
+- **Choosing where custom agents live.** TeXRA's hosts build their port with
+  `new AgentDirectoryService({ channel: 'AgentLoad', resourcesPath, state, teamMembers })`
+  (`packages/texra/src/controllers/texraProcessLayer.ts`,
   `packages/harness/src/agent/index/AgentDirectoryService.ts`). An embedder can
   supply a literal implementation instead:
 
@@ -479,10 +479,10 @@ following classification makes that distinction.
 ### Runtime bootstrap and shipped-feature parity
 
 - **`:297-306` — `installCliProcessRuntime(...)`:** Required. The one process
-  runtime, a `ManagedRuntime` over `processLayer`
-  (`packages/cli/src/runtime/cliProcessRuntime.ts:242-246`), which also
-  builds the agent-directories port (`:230-241`) and passes the runtime
-  skill sources. The `lean4` plugin's direct Lean language-server pool
+  runtime, a `ManagedRuntime` over `texraProcessLayer`
+  (`packages/texra/src/controllers/texraProcessLayer.ts`), which builds the
+  agent-directories port, passes the runtime skill sources and seeds the
+  first-install tool switches. The `lean4` plugin's direct Lean language-server pool
   (`packages/texra/src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; a composition may
   leave the plugin out. The `memory` and `plan` injections are manifest data
   (`packages/harness/src/tools/plugins.ts`).
