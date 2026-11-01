@@ -65,10 +65,13 @@ const PLUGIN_SERVICES: readonly {
     users:
       /^packages\/texra\/src\/(?:tools\/github\/|controllers\/settingsView\/githubSubscriptions\.ts$)/,
   },
-  { tag: 'CodexThreads', users: /^packages\/texra\/src\/tools\/codex\.ts$/ },
+  {
+    tag: 'CodexThreads',
+    users: /^packages\/texra\/src\/tools\/agentCli\/codex\.ts$/,
+  },
   {
     tag: 'ClaudeAgentSessions',
-    users: /^packages\/texra\/src\/tools\/claudeAgent\.ts$/,
+    users: /^packages\/texra\/src\/tools\/agentCli\/claudeAgent\.ts$/,
   },
   // The Lean 4 plugin's port: its tools and probe, and the VS Code host's
   // bridge, which that host passes as the plugin's layer.
@@ -89,9 +92,9 @@ const PLUGIN_SERVICES: readonly {
 ];
 /** Where the services are declared, typed and built. */
 const SERVICE_HOMES = new Set([
-  'packages/texra/src/tools/agentCliSessionStores.ts',
-  'packages/texra/src/tools/claudeAgentPlugin.ts',
-  'packages/texra/src/tools/codexPlugin.ts',
+  'packages/texra/src/tools/agentCli/agentCliSessionStores.ts',
+  'packages/texra/src/tools/agentCli/claudeAgentPlugin.ts',
+  'packages/texra/src/tools/agentCli/codexPlugin.ts',
   'packages/texra/src/tools/registry.ts',
 ]);
 

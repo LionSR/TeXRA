@@ -47,7 +47,7 @@ import {
   ClaudeAgentPermissionModeSchema,
 } from '@texra/shared/agentCliSettings';
 import type { ClaudeAgentPermissionMode } from '@texra/shared/agentCliSettings';
-import { buildAgentWorkspaceOptions } from '@texra/tools/agentWorkspaceOptions';
+import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspaceOptions';
 
 // Local file imports
 import { ClaudeBackgroundTaskTracker } from './claudeAgentBackgroundTasks';

@@ -26,14 +26,16 @@ const mocks = vi.hoisted(() => ({
   findClaudeBinaryPath: vi.fn(),
 }));
 
-vi.mock('@texra/tools/claudeAgentConfig', () => ({
+vi.mock('@texra/tools/agentCli/claudeAgentConfig', () => ({
   buildClaudeAgentEnv: mocks.buildClaudeAgentEnv,
 }));
 
-vi.mock('@texra/tools/claudeAgentImport', async (importActual) => {
+vi.mock('@texra/tools/agentCli/claudeAgentImport', async (importActual) => {
   const { Effect } = await import('effect');
   return {
-    ...(await importActual<typeof import('@texra/tools/claudeAgentImport')>()),
+    ...(await importActual<
+      typeof import('@texra/tools/agentCli/claudeAgentImport')
+    >()),
     importClaudeAgentSdk: () => Effect.succeed(mocks.query),
     findClaudeBinaryPath: mocks.findClaudeBinaryPath,
   };
@@ -53,9 +55,9 @@ import {
 } from '@test/support/storeFaults';
 import { noPluginHold } from '@test/support/testPluginServices';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@texra/tools/agentCliSessionStores';
-import { AgentCliSessionRegistry } from '@texra/tools/agentCliSessionRegistry';
-import { ClaudeAgentTool } from '@texra/tools/claudeAgent';
+import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@texra/tools/agentCli/agentCliSessionStores';
+import { AgentCliSessionRegistry } from '@texra/tools/agentCli/agentCliSessionRegistry';
+import { ClaudeAgentTool } from '@texra/tools/agentCli/claudeAgent';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 interface Parent {

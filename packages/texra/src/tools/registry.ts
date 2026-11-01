@@ -37,8 +37,8 @@ import { isTexFile } from '@texra/shared/latexFileTypes';
 // Local file imports
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { arxiv } from './arxiv/plugin';
-import { claudeAgent } from './claudeAgentPlugin';
-import { codex } from './codexPlugin';
+import { claudeAgent } from './agentCli/claudeAgentPlugin';
+import { codex } from './agentCli/codexPlugin';
 import {
   InlineComments,
   InlineCommentTool,

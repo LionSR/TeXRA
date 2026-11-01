@@ -159,7 +159,7 @@ export const SPINNER_ICON_NAME = '__spinner__';
  * one `kind: 'status'` tool section, which the codex-turn, codex-patch and MCP
  * rows all converge on. It therefore has to recognize both producer
  * vocabularies: the Codex turn state's `'running'` (`CodexTurnState` in
- * `packages/texra/src/tools/codexShared.ts`) and
+ * `packages/texra/src/tools/agentCli/codexShared.ts`) and
  * `McpToolOutputSchema.status`'s `'in_progress'`.
  */
 export function triStateStatusIcon(
