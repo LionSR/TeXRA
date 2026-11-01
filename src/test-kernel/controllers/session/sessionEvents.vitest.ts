@@ -417,6 +417,23 @@ describe('session events and view', () => {
       }).pipe(Effect.provide(graph([runStart]))),
   );
 
+  it.effect('hears a claim that writes no row: a release, then a take', () =>
+    Effect.gen(function* () {
+      // The view checks existence only of aggregates that changed since its
+      // last read. A claim moves without a row (an ownerless run taken by
+      // whoever resumes it), so no row of the batch names it.
+      const db = yield* Database;
+      const view = yield* SessionViewService;
+      const id = qualifyAggregateId('run', RUN);
+      const owner = (v: SessionView) => v.runs.get(RUN)?.ownerId;
+      yield* settle(view.ref, (v) => owner(v) === SELF);
+      yield* db.releaseClaims([id]);
+      yield* settle(view.ref, (v) => owner(v) === null);
+      yield* db.acquireClaims([id]);
+      yield* settle(view.ref, (v) => owner(v) === SELF);
+    }).pipe(Effect.provide(graph([runStart]))),
+  );
+
   it.effect('publishes complete replay and finite live batches in order', () =>
     Effect.gen(function* () {
       const events = yield* SessionEvents;

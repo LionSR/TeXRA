@@ -105,10 +105,25 @@ const TABLES = [
 /**
  * What any build adds without a bump (`CREATE … IF NOT EXISTS` at every
  * open): the projection tables, which carry their own versions in
- * `projection_state` (`projections.ts`), and the indexes, each serving one
- * lookup the reads make, named for the columns it keys.
+ * `projection_state` (`projections.ts`), the indexes, each serving one
+ * lookup the reads make, named for the columns it keys, and the change
+ * record: each aggregate's last insert, claim, release, close or collection
+ * (a claim and a collection leave no row of their own) under an ordinal
+ * AUTOINCREMENT never reuses, kept by triggers for every writer.
  */
 const ADDITIVE = [
+  `CREATE TABLE IF NOT EXISTS aggregate_change (change INTEGER PRIMARY KEY
+    AUTOINCREMENT, kind TEXT NOT NULL, logical_id TEXT NOT NULL,
+    UNIQUE (kind, logical_id)) STRICT`,
+  ...[
+    ['inserted', 'INSERT', 'NEW'],
+    ['claimed', 'UPDATE OF owner_id, closed_by', 'NEW'],
+    ['collected', 'DELETE', 'OLD'],
+  ].map(
+    ([name, on, row]) => `CREATE TRIGGER IF NOT EXISTS aggregate_${name}
+    AFTER ${on} ON event_sequence BEGIN INSERT OR REPLACE INTO aggregate_change
+    (kind, logical_id) VALUES (${row}.kind, ${row}.logical_id); END`,
+  ),
   `CREATE TABLE IF NOT EXISTS projection_state (
     name           TEXT PRIMARY KEY,
     version        INTEGER NOT NULL,
