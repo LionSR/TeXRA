@@ -13,7 +13,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { AgentPlatform } from '@texra-ai/harness';
+import type { AgentPlatform, ExportNode } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { Client, type Dispatcher, EnvHttpProxyAgent } from 'undici';
 
@@ -226,15 +226,20 @@ export async function makeExampleWorkspace(
   };
 }
 
-/** What the last `script` call of a stored conversation returned, parsed
- *  from its result text (`records(runId).readConversation()`). */
-export function scriptReturnOf(
-  conversation: readonly { readonly kind: string; readonly text?: string }[],
-): unknown {
-  const prefix = 'The script returned:\n';
-  const text = conversation.findLast(
-    (node) => node.kind === 'tool-result' && node.text?.startsWith(prefix),
-  )?.text;
-  if (text === undefined) throw new Error('No script result is stored.');
-  return JSON.parse(text.slice(prefix.length));
+/** What each `script` call of a stored conversation returned, in order:
+ *  the structured `value` its result node carries
+ *  (`records(runId).readConversation()`); a call node is followed by its
+ *  result node. */
+export function scriptReturnsOf(
+  conversation: readonly ExportNode[],
+): unknown[] {
+  return conversation.flatMap((node, index) => {
+    const call = conversation[index - 1];
+    return node.kind === 'tool-result' &&
+      call?.kind === 'tool-call' &&
+      call.name === 'script' &&
+      node.value !== undefined
+      ? [node.value]
+      : [];
+  });
 }

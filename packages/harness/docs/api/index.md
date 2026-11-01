@@ -215,6 +215,12 @@ function defineTool<T, R = never, const Name extends string = string>(
 type DisplaySessionEvent = typeof DisplaySessionEventSchema.Type;
 ```
 
+## ExportNode
+
+```ts
+type ExportNode = typeof ExportNodeSchema.Type;
+```
+
 ## HeldRun
 
 What this process holds of one run ({@link LocalSession.held}): a launch

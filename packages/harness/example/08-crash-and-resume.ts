@@ -27,7 +27,7 @@ import { RunIdSchema } from '@texra-ai/harness/schemas';
 
 import {
   makeExampleWorkspace,
-  scriptReturnOf,
+  scriptReturnsOf,
   type ScriptedTurn,
 } from './_support.ts';
 
@@ -39,11 +39,7 @@ const holdTool = defineTool({
   name: 'hold',
   description: 'Wait for the reviewer.',
   replay: 'safe',
-  // `Schema.Struct({})` converts to `{ not: { type: 'null' } }`, which the
-  // Anthropic binding refuses as a tool's parameters: give it one field.
-  schema: Schema.Struct({
-    note: Schema.optional(Schema.NullOr(Schema.String)),
-  }),
+  schema: Schema.Struct({}),
   execute: () =>
     crashing ? Effect.never : Effect.succeed(executed('released', 'released')),
 });
@@ -172,12 +168,8 @@ const resumeProgram = Effect.gen(function* () {
     (run) => run.parentId === runId,
   );
   const conversation = yield* session.records(runId).readConversation();
-  const results = conversation.filter(
-    (node) =>
-      node.kind === 'tool-result' &&
-      node.text.startsWith('The script returned:'),
-  );
-  const returned = scriptReturnOf(conversation) as {
+  const results = scriptReturnsOf(conversation);
+  const returned = results.at(-1) as {
     verdicts: string[];
     firstRun: string;
   };
