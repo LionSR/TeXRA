@@ -90,7 +90,7 @@ export function createSessionApprovals(
   const view = () => SubscriptionRef.getUnsafe(session.view.ref);
   // One lane per kind and run, which the run's prompts take in turn;
   // `withPerKeyLane` drops a lane from its map once its last prompt settles.
-  const lanes: Record<QueuedKind, Map<RunId | undefined, PerKeyLane>> = {
+  const lanes: Record<QueuedKind, Map<RunId, PerKeyLane>> = {
     bash: new Map(),
     toolEdit: new Map(),
   };
@@ -109,7 +109,7 @@ export function createSessionApprovals(
       ),
     enqueue: (kind, runId, approval) =>
       Effect.suspend(() =>
-        runId !== undefined && bypass(runId, kind) !== null
+        approval.grant !== null && bypass(runId, approval.grant) !== null
           ? approval.bypassed
           : approval.prompt,
       ).pipe(withPerKeyLane(lanes[kind], runId)),

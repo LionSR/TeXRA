@@ -121,8 +121,6 @@
       "type runtime/SessionHandle#SessionHandle"
     ],
     "agent->tools": [
-      "approval/bashApproval#buildBashApprovalRejectedResult",
-      "approval/bashApproval#requestBashApproval",
       "catalogEntries#sentDefinitions",
       "catalogEntries#toolDefinitionsFor",
       "catalogEntries#toolDigests",

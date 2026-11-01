@@ -111,8 +111,8 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       // whichever roots the answering fiber happens to carry.
       relativePath: workspaceRelativePath(call.env.roots.workspace, path),
       sourceTool,
-      allowBypass:
-        hook !== 'ask' && session.approvals.bypass(runId, 'toolEdit') === null,
+      // The policy asked, so the edit grant is off.
+      allowBypass: hook !== 'ask',
       runId,
       addedLines: lines.added,
       removedLines: lines.removed,
@@ -146,8 +146,9 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     // An edit grant turned on while it waited answers it, unless a hook
     // asked.
     return yield* session.approvals.enqueue('toolEdit', runId, {
+      grant: hook === 'ask' ? null : 'toolEdit',
       prompt: review,
-      bypassed: hook === 'ask' ? review : Effect.suspend(acceptProposedAsIs),
+      bypassed: Effect.suspend(acceptProposedAsIs),
     });
   },
 );

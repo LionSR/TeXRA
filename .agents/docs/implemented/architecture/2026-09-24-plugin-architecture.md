@@ -165,7 +165,7 @@ validate is skipped and the resolving run's transcript says why.
   `effect/process` (`packages/harness/src/tools/mcp/mcpServer.ts`).
 - Every MCP call goes through the one approval authority: the loop's guard
   (`guardedToolCall`, `packages/harness/src/agent/runtime/loop/toolGuard.ts`)
-  routes it to `requestBashApproval`. MCP tools are never parallel-safe, and
+  routes it to `askCommandApproval`. MCP tools are never parallel-safe, and
   are replay-safe only when the server marks them read-only or idempotent.
 - A server that fails to start yields no tools and a transcript warning; the
   run still opens.

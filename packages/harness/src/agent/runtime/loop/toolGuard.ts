@@ -49,14 +49,11 @@ import type {
 } from '@shared/session/sessionApprovals';
 import type { LogWriteError } from '@shared/session/sessionLog';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
-import {
-  buildBashApprovalRejectedResult,
-  requestBashApproval,
-} from '@tools/approval/bashApproval';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { recordedDecision } from '../requestPolicy';
 import { RunCall, requireToolRun } from '../RunCall';
+import { askCommandApproval, commandRejectedResult } from './commandApproval';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { SessionHandle } from '../SessionHandle';
 import type { PluginToolServices } from '../ToolServices';
@@ -227,20 +224,20 @@ const rejection = Effect.fn('toolUse.guard')(function* (
       : undefined;
 
   const operation = guard?.command?.grant ?? 'call';
-  const { run } = yield* requireToolRun('A call the loop asks about');
+  const { run, requests } = yield* requireToolRun('A call the loop asks about');
   const answer = run.session.approvals.permission(run.runId, operation, hook);
   if (answer === 'allow') return undefined;
   const decision =
     answer === 'ask'
-      ? yield* requestBashApproval({
+      ? yield* askCommandApproval(run, requests, {
           command,
           cwd,
-          grant: hook === 'ask' ? null : operation,
+          grant: hook === 'ask' ? null : OPERATIONS[operation][0],
         })
       : answer;
   return decision.action === 'approve'
     ? undefined
-    : buildBashApprovalRejectedResult(command, decision);
+    : commandRejectedResult(command, decision);
 });
 
 /** One call through the chain, over the `issued` input and its recorded

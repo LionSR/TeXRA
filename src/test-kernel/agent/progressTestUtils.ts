@@ -1,6 +1,7 @@
-import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import { Effect, Fiber, Schema, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
+import { defineTool } from '@texra-ai/harness';
 import {
   type BashPermission,
   type DisplaySessionEvent,
@@ -234,6 +235,18 @@ export const sessionWithInteractions = Effect.fn('sessionWithInteractions')(
     return session;
   },
 );
+
+/** A tool whose calls the run's command grant answers, as the shell's do;
+ *  its body only reports that it ran. */
+export const commandTool = defineTool({
+  name: 'command',
+  description: 'Run a command.',
+  schema: Schema.Struct({ command: Schema.String }),
+  guard: {
+    command: { text: ({ command }) => Effect.succeed(command), grant: 'bash' },
+  },
+  execute: ({ command }) => Effect.succeed(`ran ${command}`),
+});
 
 /** The bash permission payload a `request.opened` carries. */
 export function bashApprovalRequest(request: {
