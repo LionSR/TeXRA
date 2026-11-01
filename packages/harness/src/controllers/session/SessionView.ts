@@ -29,7 +29,6 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type { SessionViewAccess } from '@agent/runtime/SessionHandle';
 import {
   qualifyAggregateId,
   type LocalRuntimeState,
@@ -40,6 +39,7 @@ import type { SessionView as ReadonlySessionView } from '@shared/session/readonl
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { SessionView } from '@shared/session/sessionView';
+import type { SessionViewAccessShape } from '@shared/session/sessionViewAccess';
 import { LocalRuntimeSource, TranscriptSubscriptions } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
@@ -186,7 +186,7 @@ export const makeSessionViewAccess = Effect.fn(
   storage: string,
   closed: () => boolean,
 ): Effect.fn.Return<
-  SessionViewAccess,
+  SessionViewAccessShape,
   DatabaseReadFailed,
   | Scope.Scope
   | SessionViewService

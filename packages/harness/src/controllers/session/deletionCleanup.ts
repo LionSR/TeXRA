@@ -16,7 +16,6 @@ import {
   type Scope,
 } from 'effect';
 
-import type { SessionLog } from '@agent/runtime/SessionHandle';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
 import { withSessionFs } from '@platform/rootedFs';
@@ -30,6 +29,7 @@ import type {
   RunFilesResult,
   RuntimeRequest,
 } from '@shared/session/runtimeRequest';
+import type { SessionLogShape } from '@shared/session/sessionLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { copyOrRemoveRunDir } from '@utils/files/runStorageFs';
@@ -160,7 +160,7 @@ export type RunFilesServices = FileSystem.FileSystem | Path.Path;
 export const runFiles = (
   session: {
     readonly roots: WorkspaceRoots;
-    readonly log: Pick<SessionLog, 'hold'>;
+    readonly log: Pick<SessionLogShape, 'hold'>;
   },
   runs: {
     readonly withInactiveRunStep: <A, E, R>(

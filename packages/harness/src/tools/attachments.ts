@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 import { imageSize } from 'image-size';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 
@@ -9,7 +9,7 @@ import {
   resolveToolPath,
   type ToolPathResolution,
 } from '@tools/pathResolution';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
 
@@ -38,15 +38,24 @@ export const ATTACHMENT_MAX_BYTES = 15 * 1024 * 1024;
  */
 const MANY_IMAGE_MAX_DIMENSION = 2000;
 
+/** Bytes image-size cannot read: an unrecognized format or truncated data. */
+class UnreadableImage extends Schema.TaggedError<UnreadableImage>()(
+  'UnreadableImage',
+  {},
+) {}
+
 /** Returns true if buffer is an image exceeding the many-image dimension limit. */
 function isOversizedImage(buffer: Buffer | Uint8Array): Effect.Effect<boolean> {
-  return Effect.try({ try: () => imageSize(buffer), catch: ensureError }).pipe(
+  return Effect.try({
+    try: () => imageSize(buffer),
+    catch: () => new UnreadableImage(),
+  }).pipe(
     Effect.map(
       ({ width, height }) =>
         width > MANY_IMAGE_MAX_DIMENSION || height > MANY_IMAGE_MAX_DIMENSION,
     ),
-    // Unrecognized or truncated image data — nothing to measure.
-    Effect.catch(() => Effect.succeed(false)),
+    // Bytes with no dimensions are not oversized.
+    Effect.catchTag('UnreadableImage', () => Effect.succeed(false)),
   );
 }
 

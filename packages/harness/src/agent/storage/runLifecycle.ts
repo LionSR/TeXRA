@@ -7,10 +7,7 @@ import stableStringify from 'safe-stable-stringify';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import type { TransactionPart } from '@agent/runtime/childTurnResult';
-import type {
-  SessionHandle,
-  SessionTransaction,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { consumedRows, haltedPositionRow } from '@agent/runtime/loop/rows';
 import {
   RUN_OUTCOME,
@@ -35,6 +32,7 @@ import type {
   RunInputDraft,
   RunState,
 } from '@shared/session/runState';
+import type { SessionTransaction } from '@shared/session/sessionLog';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   getRunRecords,

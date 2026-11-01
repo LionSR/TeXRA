@@ -20,7 +20,6 @@
 import { Cause, Effect, type Layer, Result, Schema } from 'effect';
 
 // Local imports
-import type { SessionLog } from '@agent/runtime/SessionHandle';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { withLogChannel } from '@logger/effectLog';
@@ -40,6 +39,7 @@ import { recordOf } from '@shared/session/runRowReads';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { decodeDisabledTools, GlobalStateKey } from '@shared/state/stateKeys';
+import type { SessionLogShape } from '@shared/session/sessionLog';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
   AgentBlock,
@@ -322,7 +322,7 @@ export function factRows(
   facts: readonly ToolFact[],
   runId: RunId,
   plugin: Plugin | undefined,
-  log: Pick<SessionLog, 'runRows'>,
+  log: Pick<SessionLogShape, 'runRows'>,
 ): {
   readonly run: readonly RunHistoryDraft[];
   readonly alongside: Alongside<DatabaseWriteFailed>;

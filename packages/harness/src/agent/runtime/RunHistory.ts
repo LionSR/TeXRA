@@ -39,9 +39,9 @@ import type {
   RunHistoryRow,
 } from '@shared/session/historyTurns';
 import type { Alongside, Append } from '@shared/session/sessionEvents';
+import type { SessionLogShape } from '@shared/session/sessionLog';
 import { runHistoryRows, storedDraft, unpreparedHistory } from './storedTurn';
 import type { ModelOrigin } from '@texra-ai/llm';
-import type { SessionLog } from './SessionHandle';
 
 const isResponse = (row: RunHistoryDraft): boolean =>
   row.type === 'model.message' && row.payload.kind === 'response';
@@ -232,7 +232,7 @@ const none: Effect.Effect<readonly SessionEventDraft[]> = Effect.succeed([]);
 /** One checked batch, committed in the job `within` names or in the
  *  session's own (`sessionLog`). */
 const commit = Effect.fn('RunCell.commit')(function* <E>(
-  sessionLog: Pick<SessionLog, 'transact'>,
+  sessionLog: Pick<SessionLogShape, 'transact'>,
   run: RunId,
   state: RunState,
   rows: readonly RunHistoryDraft[],
@@ -309,7 +309,7 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
  * transaction that activates it.
  */
 export function makeRunHistory(
-  sessionLog: Pick<SessionLog, 'transact' | 'history'>,
+  sessionLog: Pick<SessionLogShape, 'transact' | 'history'>,
 ): RunHistory['Service'] {
   const stored = (run: RunId) =>
     sessionLog.history(qualifyAggregateId('run', run));
