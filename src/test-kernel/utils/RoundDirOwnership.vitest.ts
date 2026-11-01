@@ -11,12 +11,12 @@ import {
   resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { createWorkspaceLocation } from '@texra-ai/harness/host';
+import { runDirUnder } from '@common/storage/storageLayout';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { runDirUnder } from '@utils/files/runStorageFs';
 
 const tempDirs = useTempDirs();
 

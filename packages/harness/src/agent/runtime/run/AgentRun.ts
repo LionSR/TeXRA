@@ -24,6 +24,7 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
+import { RunFileService } from '@common/storage/runStorage';
 import type { Secrets } from '@platform/secrets';
 import type { Persona } from '@shared/schemas';
 import type {
@@ -41,7 +42,6 @@ import {
 } from '@shared/schemas';
 import type { ClaimError } from '@shared/session/sessionLog';
 import { buildTerminalTool } from '@tools/structuredOutput';
-import { RunFileService } from '@utils/files/runStorage';
 import type { ModelConfig } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 

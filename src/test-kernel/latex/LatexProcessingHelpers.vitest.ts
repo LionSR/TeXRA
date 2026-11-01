@@ -14,6 +14,7 @@ import {
   createWorkspaceLocation,
   sessionFsLayer,
 } from '@texra-ai/harness/host';
+import { runDirUnder } from '@common/storage/storageLayout';
 import { LatexMediaManager, type LatexTrace } from '@latex/LatexMediaManager';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -21,7 +22,6 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
-import { runDirUnder } from '@utils/files/runStorageFs';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 const logger: LatexTrace = spiedTrace();

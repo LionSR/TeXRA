@@ -1,22 +1,6 @@
 {
   "semantics": "Names the packages/harness/src directories import across an edge that does not point strictly down the layer order in packages/harness/AGENTS.md \"Layer order\" (HARNESS_LAYERS in src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts): an upward edge, an edge within one layer, or either half of a two-way directory pair. Keys are from->to directories (`entries` is the package entry files at the root); each name is module#name under the target directory, prefixed `type ` when every use across the edge is type-only (`*` is a namespace, side-effect, dynamic or export-star import). Downward edges are not listed. The ratchet fails on a new name, on a type name that gains a value use, and on a listed name that is gone or now only a type until the file is shrunk with `npx vitest run src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts -u`.",
   "names": {
-    "platform->utils": [
-      "core/idHash#truncatedHexId",
-      "core/perKeyQueue#withPerKeyLane",
-      "errors/errorMessage#ensureError",
-      "errors/errorMessage#toErrorMessage",
-      "files/fsDurability#nodeFileServices",
-      "files/fsDurability#writeFileAtomic",
-      "files/fsEntryExists#absentReason",
-      "files/fsEntryExists#fileWatchRetrySchedule",
-      "files/rootedFileSystem#rootedFileSystem",
-      "system/nodeWorkspace#ProjectEnvironment",
-      "system/nodeWorkspace#canonicalizeWorkspacePath",
-      "type core/perKeyQueue#PerKeyLane",
-      "type core/perKeyQueue#PerKeyLanes",
-      "type files/rootedFileSystem#RootedFileSystem"
-    ],
     "shared->utils": [
       "core#getBasename",
       "core#normalizeFilePath",
@@ -149,35 +133,12 @@
       "type toolTable#PromptSection",
       "type toolTable#RecipeChange"
     ],
-    "common->utils": [
-      "core/idHash#sha256Hex",
-      "core/pathCore#isPathWithin",
-      "errors/errorMessage#causeChain",
-      "errors/errorMessage#ensureError",
-      "errors/errorMessage#extractErrorMessage",
-      "errors/errorMessage#toErrorMessage",
-      "files/fsEntryExists#absentReason",
-      "files/fsEntryExists#pathExists",
-      "system/gitEnv#makeMachineGitEnv",
-      "system/platformPaths#CommandDirs",
-      "system/platformPaths#whichOnExtendedPath"
-    ],
     "utils->shared": [
       "config/settings#Settings",
-      "schemas#RunIdSchema",
       "state/stateKeys#WorkspaceStateKey",
       "type config/settings#SettingsStores",
       "type schemas#ExecResult",
-      "type schemas#ExternalFileLocation",
-      "type schemas#FileLocation",
-      "type schemas#RunId",
-      "type schemas#RunStorageFileLocation",
-      "type schemas#WorkspaceFileLocation"
-    ],
-    "utils->common": [
-      "errors/errorPredicates#isNotADirectoryError",
-      "storage/storageLayout#WORKSPACE_STORAGE_LAYOUT"
-    ],
-    "utils->platform": ["rootedFs#StorageFs", "rootedFs#WorkspaceFs"]
+      "type schemas#RunId"
+    ]
   }
 }

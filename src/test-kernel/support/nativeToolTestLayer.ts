@@ -1,6 +1,7 @@
 /** Explicit call capabilities over the test host's existing process services. */
 import { Effect, Layer, Schema, Scope, SynchronizedRef } from 'effect';
 
+import { RunFileService } from '@texra-ai/harness/plugins';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
   ToolContext,
@@ -31,7 +32,6 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { testCallPluginServices } from '@test/support/testPluginServices';
-import { RunFileService } from '@utils/files/runStorage';
 
 /** The run a test call is made under: what every fixture names, plus whatever
  *  else of the run the case under test actually reads. */

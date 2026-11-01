@@ -2,6 +2,8 @@ import { Effect, type FileSystem } from 'effect';
 
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { RunFileService } from '@common/storage/runStorage';
+import { runStorageLocationUnder } from '@common/storage/storageLayout';
 import {
   RUN_OUTCOME,
   type RunId,
@@ -9,8 +11,6 @@ import {
 } from '@shared/schemas';
 import type { ToolRegistry } from '@tools/toolTable';
 import { normalizeFilePath } from '@utils/core';
-import { RunFileService } from '@utils/files/runStorage';
-import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 
 import { getRunRecords } from './runRecords';
 

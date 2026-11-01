@@ -11,10 +11,10 @@ import {
 } from '@texra-ai/harness/schemas';
 import { resolveWorkflowOutput } from '@cli/runtime/workflowOutput';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { runDirUnder } from '@common/storage/storageLayout';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { runDirUnder } from '@utils/files/runStorageFs';
 
 type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];
 

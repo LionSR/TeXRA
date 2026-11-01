@@ -28,6 +28,7 @@ import {
 } from '@agent/core/tools/ToolTypes';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { AgentTrace, StageHandle } from '@agent/trace';
+import type { RunFileService } from '@common/storage/runStorage';
 import {
   ToolError,
   type PluginRequest,
@@ -38,7 +39,6 @@ import {
 import type { RunFacts } from '@shared/session/runFacts';
 import type { CellError } from '@shared/session/runHistory';
 import { errorResult } from '@tools/core/result';
-import type { RunFileService } from '@utils/files/runStorage';
 
 import type { InvokeError } from './ModelInvoker';
 import type { PluginToolServices } from './ToolServices';

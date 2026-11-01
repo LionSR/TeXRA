@@ -185,7 +185,7 @@ export {
   createRunStorageLocation,
   createWorkspaceLocation,
   pathToLocationIn,
-} from '@utils/files/fileLocation';
+} from '@common/storage/fileLocation';
 // The user's MCP servers: their config file, and a namespaced tool's server.
 export { readMcpConfig } from '@tools/mcp/mcpConfig';
 export { mcpConfigPathOf } from '@common/plugins/mcpServers';
@@ -234,9 +234,9 @@ export type { AgentErrorKind } from '@common/errors/agentErrorClassification';
 export { causeChain } from '@utils/errors/errorMessage';
 export {
   isModuleNotFoundError,
-  isNotADirectoryError,
   isUserAbort,
 } from '@common/errors/errorPredicates';
+export { isNotADirectoryError } from '@utils/files/fsEntryExists';
 export { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 // Platform path containment, segments, POSIX form, case-free extension check.
 export {
