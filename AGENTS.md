@@ -130,7 +130,9 @@ llm import no host layer. ESLint also fails:
 - any `@adapter-until` marker: there are no temporary adapters.
 
 The ratchets in `config/ratchets/` freeze the remaining edges. **Never widen a
-baseline**; a decrease is always welcome. `harness-deep-import-baseline` admits
+baseline**; a decrease is always welcome. The core-quality counts have no
+baseline file: `npm run check:core-quality` measures them against the merge
+base (`packages/harness/AGENTS.md` "Core quality"). `harness-deep-import-baseline` admits
 no new harness-internal specifier (`@agent/*`, `@shared/*`, `@platform/*`, …)
 from the app or a host, type-only included. `row-readers-baseline.json` lists,
 per session row type, the files that read it outside its reducers;

@@ -1,6 +1,6 @@
 # `@texra-ai/harness/transcript` API report
 
-Generated from `packages/harness/src/transcriptEntry.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
+Generated from `packages/harness/src/transcriptEntry.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
 Exports: 86
 
