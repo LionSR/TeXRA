@@ -5,11 +5,11 @@ status: proposed
 
 # The tool layer: one catalog, one step pin, one tool contract
 
-Measured 2026-11-01 at `origin/main` `143735cd8d`. Paths are relative to
+Measured 2026-11-01 at `origin/main` `1bdc883c0f`. Paths are relative to
 `packages/harness/src` unless they start with `packages/`, `src/` or
 `config/`; line counts are `.ts` files, tests excluded; a consumer count is
-the number of files that name the identifier (word match) under
-`packages/*/src` and `src/test-kernel`. This note is the general-package
+the number of `.ts` and `.tsx` files that name the identifier (word match)
+under `packages/*/src` and `src/test-kernel`. This note is the general-package
 design's lane 4b
 ([harness general-package design](./2026-10-21-harness-general-package-design.md),
 "Plugin contract" and "Lane 4b therefore starts with the fence itself") and
@@ -40,7 +40,7 @@ cast as `definePlugin`), two public names for one services union
 engine's (`sessionOf`). The second call contract, `RunCall`, is not
 duplication: eight of the fourteen built-in tools are engine code that reads
 the session, the runs, the open step or the script door through it, and the
-app's tools read none of it (0 of 98 files under `packages/texra/src/tools`
+app's tools read none of it (0 of 97 files under `packages/texra/src/tools`
 import a harness internal).
 
 The recommended design (B in section 4) deletes the pass-through contracts,
@@ -97,9 +97,9 @@ script door hand-off at `agent/runtime/loop/toolUseDispatch.ts:1072`; 4 lines). 
 
 | Layer                                                          | Module                                                                  | Lines | Exported names                                                                                                                                                                                                                          | Consumers                                                                                                                                                                                                                                                                                                                                       |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ToolRegistry`: the process's plugin table, static             | `tools/toolTable.ts:262`                                                | 264   | 13: `toolTable`, `ToolTable`, `ToolRegistry`, `PluginHold`, `AgentBlock`, `AgentBlockResult`, `agentBlockOf`, `RecipeChange`, `PromptSection`, `RequestDecisionHook`, `PluginLayerServices`, `ProcessPluginLayer`, `SessionPluginLayer` | named in 20 harness files, 2 app files and 1 host file; read at 9 sites: `agentToolResolution.ts:121`, `AgentLaunchContext.ts:138`, `agent/runtime/loop/toolUseDispatch.ts:544`, `recipeResult.ts:41`, `agent/index/agentYamlScanner.ts:86`, `tools/toolAvailability.ts:142`, `controllers/session/sessionLayer.ts:156`, `Database.ts:257,1045` |
+| `ToolRegistry`: the process's plugin table, static             | `tools/toolTable.ts:262`                                                | 264   | 13: `toolTable`, `ToolTable`, `ToolRegistry`, `PluginHold`, `AgentBlock`, `AgentBlockResult`, `agentBlockOf`, `RecipeChange`, `PromptSection`, `RequestDecisionHook`, `PluginLayerServices`, `ProcessPluginLayer`, `SessionPluginLayer` | named in 20 harness files, 2 app files and 1 host file; read at 9 sites: `agentToolResolution.ts:121`, `AgentLaunchContext.ts:138`, `agent/runtime/loop/toolUseDispatch.ts:544`, `recipeResult.ts:41`, `agent/index/agentYamlScanner.ts:86`, `tools/toolAvailability.ts:144`, `controllers/session/sessionLayer.ts:156`, `Database.ts:257,1045` |
 | `ToolCatalog` and `ToolCatalogOwner`: switches, process layers | `tools/liveTools.ts:89,101`, layer `:119`                               | 236   | 4: `ToolCatalog`, `ToolCatalogShape`, `ToolCatalogOwner`, `toolCatalogLayer`                                                                                                                                                            | `ToolCatalog` in 14 harness files, 3 app controllers and `packages/cli/src/runtime/tools.ts:18` (the host door: `processServices`, `setEnabled`, `disabled`); `ToolCatalogOwner` in `liveTools.ts`, `sessionLayer.ts:175,631` and one test support file                                                                                         |
-| `SessionTools`: one project's session layers and MCP servers   | `tools/sessionTools.ts:66`, `pinStep` `:174`, `sessionTools` `:266`     | 309   | 7: `ToolStep`, `SessionTools`, `ProcessCatalog`, `buildPluginLayer`, `follow`, `NONE`, `sessionTools`                                                                                                                                   | `SessionTools` 4 files; `ToolStep` 2 (`agent/runtime/loop/step.ts`, `requestPolicy.ts:211`); `ProcessCatalog` 2 (`liveTools.ts:181`, `sessionTools.ts`)                                                                                                                                                                                         |
+| `SessionTools`: one project's session layers and MCP servers   | `tools/sessionTools.ts:66`, `pinStep` `:174`, `sessionTools` `:266`     | 309   | 7: `ToolStep`, `SessionTools`, `ProcessCatalog`, `buildPluginLayer`, `follow`, `NONE`, `sessionTools`                                                                                                                                   | `SessionTools` 4 files; `ToolStep` 2 (`tools/sessionTools.ts:43,74,179`, `agent/runtime/requestPolicy.ts:57,211`); `ProcessCatalog` 2 (`liveTools.ts:181`, `sessionTools.ts`)                                                                                                                                                                   |
 | `StepTools` and `OpenStep`: the step's pin                     | `agent/runtime/loop/step.ts:74,90`, `openStep` `:184`, `stepFor` `:421` | 479   | 5: `StepTools`, `OpenStep`, `stepFor`, `offeredBy`, `resolveActivations`                                                                                                                                                                | `StepTools` in `agent/runtime/loop/toolUseDispatch.ts:127,1031`, `agent/runtime/loop/hooks.ts:395`, `agent/runtime/delegation/delegationAvailability.ts:57`; `run.steps` read at `ModelInvoker.ts:349`, `agent/runtime/loop/rows.ts:168`, `agent/runtime/loop/hooks.ts:280`                                                                     |
 | `RuntimeToolRegistry`: the type of the pin's map               | `agent/runtime/ToolServices.ts:170`                                     | 170   | 9 in the file: `RunServices`, `CallServices`, `ChildRunsShape`, `ChildRuns`, `childRuns`, `PluginToolServices`, `ToolServices`, `RuntimeTool`, `RuntimeToolRegistry`                                                                    | the alias: `agentToolResolution.ts:335` (`ResolvedTools.registry`), `agent/runtime/run/tools.ts:65,134`; `RuntimeTool`: 9 harness files, 4 tests                                                                                                                                                                                                |
 
@@ -241,12 +241,15 @@ answer); `defineTool.call`.
   the `continuation` row of the plugin-architecture note
   ([plugin architecture](../../implemented/architecture/2026-09-24-plugin-architecture.md),
   the `Plugin` field table and the `goal` bullet): `Plugin` has no such field
-  (`tools/plugins.ts:102-146`), and no `Continuation` or `RunPark` exists in
-  the harness. Both lines are stale.
+  (`tools/plugins.ts:102-146`), and `RunPark` is named nowhere in the harness.
+  The one `Continuation` in the harness is the llm package's type for a
+  chained model turn, imported at `shared/session/runState.ts:14` and held on
+  the run state at `:115`; it is not a parked-run plugin feature. Both lines
+  are stale.
 - "`toolUseHelpers.ts` is deleted": already done (no such file; the lane 4
   re-check records the move into `TraceEmitter.openToolCard`).
 - "The same fence on `packages/texra/src/tools` drives that count to zero":
-  already zero. 0 of the 98 files there import a harness internal; 77 import
+  already zero. 0 of the 97 files there import a harness internal; 77 import
   `@texra-ai/harness` entries. The deep-import baseline holds it
   (`hosts.texra: []`).
 - "Deletes `ToolServices.ts` (129)": the file is 170 lines, 100 of them the
@@ -265,10 +268,10 @@ answer); `defineTool.call`.
   entry today, and import cycles are a zero rule
   (`scripts/core-quality-measure.mjs:83-84`, `scripts/ratchet-zero-rules.mjs:15`).
   The built-in list would need its own entry.
-- "`./host` is host composition only": 50 of the 98 app tool files import
-  `@texra-ai/harness/host` (60 import statements), for `withLogChannel`,
+- "`./host` is host composition only": 52 of the 97 app tool files import
+  `@texra-ai/harness/host` (62 import statements), for `withLogChannel`,
   `Settings`, `withPerKeyLane`, `WorkspaceFs` and path helpers. The authoring
-  closure spans `./plugins` (81 statements), `./host` (60), `./schemas` (49),
+  closure spans `./plugins` (81 statements), `./host` (62), `./schemas` (49),
   the root (38), `./transcript` (20) and `./node` (15). A fence "to public
   entries" must count all six.
 
@@ -415,7 +418,7 @@ moved tool as consumer).
 Net: about +70 lines (13 export statements, the ESLint block, the entry file,
 the layer row); 0 lines vanish. It is not net-negative because it publishes
 surface and moves code; what it buys is the proof that five of fourteen
-built-ins can be written on the public surface, which the app's 98 tool files
+built-ins can be written on the public surface, which the app's 97 tool files
 already prove for the app. Recommended: not now (decision 4).
 
 Order: lane 1 alone, or lane 1 then lane 2.
@@ -503,8 +506,22 @@ Refused by this note, with the evidence:
 
 ## Verified
 
-- Measured at `143735cd8d` (`origin/main`, 2026-11-01) in a clean worktree;
-  no build, typecheck or test was run, since this note changes no code.
+- Measured at `1bdc883c0f` (`origin/main`, 2026-11-01) with `git grep`,
+  `git ls-tree` and `git show` against that revision, after a first pass at
+  `143735cd8d` on a clean worktree of it; no build, typecheck or test was
+  run, since this note changes no code. Across `143735cd8d..1bdc883c0f`
+  (#14501, #14498, #14502, #14500, #14499) every harness module, ratchet,
+  API report, controller and test file this note cites is byte-identical
+  except two: `tools/toolAvailability.ts` gained two comment lines above its
+  `ToolRegistry` read (now `:144`), and one regex line of
+  `pluginBoundaryRatchet.vitest.ts` changed (no cited anchor moved). So no
+  design number moved; the app-side counts did: `packages/texra/src/tools`
+  98 to 97 `.ts` files (#14501 deleted `pluginAvailability.ts`), its
+  `./host` importers 50 to 52 files and 60 to 62 statements, its six-entry
+  total 263 to 265 statements, and `ToolRegistry`'s two app readers are
+  `packages/texra/src/controllers/session/openGuiWindow.ts` and
+  `packages/texra/src/controllers/settingsView/ToolDashboardData.ts` (#14501
+  made the first name it; #14499 deleted `hostBootstrap.ts`, which did).
 - Line counts: `wc -l` on every file named above (`toolTable.ts` 264,
   `liveTools.ts` 236, `sessionTools.ts` 309, `step.ts` 479,
   `ToolServices.ts` 170, `agentToolResolution.ts` 376, `catalogEntries.ts`
@@ -512,9 +529,10 @@ Refused by this note, with the evidence:
   `toolUseDispatch.ts` 1,098, `toolGuard.ts` 383, `AgentTool.ts` 594,
   `ExecutionsTool.ts` 784, `bash.ts` 542, `agent/memory` 219, `tools/`
   6,766 flat and 5,708 in subdirectories, `agent/runtime/delegation/` 2,894).
-- Consumer counts: `grep -rlw <name>` over `packages/{harness,texra,cli,desktop,extension,llm}/src`
-  and `src/test-kernel` for each of 73 identifiers, split by `src/test-kernel`
-  prefix; the per-field readers of `RunCallShape` by `grep -rn` over
+- Consumer counts: `git grep -l -w <name> <rev>` over the `.ts` and `.tsx`
+  files of `packages/{harness,texra,cli,desktop,extension,llm}/src` and
+  `src/test-kernel` for each identifier named here, split by package (a
+  prose mention in a README is not counted); the per-field readers of `RunCallShape` by `grep -rn` over
   `tools/`, `agent/runtime/delegation/` and the loop for `requireToolRun`, `yield* RunCall`,
   `.scriptCalls`, `.responseId`, `.attempt`, `.logId`, `.instruction`,
   `.hook`, `.script`, `.facts` and `.run.{session,steps,callbacks}`;
@@ -525,10 +543,11 @@ Refused by this note, with the evidence:
   `export { ... } from` or `export * from` statement in `src/{index,plugins,schemas,node,transcriptEntry}.ts`
   covers; the 16 names of the five app-shaped tools were then checked by name
   against all six entry files (`grep -lw`), which found 3 on `host.ts`.
-  The app's imports: `grep -rhoE "from '@texra-ai/harness(/[a-z]+)?'"` over
-  `packages/texra/src/tools` (263 statements across the six entries), and
-  `grep -rl "from '@(agent|tools|platform|shared|common|utils|controllers|skills|model|logger|transcript)/"`
-  (0 files).
+  The app's imports: `git grep -h -o -E "from '@texra-ai/harness(/[a-z]+)?'"`
+  over `packages/texra/src/tools` (265 statements across the six entries),
+  and `git grep -l -E "from '@(agent|tools|platform|shared|common|utils|controllers|skills|model|logger|transcript)/"`
+  (0 files); the file count is `git ls-tree -r <rev> --name-only` filtered
+  to `.ts` (97, and 97 files of any kind).
 - Ratchets and reports read from disk: `config/ratchets/harness-deep-import-baseline.json`
   (`hosts.texra: []`), `harness-layer-names-baseline.json` (`tools->agent` 86
   names, `agent->tools` 27), `core-quality/{undocumented-exports,pass-through,shallow-modules,file-size,max-lines-per-function,complexity}.json`,
