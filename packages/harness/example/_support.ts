@@ -26,6 +26,9 @@ export interface ScriptedToolCall {
 export interface ScriptedTurn {
   readonly text?: string;
   readonly toolCalls?: readonly ScriptedToolCall[];
+  /** Text the request answered by this turn must contain: a request out of
+   *  the planned order is refused with a 400, which no retry resends. */
+  readonly expect?: string;
 }
 
 function formatAnthropicSse(step: ScriptedTurn, turnIndex: number): string {
@@ -135,6 +138,8 @@ let activeClient: Dispatcher | undefined;
 
 export async function makeExampleWorkspace(
   turns: readonly ScriptedTurn[] = [],
+  /** An existing workspace to reuse, as a second process does. */
+  existing?: string,
 ): Promise<{
   readonly workspace: string;
   readonly agentsDir: string;
@@ -179,6 +184,19 @@ export async function makeExampleWorkspace(
       return;
     }
 
+    if (step.expect !== undefined && !rawBody.includes(step.expect)) {
+      const message = `Scripted turn ${turnIndex + 1} expected a request containing ${JSON.stringify(step.expect)}.`;
+      console.error(message);
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          type: 'error',
+          error: { type: 'invalid_request_error', message },
+        }),
+      );
+      return;
+    }
+
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     res.end(formatAnthropicSse(step, turnIndex));
   });
@@ -191,7 +209,8 @@ export async function makeExampleWorkspace(
   activeOrigin = `http://127.0.0.1:${port}`;
   activeClient = new Client(activeOrigin);
 
-  const workspace = await mkdtemp(join(tmpdir(), 'texra-harness-example-'));
+  const workspace =
+    existing ?? (await mkdtemp(join(tmpdir(), 'texra-harness-example-')));
   const agentsDir = join(workspace, 'agents');
   await mkdir(agentsDir, { recursive: true });
   const platform = nodePlatform({
@@ -205,4 +224,17 @@ export async function makeExampleWorkspace(
     requests,
     platform,
   };
+}
+
+/** What the last `script` call of a stored conversation returned, parsed
+ *  from its result text (`records(runId).readConversation()`). */
+export function scriptReturnOf(
+  conversation: readonly { readonly kind: string; readonly text?: string }[],
+): unknown {
+  const prefix = 'The script returned:\n';
+  const text = conversation.findLast(
+    (node) => node.kind === 'tool-result' && node.text?.startsWith(prefix),
+  )?.text;
+  if (text === undefined) throw new Error('No script result is stored.');
+  return JSON.parse(text.slice(prefix.length));
 }
