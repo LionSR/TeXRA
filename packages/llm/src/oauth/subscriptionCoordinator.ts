@@ -137,7 +137,7 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
       readonly registering: boolean;
       readonly params: Readonly<Record<string, string>>;
     },
-    SecretsFailed
+    SecretsFailed | SubscriptionOAuthError
   >;
   /**
    * Check a code grant before its session is stored, and record what the

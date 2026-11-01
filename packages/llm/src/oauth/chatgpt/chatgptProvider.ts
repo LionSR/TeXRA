@@ -180,7 +180,10 @@ const RegistrationSchema = Schema.fromJsonString(
   }),
 );
 
-/** The stored registration; an unreadable one is logged and registered anew. */
+/**
+ * The stored registration. An unreadable one fails the sign-in that found it
+ * and is removed, so the user, told why, registers again on the next one.
+ */
 const storedRegistration = Effect.fn('chatgpt.storedRegistration')(function* (
   secrets: CredentialStore,
 ) {
@@ -188,10 +191,11 @@ const storedRegistration = Effect.fn('chatgpt.storedRegistration')(function* (
   if (!raw) return undefined;
   const parsed = Schema.decodeUnknownResult(RegistrationSchema)(raw);
   if (Result.isSuccess(parsed)) return parsed.success;
-  yield* Effect.logWarning(
-    `The stored ChatGPT client registration is unreadable; this sign-in registers a new client: ${toErrorMessage(parsed.failure)}`,
-  );
-  return undefined;
+  yield* secrets.delete(CHATGPT_REGISTRATION_SECRET_KEY);
+  return yield* new SubscriptionOAuthError({
+    message: `TeXRA's ChatGPT client registration on this machine was unreadable and has been removed (${toErrorMessage(parsed.failure)}). Sign in again to register this machine with ChatGPT.`,
+    kind: 'config',
+  });
 });
 
 /**
