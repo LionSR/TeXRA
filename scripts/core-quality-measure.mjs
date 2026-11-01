@@ -273,7 +273,11 @@ function mentions(node, name) {
   if (ts.isIdentifier(node)) return node.text === name;
   if (ts.isPropertyAccessExpression(node))
     return mentions(node.expression, name);
-  if (ts.isPropertyAssignment(node)) return mentions(node.initializer, name);
+  if (ts.isPropertyAssignment(node)) {
+    const computed = ts.isComputedPropertyName(node.name);
+    if (computed && mentions(node.name.expression, name)) return true;
+    return mentions(node.initializer, name);
+  }
   return (
     ts.forEachChild(node, (child) => mentions(child, name) || undefined) ??
     false
