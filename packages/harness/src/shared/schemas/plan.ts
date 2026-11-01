@@ -15,20 +15,22 @@ export const PlanSchema = Schema.Struct({
 export type Plan = typeof PlanSchema.Type;
 
 /** The goal plugin's row kind: the run's approved plan, a fact of the
- *  `plan` call the user approved. */
-export const GOAL_PLAN_ARM = Object.freeze({
+ *  `plan` call the user approved. A fork starts with the plan its source
+ *  held at the cut. */
+export const GOAL_PLAN_KIND = Object.freeze({
   plugin: 'goal',
   kind: 'plan',
   version: 1,
   schema: PlanSchema,
   upcasters: Object.freeze([]),
+  fork: 'copy',
 } as const);
 
 /** The plan the user last approved in `run` (its `RunView.facts`), if any. */
 export function planOf(run: {
   readonly facts: Readonly<Record<string, unknown>>;
 }): Plan | null {
-  const value = run.facts[`${GOAL_PLAN_ARM.plugin}/${GOAL_PLAN_ARM.kind}`];
+  const value = run.facts[`${GOAL_PLAN_KIND.plugin}/${GOAL_PLAN_KIND.kind}`];
   return value === undefined
     ? null
     : Schema.decodeUnknownSync(PlanSchema)(value);

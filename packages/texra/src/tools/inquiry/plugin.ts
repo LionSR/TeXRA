@@ -5,7 +5,7 @@ import { Effect, Schema } from 'effect';
 
 // Local imports
 import { ALWAYS_AVAILABLE } from '@texra-ai/harness/plugins';
-import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
+import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 import {
   INQUIRY_REQUEST,
   InquiryRequestSchema,
@@ -18,7 +18,7 @@ import { inquiryRecordsLayer } from './inquiryRecords';
 export const externalInquiry: TexraPlugin = {
   id: INQUIRY_REQUEST.plugin,
   tools: [ExternalInquiryTool],
-  arms: APP_PLUGIN_ARMS['external-inquiry'],
+  factKinds: APP_FACT_KINDS['external-inquiry'],
   toggle: 'off',
   availability: ALWAYS_AVAILABLE,
   // The answer is recorded on the thread and delivered to the run that

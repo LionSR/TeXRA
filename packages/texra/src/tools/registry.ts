@@ -31,7 +31,7 @@ import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool'
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
-import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
+import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 import { isTexFile } from '@texra/shared/latexFileTypes';
 
 // Local file imports
@@ -315,7 +315,7 @@ const documents: TexraPlugin = {
     DocumentReviewTool,
     DocumentProposeTool,
   ],
-  arms: APP_PLUGIN_ARMS.documents,
+  factKinds: APP_FACT_KINDS.documents,
 };
 
 /** TeXRA's plugins, in dashboard order. */

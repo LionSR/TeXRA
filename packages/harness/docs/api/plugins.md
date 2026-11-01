@@ -30,7 +30,7 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`ALWAYS_AVAILABLE`](#always_available), [`PromptSection`](#promptsection),
   [`ProcessPluginLayer`](#processpluginlayer),
   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
-  [`RequestDecisionHook`](#requestdecisionhook), [`PluginArm`](#pluginarm),
+  [`RequestDecisionHook`](#requestdecisionhook), [`FactKind`](#factkind),
   and [`AgentBlock`](#agentblock) ([`agentBlockOf`](#agentblockof)).
 
 ## AGENT_TOOL_NAME
@@ -609,6 +609,48 @@ function executed(
 ): Extract<ToolResult, { status: 'executed' }>
 ```
 
+## FactKind
+
+One row kind a plugin owns (`plugin.fact`): the version it writes, the
+schema of that version's value, and adjacent upcasters from
+`version - upcasters.length` to `version`, oldest first.
+The store checks every row of the kind against its fact kind, and keeps a row
+whose fact kind the process's plugins lack (its plugin removed, or not listed
+here) without reading it. Fact kinds live beside their readers, in modules
+webviews can import.
+
+```ts
+interface FactKind {
+  /** The plugin's id: a fact kind is its own plugin's, never another's. */
+  readonly plugin: string;
+  readonly kind: string;
+  readonly version: number;
+  readonly schema: Schema.Codec<unknown, unknown>;
+  readonly upcasters: readonly ((value: JsonValue) => JsonValue)[];
+  /** What a fork of a run (a conversation's, or a script's `self()` child)
+   *  starts with of the run's own row of the kind: `copy` the row the run
+   *  held at the cut, `drop` none. A row about the plugin's own aggregate
+   *  belongs to that aggregate and stays with it. */
+  readonly fork: 'copy' | 'drop';
+  /** The kind's own transition rule, checked by the store in the writing
+   *  transaction against the aggregate's latest row of the kind (none
+   *  before the first): the rejection's reason, or null to accept. */
+  readonly accepts?: (
+    previous: PluginRow | undefined,
+    next: PluginRow,
+  ) => string | null;
+  /** Whether the aggregate's `latest` row already says more than `next`
+   *  (a call's fact that lagged behind a later writer): the call's batch
+   *  then leaves `next` out instead of failing on `accepts`. */
+  readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean;
+  /** The workspace files a row of the kind says its run wrote past the
+   *  editor's own write path: every process that folds the run announces
+   *  them (`workspaceFilesWritten`), a window hearing a service task's
+   *  write as it hears its own. */
+  readonly writes?: (value: JsonValue) => readonly string[];
+}
+```
+
 ## fileList
 
 A list of file paths, empty when the call names none.
@@ -1026,43 +1068,6 @@ function parseWorkingDirectory(
 ): Result.Result<string | undefined, ToolError>
 ```
 
-## PluginArm
-
-One row kind a plugin owns (`plugin.fact`): the version it writes, the
-schema of that version's value, and adjacent upcasters from
-`version - upcasters.length` to `version`, oldest first.
-The store checks every row of the kind against its arm, and keeps a row
-whose arm the process's plugins lack (its plugin removed, or not listed
-here) without reading it. Arms live beside their readers, in modules
-webviews can import.
-
-```ts
-interface PluginArm {
-  /** The plugin's id: an arm is its own plugin's, never another's. */
-  readonly plugin: string;
-  readonly kind: string;
-  readonly version: number;
-  readonly schema: Schema.Codec<unknown, unknown>;
-  readonly upcasters: readonly ((value: JsonValue) => JsonValue)[];
-  /** The kind's own transition rule, checked by the store in the writing
-   *  transaction against the aggregate's latest row of the kind (none
-   *  before the first): the refusal's reason, or null to admit. */
-  readonly admits?: (
-    previous: PluginRow | undefined,
-    next: PluginRow,
-  ) => string | null;
-  /** Whether the aggregate's `latest` row already says more than `next`
-   *  (a call's fact that lagged behind a later writer): the call's batch
-   *  then leaves `next` out instead of failing on `admits`. */
-  readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean;
-  /** The workspace files a row of the kind says its run wrote past the
-   *  editor's own write path: every process that folds the run announces
-   *  them (`workspaceFilesWritten`), a window hearing a service task's
-   *  write as it hears its own. */
-  readonly writes?: (value: JsonValue) => readonly string[];
-}
-```
-
 ## PluginDefinition
 
 A plugin as its author writes it: its tools, layers and probe may
@@ -1120,7 +1125,7 @@ type PluginLayerServices =
 
 ## PluginRow
 
-One stored row of a plugin's kind, as its arm's transition rule reads
+One stored row of a plugin's kind, as its fact kind's transition rule reads
 it: the row's decoded value and the run it is parented to, if any.
 
 ```ts

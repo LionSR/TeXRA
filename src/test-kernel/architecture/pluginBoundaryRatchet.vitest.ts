@@ -16,7 +16,7 @@ import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import { texraPlugins } from '@texra/tools/registry';
-import { armsOf } from '@tools/plugins';
+import { factKindsOf } from '@tools/plugins';
 import {
   ALL_HOST_PRODUCTION_ROOTS,
   collectModuleSpecifiers,
@@ -30,16 +30,16 @@ import type { ITool, Plugin, ToolResult } from '@texra-ai/harness';
 
 /**
  * Invariants 1 and 6 of the core concepts, for what a plugin brings: its
- * own row kinds (`Plugin.arms`) and its services (a `Plugin`'s
+ * own row kinds (`Plugin.factKinds`) and its services (a `Plugin`'s
  * `processLayer` and `sessionLayer`). Failure modes guarded:
  *
- * - core (the harness's `shared/`, `agent/`) imports a plugin's arm, so a plugin's
- *   row kind is hard-coded in core again and a new stateful plugin edits
+ * - core (the harness's `shared/`, `agent/`) imports a plugin's fact kind,
+ *   so a plugin's row kind is hard-coded in core again and a new stateful plugin edits
  *   core;
- * - a plugin row is drafted anywhere but its plugin's arm module or the
+ * - a plugin row is drafted anywhere but its plugin's fact kind module or the
  *   dispatch that commits a call's facts with its result, or a
  *   plugin reaches the store's append port, so a second append path or a
- *   row no arm checks appears;
+ *   row no fact kind checks appears;
  * - a plugin's service is reached outside its own plugin's code, which the
  *   step serves it to, and the one host door (the settings Git tab reading
  *   the GitHub plugin's process services through `ToolCatalog`), so plugin
@@ -47,7 +47,7 @@ import type { ITool, Plugin, ToolResult } from '@texra-ai/harness';
  *   plugin with its services erased (`PluginContext` in `processRuntime.ts`),
  *   so no `ProcessServices` arm names one.
  */
-/** The app's plugin arms (the harness's built-ins own none). */
+/** The app's plugin fact kinds (the harness's built-ins own none). */
 const PLUGIN_ARM_MODULES =
   /^packages\/(?:harness|texra)\/src\/shared\/plugins\//;
 const PLUGIN_ARM_IMPORT = /^@(?:texra\/)?shared\/plugins\//;
@@ -106,7 +106,7 @@ const specifiers = (file: string) =>
   collectModuleSpecifiers(parseSourceFile(resolve(REPO_ROOT, file)));
 
 describe('plugin boundaries (invariants 1 and 6)', () => {
-  it('keeps plugin arms out of core', () => {
+  it('keeps plugin fact kinds out of core', () => {
     const offenders = files()
       .filter((file) => CORE.test(file) && !PLUGIN_ARM_MODULES.test(file))
       .filter((file) =>
@@ -115,7 +115,7 @@ describe('plugin boundaries (invariants 1 and 6)', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('drafts plugin rows only in arm modules, which reach no append port', () => {
+  it('drafts plugin rows only in fact kind modules, which reach no append port', () => {
     const drafts = files()
       .filter((file) => !PLUGIN_ARM_MODULES.test(file))
       .filter((file) => PLUGIN_ROW.test(source(file)));
@@ -246,9 +246,10 @@ describe('plugin rosters', () => {
   });
 
   it('pins the row kinds plugins write', () => {
-    // `armsOf` refuses an arm of another plugin's id, or a kind twice.
+    // `factKindsOf` refuses a fact kind of another plugin's id, or one
+    // kind twice.
     expect(
-      Object.keys(armsOf(texraPlugins({ name: 'vscode' }))).toSorted(),
+      Object.keys(factKindsOf(texraPlugins({ name: 'vscode' }))).toSorted(),
     ).toEqual([
       'documents/accepted',
       'documents/output',

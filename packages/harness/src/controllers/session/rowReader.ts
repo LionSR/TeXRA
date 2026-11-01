@@ -27,7 +27,7 @@ import {
   type DatabaseRowCorrupt,
   type DatabaseStoreNewer,
 } from '@shared/session/database';
-import type { PluginArms } from '@tools/plugins';
+import type { FactKinds } from '@tools/plugins';
 import { sha256Hex } from '@utils/core/idHash';
 
 import {
@@ -35,7 +35,7 @@ import {
   decodable,
   decodeRow,
   EARLIER_RUNS,
-  pluginFactArm,
+  factKindOf,
   EVENT_COLUMNS,
   EVENT_FROM,
   EVENT_JOINS,
@@ -182,14 +182,14 @@ export interface RowReader<E> {
 }
 
 /**
- * The reader of the store at `path`, over the process's plugin `arms`. Its
+ * The reader of the store at `path`, over the process's plugin `factKinds`. Its
  * first strict read or `damaged` finds, through `exec`, every run holding an
  * earlier build's row, which the listing (it never reads a run's history)
  * would not meet: one finding, read by the listing, history and resume alike.
  */
 export function rowReader<E>(
   path: string,
-  arms: PluginArms,
+  factKinds: FactKinds,
   exec: Exec<E>,
 ): RowReader<E> {
   const warned = new Set<string>();
@@ -215,8 +215,10 @@ export function rowReader<E>(
     mark(runId, true);
     if (!earlier.has(runId)) earlier.set(runId, row);
   };
-  // Only an arm with a floor can hold an earlier build's fact.
-  const floored = Object.values(arms).some((arm) => pluginFactFloor(arm) > 1);
+  // Only a fact kind with a floor can hold an earlier build's fact.
+  const floored = Object.values(factKinds).some(
+    (factKind) => pluginFactFloor(factKind) > 1,
+  );
   /** Find, once, every run holding an earlier build's row. */
   const scan = Effect.gen(function* () {
     if (scanned) return;
@@ -234,15 +236,15 @@ export function rowReader<E>(
         EarlierRowSchema.mapFields(Struct.omit(['type'])),
       )(row);
       const header = factHeader(row.data);
-      const arm = header && pluginFactArm(header, commit, arms);
+      const factKind = header && factKindOf(header, commit, factKinds);
       if (
-        arm &&
-        Result.isFailure(arm) &&
-        arm.failure._tag === 'DatabaseRowEarlier'
+        factKind &&
+        Result.isFailure(factKind) &&
+        factKind.failure._tag === 'DatabaseRowEarlier'
       )
         markEarlier(
           Schema.decodeUnknownSync(RunIdSchema)(logicalId),
-          arm.failure,
+          factKind.failure,
         );
     }
     scanned = true;
@@ -289,7 +291,7 @@ export function rowReader<E>(
       const texts: Blobs = yield* stored(blobDigests(rows));
       const events: SessionEvent[] = [];
       for (const row of rows) {
-        const decoded = decodeRow(row, arms, texts);
+        const decoded = decodeRow(row, factKinds, texts);
         if (Result.isSuccess(decoded)) {
           if (!('_tag' in decoded.success)) events.push(decoded.success);
           else

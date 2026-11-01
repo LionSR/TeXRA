@@ -135,12 +135,12 @@ const ToolResultSharedFields = {
   attachmentSummary: Schema.optional(Schema.String),
 };
 
-/** A `plugin.fact` of one of the calling tool's plugin's arms
- *  (`Plugin.arms`), committed in its call's `tool.result` batch. */
+/** A `plugin.fact` of one of the calling tool's plugin's fact kinds
+ *  (`Plugin.factKinds`), committed in its call's `tool.result` batch. */
 const ToolFactSchema = Schema.Struct({
   plugin: Schema.String.check(Schema.isMinLength(1)),
   kind: Schema.String.check(Schema.isMinLength(1)),
-  /** The arm's version `value` is written at. */
+  /** The fact kind's version `value` is written at. */
   version: Schema.Int.check(Schema.isGreaterThan(0)),
   value: JsonValueSchema,
   /** The plugin's own aggregate the fact is about (`<plugin>:<key>`), hung

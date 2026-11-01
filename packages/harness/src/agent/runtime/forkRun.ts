@@ -9,9 +9,10 @@
  * run's offered set is
  * recorded only where a step opens, so the fork's first step records its
  * own. Nothing pending is copied (no follow-up, request or retry permit),
- * its usage starts at zero, and the source's plugin facts stay with the
- * source. `forkSeed` is the same cut as a child its caller launches at
- * once: a script's `self()`.
+ * its usage starts at zero, and of the source's own plugin facts it starts
+ * with each kind's row at the cut that its policy copies (`FactKind.fork`).
+ * `forkSeed` is the same cut as a child its caller launches at once: a
+ * script's `self()`.
  */
 import { Effect } from 'effect';
 
@@ -28,6 +29,8 @@ import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { Rejected } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { generateRunId } from '@shared/schemas';
+import { factRows } from '@tools/plugins';
+import { ToolRegistry } from '@tools/toolTable';
 
 import { configRow, positionRow } from './loop/rows';
 import { addressedMessages } from './storedTurn';
@@ -177,6 +180,35 @@ const viewRows = (
 };
 
 /**
+ * The source's own plugin facts the fork `runId` starts with: of each kind
+ * whose policy copies it (`FactKind.fork`), the row `from` held at seq `cut`,
+ * restated on the fork's history.
+ */
+const forkedFacts = Effect.fn('forkRun.facts')(function* (
+  session: SessionHandle,
+  from: RunId,
+  cut: number,
+  runId: RunId,
+) {
+  const copied = new Set(
+    [...(yield* ToolRegistry).entries.values()].flatMap(({ factKinds = [] }) =>
+      factKinds
+        .filter(({ fork }) => fork === 'copy')
+        .map(({ plugin, kind }) => `${plugin}/${kind}`),
+    ),
+  );
+  const aggregate = qualifyAggregateId('run', from);
+  const { facts } = yield* session.log.runRows(aggregate, 'facts', cut);
+  const kept = Object.entries(facts).flatMap(
+    ([name, { plugin, kind, version, value }]) =>
+      copied.has(name) ? [{ plugin, kind, version, value }] : [],
+  );
+  // Stated on the fork as a call states its run's facts: no plugin's own
+  // aggregate among them, so nothing is appended beside.
+  return factRows(kept, runId, undefined, session.log).run;
+});
+
+/**
  * Fork run `from` at `at`, the `seq` of a position in its run
  * history, or at the end of its last completed turn when `at` is null (a
  * run in a turn now is forked from before it). Returns the new run's id;
@@ -186,7 +218,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
   session: SessionHandle,
   from: { readonly id: RunId; readonly uid: string },
   at: number | null,
-): Effect.fn.Return<RunId, Rejected | Error> {
+): Effect.fn.Return<RunId, Rejected | Error, ToolRegistry> {
   const cutAt = yield* cutOf(session, from.id, at);
   const { seq: cut, state, start, title, record } = cutAt;
   const runId = generateRunId();
@@ -206,6 +238,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
   });
   yield* cell.append([
     ...viewRows(runId, state, state.messages),
+    ...(yield* forkedFacts(session, from.id, cut, runId)),
     ...(state.backend === null
       ? []
       : [
@@ -252,9 +285,10 @@ export const forkSeed = Effect.fn('forkSeed')(function* (
     readonly record: AgentConfig;
     readonly seed: NonNullable<RegisterRunOptions['seed']>;
   },
-  Rejected | Error
+  Rejected | Error,
+  ToolRegistry
 > {
-  const { state, record } = yield* cutOf(session, from, null, before);
+  const { seq, state, record } = yield* cutOf(session, from, null, before);
   const text = { kind: 'text' as const, text: prompt };
   // The prompt is the next user message; a cut that already ends on one
   // (a turn's beginning) takes it as that message's last part.
@@ -280,6 +314,7 @@ export const forkSeed = Effect.fn('forkSeed')(function* (
     seed: {
       rows: [
         ...viewRows(runId, state, messages),
+        ...(yield* forkedFacts(session, from, seq, runId)),
         ...(binding === null
           ? []
           : [configRow(runId, { ...record, model }, model, binding)]),

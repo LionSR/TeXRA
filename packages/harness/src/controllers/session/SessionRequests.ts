@@ -52,7 +52,7 @@ import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import { runActionRefusal } from '@shared/session/runActions';
 import { ownFactRow } from '@tools/plugins';
-import type { ToolTable } from '@tools/toolTable';
+import { ToolRegistry, type ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { runFiles, type RunFilesServices } from './deletionCleanup';
@@ -392,6 +392,7 @@ const handle = (
         { id: req.runId, uid: admitted.uid },
         req.at ?? null,
       ).pipe(
+        Effect.provideService(ToolRegistry, deps.plugins),
         Effect.catchIf((e): e is Error => !(e instanceof Rejected), Effect.die),
         Effect.map((runId): Outcome => ({ kind: 'forked', runId })),
       );

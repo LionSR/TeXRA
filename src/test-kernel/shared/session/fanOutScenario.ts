@@ -24,7 +24,7 @@ import {
   makeSessionViewUpdater,
   type SessionViewUpdater,
 } from '@shared/session/sessionViewUpdate';
-import { DOCUMENTS_OUTPUT_ARM } from '@texra/shared/plugins/documents';
+import { DOCUMENTS_OUTPUT_KIND } from '@texra/shared/plugins/documents';
 import type { SessionViewInput } from '@texra-ai/harness/transcript';
 
 /** A process identity, never a lease token. */
@@ -295,9 +295,9 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(GRANDCHILD, T.grandchildFiles, {
     type: 'plugin.fact',
-    plugin: DOCUMENTS_OUTPUT_ARM.plugin,
-    kind: DOCUMENTS_OUTPUT_ARM.kind,
-    version: DOCUMENTS_OUTPUT_ARM.version,
+    plugin: DOCUMENTS_OUTPUT_KIND.plugin,
+    kind: DOCUMENTS_OUTPUT_KIND.kind,
+    version: DOCUMENTS_OUTPUT_KIND.version,
     parent: null,
     value: {
       rounds: [

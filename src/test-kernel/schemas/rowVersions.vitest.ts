@@ -25,7 +25,7 @@ import { TEXRA_SERVICE } from '@texra/controllers/server/protocol';
 import { INQUIRY_THREADS } from '@texra/shared/plugins/externalInquiry';
 import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
 import { texraPlugins } from '@texra/tools/registry';
-import { armsOf } from '@tools/plugins';
+import { factKindsOf } from '@tools/plugins';
 import {
   productionFilesUnder,
   productionRoots,
@@ -76,7 +76,7 @@ const VERSIONED: readonly Versioned[] = [
       schema: arm,
     };
   }),
-  ...Object.entries(armsOf(texraPlugins({ name: 'vscode' }))).map(
+  ...Object.entries(factKindsOf(texraPlugins({ name: 'vscode' }))).map(
     ([name, arm]) => ({
       name: `plugin.fact.${name.replace('/', '.')}`,
       version: arm.version,
