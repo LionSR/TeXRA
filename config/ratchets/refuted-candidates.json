@@ -148,6 +148,29 @@
           "signature": "export function registerExternalRoot( absolutePath: string, options: ExternalRootOptions, ): void {…}"
         }
       ]
+    },
+    {
+      "id": "LLM-subscription-credential-facade",
+      "candidate": "a subscriptionCredential(route, secrets) call in @texra-ai/llm over the ChatGPT and Grok session coordinators, replacing the harness's two route branches in routeCredential",
+      "why": "Built and closed unmerged: the coordinators keep three consumers across two packages (the harness, and the app's subscriptionProviders.ts and SubscriptionUsageService.ts), so both stay exported and the call hides nothing. The harness's two branches are 32 lines; the facade is 58 plus two new exports, net +26, a layer that deletes nothing it replaces.",
+      "ruling": "https://github.com/LionSR/TeXRA/pull/14504",
+      "symbols": [
+        {
+          "file": "packages/llm/src/oauth/codex/codexProvider.ts",
+          "symbol": "codexCoordinator",
+          "signature": "export const codexCoordinator: ( secrets: CredentialStore, ) => SubscriptionCoordinator<CodexSession> = SubscriptionOAuthCoordinator.forProvider(CODEX_POLICY);"
+        },
+        {
+          "file": "packages/llm/src/oauth/xai/xaiProvider.ts",
+          "symbol": "xaiCoordinator",
+          "signature": "export const xaiCoordinator: ( secrets: CredentialStore, ) => SubscriptionCoordinator<XaiSession> = SubscriptionOAuthCoordinator.forProvider(XAI_POLICY);"
+        },
+        {
+          "file": "packages/harness/src/agent/runtime/modelAccess/credentials.ts",
+          "symbol": "routeCredential",
+          "signature": "export function routeCredential( route: CredentialRoute, config: ModelConfig, facts: Pick<RouteFacts, 'endpoints'>, rejected: string | undefined, ): Effect.Effect< RouteCredential, RouteUnavailable, HttpClient.HttpClient | Secrets > {…}"
+        }
+      ]
     }
   ]
 }
