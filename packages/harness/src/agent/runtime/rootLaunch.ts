@@ -67,8 +67,9 @@ type RootLaunch = typeof StartOptionsSchema.Type &
  * fork; a launch that fails first fails this, and the caller's interruption
  * before then stops the run.
  *
- * A caller that needs subagent lineage or owns the run id drops to the
- * lower-level `executeAgent` through `RunRegistry.start`.
+ * A run with a parent, or one that is resumed rather than registered here
+ * (a child's strategy, `resumeRun`), runs the lower-level `executeAgent`
+ * through `RunRegistry.start` instead.
  */
 export const rootRun = Effect.fn('rootRun')(function* (
   session: SessionHandle,
