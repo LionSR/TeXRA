@@ -6,7 +6,7 @@
  * every task it starts.
  *
  * The payloads are the runtime's own wire schemas (the session bridge's
- * `Subscribe` and `EventsFrame`, `RuntimeRequest`, `StartRequest`,
+ * `Subscribe` and `EventsFrame`, `RuntimeRequest`, `StartRequestSchema`,
  * `AgentConfig`), used as
  * they are; a procedure's error is the error class the handler fails with,
  * which the client receives as that class. The procedures:
@@ -194,8 +194,9 @@ export const TexraRpcs = RpcGroup.make(
   }),
   Rpc.make('task.start', {
     /** The start as the window's `session.start` took it, less the window's
-     *  own tools, which a service cannot run. */
-    payload: { workspace, start: StartRequestSchema },
+     *  own tools, which a service cannot run: its case with a host's whole
+     *  configuration, which the service takes and resolves nothing for. */
+    payload: { workspace, start: StartRequestSchema.members[1] },
     /** The run that started: the asked id, or the one the launch resolved. */
     success: TaskAdmitted,
     error: TaskFailed,
