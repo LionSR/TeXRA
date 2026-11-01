@@ -337,7 +337,8 @@ function set(
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
   const entry = entryOf(stores.config, key);
   // A schema rejection is thrown rather than constructed as a typed failure:
-  // `src/shared` may take only type imports from `src/platform`.
+  // a value the catalog's schema refuses is a defect of the caller, not a
+  // `ConfigWriteFailed` the store reported.
   return Effect.suspend(() =>
     writeSlot(
       entry,
