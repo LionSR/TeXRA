@@ -26,6 +26,9 @@ Node.js platform implementation and host building blocks for
   [`executeCommand`](#executecommand), [`CommandDirs`](#commanddirs),
   [`writeFileAtomic`](#writefileatomic), and
   [`readNormalizedFile`](#readnormalizedfile).
+- **Diagnostics**: [`setLogSink`](#setlogsink) and [`LogSink`](#logsink)
+  name where the log entries go, and
+  [`effectDiagnosticsLayer`](#effectdiagnosticslayer) at which level.
 
 ## absentReason
 
@@ -382,6 +385,26 @@ interface JsonStoreOptions {
 }
 ```
 
+## LogEntry
+
+One diagnostic record, shaped by Effect's own structured formatter rather
+than by a type of ours: `Logger.formatStructured` already carries level,
+fiber, timestamp, message, cause, annotations, and spans, so the logger
+layer maps straight onto this with no adaptation.
+
+```ts
+type LogEntry = ReturnType<typeof Logger.formatStructured.log>;
+```
+
+## LogSink
+
+```ts
+interface LogSink {
+  write(entry: LogEntry): void;
+  dispose?(): void;
+}
+```
+
 ## makeMachineGitEnv
 
 Build an environment for a non-interactive git subprocess: the current
@@ -649,6 +672,19 @@ production).
 
 ```ts
 function secretsDirectory(storageRoot: string): string
+```
+
+## setLogSink
+
+Install the host sink, disposing whatever it replaces. Entries are redacted
+unless the host identifies a local operator terminal as trusted. Passing
+`null` restores the console fallback.
+
+```ts
+function setLogSink(
+  next: LogSink | null,
+  options: { readonly trusted?: boolean } = {},
+): void
 ```
 
 ## whichOnExtendedPath

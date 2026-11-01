@@ -10,7 +10,6 @@ import {
 } from '@texra-ai/harness';
 import {
   AppState,
-  setLogSink,
   type StateStore,
   type StateWriteFailed,
   withProcessServices,
@@ -19,6 +18,7 @@ import {
 import {
   createNodeWorkspaceRoots,
   resolveWorkspaceStoragePath,
+  setLogSink,
 } from '@texra-ai/harness/node';
 import { ensureError, GlobalStateKey } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';

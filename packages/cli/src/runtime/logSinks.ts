@@ -9,8 +9,6 @@ import { Effect, PlatformError } from 'effect';
 import {
   entryChannel,
   entryMessage,
-  type LogEntry,
-  type LogSink as HostLogSink,
   type ProcessRuntime,
   type PerKeyLane,
   withPerKeyLane,
@@ -20,6 +18,7 @@ import {
   CLI_NDJSON_CONTRACT,
   type CliNdjsonRecord,
 } from '@cli/schemas/cliOutput';
+import type { LogEntry, LogSink as HostLogSink } from '@texra-ai/harness/node';
 
 const closed = { stdout: false, stderr: false };
 

@@ -370,7 +370,7 @@ files.
 | `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                  |
 | `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                            |
 | `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin or tool is written with: `definePlugin`, `ToolContext`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`                                                                            |
-| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                                                                                                                                                                             |
+| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots; where the log entries go (`setLogSink`, `LogSink`) and at which level (`effectDiagnosticsLayer`)                                                                                                           |
 | `@texra-ai/harness/host`       | What a full application host composes beyond the root: `processLayer`, the agent catalog, settings and stores, skills, installed plugins, model options, the presentation surface (`HostInteractions`), and shared file, error and log helpers. TeXRA's own hosts read it; no stability promise |
 
 Every entry needs the peers installed. See [Install](#install). Each entry's
@@ -405,6 +405,16 @@ Model requests carry their own HTTP transport: the environment's proxy policy
 (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and a 30-minute stream inactivity
 timeout, bound to each model rather than installed as your process's global
 dispatcher.
+
+The harness's log entries (a store that failed, a plugin that did not load, a
+run's warnings) print to the console until you name another destination:
+`setLogSink({ write(entry) { … } })` from `@texra-ai/harness/node` receives
+each `LogEntry`, Effect's structured record (level, message, cause,
+annotations). Setting a sink disposes the one it replaces (its optional
+`dispose`), and `setLogSink(null)` restores the console. Entries reach the sink
+with secrets redacted, unless you pass `{ trusted: true }`. `Sessions.layer`
+logs at `Info` and above; `effectDiagnosticsLayer(level)`, from the same
+entry, sets the level for a program you run outside it.
 
 The platform is **process-wide** for the layer's lifetime: create one and
 reuse it for every run, with the one `Sessions.layer` built over it.

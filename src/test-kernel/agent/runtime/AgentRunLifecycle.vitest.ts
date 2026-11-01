@@ -8,7 +8,7 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import { setLogSink } from '@texra-ai/harness/host';
+import { setLogSink } from '@texra-ai/harness/node';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { endRun } from '@agent/runtime/AgentRunLifecycle';
 import { type RunReport } from '@agent/runtime/runReport';

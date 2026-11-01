@@ -265,15 +265,13 @@ export {
 } from '@tools/toolAvailabilityService';
 // The tool catalog: enabled built-ins, plugin services and switches.
 export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
-// The harness's log output: where its entries go and how an entry reads.
+// How a log entry reads, and a line written to the sink (`setLogSink` in
+// `@texra-ai/harness/node`).
 export {
   entryChannel,
   entryMessage,
   LOG_CHANNEL,
-  setLogSink,
   writeLogLine,
-  type LogEntry,
-  type LogSink,
 } from '@logger/logSink';
 export { withLogChannel } from '@logger/effectLog';
 // The write path's redaction, for host text shown outside it.

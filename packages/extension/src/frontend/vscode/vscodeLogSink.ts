@@ -15,9 +15,8 @@ import {
   LOG_CHANNEL,
   entryChannel,
   entryMessage,
-  type LogEntry,
-  type LogSink,
 } from '@texra-ai/harness/host';
+import type { LogEntry, LogSink } from '@texra-ai/harness/node';
 
 /** Everything the channel itself does not already render. Every annotation
  * arrives already rendered and bounded by the write path, so this shows them

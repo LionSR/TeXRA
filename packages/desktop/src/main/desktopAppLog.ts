@@ -18,11 +18,8 @@ import {
   type WebContentsConsoleMessageEventParams,
 } from 'electron';
 
-import {
-  redactSecrets,
-  setLogSink,
-  type LogEntry,
-} from '@texra-ai/harness/host';
+import { redactSecrets } from '@texra-ai/harness/host';
+import { setLogSink, type LogEntry } from '@texra-ai/harness/node';
 
 import type { DesktopLogSnapshot } from '../shared/desktopLogMessages.js';
 

@@ -53,14 +53,19 @@ export type {
   StartInput,
 } from './effect/sessions.js';
 // What a session's methods take and hand out: a run's id
-// (`session.resume`), a commit position and a display event (`view`), and a
-// stored conversation's nodes (`records(runId).readConversation()`).
+// (`session.resume`), a commit position and a display event (`view`), a
+// stored conversation's nodes (`records(runId).readConversation()`), a
+// request (`session.request`), and the request an `ApprovalHandler` is
+// asked with and the decision it answers.
 export type { ExportNode } from '@agent/export/schemas';
 export type {
   CommitOrdinal,
   DisplaySessionEvent,
+  RequestDecision,
   RunId,
 } from '@shared/schemas';
+export type { RuntimeRequest } from '@shared/session/runtimeRequest';
+export type { PendingRequest } from '@shared/session/readonlyViews';
 
 // What a run reports while it runs, and how it ended.
 export type { AgentEvent, StreamChunkEvent } from '@agent/trace';
