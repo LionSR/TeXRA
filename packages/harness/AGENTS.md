@@ -45,7 +45,16 @@ points to a strictly lower layer:
 
 - An agent is one definition format (`AgentDefinitionSchema` in `@shared/schemas`, a YAML file or an SDK inline persona) launched with an `AgentConfig` (`packages/harness/src/agent/core/definition/`).
 - Launch with `session.runs.launch({ request, options })` (`packages/harness/src/agent/runtime/runRegistry.ts`): it assigns the `runId` and registers the run, and needs the root's `SessionOwner`, so no tool reaches it. A persisted run resumes through `resumeRun`. `executeAgent` is the one run program, fresh (with its registration) or resumed; it runs on a fiber `RunRegistry.start` forked, so only a caller that owns the `runId` reaches it (a resume, or a child's strategy through `programs.executeAgent`, `packages/harness/src/agent/runtime/nativeSubagentStrategy.ts`). Attach presentation and approval behavior to `SessionHandle.interactions`.
-- A new provider is a protocol case in `packages/llm` plus its route and credential in `packages/harness/src/agent/runtime/modelAccess/`; there is no per-provider handler class. The `helperModel` path binds through the same route. Register capabilities and pricing in `packages/harness/src/model/computeModelOptions.ts`.
+- A new provider is data, not a handler class; the `helperModel` path binds through the same route. Routes and API-key credentials in `packages/harness/src/agent/runtime/modelAccess/` are generic over `ApiKeyProviderId`, so a key provider adds nothing there. The places it touches, all but the first compile-enforced:
+  1. An llm-zoo release with the `ModelProvider` value and its models (capabilities and prices live there; `turnCost` reads them), then the exact `llm-zoo` pin in `packages/llm/package.json`. Not enforced.
+  2. `MANIFEST` and `BACKEND_PROTOCOLS` in `packages/llm/src/providers/providerPlugins.ts` (its `AssertNever` gates).
+  3. Its row in `RESPONSES_ROUTES` (`packages/llm/src/api/responsesConfiguration.ts`), where its quirks go; a provider on a new protocol is a `CONFIGURE` case in `api/configuration.ts` instead.
+  4. Its key shapes in `packages/harness/src/logger/redaction.ts`.
+  5. The stored enums: `ModelBackendSchema` (`shared/schemas/runFacts.ts`, gated in `model/reasoningLevel.ts`) and `ApiKeyProviderIdSchema` (`shared/schemas/prompts.ts`, checked by assignment in `routeDecision.ts`).
+  6. Its endpoint row and region toggle in `shared/state/providerSettings.ts` (gated in `model/modelSettings.ts`); the toggle's placement in `packages/texra/src/shared/settingsView/settingSurfaces.ts` is checked when the catalog loads (`placeRows`), not by the compiler.
+  7. The app's picker source (`MODEL_SOURCES`, `packages/texra/src/shared/settingsView/settingsViewMessages.ts`), key page (`KEY_PAGES`, `packages/texra/src/model/providerPresentation.ts`) and setup probe model (`SETUP_MODEL_BY_PROVIDER`, `packages/texra/src/model/setupModelDefaults.ts`).
+
+  A quirk outside the request (`reasoningLevel.ts`'s DashScope and Kimi reasoning rules) and a subscription plan (a `PLAN_ROUTES` row in `packages/llm/src/errors.ts` with its settings and usage adapter) are not enforced.
 
 ## Run loop architecture
 
