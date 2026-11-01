@@ -267,25 +267,37 @@ function returnsQuietValue(handler) {
 
 const CATCH_ALLS = new Set(['catch', 'catchCause', 'catchDefect']);
 
-/** Whether `node` names the identifier `name` anywhere inside it. */
+/** Whether `node` reads the identifier `name`: a property name of the same
+ *  spelling (`config.error`, `{ error: 1 }`) is not a read. */
 function mentions(node, name) {
-  return ts.isIdentifier(node)
-    ? node.text === name
-    : (ts.forEachChild(node, (child) => mentions(child, name) || undefined) ??
-        false);
+  if (ts.isIdentifier(node)) return node.text === name;
+  if (ts.isPropertyAccessExpression(node))
+    return mentions(node.expression, name);
+  if (ts.isPropertyAssignment(node)) return mentions(node.initializer, name);
+  return (
+    ts.forEachChild(node, (child) => mentions(child, name) || undefined) ??
+    false
+  );
 }
 
 /** A catch-all whose handler never reads its error and answers
- *  `Effect.succeed(...)` or `Effect.void`. */
+ *  `Effect.succeed(...)` or `Effect.void`, as its body or its one `return`. */
 function dropsError(node) {
   const call = node.parent;
   if (!ts.isCallExpression(call) || call.expression !== node) return false;
   const handler = call.arguments.at(-1);
   if (handler == null || !ts.isArrowFunction(handler)) return false;
-  if (ts.isBlock(handler.body)) return false;
-  const body = handler.body;
+  let body = handler.body;
+  if (ts.isBlock(body)) {
+    const [only, ...rest] = body.statements;
+    if (rest.length > 0 || only == null || !ts.isReturnStatement(only)) {
+      return false;
+    }
+    if (only.expression == null) return false;
+    body = only.expression;
+  }
   const readsError = handler.parameters.some(
-    ({ name }) => !ts.isIdentifier(name) || mentions(body, name.text),
+    ({ name }) => !ts.isIdentifier(name) || mentions(handler.body, name.text),
   );
   if (readsError) return false;
   return (
