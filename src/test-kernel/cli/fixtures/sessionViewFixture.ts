@@ -10,7 +10,7 @@ import { Effect, Layer, SubscriptionRef } from 'effect';
 import {
   isInFlightPhase,
   isTerminalOutcomePhase,
-  requestParksItsCaller,
+  blocksCaller,
   RUN_PHASE,
   type RunId,
   type RunView,
@@ -191,7 +191,7 @@ export function viewWith(
       !run ||
       run.approval !== 'none' ||
       run.group === 'interrupted' ||
-      !requestParksItsCaller(request.payload)
+      !blocksCaller(request.payload)
     )
       continue;
     byId.set(run.id, {

@@ -345,7 +345,7 @@ interface ITool<E = Error, R = never> {
    * Whether a call needs a person's approval, and who asks. `true` (implied
    * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
    * body's own request (an edit's review, a plan, a delegation proposal, a
-   * question, an external inquiry), which answers what the call's hooks
+   * question, a plugin's request), which answers what the call's hooks
    * said. A run that cannot present a prompt is not offered such a tool
    * (`asksApproval`).
    */

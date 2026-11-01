@@ -20,6 +20,7 @@ import {
   requestAnswerability,
   type PermissionPayload,
 } from '@texra-ai/harness/schemas';
+import { INQUIRY_REQUEST } from '@texra/shared/plugins/externalInquiry';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import type { RunView } from '@texra-ai/harness/schemas';
@@ -36,19 +37,31 @@ import './PlanApprovalRequestPanel';
 import './ExternalInquiryPanel';
 import './UserQuestionPanel';
 
-/** The card element for each request kind. */
+type CardTag = ReturnType<typeof literal>;
+
+/** The card element for each of the harness's request kinds. */
 const CARD_TAG: Record<
-  PermissionPayload['kind'],
-  ReturnType<typeof literal>
+  Exclude<PermissionPayload['kind'], 'plugin'>,
+  CardTag
 > = {
   toolEdit: literal`tool-edit-request-panel`,
   bash: literal`bash-request-panel`,
   retry: literal`retry-request-panel`,
   proposal: literal`proposal-request-panel`,
   planApproval: literal`plan-approval-request-panel`,
-  externalInquiry: literal`external-inquiry-panel`,
   userQuestion: literal`user-question-panel`,
 };
+
+/** The card element for a plugin's request, by plugin id: the external
+ *  inquiry is the one TeXRA plugin that opens requests. */
+const PLUGIN_CARD_TAG: Readonly<Record<string, CardTag>> = {
+  [INQUIRY_REQUEST.plugin]: literal`external-inquiry-panel`,
+};
+
+const cardTag = (permission: PermissionPayload): CardTag | undefined =>
+  permission.kind === 'plugin'
+    ? PLUGIN_CARD_TAG[permission.plugin]
+    : CARD_TAG[permission.kind];
 
 /** Marks every rendered card so keyboard routing can find it. */
 const CARD_MARKER = 'data-request-panel';
@@ -115,10 +128,11 @@ export class RequestPanels extends LitElement {
 
   override render(): TemplateResult | typeof nothing {
     if (this.permissions.length === 0) return nothing;
-    return html`${repeat(
-      this.permissions,
-      requestKey,
-      (permission) => staticHtml`<${CARD_TAG[permission.kind]}
+    return html`${repeat(this.permissions, requestKey, (permission) => {
+      const tag = cardTag(permission);
+      // No card renders this plugin's request, so this surface shows none.
+      if (tag === undefined) return nothing;
+      return staticHtml`<${tag}
         data-request-panel
         .permission=${permission}
         .answerability=${
@@ -130,8 +144,8 @@ export class RequestPanels extends LitElement {
         .surface=${this.surface}
         .host=${this.host}
         .run=${this.run}
-      ></${CARD_TAG[permission.kind]}>`,
-    )}`;
+      ></${tag}>`;
+    })}`;
   }
 
   /** Route a key to the card that holds focus; text fields and choosers

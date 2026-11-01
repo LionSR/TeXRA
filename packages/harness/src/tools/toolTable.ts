@@ -26,7 +26,7 @@ import type { GlobalValues } from '@platform/processRuntime';
 import type { ConfigProvider } from '@shared/config/settings';
 import {
   AgentDefinitionSchema,
-  type PermissionPayload,
+  type PluginRequest,
   type RequestDecision,
   type RunId,
   type ToolFact,
@@ -98,19 +98,17 @@ export type PromptSection = (ctx: {
 }) => string;
 
 /**
- * A plugin's side of a decision on a pending request of the kind it owns
- * (the external inquiry's answer, recorded on its cross-project thread). The
- * session runs it before the decision's row commits, under the request's
- * decision lane, so a process that exits in between leaves the request
- * pending and answerable rather than settled with nothing recorded. It may
- * send a run of the session its input (`inbox`), and commit facts about its
- * own aggregates, hung under the request's run (`commit`).
+ * A plugin's side of a decision on a pending request it opened (a
+ * `PluginRequest` naming it). The session runs it before the decision's row
+ * commits, under the request's decision lane, so a process that exits in
+ * between leaves the request pending and answerable rather than settled
+ * with nothing recorded. It may send a run of the session its input
+ * (`inbox`), and commit facts about its own aggregates, hung under the
+ * request's run (`commit`).
  */
 export interface RequestDecisionHook {
-  /** The request kind whose decisions this plugin records. */
-  readonly kind: PermissionPayload['kind'];
   readonly record: (request: {
-    readonly payload: PermissionPayload;
+    readonly payload: PluginRequest;
     readonly decision: RequestDecision;
     readonly inbox: (runId: RunId) => RunInbox;
     readonly commit: (
@@ -190,8 +188,6 @@ export interface ToolTable {
   /** The tool registered under `name` in any plugin, typed as plugins
    *  declare their tools (`Plugin.tools`). */
   readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined;
-  /** Each request kind's decision hook, from the plugin that owns it. */
-  readonly decisions: ReadonlyMap<string, RequestDecisionHook>;
   /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */
   readonly blocks: ReadonlyMap<string, AgentBlock>;
 }
@@ -199,9 +195,7 @@ export interface ToolTable {
 /**
  * The table over `plugins`, which the app lists in order. A list that
  * spells an id other than lowercase letters, digits and dashes, repeats a
- * plugin id, a tool name or a script module's name, claims one request
- * kind's decisions twice,
- * claims an agent-file
+ * plugin id, a tool name or a script module's name, claims an agent-file
  * block another plugin or the persona owns, gives a switch to a plugin
  * with no availability probe, or lacks a plugin another `requires` is a
  * defect of the list, rejected when it is built.
@@ -209,7 +203,6 @@ export interface ToolTable {
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const entries = new Map<string, Plugin>();
   const byName = new Map<string, ITool<Error, PluginToolServices>>();
-  const decisions = new Map<string, RequestDecisionHook>();
   const refuse = (reason: string): never => {
     throw new Error(`The plugin list is not valid: ${reason}`);
   };
@@ -227,13 +220,6 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
       if (byName.has(name))
         refuse(`tool ${name} of plugin ${plugin.id} is already registered.`);
       byName.set(name, tool);
-    }
-    if (plugin.decision !== undefined) {
-      if (decisions.has(plugin.decision.kind))
-        refuse(
-          `plugin ${plugin.id} records ${plugin.decision.kind} decisions, which another plugin already does.`,
-        );
-      decisions.set(plugin.decision.kind, plugin.decision);
     }
     if (plugin.availability === undefined && plugin.toggle !== undefined)
       refuse(`plugin ${plugin.id} has a switch but no availability probe.`);
@@ -256,7 +242,7 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
   );
   if (new Set(modules).size !== modules.length)
     refuse('two plugins ship a script module of one name.');
-  return { entries, get: (name) => byName.get(name), decisions, blocks };
+  return { entries, get: (name) => byName.get(name), blocks };
 }
 
 /** The process's plugin table, which every run's offered tools come from. */

@@ -16,7 +16,7 @@ import {
   addTurnUsage,
   CommitOrdinalSchema,
   EMPTY_RUN_USAGE_TOTALS,
-  requestParksItsCaller,
+  blocksCaller,
   type CommitOrdinal,
   type HookOutcomes,
   type JsonValue,
@@ -202,9 +202,8 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
  * re-enters and the one its script's calls share (attempt 0). Each of the
  * rest keeps a call waiting that a new process will not wait on, so a
  * resume cancels them before it continues the run (`RunHistory.activate`).
- * An `externalInquiry` is the exception by contract: its tool returns at
- * once and its answer arrives as a follow-up, to whichever process is
- * running the run by then, so it stays open across every batch.
+ * A request that does not block its caller (`blocksCaller`) keeps nothing
+ * waiting, so it stays open across every batch.
  */
 export function unboundRequests(state: RunState): readonly string[] {
   const { pendingResponse: pending, requests } = state;
@@ -223,7 +222,7 @@ export function unboundRequests(state: RunState): readonly string[] {
   return Object.entries(requests).flatMap(([requestId, request]) =>
     request.decision !== null ||
     own.has(requestId) ||
-    !requestParksItsCaller(request.payload)
+    !blocksCaller(request.payload)
       ? []
       : [requestId],
   );

@@ -36,8 +36,7 @@ import {
 } from './runRecords';
 import { RunIdSchema } from './identifiers';
 import { FollowUpContentSchema, FollowUpDispositionSchema } from './followUp';
-import { PermissionPayloadSchema } from './progressView/data';
-import { RequestDecisionSchema } from './request';
+import { PermissionPayloadSchema, RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import { RunBindingSchema } from './runFacts';
 import {

@@ -32,7 +32,9 @@ import {
   type DecisionOf,
   type HookOutcomePayload,
   type PermissionPayload,
+  PermissionPayloadSchema,
   type RunId,
+  toJsonValue,
   type ToolResult,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
@@ -343,10 +345,9 @@ export const callRequests = (
           decision,
         });
         if (reentered?.request.decision != null)
-          return recordedDecision<(typeof payload)['kind']>(
-            payload.kind,
-            reentered.request.decision,
-          ).pipe(Effect.map(answered));
+          return recordedDecision(payload, reentered.request.decision).pipe(
+            Effect.map(answered),
+          );
         return session.requests
           .ask(runId, payload, {
             ...(blobs && { blobs }),
@@ -368,17 +369,21 @@ export const callRequests = (
           })
           .pipe(Effect.map(answered));
       }),
-    post: (requestId, payload) =>
-      Effect.asVoid(
+    post: (requestId, request) =>
+      Effect.suspend(() =>
         commit([
           {
             type: 'request.opened',
             aggregateId: qualifyAggregateId('run', runId),
             requestId,
-            payload,
+            // A plugin's data as the JSON its row stores; one that is not
+            // JSON is a defect of the plugin.
+            payload: Schema.decodeUnknownSync(PermissionPayloadSchema)(
+              toJsonValue(request),
+            ),
           },
         ]),
-      ),
+      ).pipe(Effect.asVoid),
     present: session.interactions.emit.bind(session.interactions),
   };
   return { requests, retireStanding };

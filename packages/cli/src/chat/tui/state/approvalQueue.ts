@@ -51,16 +51,13 @@ interface TuiApprovalAdornments {
 }
 
 /**
- * The kinds this surface presents: the wire vocabulary without the external
- * inquiry. The CLI does not offer the async inquiry flow (it shows no
+ * The kinds this surface presents: the harness's own, without a plugin's
+ * request. The CLI does not offer the async inquiry flow (it shows no
  * inquiry panel, `texraPlugins`), and an inquiry another host opened
  * in a shared session is answered from its thread rather than from a modal
- * here, so {@link attentionRequests} leaves that kind out of this queue.
+ * here, so {@link attentionRequests} leaves plugin requests out of this queue.
  */
-export type PendingApprovalKind = Exclude<
-  ProgressPermissionKind,
-  'externalInquiry'
->;
+export type PendingApprovalKind = Exclude<ProgressPermissionKind, 'plugin'>;
 
 /**
  * The presented payload IS the wire {@link PermissionPayload}, with the
@@ -190,8 +187,7 @@ export const attentionRequests = computed((): readonly AttentionRequest[] => {
   const requests = attentionOf(view)
     .requests.filter(
       (request): request is PendingApprovalFact =>
-        included.has(request.runId) &&
-        request.payload.kind !== 'externalInquiry',
+        included.has(request.runId) && request.payload.kind !== 'plugin',
     )
     .map((pending): AttentionRequest => ({
       requestId: pending.requestId,

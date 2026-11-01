@@ -29,7 +29,7 @@ import { GlobalValues } from '@platform/processRuntime';
 import {
   answerMismatch,
   qualifyAggregateId,
-  requestParksItsCaller,
+  blocksCaller,
   type CommitOrdinal,
   type LocalRuntimeState,
   type RunAction,
@@ -98,7 +98,7 @@ const GATED_ACTIONS: Partial<Record<RuntimeRequest['kind'], RunAction>> = {
 /** One session's requests, as every handler below reads them. */
 interface RequestDeps extends SessionRequestsInit {
   /** One in-process lane per request id, making the pending check, the
-   *  inquiry record and the append one operation: `decide`'s checked append
+   *  plugin's record and the append one operation: `decide`'s checked append
    *  fences only the row, so two surfaces here could both record a verdict. */
   readonly decisionLanes: Map<string, PerKeyLane>;
   readonly asks: Pick<SessionRequests, 'ask' | 'decide' | 'decision'>;
@@ -240,27 +240,32 @@ const decideRequest = (
       // and that fiber died with the owner this decision takes over from:
       // recording a decision would clear the panel without doing what it says.
       // Resuming the run re-enters the call, which asks again and is answered then.
-      if (!heldHere && requestParksItsCaller(pending.payload)) {
+      if (!heldHere && blocksCaller(pending.payload)) {
         return yield* new Unavailable({
           runId: req.runId,
           reason: `The ${runNoun(deps.session(), req.runId)} that asked is no longer running: resume it to answer this request.`,
         });
       }
       const { log } = deps.session();
-      const side = deps.plugins.decisions.get(pending.payload.kind)?.record({
-        payload: pending.payload,
-        decision: req.decision,
-        inbox: (runId) => runInbox(deps.session(), runId),
-        commit: (own) => log.transact(own.map((f) => ownFactRow(f, req.runId))),
-      });
+      const { payload } = pending;
+      const side =
+        payload.kind === 'plugin'
+          ? deps.plugins.entries.get(payload.plugin)?.decision?.record({
+              payload,
+              decision: req.decision,
+              inbox: (runId) => runInbox(deps.session(), runId),
+              commit: (own) =>
+                log.transact(own.map((f) => ownFactRow(f, req.runId))),
+            })
+          : undefined;
       if (side) yield* Effect.orDie(side);
       if (!(yield* write)) return yield* settled(req.runId);
       return done;
     });
-  // An answer its kind does not take is refused in the lane, before its grant.
+  // An answer the request does not take is refused in the lane, before its grant.
   const decided = Effect.suspend(() => {
-    const kind = pendingOf(deps, req.runId, req.requestId)?.payload.kind;
-    const reason = kind && answerMismatch(kind, req.decision, req.grant);
+    const payload = pendingOf(deps, req.runId, req.requestId)?.payload;
+    const reason = payload && answerMismatch(payload, req.decision, req.grant);
     if (reason) return Effect.fail(new Rejected({ reason }));
     return decideUnderGrant(deps.session(), req, heldHere, answer);
   });

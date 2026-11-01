@@ -11,6 +11,7 @@
  * `draftKey`, so it survives a re-mount.
  */
 
+import { Schema } from 'effect';
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
@@ -20,9 +21,12 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
-import type {
-  InquiryThreadRecord,
-  InquiryDraft,
+import {
+  InquiryRequestSchema,
+  type AnsweredInquiryTurn,
+  type InquiryDraft,
+  type InquiryRequest,
+  type InquiryThreadRecord,
 } from '@texra/shared/plugins/externalInquiry';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
 import type { Surface } from '@texra/shared/session/surface';
@@ -35,19 +39,12 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { BaseRequestPanel } from './BaseRequestPanel';
 import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
-import type {
-  AnsweredInquiryTurn,
-  ExternalInquiryPermission,
-} from '@texra-ai/harness/schemas';
 
 const DRAFT_SAVE_DELAY_MS = 400;
 
 /** `Surface.inquiryDrafts` is keyed by inquiry turn, never by stream
  * : the thread and the number of turns already answered. */
-function draftKey(permission: {
-  readonly data: ExternalInquiryPermission;
-}): string {
-  const { threadId, transcript } = permission.data;
+function draftKey({ threadId, transcript }: InquiryRequest): string {
   return `${threadId}#${transcript?.length ?? 0}`;
 }
 
@@ -64,7 +61,7 @@ function safeHttpUrl(link: string): string | undefined {
 }
 
 @customElement('external-inquiry-panel')
-export class ExternalInquiryPanel extends BaseRequestPanel<'externalInquiry'> {
+export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
   static override styles = [
     BaseRequestPanel.styles,
     externalInquiryPanelStyles,
@@ -76,6 +73,8 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'externalInquiry'> {
   /** The surface whose `inquiryDrafts` holds this inquiry's answer in progress. */
   @property({ attribute: false }) surface: Surface | null = null;
 
+  /** The inquiry the request holds, read when the request is set. */
+  private inquiry!: InquiryRequest;
   private copyController = new CopyButtonController(this);
   private draftRestored = false;
   /** The key the pending debounced write belongs to. */
@@ -100,6 +99,9 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'externalInquiry'> {
       // The text still belongs to the previous inquiry here: a pending
       // write lands on its key before the fields reset for the new one.
       this.draftSaveDebounce.flush();
+      this.inquiry = Schema.decodeUnknownSync(InquiryRequestSchema)(
+        this.permission.data,
+      );
       this.answerText = '';
       this.sessionLinksText = '';
       this.draftRestored = false;
@@ -108,7 +110,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'externalInquiry'> {
     // connectedCallback): the surface owns the draft.
     if (!this.draftRestored) {
       this.draftRestored = true;
-      const draft = this.surface?.inquiryDrafts.get(draftKey(this.permission));
+      const draft = this.surface?.inquiryDrafts.get(draftKey(this.inquiry));
       if (draft) {
         this.answerText = draft.answer;
         this.sessionLinksText = draft.sessionLinks;
@@ -133,7 +135,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'externalInquiry'> {
   private scheduleDraftSave(): void {
     // Read-only trace-viewer export: nothing owns a draft.
     if (this.readOnly) return;
-    this.pendingDraftKey = draftKey(this.permission);
+    this.pendingDraftKey = draftKey(this.inquiry);
     this.draftSaveDebounce.schedule();
   }
 
@@ -142,7 +144,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'externalInquiry'> {
     if (this.readOnly) return;
     this.draftSaveDebounce.cancel();
     this.pendingDraftKey = null;
-    this.writeDraft(draftKey(this.permission), null);
+    this.writeDraft(draftKey(this.inquiry), null);
     super.emitAction(decision);
   }
 
@@ -180,13 +182,13 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'externalInquiry'> {
   }
 
   protected override renderAsk(): string {
-    return (this.permission.data.transcript?.length ?? 0) > 1
+    return (this.inquiry.transcript?.length ?? 0) > 1
       ? 'Ask an outside model a follow-up'
       : 'Ask an outside model';
   }
 
   override render(): TemplateResult {
-    const data = this.permission.data;
+    const data = this.inquiry;
     return this.renderCard(html`
       ${this.renderQuestion(data.question)}
       ${data.suggestSearch ? this.renderSearchHint() : nothing}
@@ -200,7 +202,7 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'externalInquiry'> {
   }
 
   /** Everything the answer does not need: context, earlier turns, links. */
-  private renderMore(data: ExternalInquiryPermission): TemplateResult {
+  private renderMore(data: InquiryRequest): TemplateResult {
     return html`
       <wa-details class="external-inquiry-request__more" summary="More">
         ${

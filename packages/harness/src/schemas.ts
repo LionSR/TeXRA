@@ -266,7 +266,7 @@ export {
 // Escaping for an XML or HTML attribute value and for element text.
 export { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
-// Agents, request payloads, inquiry turns, harness setting keys, skills, and run outputs.
+// Agents, request payloads, harness setting keys, skills, and run outputs.
 export {
   type ActiveSkillSourceScope,
   ActiveSkillSourceScopeSchema,
@@ -282,9 +282,9 @@ export {
   type AgentScanIssue,
   AgentScanIssueSchema,
   AgentSourceSchema,
-  type AnsweredInquiryTurn,
   BASH_APPROVAL_CONFIG_KEY,
   type BashPermission,
+  blocksCaller,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
@@ -294,8 +294,6 @@ export {
   type DiffStats,
   DiffStatsSchema,
   emptyRunEndOutput,
-  type ExternalInquiryPermission,
-  ExternalInquiryTurnRecordSchema,
   fileLocationAddressPath,
   fileLocationDisplayPath,
   FileLocationSchema,
@@ -305,8 +303,6 @@ export {
   getProposalFileGroups,
   GOAL_MAX_COST_SETTING,
   InlinePersonaSchema,
-  type InquiryThreadId,
-  InquiryThreadIdSchema,
   InstalledPluginSchema,
   HARNESS_INSTRUCTION_KEY,
   isEmptyUsage,
@@ -325,19 +321,18 @@ export {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelAvailabilityKindSchema,
   NullableFileFieldsSchema,
-  type OpenInquiryTurn,
   ownerIdentity,
   type Plan,
   type PlanApprovalPermission,
   planOf,
   planSummaryLine,
+  type PluginRequest,
   type ProgressPermissionKind,
   type ProposalFileFields,
   qualifyAggregateId,
   recipeBlockOf,
   referencedAggregates,
   type RequestDecision,
-  requestParksItsCaller,
   type RetryPermission,
   RUN_LIFECYCLE_READY,
   RUN_OUTCOME,

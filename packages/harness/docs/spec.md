@@ -687,8 +687,8 @@ folds the stored rows, and commits the activation rows with a `request.decided`
 `cancel` for every request the previous owner left unbound
 (`agent/runtime/RunHistory.ts:336-366`). A request is unbound unless it is the
 turn's open retry ask, the request a pending call's resumed attempt re-enters,
-the request a pending `script` call's guest calls share (attempt 0), or an
-`externalInquiry` (`shared/session/runState.ts:242-263`).
+the request a pending `script` call's guest calls share (attempt 0), or one
+that does not block its caller (`shared/session/runState.ts:199-229`).
 
 ### 7.3 What a second process may and may not do
 
@@ -724,22 +724,23 @@ storage refusal fails the dispatch instead of settling
 
 ### 8.1 Kinds
 
-The request kinds are a closed union
-(`shared/schemas/progressView/data.ts:160-180`):
+The request kinds are the harness's own six and one plugin case
+(`shared/schemas/request.ts:136-156`):
 
-| Kind              | Asks                                       | Parks its caller |
-| ----------------- | ------------------------------------------ | ---------------- |
-| `toolEdit`        | approval of a file edit                    | yes              |
-| `bash`            | approval of a command                      | yes              |
-| `retry`           | whether to retry a failed model attempt    | yes              |
-| `proposal`        | approval of a proposed agent run           | yes              |
-| `planApproval`    | approval of a plan                         | yes              |
-| `externalInquiry` | an answer from an external model, as input | no               |
-| `userQuestion`    | answers to questions                       | yes              |
+| Kind           | Asks                                    | Blocks its caller |
+| -------------- | --------------------------------------- | ----------------- |
+| `toolEdit`     | approval of a file edit                 | yes               |
+| `bash`         | approval of a command                   | yes               |
+| `retry`        | whether to retry a failed model attempt | yes               |
+| `proposal`     | approval of a proposed agent run        | yes               |
+| `planApproval` | approval of a plan                      | yes               |
+| `userQuestion` | answers to questions                    | yes               |
+| `plugin`       | whatever its plugin asks, in its `data` | as declared       |
 
-Every kind parks its caller (the tool call that opened it, or for `retry` the
-model invocation) except `externalInquiry`, whose answer arrives as a follow-up
-(`shared/schemas/progressView/data.ts:196-200`).
+Every own kind blocks its caller (the tool call that opened it, or for
+`retry` the model invocation). A plugin's request declares whether it does
+(`blocksCaller`) and which actions answer it (`answers`); its plugin's
+decision hook records each answer (`shared/schemas/request.ts:175-176`).
 
 ### 8.2 Decisions
 
@@ -769,13 +770,13 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
   dead process left is the next resume's to cancel as unbound.
 - A request is a row, so it outlives its process. A resume cancels the unbound
   ones (section 7.2) and re-enters the bound ones under the same id
-  (`shared/session/inFlight.ts:347-371`). An open `externalInquiry` is neither:
-  it parks no caller, so no attempt re-enters it and it is not unbound; it stays
-  open until its `request.decided` commits, or until `run.removed` closes the
-  run, which retires it with no decision row
-  (`controllers/session/SessionRequests.ts:147-158`). Delivering the answer (or
-  the drop) as a follow-up is a separate, best-effort step
-  (`shared/session/runState.ts:242-263`).
+  (`shared/session/inFlight.ts:347-371`). An open request that does not block
+  its caller is neither: no attempt re-enters it and it is not unbound; it
+  stays open until its `request.decided` commits, or until `run.removed`
+  closes the run, which retires it with no decision row
+  (`controllers/session/SessionRequests.ts:147-158`). What its plugin's
+  decision hook does with the answer (the external inquiry delivers it as a
+  follow-up) is the plugin's.
 
 ## 9. Crash guarantees
 

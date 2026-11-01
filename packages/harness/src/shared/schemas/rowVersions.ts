@@ -116,7 +116,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // decode (no upcaster, as `run.config`).
   // v5: tool edits require their stored proposal, whose original content
   // distinguishes a missing file from an empty one (no upcaster).
-  'request.opened': { version: 5, upcast: [] },
+  // v6: no `externalInquiry` kind; a plugin's request is `kind: 'plugin'`,
+  // declaring whether it blocks its caller and what it is answered with (no
+  // upcaster: an earlier build's inquiry would fail as damaged).
+  'request.opened': { version: 6, upcast: [] },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options (no upcaster, as `run.config`).
   'request.decided': { version: 2, upcast: [] },
