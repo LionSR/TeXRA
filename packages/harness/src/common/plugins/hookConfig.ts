@@ -164,7 +164,7 @@ export function matchesHook(
 /** A tool input, field by field. */
 type Fields = Readonly<Record<string, unknown>>;
 
-/** A file path made absolute against the workspace; absent stays absent. */
+/** A file path made absolute against the run's working directory; absent stays absent. */
 type Absolute = (path: unknown) => unknown;
 
 /** A harness tool's input both ways: `input` is what a hook sees; `back`
