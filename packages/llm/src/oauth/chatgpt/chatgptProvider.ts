@@ -16,23 +16,14 @@
  */
 
 // Node imports
-import { createPublicKey, randomUUID, verify } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 // Third-party imports
-import {
-  Clock,
-  Duration,
-  Effect,
-  Option,
-  Result,
-  Schema,
-  SchemaGetter,
-  Struct,
-} from 'effect';
-import { HttpClient, HttpClientRequest } from 'effect/http';
+import { Effect, Option, Result, Schema, SchemaGetter, Struct } from 'effect';
 
 // Local imports
 import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
+import { verifyIdToken } from '../idToken.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
 import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
 import { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
@@ -46,6 +37,7 @@ import type {
   SecretsFailed,
 } from '../../providers/credentials.js';
 import type {
+  SubscriptionAuthorizeRequest,
   SubscriptionCoordinator,
   SubscriptionOAuthPolicy,
   SubscriptionSessionStatus,
@@ -57,7 +49,12 @@ const CHATGPT_ISSUER = 'https://auth.openai.com';
 
 const CHATGPT_AUTHORIZE_URL = `${CHATGPT_ISSUER}/api/accounts/authorize`;
 const CHATGPT_TOKEN_URL = `${CHATGPT_ISSUER}/api/accounts/oauth/token`;
-const CHATGPT_JWKS_URL = `${CHATGPT_ISSUER}/.well-known/jwks.json`;
+/** Where OpenAI's ID tokens come from and the keys that sign them. */
+const OPENAI_ID_TOKENS = {
+  issuer: CHATGPT_ISSUER,
+  jwksUrl: `${CHATGPT_ISSUER}/.well-known/jwks.json`,
+  name: 'ChatGPT',
+};
 
 /** The API the tokens are issued for, sent with the authorize request and
  *  every grant. */
@@ -90,6 +87,9 @@ const CHATGPT_CALLBACK_PATH = '/auth/callback';
  */
 const CHATGPT_SESSION_SECRET_KEY = 'auth.chatgpt';
 const CHATGPT_HOST_ID_SECRET_KEY = 'auth.chatgpt.host-id';
+/** The client OpenAI registered for this machine, and the account it serves:
+ *  sign-out keeps it, so a later sign-in reauthorizes the same client. */
+const CHATGPT_REGISTRATION_SECRET_KEY = 'auth.chatgpt.registration';
 
 /** The persisted OAuth session bundle (stored as JSON under one secret key). */
 const ChatgptSessionSchema = SubscriptionSessionBaseSchema.mapFields(
@@ -171,115 +171,34 @@ function extractChatgptClaims(
   };
 }
 
-// ID-token verification: RS256 against OpenAI's published keys, then the
-// issuer, the audience (the client this sign-in used), expiry and nonce.
+const RegistrationSchema = Schema.fromJsonString(
+  Schema.Struct({ clientId: Schema.String, subject: Schema.String }),
+);
 
-const IdTokenHeaderSchema = Schema.Struct({
-  alg: Schema.Literal('RS256'),
-  kid: Schema.String,
-});
-const IdTokenPayloadSchema = Schema.Struct({
-  iss: Schema.Literal(CHATGPT_ISSUER),
-  aud: Schema.Union([Schema.String, Schema.Array(Schema.String)]),
-  exp: Schema.Finite,
-  nonce: Schema.String,
-  sub: Schema.String.check(Schema.isMinLength(1)),
-});
-/** The RSA members `createPublicKey` reads; a key of another type fails to
- *  import and is reported as unusable. */
-const JwksSchema = Schema.Struct({
-  keys: Schema.Array(
-    Schema.Struct({
-      kid: Schema.optional(Schema.String),
-      kty: Schema.String,
-      n: Schema.optional(Schema.String),
-      e: Schema.optional(Schema.String),
-    }),
-  ),
-});
-
-const JWKS_TIMEOUT = Duration.seconds(30);
-
-const rejectedIdToken = (reason: string, cause?: unknown) =>
-  new SubscriptionOAuthError({
-    message: `ChatGPT sign-in returned an ID token that does not verify (${reason}). Sign in again.`,
-    kind: 'config',
-    cause,
-  });
-
-const decodeSegment = <T>(
-  segment: string,
-  schema: Schema.Codec<T, unknown>,
-  part: string,
-) =>
-  Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(
-    Buffer.from(segment, 'base64url').toString('utf-8'),
-  ).pipe(Effect.mapError((cause) => rejectedIdToken(`its ${part}`, cause)));
-
-/** OpenAI's signing keys. */
-const fetchJwks = Effect.gen(function* () {
-  const client = yield* HttpClient.HttpClient;
-  const text = yield* Effect.scoped(
-    Effect.flatMap(
-      HttpClient.withScope(HttpClient.filterStatusOk(client)).execute(
-        HttpClientRequest.get(CHATGPT_JWKS_URL),
-      ),
-      (response) => response.text,
-    ),
-  ).pipe(
-    Effect.timeout(JWKS_TIMEOUT),
-    Effect.mapError(
-      (cause) =>
-        new SubscriptionOAuthError({
-          message: `Could not fetch OpenAI's signing keys: ${toErrorMessage(cause)}`,
-          kind: 'transient',
-          cause,
-        }),
-    ),
-  );
-  return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(JwksSchema))(
-    text,
-  ).pipe(Effect.mapError((cause) => rejectedIdToken('signing keys', cause)));
-});
-
-const verifyIdToken = Effect.fn('chatgpt.verifyIdToken')(function* (
-  token: string,
-  attempt: { readonly clientId: string; readonly nonce: string },
+/** The stored registration; an unreadable one is logged and registered anew. */
+const storedRegistration = Effect.fn('chatgpt.storedRegistration')(function* (
+  secrets: CredentialStore,
 ) {
-  const parts = token.split('.');
-  if (parts.length !== 3) return yield* rejectedIdToken('not a JWT');
-  const [header, payload, signature] = parts;
-  const { kid } = yield* decodeSegment(header, IdTokenHeaderSchema, 'header');
-  const jwk = (yield* fetchJwks).keys.find((key) => key.kid === kid);
-  if (jwk === undefined) return yield* rejectedIdToken('unknown signing key');
-  const signed = Result.try({
-    try: () =>
-      verify(
-        'sha256',
-        Buffer.from(`${header}.${payload}`),
-        createPublicKey({ key: jwk, format: 'jwk' }),
-        Buffer.from(signature, 'base64url'),
-      ),
-    catch: (cause) => rejectedIdToken('unusable signing key', cause),
-  });
-  if (Result.isFailure(signed)) return yield* signed.failure;
-  if (!signed.success) return yield* rejectedIdToken('bad signature');
-  const claims = yield* decodeSegment(payload, IdTokenPayloadSchema, 'claims');
-  const audiences = typeof claims.aud === 'string' ? [claims.aud] : claims.aud;
-  if (!audiences.includes(attempt.clientId))
-    return yield* rejectedIdToken('another client');
-  if (claims.exp * 1000 <= (yield* Clock.currentTimeMillis))
-    return yield* rejectedIdToken('expired');
-  if (claims.nonce !== attempt.nonce)
-    return yield* rejectedIdToken('another sign-in attempt');
+  const raw = yield* secrets.get(CHATGPT_REGISTRATION_SECRET_KEY);
+  if (!raw) return undefined;
+  const parsed = Schema.decodeUnknownResult(RegistrationSchema)(raw);
+  if (Result.isSuccess(parsed)) return parsed.success;
+  yield* Effect.logWarning(
+    `The stored ChatGPT client registration is unreadable; this sign-in registers a new client: ${toErrorMessage(parsed.failure)}`,
+  );
+  return undefined;
 });
 
-/** A code grant is accepted only with plan usage granted and a verified ID
- *  token: the token alone does not authorize plan usage. */
+/**
+ * A code grant is accepted only with plan usage granted and a verified ID
+ * token: the token alone does not authorize plan usage. A registration is
+ * recorded with its account; a returning sign-in must be that account, since
+ * one registration's client never carries another account's tokens.
+ */
 const acceptChatgptGrant = Effect.fn('chatgpt.acceptGrant')(function* (
   tokens: SubscriptionTokenResponse,
-  clientId: string,
-  nonce: string,
+  attempt: SubscriptionAuthorizeRequest,
+  secrets: CredentialStore,
 ) {
   if (!tokens.scope?.split(' ').includes(TOKEN_SHARING_SCOPE)) {
     return yield* new SubscriptionOAuthError({
@@ -294,7 +213,26 @@ const acceptChatgptGrant = Effect.fn('chatgpt.acceptGrant')(function* (
       kind: 'config',
     });
   }
-  yield* verifyIdToken(tokens.id_token, { clientId, nonce });
+  const subject = yield* verifyIdToken(
+    OPENAI_ID_TOKENS,
+    tokens.id_token,
+    attempt,
+  );
+  if (attempt.registering) {
+    const registration = { clientId: attempt.clientId, subject };
+    return yield* secrets.set(
+      CHATGPT_REGISTRATION_SECRET_KEY,
+      JSON.stringify(registration),
+    );
+  }
+  if ((yield* storedRegistration(secrets))?.subject !== subject) {
+    yield* secrets.delete(CHATGPT_REGISTRATION_SECRET_KEY);
+    return yield* new SubscriptionOAuthError({
+      message:
+        'This ChatGPT account is not the one TeXRA registered on this machine. Sign in again to register it.',
+      kind: 'config',
+    });
+  }
 });
 
 /** This machine's stable id for OpenAI, created on first use. */
@@ -332,11 +270,12 @@ const CHATGPT_POLICY: SubscriptionOAuthPolicy<ChatgptSession> = {
     redirectUri: (port) => `http://127.0.0.1:${port}${CHATGPT_CALLBACK_PATH}`,
     params: { resource: CHATGPT_RESOURCE },
   },
-  // A returning sign-in reauthorizes the client the stored session holds; it
-  // sends no name hint, which only a registration takes.
-  registration: (previous, secrets) =>
-    Effect.map(hostId(secrets), (host) => {
-      const registered = previous?.clientId;
+  // A returning sign-in reauthorizes the registered client and sends no name
+  // hint, which only a registration takes.
+  registration: (secrets) =>
+    Effect.gen(function* () {
+      const host = yield* hostId(secrets);
+      const registered = (yield* storedRegistration(secrets))?.clientId;
       const params: Readonly<Record<string, string>> =
         registered === undefined
           ? { ext_agent_host_id: host, agent_name_hint: AGENT_NAME }

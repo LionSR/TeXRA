@@ -150,8 +150,7 @@ export class SubscriptionOAuthCoordinator<
     return authorizeRequest(
       this.policy,
       port,
-      registration &&
-        (yield* registration(yield* this.loadSession(), this.secrets)),
+      registration && (yield* registration(this.secrets)),
     );
   });
 
@@ -296,10 +295,9 @@ export class SubscriptionOAuthCoordinator<
   );
 
   /**
-   * The code exchange as a program: the loopback login yields it, so
-   * interrupting that login reaches the exchange and the store. A
-   * registering attempt takes the client the callback names; a returning
-   * one rejects a callback that names another.
+   * The code exchange, yielded by the loopback login so its interruption
+   * reaches the exchange and the store. A registering attempt takes the
+   * client the callback names; a returning one rejects any other.
    */
   readonly loginWithCode = Effect.fn(
     'SubscriptionOAuthCoordinator.loginWithCode',
@@ -328,7 +326,11 @@ export class SubscriptionOAuthCoordinator<
       grantFailure,
     );
     if (this.policy.acceptGrant)
-      yield* this.policy.acceptGrant(tokens, clientId, request.nonce);
+      yield* this.policy.acceptGrant(
+        tokens,
+        { ...request, clientId },
+        this.secrets,
+      );
     return yield* this.storeTokens(tokens, clientId);
   });
 

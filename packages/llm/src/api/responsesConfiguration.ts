@@ -17,6 +17,9 @@ import type { ConfigurationOf, Facts } from './configuration.js';
 
 type ResponsesConfiguration = ConfigurationOf<'openai-responses'>;
 
+/** The one namespace a ChatGPT plan's route groups every function tool in. */
+const CHATGPT_TOOL_NAMESPACE = 'texra';
+
 /** The request fields a vendor route sets for itself. */
 interface VendorFields extends Pick<
   ResponsesConfiguration,
@@ -47,6 +50,7 @@ function vendorRoute(
     instructions: { kind: 'optional' },
     continuationInheritsInstructions: false,
     supportsForcedToolChoice: fields.supportsForcedToolChoice,
+    toolNamespace: null,
     openaiEndpoint: false,
     requestDialect: 'compatible',
     defaults: {
@@ -85,8 +89,9 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
   if (credential.kind === 'chatgpt') {
     // OpenAI's token sharing: the public Responses API under a ChatGPT plan's
     // rules. A request is stateless and streamed (`store: false`, no
-    // `previous_response_id`), takes no temperature or output limit, and has
-    // no background mode; the plan's token reaches no Files API either.
+    // `previous_response_id`), takes no temperature or output limit, has no
+    // background mode, and takes function tools only inside a namespace; the
+    // plan's token reaches no Files API either.
     return {
       ...base,
       requestedModel: codexBackendModelId(config),
@@ -101,7 +106,9 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
       ),
       instructions: { kind: 'optional' },
       continuationInheritsInstructions: false,
-      supportsForcedToolChoice: true,
+      // OpenAI documents no `tool_choice` for a namespaced function.
+      supportsForcedToolChoice: false,
+      toolNamespace: CHATGPT_TOOL_NAMESPACE,
       openaiEndpoint: true,
       requestDialect: 'openai',
       defaults: {
@@ -135,6 +142,7 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
     instructions: { kind: 'optional' },
     continuationInheritsInstructions: xai,
     supportsForcedToolChoice: true,
+    toolNamespace: null,
     openaiEndpoint: spec.endpoint === OPENAI_DEFAULT_ENDPOINT,
     requestDialect: 'openai',
     defaults: {

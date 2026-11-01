@@ -162,15 +162,18 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
         : {}),
       ...(turn.tools.length > 0
         ? {
-            tools: turn.tools.map((tool): OpenAI.Responses.FunctionTool =>
-              config.requestDialect === 'openai'
-                ? { type: 'function', ...tool, strict: false }
-                : // The vendor endpoints take no `strict`, which the
-                  // OpenAI typings require.
-                  ({
-                    type: 'function',
-                    ...tool,
-                  } as OpenAI.Responses.FunctionTool),
+            tools: groupedTools(
+              config.toolNamespace,
+              turn.tools.map((tool): OpenAI.Responses.FunctionTool =>
+                config.requestDialect === 'openai'
+                  ? { type: 'function', ...tool, strict: false }
+                  : // The vendor endpoints take no `strict`, which the
+                    // OpenAI typings require.
+                    ({
+                      type: 'function',
+                      ...tool,
+                    } as OpenAI.Responses.FunctionTool),
+              ),
             ),
             parallel_tool_calls: turn.controls.parallelToolCalls,
             tool_choice:
@@ -186,6 +189,22 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
     return { turn, parameters };
   },
 );
+
+/** The function tools, inside the route's one namespace when it requires one. */
+const groupedTools = (
+  namespace: string | null,
+  tools: OpenAI.Responses.FunctionTool[],
+): OpenAI.Responses.Tool[] =>
+  namespace === null
+    ? tools
+    : [
+        {
+          type: 'namespace',
+          name: namespace,
+          description: 'The tools this agent can call.',
+          tools,
+        },
+      ];
 
 /** OpenAI's abort signature: the raw abort reason, or the SDK's wrapper around it. */
 export const openaiAbortMatch = (

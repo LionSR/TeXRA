@@ -126,15 +126,12 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
     readonly params: Readonly<Record<string, string>>;
   };
   /**
-   * A provider that registers a client per user: the client this attempt
-   * authorizes as, given the stored session, and the parameters the
-   * registration needs. Absent: every attempt authorizes as
-   * `tokenEndpoint.clientId`.
+   * A provider that registers a client per user and keeps that registration
+   * beside the session, so it outlives sign-out: the client this attempt
+   * authorizes as, and the parameters a registration needs. Absent: every
+   * attempt authorizes as `tokenEndpoint.clientId`.
    */
-  readonly registration?: (
-    previous: S | null,
-    secrets: CredentialStore,
-  ) => Effect.Effect<
+  readonly registration?: (secrets: CredentialStore) => Effect.Effect<
     {
       readonly clientId: string;
       readonly registering: boolean;
@@ -143,15 +140,19 @@ export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
     SecretsFailed
   >;
   /**
-   * Check a code grant before it is stored: the ID token against the
-   * attempt's client and nonce, and the scopes granted. Absent: no check,
-   * and no nonce is sent.
+   * Check a code grant before its session is stored, and record what the
+   * registration keeps. `attempt` names the client the grant was issued to.
+   * Absent: no check, and no nonce is sent.
    */
   readonly acceptGrant?: (
     tokens: SubscriptionTokenResponse,
-    clientId: string,
-    nonce: string,
-  ) => Effect.Effect<void, SubscriptionOAuthError, HttpClient.HttpClient>;
+    attempt: SubscriptionAuthorizeRequest,
+    secrets: CredentialStore,
+  ) => Effect.Effect<
+    void,
+    SubscriptionOAuthError | SecretsFailed,
+    HttpClient.HttpClient
+  >;
   /** Token response to session. Must not throw: it runs in `Effect.succeed`. */
   buildSession(
     tokens: SubscriptionTokenResponse,

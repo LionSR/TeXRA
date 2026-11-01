@@ -223,6 +223,9 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
             type: 'function_call',
             call_id: part.providerCallId,
             name: part.name,
+            ...(config.toolNamespace !== null
+              ? { namespace: config.toolNamespace }
+              : {}),
             arguments: part.argumentsText,
             ...(part.evidence?.itemId !== undefined
               ? { id: part.evidence.itemId }

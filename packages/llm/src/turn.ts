@@ -183,9 +183,10 @@ const ModelConfigurationSchema = Schema.Union([
       continuationInheritsInstructions: Schema.Boolean,
       /** The route takes `tool_choice` naming one function, not only `auto`. */
       supportsForcedToolChoice: Schema.Boolean,
-      /** OpenAI's own endpoint (the API or the ChatGPT subscription): it routes
-       *  its prompt cache by `prompt_cache_key` and takes mid-conversation
-       *  `developer` messages. */
+      /** The namespace function tools must sit in (a ChatGPT plan), or `null`. */
+      toolNamespace: Schema.NullOr(Schema.String),
+      /** OpenAI's own endpoint (the API or a ChatGPT plan): it routes its prompt
+       *  cache by `prompt_cache_key` and takes `developer` messages mid-run. */
       openaiEndpoint: Schema.Boolean,
       /**
        * `openai` sends OpenAI's full request surface; `compatible` omits what
