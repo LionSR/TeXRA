@@ -170,7 +170,11 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'tool.intent': V1,
   'script.call': V1,
   // v2: a captured attachment holds its bytes by blob address, never inline.
-  'tool.result': { version: 2, upcast: [] },
+  // v3: an executed result names the files its call read (`reads`), which
+  // an edit of an existing file requires; an earlier build's row would read
+  // as a call that read nothing, and the run's edits would be refused (no
+  // upcaster: nothing records what that build's calls read).
+  'tool.result': { version: 3, upcast: [] },
   // v2: no `continuation`: goal mode is a script, and a waiting run never
   // continues itself (no upcaster: an earlier build's row names a plugin
   // continuation this build has none of).

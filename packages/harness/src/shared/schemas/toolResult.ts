@@ -161,6 +161,12 @@ const ExecutedToolResultSchema = Schema.Struct({
   error: Schema.optional(Schema.Undefined),
   /** Records of edits made during tool run */
   edits: Schema.optional(Schema.Array(EditRecordSchema)),
+  /** The files the call read, spelled as `edits[].path` spells a file: a
+   *  later edit of an existing file requires one of them (or an edit of it)
+   *  in the run's rows, whichever process runs the edit. */
+  reads: Schema.optional(
+    Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+  ),
   /** File attachments (may contain binary data) */
   files: Schema.optional(Schema.Array(ToolFileAttachmentSchema)),
   /** What a script's `await` gets for this call in place of

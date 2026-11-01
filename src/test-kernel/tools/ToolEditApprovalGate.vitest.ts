@@ -27,6 +27,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { seedEditedFiles } from '@test/support/runRecordSeeds';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { fakePath } from '@test/support/FakePlatform';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
@@ -51,7 +52,6 @@ let nextDecision: () => RequestDecision | null = () => ({ action: 'approve' });
 let decisions: ReturnType<typeof autoDecideRequests> | undefined;
 let detachHostInteractions = (): void => {};
 let policyDenials = 0;
-let readFiles = new Set<string>();
 // The tool edits the run opened, as their rows reached the log; tests
 // override the decision when they need to reject or adjust, and assert on
 // this list otherwise.
@@ -118,9 +118,10 @@ function withStubbedEditFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
   });
 }
 
-// Seeds the file a tool reads before proposing an edit — on disk for the
-// edit flow's own read, and in the rooted view a relative path resolves
-// through — and returns the write spy so a test can inspect what was applied.
+// Seeds the file a tool edits — on disk for the edit flow's own read, and in
+// the rooted view a relative path resolves through — and returns the write
+// spy so a test can inspect what was applied. Whether the run has read the
+// file is a fact of its rows, which a case seeds apart (`seedEditedFiles`).
 function stubWorkspaceFile(
   filePath: string,
   options: { exists: boolean; content: string },
@@ -129,7 +130,6 @@ function stubWorkspaceFile(
   if (options.exists) {
     mkdirSync(path.dirname(absolutePath), { recursive: true });
     writeFileSync(absolutePath, options.content);
-    readFiles.add(absolutePath);
   }
   relativeFiles.set(filePath, {
     exists: options.exists,
@@ -144,7 +144,6 @@ function inRun<A, E>(effect: Effect.Effect<A, E, ToolServices>) {
     Effect.provide(
       nativeToolTestLayer({
         workingDirectory: WORKSPACE_PATH,
-        readFiles,
         run: {
           runId,
           session: testDefaultSession(),
@@ -162,7 +161,6 @@ describe('Tool edit approval gating', () => {
     policyDenials = 0;
     workspaceWrites.mockReset();
     relativeFiles.clear();
-    readFiles = new Set<string>();
     runId = publishTestRunStart(testDefaultSession(), generateRunId());
     await Effect.runPromise(testDefaultSession().log.settled);
     decisions = autoDecideRequests(testDefaultSession(), () => nextDecision());
@@ -203,6 +201,8 @@ describe('Tool edit approval gating', () => {
         exists: true,
         content: 'base',
       });
+      // The run's rows say it wrote the file: an edited file counts as read.
+      yield* seedEditedFiles(testDefaultSession(), runId, ['summary.txt']);
 
       nextDecision = () => ({ action: 'reject', feedback: 'Rejected by user' });
 

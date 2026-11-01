@@ -275,9 +275,10 @@ function goldenTurn(
           ]
         : text('Noted.'),
     );
-  // The crash-point run: two calls, a script, the echo's text. A step a crash
-  // cut off unstarted is asked for again; a view an edit replaced no longer
-  // holds the task, and the echo shows the view the edit left.
+  // The crash-point run: two calls, an edit of the file they read, a script,
+  // the echo's text. A step a crash cut off unstarted is asked for again; a
+  // view an edit replaced no longer holds the task, and the echo shows the
+  // view the edit left.
   if (system.includes('GOLDEN-CRASH')) {
     const done = results.filter(
       (message) =>
@@ -294,6 +295,15 @@ function goldenTurn(
         call('bash', {
           command: 'echo batch >> effects.log',
           description: 'Record the batch effect',
+        }),
+      ],
+      // The file the first step read, edited in the next response: a process
+      // resumed between the two answers the edit's read gate from the rows.
+      () => [
+        call('edit_file', {
+          path: 'notes.tex',
+          old_str: 'reads this file',
+          new_str: 'edits this file',
         }),
       ],
       () => [call('script', { title: 'Gather', code: GOLDEN_CRASH_SOURCE })],

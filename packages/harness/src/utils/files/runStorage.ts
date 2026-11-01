@@ -61,8 +61,6 @@ export class RunFileService {
   /** One lane per workspace-relative path: its snapshot and its mirror are
    *  each checked and created by one fiber at a time. */
   private readonly pathLanes = new Map<string, PerKeyLane>();
-  /** The files the run read, which an edit of one needs; read-only here. */
-  public readonly readFiles: ReadonlySet<string> = new Set<string>();
 
   public readonly runId: RunId;
   private readonly roots: {
