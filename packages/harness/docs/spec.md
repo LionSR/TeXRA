@@ -361,7 +361,7 @@ points are normative:
 
 - **W1**, `model.message` `attempt`: for a turn or a summary, commits before the
   billed request leaves the process (`agent/runtime/ModelInvoker.ts:454-476`;
-  summary: `:751-763`).
+  summary: `:745-757`).
 - **W2**, `model.message` `response`: commits, with `run.position`
   `response.ready`, before any tool call dispatches
   (`agent/runtime/ModelInvoker.ts:348-364`;
@@ -380,7 +380,7 @@ points are normative:
 - **W6**, `model.message` `failed`: for a turn or a summary, commits for every
   recorded failure, naming the next move
   (`agent/runtime/ModelInvoker.ts:585-645`, `:678`;
-  `agent/runtime/run/invocation.ts:380-390`).
+  `agent/runtime/run/invocation.ts:374-384`).
 - **W7**, `request.opened` / `request.decided`: the opening commits before any
   wait; a decision commits once (`agent/runtime/requestPolicy.ts:260-278`,
   `:333-345`).
@@ -390,7 +390,7 @@ context and the `attempt` row, before it streams or submits the request
 (`agent/runtime/ModelInvoker.ts:454-476`,
 `agent/runtime/run/requestContext.ts:138-166`). A compaction summary records its
 attempt the same way, with `purpose: 'summary'`
-(`agent/runtime/ModelInvoker.ts:737-785`). A helper call belongs to no run
+(`agent/runtime/ModelInvoker.ts:731-779`). A helper call belongs to no run
 history and records no row, its attempts and failures included
 (`agent/runtime/run/modelCall.ts:66-67`, `:142-144`, `:166`).
 
@@ -445,7 +445,7 @@ child loop drives has no run history and writes no position; it parks on
 recording MUST commit a `failed` row whose `next` is the move after it; a
 renewed observation of an accepted operation repeats without one (section 6),
 and a helper call records none (`agent/runtime/run/modelCall.ts:166`)
-(`agent/runtime/run/invocation.ts:380-390`,
+(`agent/runtime/run/invocation.ts:374-384`,
 `agent/runtime/ModelInvoker.ts:585-602`). A `failed` row that asks MUST be
 preceded, in its batch, by the `request.opened` of its retry request
 (`agent/runtime/ModelInvoker.ts:633-644`, `shared/session/runHistory.ts:183`).
@@ -531,11 +531,11 @@ the run already holds history state (`agent/runtime/loop/runProgram.ts:96-101`).
 ## 6. Retry
 
 Every model call the harness makes MUST go through one loop, `runInvocation`
-(`agent/runtime/run/invocation.ts:352-393`; callers
+(`agent/runtime/run/invocation.ts:346-387`; callers
 `agent/runtime/ModelInvoker.ts:651`, `agent/runtime/run/modelCall.ts:123`). Its
 next move is `nextAttempt(invocation, requests, retries)`, read off the
 invocation's rows before every move but the repeat of a renewed observation
-(`agent/runtime/run/invocation.ts:364-367`, `:382-385`,
+(`agent/runtime/run/invocation.ts:358-361`, `:376-379`,
 `shared/session/inFlight.ts:202-246`):
 
 | Rows show                                                        | Move                                        |
@@ -557,12 +557,12 @@ invocation's rows before every move but the repeat of a renewed observation
 The move a `failed` row records is decided once, by `failedNext`
 (`shared/session/inFlight.ts:266-283`), except for two rows that name their move
 themselves: a renewed credential's resend, `retry`
-(`agent/runtime/run/invocation.ts:340-343`), and a re-ask, `ask` under a fresh
+(`agent/runtime/run/invocation.ts:334-337`), and a re-ask, `ask` under a fresh
 request id (`agent/runtime/ModelInvoker.ts:703-718`):
 
 - A `continuation-gone` failure of an attempt that sent a continuation answers
   `unchain`, once per invocation (`shared/session/inFlight.ts:272-277`,
-  `agent/runtime/run/invocation.ts:289-293`).
+  `agent/runtime/run/invocation.ts:284-287`).
 - A retryable failure answers `retry` while the invocation's earlier failures,
   `unchain` ones excluded, are fewer than the budget
   (`shared/session/inFlight.ts:81-89`, `:196-200`, `:278-279`). Every earlier
@@ -583,22 +583,22 @@ request id (`agent/runtime/ModelInvoker.ts:703-718`):
   request id; where nobody can be asked, `stop`
   (`shared/session/inFlight.ts:275-277`).
 - A failed observation of an accepted operation never resubmits it automatically
-  (`agent/runtime/run/invocation.ts:289-298`). The one automatic repeat is a
+  (`agent/runtime/run/invocation.ts:284-292`). The one automatic repeat is a
   renewed observation after a rejected subscription token, which observes the
-  same operation again (`agent/runtime/run/invocation.ts:333-343`, `:380-383`).
+  same operation again (`agent/runtime/run/invocation.ts:327-337`, `:374-377`).
 
 Every automatic send MUST run under the process's `ModelRetryGate`
-(`agent/runtime/run/invocation.ts:40-45`, `:202-218`). The gate cools two keys
+(`agent/runtime/run/invocation.ts:40-45`, `:199-215`). The gate cools two keys
 per binding: a 429 the provider scoped to the model cools that model on its wire
 route, and a failure scoped to the route cools the wire route itself, which
 every model on that route shares. The wire key is the binding's own tuple:
 provider, credential route, endpoint and key fingerprint for a credential-backed
 HTTP route; provider for the validation model
 (`agent/runtime/modelAccess/binding.ts:207-219`, `:140`)
-(`agent/runtime/modelAccess/failureInfo.ts:43-77`). An observation
-runs outside it (`agent/runtime/run/invocation.ts:219`). The loop pauses 1,000
+(`agent/runtime/modelAccess/failureInfo.ts:42-74`). An observation
+runs outside it (`agent/runtime/run/invocation.ts:216`). The loop pauses 1,000
 ms before a `retry` or `unchain` that follows a recorded failure
-(`agent/runtime/run/invocation.ts:48`, `:254-271`, `:385-390`); a resend after a
+(`agent/runtime/run/invocation.ts:48`, `:251-268`, `:379-384`); a resend after a
 crash, of an attempt no row recorded an outcome for, goes out without it.
 
 An attempt of an invocation a person admitted, whose outcome no row recorded and
@@ -611,12 +611,12 @@ outcome no row recorded, is resent only while automatic retries remain;
 otherwise it is asked about again (`shared/session/inFlight.ts`).
 
 A rejected subscription token MAY be renewed once per execution of
-`runInvocation` (`agent/runtime/run/invocation.ts:150-172`, `:359`). The limit
+`runInvocation` (`agent/runtime/run/invocation.ts:147-169`, `:353`). The limit
 is held in memory, not in a row, so a resume may renew the same invocation
 again. On a send, the renewal records a `failed` row with `next: retry` (a
 helper call records none) and the attempt is resent; while observing an accepted
 operation, the renewed observation repeats with no row and is never a resend
-(`agent/runtime/run/invocation.ts:333-345`, `:375-390`).
+(`agent/runtime/run/invocation.ts:327-339`, `:369-384`).
 
 ## 7. Claims and several processes
 

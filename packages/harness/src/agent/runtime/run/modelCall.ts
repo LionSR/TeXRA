@@ -181,8 +181,6 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
       return info;
     }),
     asker: null,
-    // The request carries no continuation.
-    chains: () => Effect.succeed(false),
     retries: call.retries ?? (yield* call.binding).automaticRetries,
     logger,
   }).pipe(Effect.ensuring(flush));
