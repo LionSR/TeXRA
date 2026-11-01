@@ -6,9 +6,9 @@
  * `Context.Reference` whose default is null, so a standalone host
  * invocation outside a run provides nothing. The public contract every tool
  * reads, the run included, is `ToolContext`; an app's tool reads nothing
- * else. The read-before-edit helpers here (`recordToolFileRead`,
- * `requireFileReadForEdit`) read the run's `fileService.readFiles` through
- * `ToolContext`, so any tool may use them.
+ * else. `requireFileReadForEdit` here answers an edit's read prerequisite
+ * from the run's facts (`RunCallShape.facts`), so a resumed run counts the
+ * reads its rows record.
  */
 import {
   Context,
@@ -35,6 +35,7 @@ import {
   type ToolDefinition,
   type ToolResultPayload,
 } from '@shared/schemas';
+import type { RunFacts } from '@shared/session/runFacts';
 import type { CellError } from '@shared/session/runHistory';
 import { errorResult } from '@tools/core/result';
 import type { RunFileService } from '@utils/files/runStorage';
@@ -144,7 +145,8 @@ export interface ScriptScope extends ScriptSource {
  * configuration (which holds its delegation scope), model, scope (a tool that
  * starts something the run should stop registers that stop there), opening,
  * trace and stage (what a plugin's own stages nest under); and its run
- * files, which hold what the run read (`fileService.readFiles`). Never its
+ * files (its storage directory, with the snapshots and mirrors it
+ * prepares). Never its
  * session: a plugin reaches the session's runs through `ChildRuns`, and
  * shows the person something through its call's `requests.present`.
  * What only the built-ins read is `BuiltinRun`.
@@ -201,6 +203,10 @@ export interface RunCallShape {
   /** The card this call's rows open under: what a run the call launches
    *  names as its `parent.call.card`. */
   readonly logId: string;
+  /** The run's facts as its rows stand when read (`RunFacts`): what it has
+   *  read and edited so far, a sibling call's settled result included,
+   *  from the loop's cell, so a resumed run answers as the live one did. */
+  readonly facts: Effect.Effect<RunFacts>;
   /** The script that issued this call; null for a call a response issued. */
   readonly script: ScriptScope | null;
   /** For a `script` call, the door its guest calls the run's tools through,
@@ -280,37 +286,26 @@ export const requireToolRun = Effect.fn('RunCall.requireToolRun')(function* (
   return { ...call, ...runCall };
 });
 
-/** Count `path` as read by the current call's run: a later edit of it then
- *  needs no fresh read. */
-export const recordToolFileRead = Effect.fn('RunCall.recordFileRead')(
-  function* (path: string): Effect.fn.Return<void, never, ToolContext> {
-    const files = (yield* ToolContext).env.run?.fileService;
-    // Recording a read is this helper's job alone: plugins see it read-only.
-    // cast: what the run read is a Set; the contract shows it read-only.
-    if (path) (files?.readFiles as Set<string> | undefined)?.add(path);
-  },
-);
-
 /** The refusal an edit of an existing file gets when the run never read it,
- *  or null: an edit needs a read first, which the run's files record. */
+ *  or null. `path` is the file as the results spell it (`reads`,
+ *  `edits[].path`): the run has read it once a settled call's result names
+ *  it, in this process or in the one that ran the read (`RunCallShape.facts`);
+ *  outside a run nothing has. */
 export const requireFileReadForEdit = Effect.fn('RunCall.requireReadForEdit')(
   function* (
     path: string,
     exists: boolean,
     errorMessage?: string,
-    /** How the card names the file; the tracker keys on `path`. */
-    displayPath: string = path,
-  ): Effect.fn.Return<ToolResult | null, never, ToolContext> {
-    const { run } = (yield* ToolContext).env;
-    if (!exists || run?.fileService.readFiles.has(path) === true) {
-      return null;
-    }
+  ): Effect.fn.Return<ToolResult | null> {
+    if (!exists) return null;
+    const call = yield* RunCall;
+    if (call !== null && (yield* call.facts).read.includes(path)) return null;
     return errorResult(
       errorMessage ??
         'Edits to existing files require a prior read in this session. Please call read_file first.',
       {
         // Not "Read …": the card would read as a read_file call.
-        summary: `Not edited: ${displayPath} was not read first`,
+        summary: `Not edited: ${path} was not read first`,
         diagnostics: { reason: 'unread-file', path },
       },
     );
