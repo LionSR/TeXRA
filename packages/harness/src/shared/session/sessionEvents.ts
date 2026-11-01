@@ -374,9 +374,10 @@ export const logTails = Effect.fnUntraced(function* (
         return PubSub.publish(fanout, [delivery]);
       }),
     ),
-    Effect.onExit((exit) =>
-      PubSub.end(fanout, Exit.hasInterrupts(exit) ? Exit.void : exit),
-    ),
+    // A read failure ends every tail with it; the scope's close, cleanly.
+    Effect.exit,
+    Effect.flatMap((exit) => PubSub.end(fanout, exit)),
+    Effect.onInterrupt(() => PubSub.end(fanout, Exit.void)),
     Effect.forkScoped,
   );
   return (fromCommit, drained) =>
