@@ -40,9 +40,8 @@ const INTERNAL_ALIAS_PATH_GROUPS = INTERNAL_ALIAS_NAMES.flatMap((alias) => [
 ]);
 
 const COMPOSITION_ROOT_FILES = new Set([
-  path.join(__dirname, 'packages/extension/src/extension.ts'),
-  path.join(__dirname, 'packages/desktop/src/main/platform/index.ts'),
-  path.join(__dirname, 'packages/cli/src/runtime/cliProcessRuntime.ts'),
+  // TeXRA's process layer, which the three hosts build their runtime over.
+  path.join(__dirname, 'packages/texra/src/controllers/texraProcessLayer.ts'),
   // The package's composition root: `Sessions.layer` composes the process
   // its projection serves.
   path.join(__dirname, 'packages/harness/src/effect/sessions.ts'),

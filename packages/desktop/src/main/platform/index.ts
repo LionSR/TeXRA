@@ -1,13 +1,9 @@
 import { app } from 'electron';
-import { Effect, Layer, ManagedRuntime, Scope } from 'effect';
+import { Effect, ManagedRuntime, Scope } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
-  AgentDirectories,
   AppState,
-  processLayer,
-  AgentDirectoryService,
-  Secrets,
   type ProcessServices,
   StateStores,
 } from '@texra-ai/harness/host';
@@ -23,12 +19,7 @@ import { emitAppSignal } from '@texra-ai/harness/host';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import { commandDirs } from '@texra/platform/defaults/commandDirs';
-import { teamMembers } from '@texra/shared/agentTeams';
-import { bootstrapHost } from '@texra/controllers/hostBootstrap';
-import { texraPlugins } from '@texra/tools/registry';
-import { makeEditorHost } from '@texra/tools/editorHost';
-import { HostWindows } from '@texra/controllers/server/hostWindows';
+import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 
 // Local file imports
 import { repairLaunchPath } from './pathFix.js';
@@ -99,44 +90,13 @@ export const initializeElectronPlatform = Effect.fn(
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeEffect`), after run
   // settlement and the projects' release of their graphs.
-  const agentDirectoriesLayer = Layer.effect(
-    AgentDirectories,
-    Effect.map(
-      AppState,
-      (state) =>
-        new AgentDirectoryService({
-          channel: 'desktop',
-          resourcesPath,
-          state,
-          teamMembers,
-        }),
-    ),
-  );
-  // The editor registry the plugins' editor tools read, which this
-  // process's windows answer for.
-  const editors = makeEditorHost();
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
-      processLayer({
+      texraProcessLayer({
+        name: 'desktop',
+        inquiryPanel: true,
         storageRoot: dataRoot,
-        settings: TEXRA_SETTINGS.catalog,
-        commandDirs: commandDirs,
-        plugins: texraPlugins({
-          name: 'desktop',
-          editors,
-          inquiryPanel: true,
-        }),
-        skills: { resourcesPath },
-        // The one credential store every host shares (`~/.texra/secrets/`):
-        // the background service reads the keys this window saves.
-        secrets: Secrets.announcing(
-          (announce) => new FileSecrets(secretsDirectory(dataRoot), announce),
-        ),
-        agentDirectories: agentDirectoriesLayer,
-        // Desktop model traffic goes to the same anonymous usage log the extension
-        // and CLI write to, tagged with editorType 'desktop' and the app version.
-        // The runtime's disposal drains the queue, so a queue shorter than one
-        // batch is not lost at quit.
+        resourcesPath,
         usageLog: usageLogLayer({
           version: app.getVersion(),
           editorType: 'desktop',
@@ -144,7 +104,7 @@ export const initializeElectronPlatform = Effect.fn(
         // The rotated log file is the artefact attached to a bug report, so it
         // keeps debug entries; rotation already bounds its size.
         minimumLogLevel: 'Debug',
-      }).pipe(Layer.merge(HostWindows.layer(editors))),
+      }),
     ),
   );
 
@@ -179,7 +139,6 @@ export const initializeElectronPlatform = Effect.fn(
       repoState: yield* (yield* StateStores).repo(storage, undefined),
       globalState: globalStateStore,
     });
-    yield* bootstrapHost({ roots: processRoots });
     return {
       processRoots,
       globalConfigStore: configStores.global,

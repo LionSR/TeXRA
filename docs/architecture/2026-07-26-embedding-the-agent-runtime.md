@@ -62,11 +62,11 @@ step to run and no version state key to keep.
 The runtime skill sources are a `processLayer` option (`skills`: the
 bundled resources tree, and the CLI's source flags), which the layer serves
 as `HostSkillSources` beneath every session; the model HTTP dispatcher is
-installed by `processLayer` itself. Beside that layer, a Node root calls
-`bootstrapHost` (`packages/texra/src/controllers/hostBootstrap.ts:46-54`)
-once, on its own process runtime: it seeds the first-install disabled
-tools. An embedder that skips either gets a runtime without them, not a
-broken one.
+installed by `processLayer` itself. TeXRA's hosts build it through
+`texraProcessLayer` (`packages/texra/src/controllers/texraProcessLayer.ts`),
+which fixes TeXRA's policy around it and seeds the first-install disabled
+tools as the layer builds. An embedder that skips the seed gets a runtime
+without it, not a broken one.
 
 Only a composition root imports `processLayer`; ESLint pins the import
 to the files in `COMPOSITION_ROOT_FILES` (`eslint.config.mjs`).
@@ -488,13 +488,11 @@ following classification makes that distinction.
   (`packages/harness/src/tools/plugins.ts`).
 - **`:352-361` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
   roots every session is opened over.
-- **`:395` — `bootstrapHost({ roots })`:**
-  The shared once-per-process write every host runs beside its runtime
-  (`packages/texra/src/controllers/hostBootstrap.ts:46-54`): the
-  first-install disabled-tool seed. (The runtime skill sources and the model HTTP dispatcher are
-  `processLayer()`'s own; `Sessions.layer` never sets the dispatcher.) An embedder that skips it gets a runtime
-  without the seed, not a broken one. The CLI runs it before publishing its roots
-  so the fallible seed fails while they are still private.
+- **The first-install seed:** `texraProcessLayer` seeds the disabled tools
+  as the runtime's layer builds, before any program reads the switches. (The
+  runtime skill sources and the model HTTP dispatcher are `processLayer()`'s
+  own; `Sessions.layer` never sets the dispatcher.) An embedder that skips it
+  gets a runtime without the seed, not a broken one.
 
 ### CLI initialization choices — not runtime obligations
 
@@ -520,12 +518,11 @@ following classification makes that distinction.
 
 The desktop main process makes the same runtime choices, showing how a shipped
 host obtains full feature parity rather than proving that every call is a
-minimum runtime requirement: it builds its agent-directories port at
-`packages/desktop/src/main/platform/index.ts:102-113`, passes the same
-skill sources to its `processLayer` and runs the same `bootstrapHost` at
-`:164`. Product policy is not necessarily CLI-only: the disabled-tool seed
-reaches both hosts through that one shared call, and the skill sources
-through the one `processLayer` option, rather than being repeated per host.
+minimum runtime requirement: `packages/desktop/src/main/platform/index.ts`
+calls the same `texraProcessLayer` with its own resources root. Product
+policy is not necessarily CLI-only: the agent directories, the skill sources
+and the disabled-tool seed reach every host through that one layer rather
+than being repeated per host.
 
 ---
 
