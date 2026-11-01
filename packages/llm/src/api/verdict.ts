@@ -116,14 +116,14 @@ const withReset = (
   seconds === undefined ? quota : { ...quota, resetsInMs: seconds * 1000 };
 
 /**
- * The ChatGPT plan's own limit reply, unique to its token-sharing route: the
- * plan's usage ran out, or plan usage is unavailable to the account.
+ * The ChatGPT plan's own limit reply, unique to its token-sharing route. Its
+ * `subscription_sharing_usage_unavailable` is a temporary 503, not a limit.
  */
 function chatgptPlanLimit(body: unknown): Quota | undefined {
-  const candidate = envelopes(body).find((fields) =>
-    /^subscription_sharing_usage_(limit_exceeded|unavailable)$/.test(
-      stringField(fields, 'code') ?? '',
-    ),
+  const candidate = envelopes(body).find(
+    (fields) =>
+      stringField(fields, 'code') ===
+      'subscription_sharing_usage_limit_exceeded',
   );
   if (candidate === undefined) return undefined;
   return withReset(

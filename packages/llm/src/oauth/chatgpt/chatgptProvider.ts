@@ -171,8 +171,13 @@ function extractChatgptClaims(
   };
 }
 
+/** A registration whose account declined plan usage asks again for consent. */
 const RegistrationSchema = Schema.fromJsonString(
-  Schema.Struct({ clientId: Schema.String, subject: Schema.String }),
+  Schema.Struct({
+    clientId: Schema.String,
+    subject: Schema.String,
+    planDeclined: Schema.optional(Schema.Boolean),
+  }),
 );
 
 /** The stored registration; an unreadable one is logged and registered anew. */
@@ -191,27 +196,16 @@ const storedRegistration = Effect.fn('chatgpt.storedRegistration')(function* (
 
 /**
  * A code grant is accepted only with plan usage granted and a verified ID
- * token: the ID token alone does not authorize plan usage. A registration is
- * recorded with its account; a returning sign-in must be that account, since
- * one registration's client never carries another account's tokens.
+ * token: the ID token alone does not authorize plan usage. The registration
+ * is recorded with its account first, including a declined plan's, so the
+ * next sign-in reauthorizes that client; a returning sign-in must be that
+ * account, since one registration's client never carries another's tokens.
  */
 const acceptChatgptGrant = Effect.fn('chatgpt.acceptGrant')(function* (
   tokens: SubscriptionTokenResponse,
   attempt: SubscriptionAuthorizeRequest,
   secrets: CredentialStore,
 ) {
-  // A token response names its scopes only when they differ from the request
-  // (RFC 6749 §5.1), so an absent `scope` granted everything asked for.
-  if (
-    tokens.scope != null &&
-    !tokens.scope.split(' ').includes(TOKEN_SHARING_SCOPE)
-  ) {
-    return yield* new SubscriptionOAuthError({
-      message:
-        'ChatGPT sign-in finished without plan usage. Sign in again and allow TeXRA to use your ChatGPT plan, or use an OpenAI API key.',
-      kind: 'config',
-    });
-  }
   if (!tokens.id_token) {
     return yield* new SubscriptionOAuthError({
       message: 'ChatGPT sign-in did not return an ID token. Sign in again.',
@@ -223,18 +217,35 @@ const acceptChatgptGrant = Effect.fn('chatgpt.acceptGrant')(function* (
     tokens.id_token,
     attempt,
   );
-  if (attempt.registering) {
-    const registration = { clientId: attempt.clientId, subject };
-    return yield* secrets.set(
-      CHATGPT_REGISTRATION_SECRET_KEY,
-      JSON.stringify(registration),
-    );
-  }
-  if ((yield* storedRegistration(secrets))?.subject !== subject) {
+  if (
+    !attempt.registering &&
+    (yield* storedRegistration(secrets))?.subject !== subject
+  ) {
     yield* secrets.delete(CHATGPT_REGISTRATION_SECRET_KEY);
     return yield* new SubscriptionOAuthError({
       message:
         'This ChatGPT account is not the one TeXRA registered on this machine. Sign in again to register it.',
+      kind: 'config',
+    });
+  }
+  // A token response names its scopes only when they differ from the request
+  // (RFC 6749 §5.1), so an absent `scope` granted everything asked for.
+  const planDeclined =
+    tokens.scope != null &&
+    !tokens.scope.split(' ').includes(TOKEN_SHARING_SCOPE);
+  const registration = {
+    clientId: attempt.clientId,
+    subject,
+    ...(planDeclined ? { planDeclined } : {}),
+  };
+  yield* secrets.set(
+    CHATGPT_REGISTRATION_SECRET_KEY,
+    JSON.stringify(registration),
+  );
+  if (planDeclined) {
+    return yield* new SubscriptionOAuthError({
+      message:
+        'ChatGPT sign-in finished without plan usage. Sign in again and allow TeXRA to use your ChatGPT plan, or use an OpenAI API key.',
       kind: 'config',
     });
   }
@@ -280,13 +291,18 @@ const CHATGPT_POLICY: SubscriptionOAuthPolicy<ChatgptSession> = {
   registration: (secrets) =>
     Effect.gen(function* () {
       const host = yield* hostId(secrets);
-      const registered = (yield* storedRegistration(secrets))?.clientId;
+      const registered = yield* storedRegistration(secrets);
+      // The consent page shows again only when asked: OpenAI's recovery for
+      // a declined plan is a reauthorization with `prompt=consent`.
       const params: Readonly<Record<string, string>> =
         registered === undefined
           ? { ext_agent_host_id: host, agent_name_hint: AGENT_NAME }
-          : { ext_agent_host_id: host };
+          : {
+              ext_agent_host_id: host,
+              ...(registered.planDeclined ? { prompt: 'consent' } : {}),
+            };
       return {
-        clientId: registered ?? REGISTRATION_CLIENT_ID,
+        clientId: registered?.clientId ?? REGISTRATION_CLIENT_ID,
         registering: registered === undefined,
         params,
       };
