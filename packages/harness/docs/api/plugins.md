@@ -375,7 +375,10 @@ always render it the same way and in the same place.
 
 ```ts
 interface ChildRunDelivery {
-  /** Root element name (`subagent-result`, `background-error`, …). */
+  /** Root element name (`subagent-result`, `background-error`, …). A
+   *  plugin's is `<family>-result` or `<family>-error`, `family` being
+   *  lowercase words joined by `-`: every render surface recognizes that
+   *  shape as a delivery, so a plugin registers no tag. */
   readonly tag: string;
   readonly runId: string;
   /** Echoed prompt attribute, for a child that took a prompt; truncated before escaping. */

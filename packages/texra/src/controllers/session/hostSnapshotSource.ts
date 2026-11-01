@@ -70,7 +70,7 @@ export class HostSnapshotReadFailed extends Schema.TaggedError<HostSnapshotReadF
 
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
-  toolIcons: HostSnapshot['toolIcons'];
+  tools: HostSnapshot['tools'];
   /** The project folder the recent commits are read from; `undefined` for a
    *  session with no folder open, which is never a repository. */
   root: string | undefined;
@@ -196,7 +196,7 @@ export function createHostSnapshotSource(
   const publish = Effect.suspend(() =>
     options.publish({
       project: options.project,
-      toolIcons: options.toolIcons,
+      tools: options.tools,
       approvalPolicy: Settings.getConfig<ApprovalPolicy>(
         options.stores.config,
         APPROVAL_POLICY_CONFIG_KEY,

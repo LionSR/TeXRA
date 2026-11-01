@@ -99,19 +99,6 @@ export function visibleToolPlugins(
   });
 }
 
-/** The icon each tool's calls are painted with, from every plugin of
- *  TeXRA's list that names one. */
-export function toolIconsOf(
-  plugins: ReadonlyMap<string, Plugin>,
-): NonNullable<TexraPlugin['icons']> {
-  return Object.fromEntries(
-    [...plugins.values()].flatMap((plugin) =>
-      // cast: the table holds TeXRA's list as listed, as `cardOf` reads it.
-      Object.entries((plugin as TexraPlugin).icons ?? {}),
-    ),
-  );
-}
-
 /** The asking workspace, and whether its host installs an editor extension
  *  (VS Code's settings view does; the desktop app and the CLI do not). */
 export type DashboardInputs = ToolProbeInputs & {

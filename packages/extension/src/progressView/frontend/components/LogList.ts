@@ -36,7 +36,8 @@ export class LogList extends LitElement {
   @property({ attribute: false }) run: RunView | null = null;
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
-  @property({ attribute: false }) toolIcons: HostSnapshot['toolIcons'] = {};
+  /** Set by the run content, from the snapshot it renders under. */
+  @property({ attribute: false }) tools!: HostSnapshot['tools'];
 
   private static readonly MAX_CACHED_RUNS = 5;
   private readonly runCache = new LRUCache<RunId, CachedRun>({
@@ -91,7 +92,7 @@ export class LogList extends LitElement {
             .run=${run}
             .view=${id === this.activeRunId ? this.view : null}
             .surface=${this.surface}
-            .toolIcons=${this.toolIcons}
+            .tools=${this.tools}
             .transcript=${run.transcript}
             .runStatus=${run.status}
             .durableOutcome=${run.durableOutcome}
