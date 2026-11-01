@@ -2,10 +2,10 @@
  * The run program, fresh or resumed: what a run opens with (its entry
  * rows, its trace and stage, its opening), the services it runs under, the
  * description generated beside it, and the terminal that ends it
- * (`endRun`, `AgentRunLifecycle`). A launch reaches it through
- * `Runs.launch`, a resume through `resumeRun`, and a child's strategy
- * through `programs.executeAgent`; it runs on a fiber `RunRegistry.start`
- * forked, which provides the session's `Runs`.
+ * (`endRun`, `AgentRunLifecycle`). A root launch reaches it through
+ * `rootRun` (`session.start`), a resume through `resumeRun`, and a child's
+ * strategy through `programs.executeAgent`; it runs on a fiber
+ * `RunRegistry.start` forked, which provides the session's `Runs`.
  */
 import { Deferred, Effect, Exit, Fiber, Layer, Scope } from 'effect';
 
@@ -250,10 +250,9 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
  * filesystems. Every way the loop exits reaches the run's terminal
  * (`endRun`) exactly once, as the exit of the one masked region it runs
  * in: a started run is always finalized, and a failed one arrives as a
- * FAILED report carrying its failure. Launches use
- * `Runs.launch({ request, options })` and resumes `resumeRun`; this runs
- * on a fiber `RunRegistry.start` forked, which provides the session's
- * `Runs`.
+ * FAILED report carrying its failure. Root launches use `rootRun` and
+ * resumes `resumeRun`; this runs on a fiber `RunRegistry.start` forked,
+ * which provides the session's `Runs`.
  */
 export function executeAgent(
   definition: PreparedAgentDefinition,

@@ -83,6 +83,7 @@ import { beforeEach, describe, expect } from 'vitest';
 
 import { withProcessServices } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
+import { rootRun } from '@agent/runtime/rootLaunch';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentConfigSchema,
@@ -800,16 +801,14 @@ export function crashConformanceSuite(): void {
             (session) =>
               withProcessServices(
                 testRuntime(),
-                session.runs.launch({
-                  request: {
-                    config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                      agent: 'golden_crash',
-                      model: 'openai/gpt-5.6-sol',
-                      instruction: 'Work through the crash task.',
-                    }),
-                    runId: root,
-                  },
-                  options: {},
+                rootRun(session, {
+                  config: Schema.decodeUnknownSync(AgentConfigSchema)({
+                    agent: 'golden_crash',
+                    model: 'openai/gpt-5.6-sol',
+                    instruction: 'Work through the crash task.',
+                  }),
+                  runId: root,
+                  interactive: true,
                 }),
               ),
             (session) => userSteps(session, roots.storage, root),
@@ -1049,16 +1048,14 @@ export function crashConformanceSuite(): void {
               (session) =>
                 withProcessServices(
                   testRuntime(),
-                  session.runs.launch({
-                    request: {
-                      config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                        agent: 'golden_delivery',
-                        model: 'openai/gpt-5.6-sol',
-                        instruction: 'Send the children off.',
-                      }),
-                      runId: root,
-                    },
-                    options: {},
+                  rootRun(session, {
+                    config: Schema.decodeUnknownSync(AgentConfigSchema)({
+                      agent: 'golden_delivery',
+                      model: 'openai/gpt-5.6-sol',
+                      instruction: 'Send the children off.',
+                    }),
+                    runId: root,
+                    interactive: true,
                   }),
                 ),
               (session) =>
@@ -1268,21 +1265,19 @@ export function crashConformanceSuite(): void {
             (session) =>
               withProcessServices(
                 testRuntime(),
-                session.runs.launch({
-                  request: {
-                    config: Schema.decodeUnknownSync(AgentConfigSchema)(
-                      asDocumentTask({
-                        agent: 'polish',
-                        agentSource: 'builtIn',
-                        model: 'openai/gpt-5.6-sol',
-                        instruction: 'Polish the draft.',
-                        inputFiles: ['paper.tex'],
-                        workingDirectory: roots.workspace,
-                      }),
-                    ),
-                    runId: root,
-                  },
-                  options: {},
+                rootRun(session, {
+                  config: Schema.decodeUnknownSync(AgentConfigSchema)(
+                    asDocumentTask({
+                      agent: 'polish',
+                      agentSource: 'builtIn',
+                      model: 'openai/gpt-5.6-sol',
+                      instruction: 'Polish the draft.',
+                      inputFiles: ['paper.tex'],
+                      workingDirectory: roots.workspace,
+                    }),
+                  ),
+                  runId: root,
+                  interactive: true,
                 }),
               ),
             () => ended(roots.storage),

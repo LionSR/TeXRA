@@ -36,7 +36,7 @@ export function getHelperModelName(stores: SettingsStores) {
 
 /**
  * Helper-model preference for launches that opt in with
- * `preferHelperModel`: small, quick fix-up actions a host runs on the
+ * `helperModel`: small, quick fix-up actions a host runs on the
  * configured helper model rather than the heavyweight model the user has
  * selected. Every other launch (a direct run, an orchestrator delegation)
  * leaves the flag off and keeps the chosen model.

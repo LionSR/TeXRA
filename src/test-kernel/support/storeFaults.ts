@@ -40,6 +40,7 @@ import { afterEach, beforeEach, vi } from 'vitest';
 import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
 import { withProcessServices } from '@texra-ai/harness/host';
 import { AgentCatalog } from '@agent/index/agentCatalog';
+import { rootRun } from '@agent/runtime/rootLaunch';
 import type {
   SessionHandle,
   SessionHandleInit,
@@ -499,16 +500,14 @@ export const parkedRoot = (
     const runId = generateRunId();
     yield* withProcessServices(
       testRuntime(),
-      session.runs.launch({
-        request: {
-          config: Schema.decodeUnknownSync(AgentConfigSchema)({
-            agent: 'assistant',
-            model: 'openai/gpt-5.6-sol',
-            instruction,
-          }),
-          runId,
-        },
-        options: {},
+      rootRun(session, {
+        config: Schema.decodeUnknownSync(AgentConfigSchema)({
+          agent: 'assistant',
+          model: 'openai/gpt-5.6-sol',
+          instruction,
+        }),
+        runId,
+        interactive: true,
       }),
     ).pipe(Effect.forkScoped);
     yield* untilStored(storage, parkedAfter(runId, 1, storage));

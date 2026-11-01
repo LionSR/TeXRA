@@ -137,7 +137,7 @@ Alternatively, skip the packaged tree entirely and hand `processLayer` an
 
 ### Prerequisite A — a session
 
-A root launch runs on a session (`session.runs.launch`). The CLI bootstrap in
+A root launch runs on a session (`session.start`). The CLI bootstrap in
 `packages/cli/src/runtime/initPlatform.ts` prepares one memoized session-opening
 Effect; commands run `services.session` when they need a session. Utility commands
 that need no session leave the store unopened.
@@ -370,7 +370,7 @@ passes to `session.interactions.use({...})`; on the public `@texra-ai/harness`
 surface, a session with no `approve` handler attached in `session.attach({ approve })`
 withholds approval-gated tools automatically. `approvalPromptsUnavailable` is a
 field of `HostInteractions` (`packages/harness/src/agent/runtime/HostInteractions.ts:49`), not
-an option of the root launch, and `RootLaunchOptions` has no such property. The
+a start option, and `StartOptionsSchema` has no such property. The
 session's `interactions.approvalPromptsUnavailable` getter reads the attached
 host's answer (`HostInteractions.ts:218-222`). Each step
 applies the session's approval policy to it (`liveToolGates`,
@@ -382,7 +382,7 @@ same answer. When the answer is to withhold, `resolveStepTools` drops every
 catalog `requiresApproval` tool before the model sees it
 (`packages/harness/src/agent/runtime/agentToolResolution.ts:194-198`), so a run cannot open the
 requests those tools would raise. Tools an embedder supplies in
-`RootLaunchOptions.tools` are not withheld: they are overlaid after the gates
+`StartInput.tools` are not withheld: they are overlaid after the gates
 (`packages/harness/src/agent/runtime/agentToolResolution.ts:287-297`) and the model is
 offered them, so a run-scoped tool that needs approval is left to the
 approval guard, which may deny the call, rather than removed. The tools that open
@@ -413,8 +413,8 @@ whose rows `session.requests.ask` commits beside the `request.opened`).
 
 ### What ends a wait without a decision
 
-Stopping the run (`session.runs.stop(runId)`, with the id
-`RootLaunchOptions.onRun` hands over; `packages/harness/src/agent/runtime/runs.ts`) ends
+Stopping the run (`session.runs.stop(runId)`, with the id the start's
+`Run` carries; `packages/harness/src/agent/runtime/runs.ts`) ends
 the run. A request opened through `SessionHandle.openRequest` (a command, an
 edit, a plan, a delegation, a question) is closed by the interruption: it
 commits `request.decided` with `{ action: 'cancel', cause: 'Run interrupted.' }`
