@@ -96,11 +96,16 @@ type ApiKeyStatus = 'set' | 'env' | 'not-set';
 
 ## ApiKeyUsageRoute
 
-What a direct provider key pays through.
+What a direct provider key pays through: a `key` plan, or nothing.
 
 ```ts
 type ApiKeyUsageRoute =
-  'api-key' | 'kimi-code-subscription' | 'glm-coding-plan-subscription';
+  | 'api-key'
+  | {
+      [P in PlanRoute]: (typeof PLAN_ROUTES)[P]['credential'] extends 'key'
+        ? P
+        : never;
+    }[PlanRoute];
 ```
 
 ## apiProviderOfSecretName
@@ -283,6 +288,17 @@ Where a resolved credential came from.
 
 ```ts
 type CredentialOrigin = 'secret' | 'env' | 'none';
+```
+
+## CredentialRoute
+
+The routes that bill a credential: a key, or a session plan's sign-in.
+
+```ts
+type CredentialRoute = Exclude<
+  ModelRoute,
+  { kind: 'no-api-key' | 'unserved' }
+>;
 ```
 
 ## CredentialStore
@@ -875,10 +891,26 @@ const originOf: <P extends ModelOrigin["protocol"]>(config: Pick<{ readonly requ
 
 ## OWN_KEY_ROUTE_FACTS
 
-The facts under which a model takes its own key: no preference is on.
+The facts under which a model takes its own key: no plan is on.
 
 ```ts
 const OWN_KEY_ROUTE_FACTS: RouteDecisionFacts
+```
+
+## PLAN_ROUTES
+
+The subscription plans a model can bill through instead of the caller's
+API credit, keyed by the route that bills through each. `provider` is the
+account the plan bills. A `session` plan signs in with an OAuth session,
+is its own route kind, and renews its token once on a 401; a used-up quota
+asks before moving onto an API key, because the move starts spending API
+credit. A `key` plan pays for an `api-key` route on a provider console
+key, as that route's `usageRoute`; a used-up quota falls back to the
+model's own key without asking. Hosts store these spellings, so a key is
+never renamed.
+
+```ts
+const PLAN_ROUTES: Readonly<{ 'chatgpt-subscription': Readonly<{ provider: "openai"; credential: "session"; }>; 'xai-subscription': Readonly<{ provider: "xai"; credential: "session"; }>; 'kimi-code-subscription': Readonly<{ provider: "kimiCode"; credential: "key"; }>; 'glm-coding-plan-subscription': Readonly<{ provider: "glm"; credential: "key"; }>; }>
 ```
 
 ## PlanRoute
@@ -886,7 +918,7 @@ const OWN_KEY_ROUTE_FACTS: RouteDecisionFacts
 A subscription plan, named by the route that bills through it.
 
 ```ts
-type PlanRoute = typeof PlanRouteSchema.Type;
+type PlanRoute = keyof typeof PLAN_ROUTES;
 ```
 
 ## PreparedHistoryEntry
@@ -1100,10 +1132,7 @@ endpoint).
 ```ts
 function resolveRouteEndpoint(
   config: Pick<ModelConfig, 'provider' | 'baseUrl'>,
-  route: Extract<
-    ModelRoute,
-    { kind: 'api-key' | 'chatgpt-subscription' | 'xai-subscription' }
-  >,
+  route: CredentialRoute,
   facts: Pick<RouteFacts, 'endpoints'>,
 ): string | undefined
 ```
@@ -1138,17 +1167,12 @@ The facts a route reads, and nothing else.
 interface RouteFacts {
   /** The provider reasoning mode the request asks for (OpenAI `pro`), if any. */
   readonly mode?: ReasoningMode;
-  /** ChatGPT subscription preferred, signed in, and not declined. */
-  readonly chatgptSubscription: boolean;
-  /** Grok subscription preferred, signed in, and not declined. */
-  readonly xaiSubscription: boolean;
-  /** A Kimi Code console key is stored. */
-  readonly kimiCodeKey: boolean;
-  /** The "Kimi Code subscription" switch is on and not declined. */
-  readonly preferKimiCode: boolean;
-  /** The GLM Coding Plan is on, not declined, and no dashboard GLM endpoint
-   *  outranks its path. */
-  readonly glmCodingPlan: boolean;
+  /**
+   * The plans a request may bill: preferred, signed in or keyed, and not
+   * declined. The GLM Coding Plan is absent when a dashboard GLM endpoint
+   * outranks its path.
+   */
+  readonly plans: readonly PlanRoute[];
   /**
    * The user's input window override, in tokens, for the ChatGPT
    * subscription; `undefined` takes the window the backend grants the model.

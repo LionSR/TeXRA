@@ -348,18 +348,17 @@ function attemptTurn<TTurn, R, RTurn>(
 }
 
 /** A turn that threw, or reported an error without throwing, fails the
- *  child. */
+ *  child, with the turn's own message when it carries one. */
 const noteFailure = <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
-  { err, turnIsError }: Turned<TTurn>,
+  { turn, err, turnIsError }: Turned<TTurn>,
 ): void => {
   if (err == null && !turnIsError) return;
-  const { stageLabel } = loop.params.strategy;
-  loop.failure = {
-    cause:
-      err ??
-      new Error(`${stageLabel} reported a failed turn without throwing.`),
-  };
+  const { strategy } = loop.params;
+  const message =
+    (turn !== null && strategy.turnErrorMessage?.(turn)) ||
+    `${strategy.stageLabel} reported a failed turn without throwing.`;
+  loop.failure = { cause: err ?? new Error(message) };
 };
 
 /** A process child's waiting row (`child.park`): `parked` before the loop
@@ -441,8 +440,15 @@ const buildTurnResult = Effect.fn('childRunLoop.buildTurnResult')(function* <
   last = false,
 ): Effect.fn.Return<{ result: ChildTurnResult; turn: LastTurn }, Error, R> {
   const { params } = loop;
-  const { strategy, runId } = params;
-  if (loop.turnIndex === 0) yield* beginTurn(loop, false);
+  const { strategy, runId, session } = params;
+  if (loop.turnIndex === 0) {
+    // A run that never entered the session has no rows to end under.
+    if ((yield* session.log.facts(runId)) === null)
+      return yield* Effect.fail(
+        new Error('The run ended without entering the session.'),
+      );
+    yield* beginTurn(loop, false);
+  }
   const wallTimeMs = (yield* Clock.currentTimeMillis) - loop.turnStart;
   const isError = err != null || turnIsError;
   const message =
@@ -600,9 +606,8 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   if (turn !== null && strategy.isTurnInterrupted?.(turn))
     return yield* Effect.interrupt;
   noteFailure(loop, turned);
-  // A launch can fail before its first cycle, and before its run's birth:
-  // there is no run to end, and the launch waiting for the birth fails
-  // with it (`launchDetachedSubagent`, `rootRun`).
+  // A launch that failed before its run's birth: there is no run to end,
+  // and the launch waiting for the birth fails with it.
   if (
     loop.turnIndex === 0 &&
     loop.failure !== undefined &&

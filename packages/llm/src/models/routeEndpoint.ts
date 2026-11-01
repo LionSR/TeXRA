@@ -17,7 +17,7 @@
 import { findModelProviderPlugin } from '../providers/providerPlugins.js';
 import { KIMI_CODE_BASE_URL } from '../providers/providers.js';
 import type { ModelConfig } from 'llm-zoo';
-import type { ModelRoute, RouteFacts } from './modelRoute.js';
+import type { CredentialRoute, RouteFacts } from './modelRoute.js';
 
 /**
  * The Codex backend a ChatGPT subscription bills. It already includes the
@@ -39,10 +39,7 @@ function pluginEndpoint(provider: string): string | undefined {
  */
 export function resolveRouteEndpoint(
   config: Pick<ModelConfig, 'provider' | 'baseUrl'>,
-  route: Extract<
-    ModelRoute,
-    { kind: 'api-key' | 'chatgpt-subscription' | 'xai-subscription' }
-  >,
+  route: CredentialRoute,
   facts: Pick<RouteFacts, 'endpoints'>,
 ): string | undefined {
   if (route.kind === 'chatgpt-subscription') return CODEX_BACKEND_BASE_URL;

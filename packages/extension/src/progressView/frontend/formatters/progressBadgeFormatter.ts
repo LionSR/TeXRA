@@ -1,5 +1,4 @@
 import {
-  DOCUMENTS_OUTPUT_KEY,
   documentRoundsOf,
   isDocumentTaskRun,
 } from '@texra/shared/plugins/documents';
@@ -17,6 +16,6 @@ export function progressBadgeLabel(
   plannedPasses: number | undefined,
 ): string | undefined {
   if (!isDocumentTaskRun(run)) return undefined;
-  const passes = documentRoundsOf(run.facts[DOCUMENTS_OUTPUT_KEY]).length;
+  const passes = documentRoundsOf(run).length;
   return passes === 0 ? undefined : passLabel(passes - 1, plannedPasses);
 }

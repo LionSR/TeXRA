@@ -12,7 +12,6 @@ import {
   type RunId,
   AgentConfigSchema,
   type AgentConfigPayload,
-  generateRunId,
   type RequestError,
   ensureError,
 } from '@texra-ai/harness/schemas';
@@ -193,7 +192,6 @@ const startCommand = defineCliCommand({
     // with what this command asked for riding the launch
     // (`launchApproval`).
     const requested = context.requestedApprovalPolicy;
-    const approval = launchApproval(requested);
     const refused = launchApprovalNotice(
       requested,
       projectApprovalPolicy(services.config),
@@ -229,12 +227,7 @@ const startCommand = defineCliCommand({
         const { client } = yield* connectCliService(context.storageRoot);
         return yield* client['task.start']({
           workspace: context.cwd,
-          runId: generateRunId(),
-          config,
-          continues: null,
-          preferHelperModel: false,
-          approvalPolicy: approval.approvalPolicy ?? null,
-          approveDelegatedWork: approval.approveDelegatedWork,
+          start: { config, approval: launchApproval(requested) },
         });
       }),
     ).pipe(Effect.mapError(ensureError));

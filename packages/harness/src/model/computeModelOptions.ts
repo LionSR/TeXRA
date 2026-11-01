@@ -220,11 +220,10 @@ function buildAvailabilityContext(
       'the model settings',
       readModelSettings(stores),
     );
-    const facts = routeFactsFor(settings, []);
     return {
       reasoningLevels: settings.reasoningLevels,
-      facts,
-      keyStatuses: { kimiCode: facts.kimiCodeKey },
+      facts: routeFactsFor(settings, []),
+      keyStatuses: { kimiCode: settings.kimiCodeKey },
     };
   });
 }
@@ -592,7 +591,7 @@ function visibleModelsForAccess(
   { facts }: ModelRouteContext,
 ): readonly string[] {
   const models = new Set(configuredModels);
-  if (!facts.chatgptSubscription) return [...models];
+  if (!facts.plans.includes('chatgpt-subscription')) return [...models];
   for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
     if (
       !isUnservedModel(config) &&

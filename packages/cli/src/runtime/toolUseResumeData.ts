@@ -4,7 +4,7 @@ import {
   type RunLifecycleStatus,
 } from '@texra-ai/harness/schemas';
 
-/** Status of a persisted run in the CLI history output. */
+/** A persisted run's status in `texra history`'s NDJSON and tab output. */
 export const HISTORY_RUN_STATUS = {
   RESUMABLE: 'resumable',
   /** A child a stop rested (`RunView.substate` paused): its parent's model
@@ -18,15 +18,6 @@ export const HISTORY_RUN_STATUS = {
 
 export type HistoryRunStatus =
   (typeof HISTORY_RUN_STATUS)[keyof typeof HISTORY_RUN_STATUS];
-
-export const HISTORY_RUN_STATUS_LABEL = {
-  [HISTORY_RUN_STATUS.RESUMABLE]: 'Resumable',
-  [HISTORY_RUN_STATUS.PAUSED]: 'Paused',
-  [HISTORY_RUN_STATUS.COMPLETED]: 'Completed',
-  [HISTORY_RUN_STATUS.CANCELLED]: 'Cancelled',
-  [HISTORY_RUN_STATUS.FAILED]: 'Failed',
-  [HISTORY_RUN_STATUS.UNKNOWN]: 'Unknown',
-} as const satisfies Record<HistoryRunStatus, string>;
 
 /** What a run's history standing is decided from: the view's facts
  *  and `records(id).readResumable()`'s answer. */

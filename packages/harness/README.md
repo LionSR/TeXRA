@@ -379,9 +379,8 @@ version of the usage program against a packed tarball is in
 ## The platform
 
 Every run needs an `AgentPlatform`: the process services the package
-composes (the agent directories, secrets, the resume
-port, and an optional `toolMissingHandler` that surfaces
-a missing external tool) plus the `WorkspaceRoots` of the folder the runs
+composes (the agent directories, secrets and the resume
+port) plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
 process-wide global state). The tool registry reads the MCP servers of the
 `mcp.json` at the storage root that global storage lies under.

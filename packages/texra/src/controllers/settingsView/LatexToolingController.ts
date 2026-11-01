@@ -19,8 +19,8 @@ import {
   type ProbedLatexTool,
 } from '@texra/shared/constants/latexToolchain';
 import {
-  checkToolInstalled,
   detectPackageManager,
+  probeTool,
 } from '@texra/utils/system/toolChecks';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -61,7 +61,7 @@ export function detectLatexSettingsStatus(
       yield* Effect.all(
         PROBED_LATEX_TOOLS.map((tool) =>
           Effect.map(
-            checkToolInstalled(tool, false),
+            probeTool(tool),
             (isInstalled) => [tool, isInstalled] as const,
           ),
         ),

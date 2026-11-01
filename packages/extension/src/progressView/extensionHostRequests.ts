@@ -107,8 +107,6 @@ import type {
 } from '@texra/controllers/session/openGuiWindow';
 import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import type { WindowHost } from '@texra/controllers/server/windowHost';
-import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
-import { getToolDocsPage } from '@texra/utils/system/toolChecks';
 import { texraGuideUrl } from '@ui/copy/guide';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 
@@ -448,21 +446,13 @@ export const createExtensionHostRequests = Effect.fn(
       const dir = yield* (yield* AgentDirectories).custom();
       if (dir) yield* revealFileInOS(dir);
     }),
-    recheckDependencies: Effect.gen(function* () {
-      yield* checkCoreDependencies(true);
-      yield* snapshot.refreshHostBanners;
-    }),
+    // The banner refresh probes the dependencies again; the banner shows
+    // what is missing.
+    recheckDependencies: snapshot.refreshHostBanners,
+    // Every dependency the banner lists installs from the one guide page.
     openInstallGuide: Effect.fn('extensionHostRequests.openInstallGuide')(
-      function* (tool) {
-        const page = getToolDocsPage(tool);
-        if (!page) {
-          return yield* Effect.fail(
-            new Rejected({
-              reason: `No install guide is registered for ${tool}.`,
-            }),
-          );
-        }
-        yield* runHandler('openDoc', openGuidePage(page));
+      function* () {
+        yield* runHandler('openDoc', openGuidePage('installation'));
       },
     ),
     onboarding: {

@@ -55,7 +55,7 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   );
 
   const run = yield* launch(
-    { config },
+    config,
     // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
     // progress-view compile fixer); a direct main-view launch omits it and
     // keeps the user's selected model.

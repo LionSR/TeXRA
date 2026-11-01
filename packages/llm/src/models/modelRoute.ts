@@ -26,25 +26,30 @@ import {
   type ReasoningMode,
 } from 'llm-zoo';
 
+import { PLAN_ROUTES, type PlanRoute } from '../errors.js';
 import { isApiProvider } from '../providers/apiProviders.js';
 import { KIMI_CODE_BASE_URL } from '../providers/providers.js';
 import type { ApiKeyProviderId } from '../providers/providerPlugins.js';
+
+/** What a direct provider key pays through: a `key` plan, or nothing. */
+export type ApiKeyUsageRoute =
+  | 'api-key'
+  | {
+      [P in PlanRoute]: (typeof PLAN_ROUTES)[P]['credential'] extends 'key'
+        ? P
+        : never;
+    }[PlanRoute];
 
 /** The facts a route reads, and nothing else. */
 export interface RouteFacts {
   /** The provider reasoning mode the request asks for (OpenAI `pro`), if any. */
   readonly mode?: ReasoningMode;
-  /** ChatGPT subscription preferred, signed in, and not declined. */
-  readonly chatgptSubscription: boolean;
-  /** Grok subscription preferred, signed in, and not declined. */
-  readonly xaiSubscription: boolean;
-  /** A Kimi Code console key is stored. */
-  readonly kimiCodeKey: boolean;
-  /** The "Kimi Code subscription" switch is on and not declined. */
-  readonly preferKimiCode: boolean;
-  /** The GLM Coding Plan is on, not declined, and no dashboard GLM endpoint
-   *  outranks its path. */
-  readonly glmCodingPlan: boolean;
+  /**
+   * The plans a request may bill: preferred, signed in or keyed, and not
+   * declined. The GLM Coding Plan is absent when a dashboard GLM endpoint
+   * outranks its path.
+   */
+  readonly plans: readonly PlanRoute[];
   /**
    * The user's input window override, in tokens, for the ChatGPT
    * subscription; `undefined` takes the window the backend grants the model.
@@ -61,19 +66,11 @@ export interface RouteFacts {
 /** The facts {@link decideModelRoute} reads. */
 export type RouteDecisionFacts = Omit<RouteFacts, 'endpoints'>;
 
-/** The facts under which a model takes its own key: no preference is on. */
+/** The facts under which a model takes its own key: no plan is on. */
 export const OWN_KEY_ROUTE_FACTS: RouteDecisionFacts = {
-  chatgptSubscription: false,
-  xaiSubscription: false,
-  kimiCodeKey: false,
-  preferKimiCode: false,
-  glmCodingPlan: false,
+  plans: [],
   chatgptContextWindow: undefined,
 };
-
-/** What a direct provider key pays through. */
-export type ApiKeyUsageRoute =
-  'api-key' | 'kimi-code-subscription' | 'glm-coding-plan-subscription';
 
 /** The route a model's next request takes, decided by {@link decideModelRoute}. */
 export type ModelRoute =
@@ -92,6 +89,12 @@ export type ModelRoute =
   | { readonly kind: 'no-api-key' }
   /** No route TeXRA reaches serves the model (see {@link isUnservedModel}). */
   | { readonly kind: 'unserved' };
+
+/** The routes that bill a credential: a key, or a session plan's sign-in. */
+export type CredentialRoute = Exclude<
+  ModelRoute,
+  { kind: 'no-api-key' | 'unserved' }
+>;
 
 /**
  * How the Codex backend serves `model` on a ChatGPT subscription, or
@@ -211,11 +214,12 @@ export function decideModelRoute(
 ): ModelRoute {
   // Only OpenRouter serves this model, and TeXRA does not call OpenRouter.
   if (config.openRouterOnly) return { kind: 'unserved' };
+  const { plans } = facts;
   // The subscriptions are preferences: signed out, the model takes its key.
   // The Codex backend serves no provider reasoning mode (OpenAI `pro`).
   const codex = codexSubscriptionOf(config);
   if (
-    facts.chatgptSubscription &&
+    plans.includes('chatgpt-subscription') &&
     facts.mode === undefined &&
     codex !== undefined
   ) {
@@ -224,18 +228,20 @@ export function decideModelRoute(
       contextWindow: facts.chatgptContextWindow ?? codex.contextWindow,
     };
   }
-  if (facts.xaiSubscription && config.provider === ModelProvider.XAI) {
+  if (
+    plans.includes('xai-subscription') &&
+    config.provider === ModelProvider.XAI
+  ) {
     return { kind: 'xai-subscription' };
   }
   if (
     isKimiCodeExclusiveModel(config) ||
     (isKimiSubscriptionEligible(config) &&
-      facts.preferKimiCode &&
-      facts.kimiCodeKey)
+      plans.includes('kimi-code-subscription'))
   ) {
     return {
       kind: 'api-key',
-      provider: 'kimiCode',
+      provider: PLAN_ROUTES['kimi-code-subscription'].provider,
       usageRoute: 'kimi-code-subscription',
     };
   }
@@ -243,7 +249,7 @@ export function decideModelRoute(
   // A per-model base URL outranks the plan's path (`./routeEndpoint.ts`).
   const onCodingPlan =
     config.provider === ModelProvider.GLM &&
-    facts.glmCodingPlan &&
+    plans.includes('glm-coding-plan-subscription') &&
     !config.baseUrl;
   return {
     kind: 'api-key',

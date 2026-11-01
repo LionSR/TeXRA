@@ -4,7 +4,7 @@
  * in. `nodePlatform()` builds one; a host composing its own process supplies
  * the same ports to `processLayer` one by one.
  */
-import type { AgentDirectoriesPort, ToolMissingHandler } from './interfaces';
+import type { AgentDirectoriesPort } from './interfaces';
 import type { PlatformSecrets } from './secrets';
 import type { WorkspaceRoots } from './workspaceRoots';
 
@@ -16,10 +16,6 @@ import type { WorkspaceRoots } from './workspaceRoots';
 export interface AgentPlatform {
   /** The agent directories this process's `AgentDirectories` service serves. */
   readonly agentDirectories: AgentDirectoriesPort;
-  /** Surfaces a tool-missing error to the embedder, served as
-   *  `ToolMissingReporter`; absent, a missing-tool probe answers without
-   *  surfacing. */
-  readonly toolMissingHandler?: ToolMissingHandler;
   /** The app's directories on every command's PATH (`CommandDirs`). */
   readonly commandDirs?: () => readonly string[];
   readonly roots: WorkspaceRoots;

@@ -8,7 +8,6 @@
 
 import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   HostInteractions,
   SessionHostInteractions,
@@ -16,12 +15,10 @@ import type {
 import type { AgentRunListingEntry } from '@agent/storage/runListing';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { AgentPlatform } from '@platform/agentPlatform';
-import type { ApprovalPolicy } from '@shared/approvalPolicy';
 import type {
   CommitOrdinal,
   DisplaySessionEvent,
   SessionViewInput,
-  InlinePersona,
   RequestDecision,
   RunEnd,
   RunId,
@@ -32,7 +29,11 @@ import type {
   SessionStoreMovedAside,
 } from '@shared/session/database';
 import type { RequestError } from '@shared/session/runtimeRequest';
-import type { OutcomeOf, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type {
+  OutcomeOf,
+  RuntimeRequest,
+  StartRequestSchema,
+} from '@shared/session/runtimeRequest';
 import type {
   PendingRequest,
   SessionView,
@@ -108,36 +109,11 @@ export interface SessionHost extends Omit<HostInteractions, 'dispose'> {
   readonly approve?: ApprovalHandler;
 }
 
-/** What starting a run takes: an agent (a name from the agent
- *  directories, or a persona written inline, which the run stores so a
- *  resume needs no file) and the instruction to give it. Everything else
- *  is optional. `config` replaces both with a complete configuration an
- *  application host has already resolved. */
-export type StartInput = (
-  | {
-      readonly agent: string | InlinePersona;
-      readonly instruction: string;
-      readonly model?: string;
-    }
-  | { readonly config: AgentConfig }
-) & {
-  /** The run's id. Absent, one is generated. */
-  readonly runId?: RunId;
-  /** The earlier run this one continues in a chat: the new run starts with
-   *  the approvals the person granted there. */
-  readonly continues?: RunId;
-  /** Run on the configured helper model instead of the selected one. */
-  readonly helperModel?: boolean;
-  /** A stricter approval policy for this run (it can only narrow the
-   *  project's), and whether work it delegates to other agents starts
-   *  approved. */
-  readonly approval?: {
-    readonly policy?: ApprovalPolicy;
-    readonly delegated?: boolean;
-  };
-  /** Keep the run open for follow-up messages after each answer, as a chat
-   *  window does. Absent, the run ends after its first answer. */
-  readonly interactive?: boolean;
+/** What starting a run takes: the start as data (`StartRequestSchema`:
+ *  an agent and its instruction, or a resolved `config`, with the optional
+ *  `runId`, `continues`, `helperModel`, `approval` and `interactive`), and
+ *  the run's own tools. */
+export type StartInput = typeof StartRequestSchema.Type & {
   /** Tools for this run only, made with `defineTool`. A resume needs the
    *  same tools passed again. */
   readonly tools?: readonly ITool[];

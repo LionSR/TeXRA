@@ -23,30 +23,9 @@ the [general-package design](../../proposed/architecture/2026-10-21-harness-gene
 [tech-debt target designs](../../proposed/architecture/2026-10-27-tech-debt-target-designs.md) (one owner
 per run-lifecycle fact) and does not restate them. Two of the problems found
 here are already designed there; this note says which and designs the rest.
-Peer file paths are written with a `pi:` or `dsh:` prefix.
-
-## Implementation update, 2026-10-30
-
-At TeXRA
-[`784dbab9251a148f75695530bacc19c3bf91ad3c`](https://github.com/LionSR/TeXRA/tree/784dbab9251a148f75695530bacc19c3bf91ad3c),
-implementations have merged for M1 (#14446), M2 (#14450), M3 (#14444), M4
-(#14453), M5 (#14451), and M7/M8 (#14445). Related changes make request kind
-determine its answer (#14435), reject missing `run.end` output and usage totals
-(#14447), record consumed follow-up dispositions (#14448), and place command
-grants on tool definitions (#14457). Integration metadata and cards now belong
-to their plugins (#14458); model binding uses the decided route and defaulted
-options (#14459); team planning belongs to the app (#14462); notices describe
-facts while hosts choose buttons (#14463).
-
-The measurements, grades and design estimates below retain the original
-`808521a8ed` baseline. They are not measured implementation totals. The current
-[row-reader baseline](https://github.com/LionSR/TeXRA/blob/784dbab9251a148f75695530bacc19c3bf91ad3c/config/ratchets/row-readers-baseline.json)
-contains 14 file entries across eight row kinds, including storage and trace
-boundaries; the proposed zero-reader target has not been reached. At this
-revision M6 required each failure contract to be checked separately, including
-the distinction between local usage records and backend billing below; it later
-landed as #14473 (see "Landed" at the end). This update records merged scope,
-not acceptance of every original estimate or risk.
+Peer file paths are written with a `pi:` or `dsh:` prefix. The measurements,
+grades and estimates below are the `808521a8ed` baseline; what the eight moves
+changed, with the measured numbers, is under "Landed (2026-10-30)".
 
 ## Summary
 
@@ -84,8 +63,8 @@ deferred commits and JSONL. The original design estimated about 1,250 kernel
 lines removed, a tool call reduced from about 24 functions to about 8, liveness
 from 4 answers to 1, and row readers outside reducers from 43 to 0. The aggregate
 deletion estimate included M6's unvalidated 120 lines: its 11 warning sites do
-not establish 11 lost durable facts or justify deleting every catch. The dated
-update above records the implemented scope and remaining readers.
+not establish 11 lost durable facts or justify deleting every catch. "Landed
+(2026-10-30)" records what each move deleted and what remains.
 
 ## What gets deleted
 
@@ -511,9 +490,8 @@ durable fact.
 
 - The 2026-10-30 correction checked the exact pinned dsh lock implementation,
   pi's `holdRun`/`finish`/`drain` phases and unreleased changelog, and TeXRA's
-  response-before-billing order at both `808521a8ed` and `784dbab925`. The
-  implementation update checks merged scope and the current row-reader file;
-  it does not rerun the historical counts or assign new scores.
+  response-before-billing order at both `808521a8ed` and `784dbab925`. Neither
+  it nor the "Landed" table reruns the historical counts or assigns new scores.
 - The three passes' notes, with file and line evidence, are committed beside
   this note in
   `.agents/docs/evidence/2026-10-30-harness-design-against-pi-durable-and-deepseek/`

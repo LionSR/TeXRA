@@ -6,11 +6,7 @@
  * listing folded here, and a watch is the service's feed, read back as the
  * fold inputs it carries.
  */
-import {
-  generateRunId,
-  JsonValueSchema,
-  type RunId,
-} from '@texra-ai/harness/schemas';
+import { JsonValueSchema, type RunId } from '@texra-ai/harness/schemas';
 import {
   Cause,
   Effect,
@@ -573,22 +569,14 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       watch,
     },
     request,
-    start: (input) => {
-      if (!('config' in input))
+    start: ({ tools, ...start }) => {
+      if (!('config' in start))
         // The service takes a host's whole configuration.
         return Effect.fail(runFailure('A service task needs its config.'));
-      const refused = windowTools(input.tools);
+      const refused = windowTools(tools);
       if (refused) return Effect.fail(refused);
       return callService(link, runFailure, (client) =>
-        client['task.start']({
-          workspace,
-          runId: input.runId ?? generateRunId(),
-          config: input.config,
-          continues: input.continues ?? null,
-          preferHelperModel: input.helperModel ?? false,
-          approveDelegatedWork: input.approval?.delegated ?? false,
-          approvalPolicy: input.approval?.policy ?? null,
-        }).pipe(
+        client['task.start']({ workspace, start }).pipe(
           Effect.mapError((error) => {
             const cause = new Error(
               `The TeXRA service could not start the task: ${error.message}`,

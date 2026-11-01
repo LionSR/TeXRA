@@ -54,12 +54,7 @@ import { withLogChannel } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { AppSignals } from '@platform/appSignals';
 import { holdProcessRoot } from '@platform/processRuntime';
-import {
-  AgentDirectories,
-  AppState,
-  ToolMissingReporter,
-  type ToolMissingHandler,
-} from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import { globalStorageFsLayer } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import {
@@ -508,9 +503,6 @@ export interface ProcessServicesOptions {
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
-  /** The host's tool-missing reporter, served as `ToolMissingReporter`;
-   *  absent (no UI for it), a probe still answers, without surfacing. */
-  readonly toolMissingReporter?: ToolMissingHandler;
   /** The app's directories on every command's PATH (`CommandDirs`). */
   readonly commandDirs?: () => readonly string[];
   /**
@@ -564,7 +556,6 @@ export function ownerProcessLayer({
   secrets,
   appState: appStateOption,
   agentDirectories,
-  toolMissingReporter,
   toolAvailability = toolAvailabilityLayer,
   usageLog = UsageLog.disabled,
   globalDatabase: globalDatabaseOption,
@@ -592,9 +583,6 @@ export function ownerProcessLayer({
       agentCatalogFollower,
       Layer.merge(agentDirectories, catalog),
     ),
-    toolMissingReporter === undefined
-      ? Layer.empty
-      : Layer.succeed(ToolMissingReporter)(toolMissingReporter),
     catalog,
     // One retry gate per process: a 429 cools a credential for every project.
     Layer.effect(RouteRetries, ModelRetryGate.make),

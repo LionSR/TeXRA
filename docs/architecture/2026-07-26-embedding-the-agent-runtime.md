@@ -239,15 +239,11 @@ schemas reject fails it with `RunFailure` before admission too (`admitInput`,
 `packages/harness/src/effect/sessionPrograms.ts:94-137`, wraps
 `InlinePersonaSchema.parse` and `AgentConfigSchema.parse`, so a typed
 `temperature: 2` is one); and a failure after admission fails `run.result`
-with `RunFailure`. A host inside this repository that already holds a
-`ValidatedRunRequest` launches through `session.runs.launch` on its
-`SessionHandle` instead, which needs the composition root's `SessionOwner`.
-`validateRunRequest` (`packages/texra/src/controllers/session/runRequests.ts`)
-is the result-style helper that builds one: it returns either a
-`ValidatedRunRequest` or a validation message. A caller that prefers
-exceptions may instead run `AgentConfigSchema.parse` and construct the
-`ValidatedRunRequest` structurally, as production extension callers do
-(`packages/extension/src/commands/agent/executeCommand.ts:37-46`).
+with `RunFailure`. A host inside this repository decodes its configuration
+first with `decodeLaunchConfig`
+(`packages/texra/src/controllers/session/launchConfig.ts`), which fails
+with a `Rejected` naming the first issue, and starts the decoded
+`AgentConfig`.
 `agent`, `model`, and `instruction` all have `.prefault()` defaults
 (`packages/harness/src/shared/schemas/agentConfig.ts`). A launch names no agent
 category: every agent runs as a chat, and launch resolution

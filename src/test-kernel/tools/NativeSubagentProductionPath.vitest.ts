@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Fiber, Schema, Scope, Stream } from 'effect';
+import { Effect, Fiber, Layer, Schema, Scope, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -62,6 +62,7 @@ import { type BoundModel, RunFileService } from '@texra-ai/harness/plugins';
 import { AgentCatalog, withProcessServices } from '@texra-ai/harness/host';
 import { getRunRecords, readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
+import { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
 import type { AppendedMessage } from '@agent/runtime/storedTurn';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
@@ -95,6 +96,7 @@ import {
   openTestDefaultSession,
 } from '@test/support/sessionEnd';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
+import { ScriptTool } from '@tools/codemode/ScriptTool';
 import { readCompletedRunConversation } from '@transcript/completedRunArchive';
 import { ResolvedTurnSchema } from '../../../packages/llm/src/turn.js';
 
@@ -104,6 +106,14 @@ const PARENT_AGENT = 'parent_9531';
 const CHILD_AGENT = 'child_9531';
 const PARENT_MODEL = 'openai/gpt-5.4-2026-03-05';
 const CHILD_MODEL = 'openai/gpt-5.5-2026-04-23';
+/** The scripted parent's launch config, which its calls' fixtures share. */
+const parentConfig = Schema.decodeUnknownSync(AgentConfigSchema)({
+  agent: PARENT_AGENT,
+  agentSource: 'custom',
+  model: PARENT_MODEL,
+  instruction: 'Coordinate the child proof review.',
+  workingDirectory: process.cwd(),
+});
 
 const tempDirs = useTempDirs();
 let session: SessionHandle;
@@ -450,13 +460,6 @@ async function launchWaitingChild(options: {
       ),
   );
 
-  const parentConfig = Schema.decodeUnknownSync(AgentConfigSchema)({
-    agent: PARENT_AGENT,
-    agentSource: 'custom',
-    model: PARENT_MODEL,
-    instruction: 'Coordinate the child proof review.',
-    workingDirectory: process.cwd(),
-  });
   // Admitted on the run's lane like every production launch, so the run's
   // fiber is its stop target by run id.
   parentFiber = testRuntime().runFork(
@@ -724,6 +727,39 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           )).message,
         ).toBe('The run ended without entering the session.');
         yield* waitForParentTurns(5);
+
+        // A background script's launch that fails before its run opens
+        // fails the `script` call, as the `agent` call's does: the model
+        // reads the failure in the call's own result instead of waiting
+        // for a follow-up that never comes.
+        bindingMocks.bindModel.mockReturnValueOnce(
+          Effect.fail(new Error('Script model binding failed.')),
+        );
+        expect(
+          yield* ScriptTool.call({
+            code: 'await 1;',
+            run_in_background: true,
+          }).pipe(
+            Effect.provide(
+              Layer.mergeAll(
+                nativeToolTestLayer({
+                  run: {
+                    runId: PARENT_RUN_ID,
+                    session,
+                    config: parentConfig,
+                    model: testModelCell(PARENT_MODEL),
+                    toolPolicy: {},
+                  },
+                }),
+                // The background branch never reaches the sandbox.
+                Layer.mock(CodeSandbox, {}),
+              ),
+            ),
+          ),
+        ).toMatchObject({
+          status: 'error',
+          error: expect.stringContaining('Script model binding failed.'),
+        });
       }),
     60_000,
   );

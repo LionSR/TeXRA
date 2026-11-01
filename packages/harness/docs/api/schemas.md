@@ -21,7 +21,7 @@ Browser-safe Effect Schemas, derived types, and pure read helpers for
   [`ApprovalPolicySchema`](#approvalpolicyschema), [`resolveBypass`](#resolvebypass).
 - **Agent definitions & run outcomes**: [`AgentConfigSchema`](#agentconfigschema),
   [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
-  [`RunIdSchema`](#runidschema).
+  [`RunIdSchema`](#runidschema), [`StartRequestSchema`](#startrequestschema).
 - **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
   [`configTreeRows`](#configtreerows), [`GlobalStateKey`](#globalstatekey),
   [`WorkspaceStateKey`](#workspacestatekey), [`TraceDocumentSchema`](#tracedocumentschema).
@@ -355,23 +355,23 @@ type AttachedMemoryMiss = typeof AttachedMemoryMissSchema.Type;
 
 ## Attention
 
-What wants this window: the requests it can answer, in view order (the
-badge), and those `previous` could not (none without it: history).
+What wants this window: the requests it can answer (the badge), and since
+`previous` (none without it) the new ones and the runs that ended.
 
 ```ts
 interface Attention<Request> {
   readonly requests: readonly Request[];
   readonly arrived: readonly Request[];
+  readonly finished: readonly ReadRunView[];
 }
 ```
 
 ## attentionOf
 
-The one attention rule every host reads (the extension's sidebar badge and
-reveal, the desktop's dock badge, notifications, and rail): a request
-wants the user exactly when this window can answer it, whatever its kind.
-A request on a run another process holds, or one waiting for its run's
-resume, is shown on its card but asks nothing of this window.
+The one attention rule every host reads (the extension's badge, reveal and
+chime, the desktop's dock badge, notifications, and rail): a request wants
+the user when this window can answer it (not one on a run another process
+holds or waiting for its run's resume), and a run when its outcome lands.
 
 ```ts
 function attentionOf<View extends ReadSessionView>(
@@ -1529,12 +1529,9 @@ this module dependency-free lets the error formatter, the invoker, and the
 CLI retry copy share one catalog.
 
 ```ts
-type QuotaFallbackExhaustionReason = Extract<
+type QuotaFallbackExhaustionReason = Exclude<
   ExhaustionReason,
-  | 'chatgpt-subscription'
-  | 'xai-subscription'
-  | 'glm-coding-plan'
-  | 'kimi-code-subscription'
+  'upstream-credit'
 >;
 ```
 
@@ -1542,7 +1539,6 @@ type QuotaFallbackExhaustionReason = Extract<
 
 ```ts
 interface QuotaFallbackRoute {
-  readonly usageRoute: DeclinableUsageRoute;
   readonly exhaustionReason: QuotaFallbackExhaustionReason;
   readonly retryFallbackName: string;
   readonly retrySourceName: string;
@@ -2192,6 +2188,18 @@ A trailing newline does not produce a phantom empty element.
 
 ```ts
 function splitContentLines(text: string): string[]
+```
+
+## StartRequestSchema
+
+A start as data: all of `StartInput` but the run's own tools. Either an
+agent (a name from the agent directories, or a persona written inline,
+which the run stores so a resume needs no file) and the instruction to
+give it, or `config`, a complete configuration an application host has
+already resolved. A host sends it to a service as it is.
+
+```ts
+const StartRequestSchema: Union<readonly [Struct<{ readonly runId: optional<brand<String, "RunId">>; readonly continues: optional<brand<String, "RunId">>; readonly helperModel: optional<Boolean>; readonly approval: optional<Struct<{ readonly policy: optional<Literals<readonly ["never", "ask", "yolo"]>>; readonly delegated: optional<Boolean>; }>>; readonly interactive: optional<Boolean>; readonly agent: Union<readonly [String, toEncoded<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>]>; readonly instruction: String; readonly model: optional<String>; }>, Struct<{ readonly runId: optional<brand<String, "RunId">>; readonly continues: optional<brand<String, "RunId">>; readonly helperModel: optional<Boolean>; readonly approval: optional<Struct<{ readonly policy: optional<Literals<readonly ["never", "ask", "yolo"]>>; readonly delegated: optional<Boolean>; }>>; readonly interactive: optional<Boolean>; readonly config: Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly agent: withDecodingDefault<String, never>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>>; readonly asCaller: optional<NullOr<Boolean>>; readonly model: withDecodingDefault<String, never>; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<NullOr<String>>; readonly displayInstruction: optional<NullOr<String>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly cli: optional<NullOr<Struct<{ readonly outputFile: optional<NullOr<String>>; readonly outputDirectory: optional<NullOr<String>>; readonly expectedOutputFiles: optional<NullOr<$Array<String>>>; readonly teamId: optional<NullOr<String>>; }>>>; readonly delegationAgentScope: optional<NullOr<$Array<Trim>>>; readonly outputSchema: optional<NullOr<$Record<String, Unknown>>>; readonly script: optional<NullOr<Union<readonly [Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"background">; }>, Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"recipe">; readonly block: String; readonly options: $Record<String, Codec<Json, Json, never, never>>; }>]>>>; }>; }>]>
 ```
 
 ## StateSettingEntry
