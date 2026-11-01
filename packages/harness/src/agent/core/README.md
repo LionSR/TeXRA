@@ -25,5 +25,5 @@ Not here:
 Harness code imports the specific module (`@agent/core/definition/AgentConfig`);
 there is no `@agent/core` barrel. The `AgentConfigSchema` wire contract comes
 from `@shared/schemas` inside the harness and from `@texra-ai/harness/schemas`
-outside it. Run-request validation (`validateRunRequest`) is the app's, in
-`packages/texra/src/controllers/session/runRequests.ts`.
+outside it. Decoding a launch's configuration (`decodeLaunchConfig`) is the
+app's, in `packages/texra/src/controllers/session/launchConfig.ts`.
