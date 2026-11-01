@@ -10,8 +10,6 @@ import {
 import { refusalCopy } from '@shared/session/approvalDecision';
 import { readToolEditContent } from '@shared/session/runtimeRequest';
 import { errorResult } from '@tools/core/result';
-import { blobAddress } from '@utils/core/idHash';
-import { workspaceRelativePath } from '@utils/files/workspaceFS';
 import {
   buildDiffHunks,
   countLineChanges,
@@ -19,7 +17,9 @@ import {
   reportDiffTimeout,
   unifiedDiffText,
   type DiffHunks,
-} from '@utils/text/unifiedDiff';
+} from '@tools/unifiedDiff';
+import { blobAddress } from '@utils/core/idHash';
+import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 /**
  * What a tool proposes; {@link requestToolEditApproval} derives the rest:

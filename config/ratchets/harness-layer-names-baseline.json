@@ -167,7 +167,6 @@
     "utils->shared": [
       "config/settings#Settings",
       "schemas#RunIdSchema",
-      "session/runtimeRequest#formatHunkLines",
       "state/stateKeys#WorkspaceStateKey",
       "type config/settings#SettingsStores",
       "type schemas#ExecResult",
@@ -175,8 +174,7 @@
       "type schemas#FileLocation",
       "type schemas#RunId",
       "type schemas#RunStorageFileLocation",
-      "type schemas#WorkspaceFileLocation",
-      "utils/xmlEscape#escapeTextStrict"
+      "type schemas#WorkspaceFileLocation"
     ],
     "utils->common": [
       "errors/errorPredicates#isFileNotFoundError",

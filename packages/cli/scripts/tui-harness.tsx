@@ -85,16 +85,16 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
+import {
+  buildDiffHunks,
+  countLineChanges,
+  firstChangedLine,
+} from '@tools/unifiedDiff';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { blobAddress } from '@utils/core/idHash';
 import { nodeFileServices } from '@utils/files/fsDurability';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  buildDiffHunks,
-  countLineChanges,
-  firstChangedLine,
-} from '@utils/text/unifiedDiff';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';

@@ -12,7 +12,7 @@ import type { PromptSection } from '@tools/toolTable';
 // Local imports - utilities
 import { renderPrompt } from '@utils/prompt';
 import { loadAgentsMd } from '@utils/files/agentsMd';
-import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
+import { buildWorkspaceInfoBlock } from './workspaceInfo';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**

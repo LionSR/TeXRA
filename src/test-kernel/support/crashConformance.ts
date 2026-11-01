@@ -92,6 +92,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { ProjectDatabases } from '@shared/session/database';
+import { generateRunId } from '@shared/schemas';
 import {
   closeTestDefaultSession,
   openTestDefaultSession,
@@ -106,7 +107,6 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import { documentsResultOf } from '@texra/shared/plugins/documentOutputs';
-import { generateRunId } from '@utils/core';
 
 /** A file's lines, none when it is absent. */
 const linesOf = (file: string): string[] =>
