@@ -186,7 +186,7 @@ export class ModelError extends Schema.TaggedError<ModelError>()('ModelError', {
       retryable: fields.retryable ?? retryableByDefault(fields.kind, status),
       ...(fields.scope === undefined &&
       status !== undefined &&
-      (status >= 500 || status === 408 || status === 429)
+      isRetryableStatus(status)
         ? { scope: 'route' as const }
         : {}),
     });

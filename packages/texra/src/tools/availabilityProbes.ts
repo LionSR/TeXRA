@@ -1,89 +1,23 @@
 /**
- * The probes TeXRA's plugin checks are built from (`./pluginAvailability`):
- * the localhost Zotero probes, the SDK-and-binary probe the agent CLIs
- * share, and the install-command picker.
+ * What more than one plugin's availability check and card share: the
+ * SDK-and-binary probe and the install-command picker.
  */
 
 // Third-party imports
-import { Duration, Effect, type FileSystem } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 
 // Local imports
 import { causeChain, isModuleNotFoundError } from '@texra-ai/harness/host';
 import { runsInWsl } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { scopedClient, ToolProbeFailed } from '@texra-ai/harness/plugins';
+import { ToolProbeFailed } from '@texra-ai/harness/plugins';
 import {
   hasPackageManager,
   SYSTEM_PACKAGE_MANAGERS,
   type SystemPackageManager,
 } from '@texra/utils/system/toolChecks';
 
-import type { Cause } from 'effect';
-import type { HttpClient, HttpClientError } from 'effect/http';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-
-const ZOTERO_PROBE_TIMEOUT_MS = 2000;
-
-// ============================================================
-// Zotero probe helpers
-// ============================================================
-
-function probeLocalhost(
-  url: string,
-): Effect.Effect<
-  { ok: boolean; status: number },
-  HttpClientError.HttpClientError | Cause.TimeoutError,
-  HttpClient.HttpClient
-> {
-  // The probe never reads the body: the request scope aborts the socket once
-  // the status is read, and the deadline (or a caller interrupting the probe)
-  // interrupts the request itself, so a connection that never returns
-  // headers is cut rather than abandoned.
-  return Effect.gen(function* () {
-    const client = yield* scopedClient;
-    const response = yield* client.get(url);
-    return {
-      ok: response.status >= 200 && response.status < 300,
-      status: response.status,
-    };
-  }).pipe(
-    Effect.scoped,
-    Effect.timeout(Duration.millis(ZOTERO_PROBE_TIMEOUT_MS)),
-  );
-}
-
-/**
- * A Zotero probe that could not reach its endpoint answers "not running"; the
- * failure's tag is logged so a transport fault stays distinguishable from an
- * absent Zotero.
- */
-function zoteroProbeUnreachable(
-  error: HttpClientError.HttpClientError | Cause.TimeoutError,
-): Effect.Effect<boolean> {
-  return Effect.logDebug('Zotero probe unreachable', {
-    reason: error._tag === 'HttpClientError' ? error.reason._tag : error._tag,
-  }).pipe(Effect.as(false));
-}
-
-/** Probe the Zotero connector endpoint (responds if Zotero is running). */
-export function probeZoteroConnector(
-  port: number,
-): Effect.Effect<boolean, never, HttpClient.HttpClient> {
-  return probeLocalhost(`http://127.0.0.1:${port}/connector/ping`).pipe(
-    Effect.as(true),
-    Effect.catch(zoteroProbeUnreachable),
-  );
-}
-
-/** Probe the Better BibTeX JSON-RPC endpoint. */
-export function probeZoteroBbt(
-  port: number,
-): Effect.Effect<boolean, never, HttpClient.HttpClient> {
-  return probeLocalhost(`http://127.0.0.1:${port}/better-bibtex/json-rpc`).pipe(
-    Effect.map((response) => response.ok || response.status === 405),
-    Effect.catch(zoteroProbeUnreachable),
-  );
-}
 
 /** Appended to install hints when running under WSL, where side matters. */
 function wslInstallHint(): string {
@@ -95,8 +29,8 @@ type SdkBinaryStatus =
   { ok: false; message: string } | { ok: true; binaryPath: string };
 
 /**
- * Human-readable probe shared by the SDK-backed CLI integrations (Codex,
- * Claude Code): import the SDK, then resolve the native binary (appending
+ * Human-readable probe shared by the SDK-backed CLI integrations: import
+ * the SDK, then resolve the native binary (appending
  * {@link wslInstallHint} when it is absent). A missing package reads as the
  * importer's own install guidance, found on the cause chain's error code
  * rather than in the message text. Callers own only the final "ready" line.

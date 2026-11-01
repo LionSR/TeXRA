@@ -27,7 +27,6 @@ import { formatBytes } from '@ui/copy/format';
 
 // Local imports - formatter helpers
 import {
-  TOOL_ICON_MAP,
   DIFF_DETECTION_LINE_LIMIT,
   DIFF_MARKER_THRESHOLD,
   INLINE_DIFF_TIMEOUT_MS,
@@ -283,12 +282,6 @@ export function buildFileListRender(
     // prettier-ignore
     return html`<li class="detail-item" title=${filePath}>${waIcon(iconName)} ${buildFileLinkSpan(filePath, html`<bdi dir="auto">${fileName}</bdi>`)}${file.varName ? html` <span class="file-var">[<bdi dir="auto">${file.varName}</bdi>]</span>` : ''}${file.sourceDisplay ? html` <span class="file-source">(<bdi dir="auto">${file.sourceDisplay}</bdi>)</span>` : ''}${loaded ? html` <span class="file-media">[${loaded.kind}, <bdi dir="ltr">${formatBytes(loaded.sizeBytes)}</bdi>]</span>` : ''}</li>`;
   })}`;
-}
-
-/** Get appropriate wa-icon name for a tool. */
-export function getToolIconName(toolName: string, isError = false): IconName {
-  if (isError) return 'circle-exclamation';
-  return TOOL_ICON_MAP[toolName] ?? 'wrench';
 }
 
 // ============================================================================

@@ -723,12 +723,6 @@ export const modelInvokerLayer = (): Layer.Layer<
               );
             }),
           },
-          chains: (bound) =>
-            Effect.map(
-              cell.current,
-              (state) =>
-                'continuation' in chainedContinuation(state, bound.origin),
-            ),
           retries: (yield* SynchronizedRef.get(run.model)).automaticRetries,
           logger,
         });

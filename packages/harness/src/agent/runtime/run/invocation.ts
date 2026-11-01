@@ -111,9 +111,6 @@ export interface InvocationDriver<A, E, R> {
   ) => Effect.Effect<RetryErrorInfo, E, R>;
   /** A turn's person; null where nobody can be asked. */
   readonly asker: Asker<E, R> | null;
-  /** Whether an attempt on `bound` sends a continuation, which a vendor
-   *  that lost it answers with `continuation-gone`. */
-  readonly chains: (bound: BoundModel) => Effect.Effect<boolean>;
   /** Automatic resends per invocation. */
   readonly retries: number;
   readonly logger: Pick<AgentTrace, 'warn' | 'debug'>;
@@ -188,7 +185,7 @@ const rebound = Effect.fn('ModelInvoker.rebound')(function* <A, E, R>(
   const result = yield* driver.rebind(move.retry ?? 'configured', bound);
   if (Result.isSuccess(result)) return true;
   const failure = { error: result.failure, unsent: true };
-  const next = yield* moveAfter(driver, failure, ref, bound, false);
+  const next = yield* moveAfter(driver, failure, ref, false);
   yield* driver.failed(ref, failure, next, bound);
   return false;
 });
@@ -276,19 +273,16 @@ const moveAfter = <A, E, R>(
   driver: InvocationDriver<A, E, R>,
   { error, unsent }: AttemptFailure,
   ref: InvocationRef,
-  bound: BoundModel,
   observed: boolean,
 ): Effect.Effect<FailedNext> =>
-  Effect.zipWith(driver.read, driver.chains(bound), ({ invocation }, chains) =>
+  Effect.map(driver.read, ({ invocation }) =>
     failedNext(
       failuresBefore(invocation, ref),
       {
-        // A 404 on a request that chained nothing is an ordinary failure,
-        // and a failed observation is never resubmitted unasked: the work
-        // it watched was already billed.
+        // A failed observation is never resubmitted unasked: the work it
+        // watched was already billed.
         unchain:
           !observed &&
-          chains &&
           error instanceof ModelError &&
           error.kind === 'continuation-gone',
         automatic:
@@ -334,7 +328,7 @@ const afterFailure = <A, E, R>(
     Effect.flatMap((renewed) => {
       if (renewed !== true)
         return Effect.map(
-          moveAfter(driver, renewed, ref, bound, move.kind === 'observe'),
+          moveAfter(driver, renewed, ref, move.kind === 'observe'),
           (next) => ({ failure: renewed, next }),
         );
       return Effect.succeed(
