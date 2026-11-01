@@ -257,7 +257,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
     if (tool.parameters.type !== 'object')
       return yield* new ModelError({
         kind: 'unsupported',
-        message: 'Anthropic local tools require JSON object parameter schemas.',
+        message: `Tool "${tool.name}": Anthropic local tools require JSON object parameter schemas.`,
       });
     tools.push({
       name: tool.name,

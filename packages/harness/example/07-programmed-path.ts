@@ -20,7 +20,7 @@ import { Effect, Schema } from 'effect';
 import { defineTool, Sessions } from '@texra-ai/harness';
 import { definePlugin, harnessBuiltins } from '@texra-ai/harness/plugins';
 
-import { makeExampleWorkspace, scriptReturnOf } from './_support.ts';
+import { makeExampleWorkspace, scriptReturnsOf } from './_support.ts';
 
 /** A tool whose result carries a value a script reads directly, and an
  *  output long enough to need a long cell in the history store. */
@@ -148,10 +148,9 @@ const program = Effect.gen(function* () {
   console.log(`[07] agent file ${config.agent} = inline persona`);
 
   // 2-4. What the script returned, read back from the stored conversation.
-  // The journaled value is not on the public read surface: the tool
-  // result's text is.
+  // The script's return is its result node's structured `value`.
   const conversation = yield* session.records(run.runId).readConversation();
-  const returned = scriptReturnOf(conversation) as {
+  const returned = scriptReturnsOf(conversation).at(-1) as {
     titles: string[];
     verdicts: string[];
     columns: string[];

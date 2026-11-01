@@ -136,6 +136,12 @@ class Cancelled extends Schema.TaggedError<Cancelled>()(
 )
 ```
 
+## CommitOrdinal
+
+```ts
+type CommitOrdinal = typeof CommitOrdinalSchema.Type;
+```
+
 ## Composition
 
 What an embedder composes the process from: its platform, its plugins
@@ -201,6 +207,18 @@ Interruption, run history refusals and database write failures propagate.
 function defineTool<T, R = never, const Name extends string = string>(
   def: DefineToolOptions<T, R> & { readonly name: Name },
 ): DefinedTool<T, R, Name>
+```
+
+## DisplaySessionEvent
+
+```ts
+type DisplaySessionEvent = typeof DisplaySessionEventSchema.Type;
+```
+
+## ExportNode
+
+```ts
+type ExportNode = typeof ExportNodeSchema.Type;
 ```
 
 ## HeldRun
@@ -711,6 +729,12 @@ class RunFailure extends Schema.TaggedError<RunFailure>()('RunFailure', {
   cause: Schema.Defect(),
   message: Schema.String,
 })
+```
+
+## RunId
+
+```ts
+type RunId = typeof RunIdSchema.Type;
 ```
 
 ## RunRecords
