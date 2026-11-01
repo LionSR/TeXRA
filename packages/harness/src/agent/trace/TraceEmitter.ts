@@ -27,9 +27,9 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
+import type { AgentEvent } from '@shared/session/agentEvent';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type { AgentEvent } from './events';
 import type {
   AgentTrace,
   AgentTraceSink,

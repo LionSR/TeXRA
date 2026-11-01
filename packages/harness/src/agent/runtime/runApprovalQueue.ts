@@ -25,18 +25,10 @@ import {
   type ApprovalGrants,
   type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
-import {
-  bypassCovers,
-  qualifyAggregateId,
-  type RunId,
-  type SessionEventDraft,
-} from '@shared/schemas';
+import { bypassCovers, qualifyAggregateId, type RunId } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
   heldElsewhereBy,
-  type DatabaseNotOwner,
-  type DatabaseReadFailed,
-  type DatabaseWriteFailed,
 } from '@shared/session/database';
 import {
   NotOwner,
@@ -45,27 +37,15 @@ import {
   type RequestError,
   type RuntimeRequest,
 } from '@shared/session/runtimeRequest';
+import type {
+  QueuedKind,
+  SessionApprovals,
+} from '@shared/session/sessionApprovals';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { Settings } from '@shared/config/settings';
 import type { RunRows } from '@shared/session/runRowsShape';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import type { SessionHandle } from './SessionHandle';
-
-/**
- * One queued approval. A request can wait behind another prompt for long:
- * if the user turns the run's bypass on meanwhile (say by answering the one
- * ahead with "approve and stop asking"), `bypassed` honours that decision
- * instead of prompting anyway.
- */
-interface QueuedApproval<A, E, R> {
-  /** Open the request and wait for its decision. */
-  readonly prompt: Effect.Effect<A, E, R>;
-  /** Result used instead when the run is bypassed by dispatch time. */
-  readonly bypassed: Effect.Effect<A, E, R>;
-}
-
-/** The kinds whose prompts queue one at a time per run. */
-type QueuedKind = Extract<ApprovalBypassKind, 'bash' | 'toolEdit'>;
 
 /**
  * A run's grants once it activates again, or null when they stand as
@@ -101,47 +81,6 @@ const policyRow = (runId: RunId, snapshot: ApprovalGrants) => ({
   aggregateId: qualifyAggregateId('run', runId),
   snapshot,
 });
-
-/**
- * The session's approvals: prompt lanes and the run's grants. Enforcement
- * reads {@link bypass}; every change goes through {@link change}.
- */
-export interface SessionApprovals {
-  /** Serialize prompts per run and kind, checking bypass when each starts. */
-  enqueue<A, E, R>(
-    kind: QueuedKind,
-    runId: RunId | undefined,
-    approval: QueuedApproval<A, E, R>,
-  ): Effect.Effect<A, E, R>;
-  /** Who bypasses one kind's prompts for a run, read from the view. */
-  bypass(runId: RunId, kind: ApprovalBypassKind): 'goal' | 'human' | null;
-  /** Update grants in one transaction, returning once durable and folded.
-   *  An unchanged grant writes nothing. Additional `rows` always commit in
-   *  that transaction. The caller holds the run's claim. */
-  change(
-    runId: RunId,
-    edit: (grants: ApprovalGrants) => ApprovalGrants,
-    rows?: readonly UnfoldedDraft[],
-  ): Effect.Effect<
-    void,
-    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
-  >;
-  /** Grants committed beside `run.activate`, read from the run's and its
-   *  ancestors' rows, never from a view that may lag. */
-  activationRows(
-    runId: RunId,
-  ): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed>;
-  /**
-   * The approval policy `runId`'s requests are decided under: the
-   * project's persisted `approvalPolicy`, read at each call, narrowed
-   * by the strictest launch limit on the run's ancestry (`runPolicy`).
-   * The persisted setting is the one owner of a project's policy; a client
-   * changes it by writing that setting, never by telling a session, and a
-   * launch widens it only for its own run, by its grants (an Auto-approve
-   * launch). Without a run, the project's policy.
-   */
-  policy(runId?: RunId): ApprovalPolicy;
-}
 
 /** Build the session's approvals over its view, its record door and its
  *  config. */

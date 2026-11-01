@@ -68,7 +68,7 @@ export type { RuntimeRequest } from '@shared/session/runtimeRequest';
 export type { PendingRequest } from '@shared/session/readonlyViews';
 
 // What a run reports while it runs, and how it ended.
-export type { AgentEvent, StreamChunkEvent } from '@agent/trace';
+export type { AgentEvent, StreamChunkEvent } from '@shared/session/agentEvent';
 export { responseText } from '@agent/trace/TraceEmitter';
 export type { RunEnd } from '@shared/schemas';
 

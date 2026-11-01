@@ -54,6 +54,7 @@ import {
 } from '@shared/schemas';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Append } from '@shared/session/sessionEvents';
+import type { LogWriteError } from '@shared/session/sessionLog';
 import type { ToolStep } from '@tools/sessionTools';
 
 import { HostCapabilities, type StepToolInputs } from './agentToolResolution';
@@ -61,7 +62,6 @@ import { RunCall } from './RunCall';
 import type { AgentRunShape } from './run/AgentRun';
 import type {
   AskOptions,
-  LogWriteError,
   RequestRow,
   SessionHandle,
   SessionRequests,

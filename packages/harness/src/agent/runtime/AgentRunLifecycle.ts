@@ -6,7 +6,7 @@
  */
 import { Cause, Effect, Exit, Result } from 'effect';
 
-import { logSdkError, type ResultEvent, type StageHandle } from '@agent/trace';
+import { logSdkError, type StageHandle } from '@agent/trace';
 import {
   finalizeRun,
   type FinalizeRunInput,
@@ -23,6 +23,7 @@ import {
 } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
+import type { ResultEvent } from '@shared/session/agentEvent';
 import type { RunOutcome } from '@shared/schemas';
 import {
   emptyRunEndOutput,

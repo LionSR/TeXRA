@@ -5,7 +5,6 @@ import { TraceEmitter } from '@agent/trace';
 import type {
   SessionHandle,
   SessionHandleInit,
-  SessionLog,
 } from '@agent/runtime/SessionHandle';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { runStateAppend } from '@shared/session/runHistory';
@@ -124,7 +123,8 @@ export function publishTestRows(
 /** A fixture's rows committed as the store holds them, every kind
  *  admitted: a seeded history stands in for what a run's cell wrote. */
 export const seedRows =
-  (log: Pick<SessionLog, 'transact'>) => (rows: readonly SessionEventDraft[]) =>
+  (log: Pick<SessionHandle['log'], 'transact'>) =>
+  (rows: readonly SessionEventDraft[]) =>
     log.transact((tx) => runStateAppend(tx.append)(rows));
 
 /**

@@ -14,11 +14,7 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { RunRegistry, RunLive } from '@agent/runtime/runRegistry';
-import type {
-  SessionHandle,
-  SessionLog,
-  SessionTransaction,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { runStateAppend } from '@shared/session/runHistory';
 import { aggregateTarget } from '@shared/schemas';
 import {
@@ -84,17 +80,15 @@ function createRegistry(): {
       transact: ((work: unknown) =>
         typeof work === 'function'
           ? real.log.transact((tx) =>
-              (work as (tx: SessionTransaction) => Effect.Effect<unknown>)({
+              (work as (job: typeof tx) => Effect.Effect<unknown>)({
                 ...tx,
                 append: ((drafts: readonly SessionEventDraft[]) =>
                   drafts.some((draft) => draft.type === 'run.detach')
                     ? Effect.as(fold(drafts), [])
-                    : runStateAppend(tx.append)(
-                        drafts,
-                      )) as SessionTransaction['append'],
+                    : runStateAppend(tx.append)(drafts)) as typeof tx.append,
               }),
             )
-          : Effect.succeed([])) as SessionLog['transact'],
+          : Effect.succeed([])) as SessionHandle['log']['transact'],
       hold: () => Effect.void,
     },
   } as SessionHandle;
