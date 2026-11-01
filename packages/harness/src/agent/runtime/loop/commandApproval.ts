@@ -52,11 +52,13 @@ export const askCommandApproval = (
       },
     })
     .pipe(Effect.map(({ decision }) => decision));
-  return session.approvals.enqueue('bash', runId, {
-    grant: ask.grant,
-    prompt,
-    bypassed: Effect.succeed({ action: 'approve' }),
-  });
+  return session.approvals
+    .enqueue('bash', runId, {
+      grant: ask.grant,
+      prompt,
+      bypassed: Effect.succeed<DecisionOf<'bash'>>({ action: 'approve' }),
+    })
+    .pipe(Effect.withSpan('askCommandApproval'));
 };
 
 /** What the model is told when the person refuses `command`. */
