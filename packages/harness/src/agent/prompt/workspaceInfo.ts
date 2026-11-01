@@ -10,9 +10,9 @@ import { escapeTextStrict } from '@shared/utils/xmlEscape';
 import type { SettingsStores } from '@shared/config/settings';
 import { listExternalRoots } from '@utils/files/externalRoots';
 import { executeCommand } from '@utils/system/execUtils';
-import { envVar } from './envFlags';
-import { IS_WINDOWS } from './platformPaths';
-import { runsInWsl } from './wslDetect';
+import { envVar } from '@utils/system/envFlags';
+import { IS_WINDOWS } from '@utils/system/platformPaths';
+import { runsInWsl } from '@utils/system/wslDetect';
 
 /** Timeout for git commands in milliseconds. */
 const GIT_TIMEOUT_MS = 3000;

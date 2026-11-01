@@ -159,7 +159,6 @@
       "@tools/WriteTool",
       "@transcript/completedRunArchive",
       "@transcript/traceAssembler",
-      "@utils/core",
       "@utils/core/idHash",
       "@utils/core/pathCore",
       "@utils/files/externalRoots",

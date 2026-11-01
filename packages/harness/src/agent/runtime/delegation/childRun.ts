@@ -20,8 +20,8 @@ import {
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { escapeText } from '@shared/utils/xmlEscape';
 import type { RunId } from '@shared/schemas';
+import { generateRunId } from '@shared/schemas';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**

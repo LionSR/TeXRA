@@ -32,11 +32,11 @@ import {
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
+import { generateRunId } from '@shared/schemas';
 import { testRunTools } from '@test/support/nativeToolTestLayer';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { installedHost } from '@test/support/setupPlatform';
-import { generateRunId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
 import type { Model, TurnResult } from '@texra-ai/llm';

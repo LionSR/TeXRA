@@ -56,7 +56,7 @@ import {
   type DatabaseOpenFailed,
 } from '@shared/session/database';
 
-import { generateRunId } from '@utils/core';
+import { generateRunId } from '@shared/schemas';
 import { REPO_ROOT } from './repoScan';
 import { fakeHostSecrets, setupPlatform } from './setupPlatform';
 import { closeTestDefaultSession, openTestDefaultSession } from './sessionEnd';

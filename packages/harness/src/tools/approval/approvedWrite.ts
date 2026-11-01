@@ -9,10 +9,10 @@ import { Effect, FileSystem } from 'effect';
 
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';
+import { mergeEditOnto } from '@tools/unifiedDiff';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import { mergeEditOnto } from '@utils/text/unifiedDiff';
 
 interface WriteApprovedContentResult {
   appliedContent: string;
