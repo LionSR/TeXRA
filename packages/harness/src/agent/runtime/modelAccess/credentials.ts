@@ -17,9 +17,8 @@ import {
   type RouteFacts,
 } from '@texra-ai/llm';
 import {
-  codexCoordinator,
   SubscriptionOAuthError,
-  xaiCoordinator,
+  subscriptionCredential,
 } from '@texra-ai/llm/node';
 
 import { RouteUnavailable } from '@common/errors/agentErrors';
@@ -92,54 +91,6 @@ const routeEndpoint = (
 };
 
 /**
- * The OAuth session a subscription route bills, at `endpoint`: the
- * subscription's own surface, which `resolveRouteEndpoint` names ahead of
- * any per-model or dashboard endpoint, since the token is accepted nowhere
- * else. The decision already found the preference on, the model eligible
- * and a session signed in, so this only reads the session, refreshing an
- * expired one. `rejected` is a token the provider rejected although its
- * stored expiry still calls it fresh (revoked, or expired server-side): it
- * is refreshed first, while stored.
- */
-const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
-  route: SessionRoute,
-  endpoint: string,
-  rejected: string | undefined,
-): Effect.fn.Return<
-  RouteCredential,
-  RouteUnavailable,
-  HttpClient.HttpClient | Secrets
-> {
-  const secrets = yield* Secrets;
-  const { provider } = PLAN_ROUTES[route];
-  const session: Effect.Effect<RouteCredential, Error, HttpClient.HttpClient> =
-    route === 'chatgpt-subscription'
-      ? Effect.map(codexCoordinator(secrets).getFreshSession(), (fresh) => ({
-          route,
-          provider,
-          bearer: fresh.accessToken,
-          accountId: fresh.accountId ?? null,
-          plan: fresh.planType,
-          endpoint,
-        }))
-      : Effect.map(xaiCoordinator(secrets).getFreshSession(), (fresh) => ({
-          route,
-          provider,
-          bearer: fresh.accessToken,
-          endpoint,
-        }));
-  const refresh = (token: string) =>
-    route === 'chatgpt-subscription'
-      ? codexCoordinator(secrets).refreshRejected(token)
-      : xaiCoordinator(secrets).refreshRejected(token);
-  return yield* (
-    rejected === undefined
-      ? session
-      : Effect.andThen(refresh(rejected), session)
-  ).pipe(Effect.mapError((error) => subscriptionUnavailable(route, error)));
-});
-
-/**
  * The key and endpoint of an API-key route: the provider key the decision
  * named, at the endpoint the facts name for it. The
  * one producer of the missing-credential failure; an unreadable key store
@@ -177,23 +128,40 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
   };
 });
 
-/** The credential `route` bills for `config`. */
-export function routeCredential(
+/**
+ * The credential `route` bills for `config`. A subscription route sends its
+ * signed-in session at the subscription's own surface, which
+ * `resolveRouteEndpoint` names ahead of any per-model or dashboard endpoint,
+ * since the token is accepted nowhere else. The decision already found the
+ * preference on, the model eligible and a session signed in, so this only
+ * reads the session.
+ */
+export const routeCredential = Effect.fn('credentials.route')(function* (
   route: CredentialRoute,
   config: ModelConfig,
   facts: Pick<RouteFacts, 'endpoints'>,
   rejected: string | undefined,
-): Effect.Effect<
+): Effect.fn.Return<
   RouteCredential,
   RouteUnavailable,
   HttpClient.HttpClient | Secrets
 > {
-  return route.kind === 'api-key'
-    ? apiKeyCredential(route, config, facts)
-    : Effect.flatMap(routeEndpoint(config, route, facts), (endpoint) =>
-        subscriptionCredential(route.kind, endpoint, rejected),
-      );
-}
+  if (route.kind === 'api-key')
+    return yield* apiKeyCredential(route, config, facts);
+  const { kind } = route;
+  const endpoint = yield* routeEndpoint(config, route, facts);
+  const session = yield* subscriptionCredential(
+    kind,
+    yield* Secrets,
+    rejected,
+  ).pipe(Effect.mapError((error) => subscriptionUnavailable(kind, error)));
+  return {
+    route: kind,
+    provider: PLAN_ROUTES[kind].provider,
+    endpoint,
+    ...session,
+  };
+});
 
 /**
  * The user's own `provider` key and the endpoint they set for it, for a

@@ -19,14 +19,25 @@
  *   [`codexLoginWithDeviceCode`](#codexloginwithdevicecode)) and Grok
  *   ([`xaiCoordinator`](#xaicoordinator),
  *   [`xaiLoginWithLoopback`](#xailoginwithloopback),
- *   [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows, plus
- *   [`SharedAttempt`](#sharedattempt) for coalescing concurrent refreshes.
+ *   [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows,
+ *   [`subscriptionCredential`](#subscriptioncredential) for the bearer a
+ *   signed-in session sends, plus [`SharedAttempt`](#sharedattempt) for
+ *   coalescing concurrent refreshes.
  */
 import { Effect, type Scope } from 'effect';
 import { ModelError, type BillingRoute } from './errors.js';
+import { codexCoordinator } from './oauth/codex/codexProvider.js';
 import { toErrorMessage } from './oauth/support.js';
+import { xaiCoordinator } from './oauth/xai/xaiProvider.js';
 import { originOf, type ModelOrigin } from './protocol.js';
+import type { HttpClient } from 'effect/http';
 import type { ModelConfig } from 'llm-zoo';
+
+import type {
+  SubscriptionCoordinator,
+  SubscriptionSession,
+} from './oauth/subscriptionCoordinator.js';
+import type { CredentialStore } from './providers/credentials.js';
 
 import type { CredentialRoute } from './models/modelRoute.js';
 import type { ReasoningChoice } from './models/reasoningChoice.js';
@@ -237,6 +248,42 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
     forcedToolChoice: wire.forcedToolChoice(configuration, config),
   };
 });
+
+/** What a subscription route's session sends, as its bearer and account. */
+export interface SubscriptionCredential {
+  readonly bearer: string;
+  /** The account the session names (ChatGPT's), or null. */
+  readonly accountId: string | null;
+  /** The ChatGPT plan the session's token names; display-only. */
+  readonly plan: string | undefined;
+}
+
+/**
+ * The credential a subscription route sends, from the session `secrets`
+ * stores, refreshed when it expires soon. `rejected` is a token the provider
+ * rejected although its stored expiry still calls it fresh (revoked, or
+ * expired server-side): it is refreshed first, while stored.
+ */
+export function subscriptionCredential(
+  route: Exclude<CredentialRoute['kind'], 'api-key'>,
+  secrets: CredentialStore,
+  rejected: string | undefined,
+): Effect.Effect<SubscriptionCredential, Error, HttpClient.HttpClient> {
+  const coordinator: SubscriptionCoordinator<
+    SubscriptionSession & { readonly planType?: string }
+  > =
+    route === 'chatgpt-subscription'
+      ? codexCoordinator(secrets)
+      : xaiCoordinator(secrets);
+  const session = Effect.map(coordinator.getFreshSession(), (fresh) => ({
+    bearer: fresh.accessToken,
+    accountId: fresh.accountId ?? null,
+    plan: fresh.planType,
+  }));
+  return rejected === undefined
+    ? session
+    : Effect.andThen(coordinator.refreshRejected(rejected), session);
+}
 
 export { SubscriptionOAuthError } from './oauth/subscriptionOAuthError.js';
 export type { SubscriptionOAuthErrorKind } from './oauth/subscriptionOAuthError.js';

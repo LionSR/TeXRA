@@ -22,8 +22,10 @@ protocol (`bindModel`) and running subscription OAuth sign-in flows.
   [`codexLoginWithDeviceCode`](#codexloginwithdevicecode)) and Grok
   ([`xaiCoordinator`](#xaicoordinator),
   [`xaiLoginWithLoopback`](#xailoginwithloopback),
-  [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows, plus
-  [`SharedAttempt`](#sharedattempt) for coalescing concurrent refreshes.
+  [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows,
+  [`subscriptionCredential`](#subscriptioncredential) for the bearer a
+  signed-in session sends, plus [`SharedAttempt`](#sharedattempt) for
+  coalescing concurrent refreshes.
 
 ## Binding
 
@@ -317,6 +319,35 @@ interface SubscriptionCoordinator<S extends SubscriptionSession> {
   }): Effect.Effect<S, Error, HttpClient.HttpClient>;
   /** Store the session a completed token grant returned. */
   storeTokens(tokens: SubscriptionTokenResponse): Effect.Effect<S, Error>;
+}
+```
+
+## subscriptionCredential
+
+The credential a subscription route sends, from the session `secrets`
+stores, refreshed when it expires soon. `rejected` is a token the provider
+rejected although its stored expiry still calls it fresh (revoked, or
+expired server-side): it is refreshed first, while stored.
+
+```ts
+function subscriptionCredential(
+  route: Exclude<CredentialRoute['kind'], 'api-key'>,
+  secrets: CredentialStore,
+  rejected: string | undefined,
+): Effect.Effect<SubscriptionCredential, Error, HttpClient.HttpClient>
+```
+
+## SubscriptionCredential
+
+What a subscription route's session sends, as its bearer and account.
+
+```ts
+interface SubscriptionCredential {
+  readonly bearer: string;
+  /** The account the session names (ChatGPT's), or null. */
+  readonly accountId: string | null;
+  /** The ChatGPT plan the session's token names; display-only. */
+  readonly plan: string | undefined;
 }
 ```
 
