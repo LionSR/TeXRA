@@ -163,6 +163,9 @@ export class RunRegistry implements RunsShape {
       ? [...this.activations.keys()].flatMap((id) => this.liveRun(id) ?? [])
       : this.liveRun(runId)) as RunsShape['get'];
 
+  readonly stopCause = (runId: RunId): StopCause | undefined =>
+    this.activations.get(runId)?.stop;
+
   private liveRun(runId: RunId): LiveRun | undefined {
     const activation = this.activations.get(runId);
     if (activation === undefined) return undefined;
@@ -177,7 +180,6 @@ export class RunRegistry implements RunsShape {
       controls,
       parent: this.attachedParent(runId),
       readsMessages,
-      stopReason: activation.stop,
       drained: this.awaitDrained(runId),
     };
   }
@@ -537,7 +539,7 @@ export class RunRegistry implements RunsShape {
   ): Effect.Effect<void, Error, SessionServices> | undefined {
     if (cause !== 'user') return undefined;
     const { CANCELLED: outcome } = RUN_OUTCOME;
-    const end = { runId, outcome, ownerless: true, stopped: true };
+    const end = { runId, outcome, ownerless: true };
     return Effect.asVoid(this.programs.finalize(end));
   }
 

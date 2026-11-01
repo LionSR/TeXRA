@@ -67,9 +67,9 @@ interface EndActivationResult {
  * The one end of a run's activation, in this order: the transcript stage
  * end, then the `run.end` row (through `finalizeRun`, its one writer). The
  * publisher commits in order, so every row the run published lands before
- * its end, and a refusal of one of them is the end's own write failure. A
- * stop that reached the run before its end (`stopped`) outranks the run's
- * own report, on the stage and on the row. Its callers: the run program's
+ * its end, and a refusal of one of them is the end's own write failure. The
+ * outcome is the run's verdict, a stop's CANCELLED included, on the stage
+ * and on the row. Its callers: the run program's
  * terminal ({@link endRun}), a child loop's exit, and an end no driver
  * writes (a failed hand-off).
  */
@@ -77,11 +77,7 @@ export const endActivation = Effect.fn('endActivation')(
   function* (
     params: EndActivationParams,
   ): Effect.fn.Return<EndActivationResult, Error, SessionServices> {
-    const { runId } = params;
-    // Stop precedence, read once: a stop that reached the run before its exit
-    // outranks the flow's report, on the stage here as on the row below.
-    const outcome =
-      params.stopped === true ? RUN_OUTCOME.CANCELLED : params.outcome;
+    const { runId, outcome } = params;
     // Close the transcript stage first: its `stage.end` is published ahead of
     // the `run.end` row, and a refusal of it is that row's write failure.
     if (params.stage) {
@@ -117,7 +113,6 @@ export const endActivation = Effect.fn('endActivation')(
       output,
       lastTurn: params.lastTurn,
       ownerless: params.ownerless,
-      stopped: params.stopped,
     }).pipe(Effect.result);
     if (Result.isSuccess(finalization)) {
       const { end, wrote } = finalization.success;
@@ -176,7 +171,7 @@ function withResolvedOutcome(
 const endWith = (
   ctx: RunLaunch,
   finish: FinishLastTurn | undefined,
-  end: Pick<FinalizeRunInput, 'outcome' | 'error' | 'output' | 'stopped'> & {
+  end: Pick<FinalizeRunInput, 'outcome' | 'error' | 'output'> & {
     readonly lastResult?: RunReport;
   },
 ) => {
@@ -254,7 +249,7 @@ const failedEnd = Effect.fn('failedEnd')(function* (
           info: { message: fallbackMsg, userRetryable: false },
         }),
       );
-  const outcome = AGENT_ERROR_OUTCOME[kind];
+  const outcome = stopped ? RUN_OUTCOME.CANCELLED : AGENT_ERROR_OUTCOME[kind];
   // A child's failure rides its result, the error its delivery reports.
   const subagentResult: RunReport | undefined =
     parentRunId !== null
@@ -265,7 +260,6 @@ const failedEnd = Effect.fn('failedEnd')(function* (
     outcome,
     error,
     output: carried?.output,
-    stopped,
     lastResult: subagentResult,
   });
   // The exits below report the terminal fact the finalizer published.
@@ -336,10 +330,9 @@ export const endRun = Effect.fn('endRun')(function* (
   // prompt closed under it) is a stop too, not a failure: squashed, it
   // would record "All fibers interrupted without error" as FAILED.
   if (Cause.hasInterruptsOnly(cause)) {
-    yield* endWith(ctx, finish, {
-      outcome: RUN_OUTCOME.CANCELLED,
-      stopped: true,
-    }).pipe(Effect.orDie);
+    yield* endWith(ctx, finish, { outcome: RUN_OUTCOME.CANCELLED }).pipe(
+      Effect.orDie,
+    );
     return yield* Effect.failCause(cause);
   }
   const err = ensureError(Cause.squash(cause));

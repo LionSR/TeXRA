@@ -327,7 +327,6 @@ describe('wakeRun', () => {
           runId,
           outcome: 'cancelled',
           ownerless: true,
-          stopped: true,
         });
       }),
   );

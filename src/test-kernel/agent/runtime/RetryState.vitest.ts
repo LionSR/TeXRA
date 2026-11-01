@@ -746,24 +746,11 @@ describe('ModelInvoker retry', () => {
         const session = yield* sessionWithInteractions(undefined);
         const stopped = new Map<RunId, 'user' | 'shutdown'>();
         const runs = Context.get(session, Runs);
-        const get = runs.get.bind(runs);
-        vi.spyOn(runs, 'get').mockImplementation(((runId?: RunId) => {
-          if (runId === undefined) return get();
-          const live = get(runId);
-          const stopReason = stopped.get(runId);
-          if (stopReason === undefined) return live;
-          // The run's stop, whether or not this registry holds it.
-          return {
-            runId,
-            handle: undefined,
-            live: false,
-            readsMessages: false,
-            parent: null,
-            drained: Effect.void,
-            ...live,
-            stopReason,
-          };
-        }) as Runs['Service']['get']);
+        const stopCause = runs.stopCause;
+        // The run's stop, whether or not this registry holds it.
+        vi.spyOn(runs, 'stopCause').mockImplementation(
+          (runId) => stopped.get(runId) ?? stopCause(runId),
+        );
         const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
           origin: ORIGIN,
           providerResponseId: PROVIDER_RESPONSE_ID,

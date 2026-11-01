@@ -670,7 +670,7 @@ const sendStopNotice = Effect.fn('childRunLoop.sendStopNotice')(function* <
   if (
     strategy.stopNotice === undefined ||
     strategy.deliveryMode === 'persistOnly' ||
-    loop.runs.get(runId)?.stopReason !== 'user'
+    loop.runs.stopCause(runId) !== 'user'
   )
     return;
   const text = yield* strategy
@@ -702,12 +702,10 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
 ): Effect.fn.Return<void, Error, R | AgentRunServices> {
   const { params } = loop;
   const { runId } = params;
-  // Re-read: a stop landing after the body's exit is still its verdict.
-  const stoppedAtExit =
-    stopped || loop.runs.get(runId)?.stopReason !== undefined;
   const { end, failure } = loop;
+  // Re-read: a stop landing after the body's exit is still its verdict.
   const outcome = outcomeFromCause(undefined, {
-    stopped: stoppedAtExit,
+    stopped: stopped || loop.runs.stopCause(runId) !== undefined,
     failed: failure !== undefined,
   });
   const lastTurn =
@@ -729,7 +727,6 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
             },
           }),
         stage: loop.stage,
-        stopped: stoppedAtExit,
         lastTurn: () => Effect.succeed(lastTurn),
       }),
       ({ persistFailure: cause }) =>

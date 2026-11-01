@@ -331,7 +331,11 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     }
     // A user's message to a run that is stopping continues it after the
     // stop: its row lands after the run's end, which the wake reads.
-    if (item.from.kind === 'user' && live?.stopReason !== undefined)
+    if (
+      item.from.kind === 'user' &&
+      live !== undefined &&
+      runs.stopCause(runId) !== undefined
+    )
       yield* live.drained;
     const media = attach === undefined ? {} : yield* attach;
     return yield* inbox.send(
