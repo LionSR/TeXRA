@@ -169,14 +169,12 @@ export const getBase64EncodedMedia = Effect.fn('img.getBase64EncodedMedia')(
         ? resizeImageIfNeeded(mediaPath, config)
         : fs.readFile(mediaPath)
     ).pipe(
-      Effect.catchIf(
-        (error) => error._tag === 'PlatformError' && absentReason(error),
-        () =>
-          Effect.fail(
-            new MediaConversionFailed({
-              message: `File not found: ${mediaPath}`,
-            }),
-          ),
+      Effect.catchIf(absentReason, () =>
+        Effect.fail(
+          new MediaConversionFailed({
+            message: `File not found: ${mediaPath}`,
+          }),
+        ),
       ),
     );
     if (mediaBytes.length === 0) {

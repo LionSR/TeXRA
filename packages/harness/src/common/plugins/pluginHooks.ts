@@ -313,8 +313,13 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
       ),
     );
     const exitCode = yield* handle.exitCode.pipe(
-      // Killed by a signal it was not sent by us: no exit code.
-      Effect.orElseSucceed(() => null),
+      // Killed by a signal it was not sent by us: the spawner fails its own
+      // `exitCode` method, having no code to report. Any other failure
+      // propagates.
+      Effect.catchIf(
+        (error) => error.reason.method === 'exitCode',
+        () => Effect.succeed(null),
+      ),
     );
     yield* Fiber.join(readers).pipe(
       Effect.timeoutOption(STDIO_GRACE),

@@ -92,6 +92,7 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { nodeFileServices } from '@utils/files/fsDurability';
+import { absentReason } from '@utils/files/fsEntryExists';
 import { ensureError } from '@utils/errors/errorMessage';
 import type * as ChildProcess from 'effect/process/ChildProcess';
 import type { PlatformError } from 'effect/PlatformError';
@@ -353,12 +354,12 @@ export const workspaceEnvironmentLayer = (
     try: () => (workspace === undefined ? '' : readFileSync(file, 'utf8')),
     catch: (cause) => new ProjectEnvUnreadable({ file, cause }),
   }).pipe(
-    // No file is none, and so is a directory of that name (a virtualenv
-    // made with `python -m venv .env`): neither holds variables.
+    // No file is none, and so, beyond absence, is a directory of that name
+    // (a virtualenv made with `python -m venv .env`): neither holds variables.
     Effect.catchIf(
       ({ cause }) =>
-        Predicate.hasProperty(cause, 'code') &&
-        (cause.code === 'ENOENT' || cause.code === 'EISDIR'),
+        absentReason(cause) ||
+        (Predicate.hasProperty(cause, 'code') && cause.code === 'EISDIR'),
       () => Effect.succeed(''),
     ),
     Effect.map((text): Record<string, string> =>

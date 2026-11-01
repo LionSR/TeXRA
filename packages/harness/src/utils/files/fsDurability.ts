@@ -18,11 +18,19 @@ import * as nodeFs from 'node:fs/promises';
 // Third-party imports
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
-import { Effect, FileSystem, Layer, Path, PlatformError } from 'effect';
+import {
+  Effect,
+  FileSystem,
+  Layer,
+  Path,
+  PlatformError,
+  Predicate,
+} from 'effect';
 
 import writeFileAtomicLib from 'write-file-atomic';
 
 import { withLogChannel } from '@logger/effectLog';
+import { absentReason } from './fsEntryExists';
 
 const CHANNEL = 'fsDurability';
 
@@ -148,12 +156,21 @@ export const entryMetadataAt = Effect.fn('fsDurability.entryMetadataAt')(
       catch: (cause) => systemErrorFrom('entryMetadataAt', target, cause),
     });
     const stats = link.isSymbolicLink()
-      ? // A dangling or circular link has no target to describe, so the link's
-        // own metadata stands in — the reading the facade's provider gave.
+      ? // A dangling link (its target absent) or a circular one (ELOOP) has no
+        // target to describe, so the link's own metadata stands in, the
+        // reading the facade's provider gave. Any other failure propagates.
         yield* Effect.tryPromise({
           try: () => nodeFs.stat(target),
           catch: (cause) => systemErrorFrom('entryMetadataAt', target, cause),
-        }).pipe(Effect.orElseSucceed(() => link))
+        }).pipe(
+          Effect.catchIf(
+            (error) =>
+              absentReason(error) ||
+              (Predicate.hasProperty(error.reason.cause, 'code') &&
+                error.reason.cause.code === 'ELOOP'),
+            () => Effect.succeed(link),
+          ),
+        )
       : link;
     return { type: entryTypeOf(stats), size: stats.size };
   },

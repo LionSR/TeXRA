@@ -2,14 +2,6 @@ import { Predicate } from 'effect';
 
 import { causeChain } from '@utils/errors/errorMessage';
 
-/** Check if an error represents a file-not-found condition. */
-export function isFileNotFoundError(err: unknown): boolean {
-  return (
-    Predicate.hasProperty(err, 'code') &&
-    (err.code === 'ENOENT' || err.code === 'FileNotFound')
-  );
-}
-
 /** Check if an error represents "a parent path component is a file, not a directory". */
 export function isNotADirectoryError(err: unknown): boolean {
   return Predicate.hasProperty(err, 'code') && err.code === 'ENOTDIR';

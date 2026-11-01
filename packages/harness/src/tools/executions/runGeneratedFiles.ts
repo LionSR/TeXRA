@@ -22,6 +22,7 @@ import type { RunId } from '@shared/schemas';
 // swap; safe here since the input is a storage-relative path produced by the
 // walk below, not raw user input.
 import { toPosixPath } from '@utils/core/pathCore';
+import { absentReason } from '@utils/files/fsEntryExists';
 import { runDirUnder } from '@utils/files/runStorageFs';
 
 const CHANNEL = 'runGeneratedFiles';
@@ -87,8 +88,7 @@ function walkRunStorage(
       // The run directory itself has no rest to keep: its failure propagates
       // rather than reading as "no generated files".
       Effect.catch((error) => {
-        if (error.reason._tag === 'NotFound')
-          return Effect.succeed([] as string[]);
+        if (absentReason(error)) return Effect.succeed([] as string[]);
         if (relativePath === '') return Effect.fail(error);
         return Effect.logWarning(
           `Unreadable run directory '${fullPath}'; listing it as empty`,
@@ -111,13 +111,14 @@ function walkRunStorage(
           const childPath = path.join(basePath, rawRelative);
 
           const stat = yield* fs.stat(childPath).pipe(
-            // An entry that vanished, or whose path stopped naming something a
-            // stat can follow, between the listing and the stat is a benign race;
-            // anything else is a real fault and propagates.
+            // An entry that vanished between the listing and the stat is a
+            // benign race, and so, beyond absence, is one whose path stopped
+            // naming something a stat can follow (any `BadResource`: a link
+            // that now loops, say); anything else is a real fault and
+            // propagates.
             Effect.catchIf(
               (error) =>
-                error.reason._tag === 'NotFound' ||
-                error.reason._tag === 'BadResource',
+                absentReason(error) || error.reason._tag === 'BadResource',
               () => Effect.void,
             ),
           );

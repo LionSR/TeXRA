@@ -5,7 +5,7 @@ import { RunFileService } from '@texra-ai/harness/plugins';
 import { absentReason } from '@texra-ai/harness/node';
 
 // Third-party imports
-import { Effect, FileSystem, PlatformError, Predicate } from 'effect';
+import { Effect, FileSystem, Predicate } from 'effect';
 
 // Local imports
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
@@ -109,7 +109,7 @@ export class LatexMediaManager {
    * naming the cause.
    */
   private logSkipped(message: string, path: string, error: unknown): void {
-    const absent = PlatformError.isPlatformError(error) && absentReason(error);
+    const absent = absentReason(error);
     (absent ? this.logger.debug : this.logger.warn).call(this.logger, message, {
       data: { path, error },
     });
