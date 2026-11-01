@@ -83,16 +83,13 @@ import { UsageLog } from '@shared/usageLog';
 import { ToolCatalogOwner, type ToolCatalog } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { announceWrites, armsOf, type Plugin } from '@tools/plugins';
-import {
-  seedDisabledToolDefaults,
-  toolAvailabilityLayer,
-} from '@tools/toolAvailability';
+import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { databaseLayer, globalDatabaseLayer } from './Database';
-import { globalAppStateLayer, processStoresLayer } from './appStateStore';
+import { processStoresLayer } from './appStateStore';
 import { projectDatabaseLayer } from './projectDatabase';
 import { deletionCollector } from './deletionCleanup';
 import { ownerLiveness } from './ownerLiveness';
@@ -510,19 +507,13 @@ export interface ProcessServicesOptions {
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
   /** The app's directories on every command's PATH (`CommandDirs`). */
   readonly commandDirs?: () => readonly string[];
-  /**
-   * The host's global application-state layer, acquired in this runtime's
-   * scope. Absent, the global root's values (`globalAppStateLayer`); the
-   * SDK's embedder store, or a platform-less CLI entry's refusing one.
-   */
-  readonly appState?: Layer.Layer<
+  /** The global application-state layer, acquired in this runtime's scope
+   *  (`processLayer` picks the host's and seeds it). */
+  readonly appState: Layer.Layer<
     AppState,
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
   >;
-  /** Seed the first-install tool switches unless the user's list exists;
-   *  `false` for a store that refuses writes (a platform-less CLI entry's). */
-  readonly seedToolSwitches?: boolean;
   /** The dependency probes every tool gate and Tools dashboard read: absent,
    *  every host's; a test harness passes one that starts no probe. */
   readonly toolAvailability?: typeof toolAvailabilityLayer;
@@ -562,8 +553,7 @@ export function ownerProcessLayer({
   settings,
   plugins,
   secrets,
-  appState: appStateOption,
-  seedToolSwitches = true,
+  appState,
   agentDirectories,
   toolAvailability = toolAvailabilityLayer,
   usageLog = UsageLog.disabled,
@@ -574,16 +564,6 @@ export function ownerProcessLayer({
   RunServices | ToolCatalog | SessionOwner
 > {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
-  // Seeded as built, before the catalog reads it (an embedder's store, once).
-  const appState = (
-    appStateOption ?? globalAppStateLayer(globalStorage, settings)
-  ).pipe(
-    Layer.tap((context) =>
-      seedToolSwitches
-        ? seedDisabledToolDefaults(Context.get(context, AppState), plugins)
-        : Effect.void,
-    ),
-  );
   const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.unwrap(

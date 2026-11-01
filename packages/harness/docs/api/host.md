@@ -1791,9 +1791,18 @@ What a composition root composes its process from: the services' options
 (`ownerProcessLayer`) and its skill sources.
 
 ```ts
-interface ProcessLayerOptions extends ProcessServicesOptions {
+interface ProcessLayerOptions extends Omit<
+  ProcessServicesOptions,
+  'appState'
+> {
   /** The host's skill sources; absent, the process discovers no skills. */
   readonly skills?: HostSkillOptions;
+  /** The global store: absent, the global root's (`globalAppStateLayer`);
+   *  else the SDK's embedder store, or a platform-less CLI entry's refusal. */
+  readonly appState?: ProcessServicesOptions['appState'];
+  /** Seed the first-install tool switches (opt-in plugins off) unless the
+   *  user's list exists; `false` for a store that refuses every write. */
+  readonly seedToolSwitches?: boolean;
 }
 ```
 
@@ -1856,19 +1865,13 @@ interface ProcessServicesOptions {
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
   /** The app's directories on every command's PATH (`CommandDirs`). */
   readonly commandDirs?: () => readonly string[];
-  /**
-   * The host's global application-state layer, acquired in this runtime's
-   * scope. Absent, the global root's values (`globalAppStateLayer`); the
-   * SDK's embedder store, or a platform-less CLI entry's refusing one.
-   */
-  readonly appState?: Layer.Layer<
+  /** The global application-state layer, acquired in this runtime's scope
+   *  (`processLayer` picks the host's and seeds it). */
+  readonly appState: Layer.Layer<
     AppState,
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
   >;
-  /** Seed the first-install tool switches unless the user's list exists;
-   *  `false` for a store that refuses writes (a platform-less CLI entry's). */
-  readonly seedToolSwitches?: boolean;
   /** The dependency probes every tool gate and Tools dashboard read: absent,
    *  every host's; a test harness passes one that starts no probe. */
   readonly toolAvailability?: typeof toolAvailabilityLayer;

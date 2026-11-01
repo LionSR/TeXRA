@@ -351,6 +351,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
   if (!processServices) {
     const production = ownerProcessLayer({
       ...testProcessOptions(BARE_PLUGINS, host.roots.storageRoot),
+      appState: AppState.layer(fakeHostAppState),
       processStart: Effect.succeed('test'),
       // The records above are mocked, so the bare runtime's global-root
       // handle is too: a suite that reads it provides its own innermost.

@@ -9,11 +9,13 @@ import { Context, Effect, Layer, type ManagedRuntime } from 'effect';
 
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
+import { globalAppStateLayer } from '@controllers/session/appStateStore';
 import {
   ownerProcessLayer,
   type ProcessServicesOptions,
 } from '@controllers/session/sessionLayer';
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
+import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -25,6 +27,7 @@ import {
   type HostSkillOptions,
 } from '@skills/skillSources';
 import type { ToolCatalog } from '@tools/liveTools';
+import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { toolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { CommandDirs } from '@utils/system/platformPaths';
@@ -46,9 +49,18 @@ export type ProcessServices = RunServices | ToolCatalog;
 
 /** What a composition root composes its process from: the services' options
  *  (`ownerProcessLayer`) and its skill sources. */
-export interface ProcessLayerOptions extends ProcessServicesOptions {
+export interface ProcessLayerOptions extends Omit<
+  ProcessServicesOptions,
+  'appState'
+> {
   /** The host's skill sources; absent, the process discovers no skills. */
   readonly skills?: HostSkillOptions;
+  /** The global store: absent, the global root's (`globalAppStateLayer`);
+   *  else the SDK's embedder store, or a platform-less CLI entry's refusal. */
+  readonly appState?: ProcessServicesOptions['appState'];
+  /** Seed the first-install tool switches (opt-in plugins off) unless the
+   *  user's list exists; `false` for a store that refuses every write. */
+  readonly seedToolSwitches?: boolean;
 }
 
 /** The runtime a composition root makes over `processLayer`: the process
@@ -174,6 +186,25 @@ export function processLayer(
 function sessionsLayer(
   options: ProcessLayerOptions,
 ): Layer.Layer<ProcessServices | Sessions, PluginsRefused> {
+  // Seeded as the store is built, so before the tool catalog first reads
+  // the switches: an embedder's store has no change feed and is read once.
+  // A store that cannot be read or written is a platform defect.
+  const appState = (
+    options.appState ??
+    globalAppStateLayer(
+      resolveGlobalStoragePath(options.storageRoot),
+      options.settings,
+    )
+  ).pipe(
+    Layer.tap((context) =>
+      options.seedToolSwitches === false
+        ? Effect.void
+        : seedDisabledToolDefaults(
+            Context.get(context, AppState),
+            options.plugins,
+          ).pipe(Effect.orDie),
+    ),
+  );
   const sessions = Layer.effect(
     Sessions,
     Effect.gen(function* () {
@@ -183,7 +214,7 @@ function sessionsLayer(
       );
     }),
   ).pipe(
-    Layer.provideMerge(ownerProcessLayer(options)),
+    Layer.provideMerge(ownerProcessLayer({ ...options, appState })),
     // Beneath every session the process builds, so its runs' steps list
     // what the hosts' settings pages list.
     Layer.provideMerge(
