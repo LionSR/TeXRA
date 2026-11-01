@@ -23,7 +23,6 @@ import type {
   SessionLog,
   SessionTransaction,
 } from '@agent/runtime/SessionHandle';
-import { tailFrom } from '@agent/runtime/SessionEvents';
 import { withLogChannel } from '@logger/effectLog';
 import {
   qualifyAggregateId,
@@ -43,6 +42,7 @@ import {
   ProcessIdentity,
   afterCommit,
   SessionEvents,
+  tailFrom,
   type Append,
   type SessionEventsShape,
   type UnfoldedDraft,

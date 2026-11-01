@@ -64,7 +64,7 @@ its kind is its `type` column.
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
   `RunState` the loop continues from (`shared/session/runState.ts:504-517`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
-  (`agent/runtime/SessionEvents.ts:219-370`).
+  (`agent/runtime/SessionEvents.ts:159-296`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
   within an aggregate (`controllers/session/storeSchema.ts:70-80`).
 
@@ -133,36 +133,36 @@ transaction, a hold outside one in a write transaction of its own, and either is
 released in the transaction of the scope that closes it, which need not be a job
 (`controllers/session/sessionStore.ts:144-203`). Jobs SHALL run in the order
 they were enqueued, one at a time, and the table's commit order is that order
-(`agent/runtime/SessionEvents.ts:241-249`). A job other than an ordering barrier
+(`agent/runtime/SessionEvents.ts:181-189`). A job other than an ordering barrier
 (`transact(job, order)`, below) is one SQLite transaction: its appends commit
-together or not at all (`agent/runtime/SessionEvents.ts:234-240`,
+together or not at all (`agent/runtime/SessionEvents.ts:174-180`,
 `controllers/session/Database.ts:976-990`).
 
 The publisher offers these doors:
 
 - `transact(job)`: Enqueue a job and wait for its value
-  (`agent/runtime/SessionEvents.ts:294-310`).
+  (`agent/runtime/SessionEvents.ts:234-250`).
 - `transact(job, order)`: A barrier with no transaction; its `append` is a
-  defect (`agent/runtime/SessionEvents.ts:193-195`, `:237-239`).
+  defect (`agent/runtime/SessionEvents.ts:133-135`, `:177-179`).
 - `detach(job)`: Enqueue a job and return at once, for a producer with no fiber;
   its order is the moment of the call
-  (`agent/runtime/SessionEvents.ts:320-342`).
+  (`agent/runtime/SessionEvents.ts:260-282`).
 - `removeRun`: Prove owners, then commit a run's tombstone as the next job
-  (`agent/runtime/SessionEvents.ts:311-319`).
+  (`agent/runtime/SessionEvents.ts:251-259`).
 - `drain`: End the inbox and run what it holds within the close deadline of
-  5,000 ms (`agent/runtime/SessionEvents.ts:252-290`,
+  5,000 ms (`agent/runtime/SessionEvents.ts:192-230`,
   `agent/runtime/SessionHandle.ts:360`).
 
 A job MUST NOT wait on its own publisher; doing so is a defect
-(`agent/runtime/SessionEvents.ts:197-202`, `:299`). A job MAY run again whole
+(`agent/runtime/SessionEvents.ts:137-142`, `:239`). A job MAY run again whole
 when SQLite reports the database busy, so a job body MUST be database-only
 (`controllers/session/Database.ts:426-444`). Effects a job schedules with
 `afterCommit` SHALL run only after its transaction commits, never for an attempt
-that rolled back (`shared/session/sessionEvents.ts:53-85`). At the close
+that rolled back (`shared/session/sessionEvents.ts:58-90`). At the close
 deadline the running job is cut and every queued job refused
-(`agent/runtime/SessionEvents.ts:263-288`). An awaited job enqueued after close
+(`agent/runtime/SessionEvents.ts:203-228`). An awaited job enqueued after close
 is a defect; a detached one is logged and dropped
-(`agent/runtime/SessionEvents.ts:304-308`, `:337-342`).
+(`agent/runtime/SessionEvents.ts:244-248`, `:277-282`).
 
 Above the publisher, the session's own door (`SessionLog.transact`) SHALL return
 only after the session's fold has folded every commit the job made
