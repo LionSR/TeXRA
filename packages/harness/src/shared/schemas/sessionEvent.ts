@@ -29,6 +29,7 @@ import {
   type AggregateId,
 } from './identifiers';
 import { JsonValueSchema } from './jsonValue';
+import { listingTypeOf } from './rowVersions';
 import {
   RunEndRowSchema,
   RunRecordFieldsSchema,
@@ -253,7 +254,7 @@ const DisplayRowDraftSchema = Schema.Union([
    * on its own row (one run model, 3.3): `parked` before the loop blocks on
    * its queue, `resumed` when a batch starts the next turn, `paused` when a stop
    * rests it with no `run.end`, keeping the `resumeId` a tool call continues
-   * it by. A listing key of its own (`listingTypeOf`'s default): a cold
+   * it by. Listed under its own type (`ROW_KINDS`): a cold
    * listing that dropped it would paint every parked child as busy.
    * `heldFor`: the delivery id of a result its parent refused while another
    * process held it, delivered when next admitted; `ends`: that turn's end.
@@ -414,6 +415,8 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
  * `parent` run, or none), the claim a plugin's aggregate borrows for that
  * transaction alone, and the closure a deletion marker makes.
  * {@link referencedAggregates} reads the same edges off committed rows.
+ * Every kind has a case, so a new kind does not compile until its edges are
+ * decided here.
  */
 export interface AggregateEdges {
   readonly parent: AggregateId | null;
@@ -440,40 +443,32 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
     }
     case 'run.removed':
       return { parent: null, borrowsClaim: false, closes: true };
-    default:
-      return { parent: null, borrowsClaim: false, closes: false };
-  }
-}
-
-/**
- * The listing types the fold keys `latest` by: every durable arm
- * but the transcript tier. The request pair shares one entry because it
- * folds to one set, the follow-up pair likewise, and the lifecycle pair (`run.start`, `run.removed`)
- * shares one because it folds to one existence: a deletion marker's commit then
- * outranks a replayed `run.start` below it, which is what makes the
- * deletion marker final under every read. `run.position` is a
- * listing key of its own: the phase is folded from it, so a cold listing
- * that dropped it would paint every parked run as ready. `stage.start` is
- * transcript tier alone: its display arm is a no-op and only the transcript
- * fold reads it over the whole aggregate, so listing it would pull the latest
- * one of every run into every renderer for no reader.
- *
- * `plugin.fact` holds several kinds on one type, so it is read grouped by
- * kind as well (`listingKeyOf`, `Database`).
- */
-export function listingTypeOf(
-  event: Pick<SessionEvent, 'type'>,
-): string | null {
-  switch (event.type) {
+    case 'run.activate':
+    case 'run.config':
+    case 'run.model':
+    case 'run.detach':
+    case 'run.end':
+    case 'child.park':
+    case 'run.description':
+    case 'followup.queued':
+    case 'followup.consumed':
+    case 'request.opened':
+    case 'request.decided':
+    case 'approval.policy':
+    case 'run.position':
     case 'log':
     case 'stage.start':
     case 'stage.end':
     case 'tool.start':
     case 'tool.end':
+    case 'usage':
+    case 'context.state':
     case 'stream.start':
     case 'stream.end':
     case 'response.finalized':
-    case 'usage':
+    case 'run.report':
+    case 'run.result':
+    case 'followup.closed':
     case 'model.message':
     case 'context.edit':
     case 'tool.intent':
@@ -483,22 +478,7 @@ export function listingTypeOf(
     case 'context.blob':
     case 'hook.outcome':
     case 'child.turn':
-      // A priced turn is never "latest of type" (`listingKeyOf`). Run-history
-      // rows stay out: a cold initial load never pulls one into every
-      // renderer (`run.position` is a listing row). Keyed
-      // records fold whole; the fold suite pins this list.
-      return null;
-    case 'request.opened':
-    case 'request.decided':
-      return 'request';
-    case 'followup.queued':
-    case 'followup.consumed':
-      return 'followup';
-    case 'run.start':
-    case 'run.removed':
-      return 'lifecycle';
-    default:
-      return event.type;
+      return { parent: null, borrowsClaim: false, closes: false };
   }
 }
 

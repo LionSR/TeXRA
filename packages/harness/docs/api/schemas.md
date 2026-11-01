@@ -1095,24 +1095,14 @@ const LineCountSchema: Int
 
 ## listingTypeOf
 
-The listing types the fold keys `latest` by: every durable arm
-but the transcript tier. The request pair shares one entry because it
-folds to one set, the follow-up pair likewise, and the lifecycle pair (`run.start`, `run.removed`)
-shares one because it folds to one existence: a deletion marker's commit then
-outranks a replayed `run.start` below it, which is what makes the
-deletion marker final under every read. `run.position` is a
-listing key of its own: the phase is folded from it, so a cold listing
-that dropped it would paint every parked run as ready. `stage.start` is
-transcript tier alone: its display arm is a no-op and only the transcript
-fold reads it over the whole aggregate, so listing it would pull the latest
-one of every run into every renderer for no reader.
-
-`plugin.fact` holds several kinds on one type, so it is read grouped by
-kind as well (`listingKeyOf`, `Database`).
+The listing type the fold keys `latest` by, from the kind's listing class,
+or null for a kind the listing leaves out. `plugin.fact` holds several
+kinds on one type, so it is read grouped by kind as well (`listingKeyOf`,
+`Database`).
 
 ```ts
 function listingTypeOf(
-  event: Pick<SessionEvent, 'type'>,
+  event: Pick<SessionEventDraft, 'type'>,
 ): string | null
 ```
 
