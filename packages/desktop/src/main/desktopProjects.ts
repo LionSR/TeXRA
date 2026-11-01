@@ -43,6 +43,7 @@ import type { ServiceLink } from '@texra/controllers/server/client';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import type { WindowClient } from '@texra/controllers/server/windowHost';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
+import { interruptedTasksOnOpen } from '@texra/controllers/session/interruptedTasksOnOpen';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
@@ -295,7 +296,7 @@ function openProjectSession(
     const session = yield* Effect.acquireRelease(
       sessions.open(roots, {
         persistent: true,
-        host: { interruptedTasks: 'offer' },
+        host: { interruptedTasks: yield* interruptedTasksOnOpen(roots) },
       }),
       // The one close every session takes: its runs stopped under the
       // shutdown deadline, the ones still live past it settled, its

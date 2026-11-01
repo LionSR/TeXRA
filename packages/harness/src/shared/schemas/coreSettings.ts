@@ -94,22 +94,6 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
 } as const);
 
 /**
- * What an interactive host window does at open with the tasks a closed or
- * crashed process left interrupted:
- * `ask` lists them, `auto` continues them. Headless runs and the SDK do
- * neither, whatever this says.
- */
-export const RESUME_ON_OPEN_SETTING = Object.freeze({
-  configKey: 'resumeOnOpen',
-  values: ['ask', 'auto'],
-  defaultValue: 'ask',
-  description:
-    'On opening, when tasks stopped before they finished: list them so you can choose, or continue them all.',
-} as const);
-
-export type ResumeOnOpen = (typeof RESUME_ON_OPEN_SETTING.values)[number];
-
-/**
  * Bounds, default, and copy for `goal.maxCostUsd`: what a goal's rounds may
  * spend before it pauses instead of starting another round, and `0`
  * disables the cap. Read when the goal launches, into its script. Shared by

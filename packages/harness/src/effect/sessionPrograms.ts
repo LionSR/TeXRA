@@ -202,7 +202,7 @@ function resume(
       return yield* new ResumeRefused({
         runId,
         reason: resumed.failed,
-        message: describeFollowUpFailure(resumed.failed),
+        message: describeFollowUpFailure(resumed.failed.kind),
       });
     return runView(session, runId, resumed.activation, redirectedFrom);
   });

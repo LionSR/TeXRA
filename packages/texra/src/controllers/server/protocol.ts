@@ -47,6 +47,7 @@ import {
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
+  ResumeBlockedSchema,
 } from '@texra-ai/harness/transcript';
 import { ChatExportInputSchema } from '@texra/agent/export/schemas';
 
@@ -75,7 +76,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 40;
+export const PROTOCOL_VERSION = 41;
 
 /** What `service.hello` and `texra service status` report. */
 export const ServiceInfoSchema = Schema.Struct({
@@ -204,9 +205,9 @@ export const TexraRpcs = RpcGroup.make(
   Rpc.make('task.resume', {
     payload: { workspace, runId: RunIdSchema },
     /** The run that resumed: the asked one, or the parent that owns it;
-     *  null when something it needs (its agent, a plugin) is missing, so it
-     *  stays interrupted. */
-    success: Schema.NullOr(TaskAdmitted),
+     *  or what it needs (its agent, a plugin) and is missing, so it stays
+     *  interrupted. */
+    success: Schema.Union([TaskAdmitted, ResumeBlockedSchema]),
     error: TaskFailed,
   }),
   /** What a task's current activation ends with, once it ends: its

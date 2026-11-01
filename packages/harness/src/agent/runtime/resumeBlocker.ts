@@ -6,7 +6,8 @@
  * meets one does not fail the run: the run stays interrupted, the reason
  * goes into the projection (`SessionHandle.view.markResumeBlocked`), and the
  * session's follower (`followInterruptedTasks`) clears it once the catalog
- * says it is back, resuming the run under `resumeOnOpen: auto`.
+ * says it is back, resuming the run when the session was opened to resume
+ * its interrupted tasks.
  *
  * A tool plugin that is off is not a blocker: the step withholds its tools,
  * and a call to one settles `tool_unavailable` (the user's switch, not the
@@ -22,7 +23,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCatalogServices } from '@agent/index/agentEntry';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { StateReadFailed } from '@shared/config/settings';
-import { agentName, type ResumeBlocker } from '@shared/schemas';
+import { agentName, type ResumeBlocked } from '@shared/schemas';
 
 import type { SessionHandle } from './SessionHandle';
 
@@ -31,7 +32,7 @@ export const resumeBlocker = Effect.fn('resumeBlocker')(function* (
   session: SessionHandle,
   config: Pick<AgentConfig, 'agent' | 'agentSource'>,
 ): Effect.fn.Return<
-  ResumeBlocker | null,
+  ResumeBlocked | null,
   AgentCatalogLoadError | StateReadFailed,
   AgentCatalog | AgentCatalogServices | FileSystem.FileSystem
 > {
@@ -48,12 +49,16 @@ export const resumeBlocker = Effect.fn('resumeBlocker')(function* (
   const pluginAgent =
     entry != null ? entry.source === 'plugin' : config.agentSource === 'plugin';
   if (!pluginAgent)
-    return entry == null ? { kind: 'agentMissing', name: config.agent } : null;
+    return entry == null
+      ? { kind: 'blocked', blocker: 'agentMissing', name: config.agent }
+      : null;
   const plugin = name.slice(0, name.indexOf(':'));
   const load = yield* readInstalledPluginLoad(session.roots);
   if (load.loadable.some(({ record }) => record.name === plugin)) return null;
-  // A plugin trust withholds names itself; any other is off or gone.
-  return load.withheld.some((reason) => reason.startsWith(`Plugin ${plugin} `))
-    ? { kind: 'pluginUntrusted', name: plugin }
-    : { kind: 'pluginOff', name: plugin };
+  // An enabled plugin the load holds back is not trusted as it is now; any
+  // other is off or gone.
+  const blocker = load.withheld.some((held) => held.plugin === plugin)
+    ? 'pluginUntrusted'
+    : 'pluginOff';
+  return { kind: 'blocked', blocker, name: plugin };
 });

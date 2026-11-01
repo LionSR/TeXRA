@@ -18,20 +18,21 @@ import type { InboxItem } from './Inbox';
 
 /**
  * Why a submission could not be admitted, worded for the user by
- * {@link presentFollowUpResult}: a resume's refusal (`ResumeRefusal`; a
- * message to a run with no loop here is admitted only as a resume would be,
- * and `not_resumable` there also covers a closed input, a disposed session,
- * or a message that does not wake the run), or one of the message's alone:
+ * {@link presentFollowUpResult}: the kind of a resume's refusal
+ * (`ResumeRefusal`; a message to a run with no loop here is admitted only as
+ * a resume would be, and `notResumable` there also covers a closed input, a
+ * disposed session, or a message that does not wake the run), or one of the
+ * message's alone:
  *
- * - `read_failed`: the run's claim or state could not be read just now
+ * - `readFailed`: the run's claim or state could not be read just now
  *   (a busy or failing store), which says nothing about the run itself.
- * - `one_shot`: the run's live loop ends after its current turn and reads
+ * - `oneShot`: the run's live loop ends after its current turn and reads
  *   no message (headless, or an in-band child), or the run has no loop of
  *   its own and its launch takes none (a background command).
- * - `not_parent`: the sender is not the run's parent.
+ * - `notParent`: the sender is not the run's parent.
  */
 export type FollowUpFailureReason =
-  ResumeRefusal | 'read_failed' | 'one_shot' | 'not_parent';
+  ResumeRefusal['kind'] | 'readFailed' | 'oneShot' | 'notParent';
 
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
@@ -69,18 +70,18 @@ interface SubmitFollowUpOptions extends Omit<RunInboxSendOptions, 'hold'> {
 
 const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
   finished: 'This run has finished. Start a new agent task to continue.',
-  unusable_checkpoint:
+  unusableCheckpoint:
     "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
-  earlier_build:
+  earlierBuild:
     'This run was written by an earlier build, and this build cannot continue it.',
-  read_failed: "This run couldn't be read right now. Try again in a moment.",
-  owned_elsewhere:
+  readFailed: "This run couldn't be read right now. Try again in a moment.",
+  ownedElsewhere:
     'This run is live in another process. Send the message there.',
-  not_resumable:
+  notResumable:
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
-  one_shot:
+  oneShot:
     'This run ends after its current turn and reads no messages. Start a new agent task to continue.',
-  not_parent:
+  notParent:
     'This run is not a child of the sender: it was detached or launched by another run.',
   blocked:
     "This task's agent, or the plugin it comes from, is missing, off or not trusted. It can continue once that is fixed.",
@@ -113,7 +114,7 @@ const CHANNEL = 'ToolUseFollowUp';
 
 /** A resume's refusal of a run that cannot continue here. */
 export const REFUSED: { readonly failed: ResumeRefusal } = {
-  failed: 'not_resumable',
+  failed: { kind: 'notResumable' },
 };
 
 /** A resume in flight here, on its run's activation. */
@@ -231,7 +232,7 @@ const answered = <R>(
           key: HARNESS_INSTRUCTION_KEY.RESUME_REFUSED,
           message:
             'failed' in result
-              ? describeFollowUpFailure(result.failed)
+              ? describeFollowUpFailure(result.failed.kind)
               : FOLLOW_UP_WAKE_FAILED_MESSAGE,
           showSuppress: false,
         },
@@ -279,14 +280,14 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     const live = session.runs.get(runId);
     if (live !== undefined) {
       if (!live.readsMessages)
-        return { status: 'failed', reason: 'one_shot' } as const;
+        return { status: 'failed', reason: 'oneShot' } as const;
     } else {
       const rejection = yield* runRejection(runId, session).pipe(
         Effect.catch((error) =>
           Effect.logWarning(`Cannot read whether ${runId} can continue`).pipe(
             Effect.annotateLogs({ data: error }),
             withLogChannel(CHANNEL),
-            Effect.as({ kind: 'read_failed' } as const),
+            Effect.as({ kind: 'readFailed' } as const),
           ),
         ),
       );

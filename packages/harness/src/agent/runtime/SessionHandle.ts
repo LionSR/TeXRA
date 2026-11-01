@@ -23,7 +23,7 @@ import type {
   RequestDecision,
   CommitOrdinal,
   DisplaySessionEvent,
-  ResumeBlocker,
+  ResumeBlocked,
   RunEnd,
   RunId,
   RunOutcome,
@@ -197,7 +197,7 @@ export interface SessionViewAccess {
    *  a row. */
   markResumeBlocked(
     runId: RunId,
-    blocked: ResumeBlocker | null,
+    blocked: ResumeBlocked | null,
   ): Effect.Effect<void>;
   /** The runs a resume found blocked here, with what each waits for. */
   resumeBlocks(): LocalRuntimeState['resumeBlocked'];
@@ -235,16 +235,10 @@ export interface SessionHandleInit {
   /** A presentation host the session is born with: it answers while no
    *  host is attached. */
   readonly interactions?: HostInteractions;
-  /**
-   * The opener is a host window, which follows its interrupted tasks
-   * (`followInterruptedTasks`): a task whose resume was blocked is checked
-   * again as the catalog changes and, under `resumeOnOpen: auto`, resumed
-   * once what it needs is back; with `offer` the tasks a closed or crashed
-   * host app left interrupted are also listed at open, or under `auto`
-   * continued. Headless runs and the SDK leave it unset: their policy is
-   * off.
-   */
-  readonly interruptedTasks?: 'offer' | 'retry';
+  /** What the session does with its interrupted tasks
+   *  (`OpenOptions.host.interruptedTasks`, `followInterruptedTasks`);
+   *  absent, nothing. */
+  readonly interruptedTasks?: 'list' | 'resume';
   /** Absent, the project's database; ephemeral, a throwaway one. */
   readonly transcriptMode?: { readonly kind: 'ephemeral' };
 }

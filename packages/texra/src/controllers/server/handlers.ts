@@ -518,15 +518,15 @@ export const serviceHandlers = TexraRpcs.toLayer(
                 // Blocked, not failed: it stays interrupted until what it
                 // needs is back.
                 Effect.catchTag('ResumeRefused', (refusal) =>
-                  refusal.reason === 'blocked'
-                    ? Effect.succeed(null)
+                  refusal.reason.kind === 'blocked'
+                    ? Effect.succeed(refusal.reason)
                     : Effect.fail(refusal),
                 ),
               ),
               (error) =>
                 Effect.fail(new TaskFailed({ message: error.message })),
             );
-            return run === null ? null : yield* admittedTask(run);
+            return 'kind' in run ? run : yield* admittedTask(run);
           }),
         ),
     };

@@ -408,11 +408,11 @@ Process-local liveness evidence: self, explicitly proved-dead owners, and
 unreadable runs. A current claimant absent from these verdicts is
 unprovable and remains held until a probe establishes otherwise. Beside
 it, the runs a resume found blocked here, each with what it waits for;
-whether the run then continues by itself is the session follower's
-`resumeOnOpen` policy, not a fact of the run.
+whether the run then continues by itself is what the session was opened
+to do with interrupted tasks, not a fact of the run.
 
 ```ts
-const LocalRuntimeStateSchema: Struct<{ readonly self: $Array<String>; readonly dead: $Array<String>; readonly unreadable: $Array<Struct<{ readonly runId: brand<String, "RunId">; readonly reason: Literals<readonly ["damaged", "earlierBuild"]>; }>>; readonly resumeBlocked: $Array<Struct<{ readonly runId: brand<String, "RunId">; readonly reason: Struct<{ readonly kind: Literals<readonly ["agentMissing", "pluginOff", "pluginUntrusted"]>; readonly name: String; }>; }>>; }>
+const LocalRuntimeStateSchema: Struct<{ readonly self: $Array<String>; readonly dead: $Array<String>; readonly unreadable: $Array<Struct<{ readonly runId: brand<String, "RunId">; readonly reason: Literals<readonly ["damaged", "earlierBuild"]>; }>>; readonly resumeBlocked: $Array<Struct<{ readonly runId: brand<String, "RunId">; readonly reason: Struct<{ readonly kind: Literal<"blocked">; readonly blocker: Literals<readonly ["agentMissing", "pluginOff", "pluginUntrusted"]>; readonly name: String; }>; }>>; }>
 ```
 
 ## LogRow
@@ -495,10 +495,21 @@ class RemoteSessionView extends Context.Service<
 >()('@texra-ai/harness/session/RemoteSessionView')
 ```
 
-## ResumeBlocker
+## ResumeBlocked
+
+What a blocked resume waits for ({@link ResumeBlockedSchema}).
 
 ```ts
-type ResumeBlocker = typeof ResumeBlockerSchema.Type;
+type ResumeBlocked = typeof ResumeBlockedSchema.Type;
+```
+
+## ResumeBlockedSchema
+
+A run this process cannot continue until its agent, or its agent's
+plugin, is back: a fact about this build's catalog, never a row's.
+
+```ts
+const ResumeBlockedSchema: Struct<{ readonly kind: Literal<"blocked">; readonly blocker: Literals<readonly ["agentMissing", "pluginOff", "pluginUntrusted"]>; readonly name: String; }>
 ```
 
 ## rowHeadline

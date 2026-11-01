@@ -621,21 +621,22 @@ const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) =
 ## FollowUpFailureReason
 
 Why a submission could not be admitted, worded for the user by
-{@link presentFollowUpResult}: a resume's refusal (`ResumeRefusal`; a
-message to a run with no loop here is admitted only as a resume would be,
-and `not_resumable` there also covers a closed input, a disposed session,
-or a message that does not wake the run), or one of the message's alone:
+{@link presentFollowUpResult}: the kind of a resume's refusal
+(`ResumeRefusal`; a message to a run with no loop here is admitted only as
+a resume would be, and `notResumable` there also covers a closed input, a
+disposed session, or a message that does not wake the run), or one of the
+message's alone:
 
-- `read_failed`: the run's claim or state could not be read just now
+- `readFailed`: the run's claim or state could not be read just now
   (a busy or failing store), which says nothing about the run itself.
-- `one_shot`: the run's live loop ends after its current turn and reads
+- `oneShot`: the run's live loop ends after its current turn and reads
   no message (headless, or an in-band child), or the run has no loop of
   its own and its launch takes none (a background command).
-- `not_parent`: the sender is not the run's parent.
+- `notParent`: the sender is not the run's parent.
 
 ```ts
 type FollowUpFailureReason =
-  ResumeRefusal | 'read_failed' | 'one_shot' | 'not_parent';
+  ResumeRefusal['kind'] | 'readFailed' | 'oneShot' | 'notParent';
 ```
 
 ## FollowUpSenderInput

@@ -1730,17 +1730,6 @@ function resolveBypass<Id>(
 type ResultMeta = typeof ResultMetaSchema.Type;
 ```
 
-## RESUME_ON_OPEN_SETTING
-
-What an interactive host window does at open with the tasks a closed or
-crashed process left interrupted:
-`ask` lists them, `auto` continues them. Headless runs and the SDK do
-neither, whatever this says.
-
-```ts
-const RESUME_ON_OPEN_SETTING: Readonly<{ readonly configKey: "resumeOnOpen"; readonly values: readonly ["ask", "auto"]; readonly defaultValue: "ask"; readonly description: "On opening, when tasks stopped before they finished: list them so you can choose, or continue them all."; }>
-```
-
 ## ResumeRefusal
 
 One reason a resume is refused ({@link ResumeRefusalSchema}).

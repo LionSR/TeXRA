@@ -186,9 +186,9 @@ export async function runChat(
         // The service follows interrupted tasks for a chat that is its
         // client. In this process, `texra resume <id>` resumes the task it
         // names; a second resume of the interrupted ones beside it would
-        // race that one, so it only retries a blocked resume.
+        // race that one, so it only lists them.
         ...(Result.isFailure(service) && {
-          interruptedTasks: initialResume === undefined ? 'offer' : 'retry',
+          interruptedTasks: initialResume === undefined ? 'setting' : 'list',
         }),
       });
       const runtimeSession = yield* services.session;

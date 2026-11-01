@@ -200,7 +200,7 @@ export const parentAdmission = (
       ),
       {
         rows: [],
-        sent: { kind: 'refused', reason: 'not_resumable' } satisfies Sent,
+        sent: { kind: 'refused', reason: 'notResumable' } satisfies Sent,
       },
     );
   return session.followUps.admission(to, item, options).pipe(
@@ -237,7 +237,7 @@ export const deliverIn = (
       return { rows: [] };
     }
     const { rows, sent } = yield* parentAdmission(session, to, item, {}, trace);
-    if (sent.kind === 'refused' && sent.reason === 'owned_elsewhere') {
+    if (sent.kind === 'refused' && sent.reason === 'ownedElsewhere') {
       yield* warnOnCommit(
         session,
         trace,

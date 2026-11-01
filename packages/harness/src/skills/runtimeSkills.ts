@@ -107,8 +107,8 @@ function discoverRuntimeSkills(
     return {
       skills: result.skills,
       errors: [
-        ...plugins.withheld.map((message) =>
-          issue('warning', 'invalid_source', message),
+        ...plugins.withheld.map(({ reason }) =>
+          issue('warning', 'invalid_source', reason),
         ),
         ...result.errors,
       ],

@@ -218,7 +218,7 @@ function fakeSession(
       (resumed): Effect.Effect<ResumeAttempt> => {
         if (typeof resumed === 'object') return Effect.succeed(resumed);
         if (!resumed)
-          return Effect.succeed({ failed: 'not_resumable' as const });
+          return Effect.succeed({ failed: { kind: 'notResumable' as const } });
         live.add(runId);
         return Effect.as(activated(1 as CommitOrdinal), {
           started: true as const,
@@ -540,7 +540,7 @@ describe('Inbox readers', () => {
         // reported as a duplicate.
         expect(yield* followUps.send(id, delivery)).toEqual({
           kind: 'refused',
-          reason: 'owned_elsewhere',
+          reason: 'ownedElsewhere',
         });
       }
       expect(claims).toEqual([id, id]);
@@ -591,7 +591,7 @@ describe('Inbox closed input', () => {
 
         expect(yield* followUps.send(closed, user('still closed'))).toEqual({
           kind: 'refused',
-          reason: 'not_resumable',
+          reason: 'notResumable',
         });
         expect(queued(closed)).toEqual([]);
         expect(yield* followUps.send(open, user('never closed'))).toMatchObject(

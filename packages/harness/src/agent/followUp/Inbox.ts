@@ -34,7 +34,7 @@ const CHANNEL = 'Inbox';
 
 const CLOSED = Object.freeze({
   kind: 'refused',
-  reason: 'not_resumable',
+  reason: 'notResumable',
 } as const);
 /** The session doors the inbox works through (the session layer wires them). */
 export interface InboxPort {
@@ -74,7 +74,7 @@ export type Sent =
   | { readonly kind: 'queued'; readonly read: boolean }
   | { readonly kind: 'refused'; readonly reason: Refusal };
 /** Why a send wrote nothing: a closed input, a foreign holder, a non-parent. */
-type Refusal = 'not_resumable' | 'owned_elsewhere' | 'not_parent';
+type Refusal = 'notResumable' | 'ownedElsewhere' | 'notParent';
 
 /** What a send asks of the row and of the run. */
 export interface SendOptions {
@@ -305,7 +305,7 @@ export class Inbox {
       if (closed(input)) return only(CLOSED);
       const sender = item.from.kind === 'run' ? item.from.runId : null;
       if (options.fromParent === true && input.parent?.id !== sender)
-        return only({ kind: 'refused', reason: 'not_parent' });
+        return only({ kind: 'refused', reason: 'notParent' });
       // Stamped inside the job, from committed parentage.
       const row = queuedRow(item, options.hold, (sender) =>
         runRelation(sender, runId, this.parentOf),
@@ -338,7 +338,7 @@ export class Inbox {
           warnWith(
             `Follow-up for run ${runId} was not queued: another process holds the run.`,
           )(error).pipe(
-            Effect.as(only({ kind: 'refused', reason: 'owned_elsewhere' })),
+            Effect.as(only({ kind: 'refused', reason: 'ownedElsewhere' })),
           ),
       ),
     );

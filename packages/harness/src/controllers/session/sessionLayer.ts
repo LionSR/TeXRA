@@ -271,10 +271,7 @@ const sessionHandleLayer = (key: SessionKey) =>
       );
       yield* sweepLeftoverRuns(session, cohort).pipe(Effect.forkScoped);
       if (key.open.interruptedTasks !== undefined)
-        yield* followInterruptedTasks(
-          session,
-          key.open.interruptedTasks === 'offer',
-        ).pipe(
+        yield* followInterruptedTasks(session, key.open.interruptedTasks).pipe(
           Effect.catch(
             logFailure(
               `Session ${key.storage} stopped following its interrupted tasks.`,

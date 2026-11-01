@@ -477,13 +477,15 @@ interface OpenOptions {
    * answer until a host with an `approve` handler attaches
    * ({@link Session.attach}), so every request is denied.
    *
-   * `interruptedTasks` handles runs that a closed or crashed process left
-   * unfinished. Both values resume such a run once what it was missing (an
-   * agent, a plugin) is back. `offer` also lists them when the session
-   * opens, and continues them when the `resumeOnOpen` setting is
-   * `auto`.
+   * `interruptedTasks` is what the session does at open with the root
+   * runs a closed or crashed process left unfinished, the one place that
+   * decides it. Both values mark what blocks each one (an agent, a plugin:
+   * `RunView.resumeBlocked`) and clear the mark once it is back. `list`
+   * leaves them for the host to list and resume; `resume` continues them,
+   * and a blocked one once it is back. Absent, the session recovers
+   * nothing at open.
    */
-  readonly host?: { readonly interruptedTasks?: 'offer' | 'retry' };
+  readonly host?: { readonly interruptedTasks?: 'list' | 'resume' };
 }
 ```
 
@@ -779,8 +781,10 @@ interface RunRecords {
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;
-  /** Why a resume of it here is rejected, or null when it may go ahead. */
-  readonly readRejection: () => Effect.Effect<RunRejection | null, Error>;
+  /** Why a resume of it here is refused before its agent is checked
+   *  (`finished`, `ownedElsewhere` or `earlierBuild`), or null when it may
+   *  go ahead; a fact that cannot be read fails. */
+  readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
   readonly readConversation: () => Effect.Effect<ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */

@@ -8,6 +8,7 @@ import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
 import { AggregateIdSchema, OwnerIdSchema } from './identifiers';
+import { ResumeBlockedSchema } from './followUp';
 import { CommitOrdinalSchema, DisplaySessionEventSchema } from './sessionEvent';
 
 /**
@@ -36,21 +37,9 @@ export const TextChunkSchema = Schema.TaggedStruct('chunk', {
 });
 export type TextChunk = typeof TextChunkSchema.Type;
 
-/**
- * Why this process cannot resume a run until something it needs is back:
- * its agent is missing, or its agent's
- * plugin is off or not trusted. A fact about this build and its catalog,
- * so it lives in the projection, never in a row.
- */
-export const ResumeBlockerSchema = Schema.Struct({
-  kind: Schema.Literals(['agentMissing', 'pluginOff', 'pluginUntrusted']),
-  /** The agent or plugin it names. */
-  name: Schema.String.check(Schema.isMinLength(1)),
-});
-export type ResumeBlocker = typeof ResumeBlockerSchema.Type;
-
 /** Why this build cannot open a run's rows: one does not decode
- *  (`damaged`), or an earlier build wrote one it has no upcaster for. */
+ *  (`damaged`), or an earlier build wrote one it has no upcaster for, the
+ *  resume refusal of the same name. */
 const RunUnreadableSchema = Schema.Literals(['damaged', 'earlierBuild']);
 
 /**
@@ -63,7 +52,7 @@ export const RunNoticeSchema = Schema.Union([
   Schema.Struct({ kind: RunUnreadableSchema }),
   Schema.Struct({
     kind: Schema.Literal('resumeBlocked'),
-    reason: ResumeBlockerSchema,
+    reason: ResumeBlockedSchema,
   }),
   Schema.Struct({ kind: Schema.Literal('interrupted') }),
   Schema.Struct({ kind: Schema.Literal('held'), pid: Schema.Int }),
@@ -75,8 +64,8 @@ export const RunNoticeSchema = Schema.Union([
  * unreadable runs. A current claimant absent from these verdicts is
  * unprovable and remains held until a probe establishes otherwise. Beside
  * it, the runs a resume found blocked here, each with what it waits for;
- * whether the run then continues by itself is the session follower's
- * `resumeOnOpen` policy, not a fact of the run.
+ * whether the run then continues by itself is what the session was opened
+ * to do with interrupted tasks, not a fact of the run.
  */
 export const LocalRuntimeStateSchema = Schema.Struct({
   self: Schema.Array(OwnerIdSchema),
@@ -85,7 +74,7 @@ export const LocalRuntimeStateSchema = Schema.Struct({
     Schema.Struct({ runId: RunIdSchema, reason: RunUnreadableSchema }),
   ),
   resumeBlocked: Schema.Array(
-    Schema.Struct({ runId: RunIdSchema, reason: ResumeBlockerSchema }),
+    Schema.Struct({ runId: RunIdSchema, reason: ResumeBlockedSchema }),
   ),
 });
 export type LocalRuntimeState = typeof LocalRuntimeStateSchema.Type;

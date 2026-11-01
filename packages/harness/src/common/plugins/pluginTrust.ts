@@ -300,10 +300,10 @@ export interface LoadablePlugin {
 }
 
 /** What the enabled plugins load: the trusted ones, and why each other is
- *  not loaded. */
+ *  not loaded (`plugin` null: none could be read). */
 export interface InstalledPluginLoad {
   readonly loadable: readonly LoadablePlugin[];
-  readonly withheld: readonly string[];
+  readonly withheld: readonly { plugin: string | null; reason: string }[];
   /** The per-install key their servers' env values are digested under,
    *  read when any plugin is enabled. */
   readonly envKey?: string;
@@ -323,7 +323,9 @@ export function readInstalledPluginLoad(
       (record) => record.enabled,
     );
     const loadable: LoadablePlugin[] = [];
-    const withheld: string[] = [];
+    const withheld: { plugin: string; reason: string }[] = [];
+    const withhold = (plugin: string, reason: string) =>
+      withheld.push({ plugin, reason });
     if (enabled.length === 0) return { loadable, withheld };
     const envKey = yield* envKeyOf(stores);
     // Each plugin is read and digested at once, then judged in order.
@@ -343,14 +345,15 @@ export function readInstalledPluginLoad(
     );
     for (const { record, read } of reads) {
       if (Result.isFailure(read)) {
-        withheld.push(
+        withhold(
+          record.name,
           `Plugin ${record.name} is not loaded: ${read.failure.message}`,
         );
         continue;
       }
       const { plugin, key } = read.success;
       if (plugin.code.length > 0) {
-        withheld.push(codeRefusal(record.name, plugin));
+        withhold(record.name, codeRefusal(record.name, plugin));
         continue;
       }
       if (!trusts(record, key)) {
@@ -359,7 +362,8 @@ export function readInstalledPluginLoad(
           change = 'it is enabled but was never trusted';
         else if (record.trust.version !== key.version)
           change = `its version changed (${record.trust.version ?? 'none'} -> ${key.version ?? 'none'}) since you trusted it`;
-        withheld.push(
+        withhold(
+          record.name,
           `Plugin ${record.name} is not loaded: ${change}. Enable it again to review it (Settings > Plugins, \`/plugins\`, or \`texra plugin enable ${record.name}\`).`,
         );
         continue;
@@ -371,7 +375,12 @@ export function readInstalledPluginLoad(
     Effect.catch((error: PluginError | PluginRequestError) =>
       Effect.succeed({
         loadable: [],
-        withheld: [`No installed plugin is loaded: ${error.message}`],
+        withheld: [
+          {
+            plugin: null,
+            reason: `No installed plugin is loaded: ${error.message}`,
+          },
+        ],
       }),
     ),
   );
