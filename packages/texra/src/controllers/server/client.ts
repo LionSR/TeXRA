@@ -37,7 +37,7 @@ import {
 
 import {
   BUILD_VERSION,
-  PROTOCOL_VERSION,
+  PROTOCOL,
   TexraRpcs,
   type ServiceInfo,
 } from './protocol';
@@ -108,8 +108,8 @@ const HELLO_TIMEOUT = '10 seconds';
 /** A service the caller should retire: an older protocol, or an older
  *  build ({@link BUILD_VERSION}; a development build, `unknown`, never is). */
 function isOlder(info: ServiceInfo): boolean {
-  if (info.protocol !== PROTOCOL_VERSION)
-    return info.protocol < PROTOCOL_VERSION;
+  if (info.protocol !== PROTOCOL.version)
+    return info.protocol < PROTOCOL.version;
   return (
     semverValid(info.version) !== null &&
     semverValid(BUILD_VERSION) !== null &&
@@ -164,7 +164,7 @@ export function probeService(
 ): Effect.Effect<ServiceInfo | null, ServiceUnavailable> {
   return Effect.scoped(
     Effect.flatMap(connectService(socket), (client) =>
-      client['service.hello']({ protocol: PROTOCOL_VERSION }),
+      client['service.hello']({ protocol: PROTOCOL.version }),
     ),
   ).pipe(
     Effect.timeout(HELLO_TIMEOUT),
@@ -283,7 +283,7 @@ function retireService(
 /** The refusal of a running service that speaks a newer protocol. */
 const newerService = (info: ServiceInfo) =>
   new ServiceUnavailable({
-    reason: `The running TeXRA service (${info.version}, pid ${info.pid}) speaks protocol ${info.protocol}; this TeXRA speaks ${PROTOCOL_VERSION}. Update TeXRA, or stop the service with \`texra service stop\`.`,
+    reason: `The running TeXRA service (${info.version}, pid ${info.pid}) speaks protocol ${info.protocol}; this TeXRA speaks ${PROTOCOL.version}. Update TeXRA, or stop the service with \`texra service stop\`.`,
     newer: true,
   });
 
@@ -310,7 +310,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
       new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED }),
     );
   let info = yield* probeRecordedService;
-  if (info !== null && info.protocol > PROTOCOL_VERSION)
+  if (info !== null && info.protocol > PROTOCOL.version)
     return yield* Effect.fail(newerService(info));
   let retired: number | null = null;
   if (info !== null && isOlder(info)) {
@@ -352,9 +352,9 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     );
     info = yield* probeRecordedService.pipe(
       Effect.flatMap((answer) => {
-        if (answer !== null && answer.protocol > PROTOCOL_VERSION)
+        if (answer !== null && answer.protocol > PROTOCOL.version)
           return Effect.fail(newerService(answer));
-        return answer?.protocol === PROTOCOL_VERSION && answer.pid !== retired
+        return answer?.protocol === PROTOCOL.version && answer.pid !== retired
           ? Effect.succeed(answer)
           : Effect.fail(new ServiceUnavailable({ reason: NOT_YET_UP }));
       }),
