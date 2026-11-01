@@ -1,12 +1,54 @@
-/** The Zotero plugin: its library tools over Better BibTeX, and its card. */
+/**
+ * The Zotero plugin: its library tools over Better BibTeX, the localhost
+ * probe of its availability check, its icons and its card.
+ */
+
+// Third-party imports
+import { Duration, Effect, type Cause } from 'effect';
 
 // Local imports
-import { ZOTERO_AVAILABILITY } from '@texra/tools/pluginAvailability';
+import { Settings } from '@texra-ai/harness/host';
+import { scopedClient } from '@texra-ai/harness/plugins';
 import type { TexraPlugin } from '@texra/tools/registry';
+import { ZOTERO_PORT_KEY } from './bbtClient';
 import { ZoteroAddTool } from './ZoteroAddTool';
 import { ZoteroCollectionsTool } from './ZoteroCollectionsTool';
 import { ZoteroExportTool } from './ZoteroExportTool';
 import { ZoteroSearchTool } from './ZoteroSearchTool';
+import type { HttpClient, HttpClientError } from 'effect/http';
+
+const PROBE_TIMEOUT_MS = 2000;
+
+/** The HTTP status a localhost endpoint answers with. */
+function probeLocalhost(
+  url: string,
+): Effect.Effect<
+  number,
+  HttpClientError.HttpClientError | Cause.TimeoutError,
+  HttpClient.HttpClient
+> {
+  // The probe never reads the body: the request scope aborts the socket once
+  // the status is read, and the deadline (or a caller interrupting the probe)
+  // interrupts the request itself, so a connection that never returns
+  // headers is cut rather than abandoned.
+  return Effect.gen(function* () {
+    const client = yield* scopedClient;
+    return (yield* client.get(url)).status;
+  }).pipe(Effect.scoped, Effect.timeout(Duration.millis(PROBE_TIMEOUT_MS)));
+}
+
+/**
+ * A probe that could not reach its endpoint answers "not running"; the
+ * failure's tag is logged so a transport fault stays distinguishable from an
+ * absent Zotero.
+ */
+function probeUnreachable(
+  error: HttpClientError.HttpClientError | Cause.TimeoutError,
+): Effect.Effect<boolean> {
+  return Effect.logDebug('Zotero probe unreachable', {
+    reason: error._tag === 'HttpClientError' ? error.reason._tag : error._tag,
+  }).pipe(Effect.as(false));
+}
 
 export const zotero: TexraPlugin = {
   id: 'zotero',
@@ -16,8 +58,37 @@ export const zotero: TexraPlugin = {
     ZoteroAddTool,
     ZoteroExportTool,
   ],
+  icons: {
+    zotero_collections: 'book',
+    zotero_search: 'book',
+    zotero_add: 'book',
+    zotero_export: 'book',
+  },
   toggle: 'off',
-  availability: ZOTERO_AVAILABILITY,
+  availability: {
+    check: Effect.fn('zotero.availability')(function* ({ config }) {
+      const port = Settings.getConfig<number>(config, ZOTERO_PORT_KEY);
+      // The connector endpoint responds while Zotero runs; the Better
+      // BibTeX JSON-RPC endpoint, while that plugin is installed.
+      const bbt = yield* probeLocalhost(
+        `http://127.0.0.1:${port}/better-bibtex/json-rpc`,
+      ).pipe(
+        Effect.map(
+          (status) => (status >= 200 && status < 300) || status === 405,
+        ),
+        Effect.catch(probeUnreachable),
+      );
+      const connectorUp = yield* probeLocalhost(
+        `http://127.0.0.1:${port}/connector/ping`,
+      ).pipe(Effect.as(true), Effect.catch(probeUnreachable));
+      let statusDetail = `Zotero not detected on port ${port}. Make sure Zotero is running.`;
+      if (connectorUp)
+        statusDetail = bbt
+          ? `Zotero running on port ${port}, Better BibTeX responding.`
+          : `Zotero detected on port ${port}, but Better BibTeX is not responding. Install the Better BibTeX plugin.`;
+      return { available: bbt, statusDetail };
+    }),
+  },
   card: {
     name: 'Zotero Integration',
     description:

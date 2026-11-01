@@ -76,7 +76,7 @@ const PLUGIN_SERVICES: readonly {
   {
     tag: 'LeanLanguageServices',
     users:
-      /^packages\/texra\/src\/tools\/(?:lean\/|pluginAvailability\.ts$)|^packages\/extension\/src\/(?:extension\.ts|frontend\/lean\/VscodeIntegration\.ts)$/,
+      /^packages\/texra\/src\/tools\/lean\/|^packages\/extension\/src\/(?:extension\.ts|frontend\/lean\/VscodeIntegration\.ts)$/,
   },
   // The `core` plugin's Comments UI port: its tool.
   { tag: 'InlineComments', users: /^packages\/texra\/src\/tools\/comment\// },

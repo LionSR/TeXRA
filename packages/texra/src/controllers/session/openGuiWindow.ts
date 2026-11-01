@@ -42,6 +42,7 @@ import {
   type StorageFs,
   type WorkspaceFs,
 } from '@texra-ai/harness/host';
+import { ToolRegistry } from '@texra-ai/harness/plugins';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type {
   FileOpResult,
@@ -76,6 +77,7 @@ import {
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import { toolIconsOf } from '@texra/controllers/settingsView/ToolDashboardData';
 import { hostFailure } from './hostCallFailure';
 import {
   createHostRunActions,
@@ -256,7 +258,7 @@ interface GuiWindowPorts {
   /** The snapshot reads only this host answers. */
   readonly snapshot: Omit<
     Parameters<typeof createHostSnapshotSource>[0],
-    'project' | 'root' | 'stores' | 'publish'
+    'project' | 'toolIcons' | 'root' | 'stores' | 'publish'
   >;
   readonly toolEdits: ToolEditApprovalHost;
   /** Emits when the window gains focus, so the project's calls come here
@@ -332,6 +334,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   const snapshot = createHostSnapshotSource({
     ...ports.snapshot,
     project: ports.project,
+    toolIcons: toolIconsOf((yield* ToolRegistry).entries),
     root: roots.workspace,
     stores: roots,
     publish: (next) => SubscriptionRef.set(hostSnapshot, next),

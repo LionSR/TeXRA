@@ -13,8 +13,8 @@
  * The Codex CLI handles its own auth (~/.codex/auth.json from `codex login`,
  * OPENAI_API_KEY, config files).
  *
- * Requires the Codex CLI binary — gated by the availability check in
- * pluginAvailability.ts.
+ * Requires the Codex CLI binary, gated by the availability check in
+ * codexPlugin.ts.
  */
 
 // Third-party imports
