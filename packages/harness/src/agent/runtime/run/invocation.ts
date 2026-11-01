@@ -88,8 +88,7 @@ export interface InvocationDriver<A, E, R> {
   /** The binding in force, read again before every attempt. */
   readonly binding: Effect.Effect<BoundModel>;
   /** Replace `failed`: after a person's retry answer (on the credentials
-   *  it picked), a renewed subscription token, or a connection a failure
-   *  killed. */
+   *  it picked) or a renewed subscription token. */
   readonly rebind: (
     credentials: RetryCredentials | 'renewed',
     failed: BoundModel,
