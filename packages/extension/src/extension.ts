@@ -26,7 +26,6 @@ import {
   withProcessServices,
   StateStores,
   withLogChannel,
-  setLogSink,
   ToolAvailability,
   Settings,
 } from '@texra-ai/harness/host';
@@ -39,6 +38,7 @@ import {
   FileSecrets,
   JsonConfigProvider,
   secretsDirectory,
+  setLogSink,
 } from '@texra-ai/harness/node';
 import {
   APPROVAL_POLICY_CONFIG_KEY,

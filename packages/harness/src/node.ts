@@ -23,6 +23,9 @@
  *   [`executeCommand`](#executecommand), [`CommandDirs`](#commanddirs),
  *   [`writeFileAtomic`](#writefileatomic), and
  *   [`readNormalizedFile`](#readnormalizedfile).
+ * - **Diagnostics**: [`setLogSink`](#setlogsink) and [`LogSink`](#logsink)
+ *   name where the log entries go, and
+ *   [`effectDiagnosticsLayer`](#effectdiagnosticslayer) at which level.
  */
 // The default platform of an SDK embedder.
 export {
@@ -106,6 +109,17 @@ export {
 // sink, the minimum level, a bounded tracer), for a host program that runs
 // outside its process runtime: before it is built, or after it is gone.
 export { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+// The harness's log output: where its entries go (the console until a sink
+// is set), how an entry reads, and a line written straight to the sink.
+export {
+  entryChannel,
+  entryMessage,
+  LOG_CHANNEL,
+  setLogSink,
+  writeLogLine,
+  type LogEntry,
+  type LogSink,
+} from '@logger/logSink';
 // The config provider over a host's stores (workspace, local, global), and
 // whether it ignores a project file's value for a row.
 export {

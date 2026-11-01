@@ -2,7 +2,7 @@
 
 Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
-Exports: 45
+Exports: 52
 
 - `absentReason` — `const absentReason: (error: PlatformError) => boolean`
 - `canonicalizeWorkspacePath` — `function canonicalizeWorkspacePath: (workspacePath: string) => string`
@@ -10,6 +10,8 @@ Exports: 45
 - `ConfigStore` — `interface ConfigStore { get<T>(key: string): T | undefined; set(key: string, value: unknown): Effect.Effect<void, Error>; }`
 - `createNodeWorkspaceRoots` — `function createNodeWorkspaceRoots: (init: NodeWorkspaceRootsInit) => WorkspaceRoots`
 - `effectDiagnosticsLayer` — `const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>`
+- `entryChannel` — `function entryChannel: (entry: { readonly annotations: Record<string, unknown>; readonly cause: string | undefined; readonly fiberId: string; readonly level: string; readonly message: unknown; readonly spans: Record<string, number>; readonly timestamp: string; }) => string | undefined`
+- `entryMessage` — `function entryMessage: (entry: { readonly annotations: Record<string, unknown>; readonly cause: string | undefined; readonly fiberId: string; readonly level: string; readonly message: unknown; readonly spans: Record<string, number>; readonly timestamp: string; }) => string`
 - `entryTypeIn` — `const entryTypeIn: (fs: FileSystem, target: string) => Effect<Type | undefined, PlatformError, never>`
 - `envFlag` — `const envFlag: (name: string, env?: Readonly<Record<string, string | undefined>> | undefined) => Effect<boolean, never, never>`
 - `envVar` — `const envVar: (name: string) => Effect<string | undefined, never, never>`
@@ -26,6 +28,9 @@ Exports: 45
 - `JsonConfigProviderOptions` — `interface JsonConfigProviderOptions { workspace: ConfigStore; global: ConfigStore; local: ConfigStore; catalog: SettingsCatalog; }`
 - `JsonStore` — `class JsonStore { constructor: new (filePath: string, data: JsonRecord, follow: boolean) => JsonStore; static: open: (filePath: string, options?: JsonStoreOptions | undefined) => Effect<JsonStore, SyntaxError, FileSystem | Path>; instance: filePath: string; get: <T>(key: string) => T | undefined; keys: () => string[]; set: (key: string, value: unknown) => Effect<void, Error, never>; snapshot: () => Record<string, unknown> }`
 - `JsonStoreOptions` — `interface JsonStoreOptions { onUnreadable?: (error: Error) => void; follow?: boolean; }`
+- `LOG_CHANNEL` — `const LOG_CHANNEL: "channel"`
+- `LogEntry` — `type LogEntry = ReturnType<typeof Logger.formatStructured.log>; ≡ { readonly annotations: Record<string, unknown>; readonly cause: string | undefined; readonly fiberId: string; readonly level: string; readonly message: unknown; readonly spans: Record<string, number>; readonly timestamp: string; }`
+- `LogSink` — `interface LogSink { write(entry: LogEntry): void; dispose?(): void; }`
 - `makeMachineGitEnv` — `const makeMachineGitEnv: Effect<ProcessEnv, never, never>`
 - `nodeFileServices` — `const nodeFileServices: Layer<FileSystem | Path, never, never>`
 - `nodePlatform` — `function nodePlatform: (options: NodePlatformOptions) => AgentPlatform`
@@ -44,8 +49,10 @@ Exports: 45
 - `resolveWorkspaceStoragePath` — `function resolveWorkspaceStoragePath: (storageRoot: string, workspacePath: string | undefined) => string`
 - `runsInWsl` — `function runsInWsl: () => boolean`
 - `secretsDirectory` — `function secretsDirectory: (storageRoot: string) => string`
+- `setLogSink` — `function setLogSink: (next: LogSink | null, options?: { readonly trusted?: boolean | undefined; }) => void`
 - `whichOnExtendedPath` — `function whichOnExtendedPath: (name: string, appDirs: readonly string[]) => null | string`
 - `withExtendedPath` — `function withExtendedPath: <T extends NodeJS.ProcessEnv>(env: T, appDirs: readonly string[]) => T`
 - `WORKSPACE_STORES` — `const WORKSPACE_STORES: ValueFamily<{ readonly root: string; }, false>`
 - `workspaceRelativePath` — `function workspaceRelativePath: (root: string | undefined, filePath: string) => string`
 - `writeFileAtomic` — `const writeFileAtomic: (target: string, data: Uint8Array<ArrayBufferLike>) => Effect<void, PlatformError, never>`
+- `writeLogLine` — `function writeLogLine: (channel: string, message: string) => void`

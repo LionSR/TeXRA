@@ -265,16 +265,7 @@ export {
 } from '@tools/toolAvailabilityService';
 // The tool catalog: enabled built-ins, plugin services and switches.
 export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
-// The harness's log output: where its entries go and how an entry reads.
-export {
-  entryChannel,
-  entryMessage,
-  LOG_CHANNEL,
-  setLogSink,
-  writeLogLine,
-  type LogEntry,
-  type LogSink,
-} from '@logger/logSink';
+// The channel an Effect's log entries name (`entryChannel`, `/node`).
 export { withLogChannel } from '@logger/effectLog';
 // The write path's redaction, for host text shown outside it.
 export { formatFatalErrorDetail, redactSecrets } from '@logger/redaction';

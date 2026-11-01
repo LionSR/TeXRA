@@ -22,7 +22,6 @@ import { type Sessions } from '@texra-ai/harness';
 import {
   AppState,
   type GlobalValues,
-  setLogSink,
   withLogChannel,
   withPerKeyLane,
   type PerKeyLane,
@@ -35,6 +34,7 @@ import {
   resolveWorkspaceStoragePath,
   envFlag,
   JsonStore,
+  setLogSink,
 } from '@texra-ai/harness/node';
 import {
   ensureError,

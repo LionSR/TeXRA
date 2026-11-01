@@ -26,6 +26,9 @@ Node.js platform implementation and host building blocks for
   [`executeCommand`](#executecommand), [`CommandDirs`](#commanddirs),
   [`writeFileAtomic`](#writefileatomic), and
   [`readNormalizedFile`](#readnormalizedfile).
+- **Diagnostics**: [`setLogSink`](#setlogsink) and [`LogSink`](#logsink)
+  name where the log entries go, and
+  [`effectDiagnosticsLayer`](#effectdiagnosticslayer) at which level.
 
 ## absentReason
 
@@ -106,6 +109,29 @@ freeze the setting for a whole session.
 
 ```ts
 const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>
+```
+
+## entryChannel
+
+Which channel an entry belongs to, or `undefined` when it names none. An
+`Effect.log*` carries one only through `Effect.annotateLogs`; a tracer span
+opened by `Effect.withSpan` does not supply it, because the entry's `spans`
+field reads `CurrentLogSpans` (`Effect.withLogSpan`), a separate mechanism.
+An unattributed entry lands on the host's shared surface, which is the right
+home for it.
+
+```ts
+function entryChannel(entry: LogEntry): string | undefined
+```
+
+## entryMessage
+
+Render an entry's message for a host that wants one line of text. Effect
+hands `message` through as a single value or an array of them, so both
+shapes fold here rather than at each host.
+
+```ts
+function entryMessage(entry: LogEntry): string
 ```
 
 ## entryTypeIn
@@ -382,6 +408,34 @@ interface JsonStoreOptions {
 }
 ```
 
+## LOG_CHANNEL
+
+Annotation naming the logical channel an entry belongs to.
+
+```ts
+const LOG_CHANNEL: "channel"
+```
+
+## LogEntry
+
+One diagnostic record, shaped by Effect's own structured formatter rather
+than by a type of ours: `Logger.formatStructured` already carries level,
+fiber, timestamp, message, cause, annotations, and spans, so the logger
+layer maps straight onto this with no adaptation.
+
+```ts
+type LogEntry = ReturnType<typeof Logger.formatStructured.log>;
+```
+
+## LogSink
+
+```ts
+interface LogSink {
+  write(entry: LogEntry): void;
+  dispose?(): void;
+}
+```
+
 ## makeMachineGitEnv
 
 Build an environment for a non-interactive git subprocess: the current
@@ -651,6 +705,19 @@ production).
 function secretsDirectory(storageRoot: string): string
 ```
 
+## setLogSink
+
+Install the host sink, disposing whatever it replaces. Entries are redacted
+unless the host identifies a local operator terminal as trusted. Passing
+`null` restores the console fallback.
+
+```ts
+function setLogSink(
+  next: LogSink | null,
+  options: { readonly trusted?: boolean } = {},
+): void
+```
+
 ## whichOnExtendedPath
 
 Resolve `name` on the process PATH extended with `appDirs` the way a shell
@@ -719,4 +786,14 @@ file would make unreadable on resume; not for workspace files.
 
 ```ts
 const writeFileAtomic: (target: string, data: Uint8Array<ArrayBufferLike>) => Effect<void, PlatformError, never>
+```
+
+## writeLogLine
+
+One `WARN` channel line, for the few synchronous publication points with no
+fiber to run `Effect.log*` on (the trace emitter, pre-runtime and shutdown
+paths). The entry has the shape the logger layer writes.
+
+```ts
+function writeLogLine(channel: string, message: string): void
 ```

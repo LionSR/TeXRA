@@ -3,8 +3,8 @@ import { Context, Effect, Exit, Layer, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { AGENT_SOURCE } from '@texra-ai/harness/schemas';
-import { effectDiagnosticsLayer } from '@texra-ai/harness/node';
-import { setLogSink, UsageLog } from '@texra-ai/harness/host';
+import { effectDiagnosticsLayer, setLogSink } from '@texra-ai/harness/node';
+import { UsageLog } from '@texra-ai/harness/host';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { usageAgentName } from '@shared/usageLog';
 import {
