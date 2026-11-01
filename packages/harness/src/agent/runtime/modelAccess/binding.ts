@@ -165,7 +165,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     facts,
     request.rejected,
   );
-  const codex = credential.route === 'chatgpt-subscription';
+  const chatgpt = credential.route === 'chatgpt-subscription';
   const reasoning = yield* reasoningOf(plan, requested);
   const turn = { protocol, textOnly: request.textOnly };
   const bound = yield* bindWireModel({
@@ -173,13 +173,9 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     route,
     endpoint: credential.endpoint,
     // A subscription token is the bearer where an API key would be; the
-    // Codex session also names its account.
-    credential: codex
-      ? {
-          kind: 'codex',
-          accessToken: credential.bearer,
-          accountId: credential.accountId,
-        }
+    // ChatGPT plan's also selects that plan's request rules.
+    credential: chatgpt
+      ? { kind: 'chatgpt', accessToken: credential.bearer }
       : { kind: 'api-key', apiKey: credential.bearer },
     options: {
       maxOutputTokens: request.textOnly
@@ -205,7 +201,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     credential.route === 'xai-subscription'
       ? { subscriptionToken: credential.bearer }
       : {}),
-    ...(codex && credential.plan ? { plan: credential.plan } : {}),
+    ...(chatgpt && credential.plan ? { plan: credential.plan } : {}),
     routes: routePolicies(
       [
         bound.config.provider,

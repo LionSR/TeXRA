@@ -4,8 +4,9 @@
  * deployment endpoint (it never falls back to an SDK default), so the
  * providers the handler left to their SDKs are named here. A subscription
  * token is accepted only at its own surface, so a ChatGPT subscription goes
- * to the Codex backend and a Grok subscription to the xAI plugin's default,
- * never to a per-model or dashboard endpoint. Otherwise the precedence is:
+ * to the API its token was issued for and a Grok subscription to the xAI
+ * plugin's default, never to a per-model or dashboard endpoint. Otherwise
+ * the precedence is:
  * a per-model base URL, then the route's own (Kimi Code), then the host's
  * endpoint for the provider
  * (`RouteFacts.endpoints`: a dashboard URL, or the default of the region its
@@ -20,11 +21,10 @@ import type { ModelConfig } from 'llm-zoo';
 import type { ModelRoute, RouteFacts } from './modelRoute.js';
 
 /**
- * The Codex backend a ChatGPT subscription bills. It already includes the
- * `codex` path segment, so the Responses `/responses` suffix yields
- * `.../codex/responses`.
+ * The API a ChatGPT plan's token is issued for (its OAuth `resource`): the
+ * public Responses API, never ChatGPT's own backend.
  */
-const CODEX_BACKEND_BASE_URL = 'https://chatgpt.com/backend-api/codex';
+const CHATGPT_PLAN_BASE_URL = 'https://api.openai.com/v1';
 
 /** A provider plugin's default endpoint, when it states one URL. */
 function pluginEndpoint(provider: string): string | undefined {
@@ -45,7 +45,7 @@ export function resolveRouteEndpoint(
   >,
   facts: Pick<RouteFacts, 'endpoints'>,
 ): string | undefined {
-  if (route.kind === 'chatgpt-subscription') return CODEX_BACKEND_BASE_URL;
+  if (route.kind === 'chatgpt-subscription') return CHATGPT_PLAN_BASE_URL;
   if (route.kind === 'xai-subscription') return pluginEndpoint('xai');
   if (config.baseUrl) return config.baseUrl;
   if (route.usageRoute === 'kimi-code-subscription') return KIMI_CODE_BASE_URL;

@@ -13,9 +13,6 @@ import type { ConfigurationOf, Facts } from './configuration.js';
 
 type ResponsesConfiguration = ConfigurationOf<'openai-responses'>;
 
-/** Instructions the Codex backend requires when the request carries none. */
-const CODEX_DEFAULT_INSTRUCTIONS = "Follow the user's instructions.";
-
 /**
  * The Responses route of a vendor serving OpenAI's format on its own
  * endpoint: stateless unless the vendor stores and chains, no background,
@@ -140,7 +137,11 @@ export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
     config.reasoning === undefined
       ? null
       : { effort, mode: choice.mode, summary };
-  if (credential.kind === 'codex') {
+  if (credential.kind === 'chatgpt') {
+    // OpenAI's token sharing: the public Responses API under a ChatGPT plan's
+    // rules. A request is stateless and streamed (`store: false`, no
+    // `previous_response_id`), takes no temperature or output limit, and has
+    // no background mode; the plan's token reaches no Files API either.
     return {
       ...base,
       requestedModel: codexBackendModelId(config),
@@ -148,20 +149,19 @@ export function responsesConfiguration(facts: Facts): ResponsesConfiguration {
       background: 'unsupported',
       supportsStorage: false,
       supportsDocumentInput: config.capabilities.supportsNativePdf,
-      webSocketStreamParameter: 'required',
+      webSocketStreamParameter: 'implicit',
       allowedReasoningEfforts: facts.acceptedEfforts.filter(
         (value) =>
           value === ReasoningEffort.NONE || CODEX_ROUTE_EFFORTS.includes(value),
       ),
-      instructions: { kind: 'required', fallback: CODEX_DEFAULT_INSTRUCTIONS },
+      instructions: { kind: 'optional' },
       continuationInheritsInstructions: false,
       supportsForcedToolChoice: true,
       openaiEndpoint: true,
       requestDialect: 'openai',
       defaults: {
-        // The Codex backend takes no output limit.
         maxOutputTokens: null,
-        temperature: controls.temperature,
+        temperature: null,
         store: false,
         parallelToolCalls: controls.parallelToolCalls,
         reasoning,

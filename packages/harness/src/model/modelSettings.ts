@@ -14,7 +14,7 @@ import {
   type RegionalProviderId,
   type RouteFacts,
 } from '@texra-ai/llm';
-import { getCodexStatus, getXaiStatus } from '@texra-ai/llm/node';
+import { getChatgptStatus, getXaiStatus } from '@texra-ai/llm/node';
 
 import { StateReadFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -189,7 +189,7 @@ const subscriptionOn = (
     Effect.flatMap((on) =>
       on
         ? Effect.flatMap(Secrets, (secrets) =>
-            (provider === 'chatgpt' ? getCodexStatus : getXaiStatus)(secrets),
+            (provider === 'chatgpt' ? getChatgptStatus : getXaiStatus)(secrets),
           ).pipe(
             Effect.map((status) => status.signedIn),
             Effect.mapError(

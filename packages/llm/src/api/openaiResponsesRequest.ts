@@ -203,14 +203,9 @@ export const ResponseAuthenticationSchema = Schema.Union([
     ),
   }),
   Schema.Struct({
-    kind: Schema.Literal('codex'),
+    kind: Schema.Literal('chatgpt'),
     accessToken: Schema.String.check(Schema.isMinLength(1)).check(
       Schema.isPattern(/^[^\r\n]+$/),
-    ),
-    accountId: Schema.NullOr(
-      Schema.String.check(Schema.isMinLength(1)).check(
-        Schema.isPattern(/^[^\r\n]+$/),
-      ),
     ),
   }),
 ]);
@@ -228,18 +223,13 @@ export function responseAuthentication(
   const authentication = Schema.decodeUnknownSync(ResponseAuthenticationSchema)(
     input,
   );
-  return authentication.kind === 'api-key'
-    ? { token: authentication.apiKey, headers: {} }
-    : {
-        token: authentication.accessToken,
-        headers: {
-          ...(authentication.accountId !== null
-            ? { 'chatgpt-account-id': authentication.accountId }
-            : {}),
-          originator: 'texra',
-          'openai-beta': 'responses=experimental',
-        },
-      };
+  return {
+    token:
+      authentication.kind === 'api-key'
+        ? authentication.apiKey
+        : authentication.accessToken,
+    headers: {},
+  };
 }
 
 /** The SDK client for one selected Responses deployment: no retries, no ambient organization. */

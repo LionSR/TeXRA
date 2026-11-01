@@ -1,16 +1,21 @@
 /**
  * The subscription coordinator's public contract: the session it stores,
- * the token grant and authorize request its sign-in flows pass it, and the
- * {@link SubscriptionCoordinator} a caller holds. The implementation is
+ * the token grant and authorize request its sign-in flows pass it, the
+ * {@link SubscriptionCoordinator} a caller holds, and the
+ * {@link SubscriptionOAuthPolicy} a provider writes. The implementation is
  * `SubscriptionOAuthCoordinator.ts`.
  */
-import type { SecretsFailed } from '../providers/credentials.js';
+import type {
+  CredentialStore,
+  SecretsFailed,
+} from '../providers/credentials.js';
 import type { SubscriptionOAuthError } from './subscriptionOAuthError.js';
 import type {
   SubscriptionSessionBaseSchema,
   SubscriptionTokenResponseSchema,
 } from './subscriptionSessionSchema.js';
-import type { Effect } from 'effect';
+import type { OAuthFormEndpoint } from './formTokenClient.js';
+import type { Effect, Schema } from 'effect';
 import type { HttpClient } from 'effect/http';
 
 /** Raw token-endpoint shape shared by authorization-code and refresh grants. */
@@ -32,7 +37,22 @@ export interface SubscriptionAuthorizeRequest {
   /** The high-entropy secret carried through the loopback round-trip. */
   verifier: string;
   state: string;
+  /** The OIDC nonce the returned ID token must carry. */
+  nonce: string;
   redirectUri: string;
+  /** The client this attempt authorizes as. */
+  clientId: string;
+  /**
+   * The attempt registers a new client for the user: the callback names the
+   * client the provider issued, and the grant and the session use that one.
+   */
+  registering: boolean;
+}
+
+/** What a loopback callback delivered: the code, and any client it named. */
+export interface SubscriptionCallback {
+  readonly code: string;
+  readonly clientId: string | undefined;
 }
 
 /** Whether a session is stored, and the account it names. */
@@ -70,13 +90,73 @@ export interface SubscriptionCoordinator<S extends SubscriptionSession> {
   /** Forget the stored session. */
   signOut(): Effect.Effect<void, SecretsFailed>;
   /** The PKCE authorize URL for a loopback callback on `port`. */
-  buildAuthorizeRequest(port: number): SubscriptionAuthorizeRequest;
-  /** Exchange an authorization code and store the session it grants. */
-  loginWithCode(params: {
-    code: string;
-    verifier: string;
-    redirectUri: string;
-  }): Effect.Effect<S, Error, HttpClient.HttpClient>;
+  buildAuthorizeRequest(
+    port: number,
+  ): Effect.Effect<
+    SubscriptionAuthorizeRequest,
+    SecretsFailed | SubscriptionOAuthError
+  >;
+  /** Exchange the code `request`'s callback delivered and store the
+   *  session it grants. */
+  loginWithCode(
+    request: SubscriptionAuthorizeRequest,
+    callback: SubscriptionCallback,
+  ): Effect.Effect<S, Error, HttpClient.HttpClient>;
   /** Store the session a completed token grant returned. */
   storeTokens(tokens: SubscriptionTokenResponse): Effect.Effect<S, Error>;
+}
+
+/** Provider-specific policy: every magic URL/claim out of the machine. */
+export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
+  /** The credential-store key that holds this provider's session. */
+  readonly secretKey: string;
+  /** The persisted session bundle's schema. */
+  readonly sessionSchema: Schema.Codec<S, unknown>;
+  /** Form token endpoint the token grants go to. */
+  readonly tokenEndpoint: OAuthFormEndpoint;
+  readonly notSignedInMessage: string;
+  readonly sessionChangedMessage: string;
+  /** The provider's authorize endpoint, for the PKCE code flow (`./pkce.ts`). */
+  readonly authorize: {
+    readonly url: string;
+    readonly scope: string;
+    /** The loopback redirect for a bind on `port` (a pinned one ignores it). */
+    redirectUri(port: number): string;
+    /** The provider's parameters beyond the code flow's own. */
+    readonly params: Readonly<Record<string, string>>;
+  };
+  /**
+   * A provider that registers a client per user: the client this attempt
+   * authorizes as, given the stored session, and the parameters the
+   * registration needs. Absent: every attempt authorizes as
+   * `tokenEndpoint.clientId`.
+   */
+  readonly registration?: (
+    previous: S | null,
+    secrets: CredentialStore,
+  ) => Effect.Effect<
+    {
+      readonly clientId: string;
+      readonly registering: boolean;
+      readonly params: Readonly<Record<string, string>>;
+    },
+    SecretsFailed
+  >;
+  /**
+   * Check a code grant before it is stored: the ID token against the
+   * attempt's client and nonce, and the scopes granted. Absent: no check,
+   * and no nonce is sent.
+   */
+  readonly acceptGrant?: (
+    tokens: SubscriptionTokenResponse,
+    clientId: string,
+    nonce: string,
+  ) => Effect.Effect<void, SubscriptionOAuthError, HttpClient.HttpClient>;
+  /** Token response to session. Must not throw: it runs in `Effect.succeed`. */
+  buildSession(
+    tokens: SubscriptionTokenResponse,
+    refreshToken: string,
+    nowMs: number,
+    previous?: S,
+  ): S;
 }

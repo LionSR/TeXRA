@@ -270,7 +270,6 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             <subscriptions-tab
               slot="subscriptions"
               .subscriptionAuth=${subscriptionAuth.get()}
-              .usage=${subscriptionUsage.get()}
             ></subscriptions-tab>
           </models-tab>
         `;

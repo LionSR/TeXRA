@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import * as codexAuth from '@texra-ai/llm/node';
+import * as chatgptAuth from '@texra-ai/llm/node';
 import {
   fakeProcessServices,
   installedHost,
@@ -23,7 +23,7 @@ describe('shared setup capabilities', () => {
     'does not expose ChatGPT account identifiers through setup tools',
     () =>
       Effect.gen(function* () {
-        vi.spyOn(codexAuth, 'getCodexStatus').mockReturnValue(
+        vi.spyOn(chatgptAuth, 'getChatgptStatus').mockReturnValue(
           Effect.succeed({
             signedIn: true,
             email: 'researcher@example.com',

@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { codexCoordinator } from '@texra-ai/llm/node';
+import { chatgptCoordinator } from '@texra-ai/llm/node';
 import type { CredentialStore } from '@texra-ai/llm';
 
 /** An access token the claim decoder reads as carrying no claims. */
@@ -22,7 +22,7 @@ function storedClaims(
     delete: () => Effect.void,
   };
   const { accountId, email, planType } = Effect.runSync(
-    codexCoordinator(signedOut).storeTokens({
+    chatgptCoordinator(signedOut).storeTokens({
       access_token: accessToken ?? OPAQUE_ACCESS_TOKEN,
       id_token: idToken,
       refresh_token: 'refresh-token',
@@ -38,7 +38,7 @@ function makeJwt(payload: Record<string, unknown>): string {
   return `header.${body}.signature`;
 }
 
-describe('codex JWT claim extraction', () => {
+describe('ChatGPT JWT claim extraction', () => {
   it.each([
     {
       name: 'reads the nested https://api.openai.com/auth claim',

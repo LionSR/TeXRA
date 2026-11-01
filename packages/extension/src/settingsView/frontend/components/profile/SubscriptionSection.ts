@@ -20,7 +20,6 @@ import {
   type SubscriptionAuthStatus,
   xaiAccountLabel,
 } from '@texra/shared/model/subscriptionAuth';
-import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
@@ -33,7 +32,6 @@ import {
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - settings view components
-import './SubscriptionUsageRow';
 import {
   postStateSetting,
   renderStateSettingNumberRow,
@@ -85,9 +83,6 @@ export class SubscriptionSection extends SignalWatcher(LitElement) {
 
   @property({ attribute: false }) provider!: SubscriptionSectionProvider;
   @property({ attribute: false }) auth: SubscriptionAuthStatus | null = null;
-  @property({ attribute: false }) usage: SubscriptionUsageSnapshot | null =
-    null;
-  @property({ attribute: false }) now = 0;
 
   private readonly handlePreferSubscriptionChange = (event: Event): void => {
     const enabled = (event.target as WaSwitch).checked;
@@ -180,10 +175,6 @@ export class SubscriptionSection extends SignalWatcher(LitElement) {
               }
             </div>
           </div>
-          <subscription-usage-row
-            .snapshot=${this.usage}
-            .now=${this.now}
-          ></subscription-usage-row>
           ${
             // The long explanation lives in the docs (models.md) and the
             // catalog row; the card keeps one line.

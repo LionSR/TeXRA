@@ -21,7 +21,6 @@ import { SerializedWrites } from './authProgram.js';
 import {
   exchangeAuthorizationCode,
   refreshOAuthTokens,
-  type OAuthFormEndpoint,
 } from './formTokenClient.js';
 import { authorizeRequest } from './pkce.js';
 import { SubscriptionOAuthError } from './subscriptionOAuthError.js';
@@ -32,40 +31,14 @@ import type {
 } from '../providers/credentials.js';
 import type {
   SubscriptionAuthorizeRequest,
+  SubscriptionCallback,
   SubscriptionCoordinator,
+  SubscriptionOAuthPolicy,
   SubscriptionSession,
   SubscriptionSessionStatus,
   SubscriptionTokenResponse,
 } from './subscriptionCoordinator.js';
 import type { HttpClient } from 'effect/http';
-
-/** Provider-specific policy: every magic URL/claim out of the machine. */
-export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
-  /** The credential-store key that holds this provider's session. */
-  readonly secretKey: string;
-  /** The persisted session bundle's schema. */
-  readonly sessionSchema: Schema.Codec<S, unknown>;
-  /** Form token endpoint the token grants go to. */
-  readonly tokenEndpoint: OAuthFormEndpoint;
-  readonly notSignedInMessage: string;
-  readonly sessionChangedMessage: string;
-  /** The provider's authorize endpoint, for the PKCE code flow (`./pkce.ts`). */
-  readonly authorize: {
-    readonly url: string;
-    readonly scope: string;
-    /** The loopback redirect for a bind on `port` (a pinned one ignores it). */
-    redirectUri(port: number): string;
-    /** The provider's parameters beyond the code flow's own. */
-    readonly params: Readonly<Record<string, string>>;
-  };
-  /** Token response to session. Must not throw: it runs in `Effect.succeed`. */
-  buildSession(
-    tokens: SubscriptionTokenResponse,
-    refreshToken: string,
-    nowMs: number,
-    previous?: S,
-  ): S;
-}
 
 type MachineFailure = SubscriptionOAuthError | SecretsFailed;
 
@@ -170,9 +143,17 @@ export class SubscriptionOAuthCoordinator<
     );
   }
 
-  buildAuthorizeRequest(port: number): SubscriptionAuthorizeRequest {
-    return authorizeRequest(this.policy, port);
-  }
+  readonly buildAuthorizeRequest = Effect.fn(
+    'SubscriptionOAuthCoordinator.buildAuthorizeRequest',
+  )(function* (this: SubscriptionOAuthCoordinator<S>, port: number) {
+    const { registration } = this.policy;
+    return authorizeRequest(
+      this.policy,
+      port,
+      registration &&
+        (yield* registration(yield* this.loadSession(), this.secrets)),
+    );
+  });
 
   /** Whether `session` needs a refresh at `now`, a `Clock` reading. */
   private isExpiringSoon(session: S, now: number): boolean {
@@ -202,12 +183,19 @@ export class SubscriptionOAuthCoordinator<
   private buildSession(
     tokens: SubscriptionTokenResponse,
     previous?: S,
+    clientId: string | undefined = previous?.clientId,
   ): Effect.Effect<S, SubscriptionOAuthError> {
     const refreshToken = tokens.refresh_token ?? previous?.refreshToken;
     return refreshToken
-      ? Effect.map(Clock.currentTimeMillis, (now) =>
-          this.policy.buildSession(tokens, refreshToken, now, previous),
-        )
+      ? Effect.map(Clock.currentTimeMillis, (now) => {
+          const session = this.policy.buildSession(
+            tokens,
+            refreshToken,
+            now,
+            previous,
+          );
+          return clientId === undefined ? session : { ...session, clientId };
+        })
       : Effect.fail(
           new SubscriptionOAuthError({
             message: 'OAuth response did not include a refresh token.',
@@ -296,8 +284,9 @@ export class SubscriptionOAuthCoordinator<
     function* (
       this: SubscriptionOAuthCoordinator<S>,
       tokens: SubscriptionTokenResponse,
+      clientId?: string,
     ) {
-      const session = yield* this.buildSession(tokens);
+      const session = yield* this.buildSession(tokens, undefined, clientId);
       yield* this.sessionMutations.run(
         this.store(session),
         this.supersedeInFlightRefresh,
@@ -308,19 +297,39 @@ export class SubscriptionOAuthCoordinator<
 
   /**
    * The code exchange as a program: the loopback login yields it, so
-   * interrupting that login reaches the exchange and the store.
+   * interrupting that login reaches the exchange and the store. A
+   * registering attempt takes the client the callback names; a returning
+   * one rejects a callback that names another.
    */
   readonly loginWithCode = Effect.fn(
     'SubscriptionOAuthCoordinator.loginWithCode',
   )(function* (
     this: SubscriptionOAuthCoordinator<S>,
-    params: { code: string; verifier: string; redirectUri: string },
+    request: SubscriptionAuthorizeRequest,
+    callback: SubscriptionCallback,
   ) {
+    const clientId = request.registering ? callback.clientId : request.clientId;
+    if (
+      clientId === undefined ||
+      (callback.clientId !== undefined && callback.clientId !== clientId)
+    ) {
+      return yield* new SubscriptionOAuthError({
+        message: 'Sign-in did not confirm the client it used. Sign in again.',
+        kind: 'config',
+      });
+    }
     const tokens = yield* Effect.mapError(
-      exchangeAuthorizationCode(this.policy.tokenEndpoint, params),
+      exchangeAuthorizationCode(this.policy.tokenEndpoint, {
+        code: callback.code,
+        verifier: request.verifier,
+        redirectUri: request.redirectUri,
+        clientId,
+      }),
       grantFailure,
     );
-    return yield* this.storeTokens(tokens);
+    if (this.policy.acceptGrant)
+      yield* this.policy.acceptGrant(tokens, clientId, request.nonce);
+    return yield* this.storeTokens(tokens, clientId);
   });
 
   private readonly freshSession = Effect.fn(
@@ -358,6 +367,7 @@ export class SubscriptionOAuthCoordinator<
     const tokens = yield* refreshOAuthTokens(
       this.policy.tokenEndpoint,
       previous.refreshToken,
+      previous.clientId ?? this.policy.tokenEndpoint.clientId,
     ).pipe(
       Effect.mapError(grantFailure),
       // Fatal: clear the session unless a login or a refresh replaced it.

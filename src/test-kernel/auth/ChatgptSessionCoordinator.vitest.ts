@@ -6,8 +6,8 @@ import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import {
-  codexCoordinator,
-  type CodexSession,
+  chatgptCoordinator,
+  type ChatgptSession,
   type SubscriptionCoordinator,
   type SubscriptionTokenResponse,
 } from '@texra-ai/llm/node';
@@ -23,8 +23,8 @@ const NOW = 0;
 const FIVE_MIN = 5 * 60 * 1000;
 
 /** The secret store the ChatGPT coordinator binds; it reads one key. */
-function memoryStorage(initial?: CodexSession): CredentialStore & {
-  peek: () => CodexSession | undefined;
+function memoryStorage(initial?: ChatgptSession): CredentialStore & {
+  peek: () => ChatgptSession | undefined;
 } {
   let value = initial ? JSON.stringify(initial) : undefined;
   return {
@@ -37,11 +37,11 @@ function memoryStorage(initial?: CodexSession): CredentialStore & {
       Effect.sync(() => {
         value = undefined;
       }),
-    peek: () => (value ? (JSON.parse(value) as CodexSession) : undefined),
+    peek: () => (value ? (JSON.parse(value) as ChatgptSession) : undefined),
   };
 }
 
-function session(overrides: Partial<CodexSession> = {}): CodexSession {
+function session(overrides: Partial<ChatgptSession> = {}): ChatgptSession {
   return {
     accessToken: 'access-0',
     refreshToken: 'refresh-0',
@@ -52,7 +52,7 @@ function session(overrides: Partial<CodexSession> = {}): CodexSession {
   };
 }
 
-function expiredSession(): CodexSession {
+function expiredSession(): ChatgptSession {
   return session({ expiresAtMs: NOW - 1 });
 }
 
@@ -75,7 +75,6 @@ type Grant = () => Promise<Response>;
 
 /** The grants the current test's token endpoint answers. */
 let grants: {
-  exchangeAuthorizationCode?: Grant;
   refreshTokens?: Grant;
 } = {};
 
@@ -88,9 +87,6 @@ const tokenEndpoint: typeof fetch = async (_input, init) => {
   const grantType = new URLSearchParams(String(init?.body)).get('grant_type');
   if (grantType === 'refresh_token' && grants.refreshTokens) {
     return grants.refreshTokens();
-  }
-  if (grantType === 'authorization_code' && grants.exchangeAuthorizationCode) {
-    return grants.exchangeAuthorizationCode();
   }
   throw new Error(`Unexpected grant: ${grantType}`);
 };
@@ -141,25 +137,25 @@ const joinFailure = <A>(fiber: Fiber.Fiber<A, unknown>) =>
 function makeCoordinator(
   storage: CredentialStore,
   endpointGrants: typeof grants = {},
-): SubscriptionCoordinator<CodexSession> {
+): SubscriptionCoordinator<ChatgptSession> {
   grants = endpointGrants;
-  return codexCoordinator(storage);
+  return chatgptCoordinator(storage);
 }
 
-const freshToken = (coordinator: SubscriptionCoordinator<CodexSession>) =>
+const freshToken = (coordinator: SubscriptionCoordinator<ChatgptSession>) =>
   Effect.map(coordinator.getFreshSession(), (fresh) => fresh.accessToken);
 
-describe('CodexSessionCoordinator', () => {
+describe('ChatGPT session coordinator', () => {
   it.effect(
     'reuses one coordinator per store, so distinct stores share no state',
     () =>
       Effect.gen(function* () {
         const first = memoryStorage();
         const second = memoryStorage();
-        const coordinator = codexCoordinator(first);
+        const coordinator = chatgptCoordinator(first);
 
-        expect(codexCoordinator(first)).toBe(coordinator);
-        expect(codexCoordinator(second)).not.toBe(coordinator);
+        expect(chatgptCoordinator(first)).toBe(coordinator);
+        expect(chatgptCoordinator(second)).not.toBe(coordinator);
 
         yield* coordinator.storeTokens(tokenResponse());
         expect(first.peek()?.accessToken).toBe('access-1');
@@ -232,26 +228,16 @@ describe('CodexSessionCoordinator', () => {
       Effect.gen(function* () {
         const storage = memoryStorage(expiredSession());
         const { pending, refreshTokens, refreshStarted } = parkedRefresh();
-        const exchangeAuthorizationCode = async () =>
-          jsonResponse(
-            tokenResponse({
-              access_token: 'access-new',
-              refresh_token: 'refresh-new',
-            }),
-          );
-        const coordinator = makeCoordinator(storage, {
-          exchangeAuthorizationCode,
-          refreshTokens,
-        });
+        const coordinator = makeCoordinator(storage, { refreshTokens });
 
         const token = yield* forkNow(freshToken(coordinator));
         yield* refreshStarted;
 
-        yield* withHttp(
-          coordinator.loginWithCode({
-            code: 'new-code',
-            verifier: 'new-verifier',
-            redirectUri: 'http://localhost:1455/auth/callback',
+        // A sign-in that finished stores its grant the same way.
+        yield* coordinator.storeTokens(
+          tokenResponse({
+            access_token: 'access-new',
+            refresh_token: 'refresh-new',
           }),
         );
         pending.resolve(revoked());

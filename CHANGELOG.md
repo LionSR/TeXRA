@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **ChatGPT sign-in is OpenAI's "Sign in with ChatGPT" for open-source
+  agents.** The ChatGPT plan now pays for calls to the public Responses API
+  (`api.openai.com/v1`) through a client OpenAI registers for you at the
+  first sign-in, instead of ChatGPT's Codex backend through the Codex CLI's
+  client. Sign in again: the earlier session is not read. Sign-in is
+  browser-only (no device code; `--device` uses the browser), the consent
+  page must allow plan usage, and the plan's usage meter is gone from the
+  settings view and `/login status`, since OpenAI shows it in ChatGPT.
+  SDK: `codexCoordinator`, `codexLoginWithLoopback`, `getCodexStatus` and
+  `CodexSession` are `chatgptCoordinator`, `chatgptLoginWithLoopback`,
+  `getChatgptStatus` and `ChatgptSession`; `codexLoginWithDeviceCode` is
+  gone; `ModelCredential`'s `codex` member is `chatgpt` and carries no
+  account id; `SubscriptionCoordinator.buildAuthorizeRequest` is an Effect
+  and `loginWithCode` takes the authorize request and its callback.
 - **SDK: a tool edit's proposal is the request's, not the session's.**
   `ToolEditPermission.content` names the proposal (`ToolEditContent`) by its
   address in the session's blob store, written with the `request.opened`

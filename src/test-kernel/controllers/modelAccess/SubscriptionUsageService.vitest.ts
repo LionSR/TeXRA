@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 import { FetchHttpClient } from 'effect/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import * as codexAuth from '@texra-ai/llm/node';
 import { Secrets } from '@platform/secrets';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -25,30 +24,6 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
-}
-
-/**
- * The stored ChatGPT session the service reads through `codexCoordinator`,
- * which is the only ChatGPT credential source now that the service builds its
- * own credential reads over the secret store it was handed.
- */
-function stubCodexSession(
-  overrides: {
-    readonly getFreshSession?: () => Effect.Effect<unknown, unknown>;
-    readonly refreshRejected?: () => Effect.Effect<void, unknown>;
-  } = {},
-): void {
-  vi.spyOn(codexAuth, 'codexCoordinator').mockReturnValue({
-    loadSession: () => Effect.succeed({ accessToken: 'chatgpt-secret' }),
-    getFreshSession:
-      overrides.getFreshSession ??
-      (() =>
-        Effect.succeed({
-          accessToken: 'chatgpt-secret',
-          accountId: 'account-123',
-        })),
-    refreshRejected: overrides.refreshRejected ?? (() => Effect.void),
-  } as never);
 }
 
 function makeService(): SubscriptionUsageService {
@@ -84,31 +59,17 @@ describe('SubscriptionUsageService', () => {
     vi.restoreAllMocks();
   });
 
-  it('maps chatgpt HTTP 401 to invalid credentials without exposing details', async () => {
-    let accessToken = 'chatgpt-secret';
-    stubCodexSession({
-      getFreshSession: () => Effect.sync(() => ({ accessToken })),
-      refreshRejected: () =>
-        Effect.sync(() => {
-          accessToken = 'chatgpt-refreshed';
-        }),
-    });
+  it('maps HTTP 401 to invalid credentials without exposing details', async () => {
     const http = vi.fn<UsageFetch>(async () =>
       jsonResponse({ secret: 'must not escape' }, 401),
     );
 
-    const snapshot = await runUsage(makeService().getUsage('chatgpt'), http);
+    const snapshot = await runUsage(makeService().getUsage('kimiCode'), http);
     expect(snapshot).toMatchObject({
       state: 'unavailable',
       reason: 'invalid_credentials',
     });
     expect(JSON.stringify(snapshot)).not.toContain('secret');
-    // A ChatGPT 401 is retried once, on the refreshed token.
-    expect(
-      http.mock.calls.map(
-        ([, init]) => (init.headers as Record<string, string>).authorization,
-      ),
-    ).toStrictEqual(['Bearer chatgpt-secret', 'Bearer chatgpt-refreshed']);
   });
 
   // Pins the return path of an invalidated fetch: the caller

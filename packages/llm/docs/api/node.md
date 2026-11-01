@@ -16,10 +16,9 @@ protocol (`bindModel`) and running subscription OAuth sign-in flows.
   load only the requested protocol (`anthropic-messages`, `openai-responses`,
   `google-interactions`), manage scoped connections and file uploads in the
   caller's `Scope`, and classify provider failures into `ModelError`.
-- **Subscription sign-in (`codex`, `xai`)**: ChatGPT
-  ([`codexCoordinator`](#codexcoordinator),
-  [`codexLoginWithLoopback`](#codexloginwithloopback),
-  [`codexLoginWithDeviceCode`](#codexloginwithdevicecode)) and Grok
+- **Subscription sign-in (`chatgpt`, `xai`)**: ChatGPT
+  ([`chatgptCoordinator`](#chatgptcoordinator),
+  [`chatgptLoginWithLoopback`](#chatgptloginwithloopback)) and Grok
   ([`xaiCoordinator`](#xaicoordinator),
   [`xaiLoginWithLoopback`](#xailoginwithloopback),
   [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows, plus
@@ -105,41 +104,31 @@ interface BindSpec {
 }
 ```
 
-## codexCoordinator
+## chatgptCoordinator
 
 The coordinator for the caller's secret store: one coordinator per store
 instance, so distinct stores never share session state.
 
 ```ts
-const codexCoordinator: (
+const chatgptCoordinator: (
   secrets: CredentialStore,
-) => SubscriptionCoordinator<CodexSession>
+) => SubscriptionCoordinator<ChatgptSession>
 ```
 
-## codexLoginWithDeviceCode
+## chatgptLoginWithLoopback
 
-Run the device-code flow end to end and persist the session. Succeeds with
-the stored session once the user approves; fails on timeout or a hard
-failure with a tagged error whose `message` is the user-facing text.
+The browser sign-in, on the loopback callback OpenAI accepts.
 
 ```ts
-const codexLoginWithDeviceCode: (options: DeviceLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
+const chatgptLoginWithLoopback: (options: LoopbackLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly clientId?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly clientId?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
 ```
 
-## codexLoginWithLoopback
+## ChatgptSession
 
-The browser sign-in, bound to the registered ChatGPT callback.
-
-```ts
-const codexLoginWithLoopback: (options: LoopbackLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly planType?: string | undefined; readonly idToken?: string | undefined; readonly accountId?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
-```
-
-## CodexSession
-
-A stored ChatGPT (Codex) session.
+A stored ChatGPT session.
 
 ```ts
-type CodexSession = typeof CodexSessionSchema.Type;
+type ChatgptSession = typeof ChatgptSessionSchema.Type;
 ```
 
 ## DeviceLoginOptions
@@ -149,10 +138,7 @@ What a provider's device-code sign-in takes from its host.
 ```ts
 interface DeviceLoginOptions<S extends SubscriptionSession> {
   /** The coordinator that stores the session the sign-in grants. */
-  readonly coordinator: Pick<
-    SubscriptionCoordinator<S>,
-    'loginWithCode' | 'storeTokens'
-  >;
+  readonly coordinator: Pick<SubscriptionCoordinator<S>, 'storeTokens'>;
   /** Show the user the verification URL + one-time code. */
   readonly onPrompt: (
     prompt: SubscriptionDeviceCodePrompt,
@@ -160,13 +146,13 @@ interface DeviceLoginOptions<S extends SubscriptionSession> {
 }
 ```
 
-## getCodexStatus
+## getChatgptStatus
 
 Signed-in status, read from the caller's secret store. A store that
 cannot be read, or a stored session that does not parse, fails.
 
 ```ts
-function getCodexStatus(
+function getChatgptStatus(
   secrets: CredentialStore,
 ): Effect.Effect<
   SubscriptionSessionStatus,
@@ -230,17 +216,13 @@ class LoopbackTransportUnavailableError extends Schema.TaggedError<LoopbackTrans
 ## ModelCredential
 
 The credential a binding sends: an API key (or any bearer token the
-endpoint takes as one), or a ChatGPT (Codex) session token, which also
-names its account and is served on the Responses protocol only.
+endpoint takes as one), or a ChatGPT plan's access token, which the
+Responses protocol alone serves, under that plan's request rules.
 
 ```ts
 type ModelCredential =
   | { readonly kind: 'api-key'; readonly apiKey: string }
-  | {
-      readonly kind: 'codex';
-      readonly accessToken: string;
-      readonly accountId: string | null;
-    };
+  | { readonly kind: 'chatgpt'; readonly accessToken: string };
 ```
 
 ## SharedAttempt
@@ -277,7 +259,27 @@ interface SubscriptionAuthorizeRequest {
   /** The high-entropy secret carried through the loopback round-trip. */
   verifier: string;
   state: string;
+  /** The OIDC nonce the returned ID token must carry. */
+  nonce: string;
   redirectUri: string;
+  /** The client this attempt authorizes as. */
+  clientId: string;
+  /**
+   * The attempt registers a new client for the user: the callback names the
+   * client the provider issued, and the grant and the session use that one.
+   */
+  registering: boolean;
+}
+```
+
+## SubscriptionCallback
+
+What a loopback callback delivered: the code, and any client it named.
+
+```ts
+interface SubscriptionCallback {
+  readonly code: string;
+  readonly clientId: string | undefined;
 }
 ```
 
@@ -311,13 +313,18 @@ interface SubscriptionCoordinator<S extends SubscriptionSession> {
   /** Forget the stored session. */
   signOut(): Effect.Effect<void, SecretsFailed>;
   /** The PKCE authorize URL for a loopback callback on `port`. */
-  buildAuthorizeRequest(port: number): SubscriptionAuthorizeRequest;
-  /** Exchange an authorization code and store the session it grants. */
-  loginWithCode(params: {
-    code: string;
-    verifier: string;
-    redirectUri: string;
-  }): Effect.Effect<S, Error, HttpClient.HttpClient>;
+  buildAuthorizeRequest(
+    port: number,
+  ): Effect.Effect<
+    SubscriptionAuthorizeRequest,
+    SecretsFailed | SubscriptionOAuthError
+  >;
+  /** Exchange the code `request`'s callback delivered and store the
+   *  session it grants. */
+  loginWithCode(
+    request: SubscriptionAuthorizeRequest,
+    callback: SubscriptionCallback,
+  ): Effect.Effect<S, Error, HttpClient.HttpClient>;
   /** Store the session a completed token grant returned. */
   storeTokens(tokens: SubscriptionTokenResponse): Effect.Effect<S, Error>;
 }
@@ -416,7 +423,7 @@ the stored session once the user approves; fails with a tagged error whose
 `message` is the user-facing text.
 
 ```ts
-const xaiLoginWithDeviceCode: (options: DeviceLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
+const xaiLoginWithDeviceCode: (options: DeviceLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly clientId?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly clientId?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
 ```
 
 ## xaiLoginWithLoopback
@@ -424,7 +431,7 @@ const xaiLoginWithDeviceCode: (options: DeviceLoginOptions<{ readonly accessToke
 The browser sign-in, bound to the registered Grok callback.
 
 ```ts
-const xaiLoginWithLoopback: (options: LoopbackLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
+const xaiLoginWithLoopback: (options: LoopbackLoginOptions<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly clientId?: string | undefined; readonly email?: string | undefined; }>) => Effect<{ readonly accessToken: string; readonly refreshToken: string; readonly expiresAtMs: number; readonly idToken?: string | undefined; readonly clientId?: string | undefined; readonly email?: string | undefined; }, Error, HttpClient>
 ```
 
 ## XaiSession

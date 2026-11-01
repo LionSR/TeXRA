@@ -215,17 +215,26 @@ Subscriptions sign in through `texra auth <provider> login`:
 ```bash
 texra auth chatgpt login              # browser sign-in
 texra auth chatgpt login --no-browser # print the loopback sign-in URL
-texra auth chatgpt login --device     # device code: approve from a browser on any device
 texra auth chatgpt status
 texra auth chatgpt logout
+texra auth grok login --device        # device code: approve from a browser on any device
 ```
 
 `grok` takes the same verbs. `--no-browser` still uses a local callback server.
 Open the printed URL in a browser that can reach the terminal session; SSH and
-container sessions may need callback port forwarding. `--device` needs no
-callback at all: the CLI prints a short code and a verification URL. Open the
-URL in a browser on any device, including your phone, and approve the code.
-This is the recommended path on SSH, WSL2, and containers.
+container sessions may need callback port forwarding.
+
+ChatGPT sign-in is OpenAI's "Sign in with ChatGPT" for open-source agents, and
+it is browser-only: OpenAI returns the sign-in to `127.0.0.1` on the machine
+running TeXRA, and `--device` signs in through the browser too. On SSH, WSL2
+or a container, forward port 1455 from the machine with the browser. On the
+consent page, allow TeXRA to use your ChatGPT plan; without it, sign-in stops
+with an error. ChatGPT plan usage is shown in ChatGPT's own settings.
+
+Grok's `--device` needs no callback at all: the CLI prints a short code and a
+verification URL. Open the URL in a browser on any device, including your
+phone, and approve the code. This is the recommended path for Grok on SSH,
+WSL2, and containers.
 
 Run `texra doctor` at any time to see which dependencies are detected and which
 models the CLI can reach with the current credentials.
