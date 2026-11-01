@@ -15,6 +15,7 @@
  */
 
 // Local imports
+import { deliveryTagOf } from '@shared/subagentFollowup';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
 /** Maximum prompt length echoed back in a delivery/error XML attribute. */
@@ -93,5 +94,12 @@ export function formatDelivery(delivery: ChildRunDelivery): string {
   }
 
   const open = attrs ? `<${delivery.tag} ${attrs}>` : `<${delivery.tag}>`;
-  return [open, ...body, `</${delivery.tag}>`].join('\n');
+  const xml = [open, ...body, `</${delivery.tag}>`].join('\n');
+  // A tag outside the recognized shapes would reach every render surface as
+  // raw XML, so its producer fails at once instead.
+  if (deliveryTagOf(xml) !== delivery.tag)
+    throw new Error(
+      `"${delivery.tag}" is not a delivery tag: a plugin's is <family>-result or <family>-error, family in lowercase words joined by "-".`,
+    );
+  return xml;
 }

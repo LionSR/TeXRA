@@ -173,9 +173,8 @@ function decodeXmlEntities(text: string): string
 Whether the envelope body is XML-entity-escaped (via `escapeText()` in
 the producer) and needs `decodeXmlEntities()` before display. An activity
 report (a plugin's bare `<family>-activity>` open on its own line)
-neutralizes
-embedded tag names rather than escaping, so it is the one kind that is
-not.
+neutralizes embedded tag names rather than escaping, so it is the one
+kind that is not.
 
 ```ts
 function deliveryBodyEscaped(tag: string): boolean
