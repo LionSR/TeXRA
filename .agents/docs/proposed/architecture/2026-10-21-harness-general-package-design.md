@@ -245,9 +245,11 @@ of 60 to 120 lines, holding one `ManagedRuntime` and no logic. It is added to
 the `Effect.run*` entry allowlist and recorded in `refuted-candidates`. If the
 ruling holds, the file is deleted and nothing else changes.
 
-Superseded (2026-10-28, the release PRD): the Effect-only ruling holds for 1.0
-and `./promise` is not built; the entry stays in the table above as the
-refused option.
+Superseded: the 2026-09-21 ruling holds (rulings ledger, "The agent SDK's
+public surface is Effect") and the 2026-10-06 decision on #13723 stands
+([harness package split](../../implemented/architecture/2026-10-02-harness-package-split.md),
+"There is no Promise API"); `./promise` is not built for 1.0 and the entry
+stays in the table above as the refused option.
 
 ### Plugin contract
 
