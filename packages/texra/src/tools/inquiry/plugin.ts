@@ -1,18 +1,22 @@
 /** The external-inquiry plugin: its tool, thread rows and decision, and its card. */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import { ALWAYS_AVAILABLE } from '@texra-ai/harness/plugins';
 import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
+import {
+  INQUIRY_REQUEST,
+  InquiryRequestSchema,
+} from '@texra/shared/plugins/externalInquiry';
 import type { TexraPlugin } from '@texra/tools/registry';
 import { ExternalInquiryTool } from './ExternalInquiryTool';
 import { recordInquiryDecision } from './inquiryActions';
 import { inquiryRecordsLayer } from './inquiryRecords';
 
 export const externalInquiry: TexraPlugin = {
-  id: 'external-inquiry',
+  id: INQUIRY_REQUEST.plugin,
   tools: [ExternalInquiryTool],
   arms: APP_PLUGIN_ARMS['external-inquiry'],
   toggle: 'off',
@@ -20,15 +24,13 @@ export const externalInquiry: TexraPlugin = {
   // The answer is recorded on the thread and delivered to the run that
   // asked, before the decision commits.
   decision: {
-    kind: 'externalInquiry',
     record: ({ payload, decision, inbox, commit }) =>
-      payload.kind === 'externalInquiry'
-        ? recordInquiryDecision(payload.data, decision, inbox, commit).pipe(
-            Effect.provide(inquiryRecordsLayer),
-          )
-        : Effect.die(
-            new Error(`external-inquiry records no ${payload.kind} decision.`),
-          ),
+      Schema.decodeUnknownEffect(InquiryRequestSchema)(payload.data).pipe(
+        Effect.flatMap((inquiry) =>
+          recordInquiryDecision(inquiry, decision, inbox, commit),
+        ),
+        Effect.provide(inquiryRecordsLayer),
+      ),
   },
   card: {
     name: 'External Inquiry',

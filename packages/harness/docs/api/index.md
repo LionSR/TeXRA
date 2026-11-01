@@ -345,7 +345,7 @@ interface ITool<E = Error, R = never> {
    * Whether a call needs a person's approval, and who asks. `true` (implied
    * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
    * body's own request (an edit's review, a plan, a delegation proposal, a
-   * question, an external inquiry), which answers what the call's hooks
+   * question, a plugin's request), which answers what the call's hooks
    * said. A run that cannot present a prompt is not offered such a tool
    * (`asksApproval`).
    */
@@ -554,7 +554,7 @@ interface Plugin {
   /** Session-lifetime services, one per open session, up while the plugin
    *  is switched on or a step of that session pins it. */
   readonly sessionLayer?: SessionPluginLayer;
-  /** Its side of a decision on a pending request of its kind, on or off. */
+  /** Its side of a decision on a pending request it opened, on or off. */
   readonly decision?: RequestDecisionHook;
   /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
   readonly arms?: readonly PluginArm[];

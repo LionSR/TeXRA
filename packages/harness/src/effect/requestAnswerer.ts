@@ -22,7 +22,7 @@ import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/Sessi
 import { withLogChannel } from '@logger/effectLog';
 import {
   answerMismatch,
-  requestParksItsCaller,
+  blocksCaller,
   type RequestDecision,
 } from '@shared/schemas';
 import type {
@@ -54,7 +54,7 @@ const decisionOf = (
   // Called on the host itself: a class-based host keeps its receiver.
   Effect.suspend(() => host.approve(pending)).pipe(
     Effect.flatMap((decision) => {
-      const mismatch = answerMismatch(pending.payload.kind, decision);
+      const mismatch = answerMismatch(pending.payload, decision);
       return mismatch === null
         ? Effect.succeed(decision)
         : Effect.fail(new Error(mismatch));
@@ -133,7 +133,7 @@ const answerRequests = (
     session.view,
     (view) =>
       attentionOf(view).requests.filter((pending) =>
-        requestParksItsCaller(pending.payload),
+        blocksCaller(pending.payload),
       ),
     (pending) =>
       decisionOf(host, pending).pipe(

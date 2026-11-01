@@ -166,7 +166,7 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     }
     // The script's shared request may answer from its recorded row.
     if (ask !== undefined) {
-      const result = yield* recordedDecision('proposal', yield* ask);
+      const result = yield* recordedDecision({ kind: 'proposal' }, yield* ask);
       return { result, childApproval: 'inherit' };
     }
 

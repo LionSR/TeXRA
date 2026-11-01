@@ -197,16 +197,15 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     );
   };
 
-  // An external inquiry is answered from its thread and never parks its
-  // run, so it is named apart and never stands in front of a request
-  // this view can answer.
+  // A plugin's request (the external inquiry's) is answered from its
+  // thread and never blocks its run, so it is named apart and never stands
+  // in front of a request this view can answer.
   const pending = level.requests.find(
     (request): request is PendingApprovalFact =>
-      request.payload.kind !== 'externalInquiry' &&
-      !decided.has(request.requestId),
+      request.payload.kind !== 'plugin' && !decided.has(request.requestId),
   );
   const inquiries = level.requests.filter(
-    (request) => request.payload.kind === 'externalInquiry',
+    (request) => request.payload.kind === 'plugin',
   ).length;
   // Previews of settled requests go: each holds two whole documents.
   useEffect(() => {

@@ -146,7 +146,7 @@ function answerFor(
     case 'proposal':
     case 'toolEdit':
     case 'bash':
-    case 'externalInquiry':
+    case 'plugin':
       return undefined;
   }
 }
@@ -239,18 +239,18 @@ export interface RequestAsksInit {
   readonly session: () => SessionHandle;
 }
 
-/** A recorded decision, as its request's kind takes it: a surface's answer
- *  is checked before it is recorded and the runtime's own writers use only
- *  actions the kind takes, so any other is a defect. */
-export const recordedDecision = <K extends PermissionPayload['kind']>(
-  kind: K,
+/** A recorded decision, as its request takes it: a surface's answer is
+ *  checked before it is recorded and the runtime's own writers use only
+ *  actions the request takes, so any other is a defect. */
+export const recordedDecision = <P extends Parameters<typeof decisionFits>[0]>(
+  request: P,
   decision: RequestDecision,
-): Effect.Effect<DecisionOf<K>> =>
-  decisionFits(kind, decision)
+): Effect.Effect<DecisionOf<P['kind']>> =>
+  decisionFits(request, decision)
     ? Effect.succeed(decision)
     : Effect.die(
         new Error(
-          `A ${kind} request was recorded as answered with "${decision.action}", which it does not take.`,
+          `A ${request.kind} request was recorded as answered with "${decision.action}", which it does not take.`,
         ),
       );
 
@@ -345,9 +345,7 @@ export function requestAsks({
       ];
       const from = yield* open(rows);
       return yield* decision(runId, requestId, from).pipe(
-        Effect.flatMap((row) =>
-          recordedDecision<P['kind']>(payload.kind, row.decision),
-        ),
+        Effect.flatMap((row) => recordedDecision(payload, row.decision)),
         Effect.catch((cause) =>
           Effect.logWarning(
             `Request ${requestId} closed without a decision`,

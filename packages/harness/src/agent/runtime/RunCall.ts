@@ -30,7 +30,7 @@ import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   ToolError,
-  type PermissionPayload,
+  type PluginRequest,
   type ToolResult,
   type ToolDefinition,
   type ToolResultPayload,
@@ -165,14 +165,18 @@ declare module '../core/tools/ToolTypes.js' {
   }
   interface CallRequests {
     /**
-     * Open a request the call does not wait on, under `requestId`: its
-     * `request.opened` commits on the run's history, and the plugin owning
-     * its kind takes the decision when it lands (`Plugin.decision`). A
-     * failed commit is not proof that nothing landed: the run's rows decide.
+     * Open a plugin's request the call does not wait on, under
+     * `requestId`: its `request.opened` commits on the run's history, with
+     * `data` stored as the JSON it writes, and the plugin's decision hook
+     * takes each answer when it lands (`Plugin.decision`). A failed commit
+     * is not proof that nothing landed: the run's rows decide.
      */
     readonly post: (
       requestId: string,
-      payload: PermissionPayload,
+      request: Omit<PluginRequest, 'blocksCaller' | 'data'> & {
+        readonly blocksCaller: false;
+        readonly data: Pick<PluginRequest['data'], 'requestId' | 'runId'>;
+      },
     ) => Effect.Effect<void, CellError>;
     /** Show the person something on the session's host (a file opened
      *  beside what they are looking at, a notice), answered by nothing. */

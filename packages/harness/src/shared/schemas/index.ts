@@ -49,7 +49,6 @@ export * from './logPayload';
 export * from './taskGroup';
 export * from './plan';
 export * from './subagentProgress';
-export * from './inquiry';
 export * from './prompts';
 export * from './request';
 

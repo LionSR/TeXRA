@@ -35,7 +35,7 @@ import {
   listingKeyOf,
   isTranscriptEvent,
   ownerPid,
-  requestParksItsCaller,
+  blocksCaller,
   runIdentityDisplayName,
   emptyUsageStats,
   sumUsageStats,
@@ -435,10 +435,10 @@ function withAggregates(u: Update, run: RunView): RunView {
     owner !== null && !own && !local.dead.includes(owner) ? owner : null;
   const held = own || heldBy !== null;
   const paused = RESTING_SUBSTATES.has(run.substate);
-  // Only a request that blocks its tool is a wait: a dispatched inquiry left
+  // Only a request that blocks its tool is a wait: one that does not left
   // its run working, listed for the panel but still Running.
   const pendingOwn = view.requests.some(
-    (r) => r.runId === run.id && requestParksItsCaller(r.payload),
+    (r) => r.runId === run.id && blocksCaller(r.payload),
   );
   const interrupted = !isTerminalOutcomePhase(run.status) && !held && !paused;
   const waiting = pendingOwn && held && !isTerminalOutcomePhase(run.status);

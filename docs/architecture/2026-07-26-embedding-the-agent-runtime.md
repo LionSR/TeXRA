@@ -356,12 +356,14 @@ resumes a waiting run.
 
 ### The request kinds
 
-The payload union is the vocabulary: `toolEdit`, `bash`, `retry`,
-`proposal`, `planApproval`, `externalInquiry`, `userQuestion`
-(`packages/harness/src/shared/schemas/progressView/data.ts:106-128`). Every kind but
-`externalInquiry` blocks the tool or turn that opened it
-(`requestParksItsCaller`, `:144-148`); an external inquiry is answered later
-and blocks nothing.
+The payload union is the vocabulary: the harness's own `toolEdit`, `bash`,
+`retry`, `proposal`, `planApproval` and `userQuestion`, and a plugin's
+request, `plugin` (`PermissionPayloadSchema`,
+`packages/harness/src/shared/schemas/request.ts`). Every kind of the
+harness's own blocks the tool or turn that opened it; a plugin's request
+declares whether it does (`blocksCaller`) and which answers it takes
+(`answers`). TeXRA's external inquiry is a plugin request that blocks
+nothing and is answered later.
 
 ### Removing the requests: `approvalPromptsUnavailable`
 
@@ -386,7 +388,7 @@ requests those tools would raise. Tools an embedder supplies in
 (`packages/harness/src/agent/runtime/agentToolResolution.ts:287-297`) and the model is
 offered them, so a run-scoped tool that needs approval is left to the
 approval guard, which may deny the call, rather than removed. The tools that open
-`toolEdit`, `bash`, `proposal`, `planApproval`, `externalInquiry` and
+`toolEdit`, `bash`, `proposal`, `planApproval`, plugin and
 `userQuestion` requests all declare `requiresApproval` or a command
 (`guard.bash`), which `asksApproval` reads.
 

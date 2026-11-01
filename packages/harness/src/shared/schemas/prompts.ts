@@ -2,11 +2,6 @@ import { Schema, Struct } from 'effect';
 
 import { RetryErrorInfoSchema } from './errors';
 import { RunSelectionSchema, RunIdSchema, Sha256Schema } from './identifiers';
-import {
-  ExternalInquiryTurnRecordSchema,
-  InquirySessionLinksSchema,
-  InquiryThreadIdSchema,
-} from './inquiry';
 import { LineCountSchema } from './lineChanges';
 import { PlanSchema } from './plan';
 import {
@@ -161,38 +156,6 @@ export const AgentProposalPermissionSchema = AgentProposalSchema.mapFields(
 );
 export type AgentProposalPermission =
   (typeof AgentProposalPermissionSchema)['Type'];
-
-// ============================================================================
-// External Inquiry — see also `./inquiry.ts` for thread / session-link / action schemas
-// ============================================================================
-
-// Inquiry fields carried by every inquiry permission.
-const CommonExternalInquiryFieldsSchema = Schema.Struct({
-  question: Schema.String,
-  threadId: InquiryThreadIdSchema,
-  context: Schema.optional(Schema.NullOr(Schema.String)),
-  suggestSearch: Schema.optional(Schema.NullOr(Schema.Boolean)),
-  attachFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
-});
-
-const ExternalInquiryHydrationFieldsSchema = Schema.Struct({
-  sessionLinks: Schema.optional(Schema.NullOr(InquirySessionLinksSchema)),
-  transcript: Schema.optional(
-    Schema.NullOr(Schema.Array(ExternalInquiryTurnRecordSchema)),
-  ),
-});
-
-/**
- * One shape for every inquiry turn. First and follow-up dispatches carry the
- * identical field set — the panel tells them apart from `transcript` — so
- * there is no discriminator to narrow on. Initial-load fields are always
- * present (nullish on a fresh thread that has nothing to load).
- */
-export const ExternalInquiryPermissionSchema = PermissionBaseSchema.mapFields(
-  Struct.assign(CommonExternalInquiryFieldsSchema.fields),
-).mapFields(Struct.assign(ExternalInquiryHydrationFieldsSchema.fields));
-export type ExternalInquiryPermission =
-  (typeof ExternalInquiryPermissionSchema)['Type'];
 
 // ============================================================================
 // User Question

@@ -514,11 +514,19 @@ const codemode: Plugin
 ## DecisionOf
 
 The decisions a request of kind `K` takes: its own actions and the three
-refusals.
+refusals. A plugin's request declares its actions on its row, so its
+type admits any decision.
 
 ```ts
 type DecisionOf<K extends PermissionPayload['kind']> =
-  | Extract<RequestDecision, { action: (typeof KIND_ANSWERS)[K][number] }>
+  | Extract<
+      RequestDecision,
+      {
+        action: (typeof OWN_ANSWERS & {
+          readonly plugin: PluginRequest['answers'];
+        })[K][number];
+      }
+    >
   | RefusalDecision;
 ```
 
@@ -1276,20 +1284,18 @@ const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effe
 
 ## RequestDecisionHook
 
-A plugin's side of a decision on a pending request of the kind it owns
-(the external inquiry's answer, recorded on its cross-project thread). The
-session runs it before the decision's row commits, under the request's
-decision lane, so a process that exits in between leaves the request
-pending and answerable rather than settled with nothing recorded. It may
-send a run of the session its input (`inbox`), and commit facts about its
-own aggregates, hung under the request's run (`commit`).
+A plugin's side of a decision on a pending request it opened (a
+`PluginRequest` naming it). The session runs it before the decision's row
+commits, under the request's decision lane, so a process that exits in
+between leaves the request pending and answerable rather than settled
+with nothing recorded. It may send a run of the session its input
+(`inbox`), and commit facts about its own aggregates, hung under the
+request's run (`commit`).
 
 ```ts
 interface RequestDecisionHook {
-  /** The request kind whose decisions this plugin records. */
-  readonly kind: PermissionPayload['kind'];
   readonly record: (request: {
-    readonly payload: PermissionPayload;
+    readonly payload: PluginRequest;
     readonly decision: RequestDecision;
     readonly inbox: (runId: RunId) => RunInbox;
     readonly commit: (
@@ -2038,8 +2044,6 @@ interface ToolTable {
   /** The tool registered under `name` in any plugin, typed as plugins
    *  declare their tools (`Plugin.tools`). */
   readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined;
-  /** Each request kind's decision hook, from the plugin that owns it. */
-  readonly decisions: ReadonlyMap<string, RequestDecisionHook>;
   /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */
   readonly blocks: ReadonlyMap<string, AgentBlock>;
 }

@@ -21,7 +21,7 @@ import {
   OwnerIdSchema,
   PermissionPayloadSchema,
   PluginFactDraftSchema,
-  requestParksItsCaller,
+  blocksCaller,
   RunActionSchema,
   RunIdentitySchema,
   RunNoticeSchema,
@@ -281,16 +281,15 @@ export function acceptsFollowUp(run: ReadRunView): boolean {
  * `SessionRequests.decide` accepts. A run this process may not act on
  * (`readOnly`) takes no answer here. A request that blocks its caller is
  * answered by the fiber waiting on it, so only while its run waits here; an
- * interrupted run has to be resumed first. An inquiry, at any other time.
+ * interrupted run has to be resumed first. One that does not, at any time.
  */
 export type RequestAnswerability = 'answerable' | 'readOnly' | 'resume';
 export function requestAnswerability(
   run: ReadRunView,
-  payload: Pick<PermissionPayload, 'kind'>,
+  payload: PermissionPayload,
 ): RequestAnswerability {
   if (run.readOnly) return 'readOnly';
-  if (run.approval === 'own' || !requestParksItsCaller(payload))
-    return 'answerable';
+  if (run.approval === 'own' || !blocksCaller(payload)) return 'answerable';
   return 'resume';
 }
 

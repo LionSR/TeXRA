@@ -50,7 +50,7 @@ is the module map by concern. Run-loop rules are in
   `SessionEvents` (one publisher, the reads, and trace-to-fact translation);
   `runtimePresentationEvents`; `HostInteractions` /
   `SessionHostInteractions` (the session's host port: diagnostics, approvals,
-  retries, user questions, external inquiry, and other notices, and what a
+  retries, user questions, plugin requests, and other notices, and what a
   failed run presents on it).
 - **History and per-call services**: `RunHistory` (claims through
   `Database`, reads and writes through `SessionLog`); `FollowUps` (pending
