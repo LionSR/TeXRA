@@ -118,10 +118,12 @@ export interface SessionLog {
     id: AggregateId,
   ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
   /** The `RunRows` of the kinds one read names (`RUN_ROW_READS`), read
-   *  through the type index of a run's aggregate or a plugin's own. */
+   *  through the type index of a run's aggregate or a plugin's own; with
+   *  `through`, of its rows up to that seq alone (a fork's cut). */
   runRows(
     id: AggregateId,
     read: RunRowRead,
+    through?: number,
   ): Effect.Effect<RunRows, DatabaseReadFailed>;
   /** The strings under `digests`: what the rows name by address (media
    *  bytes, a tool edit's proposal). */

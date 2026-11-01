@@ -73,13 +73,13 @@ export const RETIRED_ROW_KINDS: ReadonlySet<string> = new Set<string>([
   'workflow.script',
 ]);
 
-/** The lowest stored version of a plugin arm's value this build reads: an
+/** The lowest stored version of a plugin fact kind's value this build reads: an
  *  older one has no upcaster here, so an earlier build wrote it. The store
  *  (`decodeRow`, `earlierRuns`) and an imported trace refuse it alike. */
-export const pluginFactFloor = (arm: {
+export const pluginFactFloor = (factKind: {
   readonly version: number;
   readonly upcasters: readonly unknown[];
-}): number => arm.version - arm.upcasters.length;
+}): number => factKind.version - factKind.upcasters.length;
 
 /** The version every current-value family writes and reads
  *  (each `ValueFamily`), until one gains an upcaster. */

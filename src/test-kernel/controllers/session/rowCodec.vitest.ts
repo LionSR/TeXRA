@@ -3,17 +3,18 @@ import { expect, it } from 'vitest';
 
 import { qualifyAggregateId, RunIdSchema } from '@texra-ai/harness/schemas';
 import { decodeRow, encodeDraft } from '@controllers/session/rowCodec';
-import type { PluginArms } from '@tools/plugins';
+import type { FactKinds } from '@tools/plugins';
 
 // Failure modes: a compatibility chain starting after version 1 skips steps,
 // a current value is converted twice, or an unsupported version is accepted.
 it('reads every supported version from the start of its compatibility chain', () => {
-  const arms: PluginArms = {
+  const factKinds: FactKinds = {
     'example/count': {
       plugin: 'example',
       kind: 'count',
       version: 4,
       schema: Schema.Int,
+      fork: 'drop',
       upcasters: [
         (value) => Schema.decodeUnknownSync(Schema.Int)(value) + 10,
         (value) => Schema.decodeUnknownSync(Schema.Int)(value) * 2,
@@ -42,7 +43,7 @@ it('reads every supported version from the start of its compatibility chain', ()
         origin: '["test",1,"process-1"]',
         at: 0,
       },
-      arms,
+      factKinds,
       new Map(),
     );
 

@@ -27,7 +27,7 @@
  *   [`ALWAYS_AVAILABLE`](#always_available), [`PromptSection`](#promptsection),
  *   [`ProcessPluginLayer`](#processpluginlayer),
  *   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
- *   [`RequestDecisionHook`](#requestdecisionhook), [`PluginArm`](#pluginarm),
+ *   [`RequestDecisionHook`](#requestdecisionhook), [`FactKind`](#factkind),
  *   and [`AgentBlock`](#agentblock) ([`agentBlockOf`](#agentblockof)).
  */
 export {
@@ -44,7 +44,7 @@ export {
 export { AGENT_TOOL_NAME } from '@shared/schemas';
 export {
   definePlugin,
-  type PluginArm,
+  type FactKind,
   type PluginDefinition,
   type PluginRow,
 } from '@tools/plugins';

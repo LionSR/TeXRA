@@ -7,8 +7,7 @@ import * as path from 'node:path';
 
 import { globSync } from 'glob';
 
-import { writeLogLine } from '@texra-ai/harness/host';
-import { existsAtAbsolute } from '@texra-ai/harness/node';
+import { existsAtAbsolute, writeLogLine } from '@texra-ai/harness/node';
 import { normalizeFilePath, toErrorMessage } from '@texra-ai/harness/schemas';
 
 // Common LaTeX tool names used across the system

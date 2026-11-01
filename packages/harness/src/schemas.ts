@@ -225,7 +225,7 @@ export {
   readTraceFacts,
   TraceDocumentSchema,
   type TraceDocument,
-  type TraceFactArm,
+  type TraceFactKind,
 } from '@transcript/traceDocumentSchema';
 // Path basics that hold in a browser: forward slashes, a path's base name,
 // and its base name without the extension.

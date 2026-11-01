@@ -2,7 +2,7 @@ import { defineCommand } from 'citty';
 import { Deferred, Effect, Exit, Schedule } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
-import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/host';
+import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
 import { askServiceToStop } from '@texra/controllers/server/client';
 import { servicePaths } from '@texra/controllers/server/discovery';
 import { ServiceProjects } from '@texra/controllers/server/handlers';

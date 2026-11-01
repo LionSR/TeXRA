@@ -7,15 +7,17 @@ import { Effect, PlatformError } from 'effect';
 
 // Local imports
 import {
-  entryChannel,
-  entryMessage,
-  type LogEntry,
-  type LogSink as HostLogSink,
   type ProcessRuntime,
   type PerKeyLane,
   withPerKeyLane,
 } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  entryChannel,
+  entryMessage,
+  type LogEntry,
+  type LogSink as HostLogSink,
+} from '@texra-ai/harness/node';
 import {
   CLI_NDJSON_CONTRACT,
   type CliNdjsonRecord,

@@ -82,7 +82,7 @@ import type { SettingsCatalog } from '@shared/state/stateSettings';
 import { UsageLog } from '@shared/usageLog';
 import { ToolCatalogOwner, type ToolCatalog } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
-import { announceWrites, armsOf, type Plugin } from '@tools/plugins';
+import { announceWrites, factKindsOf, type Plugin } from '@tools/plugins';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
@@ -245,7 +245,7 @@ const sessionHandleLayer = (key: SessionKey) =>
       // The registry's phase notification rides the fold-gated tail: its
       // waiters read `RunView.status` once the view holds a row's state.
       // Host notices go to the author. `log.settled` waits for this reader.
-      const announce = announceWrites(armsOf(plugins.entries.values()));
+      const announce = announceWrites(factKindsOf(plugins.entries.values()));
       yield* Stream.runForEach(store.folded, (event) =>
         Effect.gen(function* () {
           yield* onHeldResult(session, event, consumerScope);

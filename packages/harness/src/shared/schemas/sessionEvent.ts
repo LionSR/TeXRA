@@ -207,7 +207,7 @@ const RunRemovedDraftSchema = RunRemovedEventSchema.mapFields(
   Struct.omit(['runIds']),
 );
 
-/** A row of a plugin's own kind (`Plugin.arms`): core folds `value`
+/** A row of a plugin's own kind (`Plugin.factKinds`): core folds `value`
  *  latest per (plugin, kind) and never reads it; the plugin decodes it. A
  *  run's is `RunView.facts`; a plugin aggregate's is `SessionView.pluginFacts`,
  *  under its `parent` run (whose deletion collects it) or none. */

@@ -47,7 +47,7 @@ import {
   DatabaseStoreNewer,
 } from '@shared/session/database';
 import type { DraftBlob, WithBlobs } from '@shared/session/historyTurns';
-import type { PluginArms } from '@tools/plugins';
+import type { FactKinds } from '@tools/plugins';
 import { blobAddress, sha256Hex } from '@utils/core/idHash';
 
 /** One selected store row, its columns by name, decoded where it is read. */
@@ -277,7 +277,7 @@ interface LeftOut {
  *  `DatabaseRowCorrupt`, naming it. */
 export function decodeRow(
   input: SqlRow,
-  arms: PluginArms,
+  factKinds: FactKinds,
   blobs: Blobs,
 ): Result.Result<
   SessionEvent | LeftOut,
@@ -321,48 +321,49 @@ export function decodeRow(
   const event = parsed.success;
   if (event.type !== 'plugin.fact') return Result.succeed(event);
   const name = `${event.plugin}/${event.kind}`;
-  const arm = pluginFactArm(event, row.commit, arms);
-  if (Result.isFailure(arm)) return Result.fail(arm.failure);
-  if (arm.success === undefined)
+  const factKind = factKindOf(event, row.commit, factKinds);
+  if (Result.isFailure(factKind)) return Result.fail(factKind.failure);
+  if (factKind.success === undefined)
     return Result.succeed({ _tag: 'leftOut', kind: name });
-  const value = arm.success.upcasters
-    .slice(event.version - pluginFactFloor(arm.success))
+  const value = factKind.success.upcasters
+    .slice(event.version - pluginFactFloor(factKind.success))
     .reduce((current, step) => step(current), event.value);
-  const checked = Schema.decodeUnknownResult(arm.success.schema)(value);
+  const checked = Schema.decodeUnknownResult(factKind.success.schema)(value);
   if (Result.isFailure(checked))
     return corrupt(checked.failure, `plugin.fact/${name}`);
-  return Result.succeed({ ...event, version: arm.success.version, value });
+  return Result.succeed({ ...event, version: factKind.success.version, value });
 }
 
 /**
  * A stored plugin fact's header, its row's top-level `plugin`, `kind` and
- * `version`, against its arm: the arm, none when this build lacks the
- * plugin (the row is left out), or a newer or an earlier build's version.
+ * `version`, against its fact kind: the fact kind, none when this build
+ * lacks the plugin (the row is left out), or a newer or an earlier build's
+ * version.
  * `decodeRow` and the reader's earlier-run scan both ask it.
  */
-export function pluginFactArm(
+export function factKindOf(
   fact: {
     readonly plugin: string;
     readonly kind: string;
     readonly version: number;
   },
   commit: number,
-  arms: PluginArms,
+  factKinds: FactKinds,
 ): Result.Result<
-  PluginArms[string] | undefined,
+  FactKinds[string] | undefined,
   DatabaseStoreNewer | DatabaseRowEarlier
 > {
   const type = pluginKind(fact.plugin, fact.kind);
-  const arm = arms[`${fact.plugin}/${fact.kind}`];
-  if (arm === undefined) return Result.succeed(undefined);
-  if (fact.version > arm.version)
+  const factKind = factKinds[`${fact.plugin}/${fact.kind}`];
+  if (factKind === undefined) return Result.succeed(undefined);
+  if (fact.version > factKind.version)
     return Result.fail(new DatabaseStoreNewer({ type, version: fact.version }));
-  if (fact.version < pluginFactFloor(arm))
+  if (fact.version < pluginFactFloor(factKind))
     return Result.fail(new DatabaseRowEarlier({ commit, type }));
-  return Result.succeed(arm);
+  return Result.succeed(factKind);
 }
 
-/** The `stored_kind` entry a plugin value is recorded under: each arm
+/** The `stored_kind` entry a plugin value is recorded under: each fact kind
  *  versions its kind on its own. */
 export const pluginKind = (plugin: string, kind: string): string =>
   `plugin.fact/${plugin}/${kind}`;
@@ -372,10 +373,10 @@ export const CURRENT_VALUE_KIND = 'current_value';
 
 /** The highest version of a `stored_kind` entry this build reads: `Infinity`
  *  for a plugin kind it lacks (left out), 0 for a core kind it lacks. */
-function readableVersion(type: string, arms: PluginArms): number {
+function readableVersion(type: string, factKinds: FactKinds): number {
   if (type === CURRENT_VALUE_KIND) return CURRENT_VALUE_VERSION;
   if (type.startsWith('plugin.fact/'))
-    return arms[type.slice('plugin.fact/'.length)]?.version ?? Infinity;
+    return factKinds[type.slice('plugin.fact/'.length)]?.version ?? Infinity;
   if (RETIRED_ROW_KINDS.has(type)) return Infinity;
   return hasKind(type) ? ROW_KINDS[type].version : 0;
 }
@@ -387,13 +388,13 @@ function readableVersion(type: string, arms: PluginArms): number {
  */
 export const storeGate = Effect.fn('rowCodec.storeGate')(function* <E>(
   exec: (statement: string) => Effect.Effect<readonly SqlRow[], E>,
-  arms: PluginArms,
+  factKinds: FactKinds,
 ): Effect.fn.Return<void, E | DatabaseStoreNewer> {
   for (const input of yield* exec('SELECT type, version FROM stored_kind')) {
     const { type, version } = Schema.decodeUnknownSync(
       Schema.Struct({ type: Schema.String, version: Schema.Int }),
     )(input);
-    if (version > readableVersion(type, arms))
+    if (version > readableVersion(type, factKinds))
       return yield* new DatabaseStoreNewer({ type, version });
   }
 });

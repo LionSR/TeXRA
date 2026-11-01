@@ -10,7 +10,7 @@ import * as tar from 'tar';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { setLogSink } from '@texra-ai/harness/host';
+import { setLogSink } from '@texra-ai/harness/node';
 import { ArxivProcessor } from '@latex/arxivProcessor';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';

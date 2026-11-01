@@ -513,6 +513,16 @@ type OutcomeOf<K extends RuntimeRequest['kind']> = Extract<
 >;
 ```
 
+## PendingRequest
+
+A request a run waits on a person for, as `SessionView` lists it:
+which run asks, the request's id, and its payload (`payload.kind` is
+what is asked: a command, an edit, a plan, a retry, a question).
+
+```ts
+type PendingRequest = SessionView['requests'][number];
+```
+
 ## Plugin
 
 One plugin: what it contributes to a run. How an app shows it (a
@@ -557,7 +567,7 @@ interface Plugin {
   /** Its side of a decision on a pending request it opened, on or off. */
   readonly decision?: RequestDecisionHook;
   /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
-  readonly arms?: readonly PluginArm[];
+  readonly factKinds?: readonly FactKind[];
   /** The agent-file block it owns (`AgentBlock`), on or off. */
   readonly agentBlock?: AgentBlock;
   /** Script module sources by name, imported as `builtIn:<name>`. */
@@ -594,6 +604,12 @@ class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
   reason: Schema.String,
   docsPage: Schema.optional(Schema.String),
 })
+```
+
+## RequestDecision
+
+```ts
+type RequestDecision = typeof RequestDecisionSchema.Type;
 ```
 
 ## RequestError
@@ -811,6 +827,14 @@ Why a run stops: a `user` stop or this process's `shutdown`.
 
 ```ts
 type RunStopReason = typeof RunStopReasonSchema.Type;
+```
+
+## RuntimeRequest
+
+One request a surface issues to its session's runtime.
+
+```ts
+type RuntimeRequest = typeof RuntimeRequestSchema.Type;
 ```
 
 ## Session

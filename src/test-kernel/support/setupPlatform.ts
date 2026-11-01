@@ -24,9 +24,10 @@ import {
 } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { GOAL_PLAN_KIND } from '@shared/schemas';
 import { GlobalDatabase, type CurrentValues } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
-import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
+import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { teamMembers } from '@texra/shared/agentTeams';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
@@ -55,13 +56,13 @@ import type {
 /** TeXRA's plugins that own row kinds or an agent-file block, as those
  *  only: what a store under test reads their rows with, and a catalog under
  *  test scans the bundled agents with. */
-const ARMED_PLUGINS: readonly Plugin[] = [
+const FACT_KIND_PLUGINS: readonly Plugin[] = [
   {
     id: 'documents',
-    arms: APP_PLUGIN_ARMS.documents,
+    factKinds: APP_FACT_KINDS.documents,
     agentBlock: DOCUMENT_TASK_BLOCK,
   },
-  { id: 'external-inquiry', arms: APP_PLUGIN_ARMS['external-inquiry'] },
+  { id: 'external-inquiry', factKinds: APP_FACT_KINDS['external-inquiry'] },
 ];
 
 /** The process's `GlobalValues` over a global database layer, as
@@ -80,7 +81,7 @@ export const globalValuesOver = <E, R>(
 /** The plugin table a store or catalog suite runs over: every row kind and
  *  agent-file block TeXRA's plugins own, and no tool. */
 export const storePluginsLayer = Layer.succeed(ToolRegistry)(
-  toolTable([...ARMED_PLUGINS]),
+  toolTable([...FACT_KIND_PLUGINS]),
 );
 
 /** The bare runtime's plugins: goal mode's switch and the row kinds
@@ -92,8 +93,9 @@ const BARE_PLUGINS: readonly Plugin[] = [
     id: 'goal',
     toggle: 'off',
     availability: { check: () => Effect.succeed({ available: true }) },
+    factKinds: [GOAL_PLAN_KIND],
   }),
-  ...ARMED_PLUGINS,
+  ...FACT_KIND_PLUGINS,
 ];
 
 /** The kernel's composition over the fake host: `processLayer`'s options

@@ -20,7 +20,7 @@ import {
 import { Settings } from '@shared/config/settings';
 import {
   GOAL_MAX_COST_SETTING,
-  GOAL_PLAN_ARM,
+  GOAL_PLAN_KIND,
   qualifyAggregateId,
   RunIdSchema,
   type Plan,
@@ -71,9 +71,9 @@ type PlanToolInput = typeof PlanToolInputSchema.Type;
 
 /** `plan` as the run's approved plan: the approving result's fact. */
 const approvedPlan = (plan: Plan): ToolFact => ({
-  plugin: GOAL_PLAN_ARM.plugin,
-  kind: GOAL_PLAN_ARM.kind,
-  version: GOAL_PLAN_ARM.version,
+  plugin: GOAL_PLAN_KIND.plugin,
+  kind: GOAL_PLAN_KIND.kind,
+  version: GOAL_PLAN_KIND.version,
   value: plan,
 });
 

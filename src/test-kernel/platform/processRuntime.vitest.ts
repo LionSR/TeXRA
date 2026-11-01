@@ -3,8 +3,7 @@ import { Effect, ManagedRuntime } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
-import { effectDiagnosticsLayer } from '@texra-ai/harness/node';
-import { setLogSink } from '@texra-ai/harness/host';
+import { effectDiagnosticsLayer, setLogSink } from '@texra-ai/harness/node';
 
 import {
   captureLogEntries,

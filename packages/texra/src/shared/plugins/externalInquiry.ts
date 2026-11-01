@@ -1,5 +1,5 @@
 /**
- * The external-inquiry plugin's rows (its `arms`, `@tools/plugins`): each thread is an aggregate the plugin owns,
+ * The external-inquiry plugin's rows (its `factKinds`, `@tools/plugins`): each thread is an aggregate the plugin owns,
  * `('plugin', 'external-inquiry:<threadId>')`, and its latest `plugin.fact`
  * of kind `thread` is the summary the Background Tasks panel lists under the
  * run that asked, the row's `parent`. The thread's full record stays in the
@@ -166,11 +166,11 @@ interface ThreadRow {
 }
 
 /**
- * Refuse a thread row its latest row does not admit, so a delayed or
+ * Refuse a thread row its latest row does not accept, so a delayed or
  * replayed update can neither regress the thread nor move it to an earlier
  * asker. Only a reopen of an answered thread (a new turn) changes parents.
  */
-function admitsThreadRow(
+function acceptsThreadRow(
   previous: ThreadRow | undefined,
   next: ThreadRow,
 ): string | null {
@@ -217,13 +217,15 @@ function supersedesThreadRow(latest: ThreadRow, next: ThreadRow): boolean {
 }
 
 /** The external-inquiry plugin's one row kind. */
-export const EXTERNAL_INQUIRY_THREAD_ARM = {
+export const EXTERNAL_INQUIRY_THREAD_KIND = {
   plugin: 'external-inquiry',
   kind: 'thread',
   version: 1,
   schema: InquiryThreadRowSchema,
   upcasters: [],
-  admits: admitsThreadRow,
+  // A thread is the plugin's own aggregate, never a run's row.
+  fork: 'drop',
+  accepts: acceptsThreadRow,
   supersedes: supersedesThreadRow,
 } as const;
 
@@ -232,7 +234,7 @@ export const EXTERNAL_INQUIRY_THREAD_ARM = {
  *  it with an {@link InquiryRequest} as its data. */
 export const INQUIRY_REQUEST = Object.freeze({
   kind: 'plugin',
-  plugin: EXTERNAL_INQUIRY_THREAD_ARM.plugin,
+  plugin: EXTERNAL_INQUIRY_THREAD_KIND.plugin,
   blocksCaller: false,
   answers: Object.freeze(['answer', 'skip'] as const),
 } as const);
@@ -246,11 +248,11 @@ export function inquiryThreadFact(
 ): ToolFact & { readonly aggregate: string } {
   const { parentRunId: _, ...value } = summary;
   return {
-    plugin: EXTERNAL_INQUIRY_THREAD_ARM.plugin,
-    kind: EXTERNAL_INQUIRY_THREAD_ARM.kind,
-    version: EXTERNAL_INQUIRY_THREAD_ARM.version,
+    plugin: EXTERNAL_INQUIRY_THREAD_KIND.plugin,
+    kind: EXTERNAL_INQUIRY_THREAD_KIND.kind,
+    version: EXTERNAL_INQUIRY_THREAD_KIND.version,
     value: Schema.decodeUnknownSync(InquiryThreadRowSchema)(value),
-    aggregate: `${EXTERNAL_INQUIRY_THREAD_ARM.plugin}:${summary.threadId}`,
+    aggregate: `${EXTERNAL_INQUIRY_THREAD_KIND.plugin}:${summary.threadId}`,
   };
 }
 
@@ -260,8 +262,8 @@ export function inquiryThreadsUnder(
   runId: RunId,
 ): InquiryThreadSummary[] {
   return view.pluginFacts.flatMap((fact) =>
-    fact.plugin === EXTERNAL_INQUIRY_THREAD_ARM.plugin &&
-    fact.kind === EXTERNAL_INQUIRY_THREAD_ARM.kind &&
+    fact.plugin === EXTERNAL_INQUIRY_THREAD_KIND.plugin &&
+    fact.kind === EXTERNAL_INQUIRY_THREAD_KIND.kind &&
     fact.parent === runId
       ? [
           {
