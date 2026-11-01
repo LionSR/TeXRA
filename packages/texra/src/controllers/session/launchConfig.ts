@@ -7,7 +7,7 @@ import { AgentConfigSchema, type AgentConfig } from '@texra-ai/harness/schemas';
 /**
  * A fresh launch's configuration, decoded: what a launcher form, an action
  * or a command built. One that does not decode is the launch's rejection,
- * worded with its first issue and logged with all of them; nothing starts.
+ * worded with its first issue and logged with that issue; nothing starts.
  * A persisted run resumes through `resumeRun` instead.
  */
 export const decodeLaunchConfig = (
