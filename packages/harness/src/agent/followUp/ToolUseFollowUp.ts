@@ -291,8 +291,8 @@ const answered = <R>(
  * The one admission of a message to a run: every host and tool sends
  * through here, and only here is a message refused. The send is durable
  * before anything is acknowledged or woken; when no reader here takes the
- * row, this asks the inbox whether the run owes a resume (`Inbox.wake`) and
- * relays its answer.
+ * row, this asks the inbox whether the run owes a resume (`wakeIfOwed`,
+ * over `SessionInbox.owesResume`) and relays its answer.
  *
  * A launch in flight here decides for itself (`LiveRun.readsMessages`): a
  * one-shot loop ends after its turn and reads none. With no launch here,
