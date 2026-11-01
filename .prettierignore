@@ -16,6 +16,6 @@ packages/extension/resources/templates/
 # Retired sources kept for restoration (see attic/README.md) - Deno-formatted
 attic/
 
-# Generated API references (scripts/check-core-quality.mjs --update)
+# Generated API references (npm run docgen)
 packages/harness/docs/api/
 packages/llm/docs/api/

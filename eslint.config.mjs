@@ -138,8 +138,8 @@ const EFFECT_RUN_ENTRIES = [
 // quality like pi"): the harness side of the package split (PR #13639,
 // harness-package-split.md §1) plus the model package. `any`, `new Promise`,
 // `.then(` and `Effect.run*` outside a named entry are hard lint errors here
-// (the blocks below); the rest is the shrink-only ratchet in
-// scripts/check-core-quality.mjs over config/ratchets/core-quality/.
+// (the blocks below); the rest is the ratchet in
+// scripts/check-core-quality.mjs, measured against the merge base.
 export const CORE_QUALITY_DIRS = [
   'packages/harness/src/agent',
   'packages/harness/src/shared/session',
