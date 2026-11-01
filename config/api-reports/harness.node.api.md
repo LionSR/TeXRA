@@ -4,7 +4,7 @@ Generated from `packages/harness/src/node.ts` by `npm run docgen`; do not edit. 
 
 Exports: 52
 
-- `absentReason` — `const absentReason: (error: PlatformError) => boolean`
+- `absentReason` — `const absentReason: (error: unknown) => boolean`
 - `canonicalizeWorkspacePath` — `function canonicalizeWorkspacePath: (workspacePath: string) => string`
 - `CommandDirs` — `const CommandDirs: Reference<() => readonly string[]>`
 - `ConfigStore` — `interface ConfigStore { get<T>(key: string): T | undefined; set(key: string, value: unknown): Effect.Effect<void, Error>; }`

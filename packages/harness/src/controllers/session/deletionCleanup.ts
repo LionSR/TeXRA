@@ -31,6 +31,7 @@ import type {
 } from '@shared/session/runtimeRequest';
 import type { SessionLogShape } from '@shared/session/sessionLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { absentReason } from '@utils/files/fsEntryExists';
 import { copyOrRemoveRunDir } from '@utils/files/runStorageFs';
 import { isPathWithin } from '@utils/core/pathCore';
 
@@ -94,11 +95,7 @@ const removeRunDirectories = (
     );
   }).pipe(
     Effect.uninterruptible,
-    Effect.catchIf(
-      (error) =>
-        error._tag === 'PlatformError' && error.reason._tag === 'NotFound',
-      () => Effect.void,
-    ),
+    Effect.catchIf(absentReason, () => Effect.void),
   );
 
 /**

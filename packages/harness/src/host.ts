@@ -233,7 +233,6 @@ export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export type { AgentErrorKind } from '@common/errors/agentErrorClassification';
 export { causeChain } from '@utils/errors/errorMessage';
 export {
-  isFileNotFoundError,
   isModuleNotFoundError,
   isNotADirectoryError,
   isUserAbort,

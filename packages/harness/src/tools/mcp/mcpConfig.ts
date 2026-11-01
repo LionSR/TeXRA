@@ -51,6 +51,7 @@ import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { sha256 } from '@utils/core/idHash';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 import { acquireMcpServer } from './mcpServer';
 
@@ -65,10 +66,7 @@ const readConfigText = (
 ): Effect.Effect<string | null, Error> =>
   fs.readFileString(file).pipe(
     Effect.map((text): string | null => text),
-    Effect.catchIf(
-      (error) => error.reason._tag === 'NotFound',
-      () => Effect.succeed(null),
-    ),
+    Effect.catchIf(absentReason, () => Effect.succeed(null)),
     Effect.mapError(
       (error) =>
         new Error(`Could not read ${file}: ${error.message}`, { cause: error }),

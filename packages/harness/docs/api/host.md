@@ -1239,14 +1239,6 @@ class InvalidAgentTeamError extends Schema.TaggedError<InvalidAgentTeamError>()(
 )
 ```
 
-## isFileNotFoundError
-
-Check if an error represents a file-not-found condition.
-
-```ts
-function isFileNotFoundError(err: unknown): boolean
-```
-
 ## isModuleNotFoundError
 
 Check if an error is "dynamic import couldn't find the module" (Node + ESM variants).
