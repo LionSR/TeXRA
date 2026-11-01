@@ -10,10 +10,11 @@
  * opens on its loop's fiber, whose end is the loop's.
  */
 // Third-party imports
-import { Cause, Effect, Fiber } from 'effect';
+import { Cause, Deferred, Effect, Fiber } from 'effect';
 
 // Local imports
 import type { AgentRunServices, Runs } from '@agent/runtime/runRegistry';
+import { activationIfOpened } from '@agent/runtime/AgentLaunchContext';
 import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
 import {
   startChildRunLoop,
@@ -29,6 +30,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import {
   USER_FOLLOW_UP_SUPPORT,
+  type CommitOrdinal,
   type RunId,
   type RunIdentity,
 } from '@shared/schemas';
@@ -41,7 +43,16 @@ import {
 /** A native child's loop parameters, or a process child's with the setup
  *  the launch guard runs: its trace, then its strategy around it. */
 type DetachedChildRunInput<TTurn, R> =
-  | Extract<ChildRunLoopParams<TTurn, R>, { readonly childRun?: undefined }>
+  | (Extract<
+      ChildRunLoopParams<TTurn, R>,
+      { readonly childRun?: undefined }
+    > & {
+      /** The deferred the strategy's `onAdmitted` completes with the run's
+       *  opening commit. Given, the start waits for it: the caller's receipt
+       *  names a run that exists, and a loop that ends before the opening
+       *  fails the start with the launch's failure. */
+      readonly opened?: Deferred.Deferred<CommitOrdinal>;
+    })
   | (Omit<ChildRunLoopParams<never>, 'strategy' | 'childRun'> & {
       /** Create the stream inside the launch guard, before any stream-dependent setup. */
       readonly createChildRun: () => Effect.Effect<ChildRunPort>;
@@ -65,14 +76,23 @@ export function startDetachedChildRunLoop<
   input: DetachedChildRunInput<TTurn, R>,
 ): Effect.Effect<StartedChildRunLoop<TTurn>, Error, R | Runs> {
   if (!('createChildRun' in input)) {
-    const started = startChildRunLoop(input);
-    return Effect.uninterruptible(
-      input.awaited === true
-        ? started
-        : Effect.tap(started, (loop) =>
-            logLateFailure(input.agentName, loop.fiber),
+    const { opened, ...params } = input;
+    const started = Effect.uninterruptible(
+      params.awaited === true
+        ? startChildRunLoop(params)
+        : Effect.tap(startChildRunLoop(params), (loop) =>
+            logLateFailure(params.agentName, loop.fiber),
           ),
     );
+    // Interruptible: a cancelled caller stops waiting, not the child.
+    return opened === undefined
+      ? started
+      : Effect.tap(started, ({ fiber }) =>
+          Effect.raceFirst(
+            Deferred.await(opened),
+            Fiber.join(fiber).pipe(Effect.andThen(activationIfOpened(opened))),
+          ),
+        );
   }
   const { createChildRun, buildLaunch, ...loopParams } = input;
   return runWithLaunchGuard(
