@@ -135,7 +135,6 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       billing: 'api-key',
       maxOutputTokens: requested.maxOutputTokens,
       background: false,
-      persistentConnection: false,
       serviceTier: null,
       forcedToolChoice: true,
       route: { kind: 'validation' },

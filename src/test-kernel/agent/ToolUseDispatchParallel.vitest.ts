@@ -176,7 +176,6 @@ function boundModel(): BoundModel {
     origin: ORIGIN,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
     forcedToolChoice: true,
-    persistentConnection: false,
     billing: 'api-key',
     maxOutputTokens: null,
     background: false,
