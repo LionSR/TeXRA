@@ -52,7 +52,9 @@ export interface ProcessLayerOptions extends ProcessServicesOptions {
 }
 
 /** The runtime a composition root makes over `processLayer`: the process
- *  services, and the `Sessions` that open and close its sessions. */
+ *  services, and the `Sessions` that open and close its sessions. Its build
+ *  cannot fail, so the root has already decided what a `PluginsRefused`
+ *  means (a host with a fixed list, `Layer.orDie`). */
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
   ProcessServices | Sessions,
   never
