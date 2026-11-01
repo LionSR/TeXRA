@@ -246,7 +246,7 @@ export const makeSessionViewAccess = Effect.fn(
           blocked === null
             ? held === undefined
             : held !== undefined &&
-              held.reason.kind === blocked.kind &&
+              held.reason.blocker === blocked.blocker &&
               held.reason.name === blocked.name;
         if (same) return state;
         const rest = state.resumeBlocked.filter((b) => b.runId !== runId);
