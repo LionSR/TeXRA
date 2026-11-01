@@ -37,16 +37,19 @@ export type {
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
 // The process the hosts compose: one `processLayer` for every host.
-export type { ProcessLayerOptions } from '@controllers/session/sessionLayer';
+export type { ProcessLayerOptions } from './effect/processLayer.js';
+export type { ProcessServicesOptions } from '@controllers/session/sessionLayer';
 // A project's `.env` over the process environment, for a one-project host.
 export { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 export {
   withProcessServices,
-  type AgentCatalogServices,
-  type PluginContext,
   type ProcessRuntime,
   type ProcessServices,
-} from '@platform/processRuntime';
+} from './effect/processLayer.js';
+export type { PlatformServices, PluginContext } from '@platform/processRuntime';
+// What a run's program requires of the process, beneath `ProcessServices`.
+export type { RunServices } from '@agent/runtime/ToolServices';
+export type { AgentCatalogServices } from '@agent/index/agentEntry';
 // The agent catalog: reads, launch resolution, custom copies, the workspace's
 // selection, and the agent directories a host serves it.
 export {
@@ -121,11 +124,9 @@ export {
   ConfigWriteFailed,
   StateReadFailed,
   StateWriteFailed,
-  ToolMissingReporter,
   type AgentDirectoriesPort,
   type ConfigProvider,
   type StateStore,
-  type ToolMissingHandler,
 } from '@platform/interfaces';
 export { Secrets, type PlatformSecrets } from '@platform/secrets';
 // App-lifecycle signals: the process's hub, which `ProcessServices` serves,
@@ -204,7 +205,7 @@ export {
   type EnabledSkill,
   type SkillRoots,
 } from '@skills/runtimeSkills';
-export type { HostSkillOptions } from '@platform/processRuntime';
+export type { HostSkillOptions } from '@skills/skillSources';
 export type { SkillSourceOptions } from '@skills/skillSources';
 export type {
   SkillIssueCode,

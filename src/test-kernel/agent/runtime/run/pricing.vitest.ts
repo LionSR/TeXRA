@@ -9,11 +9,11 @@ import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/harness/schemas';
 import { priceTurnUsage } from '@agent/runtime/run/pricing';
-import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@shared/schemas';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import type { BoundModel } from '@texra-ai/harness/plugins';
 
 import type { Model, TurnResult } from '@texra-ai/llm';
 
@@ -73,8 +73,11 @@ const boundAnthropic: BoundModel = {
   textOnly: false,
 };
 
-function anthropicUsage(breakdown: {
-  readonly cacheCreationTokens: number;
+function anthropicUsage({
+  cacheWriteTokens,
+  ...breakdown
+}: {
+  readonly cacheWriteTokens: number;
   readonly cacheCreation5mTokens: number | null;
   readonly cacheCreation1hTokens: number | null;
 }): TurnResult['usage'] {
@@ -83,7 +86,9 @@ function anthropicUsage(breakdown: {
     outputTokens: OUTPUT_TOKENS,
     totalTokens: UNCACHED_TOKENS + CACHED_TOKENS + OUTPUT_TOKENS,
     cachedInputTokens: CACHED_TOKENS,
+    cacheWriteTokens,
     reasoningTokens: null,
+    toolUsePromptTokens: null,
     providerUsage: {
       kind: 'anthropic',
       uncachedInputTokens: UNCACHED_TOKENS,
@@ -97,7 +102,7 @@ describe('priceTurnUsage on an Anthropic turn', () => {
     const priced = priceTurnUsage(
       boundAnthropic,
       anthropicUsage({
-        cacheCreationTokens: 1000,
+        cacheWriteTokens: 1000,
         cacheCreation5mTokens: 600,
         cacheCreation1hTokens: 300,
       }),
@@ -133,7 +138,9 @@ describe('priceTurnUsage on a GPT-6 turn', () => {
     outputTokens: 1000,
     totalTokens: inputTokens + 1000,
     cachedInputTokens: 100_000,
+    cacheWriteTokens: null,
     reasoningTokens: null,
+    toolUsePromptTokens: null,
     providerUsage: undefined,
   });
 

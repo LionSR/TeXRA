@@ -4,21 +4,21 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
+import { pathToLocationIn } from '@texra-ai/harness/host';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 
 const mocks = vi.hoisted(() => ({
-  runToolWithCheck: vi.fn(),
+  runTool: vi.fn(),
 }));
 
 vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@texra/utils/system/toolChecks')>();
-  return { ...actual, runToolWithCheck: mocks.runToolWithCheck };
+  return { ...actual, runTool: mocks.runTool };
 });
 
 const workspacePath = fakePath('workspace');
@@ -26,7 +26,7 @@ const workspacePath = fakePath('workspace');
 // Exercises the real production code; only the subprocess call is mocked.
 describe('compileLatex2Pdf structured return', () => {
   beforeEach(async () => {
-    mocks.runToolWithCheck.mockReset();
+    mocks.runTool.mockReset();
     await installPlatform({ workspacePath });
   });
 
@@ -34,7 +34,7 @@ describe('compileLatex2Pdf structured return', () => {
     'returns { ok: true } with the engine PDF path and no logTail on success',
     () =>
       Effect.gen(function* () {
-        mocks.runToolWithCheck.mockReturnValue(
+        mocks.runTool.mockReturnValue(
           Effect.succeed({
             success: true,
             stdout: '',
@@ -63,7 +63,7 @@ describe('compileLatex2Pdf structured return', () => {
         // kpathsea overrides ranking the document's own directory ahead of
         // the compiler's cwd (".") and the workspace root behind both.
         const D = path.delimiter;
-        expect(mocks.runToolWithCheck).toHaveBeenCalledWith(
+        expect(mocks.runTool).toHaveBeenCalledWith(
           'latexmk',
           expect.any(Array),
           expect.objectContaining({

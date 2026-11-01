@@ -21,9 +21,10 @@
  */
 import { Context, Effect, type ManagedRuntime, References } from 'effect';
 
+import { SessionOwner } from '@agent/runtime/rootLaunch';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { SessionOwner, type ProcessServices } from '@platform/processRuntime';
 import type { LocalSession, Sessions } from '@texra-ai/harness';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 /** The harness's runtime: a host's, with the internal session owner a root
  *  launch the suites drive directly asks for. */

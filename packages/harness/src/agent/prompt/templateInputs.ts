@@ -36,7 +36,7 @@ const TemplateInputsSchema = Schema.Struct({
   INSTRUCTION: Schema.String,
   /** Provider gate for Anthropic-specific agent prompt blocks. */
   IS_ANTHROPIC_MODEL: Schema.Boolean,
-  /** Workspace root the run operates in. */
+  /** Working directory the run's tools operate in. */
   CWD: Schema.String,
   /** Absolute agent-directory paths from the external-roots registry, '' when unregistered. */
   BUILTIN_AGENTS_DIR: Schema.String,
@@ -103,12 +103,13 @@ export function buildTemplatePassthrough(): Readonly<Record<string, string>> {
 
 /**
  * The roots of the session this run belongs to, held as data, so a run never
- * reads whichever roots the calling fiber carries: the workspace that prompt
- * file names, file reads and `CWD` resolve against (`undefined` with no
- * folder open), and the storage its attached memories live in.
+ * reads whichever roots the calling fiber carries. Prompt files resolve in
+ * the workspace, tools use the working directory, and attached memories
+ * live in storage.
  */
 interface BuildTemplateInputsOptions {
   workspacePath: string | undefined;
+  workingDirectory?: string;
   storageRoot: string;
 }
 
@@ -187,7 +188,7 @@ function getBasicVars(
   return {
     INSTRUCTION: agentConfig.instruction,
     IS_ANTHROPIC_MODEL: isAnthropicModel,
-    CWD: options.workspacePath ?? '.',
+    CWD: options.workingDirectory ?? options.workspacePath ?? '.',
     ...getAgentDirectoryVars(),
   };
 }

@@ -1,12 +1,15 @@
 /**
- * A `script` call sent to the background: the call returns at once with the
- * id of a child run that makes the same call, `{ kind: 'script', title }`.
+ * A `script` call sent to the background: the call returns, once that run's
+ * opening has committed, with the id of a child run that makes the same
+ * call, `{ kind: 'script', title }`. A launch that fails before the run
+ * exists fails the call, so the model reads the failure in the call's own
+ * result instead of waiting for a follow-up that never comes.
  * That run is the parent's agent with the parent's tools, model and working
  * directory, opened on the call (`AgentConfig.script`); its result reaches
  * the parent as one follow-up (`createScriptRunStrategy`), and a resume
  * replays it from its own rows.
  */
-import { Clock, Effect, Schema, SynchronizedRef } from 'effect';
+import { Clock, Deferred, Effect, Schema, SynchronizedRef } from 'effect';
 
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
@@ -19,7 +22,11 @@ import {
 import { childRunDescription } from '@agent/runtime/delegation/childRun';
 import { startDetachedChildRunLoop } from '@agent/runtime/delegation/detachedChildRun';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
-import { AgentConfigSchema, type RunId } from '@shared/schemas';
+import {
+  AgentConfigSchema,
+  type CommitOrdinal,
+  type RunId,
+} from '@shared/schemas';
 import { executed } from '@tools/core/result';
 
 /** What the model reads for a script sent to the background. */
@@ -90,6 +97,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
     }),
     session,
   });
+  const opened = yield* Deferred.make<CommitOrdinal>();
   yield* startDetachedChildRunLoop({
     session,
     runId,
@@ -110,7 +118,11 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
       startedAt: yield* Clock.currentTimeMillis,
       ...(workingDirectory != null && { workingDirectory }),
       title,
+      onAdmitted: (_, commit) => Deferred.succeed(opened, commit),
     }),
+    // The receipt names a run that exists: the start waits for its
+    // opening, and a launch that fails before it fails this call.
+    opened,
   });
   return receipt(title, runId, false);
 });

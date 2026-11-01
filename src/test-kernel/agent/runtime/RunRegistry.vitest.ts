@@ -4,6 +4,15 @@ import { Cause, Deferred, Effect, Exit, Fiber, SubscriptionRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
+import {
+  generateRunId,
+  RUN_PHASE,
+  type RunId,
+  type RunPhase,
+  type RunView,
+  type SessionEventDraft,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
 import { RunRegistry, RunLive } from '@agent/runtime/runRegistry';
 import type {
   SessionHandle,
@@ -11,14 +20,7 @@ import type {
   SessionTransaction,
 } from '@agent/runtime/SessionHandle';
 import { runStateAppend } from '@shared/session/runHistory';
-import {
-  aggregateTarget,
-  RUN_PHASE,
-  type RunId,
-  type RunPhase,
-  type SessionEventDraft,
-} from '@shared/schemas';
-import type { RunView, SessionView } from '@shared/session/sessionView';
+import { aggregateTarget } from '@shared/schemas';
 import {
   startAwaited,
   admitInterruptibleRun,
@@ -27,7 +29,6 @@ import {
 } from '@test/support/runHandleFixtures';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { setupPlatform } from '@test/support/setupPlatform';
-import { generateRunId } from '@utils/core';
 
 // Local file imports
 

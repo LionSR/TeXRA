@@ -22,6 +22,9 @@ import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { waitForDiagnosticsChange } from '@frontend/vscode/vscodeDiagnostics';
 import {
   LEAN4_EXTENSION_ID,
+  LeanFileCommandFailed,
+  LeanFileUnreadable,
+  LeanUnavailable,
   type FetchDiagnosticsResult,
   type LeanDiagnostic,
   type LeanFileCommand,
@@ -35,10 +38,7 @@ import {
   createLeanServerRoster,
   type LeanServerRoster,
 } from '@texra/tools/lean/leanServerRegistry';
-import {
-  LeanFileCommandFailed,
-  type LeanLanguageServicesShape,
-} from '@texra/tools/lean/leanLanguageServices';
+import type { LeanLanguageServicesShape } from '@texra/tools/lean/leanLanguageServices';
 import type { StateStore } from '@texra-ai/harness/host';
 
 const CHANNEL = 'VscodeLeanIntegration';
@@ -258,26 +258,27 @@ function executeFileCommand(
   globalState: StateStore,
   command: LeanFileCommand,
   filePath: string,
-): Effect.Effect<void, LeanFileCommandFailed> {
+): Effect.Effect<void, LeanFileCommandFailed | LeanUnavailable> {
   return Effect.gen(function* () {
     yield* openFileInEditor(filePath, { preview: true, preserveFocus: true });
     yield* getClientProvider(globalState);
     yield* executeLeanCommand(FILE_COMMAND_VSCODE_IDS[command]);
   }).pipe(
-    Effect.mapError(
-      (failure) =>
-        new LeanFileCommandFailed({
-          // A missing extension is a setup problem; every other failure
-          // (an editor refusal, an activation fault, a rejected command)
-          // already says what to do in its message.
-          reason:
-            failure._tag === 'LeanExtensionUnavailable' &&
-            failure.reason === 'not-installed'
-              ? 'toolchain_unavailable'
-              : 'failed',
-          message: failure.message,
-          cause: failure,
-        }),
+    Effect.mapError((failure) =>
+      // A missing extension is a setup problem; every other failure (an
+      // editor refusal, an activation fault, a rejected command) already
+      // says what to do in its message.
+      failure._tag === 'LeanExtensionUnavailable' &&
+      failure.reason === 'not-installed'
+        ? new LeanUnavailable({
+            reason: 'toolchain',
+            message: failure.message,
+            cause: failure,
+          })
+        : new LeanFileCommandFailed({
+            message: failure.message,
+            cause: failure,
+          }),
     ),
   );
 }
@@ -416,13 +417,12 @@ function sendPositionRequest<T>(
 
 /**
  * Open a Lean file, wait for diagnostics, and return them.
- * The file that could not be opened is the `file_missing` answer; a rejected
- * host call fails the effect.
+ * The file that could not be opened fails with `LeanFileUnreadable`.
  */
 function fetchDiagnosticsForFile(
   roster: LeanServerRoster,
   absolutePath: string,
-): Effect.Effect<FetchDiagnosticsResult> {
+): Effect.Effect<FetchDiagnosticsResult, LeanFileUnreadable> {
   return Effect.gen(function* () {
     // Subscribed on this frame, before the file is opened, so an update the
     // open itself triggers is not missed; the program joins the same fiber
@@ -438,18 +438,16 @@ function fetchDiagnosticsForFile(
     if (Result.isFailure(opened)) {
       // Could not be opened in the editor — the file itself is the problem,
       // and the failure already names it and which step VS Code refused.
-      return {
-        ok: false,
-        kind: 'file_missing',
+      return yield* new LeanFileUnreadable({
         message: opened.failure.message,
-      } satisfies FetchDiagnosticsResult;
+        cause: opened.failure,
+      });
     }
 
     noteVscodeLeanServer(roster, workspaceRootForFile(absolutePath));
 
     yield* Fiber.join(diagnosticsWait);
     return {
-      ok: true,
       diagnostics: getDiagnostics(opened.success.absolutePath),
       // VS Code's diagnostics collection carries no elaboration progress,
       // so this adapter cannot tell a still-elaborating file apart.

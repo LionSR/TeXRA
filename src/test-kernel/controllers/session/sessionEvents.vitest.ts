@@ -49,7 +49,6 @@ import { TestClock } from 'effect/testing';
 import * as Reactivity from 'effect/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
-import * as toast from '@agent/runtime/HostInteractions';
 
 vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   ...(await importOriginal<
@@ -57,38 +56,39 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   >()),
 }));
 
-import { makeRunHistory } from '@agent/runtime/RunHistory';
-import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import {
-  databaseLayer,
-  globalDatabaseLayer,
-} from '@controllers/session/Database';
-import { deletionCollector } from '@controllers/session/deletionCleanup';
-import { openStore } from '@controllers/session/storeSchema';
-import { sessionRequests } from '@controllers/session/SessionRequests';
-import { makeSessionStore } from '@controllers/session/sessionStore';
+  emptyRunEndOutput,
+  GlobalStateKey,
+  qualifyAggregateId,
+  RUN_PHASE,
+  type RunId,
+  RunIdSchema,
+  type SessionEvent,
+  type SessionEventDraft,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
+import { LocalRuntimeStateSchema } from '@texra-ai/harness/transcript';
+import * as toast from '@agent/runtime/HostInteractions';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
+import { makeRunHistory } from '@agent/runtime/RunHistory';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
+import { sessionInputsLayer } from '@controllers/session/sessionInputs';
+import { SessionViewService } from '@controllers/session/SessionView';
 import {
   LocalRuntimeSource,
   TextChunkSource,
   TranscriptSubscriptions,
 } from '@controllers/session/sessionSources';
-import { SessionViewService } from '@controllers/session/SessionView';
-import { sessionInputsLayer } from '@controllers/session/sessionInputs';
-import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { type GlobalValues } from '@platform/processRuntime';
-import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
+import { makeSessionStore } from '@controllers/session/sessionStore';
+import { sessionRequests } from '@controllers/session/SessionRequests';
+import { openStore } from '@controllers/session/storeSchema';
+import { deletionCollector } from '@controllers/session/deletionCleanup';
 import {
-  qualifyAggregateId,
-  emptyRunEndOutput,
-  LocalRuntimeStateSchema,
-  RUN_PHASE,
-  RunIdSchema,
-  type RunId,
-  type SessionEvent,
-  type SessionEventDraft,
-} from '@shared/schemas';
+  databaseLayer,
+  globalDatabaseLayer,
+} from '@controllers/session/Database';
 import {
   runStateAppend,
   RunHistory,
@@ -97,10 +97,8 @@ import {
 } from '@shared/session/runHistory';
 import { Database } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
-import type { SessionView } from '@shared/session/sessionView';
 import { closeSessionOf, openTestSession } from '@test/support/sessionEnd';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
@@ -119,6 +117,8 @@ import { REPO_ROOT } from '@test/support/repoScan';
 import type { InquiryThreadSummary } from '@texra/shared/plugins/externalInquiry';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { toolTable } from '@tools/toolTable';
+import type { GlobalValues } from '@texra-ai/harness/host';
+import type { ProcessProbe } from '@texra-ai/harness/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 vi.mock('node:os', async (importOriginal) => ({

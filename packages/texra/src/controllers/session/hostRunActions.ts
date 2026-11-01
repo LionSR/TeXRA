@@ -37,11 +37,7 @@ import {
   type RunAction,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import {
-  validateRunRequest,
-  type RunRequest,
-  type ValidatedRunRequest,
-} from '@texra/controllers/session/runRequests';
+import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { packDestination } from '@texra/tools/documents/runOutputs';
@@ -64,7 +60,7 @@ import {
   planCompileFixer,
   type CompileFixerPlanFailed,
 } from '../progressView/compileFixer';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
+import type { AgentConfig, AgentConfigInput } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'HostRunActions';
 
@@ -165,14 +161,15 @@ export interface HostRunActionPorts {
  *  that host's launcher, catalogs, key prompt, and notifications. */
 export interface HostRunActions {
   /**
-   * The window's launcher: start a validated fresh run on its session,
-   * answering once it is admitted. A failure before the run opens is
+   * The window's launcher: start a fresh run of an already decoded
+   * configuration (`decodeLaunchConfig`) on its session, answering once it
+   * is admitted; it decodes nothing itself. A failure before the run opens is
    * presented here, once, and fails with the launch's own error; the
    * launched run is the host's to select, and its final output opens when
    * it ends.
    */
   runValidated(
-    request: ValidatedRunRequest,
+    config: AgentConfig,
     options?: RunValidatedOptions,
   ): Effect.Effect<Run, Error>;
   /** Merge `editedFile` into `baseFile`: the merge agent's document task on
@@ -284,7 +281,7 @@ export const createHostRunActions = Effect.fn(
       ? cause
       : new RunLaunchFailed({ message: toErrorMessage(cause), cause });
 
-  const runValidated: HostRunActions['runValidated'] = ({ config }, options) =>
+  const runValidated: HostRunActions['runValidated'] = (config, options) =>
     session.start({ config, ...options, interactive: true }).pipe(
       // A failure before the run opens has no row to show it.
       Effect.tapError((error) => presentRunFailure(ports.present, error)),
@@ -315,33 +312,24 @@ export const createHostRunActions = Effect.fn(
         ),
       ),
     );
-  /** Validate a request an action built, then start it: one that does
-   *  not validate is refused before anything starts, a refusal the
-   *  launcher worded travels as itself, anything else is RunLaunchFailed. */
+  /** Start the configuration an action built: one that does not decode is
+   *  rejected before anything starts, a refusal the launcher worded travels
+   *  as itself, anything else is RunLaunchFailed. */
   const startAgentRequest = (
-    request: RunRequest,
+    config: AgentConfigInput,
     options?: RunValidatedOptions,
-  ): Effect.Effect<Run, RequestRefusal | RunLaunchFailed> => {
-    const validated = validateRunRequest(request);
-    if (!validated.valid) {
-      return Effect.logError(validated.message).pipe(
-        Effect.annotateLogs({ data: validated.issue }),
-        withLogChannel(CHANNEL),
-        Effect.andThen(
-          Effect.fail(new Rejected({ reason: validated.message })),
-        ),
-      );
-    }
-    return runValidated(validated.request, options).pipe(
-      Effect.mapError(launchFailed),
+  ): Effect.Effect<Run, RequestRefusal | RunLaunchFailed> =>
+    decodeLaunchConfig(config).pipe(
+      Effect.flatMap((decoded) =>
+        runValidated(decoded, options).pipe(Effect.mapError(launchFailed)),
+      ),
     );
-  };
-  /** Start a request an action built and wait for its run to end. */
+  /** Start a configuration an action built and wait for its run to end. */
   const runAgentRequest = (
-    request: RunRequest,
+    config: AgentConfigInput,
     options?: RunValidatedOptions,
   ): Effect.Effect<void, RequestRefusal | RunLaunchFailed> =>
-    startAgentRequest(request, options).pipe(
+    startAgentRequest(config, options).pipe(
       Effect.flatMap((run) =>
         run.result.pipe(Effect.asVoid, Effect.mapError(launchFailed)),
       ),
@@ -546,7 +534,7 @@ export const createHostRunActions = Effect.fn(
           AgentCatalogLoadError: refuse,
         }),
       );
-      if (config !== null) yield* startAgentRequest({ config });
+      if (config !== null) yield* startAgentRequest(config);
     }),
     readConfig,
     workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
@@ -624,7 +612,7 @@ export const createHostRunActions = Effect.fn(
       } else if (plan.kind === 'info') {
         yield* ports.showInfo(plan.message);
       } else {
-        yield* runAgentRequest(plan.request, {
+        yield* runAgentRequest(plan.config, {
           helperModel: true,
         });
       }

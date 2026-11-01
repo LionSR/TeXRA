@@ -4,19 +4,19 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { MemoryStateStore } from '@platform/defaults/memoryState';
+import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { RunFileService } from '@texra-ai/harness/plugins';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
-import { RunIdSchema } from '@shared/schemas';
+} from '@texra-ai/harness/node';
+import { createWorkspaceLocation } from '@texra-ai/harness/host';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { runDirUnder } from '@utils/files/runStorageFs';
-import { RunFileService } from '@utils/files/runStorage';
 
 const tempDirs = useTempDirs();
 

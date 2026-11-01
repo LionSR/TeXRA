@@ -13,6 +13,7 @@ import { html, nothing, type TemplateResult } from 'lit';
 
 // Local imports - shared transcript model
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
@@ -37,11 +38,12 @@ import type { FormatResult } from './baseLogFormatter';
 type RowOf<K extends TranscriptRowKind> = Extract<TranscriptRow, { kind: K }>;
 
 /** `interrupted`: the row's run is interrupted (its process died), so an
- *  open call is not running. */
+ *  open call is not running. `toolIcons`: the host's icon per tool. */
 type RowFormatters = {
   [K in TranscriptRowKind]: (
     row: RowOf<K>,
     interrupted: boolean,
+    toolIcons: HostSnapshot['toolIcons'],
   ) => FormatResult;
 };
 
@@ -77,7 +79,8 @@ function formatRenderError(label: string, errorMsg: string): TemplateResult {
 /** Format a transcript row as a TemplateResult for direct Lit rendering. */
 export function formatLogEntry(
   row: TranscriptRow,
-  interrupted = false,
+  interrupted: boolean,
+  toolIcons: HostSnapshot['toolIcons'],
 ): TemplateResult | typeof nothing {
   try {
     // Runtime lookup preserves the kind/payload correlation encoded by
@@ -86,8 +89,9 @@ export function formatLogEntry(
     const formatter = ROW_FORMATTERS[row.kind] as (
       row: TranscriptRow,
       interrupted: boolean,
+      toolIcons: HostSnapshot['toolIcons'],
     ) => FormatResult;
-    return formatter(row, interrupted) ?? nothing;
+    return formatter(row, interrupted, toolIcons) ?? nothing;
   } catch (e) {
     const label = renderLabel(row);
     console.error(`Error rendering ${label}:`, e);

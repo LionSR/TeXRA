@@ -6,7 +6,8 @@
  * every task it starts.
  *
  * The payloads are the runtime's own wire schemas (the session bridge's
- * `Subscribe` and `EventsFrame`, `RuntimeRequest`, `AgentConfig`), used as
+ * `Subscribe` and `EventsFrame`, `RuntimeRequest`, `StartRequestSchema`,
+ * `AgentConfig`), used as
  * they are; a procedure's error is the error class the handler fails with,
  * which the client receives as that class. The procedures:
  *
@@ -37,11 +38,11 @@ import {
   RunEndSchema,
   RunIdSchema,
   RunRecordFieldsSchema,
-  ApprovalPolicySchema,
   RUN_STATUS_KEYS,
   OutcomeSchema,
   RequestErrorSchema,
   RuntimeRequestSchema,
+  StartRequestSchema,
 } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
@@ -74,7 +75,7 @@ export const BUILD_VERSION: string =
 
 /** Bumped whenever a procedure or a payload changes shape. A client newer
  *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 39;
+export const PROTOCOL_VERSION = 40;
 
 /** What `service.hello` and `texra service status` report. */
 export const ServiceInfoSchema = Schema.Struct({
@@ -192,21 +193,10 @@ export const TexraRpcs = RpcGroup.make(
     error: RequestErrorSchema,
   }),
   Rpc.make('task.start', {
-    payload: {
-      workspace,
-      runId: RunIdSchema,
-      config: AgentConfigSchema,
-      /** The chat's previous root: its bypass settings carry over. */
-      continues: Schema.NullOr(RunIdSchema),
-      /** Run on the configured helper model (the "fix LaTeX" actions). */
-      preferHelperModel: Schema.Boolean,
-      /** An Auto-approve launch: the run starts with delegated work
-       *  approved, as the run header's switch would set it. */
-      approveDelegatedWork: Schema.Boolean,
-      /** The policy the launch asked for: one stricter than the project's
-       *  narrows this task only; a more permissive one is ignored. */
-      approvalPolicy: Schema.NullOr(ApprovalPolicySchema),
-    },
+    /** The start as the window's `session.start` took it, less the window's
+     *  own tools, which a service cannot run: its case with a host's whole
+     *  configuration, which the service takes and resolves nothing for. */
+    payload: { workspace, start: StartRequestSchema.members[1] },
     /** The run that started: the asked id, or the one the launch resolved. */
     success: TaskAdmitted,
     error: TaskFailed,

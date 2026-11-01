@@ -8,25 +8,17 @@
 
 import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   HostInteractions,
   SessionHostInteractions,
 } from '@agent/runtime/HostInteractions';
 import type { AgentRunListingEntry } from '@agent/storage/runListing';
-import type {
-  AgentDirectoriesPort,
-  ToolMissingHandler,
-} from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { HostSkillOptions } from '@platform/processRuntime';
-import type { ApprovalPolicy } from '@shared/approvalPolicy';
+import type { AgentPlatform } from '@platform/agentPlatform';
 import type {
   CommitOrdinal,
   DisplaySessionEvent,
   SessionViewInput,
-  InlinePersona,
   RequestDecision,
   RunEnd,
   RunId,
@@ -37,11 +29,16 @@ import type {
   SessionStoreMovedAside,
 } from '@shared/session/database';
 import type { RequestError } from '@shared/session/runtimeRequest';
-import type { OutcomeOf, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type {
+  OutcomeOf,
+  RuntimeRequest,
+  StartRequestSchema,
+} from '@shared/session/runtimeRequest';
 import type {
   PendingRequest,
   SessionView,
 } from '@shared/session/readonlyViews';
+import type { HostSkillOptions } from '@skills/skillSources';
 import type { Plugin } from '@tools/plugins';
 import type { Effect, Stream, Scope, SubscriptionRef } from 'effect';
 
@@ -52,25 +49,6 @@ import type {
   ToolsRefused,
 } from './errors.js';
 import type { HeldRun, RunDeletion, RunRecords } from './sessionReads.js';
-
-/**
- * The process services the package composes, together with the workspace
- * roots the package's runs work in. `nodePlatform()` builds all of them; an
- * embedder supplying its own names its workspace roots beside them.
- */
-export interface AgentPlatform {
-  /** The agent directories this process's `AgentDirectories` service serves. */
-  readonly agentDirectories: AgentDirectoriesPort;
-  /** Surfaces a tool-missing error to the embedder, served as
-   *  `ToolMissingReporter`; absent, a missing-tool probe answers without
-   *  surfacing. */
-  readonly toolMissingHandler?: ToolMissingHandler;
-  /** The app's directories on every command's PATH (`CommandDirs`). */
-  readonly commandDirs?: () => readonly string[];
-  readonly roots: WorkspaceRoots;
-  /** The secret store this process's `Secrets` service reads from. */
-  readonly secrets: PlatformSecrets;
-}
 
 /** What an embedder composes the process from: its platform, its plugins
  *  (the harness's built-ins among them) and its skill sources, without
@@ -131,36 +109,11 @@ export interface SessionHost extends Omit<HostInteractions, 'dispose'> {
   readonly approve?: ApprovalHandler;
 }
 
-/** What starting a run takes: an agent (a name from the agent
- *  directories, or a persona written inline, which the run stores so a
- *  resume needs no file) and the instruction to give it. Everything else
- *  is optional. `config` replaces both with a complete configuration an
- *  application host has already resolved. */
-export type StartInput = (
-  | {
-      readonly agent: string | InlinePersona;
-      readonly instruction: string;
-      readonly model?: string;
-    }
-  | { readonly config: AgentConfig }
-) & {
-  /** The run's id. Absent, one is generated. */
-  readonly runId?: RunId;
-  /** The earlier run this one continues in a chat: the new run starts with
-   *  the approvals the person granted there. */
-  readonly continues?: RunId;
-  /** Run on the configured helper model instead of the selected one. */
-  readonly helperModel?: boolean;
-  /** A stricter approval policy for this run (it can only narrow the
-   *  project's), and whether work it delegates to other agents starts
-   *  approved. */
-  readonly approval?: {
-    readonly policy?: ApprovalPolicy;
-    readonly delegated?: boolean;
-  };
-  /** Keep the run open for follow-up messages after each answer, as a chat
-   *  window does. Absent, the run ends after its first answer. */
-  readonly interactive?: boolean;
+/** What starting a run takes: the start as data (`StartRequestSchema`:
+ *  an agent and its instruction, or a resolved `config`, with the optional
+ *  `runId`, `continues`, `helperModel`, `approval` and `interactive`), and
+ *  the run's own tools. */
+export type StartInput = typeof StartRequestSchema.Type & {
   /** Tools for this run only, made with `defineTool`. A resume needs the
    *  same tools passed again. */
   readonly tools?: readonly ITool[];

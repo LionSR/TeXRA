@@ -1,5 +1,6 @@
 import { Context, Effect, Schema, type Scope } from 'effect';
 import type { ITool, ToolContext } from '@agent/core/tools/ToolTypes';
+import type { AgentCatalog } from '@agent/index/agentCatalog';
 import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import { getRunRecords } from '@agent/storage/runRecords';
 import {
@@ -10,7 +11,7 @@ import {
   launchProcessChild,
   type ProcessChildLaunch,
 } from '@agent/runtime/delegation/detachedChildRun';
-import type { ProcessServices } from '@platform/processRuntime';
+import type { PlatformServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   qualifyAggregateId,
@@ -18,9 +19,26 @@ import {
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
+import type { ToolAvailability } from '@tools/toolAvailabilityService';
+import type { ToolRegistry } from '@tools/toolTable';
 
 import { Runs } from './runRegistry';
+import type { RouteRetries } from './run/invocation';
 import type { RunCallShape } from './RunCall';
+
+/**
+ * What a run's program requires of the process: the platform services every
+ * process serves, the agent catalog, the plugin table its offered tools are
+ * rebuilt from, each workspace's last dependency probe and the model routes'
+ * retry gate. The composition's tool catalog (`ToolCatalog`) is not among
+ * them: no run names it.
+ */
+export type RunServices =
+  | PlatformServices
+  | AgentCatalog
+  | RouteRetries
+  | ToolRegistry
+  | ToolAvailability;
 
 /** The runtime's services a call reads: the process's, the rooted
  *  filesystems of the session the call works in, and the call
@@ -28,7 +46,7 @@ import type { RunCallShape } from './RunCall';
  *  context instead of resolving a static against whichever roots its fiber
  *  happens to carry. */
 export type CallServices =
-  ProcessServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
+  RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
 
 /**
  * A plugin tool's one door to the session's runs. It launches children of

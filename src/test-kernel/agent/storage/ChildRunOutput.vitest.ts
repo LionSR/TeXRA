@@ -5,13 +5,14 @@ import { it } from '@effect/vitest';
 import { Effect, Layer, Schema } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
-import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
   type RunId,
-} from '@shared/schemas';
+} from '@texra-ai/harness/schemas';
+import { ToolRegistry } from '@texra-ai/harness/plugins';
+import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -30,7 +31,7 @@ import {
   RoundOutputSchema,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
-import { ToolRegistry, toolTable } from '@tools/toolTable';
+import { toolTable } from '@tools/toolTable';
 
 const parentRunId = 'aaaaaa111111' as RunId;
 const childRunId = 'bbbbbb222222' as RunId;

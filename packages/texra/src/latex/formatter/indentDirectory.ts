@@ -10,6 +10,7 @@ import {
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { EXCLUDED_DIRS } from '@texra/shared/constants/latexTiming';
 
+import type { ToolMissing } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { LatexFormatter } from './texFormatter';
@@ -103,7 +104,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
     dirPath: string,
   ): Effect.fn.Return<
     void,
-    PlatformError.PlatformError,
+    PlatformError.PlatformError | ToolMissing,
     FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   > {
     const entries = yield* readDirectoryTypedTolerant(dirPath);
@@ -133,8 +134,8 @@ export const indentLatexFilesInDirectory = Effect.fn(
         withLogChannel(CHANNEL),
       );
 
-      // Both formatters report a failed run as `false`, so a per-file
-      // recovery here would have nothing left to catch.
+      // A failed run is `false`. A missing formatter fails the walk with its
+      // `ToolMissing`, once, rather than once per file.
       if (
         yield* runFormatter(fullPath, workspaceRoot, config, formatterSettings)
       ) {

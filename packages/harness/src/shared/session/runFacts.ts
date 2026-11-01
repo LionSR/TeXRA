@@ -1,16 +1,15 @@
 /**
  * What a run answers and what it produced, read from the rows that record
- * them: its input (system text, instruction, activated skills, memory
- * misses), the files its calls edited and how many ran, its structured
- * output, and where its turn policy stands (the final-tool nudge, the
- * finalized answer). The row handlers in `runState.ts` and
- * `turnRowHandlers.ts` set these fields, so the loop reads them off the
- * same state on the live path and on resume. The consumed follow-up is here
- * too, as its writers commit it and as a reader learns its receipt from
- * `RunRows`; the rules for which pending rows a run reads are the reader's
- * (`agent/followUp/RunInput.ts`). The lifecycle rows a run is registered,
- * activated and ended with are built here, beside the readers of their
- * facts; `agent/storage/runLifecycle.ts` commits them.
+ * them: its input (system text, instruction, activated skills, memory misses),
+ * the files its calls read and edited and how many ran, its structured output,
+ * and where its turn policy stands (the final-tool nudge, the finalized
+ * answer). The row handlers in `runState.ts` and `turnRowHandlers.ts` set these
+ * fields, so the loop reads them off the same state on the live path and on
+ * resume. The consumed follow-up is here too, as its writers commit it and as a
+ * reader learns its receipt from `RunRows`; the rules for which pending rows a
+ * run reads are the reader's (`agent/followUp/RunInput.ts`). The lifecycle rows
+ * a run is registered, activated and ended with are built here, beside the
+ * readers of their facts; `agent/storage/runLifecycle.ts` commits them.
  */
 import {
   NO_APPROVAL_GRANTS,
@@ -68,6 +67,9 @@ export type RunFacts = {
   };
   /** The workspace files the run's calls edited, first edit first. */
   readonly edited: readonly string[];
+  /** The files the run's calls read (an edited file counts), first read first,
+   *  as the results spell them: what editing an existing file requires. */
+  readonly read: readonly string[];
   /** Results `executed` or `failed`: tool bodies and script host answers. */
   readonly toolCalls: number;
   /** The result value of a `submit_output` call, whether the response or
@@ -99,6 +101,7 @@ export const NO_FACTS: RunFacts = {
   answer: '',
   input: {},
   edited: [],
+  read: [],
   toolCalls: 0,
   structured: null,
   handedDown: null,
@@ -127,23 +130,25 @@ export function withInput(
   };
 }
 
-/** The facts one `tool.result` changes: the files it edited, whether it
- *  ran, and, when it is the run's output, its value (and a handed-down
- *  call's result). `pending` is the response the call belongs to. */
+/** The facts one `tool.result` of `pending` changes: the files it read and
+ *  edited, whether it ran, and, as the run's output, its value or result. */
 export function resultFacts(
   facts: RunFacts,
   p: ToolResultPayload,
   pending: PendingResponse,
 ): Partial<RunFacts> {
   const ran = p.disposition === 'executed' || p.disposition === 'failed';
-  const edits = p.result.status === 'executed' ? (p.result.edits ?? []) : [];
-  const fresh = [
-    ...new Set(edits.map(({ path }) => path).filter(Boolean)),
-  ].filter((path) => !facts.edited.includes(path));
+  const executed = p.result.status === 'executed' ? p.result : null;
+  const edits = (executed?.edits ?? []).map(({ path }) => path);
+  const fresh = (paths: readonly string[], known: readonly string[]) =>
+    [...new Set(paths)].filter((path) => path !== '' && !known.includes(path));
+  const edited = fresh(edits, facts.edited);
+  const read = fresh([...(executed?.reads ?? []), ...edits], facts.read);
   const output = outputOf(pending, p.callId);
-  const value = p.result.status === 'executed' ? p.result.value : undefined;
+  const value = executed?.value;
   return {
-    edited: fresh.length === 0 ? facts.edited : [...facts.edited, ...fresh],
+    edited: edited.length === 0 ? facts.edited : [...facts.edited, ...edited],
+    read: read.length === 0 ? facts.read : [...facts.read, ...read],
     toolCalls: facts.toolCalls + (ran ? 1 : 0),
     structured:
       output !== null && value !== undefined ? { value } : facts.structured,
@@ -166,15 +171,10 @@ function outputOf(
   return tool === STRUCTURED_OUTPUT_TOOL_NAME ? 'submitted' : null;
 }
 
-// ---------------------------------------------------- pending input
-
-/** Input that asks the run to do something: its user's and its parent's.
- *  A child's report, any other run's message and a host notice inform the
- *  run and never instruct it. */
+/** Input that asks the run to do something: its user's and its parent's. A
+ *  child's report, another run's message and a host notice only inform it. */
 export const isInstruction = ({ from }: FollowUpContent): boolean =>
   from.kind === 'user' || (from.kind === 'run' && from.relation === 'parent');
-
-// ----------------------------------------------- the consumed follow-up
 
 /** The row that consumes one follow-up, committed beside the rows that took
  *  it; its writer states why (`disposition`). */
@@ -190,14 +190,13 @@ export const consumedRow = (
 });
 
 /**
- * Where one follow-up stands: `accepted` while queued; `incorporated` once
- * it is part of a turn's message and that turn has not ended; `terminal`
- * once something answered it (`answer`: the commit of the row that took it,
- * written in the transaction that answered it: a child's report, a
- * control's edit or config, or the turn's own rows) or nothing will
- * (`answer` null, `reason`: a dropped row's, or the error or outcome that
- * ended the run before its turn finished). Every message of one turn
- * shares that turn's answer.
+ * Where one follow-up stands: `accepted` while queued; `incorporated` once it
+ * is part of a turn's message and that turn has not ended; `terminal` once
+ * something answered it (`answer`: the commit of the row that took it, written
+ * in the transaction that answered it: a child's report, a control's edit or
+ * config, or the turn's own rows) or nothing will (`answer` null, `reason`: a
+ * dropped row's, or the error or outcome that ended the run before its turn
+ * finished). Every message of one turn shares that turn's answer.
  */
 type FollowUpReceipt =
   | { readonly state: 'accepted' }
@@ -208,10 +207,10 @@ type FollowUpReceipt =
       readonly reason?: string;
     };
 
-/** The receipt of `followUpId` as `rows` say it; an id no row named has
- *  left no receipt. A turn ends when the loop rests at it (`waiting`, or
- *  `turn.ready` once the next input is taken at the same turn number),
- *  moves past it, or the run ends. */
+/** The receipt of `followUpId` as `rows` say it; an id no row named has left
+ *  no receipt. A turn ends when the loop rests at it (`waiting`, or `turn.ready`
+ *  once the next input is taken at the same turn number), moves past it, or
+ *  the run ends. */
 export function followUpReceipt(
   rows: RunRows,
   followUpId: string,
@@ -256,8 +255,8 @@ export const recordsOf = (
 };
 
 /** The row that bounds run `runId`'s current lifecycle in `rows`: its last
- *  `run.end` or `run.activate`, since an activate after an end starts a new
- *  lifecycle, so a resumed run never carries the end of one it left. */
+ *  `run.end` or `run.activate` (an activate after an end starts a new
+ *  lifecycle, so a resumed run never carries the end of one it left). */
 export function lastLifecycleRow(
   rows: readonly SessionEvent[],
   runId: RunId,
@@ -276,8 +275,7 @@ export function runEndFromEvents(
 }
 
 /** `invocation` once a clean close stopped its open attempt (a `run.position`
- *  halt with reason `closed`): none, or one whose outcome a row recorded, is
- *  as it was. */
+ *  halt, reason `closed`): none, or one with a recorded outcome, is as it was. */
 export function closedBy(invocation: Invocation | null): Invocation | null {
   if (invocation === null || invocation.current.failed !== null)
     return invocation;
@@ -321,8 +319,8 @@ export interface Registration {
 }
 
 /** The rows that register a run, in commit order: a new run's (`born`)
- *  `run.start`, its configuration, its `run.activate` (a re-registration's
- *  with the grants it ends, `ended`), and the description it is born with. */
+ *  `run.start`, its configuration, its `run.activate` (a re-registration's with
+ *  the grants it ends, `ended`), and the description it is born with. */
 export function registrationDrafts(
   runId: RunId,
   config: RunConfigRow['config'],

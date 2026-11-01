@@ -21,7 +21,6 @@ import {
   type AgentDirectoriesFailed,
   type StateReadFailed,
 } from '@platform/interfaces';
-import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   AgentDelegationScope,
@@ -45,7 +44,7 @@ import {
   type AgentCustomizeRefused,
 } from './AgentDirectoryService';
 import { scanPluginAgents } from './pluginAgents';
-import type { AgentEntry } from './agentEntry';
+import type { AgentCatalogServices, AgentEntry } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
 

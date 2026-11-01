@@ -94,6 +94,8 @@ A [`PluginDefinition`](./harness/plugins#plugindefinition) can declare:
 - **`arms`**: [`PluginArm`](./harness/plugins#pluginarm) schemas and upcasters for versioned `plugin.fact` rows committed by the plugin (latest values appear on `RunView.facts`).
 - **`agentBlock`**: [`AgentBlock`](./harness/plugins#agentblock) claiming a top-level YAML key in agent definitions (read via [`agentBlockOf`](./harness/plugins#agentblockof)) to run a structured recipe script.
 
+An availability `check(inputs)` returns `{ available, statusLabel?, statusDetail? }` from one observation of the asking workspace. The check owns optional-detail failures: log the cause and retain an availability result already established. The harness owns the complete check's deadline, cached results and refresh.
+
 ### Runtime services inside a tool body
 
 Inside `execute`, yield services from [`@texra-ai/harness`](./harness/) and [`@texra-ai/harness/plugins`](./harness/plugins):

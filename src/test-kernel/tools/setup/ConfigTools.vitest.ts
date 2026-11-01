@@ -10,6 +10,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { generateRunId } from '@texra-ai/harness/schemas';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeHost } from '@test/support/setupPlatform';
@@ -21,7 +22,6 @@ import {
   sessionWithInteractions,
 } from '@test/agent/progressTestUtils';
 import { UpdateConfigTool } from '@texra/tools/setup/ConfigTools';
-import { generateRunId } from '@utils/core';
 
 describe('ConfigTools — update_config allowlist', () => {
   it.effect('rejects a non-allowlisted key without writing', () =>

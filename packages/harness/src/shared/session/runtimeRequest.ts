@@ -10,7 +10,8 @@
  * for its whole life, so a request that waits while its run is
  * deleted can only miss, never land on a different run.
  * The union carries the arms the runtime answers today; a lane that routes
- * another retained command adds its arm with its handler.
+ * another retained command adds its arm with its handler. A start is not a
+ * request: it is `StartRequestSchema`, beside it.
  */
 import { type Context, Effect, Schema, Struct } from 'effect';
 
@@ -18,7 +19,10 @@ import {
   APPROVAL_BYPASS_KINDS,
   APPROVAL_POLICY_LIMITS,
 } from '@shared/approvalBypassKind';
+import { ApprovalPolicySchema } from '@shared/approvalPolicy';
 import {
+  AgentConfigSchema,
+  InlinePersonaSchema,
   RequestDecisionSchema,
   RunIdSchema,
   StoredMediaSchema,
@@ -342,3 +346,48 @@ export function isRequestRefusal(error: unknown): error is RequestRefusal {
     error instanceof Rejected
   );
 }
+
+/** What a start takes besides its agent, whichever way the agent is given. */
+const StartOptionsSchema = Schema.Struct({
+  /** The run's id. Absent, one is generated. */
+  runId: Schema.optional(RunIdSchema),
+  /** The earlier run this one continues in a chat: the new run starts with
+   *  the approvals the person granted there. */
+  continues: Schema.optional(RunIdSchema),
+  /** Run on the configured helper model instead of the selected one. */
+  helperModel: Schema.optional(Schema.Boolean),
+  /** A stricter approval policy for this run (it can only narrow the
+   *  project's), and whether work it delegates to other agents starts
+   *  approved. */
+  approval: Schema.optional(
+    Schema.Struct({
+      policy: Schema.optional(ApprovalPolicySchema),
+      delegated: Schema.optional(Schema.Boolean),
+    }),
+  ),
+  /** Keep the run open for follow-up messages after each answer, as a chat
+   *  window does. Absent, the run ends after its first answer. */
+  interactive: Schema.optional(Schema.Boolean),
+});
+
+/**
+ * A start as data: all of `StartInput` but the run's own tools. Either an
+ * agent (a name from the agent directories, or a persona written inline,
+ * which the run stores so a resume needs no file) and the instruction to
+ * give it, or `config`, a complete configuration an application host has
+ * already resolved. A host sends it to a service as it is.
+ */
+export const StartRequestSchema = Schema.Union([
+  StartOptionsSchema.mapFields(
+    Struct.assign({
+      // The persona as an embedder writes it; the start decodes it.
+      agent: Schema.Union([
+        Schema.String,
+        Schema.toEncoded(InlinePersonaSchema),
+      ]),
+      instruction: Schema.String,
+      model: Schema.optional(Schema.String),
+    }),
+  ),
+  StartOptionsSchema.mapFields(Struct.assign({ config: AgentConfigSchema })),
+]);

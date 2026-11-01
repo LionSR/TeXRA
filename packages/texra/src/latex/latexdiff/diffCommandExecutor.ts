@@ -3,12 +3,13 @@ import { Effect, Schema } from 'effect';
 
 // Internal imports
 import { withLogChannel, Settings } from '@texra-ai/harness/host';
-import { executeCommand, type ExecResult } from '@texra-ai/harness/node';
+import { runTool } from '@texra/utils/system/toolChecks';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 
 // Local file imports
 import { LATEX_CITATION_COMMANDS } from '../latexParsingUtils';
+import type { ExecResult } from '@texra-ai/harness/node';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -145,7 +146,6 @@ export class DiffCommandExecutor {
     return Effect.gen({ self: this }, function* () {
       const { mathMarkup, subtype } = yield* this.getLatexdiffConfig(options);
       return [
-        'latexdiff',
         ...(useFlatten ? ['--flatten'] : []),
         '--encoding=utf8',
         '-c',
@@ -166,7 +166,6 @@ export class DiffCommandExecutor {
     return Effect.gen({ self: this }, function* () {
       const { mathMarkup, subtype } = yield* this.getLatexdiffConfig(options);
       return [
-        'latexdiff-vc',
         '--encoding=utf8',
         '-c',
         `PICTUREENV=${LATEXDIFF_PICTURE_ENVIRONMENTS}`,
@@ -185,10 +184,11 @@ export class DiffCommandExecutor {
    * Run `commandBuilder(true)`, and on a bibliography failure retry it without
    * `--flatten`. The subprocess is torn down by the fiber's own interruption:
    * `executeCommand` kills the process group from its own finalizer.
+   * `commandBuilder` answers the tool's arguments.
    */
   private executeWithFallback(
     commandBuilder: (useFlatten: boolean) => Effect.Effect<string[], Error>,
-    commandType: string,
+    commandType: 'latexdiff' | 'latexdiff-vc',
     cwd: string | undefined,
   ): Effect.Effect<ExecResult, Error, ChildProcessSpawner> {
     return Effect.gen({ self: this }, function* () {
@@ -207,9 +207,16 @@ export class DiffCommandExecutor {
         Effect.gen({ self: this }, function* () {
           const variant = flatten ? 'with --flatten' : 'without --flatten';
           yield* Effect.logDebug(`Running ${commandType} ${variant}`);
-          const result = yield* this.exec(
+          // A missing tool fails with its `ToolMissing`, which the
+          // bibliography retry below leaves alone.
+          const result = yield* runTool(
+            commandType,
             yield* commandBuilder(flatten),
-            execOptions,
+            {
+              ...execOptions,
+              // The roots of the workspace being diffed, held by this executor.
+              settings: this.roots,
+            },
           );
           if (!result.success) {
             return yield* new LatexdiffFailed({
@@ -238,18 +245,6 @@ export class DiffCommandExecutor {
             ).pipe(Effect.andThen(attempt(false))),
         ),
       );
-    });
-  }
-
-  /** One `executeCommand` invocation, cancelled by the running fiber. */
-  private exec(
-    command: string[],
-    execOptions: CommandExecOptions,
-  ): Effect.Effect<ExecResult, never, ChildProcessSpawner> {
-    return executeCommand(command, {
-      ...execOptions,
-      // The roots of the workspace being diffed, held by this executor.
-      settings: this.roots,
     });
   }
 

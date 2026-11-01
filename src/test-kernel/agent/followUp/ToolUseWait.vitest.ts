@@ -10,11 +10,11 @@ import { Effect, Fiber, Layer, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { generateRunId, qualifyAggregateId } from '@texra-ai/harness/schemas';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';
-import { qualifyAggregateId } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
 import { type RunState } from '@shared/session/runState';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -29,7 +29,6 @@ import {
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { publishTestRows } from '@test/support/sessionTestUtils';
-import { generateRunId } from '@utils/core';
 
 import { sessionWithInteractions } from '../progressTestUtils';
 

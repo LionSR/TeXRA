@@ -5,16 +5,20 @@ import '@test/support/defaultSessionTestSetup';
 import { it } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
+import {
+  APPROVAL_BYPASS_KINDS,
+  generateRunId,
+  type Plan,
+  type RequestDecision,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
-import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
-import type { Plan, RequestDecision, RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { PlanTool } from '@tools/plan/PlanTool';
-import { generateRunId } from '@utils/core';
 
 // Local file imports
 import {

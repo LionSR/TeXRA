@@ -13,8 +13,8 @@
  * The Codex CLI handles its own auth (~/.codex/auth.json from `codex login`,
  * OPENAI_API_KEY, config files).
  *
- * Requires the Codex CLI binary — gated by the availability check in
- * pluginAvailability.ts.
+ * Requires the Codex CLI binary, gated by the availability check in
+ * codexPlugin.ts.
  */
 
 // Third-party imports
@@ -190,12 +190,12 @@ function publishCodexItemProgress(params: {
 /** A Codex turn's spend in the one usage shape. The SDK reports no cost. */
 function codexTurnUsage({ usage }: RunResult): TokenUsageStats | null {
   if (!usage) return null;
-  const cacheRead = usage.cached_input_tokens;
+  const cached = usage.cached_input_tokens;
   return {
     inputTokens: usage.input_tokens,
     outputTokens: usage.output_tokens,
     cost: 0,
-    ...(cacheRead > 0 && { cacheReadInputTokens: cacheRead }),
+    ...(cached > 0 && { cachedInputTokens: cached }),
   };
 }
 

@@ -52,7 +52,6 @@ import {
 } from '@texra/tools/editorHost';
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
-import { DOCUMENTS_OUTPUT_KEY } from '@texra/shared/plugins/documents';
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
@@ -151,6 +150,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     showInSidebar: () => this.showInSidebar(),
     showSessions: (runId) =>
       this.bridge.surfaceAction({ kind: 'showSessions', runId }),
+    chime: () => this.chime(),
   });
 
   /**
@@ -330,7 +330,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             // Already an Effect program, and one that answers a failed probe as a
             // missing tool rather than failing, so the banner reads it directly.
             dependencyBanner: () =>
-              checkCoreDependencies(false).pipe(
+              checkCoreDependencies().pipe(
                 Effect.map((missingTools) => ({
                   visible: missingTools.length > 0,
                   missingTools: [...missingTools],
@@ -400,38 +400,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     this.snapshot = gui.snapshot;
     this.runValidated = gui.runValidated;
     this.runtime.runSync(
-      Effect.gen({ self: this }, function* () {
-        yield* Effect.forkIn(this.attention.follow(runSession), this.scope);
-        yield* Effect.forkIn(this.chimeOnDocuments(), this.scope);
-      }),
+      Effect.forkIn(this.attention.follow(runSession), this.scope),
     );
     this.watchWorkspace();
-  }
-
-  /** The completion chime, one per process and never a renderer
-   *  transition hook every subscriber would replay: a document task (its
-   *  run holds the documents fact, which only its recipe records)
-   *  completing, here or in the service. A failed or cancelled run does not
-   *  chime; neither does one already ended when this window first sees it. */
-  private chimeOnDocuments(): Effect.Effect<void> {
-    return Effect.suspend(() => {
-      let open = new Set<RunId>();
-      return Stream.runForEach(this.runSession.view.changes, (view) =>
-        Effect.sync(() => {
-          const now = new Set<RunId>();
-          for (const run of view.runs.values()) {
-            if (run.durableOutcome === null) now.add(run.id);
-            else if (
-              open.has(run.id) &&
-              run.facts[DOCUMENTS_OUTPUT_KEY] !== undefined &&
-              run.durableOutcome === 'completed'
-            )
-              this.chime();
-          }
-          open = now;
-        }),
-      );
-    });
   }
 
   public initialize() {

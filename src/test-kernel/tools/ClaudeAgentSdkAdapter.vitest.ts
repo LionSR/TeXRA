@@ -37,8 +37,8 @@ describe('Claude Agent SDK adapter', () => {
     expect(usage).toEqual({
       inputTokens: 170,
       outputTokens: 50,
-      cacheReadInputTokens: 50,
-      cacheCreationInputTokens: 7,
+      cachedInputTokens: 50,
+      cacheWriteTokens: 7,
       cost: 0.03,
     });
   });

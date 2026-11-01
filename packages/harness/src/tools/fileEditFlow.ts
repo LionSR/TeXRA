@@ -88,15 +88,12 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
       display: displayPath,
     } = yield* resolveToolPath(call.env, inputPath);
 
-    // Shared read-before-edit gate (lstat semantics), then the current content.
+    // Shared read-before-edit gate (lstat semantics), then the current
+    // content. The gate keys on the display path, the spelling the result's
+    // `edits` and a read's `reads` give a file.
     const fs = yield* FileSystem.FileSystem;
     const exists = yield* entryExists(fs, absolutePath);
-    const blocked = yield* requireFileReadForEdit(
-      path,
-      exists,
-      undefined,
-      displayPath,
-    );
+    const blocked = yield* requireFileReadForEdit(displayPath, exists);
     if (blocked) {
       return { blocked };
     }

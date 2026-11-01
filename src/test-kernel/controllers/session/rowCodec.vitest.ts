@@ -1,8 +1,8 @@
 import { Result, Schema } from 'effect';
 import { expect, it } from 'vitest';
 
+import { qualifyAggregateId, RunIdSchema } from '@texra-ai/harness/schemas';
 import { decodeRow, encodeDraft } from '@controllers/session/rowCodec';
-import { qualifyAggregateId, RunIdSchema } from '@shared/schemas';
 import type { PluginArms } from '@tools/plugins';
 
 // Failure modes: a compatibility chain starting after version 1 skips steps,

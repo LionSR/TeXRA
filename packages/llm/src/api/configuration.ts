@@ -7,7 +7,7 @@
  */
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
-import { ModelError } from '../errors.js';
+import { ModelError, PLAN_ROUTES } from '../errors.js';
 import { routeConfig } from '../models/modelRoute.js';
 import { acceptedEfforts, chooseReasoning } from '../models/reasoningChoice.js';
 import { BACKEND_PROTOCOLS } from '../providers/providerPlugins.js';
@@ -131,12 +131,6 @@ const CONFIGURE: {
   },
 };
 
-/** The provider whose account a subscription route signs in to. */
-const SUBSCRIPTION_PROVIDERS = {
-  'chatgpt-subscription': 'openai',
-  'xai-subscription': 'xai',
-} as const;
-
 /** The protocol each backend provider serves, by provider id. */
 const PROTOCOL_OF: Readonly<Partial<Record<string, HttpProtocol>>> =
   BACKEND_PROTOCOLS;
@@ -181,7 +175,7 @@ export function configurationFor(spec: BindSpec): {
   const credentialProvider =
     route.kind === 'api-key'
       ? route.provider
-      : SUBSCRIPTION_PROVIDERS[route.kind];
+      : PLAN_ROUTES[route.kind].provider;
   const configuration = CONFIGURE[protocol]({
     spec: { ...spec, model: config, options },
     config,

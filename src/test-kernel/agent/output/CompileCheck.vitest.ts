@@ -9,7 +9,6 @@ import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import type { CompileLatex2PdfResult } from '@latex/texTools';
-import type { RunId } from '@shared/schemas';
 import { fakePath } from '@test/support/FakePlatform';
 import {
   ensureRoundData,
@@ -24,6 +23,7 @@ import {
   initLatexPlatform,
   outputFile,
 } from './compileCheckTestUtils';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 // The compiled PDF the fake engine reports; no test seeds it, so artifact
 // publication is a no-op — the path only has to be a plausible absolute one.
@@ -33,15 +33,10 @@ const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn((): Effect.Effect<CompileLatex2PdfResult> =>
     Effect.succeed({ ok: true, pdfPath: COMPILED_PDF }),
   ),
-  hasLatexCompiler: vi.fn((): Effect.Effect<boolean> => Effect.succeed(true)),
 }));
 
 vi.mock('@latex/texTools', () => ({
   compileLatex2Pdf: mocks.compileLatex2Pdf,
-}));
-
-vi.mock('@latex/latexToolchain', () => ({
-  hasLatexCompiler: mocks.hasLatexCompiler,
 }));
 
 describe('runCompileCheck', () => {
@@ -62,7 +57,7 @@ describe('runCompileCheck', () => {
         0,
       );
 
-      const failures = result.failures ?? [];
+      const { failures } = result;
       expect(failures).toHaveLength(1);
       expect(failures[0].displayName).toBe('main.tex');
 

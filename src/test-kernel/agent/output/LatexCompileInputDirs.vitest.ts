@@ -7,14 +7,14 @@ import { Effect } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { fileLocationDisplayPath, type RunId } from '@shared/schemas';
+import { fileLocationDisplayPath, type RunId } from '@texra-ai/harness/schemas';
+import { RunFileService } from '@texra-ai/harness/plugins';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { LatexDiffManager } from '@texra/agent/output/LatexDiffManager';
-import { RunFileService } from '@utils/files/runStorage';
 
 // Local file imports
 import {
@@ -30,12 +30,10 @@ const mocks = vi.hoisted(() => ({
     (): Effect.Effect<{ ok: boolean; logTail?: string }> =>
       Effect.succeed({ ok: true }),
   ),
-  hasLatexCompiler: vi.fn((): Effect.Effect<boolean> => Effect.succeed(true)),
   publishCompiledPdfArtifact: vi.fn((): Effect.Effect<null, Error> =>
     Effect.succeed(null),
   ),
-  // The latexdiff process edge: its probe and its run.
-  checkToolInstalled: vi.fn((): Effect.Effect<boolean> => Effect.succeed(true)),
+  // The latexdiff process edge: its run.
   executeCommand: vi.fn(() =>
     Effect.succeed({
       success: true,
@@ -46,20 +44,12 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
-vi.mock('@texra/utils/system/toolChecks', () => ({
-  checkToolInstalled: mocks.checkToolInstalled,
-}));
-
 vi.mock('@utils/system/execUtils', () => ({
   executeCommand: mocks.executeCommand,
 }));
 
 vi.mock('@latex/texTools', () => ({
   compileLatex2Pdf: mocks.compileLatex2Pdf,
-}));
-
-vi.mock('@latex/latexToolchain', () => ({
-  hasLatexCompiler: mocks.hasLatexCompiler,
 }));
 
 vi.mock('@texra/agent/output/compiledPdfArtifacts', async (importOriginal) => ({

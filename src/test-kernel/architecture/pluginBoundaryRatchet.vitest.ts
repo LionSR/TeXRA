@@ -6,15 +6,17 @@ import { resolve } from 'node:path';
 import { Effect, Layer } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import type { ToolRun } from '@agent/core/tools/ToolTypes';
+import {
+  harnessBuiltins,
+  type PluginDefinition,
+  type ToolRun,
+} from '@texra-ai/harness/plugins';
 import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { ToolResult } from '@shared/schemas';
 
 import { texraPlugins } from '@texra/tools/registry';
-import { harnessBuiltins } from '@tools/builtinPlugins';
-import { armsOf, type Plugin, type PluginDefinition } from '@tools/plugins';
+import { armsOf } from '@tools/plugins';
 import {
   ALL_HOST_PRODUCTION_ROOTS,
   collectModuleSpecifiers,
@@ -24,6 +26,7 @@ import {
   REPO_ROOT,
   stripComments,
 } from '../support/repoScan';
+import type { Plugin, ToolResult } from '@texra-ai/harness';
 
 /**
  * Invariants 1 and 6 of the core concepts, for what a plugin brings: its
@@ -73,7 +76,7 @@ const PLUGIN_SERVICES: readonly {
   {
     tag: 'LeanLanguageServices',
     users:
-      /^packages\/texra\/src\/tools\/(?:lean\/|pluginAvailability\.ts$)|^packages\/extension\/src\/(?:extension\.ts|frontend\/lean\/VscodeIntegration\.ts)$/,
+      /^packages\/texra\/src\/tools\/lean\/|^packages\/extension\/src\/(?:extension\.ts|frontend\/lean\/VscodeIntegration\.ts)$/,
   },
   // The `core` plugin's Comments UI port: its tool.
   { tag: 'InlineComments', users: /^packages\/texra\/src\/tools\/comment\// },
@@ -91,7 +94,6 @@ const SERVICE_HOMES = new Set([
   'packages/texra/src/tools/claudeAgentPlugin.ts',
   'packages/texra/src/tools/codexPlugin.ts',
   'packages/texra/src/tools/registry.ts',
-  'packages/harness/src/platform/processRuntime.ts',
 ]);
 
 const files = () => ALL_HOST_PRODUCTION_ROOTS.flatMap(productionFilesUnder);

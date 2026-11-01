@@ -38,12 +38,12 @@ import { TestClock } from 'effect/testing';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { RunId } from '@shared/schemas';
 import {
   LeanServerPool,
   type LeanServerPoolOptions,
 } from '@texra/tools/lean/direct/leanServerPool';
 import { isLeanServerActive } from '@texra/tools/lean/leanServerRegistry';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 const FAKE_LAKE = `#!/usr/bin/env node
 const fs = require('node:fs');
@@ -248,9 +248,10 @@ describe('LeanServerPool', () => {
         expect(activeServerRoots(pool)).toEqual([projectRoot]);
 
         yield* dispose;
-        expect(yield* Fiber.join(pending)).toMatchObject({
-          ok: false,
-          kind: 'toolchain_unavailable',
+        // A server stopped under the call is a stop, not a missing toolchain.
+        expect(yield* Effect.flip(Fiber.join(pending))).toMatchObject({
+          _tag: 'LeanUnavailable',
+          reason: 'stopped',
         });
         expect(activeServerRoots(pool)).toEqual([]);
       }),

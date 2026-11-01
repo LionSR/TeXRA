@@ -6,11 +6,8 @@
  */
 
 // Third-party imports
-import { Clock, Deferred, Effect, Fiber, Schema } from 'effect';
-import {
-  activationIfOpened,
-  prepareAgentDefinition,
-} from '@agent/runtime/AgentLaunchContext';
+import { Clock, Deferred, Effect, Schema } from 'effect';
+import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
@@ -120,7 +117,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     });
     const { config } = definition;
     const opened = yield* Deferred.make<CommitOrdinal>();
-    const { fiber } = yield* startDetachedChildRunLoop({
+    yield* startDetachedChildRunLoop({
       session: parentSession,
       runId,
       parentRunId,
@@ -140,11 +137,8 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
         workingDirectory,
         onAdmitted: (_, commit) => Deferred.succeed(opened, commit),
       }),
+      opened,
     });
-    yield* Effect.raceFirst(
-      Deferred.await(opened),
-      Fiber.join(fiber).pipe(Effect.andThen(activationIfOpened(opened))),
-    );
 
     const meta = launch.approvalMeta;
     const metaLines: string[] = [];

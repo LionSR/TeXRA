@@ -8,6 +8,7 @@ import {
   ModelProvider,
   OWN_KEY_ROUTE_FACTS,
   ReasoningEffort,
+  type RouteDecisionFacts,
 } from '@texra-ai/llm';
 
 /** A minimal OpenAI `ModelConfig` fixture, overridable per test. */
@@ -87,7 +88,7 @@ describe('codex model eligibility', () => {
     expect(
       decideModelRoute(openAIModel(overrides), {
         ...OWN_KEY_ROUTE_FACTS,
-        chatgptSubscription: true,
+        plans: ['chatgpt-subscription'],
       }).kind === 'chatgpt-subscription',
     ).toBe(eligible);
   });
@@ -97,7 +98,10 @@ describe('codex model eligibility', () => {
       codexSubscription: { contextWindow: 272_000 },
       modes: ['pro'],
     });
-    const facts = { ...OWN_KEY_ROUTE_FACTS, chatgptSubscription: true };
+    const facts: RouteDecisionFacts = {
+      ...OWN_KEY_ROUTE_FACTS,
+      plans: ['chatgpt-subscription'],
+    };
     expect(decideModelRoute(model, facts).kind).toBe('chatgpt-subscription');
     expect(decideModelRoute(model, { ...facts, mode: 'pro' }).kind).not.toBe(
       'chatgpt-subscription',

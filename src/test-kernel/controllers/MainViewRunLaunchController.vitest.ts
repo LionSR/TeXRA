@@ -4,8 +4,11 @@ import { Effect, Layer, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { AgentCatalog } from '@agent/index/agentCatalog';
-import { AgentDirectories, AppState } from '@platform/interfaces';
+import {
+  AgentCatalog,
+  AgentDirectories,
+  AppState,
+} from '@texra-ai/harness/host';
 import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
@@ -84,7 +87,7 @@ describe('main-view run launch controller', () => {
           inputFiles: ['/papers/first/main.tex'],
           contextFiles: ['/papers/first/refs.bib'],
         };
-        const { config } = yield* onGlobalStorage(
+        const config = yield* onGlobalStorage(
           prepareSurfaceLaunch(launchRequest(selections), ROOTS),
         );
 

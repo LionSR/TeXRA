@@ -216,6 +216,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
             // so file reads resolve in this project, not the calling
             // fiber's.
             workspacePath: session.roots.workspace,
+            workingDirectory,
             storageRoot: session.roots.storage,
           },
         );

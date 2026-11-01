@@ -49,7 +49,9 @@ export function responsesUsage(
     outputTokens: usage.output_tokens,
     totalTokens: usage.total_tokens ?? null,
     cachedInputTokens: usage.input_tokens_details?.cached_tokens ?? null,
+    cacheWriteTokens: null,
     reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? null,
+    toolUsePromptTokens: null,
     ...(usage.cost_in_usd_ticks !== undefined
       ? {
           providerUsage: {

@@ -346,7 +346,7 @@ function runJourney(name, model, outDir, { scriptOnly, attempt }) {
       tokens: usage.totalInputTokens + usage.totalOutputTokens,
       inputTokens: usage.totalInputTokens,
       outputTokens: usage.totalOutputTokens,
-      cacheReadTokens: usage.totalCacheReadInputTokens,
+      cachedInputTokens: usage.totalCachedInputTokens,
       cost: usage.totalCost,
       wallMs,
       scripts,

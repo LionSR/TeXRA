@@ -6,7 +6,8 @@
  *
  * A clean pass drives `golden_crash` (`goldenTurn` in the validation model)
  * in-process over a persistent store: a response with two calls (a read and
- * a command), a script whose nested calls run a read, a command and an
+ * a command), an approved edit of the file the read returned, a script whose
+ * nested calls run a read, a command and an
  * awaited `agent()` call that owns its child, the echo's answer, then a
  * compaction (`context.edit`) and a fork, and the bash
  * bypass turned on and off again. The pass records the commit each write
@@ -49,6 +50,9 @@
  *   pending, and the resume's answer is to that same request; a crash
  *   between the answer and the body it admits honours that answer. Either
  *   way the attempt never asks again;
+ * - an edit of a file the run read before the crash is refused after it as
+ *   unread: what a run has read is a fact of its rows, not of the process
+ *   that ran the read (#14479);
  * - invariant I9: a bypass turned off is acknowledged before its row is durable (a
  *   resume would restore it on);
  * - a crash inside one publisher job, between two of its appends, leaves
@@ -77,9 +81,9 @@ import {
 } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
+import { withProcessServices } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withProcessServices } from '@platform/processRuntime';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
@@ -250,24 +254,27 @@ function outcome(rows: readonly Row[], root: string) {
   };
 }
 
-/** The files a run keeps beside the store and the command effects in the
- *  workspace, copied as the clean pass reached commit `n`: what a process
- *  killed there left on disk. */
+/** The files a run keeps beside the store and the workspace files the run
+ *  changes (the command effects, the notes it edits), copied as the clean
+ *  pass reached commit `n`: what a process killed there left on disk. */
 const snapshotOf = (storage: string, n: number) =>
   join(storage, 'snapshots', String(n));
 const FILES_BESIDE = ['executions'];
+const WORKSPACE_FILES = ['effects.log', 'notes.tex'];
 const takeSnapshot = (
   roots: ReturnType<typeof testWorkspaceRoots>,
   n: number,
 ): void => {
   const to = snapshotOf(roots.storage, n);
+  mkdirSync(to, { recursive: true });
   for (const name of FILES_BESIDE) {
     const from = join(roots.storage, name);
     if (existsSync(from)) cpSync(from, join(to, name), { recursive: true });
   }
-  const effects = join(roots.workspace!, 'effects.log');
-  mkdirSync(to, { recursive: true });
-  if (existsSync(effects)) cpSync(effects, join(to, 'effects.log'));
+  for (const name of WORKSPACE_FILES) {
+    const from = join(roots.workspace!, name);
+    if (existsSync(from)) cpSync(from, join(to, name));
+  }
 };
 
 /** Approve every request the runs open above commit `after`. */
@@ -459,6 +466,10 @@ function violations(
   );
   const isCommand = (callId: unknown) =>
     /validation-(bash-\d+|script-\d+\/1)$/.test(String(callId));
+  // A call whose body changes the world outside the store: a command, or
+  // the edit of the notes.
+  const isEffectful = (callId: unknown) =>
+    isCommand(callId) || /validation-edit_file-\d+$/.test(String(callId));
   // An unfinished command never runs again, whatever a second run would
   // have returned: its outcome is unknown, and the model decides. A body
   // that starts again is a second intent of the call.
@@ -521,19 +532,36 @@ function violations(
       ),
   );
   const got = outcome(final, root);
-  // A command whose body the prefix started and never settled is not run
-  // again: it settles as outcome unknown, and the model decides. What the
-  // conversation settled from there on is then the model's choice, not
-  // the clean pass's, so those fields are not compared.
+  // A command or an edit whose body the prefix started and never settled is
+  // not run again: it settles as outcome unknown, and the model decides.
+  // What the conversation settled from there on is then the model's choice,
+  // not the clean pass's, so those fields are not compared. The exception
+  // is a body whose own request still stands (opened in the prefix and
+  // undecided there): its attempt re-enters that request and finishes.
   const isSettled = (callId: unknown) =>
     prefix.some(
       (row) => row.type === 'tool.result' && payload(row).callId === callId,
     );
+  const standing = (intent: Row) => {
+    const { origin, callId, attempt } = payload(intent) as {
+      readonly origin: { readonly responseId?: string };
+      readonly callId: string;
+      readonly attempt: number;
+    };
+    const own = `${origin.responseId ?? ''}/${callId}:${attempt}`;
+    return prefix.some(
+      (row) =>
+        row.type === 'request.opened' &&
+        attemptOfRequest(requestIdOf(row)) === own &&
+        decidedIn(prefix, requestIdOf(row)) === undefined,
+    );
+  };
   const cutShort = prefix.filter(
     (row) =>
       row.type === 'tool.intent' &&
-      isCommand(payload(row).callId) &&
-      !isSettled(payload(row).callId),
+      isEffectful(payload(row).callId) &&
+      !isSettled(payload(row).callId) &&
+      !standing(row),
   );
   const unknownOutcomes = cutShort.filter(
     (intent) =>
@@ -682,10 +710,12 @@ const resumeFrom = (
     for (const name of FILES_BESIDE)
       if (existsSync(join(snapshot, name)))
         cpSync(join(snapshot, name), join(storage, name), { recursive: true });
+    for (const name of WORKSPACE_FILES) {
+      const file = join(roots.workspace!, name);
+      rmSync(file, { force: true });
+      if (existsSync(join(snapshot, name))) cpSync(join(snapshot, name), file);
+    }
     const effectsLog = join(roots.workspace!, 'effects.log');
-    rmSync(effectsLog, { force: true });
-    if (existsSync(join(snapshot, 'effects.log')))
-      cpSync(join(snapshot, 'effects.log'), effectsLog);
     const effectsBefore = linesOf(effectsLog).length;
     const prefix = rowsOf(storage);
     const refused = yield* Effect.scoped(
@@ -817,8 +847,9 @@ export function crashConformanceSuite(): void {
           expect(
             points.filter((p) => p >= first('run.position') && p < traced),
           ).toEqual([]);
-          // The two calls, the script and its three calls, each settled.
-          expect(expected.settled).toHaveLength(6);
+          // The two calls, the edit, the script and its three calls, each
+          // settled.
+          expect(expected.settled).toHaveLength(7);
           expect(
             [
               'tool.intent',

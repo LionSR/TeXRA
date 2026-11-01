@@ -19,7 +19,6 @@ import {
 import { Cause, Effect, FileSystem } from 'effect';
 
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
-import { hasLatexCompiler } from '@latex/latexToolchain';
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { LATEX_CONFIG_RANGES } from '@texra/shared/constants/latexConfig';
@@ -50,11 +49,30 @@ interface CompileCheckContext {
 
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
-interface CompileCheckResult {
-  artifacts: RunStorageFileLocation[];
-  /** Absent when no check ran at all, which is not the same as zero failures. */
-  failures?: CompileFailure[];
-}
+/**
+ * Why a compile check checked nothing: auto-compile is off, the revision
+ * wrote no `.tex` output, no LaTeX compiler is installed, or the check itself
+ * failed. None of them is zero failures.
+ */
+export type CompileSkip = 'disabled' | 'no-tex' | 'no-compiler' | 'errored';
+
+/** A round's check: what it found, or why it checked nothing (`skipped`). */
+type CompileCheckResult =
+  | {
+      readonly skipped: null;
+      readonly artifacts: RunStorageFileLocation[];
+      readonly failures: CompileFailure[];
+    }
+  | {
+      readonly skipped: CompileSkip;
+      readonly artifacts: [];
+      readonly failures: [];
+    };
+
+/** A check that checked nothing, and why. */
+export const skippedCompileCheck = (
+  skipped: CompileSkip,
+): CompileCheckResult => ({ skipped, artifacts: [], failures: [] });
 
 /** Workflow auto-compile timeout, floored at the config-range minimum. */
 export const getWorkflowAutoCompileTimeoutMs = Effect.fn(
@@ -113,19 +131,18 @@ export function resolveWorkspaceSourceDir(
 /**
  * Compile each .tex output of a round to verify the workflow produced a
  * buildable document. Success is silent; failures write the log tail to
- * `<runDir>/compile/r<round>_<safe>.log`. Missing toolchains and non-root
- * fragments are skipped gracefully.
+ * `<runDir>/compile/r<round>_<safe>.log`. Non-root fragments are skipped;
+ * a check that compiles nothing says why (`skipped`).
  */
 export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
   function* (ctx: CompileCheckContext, currentRound: number) {
-    const empty: CompileCheckResult = { artifacts: [] };
     if (
       !(yield* Settings.get<boolean>(
         ctx.roots,
         DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
       ))
     ) {
-      return empty;
+      return skippedCompileCheck('disabled');
     }
 
     const { runDirectory } = ctx.fileService;
@@ -133,17 +150,7 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
     const texOutputs = (
       ctx.outputState.rounds.get(currentRound)?.outputs ?? []
     ).filter((f) => hasExtension(f.location.absolutePath, '.tex'));
-    if (texOutputs.length === 0) return empty;
-
-    // Skip gracefully when no LaTeX toolchain is installed so the run doesn't
-    // leave stray `compile/<name>.log` artifacts that the orchestrator would
-    // misread as real compile failures.
-    if (!(yield* hasLatexCompiler())) {
-      ctx.logger.debug(
-        'Compile check skipped: neither latexmk nor pdflatex is installed',
-      );
-      return empty;
-    }
+    if (texOutputs.length === 0) return skippedCompileCheck('no-tex');
 
     const timeoutMs = yield* getWorkflowAutoCompileTimeoutMs(ctx.roots);
     // compileRoot is created lazily on first failure so successful rounds
@@ -200,11 +207,21 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
               }),
         ),
       );
+      // No compiler to drive is the whole check's skip, not a failure per
+      // file: the run leaves no `compile/*.log` to read as a broken build.
+      if (result === 'no-compiler') {
+        ctx.logger.warn('Compile check skipped: no LaTeX compiler installed');
+        return skippedCompileCheck('no-compiler');
+      }
       if (result.failure) failures.push(result.failure);
       if (result.artifact) artifacts.push(result.artifact);
     }
 
-    return { artifacts, failures } satisfies CompileCheckResult;
+    return {
+      skipped: null,
+      artifacts,
+      failures,
+    } satisfies CompileCheckResult;
   },
 );
 
@@ -247,12 +264,13 @@ const MAX_SANITIZED_STEM_LENGTH = 200;
 
 /**
  * What one `compileLatex2Pdf` attempt produced: a file with no
- * `\documentclass` is skipped without compiling, a file that failed before
- * the engine could answer is `errored`, and everything else carries the
- * engine's own verdict.
+ * `\documentclass` is skipped without compiling, a machine with no engine to
+ * drive is `no-compiler`, a file that failed before the engine could answer
+ * is `errored`, and everything else carries the engine's own verdict.
  */
 type CompileAttempt =
   | { readonly kind: 'skipped' }
+  | { readonly kind: 'no-compiler' }
   | { readonly kind: 'errored'; readonly message: string }
   | { readonly kind: 'compiled'; readonly result: CompileLatex2PdfResult };
 
@@ -349,13 +367,17 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
 
     // On the timeout the command's scope kills the child, so we don't orphan
     // hanging latexmk/pdflatex runs.
-    const result = yield* compileLatex2Pdf(outputFile.location, ctx.roots, {
+    return yield* compileLatex2Pdf(outputFile.location, ctx.roots, {
       channel: ctx.runId,
       outputDirectory: buildDir,
       timeout: opts.timeoutMs,
       extraInputDirs,
-    });
-    return { kind: 'compiled', result };
+    }).pipe(
+      Effect.map((result): CompileAttempt => ({ kind: 'compiled', result })),
+      Effect.catchTag('ToolMissing', () =>
+        Effect.succeed<CompileAttempt>({ kind: 'no-compiler' }),
+      ),
+    );
   }).pipe(
     // A per-file failure here (fs read error, compiler crash, …) means we
     // could not determine whether this output compiles — that must never be
@@ -374,6 +396,7 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
   );
 
   const attempted = yield* attempt;
+  if (attempted.kind === 'no-compiler') return 'no-compiler' as const;
   if (attempted.kind === 'skipped') {
     return { failure: null, artifact: null };
   }

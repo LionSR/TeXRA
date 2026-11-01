@@ -376,11 +376,9 @@ const usageParts = (
             outputTokens: usage.total_output_tokens ?? null,
             totalTokens: usage.total_tokens ?? null,
             cachedInputTokens: usage.total_cached_tokens ?? null,
+            cacheWriteTokens: null,
             reasoningTokens: usage.total_thought_tokens ?? null,
-            providerUsage: {
-              kind: 'google',
-              toolUsePromptTokens: usage.total_tool_use_tokens ?? null,
-            },
+            toolUsePromptTokens: usage.total_tool_use_tokens ?? null,
           },
         },
       ];

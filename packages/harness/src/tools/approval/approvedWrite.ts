@@ -7,8 +7,6 @@ import * as nodePath from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { ToolContext } from '@agent/core/tools/ToolTypes';
-import { recordToolFileRead } from '@agent/runtime/RunCall';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -62,9 +60,9 @@ function realPathOf(
 }
 
 /**
- * Reconcile approved content with the current workspace file and mark the path
- * as read after the operation succeeds, so every approved-write caller keeps
- * the later-edit guard in sync.
+ * Reconcile approved content with the current workspace file. The caller's
+ * result records the write (`edits`), which is what a later edit of the
+ * file requires in the run's rows.
  *
  * The path is written through its own view of the filesystem: a
  * workspace-relative path through the session's confined `WorkspaceFs` view,
@@ -84,9 +82,8 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
   ): Effect.fn.Return<
     WriteApprovedContentResult,
     Error,
-    ToolContext | FileSystem.FileSystem | WorkspaceFs
+    FileSystem.FileSystem | WorkspaceFs
   > {
-    yield* ToolContext;
     const workspace = nodePath.isAbsolute(path)
       ? undefined
       : yield* WorkspaceFs;
@@ -96,7 +93,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
       yield* FileSystem.FileSystem,
       nodePath.resolve(file),
     );
-    const written = yield* Effect.gen(function* () {
+    return yield* Effect.gen(function* () {
       const exists = yield* entryExists(fs, path);
       // All content is already LF-normalized at the FS read boundary,
       // so comparisons work directly without extra normalization.
@@ -125,8 +122,6 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
       yield* fs.writeFile(path, Buffer.from(appliedContent, 'utf-8'));
       return { appliedContent };
     }).pipe(withPerKeyLane(approvedWriteLanes, lane));
-    yield* recordToolFileRead(path);
-    return written;
   },
 );
 

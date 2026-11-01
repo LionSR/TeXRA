@@ -15,6 +15,7 @@ import {
   type ModelOrigin,
   type ModelRoute,
   OWN_KEY_ROUTE_FACTS,
+  PLAN_ROUTES,
   type ReasoningMode,
   type RouteFacts,
   type SelectedModel,
@@ -102,17 +103,18 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
       backend: 'validation',
     };
   }
-  const decided = decideModelRoute(
-    config,
-    backend === undefined
-      ? { ...host, mode }
-      : {
-          ...host,
-          chatgptSubscription: host.chatgptSubscription && backend === 'openai',
-          xaiSubscription: host.xaiSubscription && backend === 'xai',
-          mode,
-        },
-  );
+  const decided = decideModelRoute(config, {
+    ...host,
+    plans:
+      backend === undefined
+        ? host.plans
+        : host.plans.filter(
+            (plan) =>
+              PLAN_ROUTES[plan].credential === 'key' ||
+              PLAN_ROUTES[plan].provider === backend,
+          ),
+    mode,
+  });
   if (decided.kind === 'unserved') {
     return yield* unavailable(
       `${config.label} is served only through OpenRouter or GitHub Copilot, which this build no longer supports. Choose another model.`,
@@ -168,12 +170,6 @@ export const admitSwitch = Effect.fn('admitSwitch')(function* (
   );
 });
 
-/** The routes whose quota the retry owner falls back from without asking. */
-const CODING_PLAN_ROUTES: readonly DeclinableUsageRoute[] = [
-  'kimi-code-subscription',
-  'glm-coding-plan-subscription',
-];
-
 /**
  * The move onto the user's own credential a failed attempt offers, carried
  * on the retry request so no host re-derives it.
@@ -216,7 +212,7 @@ export const credentialSwitch = Effect.fn('credentialSwitch')(function* (
     return null;
   }
   const automatic =
-    CODING_PLAN_ROUTES.includes(declined) &&
+    PLAN_ROUTES[declined].credential === 'key' &&
     !declinedRoutes.includes(declined) &&
     (yield* hasUsableApiKey(yield* Secrets, fallback.provider).pipe(
       Effect.catchTag('SecretsFailed', (failure) =>

@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { SubscriptionPreference } from '@model/subscriptionAccess';
+import { SubscriptionPreference } from '@texra-ai/harness/host';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 

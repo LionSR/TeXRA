@@ -15,6 +15,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import './TaskGroupList';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@ui/wa/spinner';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
@@ -35,6 +36,7 @@ export class LogList extends LitElement {
   @property({ attribute: false }) run: RunView | null = null;
   @property({ attribute: false }) view: SessionView | null = null;
   @property({ attribute: false }) surface: Surface | null = null;
+  @property({ attribute: false }) toolIcons: HostSnapshot['toolIcons'] = {};
 
   private static readonly MAX_CACHED_RUNS = 5;
   private readonly runCache = new LRUCache<RunId, CachedRun>({
@@ -89,6 +91,7 @@ export class LogList extends LitElement {
             .run=${run}
             .view=${id === this.activeRunId ? this.view : null}
             .surface=${this.surface}
+            .toolIcons=${this.toolIcons}
             .transcript=${run.transcript}
             .runStatus=${run.status}
             .durableOutcome=${run.durableOutcome}

@@ -4,8 +4,12 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
-import { ToolError } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
+import {
+  resolveToolPath,
+  type StepRoot,
+  ToolError,
+} from '@texra-ai/harness/plugins';
 import {
   activatedSkillNames,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
@@ -15,8 +19,6 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { testSkillRoots, writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { resolveToolPath } from '@tools/pathResolution';
-import type { StepRoot } from '@utils/files/externalRoots';
 
 const tempRoots = useTempDirs();
 /** The run catalog of `workspacePath`, with no installed plugin loading. */

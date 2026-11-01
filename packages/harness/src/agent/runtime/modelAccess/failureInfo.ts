@@ -5,7 +5,6 @@
  * `providerErrorOf` words either; this module records that wording for the
  * run's retry request and reads the scope the gate cools.
  */
-import { StatusCodes } from 'http-status-codes';
 import { ModelError } from '@texra-ai/llm';
 
 import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
@@ -18,29 +17,31 @@ export type CallFailure = ModelError | RouteUnavailable;
 
 /**
  * The failure a run records for `error` on a binding of `provider`.
- * `partialText` is the tail of the text the attempt had streamed, which the
+ * A model failure carries the text the attempt had streamed, which the
  * retry surface shows; an `unsent` failure (a rebind or renewal that failed)
  * is never offered again, so the user reads why.
  */
 export function failureInfo(
   error: CallFailure,
   provider: string,
-  options: { readonly partialText?: string; readonly unsent?: boolean } = {},
+  options: { readonly unsent?: boolean } = {},
 ): RetryErrorInfo {
   const info = toRetryErrorInfo(providerErrorOf(error));
+  const partialText =
+    options.unsent !== true && error instanceof ModelError
+      ? error.partialText
+      : undefined;
   return {
     ...info,
     provider,
     userRetryable: options.unsent !== true && info.userRetryable,
-    ...(options.partialText ? { partialText: options.partialText } : {}),
+    ...(partialText ? { partialText } : {}),
   };
 }
 
 /** Which route a 429 cools: the model's, where the provider scoped it, else the wire's. */
 const modelScoped = (error: Error): boolean =>
-  error instanceof ModelError &&
-  error.status === StatusCodes.TOO_MANY_REQUESTS &&
-  error.scope === 'model';
+  error instanceof ModelError && error.scope === 'model';
 
 /**
  * The retry gate's two routes for one binding, narrowest first: `model` on

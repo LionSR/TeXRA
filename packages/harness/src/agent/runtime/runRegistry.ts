@@ -27,7 +27,6 @@ import {
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import { getRunRecords } from '@agent/storage/runRecords';
 import type { RunAttempt } from '@agent/followUp/ToolUseFollowUp';
-import type { ProcessServices, SessionOwner } from '@platform/processRuntime';
 import { grantsKept, type ApprovalGrants } from '@shared/approvalBypassKind';
 import { Settings } from '@shared/config/settings';
 import {
@@ -41,7 +40,7 @@ import {
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import type { rootRun } from './rootLaunch';
+import type { rootRun, SessionOwner } from './rootLaunch';
 import type { SessionHandle } from './SessionHandle';
 import type {
   LiveRun,
@@ -54,6 +53,7 @@ import type {
 } from './runs';
 import type { executeAgent } from './executeAgent';
 import type { decideResume } from './resumeRun';
+import type { RunServices } from './ToolServices';
 
 /** A launch already has the run here: the one refusal for that fact. Hosts
  *  word it from `message`; a resume reads the tag to report the run
@@ -82,7 +82,7 @@ export interface RunRegistryInit {
   readonly session: () => SessionHandle;
   /** The fork every run starts on: the session's context, never a caller's, since a fork from a tool call reads that call's run services; a child's parent is data (`parentRunId`), not fiber ancestry. */
   readonly fork: <A, E>(
-    effect: Effect.Effect<A, E, ProcessServices>,
+    effect: Effect.Effect<A, E, RunServices>,
   ) => Fiber.Fiber<A, E>;
   /** The run programs these runs run, given by the session layer: an import
    *  of them here would close a cycle (their tools reach `Runs`). */
@@ -686,7 +686,7 @@ export const registryOf = (runs: RunsShape): RunRegistry =>
   runs as RunRegistry;
 
 /**
- * The services every step of an agent run reads on the way down: the process
- * services and the `Runs` of the session the run is launched on.
+ * The services every step of an agent run reads on the way down: what the
+ * run requires of the process and the `Runs` of the session it is launched on.
  */
-export type AgentRunServices = ProcessServices | Runs;
+export type AgentRunServices = RunServices | Runs;

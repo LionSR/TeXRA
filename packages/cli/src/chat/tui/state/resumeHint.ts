@@ -82,7 +82,7 @@ function formatResumeUsage(
 ): string | undefined {
   if (!usage || isEmptyUsage(usage)) return undefined;
   const total = usage.inputTokens + usage.outputTokens;
-  const cached = usage.cacheReadInputTokens ?? 0;
+  const cached = usage.cachedInputTokens ?? 0;
   const reasoning = usage.reasoningTokens ?? 0;
   const lines = [
     `total=${total.toLocaleString('en-US')}`,

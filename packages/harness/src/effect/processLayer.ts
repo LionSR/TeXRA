@@ -5,13 +5,14 @@
  * session the same way. `Sessions.layer` is an embedder's
  * composition of that process from its platform and plugins.
  */
-import { Context, Effect, Layer } from 'effect';
+import { Context, Effect, Layer, type ManagedRuntime } from 'effect';
 
+import type { RunServices } from '@agent/runtime/ToolServices';
+import { SessionOwner } from '@agent/runtime/rootLaunch';
 import {
   ownerProcessLayer,
-  type ProcessLayerOptions,
+  type ProcessServicesOptions,
 } from '@controllers/session/sessionLayer';
-import { SessionOwner, type ProcessServices } from '@platform/processRuntime';
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -19,7 +20,11 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { SessionCloseReport } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 import { HostSkillSources } from '@skills/runtimeSkills';
-import { hostSkillContributions } from '@skills/skillSources';
+import {
+  hostSkillContributions,
+  type HostSkillOptions,
+} from '@skills/skillSources';
+import type { ToolCatalog } from '@tools/liveTools';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { toolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -28,6 +33,49 @@ import { CommandDirs } from '@utils/system/platformPaths';
 import { PluginsRefused } from './errors.js';
 import { makeSessions } from './sessionPrograms.js';
 import type { Composition, LocalSession, OpenOptions } from './sessions.js';
+
+/**
+ * The process services a composition root runs on, the public name every
+ * host writes against: what a run's program requires of the process
+ * ({@link RunServices}) and `ToolCatalog`, the tool catalog each session's
+ * steps pin their tools in (its owner's view, `ToolCatalogOwner`, stays
+ * inside the composition). Every run and session of the process is provided
+ * these; the {@link Sessions} above them is the composition root's alone
+ * ({@link ProcessRuntime}).
+ */
+export type ProcessServices = RunServices | ToolCatalog;
+
+/** What a composition root composes its process from: the services' options
+ *  (`ownerProcessLayer`) and its skill sources. */
+export interface ProcessLayerOptions extends ProcessServicesOptions {
+  /** The host's skill sources; absent, the process discovers no skills. */
+  readonly skills?: HostSkillOptions;
+}
+
+/** The runtime a composition root makes over `processLayer`: the process
+ *  services, and the `Sessions` that open and close its sessions. */
+export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
+  ProcessServices | Sessions,
+  never
+>;
+
+/**
+ * `effect` over this runtime's services (a {@link ProcessRuntime}'s, or a
+ * host runtime's that serves more), as a program rather than a run: a
+ * composition root hands the process services to a program it must give away
+ * (a shutdown handler, a host callback typed as an Effect) without
+ * stepping through a Promise to get them. The services are the runtime's own
+ * context, built once and cached there, so this is the same provision
+ * `runPromise` would have made, minus the boundary.
+ */
+export function withProcessServices<A, E, R = ProcessServices | Sessions>(
+  runtime: ManagedRuntime.ManagedRuntime<R, never>,
+  effect: Effect.Effect<A, E, NoInfer<R>>,
+): Effect.Effect<A, E> {
+  return Effect.flatMap(runtime.contextEffect, (context) =>
+    Effect.provide(effect, context),
+  );
+}
 
 /** The process's sessions: one per workspace storage root, through its one
  *  `SessionOwner`. */
@@ -105,7 +153,6 @@ export class Sessions extends Context.Service<
             agentDirectories: Layer.succeed(AgentDirectories)(
               platform.agentDirectories,
             ),
-            toolMissingReporter: platform.toolMissingHandler,
             commandDirs: platform.commandDirs,
             // An embedder's console has no live level filter of its own, so
             // the package speaks at the informational level, not flooding it.

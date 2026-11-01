@@ -10,9 +10,8 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
+import { BASH_APPROVAL_CONFIG_KEY } from '@texra-ai/harness/schemas';
 import type { DesktopSettingsIpcOptions } from '@desktop/main/desktopSettingsIpc';
-import { type ConfigProvider } from '@platform/interfaces';
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -23,6 +22,7 @@ import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   SettingsViewInboundMessageSchema,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import type { ConfigProvider } from '@texra-ai/harness/host';
 
 // The LaTeX page spawns the LaTeX probes; a fixed status keeps the suite off
 // the machine's tools, as the harness's unprobed tool availability does for

@@ -6,13 +6,11 @@ import {
   Fiber,
   Predicate,
   Result,
-  Schema,
   Scope,
   Stream,
 } from 'effect';
 
 import {
-  AgentConfigSchema,
   RUN_OUTCOME,
   type RunId,
   type AgentConfigPayload,
@@ -37,6 +35,7 @@ import {
   AgentError,
   isUserAbort,
 } from '@texra-ai/harness/host';
+import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import {
@@ -177,14 +176,10 @@ function launchOn(
         ),
       ),
     );
-  const approval = launchApproval(runContext.requestedApprovalPolicy);
   return session.start({
     config: request.config,
     runId: request.runId,
-    approval: {
-      policy: approval.approvalPolicy,
-      delegated: approval.approveDelegatedWork,
-    },
+    approval: launchApproval(runContext.requestedApprovalPolicy),
     interactive: options.stopAfterCycle !== true,
   });
 }
@@ -213,9 +208,9 @@ export function executeCliConfig(
   options: CliExecuteOptions,
 ): Effect.Effect<CliConfigExecuteResult, Error, ProcessServices> {
   return Effect.gen(function* () {
-    const parsed = Schema.decodeUnknownResult(AgentConfigSchema)(config);
-    if (!Result.isSuccess(parsed)) {
-      writeTextStderr(`Invalid configuration: ${parsed.failure.message}`);
+    const parsed = yield* Effect.result(decodeLaunchConfig(config));
+    if (Result.isFailure(parsed)) {
+      writeTextStderr(parsed.failure.reason);
       return { ok: false as const, exitCode: CliExitCode.Usage };
     }
     // The run id is decided before launch: a shutdown stops the launch
