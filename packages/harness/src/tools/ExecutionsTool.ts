@@ -19,7 +19,7 @@ import {
 } from '@agent/storage/runWorkspaceFiles';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { requireToolRun } from '@agent/runtime/RunCall';
-import { Runs } from '@agent/runtime/runRegistry';
+import type { Runs } from '@agent/runtime/runRegistry';
 import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { StorageFs } from '@platform/rootedFs';
@@ -68,6 +68,8 @@ import { scriptCallsView } from './executions/scriptCallsView';
 interface RunToolContext {
   readonly session: SessionHandle;
   readonly runId: RunId;
+  /** The session's runs, off the engine door (`RunCallShape.runs`). */
+  readonly runs: Runs['Service'];
 }
 
 /**
@@ -144,7 +146,7 @@ interface RouteRequest<A extends ExecutionsAction> {
 }
 type RouteHandler<A extends ExecutionsAction> = (
   request: RouteRequest<A>,
-) => Effect.Effect<ToolResult, Error, Runs | FileSystem.FileSystem | StorageFs>;
+) => Effect.Effect<ToolResult, Error, FileSystem.FileSystem | StorageFs>;
 type RouteActions = {
   readonly [A in ExecutionsAction]?: RouteHandler<A>;
 };
@@ -290,8 +292,8 @@ const EXECUTION_PATH_LIST = EXECUTION_ROUTES.map(
 const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
   input: ExecutionsToolInput,
 ) {
-  const { run } = yield* requireToolRun('executions');
-  const context = { session: run.session, runId: run.runId };
+  const { run, runs } = yield* requireToolRun('executions');
+  const context = { session: run.session, runId: run.runId, runs };
   const segments = getPathSegments(input.path);
   const route = EXECUTION_ROUTES.find(({ path }) => {
     const parts = path.split('/').slice(1);
@@ -346,7 +348,7 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
   timeout: number,
   ids?: readonly RunId[] | null,
 ) {
-  const runs = yield* Runs;
+  const { runs } = context;
   const candidates = ids?.length ? ids : runs.get().map((r) => r.runId);
   // Skip runs already done (see shouldSkipWait) on the view the wait starts from.
   const initial = SubscriptionRef.getUnsafe(context.session.view.ref);
@@ -415,7 +417,7 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
     options.suppressAutoDeliveredSubagentReport === true &&
     run.identity.kind === 'agent' &&
     run.parentId === context.runId &&
-    (yield* Runs).get(runId) !== undefined;
+    context.runs.get(runId) !== undefined;
 
   lines.push(
     ...buildSummaryTailLines(
@@ -440,7 +442,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
     );
   }
 
-  const runs = yield* Runs;
+  const { runs } = context;
   if (runs.get(runId) === undefined) {
     return yield* Effect.fail(
       new ToolError(`Run ${runId} not found or already completed.`),

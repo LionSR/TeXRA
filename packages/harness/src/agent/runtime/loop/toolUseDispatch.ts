@@ -29,7 +29,6 @@ import {
   Exit,
   Fiber,
   FiberMap,
-  FileSystem,
   Schema,
   Scope,
   Semaphore,
@@ -134,6 +133,8 @@ interface Dispatch {
   readonly recovered: boolean;
   /** Each offered tool's plugin, by tool name. */
   readonly pluginOf: ReadonlyMap<string, string>;
+  /** The session's runs, which the engine door hands each call. */
+  readonly runs: Runs['Service'];
 }
 
 /** One call as the per-call program takes it: its facts (a response's
@@ -363,11 +364,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   call: Call,
   place: Pick<RunCallShape, 'script' | 'scriptCalls'>,
   ended = false,
-): Effect.fn.Return<
-  void,
-  InvokeError,
-  RunServices | Runs | WorkspaceFs | StorageFs | FileSystem.FileSystem
-> {
+): Effect.fn.Return<void, InvokeError, RunServices | WorkspaceFs | StorageFs> {
   const { dispatch, fact, input } = call;
   const { run, cell, step, responseId } = dispatch;
   const { runId, logger } = run;
@@ -482,6 +479,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     // This call's place in its run, and the child door over exactly it.
     const runCall: RunCallShape = {
       run,
+      runs: dispatch.runs,
       responseId,
       instruction: dispatch.instruction,
       attempt,
@@ -505,7 +503,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
             requests,
             emit: onToolOutput,
           }),
-          Effect.provideService(ChildRuns, childRuns(runCall, yield* Runs)),
+          Effect.provideService(ChildRuns, childRuns(runCall)),
           Effect.provideService(RunCall, runCall),
           Effect.provide(step.services),
         ),
@@ -732,7 +730,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   // Made after that finalizer, so it closes first: no call the guest
   // issued still runs when the finalizer reads what it left.
   const fork = yield* FiberMap.makeRuntime<
-    RunServices | Runs | WorkspaceFs | StorageFs,
+    RunServices | WorkspaceFs | StorageFs,
     string
   >();
   // Opened once, labelled by the script's title, which its first call carries.
@@ -1056,6 +1054,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       cell.opened.pendingResponse?.responseId === responseId &&
       pending.assistant.origin !== null,
     pluginOf: new Map(step.offered.map((t) => [t.name, t.plugin])),
+    runs: yield* Runs,
   };
   const inputOf = new Map(
     localCallsOf(pending.assistant.content).map((call) => [

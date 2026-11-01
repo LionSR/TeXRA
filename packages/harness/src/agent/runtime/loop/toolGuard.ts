@@ -14,7 +14,11 @@ import { isDeepStrictEqual } from 'node:util';
 
 import { Effect, Result, Schema } from 'effect';
 
-import { ToolContext, type CallRequests } from '@agent/core/tools/ToolTypes';
+import {
+  ToolContext,
+  type CallRequests,
+  type ITool,
+} from '@agent/core/tools/ToolTypes';
 import {
   approvalPolicyDenialMessage,
   decideApproval,
@@ -44,11 +48,11 @@ import {
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { recordedDecision } from '../requestPolicy';
-import { RunCall, requireRun, sessionOf } from '../RunCall';
+import { RunCall, requireToolRun } from '../RunCall';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { SessionApprovals } from '../runApprovalQueue';
 import type { LogWriteError, SessionHandle } from '../SessionHandle';
-import type { RuntimeTool, ToolServices } from '../ToolServices';
+import type { PluginToolServices } from '../ToolServices';
 import type { preToolUse } from './hooks';
 
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
@@ -153,11 +157,11 @@ const hookDenied = (tool: string, why: string): ToolResult => ({
 /** The result that replaces the call when the chain stops it over its
  *  final `input`, and `undefined` when its body may run. */
 const rejection = Effect.fn('toolUse.guard')(function* (
-  tool: RuntimeTool,
+  tool: ITool<Error, PluginToolServices>,
   input: unknown,
   hook: HookAnswer,
   rewritten: boolean,
-): Effect.fn.Return<ToolResult | undefined, Error, ToolServices> {
+): Effect.fn.Return<ToolResult | undefined, Error, PluginToolServices> {
   const { guard, definition } = tool;
   // The loop asks about a command, a tool that requires approval, and a call
   // a hook asked about. A tool whose body opens its own request (`'inBody'`)
@@ -226,12 +230,8 @@ const rejection = Effect.fn('toolUse.guard')(function* (
       : undefined;
 
   const operation = guard?.command?.grant ?? 'call';
-  const { run } = yield* requireRun('A call the loop asks about');
-  const answer = sessionOf(run).approvals.permission(
-    run.runId,
-    operation,
-    hook,
-  );
+  const { run } = yield* requireToolRun('A call the loop asks about');
+  const answer = run.session.approvals.permission(run.runId, operation, hook);
   if (answer === 'allow') return undefined;
   const decision =
     answer === 'ask'
@@ -250,12 +250,12 @@ const rejection = Effect.fn('toolUse.guard')(function* (
  *  `hooks`: its rejection, else the tool's body on the final input, which
  *  `bodyStarts` is handed (and records) once the chain has let it run. */
 export const guardedToolCall = (
-  tool: RuntimeTool,
+  tool: ITool<Error, PluginToolServices>,
   issued: unknown,
   hooks: CallHooks = { outcomes: [], fromHook: (input) => input },
   bodyStarts: (input: unknown) => Effect.Effect<void, Error> = () =>
     Effect.void,
-): ReturnType<RuntimeTool['call']> => {
+): ReturnType<ITool<Error, PluginToolServices>['call']> => {
   const { deny, hook, rewritten } = answerOf(hooks.outcomes);
   if (deny !== null)
     return Effect.succeed(hookDenied(tool.definition.name, deny));

@@ -10,7 +10,8 @@
 import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   declaredToolNames,
@@ -170,7 +171,7 @@ interface AgentRunLayerInput {
    *  which the run binds first; a mid-run switch rebinds in `model`. */
   readonly modelConfig: ModelConfig;
   /** Caller-supplied tools available only to this run. */
-  readonly tools?: readonly ITool[];
+  readonly tools?: readonly ITool<Error, PluginToolServices>[];
   readonly callbacks: RunCallbacks;
 }
 

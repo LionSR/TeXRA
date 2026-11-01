@@ -21,7 +21,7 @@ import { GrepTool } from '@tools/grep';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import { PlanTool } from '@tools/plan/PlanTool';
-import { defineBuiltinPlugin, type Plugin } from '@tools/plugins';
+import { definePlugin, type Plugin } from '@tools/plugins';
 import { ReadFileTool } from '@tools/ReadTool';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
@@ -39,13 +39,6 @@ const fileTools = (writeFilter?: WriteFilter) =>
   ] as const;
 
 const SCRIPT_TOOLS = [ScriptTool, SelfTool] as const;
-
-/**
- * A built-in plugin: as a plugin's definition, but its tools may read the
- * call's place in its run (`RunCall`) and its script, which the run loop
- * provides to every call and no app's tool may require.
- */
-const builtin = defineBuiltinPlugin;
 
 /**
  * Compile-time guard: every canonical tool with specialized display
@@ -66,20 +59,20 @@ type _CanonicalDisplayNamesAreBuiltIns = AssertNever<
 export const fileOps = (
   options: { readonly writeFilter?: WriteFilter } = {},
 ): Plugin =>
-  builtin({
+  definePlugin({
     id: 'file-ops',
     tools: fileTools(options.writeFilter),
   });
 
 /** The web: `web_search` and `web_fetch`. */
-export const web: Plugin = builtin({
+export const web: Plugin = definePlugin({
   id: 'web',
   tools: [WebSearchTool, WebFetchTool],
 });
 
 /** Memory and past runs: the `memory` tool, offered while memory is on,
  *  and `executions`. */
-export const memoryWorkflow: Plugin = builtin({
+export const memoryWorkflow: Plugin = definePlugin({
   id: 'memory-workflow',
   tools: [MemoryTool, ExecutionsTool],
   injectedWhen: { memory: GlobalStateKey.MEMORY_ENABLED },
@@ -91,7 +84,7 @@ export const memoryWorkflow: Plugin = builtin({
  * as a goal: a background script of the conversation that runs its agent
  * in rounds through `self()` (`goalScript`).
  */
-export const goal: Plugin = builtin({
+export const goal: Plugin = definePlugin({
   id: 'goal',
   tools: [PlanTool],
   arms: [GOAL_PLAN_ARM],
@@ -103,7 +96,7 @@ export const goal: Plugin = builtin({
 });
 
 /** Child agents: the `agent` tool. */
-export const multiAgent: Plugin = builtin({
+export const multiAgent: Plugin = definePlugin({
   id: 'multi-agent',
   tools: [agentTool()],
   // The one delegation tool: the built-in orchestrators need it.
@@ -118,7 +111,7 @@ export const multiAgent: Plugin = builtin({
  * tools are on, as every chat run does; its session layer is the code
  * sandbox the scripts run in.
  */
-export const codemode = builtin<CodeSandbox>({
+export const codemode = definePlugin<CodeSandbox>({
   id: 'codemode',
   tools: SCRIPT_TOOLS,
   injectedWhen: { script: GlobalStateKey.SCRIPT_ONLY },

@@ -487,6 +487,7 @@ async function launchWaitingChild(options: {
     callId: 'parent-call',
     env: { roots: session.roots, workingDirectory: process.cwd() },
     emit: () => undefined,
+    runs: session.runs,
     responseId: 'parent-response',
     instruction: undefined,
     attempt: 1,

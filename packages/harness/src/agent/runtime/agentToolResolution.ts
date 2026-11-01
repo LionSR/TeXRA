@@ -40,11 +40,8 @@
 
 import { Context, Effect, SubscriptionRef } from 'effect';
 
-import type {
-  RuntimeTool as ITool,
-  RuntimeToolRegistry,
-} from '@agent/runtime/ToolServices';
-import type { ITool as ToolDeclaration } from '@agent/core/tools/ToolTypes';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import { mcpPluginId } from '@common/plugins/mcpServers';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import type { SettingsStores } from '@shared/config/settings';
@@ -67,7 +64,7 @@ import { ToolRegistry } from '@tools/toolTable';
 
 /** Whether `tool` may ask a person, so a run nobody can ask withholds it. */
 export const asksApproval = <E, R>(
-  tool: Pick<ToolDeclaration<E, R>, 'guard' | 'requiresApproval'>,
+  tool: Pick<ITool<E, R>, 'guard' | 'requiresApproval'>,
 ): boolean =>
   tool.guard?.command !== undefined || tool.requiresApproval !== undefined;
 /**
@@ -92,7 +89,7 @@ export interface StepToolInputs {
    *  needs a capability missing here is withheld. */
   readonly hostCapabilities: ReadonlySet<string>;
   /** Tools only this run holds, laid over the resolved list (step 3). */
-  readonly runTools: readonly ITool[];
+  readonly runTools: readonly ITool<Error, PluginToolServices>[];
   /** Whether the plugins' injected tools join (step 2). */
   readonly injectTools: boolean;
   /** Whether the installed plugins' tools join (step 2): a top-level run's,
@@ -274,7 +271,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     for (const name of enabled.keys())
       if (scriptOnly(name)) offer(name, 'injected');
 
-  const overlay = new Map<string, ITool>();
+  const overlay = new Map<string, ITool<Error, PluginToolServices>>();
   for (const tool of input.runTools) {
     const { name } = tool.definition;
     const index = definitions.findIndex((entry) => entry.name === name);
@@ -290,7 +287,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     [...resolvedNames].some(isScript) &&
     (yield* Settings.get<boolean>(input.stores, GlobalStateKey.SCRIPT_ONLY));
   // Dispatch answers only the names the model was offered.
-  const offeredTools = new Map<string, ITool>();
+  const offeredTools = new Map<string, ITool<Error, PluginToolServices>>();
   const offered: OfferedTool[] = [];
   // Recorded as shown: the definition sent.
   for (const definition of definitions) {
@@ -332,7 +329,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
 export interface ResolvedTools {
   readonly definitions: readonly ToolDefinition[];
   /** The offered tools by name: dispatch runs nothing else. */
-  readonly registry: RuntimeToolRegistry;
+  readonly registry: ReadonlyMap<string, ITool<Error, PluginToolServices>>;
   /** Each offered tool's identity, in offer order. */
   readonly offered: readonly OfferedTool[];
 }

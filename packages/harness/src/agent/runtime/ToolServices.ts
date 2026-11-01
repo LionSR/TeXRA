@@ -1,5 +1,5 @@
 import { Context, Effect, Schema, type Scope } from 'effect';
-import type { ITool, ToolContext } from '@agent/core/tools/ToolTypes';
+import type { ToolContext } from '@agent/core/tools/ToolTypes';
 import type { AgentCatalog } from '@agent/index/agentCatalog';
 import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -40,12 +40,16 @@ export type RunServices =
   | ToolRegistry
   | ToolAvailability;
 
-/** The runtime's services a call reads: the process's, the rooted
- *  filesystems of the session the call works in, and the call
- *  (`ToolContext`, the run included). A tool takes `WorkspaceFs` from
- *  context instead of resolving a static against whichever roots its fiber
- *  happens to carry. */
-export type CallServices =
+/** The services the runtime supplies to a tool's call, a plugin's and a
+ *  built-in's alike: the process's, the rooted filesystems of the session
+ *  the call works in, and the call (`ToolContext`, the run included). A
+ *  tool takes `WorkspaceFs` from context instead of resolving a static
+ *  against whichever roots its fiber happens to carry. The child-launch
+ *  door (`ChildRuns`) and the call's place in its run (`RunCall`) are
+ *  references with defaults, never requirements; a plugin's tool reads the
+ *  door and never the session's `Runs`, which only the engine door carries
+ *  (`RunCallShape.runs`). */
+export type PluginToolServices =
   RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
 
 /**
@@ -61,7 +65,7 @@ export type CallServices =
 export interface ChildRunsShape {
   readonly launch: (
     launch: ChildLaunch,
-  ) => Effect.Effect<ToolResult, Error, CallServices>;
+  ) => Effect.Effect<ToolResult, Error, PluginToolServices>;
   readonly launchProcess: <TTurn>(
     launch: ProcessChildLaunch<TTurn>,
   ) => Effect.Effect<RunId, Error>;
@@ -123,17 +127,13 @@ export const ChildRuns = Context.Reference<ChildRunsShape>(
  *  session's runs, which the loop read where it dispatched the call. A
  *  launch runs under exactly those, so nothing of the dispatching fiber's
  *  context reaches it, and a plugin's tool sees neither. */
-export const childRuns = (
-  call: RunCallShape,
-  runs: Runs['Service'],
-): ChildRunsShape => {
+export const childRuns = (call: RunCallShape): ChildRunsShape => {
   const { session, runId } = call.run;
   return {
-    launch: (launch) =>
-      launchChildAgent(launch).pipe(Effect.provideService(Runs, runs)),
+    launch: launchChildAgent,
     launchProcess: (launch) =>
       launchProcessChild(session, runId, launch).pipe(
-        Effect.provideService(Runs, runs),
+        Effect.provideService(Runs, call.runs),
       ),
     inbox: (id) => Effect.succeed(runInbox(session, id)),
     parent: (id) => Effect.succeed(session.runs.get(id)?.parent),
@@ -155,16 +155,3 @@ export const childRuns = (
       ),
   };
 };
-
-/** Services the runtime supplies to a plugin's tool: the call's. The
- *  child-launch door (`ChildRuns`) and the call's place in its run
- *  (`RunCall`) are references with defaults, never requirements; a plugin's
- *  tool reads the door and never the session's `Runs`. */
-export type PluginToolServices = CallServices;
-
-/** What the runtime supplies to the harness's built-in tools: a plugin
- *  tool's services and the session's runs. */
-export type ToolServices = PluginToolServices | Runs;
-export type RuntimeTool<E = Error, R = ToolServices> = ITool<E, R>;
-/** The tools a run offers, by name. */
-export type RuntimeToolRegistry = ReadonlyMap<string, RuntimeTool>;

@@ -11,7 +11,8 @@ import { Deferred, Effect, Exit, Fiber, Layer, Scope } from 'effect';
 
 import { ModelProvider } from '@texra-ai/llm';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { registrationRows } from '@agent/storage/runLifecycle';
 import { logUserMessage, TraceEmitter, type AgentEvent } from '@agent/trace';
 import { runEventDraft } from '@agent/trace/TraceEmitter';
@@ -61,7 +62,7 @@ export interface ExecuteAgentOptions {
   /** The child-run policy: each turn's permit, each turn's settlement. */
   readonly turns?: ChildRunTurns<RunReport>;
   /** Run-scoped tools added to the agent without mutating the default registry. */
-  readonly tools?: readonly ITool[];
+  readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /**
