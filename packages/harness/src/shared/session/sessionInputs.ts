@@ -1,4 +1,5 @@
-/** Ordered session view inputs shared by the runtime, transport framer, and webview. */
+/** Ordered session view inputs shared by the runtime, transport framer, and
+ *  webview, and the session view built over them. */
 import { Context } from 'effect';
 import type {
   CommitOrdinal,
@@ -6,6 +7,7 @@ import type {
   TranscriptSubscription,
 } from '@shared/schemas';
 import type { Stream } from 'effect';
+import type { SessionViewAccessShape } from './sessionViewAccess';
 
 export class SessionInputs extends Context.Service<
   SessionInputs,
@@ -19,3 +21,10 @@ export class SessionInputs extends Context.Service<
     ) => Stream.Stream<readonly SessionViewInput[]>;
   }
 >()('@texra-ai/harness/session/SessionInputs') {}
+
+/** The session's view: the one state every renderer reads, and the local
+ *  state it keeps beside the rows. */
+export class SessionViewAccess extends Context.Service<
+  SessionViewAccess,
+  SessionViewAccessShape
+>()('@texra-ai/harness/session/SessionViewAccess') {}

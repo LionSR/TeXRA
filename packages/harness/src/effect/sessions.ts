@@ -6,7 +6,6 @@
  * behind them are `sessionPrograms.ts`'s.
  */
 
-import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type {
   HostInteractions,
@@ -15,6 +14,7 @@ import type {
 import type { AgentRunListingEntry } from '@agent/storage/runListing';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { AgentPlatform } from '@platform/agentPlatform';
+import type { AgentEvent } from '@shared/session/agentEvent';
 import type {
   CommitOrdinal,
   DisplaySessionEvent,

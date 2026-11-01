@@ -18,11 +18,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type {
-  RunTrace,
-  SessionLog,
-  SessionTransaction,
-} from '@agent/runtime/SessionHandle';
+import type { RunTrace } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import {
   qualifyAggregateId,
@@ -53,6 +49,10 @@ import {
   runRowsFrom,
 } from '@shared/session/runRowReads';
 import { RUN_STATE_ROW_TYPES } from '@shared/session/runState';
+import type {
+  SessionLogShape,
+  SessionTransaction,
+} from '@shared/session/sessionLog';
 
 import { makeRunTrace } from './runTrace';
 import { SessionViewService } from './SessionView';
@@ -62,7 +62,7 @@ import { TextChunkSource } from './sessionSources';
  *  store is the one owner of the session's publisher: nothing else reaches
  *  its transactions. */
 export interface SessionStore {
-  readonly log: SessionLog;
+  readonly log: SessionLogShape;
   readonly trace: RunTrace;
   /** The publisher's detached door: for a producer with no fiber to wait on
    *  (the inbox's own sends, an interrupted request's cancellation). */
@@ -179,7 +179,7 @@ const claimHolds = (database: Context.Service.Shape<typeof Database>) => {
       discard: true,
     });
   });
-  const hold: SessionLog['hold'] = (runId, options = {}) => {
+  const hold: SessionLogShape['hold'] = (runId, options = {}) => {
     const id = qualifyAggregateId('run', runId);
     // Taking the claim and recording it are one step: a claim committed
     // under an interrupt that landed before `taken` would never be released.
@@ -309,7 +309,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       settled,
       closed,
     });
-    const log: SessionLog = {
+    const log: SessionLogShape = {
       transact: <A, E>(
         work:
           | readonly UnfoldedDraft[]

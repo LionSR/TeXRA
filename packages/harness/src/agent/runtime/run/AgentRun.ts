@@ -39,13 +39,14 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
+import type { ClaimError } from '@shared/session/sessionLog';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import { RunFileService } from '@utils/files/runStorage';
 import type { ModelConfig } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 
 import type { OpenStep } from '../loop/step';
-import type { ClaimError, SessionHandle } from '../SessionHandle';
+import type { SessionHandle } from '../SessionHandle';
 
 /**
  * How a launch enters its run's cell: a fresh run's `registration` rides

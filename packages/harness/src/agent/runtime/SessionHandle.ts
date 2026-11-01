@@ -13,197 +13,40 @@
  * `readOnly` and `group` rules decide how a run with no loop here reads.
  */
 
-import type { AgentEvent } from '@agent/trace';
 import type { Inbox } from '@agent/followUp/Inbox';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
-  AggregateId,
   DecisionOf,
   PermissionPayload,
   RequestDecision,
   CommitOrdinal,
-  DisplaySessionEvent,
-  ResumeBlocked,
   RunEnd,
   RunId,
   RunOutcome,
   SessionEvent,
   SessionEventDraft,
-  TranscriptSubscription,
-  LocalRuntimeState,
 } from '@shared/schemas';
+import type { Approvals } from '@shared/session/approvalDecision';
 import type {
-  AggregateClaim,
-  DatabaseClaimError,
-  DatabaseNotOwner,
   DatabaseReadFailed,
-  DatabaseWriteFailed,
   DeletionMode,
-  SessionStoreMovedAside,
 } from '@shared/session/database';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RequestError } from '@shared/session/runtimeRequest';
-import type { RunHistory } from '@shared/session/runHistory';
-import type { RunRowRead } from '@shared/session/runRowReads';
-import type { RunRows } from '@shared/session/runRowsShape';
+import type { RunHistory, SessionLog } from '@shared/session/runHistory';
 import type { OutcomeOf, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { RunHistoryDraft } from '@shared/session/runState';
-import type { Append, UnfoldedDraft } from '@shared/session/sessionEvents';
-import type { SessionInputs } from '@shared/session/sessionInputs';
-import type { RunView, SessionView } from '@shared/session/sessionView';
+import type { SessionViewAccess } from '@shared/session/sessionInputs';
+import type { LogWriteError } from '@shared/session/sessionLog';
 import type { SessionTools } from '@tools/sessionTools';
-import type { Context, Effect, Scope, Stream, SubscriptionRef } from 'effect';
+import type { Context, Effect } from 'effect';
 
 import type {
   SessionHostInteractions,
   HostInteractions,
 } from './HostInteractions';
 import type { HistoryQuery } from './historyQuery/HistoryQuery';
-import type { ApprovalsWithPermission } from './loop/toolGuard';
 import type { RunsShape } from './runs';
-
-/** A write the store refused: nothing was written. */
-export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
-
-/** A claim the store would not give this process. */
-export type ClaimError = DatabaseReadFailed | DatabaseClaimError;
-
-/** What one transaction's job holds: the ordered append (each in this
- *  transaction's order) and a registration's claim take-over. What must run
- *  only once it commits goes through {@link SessionLog.afterCommit}. */
-export interface SessionTransaction {
-  readonly append: Append;
-  /** Take `runId`'s claim for this process (a dead owner's, proved dead,
-   *  or its own) and leave it for the run's driver; given back if the job
-   *  fails, or if what it committed never reaches the view. */
-  readonly claim: (runId: RunId) => Effect.Effect<void, ClaimError>;
-  /** Let `runId`'s claim go with this job's commit: a child whose last turn
-   *  waits for a parent another process holds, so whoever delivers it
-   *  takes the claim with no owner to prove dead. */
-  readonly release: (runId: RunId) => Effect.Effect<void, DatabaseWriteFailed>;
-}
-
-/**
- * The session's doors to its store, on its one publisher, and the reads
- * beside them. Every awaited write is one {@link transact} (a run's own rows
- * too, through {@link SessionHandle.runHistory}); trace rows go through
- * {@link publish}.
- */
-export interface SessionLog {
-  /** One transaction, run as the next job of the session's publisher and
-   *  returned once the view applied it: a batch of rows, or a job that reads
-   *  committed rows and appends what depends on them with no other write
-   *  between. A refusal wrote nothing, comes back typed, never retried. */
-  transact(
-    events: readonly UnfoldedDraft[],
-  ): Effect.Effect<readonly SessionEvent[], LogWriteError>;
-  transact<A, E>(
-    job: (tx: SessionTransaction) => Effect.Effect<A, E>,
-  ): Effect.Effect<A, E | LogWriteError>;
-  /** Publish one trace event (display rows only: no {@link AgentEvent} is
-   *  part of the run's state) as its row, a chunk as transient text; its order
-   *  is this call, a refusal the run's own ({@link RunTrace.lost}). */
-  publish(runId: RunId, event: AgentEvent): void;
-  /** A barrier: every job enqueued before it has run, the view applied it, and
-   *  the terminal-result presenter read the view's tail past it. A refused
-   *  detached row is heard by its writer. */
-  readonly settled: Effect.Effect<void>;
-  /** Run `action` once the job this fiber runs (inside {@link transact})
-   *  commits, never if it rolls back; outside a job, now. */
-  afterCommit(action: Effect.Effect<void>): Effect.Effect<void>;
-  /** The current commit ordinal: where a new reader starts its {@link tail}. */
-  now(): CommitOrdinal;
-  /** A run's history rows, the kinds its state reads, in seq order. */
-  history(
-    id: AggregateId,
-  ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-  /** The `RunRows` of the kinds one read names (`RUN_ROW_READS`), read
-   *  through the type index of a run's aggregate or a plugin's own; with
-   *  `through`, of its rows up to that seq alone (a fork's cut). */
-  runRows(
-    id: AggregateId,
-    read: RunRowRead,
-    through?: number,
-  ): Effect.Effect<RunRows, DatabaseReadFailed>;
-  /** The strings under `digests`: what the rows name by address (media
-   *  bytes, a tool edit's proposal). */
-  blobs(
-    digests: readonly string[],
-  ): Effect.Effect<ReadonlyMap<string, string>, DatabaseReadFailed>;
-  /** A run's facts, folded from its latest row of each record type (its
-   *  requests and pending input left out: a `runRows` read holds those);
-   *  null while the store holds no open run under the id. */
-  facts(runId: RunId): Effect.Effect<RunRows | null, DatabaseReadFailed>;
-  /** A run's display rows, its priced `usage` rows among them; empty when
-   *  the run never existed or was removed. */
-  display(
-    runId: RunId,
-  ): Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
-  /** Every display row above `fromCommit` in commit order, then the live
-   *  tail. `drained` receives the commit each forward read covered. */
-  tail(
-    fromCommit: CommitOrdinal,
-    drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-  ): Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
-  /** The cold listing: the latest row per aggregate and listing type, plus
-   *  the outstanding approvals; completes. */
-  listing(): Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
-  /** Hold `runId`'s claim for the caller's scope. Holds are counted: the
-   *  first takes the claim (proving a prior owner dead), later ones share
-   *  it, and the last to go returns it to how the first found it, unless a
-   *  hold `ends` it (the run's driver), when it is released. */
-  hold(
-    runId: RunId,
-    options?: { readonly ends?: boolean },
-  ): Effect.Effect<void, ClaimError, Scope.Scope>;
-  /** Whether this process holds `runId` open in the database: the durable
-   *  claim, read from SQLite rather than from the view, which lags. */
-  owns(runId: RunId): Effect.Effect<boolean, DatabaseReadFailed>;
-  /** Who holds `runId` now, with the owner's liveness proved in the call:
-   *  what a resume gate and the run listing word a refusal from. */
-  owner(runId: RunId): Effect.Effect<AggregateClaim, DatabaseReadFailed>;
-  /** Set when opening the store moved an older build's rows aside; the
-   *  host that opened the session presents it once. */
-  readonly movedAside: SessionStoreMovedAside | null;
-}
-
-/**
- * The session's view: the one state every renderer reads, the transport
- * replay it is built from, the transcript subscriptions that decide what it
- * holds, and the local state it keeps beside the rows.
- */
-export interface SessionViewAccess {
-  /** The current view, written only by the fiber that updates it.
-   *  Synchronous readers take `SubscriptionRef.getUnsafe(ref)`. */
-  readonly ref: SubscriptionRef.SubscriptionRef<SessionView>;
-  /** {@link ref} as a stream, ending when the updating fiber does (with its
-   *  defect if it died), so a reader waiting on a view never hangs. */
-  readonly changes: Stream.Stream<SessionView>;
-  /** One run of the current view; its transcript tier is complete only
-   *  while some port subscribes the run. */
-  run(runId: RunId): RunView | undefined;
-  /** The view rebuilt from the log as of this call: the listing tier of
-   *  every run and the whole history of the runs named. */
-  read(runIds: readonly RunId[]): Effect.Effect<SessionView>;
-  /** Ordered view inputs for one transport subscription: complete replay,
-   *  then events before live text. */
-  readonly inputs: Context.Service.Shape<typeof SessionInputs>['read'];
-  /** Replace one port's transcript subscription set; an empty set removes
-   *  the port. The view's set is the union over every port. */
-  subscribe(
-    port: string,
-    set: readonly TranscriptSubscription[],
-  ): Effect.Effect<void>;
-  /** Record what a resume of a run waits for in this process, or null when
-   *  nothing blocks it any more: a fact about this process's catalog, never
-   *  a row. */
-  markResumeBlocked(
-    runId: RunId,
-    blocked: ResumeBlocked | null,
-  ): Effect.Effect<void>;
-  /** The runs a resume found blocked here, with what each waits for. */
-  resumeBlocks(): LocalRuntimeState['resumeBlocked'];
-}
 
 /** A streaming row's closing fact, as the run history commits it. */
 export type StreamClosure = Extract<RunHistoryDraft, { type: 'stream.end' }>;
@@ -213,7 +56,7 @@ export type StreamClosure = Extract<RunHistoryDraft, { type: 'stream.end' }>;
 export type ClosureFact =
   StreamClosure | Extract<SessionEventDraft, { type: 'stage.end' }>;
 
-/** Each run's trace ({@link SessionLog.publish}): the first row the store
+/** Each run's trace (the session log's `publish`): the first row the store
  *  refused, and its open work. */
 export interface RunTrace {
   /** The first refused row of `runId`, taken, as its `run.end` error. */
@@ -265,7 +108,7 @@ export interface AskOptions<E> {
     rows: readonly RequestRow[],
   ) => Effect.Effect<CommitOrdinal, E>;
   /** The strings the payload names by address (a tool edit's proposal),
-   *  stored with the `request.opened` row; {@link SessionLog.blobs} reads
+   *  stored with the `request.opened` row; the session log's `blobs` reads
    *  them back for as long as the row lives. */
   readonly blobs?: readonly DraftBlob[];
 }
@@ -328,9 +171,9 @@ export interface SessionHandle {
    *  takes its roots from here as data. */
   readonly roots: WorkspaceRoots;
   /** The store: one transaction door, reads and claims. */
-  readonly log: SessionLog;
+  readonly log: Context.Service.Shape<typeof SessionLog>;
   /** The view every renderer reads, and the local state beside it. */
-  readonly view: SessionViewAccess;
+  readonly view: Context.Service.Shape<typeof SessionViewAccess>;
   /** Its runs: launch, resume, stop, and what this process holds. */
   readonly runs: RunsShape;
   /** The project's tools: its plugin layers and MCP servers, closed with it. */
@@ -339,7 +182,7 @@ export interface SessionHandle {
    *  questions to a person (`ask`, `decide`). */
   readonly requests: SessionRequests;
   /** Approval policy, prompt lanes and each run's grants. */
-  readonly approvals: ApprovalsWithPermission;
+  readonly approvals: Context.Service.Shape<typeof Approvals>;
   /** The session's presentation host. */
   readonly interactions: SessionHostInteractions;
   /** Every run's input, one reader each. */

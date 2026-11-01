@@ -11,13 +11,12 @@ import { Effect, Stream, Struct, SubscriptionRef } from 'effect';
 import type {
   ClosureFact,
   RunTrace,
-  SessionLog,
   StreamClosure,
 } from '@agent/runtime/SessionHandle';
-import type { AgentEvent } from '@agent/trace';
 import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { writeLogLine } from '@logger/logSink';
+import type { AgentEvent } from '@shared/session/agentEvent';
 import {
   qualifyAggregateId,
   aggregateTarget,
@@ -35,14 +34,15 @@ import {
 import { lastLifecycleRow, runEndFromEvents } from '@shared/session/runFacts';
 import { closesRunWindow, recordOf } from '@shared/session/runRowReads';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
+import type { SessionLogShape } from '@shared/session/sessionLog';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { InflightText, InflightTextChunk } from './sessionSources';
 
 /** A session's trace sink, and the tail's hand-off of each committed row. */
 export interface RunTraceSink extends RunTrace {
-  /** The session log's display door ({@link SessionLog.publish}). */
-  readonly publish: SessionLog['publish'];
+  /** The session log's display door ({@link SessionLogShape.publish}). */
+  readonly publish: SessionLogShape['publish'];
   /** Drop the transient text a committed row closes: a stream's final text
    *  or a card's terminal result its own, a phase move that rests or ends
    *  the run, and its removal, every chunk of the run. */

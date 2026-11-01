@@ -33,7 +33,6 @@ import {
   type HookOutcomePayload,
   type PermissionPayload,
   PermissionPayloadSchema,
-  type RunId,
   toJsonValue,
   type ToolResult,
 } from '@shared/schemas';
@@ -42,6 +41,13 @@ import { callRequestId, type AttemptRequests } from '@shared/session/inFlight';
 import type { CellError, RunCell } from '@shared/session/runHistory';
 import { isRequestDecision } from '@shared/session/runRowReads';
 import type { RunHistoryDraft } from '@shared/session/runState';
+import type {
+  ApprovalOperation,
+  ApprovalsWithPermission,
+  HookAnswer,
+  SessionApprovals,
+} from '@shared/session/sessionApprovals';
+import type { LogWriteError } from '@shared/session/sessionLog';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import {
   buildBashApprovalRejectedResult,
@@ -52,8 +58,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { recordedDecision } from '../requestPolicy';
 import { RunCall, requireToolRun } from '../RunCall';
 import type { AgentRunShape } from '../run/AgentRun';
-import type { SessionApprovals } from '../runApprovalQueue';
-import type { LogWriteError, SessionHandle } from '../SessionHandle';
+import type { SessionHandle } from '../SessionHandle';
 import type { PluginToolServices } from '../ToolServices';
 import type { preToolUse } from './hooks';
 
@@ -69,19 +74,7 @@ const OPERATIONS = {
   toolEdit: ['toolEdit', TOOL_EDIT_APPROVAL_CONFIG_KEY, 'executable'],
   plan: ['superYolo', null, 'plan'],
   proposal: ['superYolo', null, 'proposal'],
-} as const;
-
-type HookAnswer = 'allow' | 'ask' | undefined;
-
-/** The session's approvals, with the one reading of the policy
- *  ({@link sessionPermission}). */
-export type ApprovalsWithPermission = SessionApprovals & {
-  readonly permission: (
-    runId: RunId,
-    operation: keyof typeof OPERATIONS,
-    hook: HookAnswer,
-  ) => 'allow' | 'ask' | { readonly action: 'deny'; readonly reason: string };
-};
+} as const satisfies Record<ApprovalOperation, unknown>;
 
 /**
  * The one reading of the policy for an operation of a run, with what the

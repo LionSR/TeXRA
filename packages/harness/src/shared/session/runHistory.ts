@@ -30,6 +30,7 @@ import {
   type RunState,
 } from './runState';
 import type { Alongside, Append } from './sessionEvents';
+import type { SessionLogShape } from './sessionLog';
 
 /**
  * A refusal the run history itself decided. Database failures are kept OUT of
@@ -278,3 +279,9 @@ export class RunHistory extends Context.Service<
     >;
   }
 >()('@texra-ai/harness/session/RunHistory') {}
+
+/** The session log: the session's doors to its store, on its one publisher,
+ *  which the run history commits through. */
+export class SessionLog extends Context.Service<SessionLog, SessionLogShape>()(
+  '@texra-ai/harness/session/SessionLog',
+) {}

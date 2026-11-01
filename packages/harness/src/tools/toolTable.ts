@@ -17,7 +17,6 @@ import {
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { RunInbox } from '@agent/followUp/ToolUseFollowUp';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import type { LogWriteError } from '@agent/runtime/SessionHandle';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AppSignals } from '@platform/appSignals';
 import type { AppState } from '@platform/interfaces';
@@ -31,6 +30,7 @@ import {
   type RunId,
   type ToolFact,
 } from '@shared/schemas';
+import type { LogWriteError } from '@shared/session/sessionLog';
 import type { ToolCatalog } from '@tools/liveTools';
 import type { Plugin } from '@tools/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
