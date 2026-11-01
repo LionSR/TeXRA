@@ -303,11 +303,10 @@ const compactIfNeeded = Effect.fn('compaction.check')(function* (
  * The tool-use loop's compaction (durable harness, gap 4). Crossing the
  * threshold starts the summary on a fiber in the run's scope, and a later
  * request boundary of the turn, or its end at the latest, lands it as the
- * edit of messages `[0, to)` at the `base` it was computed from. A binding
- * that carries one turn at a time waits for it instead. Every other edit of
- * the view (a `/compact`, a model switch) settles this
- * first ({@link settle}), so no summary meets a view another edit moved. A
- * history past the window waits for the summary; a `/compact` settles, then
+ * edit of messages `[0, to)` at the `base` it was computed from. Every
+ * other edit of the view (a `/compact`, a model switch) settles this first
+ * ({@link settle}), so no summary meets a view another edit moved. A history
+ * past the window waits for the summary; a `/compact` settles, then
  * summarizes the whole history.
  */
 export interface BackgroundCompaction {
@@ -412,15 +411,6 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
         if (landed.lastEdit !== state.lastEdit) return landed;
         state = landed;
       }
-      // A binding that carries one turn at a time (a Responses WebSocket)
-      // cannot make the summary beside the request: it waits.
-      if (bound.persistentConnection)
-        return yield* compactIfNeeded(state, {
-          ...input,
-          cell,
-          bound,
-          force: null,
-        });
       if (!(yield* overThreshold(state, { ...input, bound }))) return state;
       pending = {
         base: state.lastEdit,

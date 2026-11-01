@@ -76,7 +76,6 @@ function testBoundModel({
     origin: TEST_ORIGIN,
     route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
     forcedToolChoice: true,
-    persistentConnection: false,
     billing: 'api-key',
     maxOutputTokens: null,
     background: false,
