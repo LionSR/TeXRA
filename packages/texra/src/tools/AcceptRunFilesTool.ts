@@ -278,9 +278,13 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
       continue;
     }
 
+    // Null when the destination did not exist: the reviewed base the
+    // approval carries, and the one the write is checked against below, so
+    // a resume between the proposal and the approval cannot swap in a
+    // fresh read of the destination.
     const approval = yield* requestToolEditApproval({
       path: entry.original,
-      originalContent: entry.originalContent,
+      originalContent: entry.destExists ? entry.originalContent : null,
       proposedContent: entry.proposedContent,
       sourceTool: 'accept_run_files',
     });
@@ -294,7 +298,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     // A conflict is this file's outcome; the rest are still offered.
     const conflict = yield* approvedWriteConflict(
       entry.original,
-      entry.destExists ? entry.originalContent : null,
+      approval.originalContent,
       approval.appliedContent,
     );
     if (conflict !== undefined) {

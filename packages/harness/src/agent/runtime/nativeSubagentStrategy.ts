@@ -96,9 +96,8 @@ export function createNativeSubagentStrategy(
   return {
     // Not used as a trace stage for native delegation (the loop gates
     // `logger.openStage` on `childRun`, which native delegation never
-    // passes) — its only reader is the loop's non-throwing-failure message,
-    // which becomes the persisted terminal `error.message` for the run
-    // record.
+    // passes) — its only reader is the loop's message for a failed turn
+    // that carries no message of its own (`turnErrorMessage`).
     stageLabel: config.script == null ? 'Native subagent' : 'Native recipe run',
 
     // An awaited child has no later turn to consume a follow-up delivery;
@@ -152,6 +151,7 @@ export function createNativeSubagentStrategy(
     isTurnInterrupted: (turn) =>
       params.inBand !== true && turn.outcome === RUN_OUTCOME.CANCELLED,
     isTurnError: (turn) => turn.failure !== undefined,
+    turnErrorMessage: (turn) => turn.failure?.message,
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
       turn: RunReport,

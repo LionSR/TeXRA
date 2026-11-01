@@ -21,23 +21,25 @@ export const INSTRUCTION_ACTION = {
 export type InstructionAction =
   (typeof INSTRUCTION_ACTION)[keyof typeof INSTRUCTION_ACTION];
 
-const NO_ACTIONS: readonly InstructionAction[] = [];
+// Frozen: the same arrays are handed to every caller, so a mutation would
+// change what every later notice with that key offers.
+const NO_ACTIONS: readonly InstructionAction[] = Object.freeze([]);
 
 /** The actions beside each of the harness's notices; TeXRA's own notices
  *  (document outputs, a store moved aside) offer none. */
 const ACTIONS_BY_KEY: Record<
   HarnessInstructionKey,
   readonly InstructionAction[]
-> = {
-  [HARNESS_INSTRUCTION_KEY.MISSING_API_KEY]: [
+> = Object.freeze({
+  [HARNESS_INSTRUCTION_KEY.MISSING_API_KEY]: Object.freeze([
     INSTRUCTION_ACTION.SET_API_KEY,
     INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE,
-  ],
-  [HARNESS_INSTRUCTION_KEY.MODEL_NOT_RECOGNIZED]: [
+  ]),
+  [HARNESS_INSTRUCTION_KEY.MODEL_NOT_RECOGNIZED]: Object.freeze([
     INSTRUCTION_ACTION.OPEN_MODELS_DOC,
-  ],
+  ]),
   [HARNESS_INSTRUCTION_KEY.RESUME_REFUSED]: NO_ACTIONS,
-};
+});
 
 function isHarnessKey(key: string): key is HarnessInstructionKey {
   return Object.hasOwn(ACTIONS_BY_KEY, key);
