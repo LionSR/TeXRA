@@ -161,8 +161,9 @@ export interface HostRunActionPorts {
  *  that host's launcher, catalogs, key prompt, and notifications. */
 export interface HostRunActions {
   /**
-   * The window's launcher: start a validated fresh run on its session,
-   * answering once it is admitted. A failure before the run opens is
+   * The window's launcher: start a fresh run of an already decoded
+   * configuration (`decodeLaunchConfig`) on its session, answering once it
+   * is admitted; it decodes nothing itself. A failure before the run opens is
    * presented here, once, and fails with the launch's own error; the
    * launched run is the host's to select, and its final output opens when
    * it ends.
