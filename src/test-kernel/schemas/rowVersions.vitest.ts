@@ -77,11 +77,11 @@ const VERSIONED: readonly Versioned[] = [
     };
   }),
   ...Object.entries(factKindsOf(texraPlugins({ name: 'vscode' }))).map(
-    ([name, arm]) => ({
+    ([name, factKind]) => ({
       name: `plugin.fact.${name.replace('/', '.')}`,
-      version: arm.version,
-      upcasts: arm.upcasters.length,
-      schema: arm.schema,
+      version: factKind.version,
+      upcasts: factKind.upcasters.length,
+      schema: factKind.schema,
     }),
   ),
   ...VALUE_FAMILIES.map(({ name, schema }) => ({

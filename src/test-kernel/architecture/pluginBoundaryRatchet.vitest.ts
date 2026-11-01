@@ -48,9 +48,9 @@ import type { ITool, Plugin, ToolResult } from '@texra-ai/harness';
  *   so no `ProcessServices` arm names one.
  */
 /** The app's plugin fact kinds (the harness's built-ins own none). */
-const PLUGIN_ARM_MODULES =
+const PLUGIN_FACT_KIND_MODULES =
   /^packages\/(?:harness|texra)\/src\/shared\/plugins\//;
-const PLUGIN_ARM_IMPORT = /^@(?:texra\/)?shared\/plugins\//;
+const PLUGIN_FACT_KIND_IMPORT = /^@(?:texra\/)?shared\/plugins\//;
 const CORE = /^packages\/harness\/src\/(?:shared|agent)\//;
 const APPEND_PORTS =
   /^@(?:controllers\/session\/Database|shared\/session\/database|agent\/runtime\/SessionEvents)$/;
@@ -108,19 +108,19 @@ const specifiers = (file: string) =>
 describe('plugin boundaries (invariants 1 and 6)', () => {
   it('keeps plugin fact kinds out of core', () => {
     const offenders = files()
-      .filter((file) => CORE.test(file) && !PLUGIN_ARM_MODULES.test(file))
+      .filter((file) => CORE.test(file) && !PLUGIN_FACT_KIND_MODULES.test(file))
       .filter((file) =>
-        specifiers(file).some((s) => PLUGIN_ARM_IMPORT.test(s)),
+        specifiers(file).some((s) => PLUGIN_FACT_KIND_IMPORT.test(s)),
       );
     expect(offenders).toEqual([]);
   });
 
   it('drafts plugin rows only in fact kind modules, which reach no append port', () => {
     const drafts = files()
-      .filter((file) => !PLUGIN_ARM_MODULES.test(file))
+      .filter((file) => !PLUGIN_FACT_KIND_MODULES.test(file))
       .filter((file) => PLUGIN_ROW.test(source(file)));
     const appends = files()
-      .filter((file) => PLUGIN_ARM_MODULES.test(file))
+      .filter((file) => PLUGIN_FACT_KIND_MODULES.test(file))
       .filter((file) => specifiers(file).some((s) => APPEND_PORTS.test(s)));
     // The one generic writer: `factRows` drafts a call's facts
     // (`ToolResult.facts`), which the dispatch commits with its `tool.result`.
