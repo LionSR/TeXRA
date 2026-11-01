@@ -53,7 +53,7 @@ export const DOCUMENTS_OUTPUT_ARM = {
 } as const;
 
 /** The key a run's documents are kept under in `RunView.facts`. */
-export const DOCUMENTS_OUTPUT_KEY = `${DOCUMENTS_OUTPUT_ARM.plugin}/${DOCUMENTS_OUTPUT_ARM.kind}`;
+const DOCUMENTS_OUTPUT_KEY = `${DOCUMENTS_OUTPUT_ARM.plugin}/${DOCUMENTS_OUTPUT_ARM.kind}`;
 
 /** The fact that makes `rounds` (and, once proposed, the final `diffs`)
  *  the calling run's documents, for its call's result (`ToolResult.facts`). */
@@ -109,8 +109,12 @@ export function documentsAcceptedFact(
   };
 }
 
-/** A stored documents row's rounds; none for a value that is not one. */
-export function documentRoundsOf(value: unknown): readonly RoundOutput[] {
+/** A run's documents rounds, from its latest documents row; none for a
+ *  run that recorded none. */
+export function documentRoundsOf(
+  run: Pick<RunView, 'facts'>,
+): readonly RoundOutput[] {
+  const value = run.facts[DOCUMENTS_OUTPUT_KEY];
   return value === undefined
     ? []
     : Schema.decodeUnknownSync(DocumentsOutputSchema)(value).rounds;
@@ -140,7 +144,7 @@ export function documentsOf(run: Pick<RunView, 'facts'>): {
    *  documents. */
   readonly replies: { readonly [round: number]: FileLocation };
 } {
-  const rounds = documentRoundsOf(run.facts[DOCUMENTS_OUTPUT_KEY]);
+  const rounds = documentRoundsOf(run);
   const byRound = <T>(pick: (round: RoundOutput) => readonly T[]) =>
     Object.fromEntries(
       rounds.flatMap((round) =>

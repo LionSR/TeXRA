@@ -339,11 +339,12 @@ export const SessionViewSchema = Schema.Struct({
 });
 export type SessionView = typeof SessionViewSchema.Type;
 
-/** What wants this window: the requests it can answer, in view order (the
- *  badge), and those `previous` could not (none without it: history). */
+/** What wants this window: the requests it can answer (the badge), and since
+ *  `previous` (none without it) the new ones and the runs that ended. */
 export interface Attention<Request> {
   readonly requests: readonly Request[];
   readonly arrived: readonly Request[];
+  readonly finished: readonly ReadRunView[];
 }
 
 function answerableRequests<View extends ReadSessionView>(
@@ -359,22 +360,25 @@ function answerableRequests<View extends ReadSessionView>(
 }
 
 /**
- * The one attention rule every host reads (the extension's sidebar badge and
- * reveal, the desktop's dock badge, notifications, and rail): a request
- * wants the user exactly when this window can answer it, whatever its kind.
- * A request on a run another process holds, or one waiting for its run's
- * resume, is shown on its card but asks nothing of this window.
+ * The one attention rule every host reads (the extension's badge, reveal and
+ * chime, the desktop's dock badge, notifications, and rail): a request wants
+ * the user when this window can answer it (not one on a run another process
+ * holds or waiting for its run's resume), and a run when its outcome lands.
  */
 export function attentionOf<View extends ReadSessionView>(
   view: View,
   previous?: ReadSessionView,
 ): Attention<View['requests'][number]> {
   const requests = answerableRequests(view);
-  if (previous === undefined) return { requests, arrived: [] };
+  if (previous === undefined) return { requests, arrived: [], finished: [] };
   const known = new Set(answerableRequests(previous).map((r) => r.requestId));
   return {
     requests,
     arrived: requests.filter((request) => !known.has(request.requestId)),
+    finished: [...view.runs.values()].filter(
+      ({ id, durableOutcome: outcome }) =>
+        outcome !== null && previous.runs.get(id)?.durableOutcome === null,
+    ),
   };
 }
 

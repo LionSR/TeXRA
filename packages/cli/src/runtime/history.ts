@@ -26,13 +26,13 @@ import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
+import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';
 import {
   cliRunStanding,
   HISTORY_RUN_STATUS,
-  HISTORY_RUN_STATUS_LABEL,
   type HistoryRunStatus,
 } from './toolUseResumeData';
 import {
@@ -85,7 +85,10 @@ interface CliHistoryDetails {
   readonly id: RunId;
   readonly status: HistoryRunStatus;
   /** The run's launch facts as the session view holds them. */
-  readonly run: Pick<RunView, 'launchedAt' | 'parentId' | 'description'> | null;
+  readonly run: Pick<
+    RunView,
+    'launchedAt' | 'parentId' | 'description' | 'statusKey'
+  > | null;
   readonly config: AgentConfig | null;
   readonly result: RunResult | null;
   readonly report: string | null;
@@ -239,6 +242,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
             launchedAt: run.launchedAt,
             parentId: run.parentId,
             description: run.description,
+            statusKey: run.statusKey,
           }
         : null,
       config,
@@ -435,9 +439,13 @@ export function formatCliHistoryDetailsText(
   const model = details.currentModel ?? config?.model;
   const team = teamIdOf(config);
   const cliOutputFile = config?.cli?.outputFile?.trim();
+  // Worded as every host words it; `details.status` is the NDJSON contract's.
+  const status = `${run ? runStatusLabel(run.statusKey) : 'Unknown'}${
+    details.status === HISTORY_RUN_STATUS.RESUMABLE ? ' (resumable)' : ''
+  }`;
   const lines = [
     `Run: ${details.id}`,
-    `Status: ${HISTORY_RUN_STATUS_LABEL[details.status]}`,
+    `Status: ${status}`,
     `Timestamp: ${run ? new Date(run.launchedAt).toISOString() : 'unknown'}`,
     `Agent: ${config?.agent ?? 'unknown'}`,
     `Model: ${model ?? 'unknown'}`,
