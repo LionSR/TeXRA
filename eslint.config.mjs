@@ -1109,7 +1109,7 @@ export default tseslint.config(
         (dir) => file === dir || file.startsWith(`${dir}/`),
       );
     const entries = EFFECT_RUN_ENTRIES;
-    const residents = ['packages/texra/src/tools/claudeAgent.ts'];
+    const residents = ['packages/texra/src/tools/agentCli/claudeAgent.ts'];
     const iconFile = 'packages/texra/src/ui/wa/webAwesomeIcons.ts';
     const block = (files, ignores, ...selectors) => ({
       files,

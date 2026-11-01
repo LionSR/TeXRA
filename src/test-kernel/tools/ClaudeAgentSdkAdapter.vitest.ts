@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { claudeResultUsage } from '@texra/tools/claudeAgentShared';
+import { claudeResultUsage } from '@texra/tools/agentCli/claudeAgentShared';
 
 describe('Claude Agent SDK adapter', () => {
   it('folds authoritative modelUsage across main and nested model calls', () => {

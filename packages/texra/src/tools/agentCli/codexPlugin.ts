@@ -14,7 +14,7 @@ import {
 } from './availabilityProbes';
 import { CodexTool } from './codex';
 import { findCodexBinaryPath, importCodexClass } from './codexImport';
-import type { TexraPlugin } from './registry';
+import type { TexraPlugin } from '../registry';
 
 export const codex: TexraPlugin = {
   ...definePlugin<CodexThreads>({

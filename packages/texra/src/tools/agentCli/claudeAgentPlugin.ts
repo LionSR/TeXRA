@@ -22,7 +22,7 @@ import {
   findClaudeBinaryPath,
   importClaudeAgentSdk,
 } from './claudeAgentImport';
-import type { TexraPlugin } from './registry';
+import type { TexraPlugin } from '../registry';
 
 const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
 
