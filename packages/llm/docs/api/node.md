@@ -74,10 +74,7 @@ it bills.
 interface BindSpec {
   /** The llm-zoo entry, before its route's overrides. */
   readonly model: ModelConfig;
-  readonly route: Extract<
-    ModelRoute,
-    { kind: 'api-key' | 'chatgpt-subscription' | 'xai-subscription' }
-  >;
+  readonly route: CredentialRoute;
   readonly endpoint: string;
   readonly credential: ModelCredential;
   /** Each option has a default; the booleans default to `false`. */

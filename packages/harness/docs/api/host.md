@@ -1875,7 +1875,7 @@ type ProcessServices =
 
 ## quotaFallbackRouteFor
 
-The catalog entry of a declinable route. Every declinable route has one.
+The catalog entry of a declinable route.
 
 ```ts
 function quotaFallbackRouteFor(

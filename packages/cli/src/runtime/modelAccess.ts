@@ -16,14 +16,12 @@ import {
   type UsageRoute,
   isModelOptionAvailable,
 } from '@texra-ai/harness/schemas';
+import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 
 // Local file imports
-import {
-  MODEL_AVAILABILITY_LABEL,
-  usageRouteBadge,
-} from '@ui/copy/modelAccess';
+import { MODEL_AVAILABILITY_LABEL } from '@ui/copy/modelAccess';
 import { resolveKnownCliModelId } from './cliConfig';
 
 export interface CliModelAccess {
@@ -149,11 +147,8 @@ function formatModelAccessStatus(model: ModelOptionData): string {
  * request (the row's `usageRoute`, decided by the picker).
  */
 function formatModelStatusForCli(model: CliModelAccess): string {
-  const route = model.usageRoute;
-  return route === 'kimi-code-subscription' ||
-    route === 'glm-coding-plan-subscription'
-    ? `api: ${usageRouteBadge(route)?.label}`
-    : `api: ${model.status}`;
+  const plan = codingPlanForUsageRoute(model.usageRoute);
+  return `api: ${plan?.displayName ?? model.status}`;
 }
 
 // Reason a given model id cannot be switched to right now, or undefined if it can.

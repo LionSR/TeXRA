@@ -201,10 +201,9 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     ...commonOf(plan),
     ...bound,
     route,
-    ...(credential.route === 'chatgpt-subscription' ||
-    credential.route === 'xai-subscription'
-      ? { subscriptionToken: credential.bearer }
-      : {}),
+    ...(credential.route === 'api-key'
+      ? {}
+      : { subscriptionToken: credential.bearer }),
     ...(codex && credential.plan ? { plan: credential.plan } : {}),
     routes: routePolicies(
       [

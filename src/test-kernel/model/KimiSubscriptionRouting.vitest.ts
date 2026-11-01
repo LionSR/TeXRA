@@ -16,15 +16,11 @@ const dual = {
 const asConfig = (fields: object) =>
   ({ openRouterOnly: false, capabilities: {}, ...fields }) as ModelConfig;
 
-const kimiRoute = (
-  fields: object,
-  kimiCodeKey: boolean,
-  preferKimiCode: boolean,
-) =>
+/** `planOn`: the "Kimi Code subscription" switch is on and a key is stored. */
+const kimiRoute = (fields: object, planOn: boolean) =>
   decideModelRoute(asConfig(fields), {
     ...OWN_KEY_ROUTE_FACTS,
-    kimiCodeKey,
-    preferKimiCode,
+    plans: planOn ? ['kimi-code-subscription'] : [],
   });
 
 const onKimiCode = {
@@ -34,11 +30,9 @@ const onKimiCode = {
 };
 
 describe('decideModelRoute on Kimi Code', () => {
-  it('routes dual-backend only with prefer on and a key set', () => {
-    expect(kimiRoute(dual, true, true)).toEqual(onKimiCode);
-    // prefer off → open platform.
-    expect(kimiRoute(dual, true, false)).not.toEqual(onKimiCode);
-    // no key → open platform.
-    expect(kimiRoute(dual, false, true)).not.toEqual(onKimiCode);
+  it('routes dual-backend only with the plan on', () => {
+    expect(kimiRoute(dual, true)).toEqual(onKimiCode);
+    // Plan off (switch off, or no key) → open platform.
+    expect(kimiRoute(dual, false)).not.toEqual(onKimiCode);
   });
 });

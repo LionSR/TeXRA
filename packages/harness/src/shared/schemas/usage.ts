@@ -4,26 +4,15 @@ export const TokenCountSchema = Schema.Int.check(
   Schema.isGreaterThanOrEqualTo(0),
 );
 
-export const UsageRouteSchema = Schema.Literals([
-  'chatgpt-subscription',
-  'xai-subscription',
-  'kimi-code-subscription',
-  'glm-coding-plan-subscription',
-  'api-key',
-]);
-
-/** The route a request's usage is billed through. */
-export type UsageRoute = typeof UsageRouteSchema.Type;
-
 /**
- * The subscription routes a run can decline. A retry the user answered with
- * their own API key declines the route that ran out of quota, for that run
- * only: the choice is a fact of the run, not of the user's settings, so no
- * preference is rewritten and two concurrent runs cannot cancel each other's
- * fallback. `api-key` is excluded because it is the route a decline falls
- * back to.
+ * The subscription routes a run can decline: storage's spelling of llm's
+ * `PLAN_ROUTES`, which the route decision converts both ways, so a plan in
+ * one list only fails to compile. A retry the user answered with their own
+ * API key declines the route that ran out of quota, for that run only: the
+ * choice is a fact of the run, not of the user's settings, so no preference
+ * is rewritten and two concurrent runs cannot cancel each other's fallback.
  */
-export const DeclinableUsageRouteSchema = UsageRouteSchema.pick([
+export const DeclinableUsageRouteSchema = Schema.Literals([
   'chatgpt-subscription',
   'xai-subscription',
   'kimi-code-subscription',
@@ -31,6 +20,14 @@ export const DeclinableUsageRouteSchema = UsageRouteSchema.pick([
 ]);
 
 export type DeclinableUsageRoute = typeof DeclinableUsageRouteSchema.Type;
+
+export const UsageRouteSchema = Schema.Literals([
+  ...DeclinableUsageRouteSchema.literals,
+  'api-key',
+]);
+
+/** The route a request's usage is billed through. */
+export type UsageRoute = typeof UsageRouteSchema.Type;
 
 export const TokenUsageStatsSchema = Schema.Struct({
   inputTokens: TokenCountSchema,

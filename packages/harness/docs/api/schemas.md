@@ -1529,12 +1529,9 @@ this module dependency-free lets the error formatter, the invoker, and the
 CLI retry copy share one catalog.
 
 ```ts
-type QuotaFallbackExhaustionReason = Extract<
+type QuotaFallbackExhaustionReason = Exclude<
   ExhaustionReason,
-  | 'chatgpt-subscription'
-  | 'xai-subscription'
-  | 'glm-coding-plan'
-  | 'kimi-code-subscription'
+  'upstream-credit'
 >;
 ```
 
@@ -1542,7 +1539,6 @@ type QuotaFallbackExhaustionReason = Extract<
 
 ```ts
 interface QuotaFallbackRoute {
-  readonly usageRoute: DeclinableUsageRoute;
   readonly exhaustionReason: QuotaFallbackExhaustionReason;
   readonly retryFallbackName: string;
   readonly retrySourceName: string;
