@@ -2,7 +2,8 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { AppState, type StateReadFailed } from '@platform/interfaces';
+import { AppState } from '@platform/interfaces';
+import type { StateReadFailed } from '@shared/config/settings';
 import { readDisabledTools } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 

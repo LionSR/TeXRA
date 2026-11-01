@@ -116,17 +116,12 @@ export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentati
 // Which side of a trace event a run wrote.
 export type { TraceArm } from '@agent/trace';
 export type { AggregateId, SessionCloseReport } from '@shared/schemas';
-// The platform's ports, their stores' failures, and the services plugins read.
+// The agent-directories port and the process services plugins read.
 export {
   AgentDirectories,
   AgentDirectoriesFailed,
   AppState,
-  ConfigWriteFailed,
-  StateReadFailed,
-  StateWriteFailed,
   type AgentDirectoriesPort,
-  type ConfigProvider,
-  type StateStore,
 } from '@platform/interfaces';
 export { Secrets, type PlatformSecrets } from '@platform/secrets';
 // App-lifecycle signals: the process's hub, which `ProcessServices` serves,
@@ -285,10 +280,17 @@ export {
 export { withLogChannel } from '@logger/effectLog';
 // The write path's redaction, for host text shown outside it.
 export { formatFatalErrorDetail, redactSecrets } from '@logger/redaction';
-// Every read and write of a catalog setting, against the stores a caller
-// holds (a session's roots), and the typed read of a non-catalog state key.
+// The config and state store ports a host implements, their failures, and
+// `Settings`: every read and write of a catalog setting against the stores a
+// caller holds (a session's roots), and the typed read of a non-catalog
+// state key.
 export {
+  ConfigWriteFailed,
   Settings,
+  StateReadFailed,
+  StateWriteFailed,
+  type ConfigProvider,
   type SettingsStores,
+  type StateStore,
   type StoredSetting,
 } from '@shared/config/settings';

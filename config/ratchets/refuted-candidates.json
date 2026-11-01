@@ -8,7 +8,7 @@
       "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
-          "file": "packages/harness/src/platform/interfaces.ts",
+          "file": "packages/harness/src/shared/config/settings.ts",
           "symbol": "ConfigProvider",
           "signature": "export interface ConfigProvider { get<T>(key: string): T; update<T>( key: string, value: T, target?: ConfigTarget, ): Effect.Effect<void, ConfigWriteFailed>; inspect<T = unknown>(key: string): ConfigInspection<T>; readonly catalog: SettingsCatalog; }"
         },

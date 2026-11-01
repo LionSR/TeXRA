@@ -17,9 +17,12 @@ import {
   type RouteFacts,
   selectModel,
 } from '@texra-ai/llm';
-import { StateWriteFailed } from '@platform/interfaces';
-import type { StateStore } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
+import {
+  StateWriteFailed,
+  type SettingsStores,
+  type StateStore,
+} from '@shared/config/settings';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
   MODEL_AVAILABILITY_STATUS,
@@ -28,7 +31,6 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import type { SettingsStores } from '@shared/config/settings';
 import { readModelSettings, routeFactsFor } from './modelSettings';
 import {
   reasoningRouteOf,

@@ -52,7 +52,7 @@ import {
   ModelAccess,
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
-import type { StateReadFailed } from '@platform/interfaces';
+import type { StateReadFailed } from '@shared/config/settings';
 import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {

@@ -38,7 +38,7 @@ import {
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
 import { onAppSignal, type AppSignals } from '@platform/appSignals';
-import type { StateStore } from '@platform/interfaces';
+import type { StateStore } from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { storedDisabledTools, type Plugin } from '@tools/plugins';
 import type {

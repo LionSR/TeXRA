@@ -14,13 +14,15 @@ import { Effect, Semaphore } from 'effect';
  * its slot never starts fresh model work.
  */
 
-import type { StateReadFailed } from '@platform/interfaces';
+import {
+  Settings,
+  type SettingsStores,
+  type StateReadFailed,
+} from '@shared/config/settings';
 import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
-import { Settings } from '@shared/config/settings';
-import type { SettingsStores } from '@shared/config/settings';
 
 import type { ScriptScope } from './RunCall';
 

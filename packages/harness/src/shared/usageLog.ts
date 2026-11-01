@@ -1,7 +1,7 @@
 import { Context, Effect, Layer, Schema, Struct } from 'effect';
 
 import { TurnProtocolSchema } from '@texra-ai/llm';
-import type { ConfigProvider } from '@platform/interfaces';
+import type { ConfigProvider } from '@shared/config/settings';
 import {
   AGENT_SOURCE,
   UsageRouteSchema,

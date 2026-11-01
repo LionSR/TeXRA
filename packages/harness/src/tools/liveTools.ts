@@ -31,12 +31,12 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { withLogChannel } from '@logger/effectLog';
 import { AppSignals } from '@platform/appSignals';
-import {
-  AppState,
-  type StateReadFailed,
-  type StateWriteFailed,
-} from '@platform/interfaces';
+import { AppState } from '@platform/interfaces';
 import type { PluginContext } from '@platform/processRuntime';
+import type {
+  StateReadFailed,
+  StateWriteFailed,
+} from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { entriesOf } from '@tools/catalogEntries';
 import {

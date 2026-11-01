@@ -21,7 +21,6 @@ import {
   AgentDirectories,
   AppState,
   type AgentDirectoriesPort,
-  type StateStore,
 } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -50,6 +49,7 @@ import {
 import type {
   ProcessLayerOptions,
   ProcessServices,
+  StateStore,
 } from '@texra-ai/harness/host';
 
 /** TeXRA's plugins that own row kinds or an agent-file block, as those
