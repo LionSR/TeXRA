@@ -40,7 +40,6 @@ import {
   isDisplaySessionEvent,
   RunIdSchema,
   aggregateTarget,
-  referencedAggregates,
   type AggregateId,
   type OwnerId,
   type RunParent,
@@ -879,9 +878,6 @@ export const databaseLayer = (
               const checked = new Set(checkedIds);
               for (const row of changed)
                 checked.add(aggregateOf(row.kind, row.logicalId));
-              for (const event of events) {
-                for (const id of referencedAggregates(event)) checked.add(id);
-              }
               const checkedAggregateIds = [...checked];
               return {
                 cursor,
