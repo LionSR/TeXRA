@@ -178,7 +178,10 @@ export const sessionInputsLayer = Layer.effect(
                   level: -1,
                   text: new Map() as InflightText,
                   local: initialLocal,
-                  change: replayState.change,
+                  // Every change the record holds: an aggregate that started
+                  // or moved its claim during the cold read is checked again
+                  // once its rows are in the view, not only by the replay.
+                  change: 0,
                 }),
                 (previous) =>
                   Effect.gen(function* () {

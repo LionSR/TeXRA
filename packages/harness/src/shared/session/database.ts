@@ -375,7 +375,8 @@ export class Database extends Context.Service<
     /** The event prefix, current claims and damaged runs from one read: the
      *  claims of `checkedIds` and of every aggregate whose existence or
      *  claim changed after `changedSince` (a row that changes one is such a
-     *  change too); `change` is the last such change the read saw. */
+     *  change too); `change` is the last such change the read saw, or
+     *  `changedSince` when there was none. */
     readonly readInputBatch: (
       ids: readonly AggregateId[],
       fromCommit: CommitOrdinal,
