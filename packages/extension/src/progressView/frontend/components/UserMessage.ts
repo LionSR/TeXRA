@@ -18,9 +18,9 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 // Local imports - shared styles
 import {
   decodeXmlEntities,
+  deliveryBodyEscaped,
   deliveryTagOf,
   formatScriptDeliverySummary,
-  DELIVERY_TAGS,
 } from '@texra-ai/harness/transcript';
 import { CopyButtonController } from '@texra/shared/litControllers/CopyButtonController';
 import { designTokens } from '@ui/styles';
@@ -45,13 +45,6 @@ import type {
   ScriptDeliverySummary,
   StoredMediaSchema,
 } from '@texra-ai/harness/schemas';
-
-// Derived from the single owned DELIVERY_TAGS list (`@texra-ai/harness/transcript`) so
-// a new child-run kind only needs one entry there. See that module for the
-// escaped-subset rationale.
-const XML_ESCAPED_TAGS = new Set(
-  DELIVERY_TAGS.filter((entry) => entry.escaped).map((entry) => entry.tag),
-);
 
 /** A user message's "Fork from here": the cut and the message with the
  *  media it attached, which the fork's composer holds. */
@@ -230,7 +223,7 @@ export class UserMessage extends LitElement {
     const tag = deliveryTagOf(this.text);
     const isStructuredDelivery =
       tag !== undefined || this.scriptSummary !== null;
-    const hasRawMessage = tag !== undefined && XML_ESCAPED_TAGS.has(tag);
+    const hasRawMessage = tag !== undefined && deliveryBodyEscaped(tag);
     const displayText = hasRawMessage
       ? decodeXmlEntities(this.text)
       : this.text;

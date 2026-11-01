@@ -56,6 +56,7 @@ export const codex: TexraPlugin = {
     codex_thread: 'comments',
     codex_turn: 'check-double',
   },
+  terminalOutput: ['codex'],
   card: {
     name: 'OpenAI Codex CLI',
     description:

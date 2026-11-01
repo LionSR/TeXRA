@@ -168,43 +168,17 @@ interface ContextManagementRow extends TranscriptRowBase {
 function decodeXmlEntities(text: string): string
 ```
 
-## DELIVERY_TAG
+## deliveryBodyEscaped
 
-Canonical tag names, referenced by producers instead of string literals.
-
-```ts
-const DELIVERY_TAG: { readonly subagentProgress: "subagent-progress"; readonly subagentResult: "subagent-result"; readonly subagentError: "subagent-error"; readonly backgroundResult: "background-result"; readonly backgroundError: "background-error"; readonly codexResult: "codex-result"; readonly codexError: "codex-error"; readonly claudeAgentResult: "claude-agent-result"; readonly claudeAgentError: "claude-agent-error"; readonly scriptResult: "script-result"; readonly scriptError: "script-error"; readonly childPaused: "child-paused"; readonly githubWebhookActivity: "github-webhook-activity"; }
-```
-
-## DELIVERY_TAGS
-
-Every recognized child-run delivery-envelope tag, in no particular order.
+Whether the envelope body is XML-entity-escaped (via `escapeText()` in
+the producer) and needs `decodeXmlEntities()` before display. An activity
+report (a plugin's bare `<family>-activity>` open on its own line)
+neutralizes
+embedded tag names rather than escaping, so it is the one kind that is
+not.
 
 ```ts
-const DELIVERY_TAGS: readonly DeliveryTagEntry[]
-```
-
-## DeliveryTagEntry
-
-```ts
-interface DeliveryTagEntry {
-  readonly tag: DeliveryTagName;
-  /**
-   * Whether the envelope body is XML-entity-escaped (via `escapeText()` in
-   * the producer) and needs `decodeXmlEntities()` before display.
-   * `github-webhook-activity` neutralizes embedded tag names instead
-   * rather than XML-entity-escaping, so it is not in the escaped subset.
-   */
-  readonly escaped: boolean;
-}
-```
-
-## DeliveryTagName
-
-Every canonical tag name — the union `DELIVERY_TAGS` entries must draw from.
-
-```ts
-type DeliveryTagName = (typeof DELIVERY_TAG)[keyof typeof DELIVERY_TAG];
+function deliveryBodyEscaped(tag: string): boolean
 ```
 
 ## deliveryTagOf
@@ -216,7 +190,7 @@ panel, and the progress-view message bubble. Leading whitespace is allowed
 because producers hand blocks to the render surfaces untrimmed.
 
 ```ts
-function deliveryTagOf(text: string): DeliveryTagName | undefined
+function deliveryTagOf(text: string): string | undefined
 ```
 
 ## dispatchedChildren

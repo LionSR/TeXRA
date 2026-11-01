@@ -43,7 +43,6 @@ import {
   type AgentTrace,
   type ToolCardHandle,
 } from '@texra-ai/harness/plugins';
-import { DELIVERY_TAG } from '@texra-ai/harness/transcript';
 import type { CodexApprovalPolicy } from '@texra/shared/agentCliSettings';
 import { CodexSandboxModeSchema } from '@texra/shared/agentCliSettings';
 import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
@@ -356,7 +355,7 @@ function buildCodexLaunch(params: {
     getUsage: codexTurnUsage,
     formatDelivery: (turn, wallTimeMs, lastPrompt) =>
       formatDelivery({
-        tag: DELIVERY_TAG.codexResult,
+        tag: 'codex-result',
         runId,
         prompt: lastPrompt,
         attributes: [{ name: 'thread-id', value: thread.id || null }],
@@ -366,7 +365,7 @@ function buildCodexLaunch(params: {
       }),
     formatError: (_turn, err, lastPrompt) =>
       formatDelivery({
-        tag: DELIVERY_TAG.codexError,
+        tag: 'codex-error',
         runId,
         prompt: lastPrompt,
         message: toErrorMessage(err),

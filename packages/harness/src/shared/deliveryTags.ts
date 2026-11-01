@@ -1,52 +1,49 @@
-// Single source of truth for the child-run delivery-envelope XML root tags
-// (`<subagent-result>`, `<codex-error>`, `<github-webhook-activity>`, …) that
-// producers (packages/harness/src/tools/*) mint and render surfaces (progressView
-// UserMessage, the CLI transcript) must recognize. Previously each render
-// surface hand-listed the tag vocabulary separately from the producers, so
-// a new child-run kind (e.g. `claude-agent-result`) could ship without ever
-// being added to a render list and would render as raw XML. Adding a new
-// child-run kind is now one entry here.
+// The child-run delivery-envelope XML root tags (`<subagent-result>`,
+// `<background-error>`, a plugin's `<…-result>`, …) that producers mint and
+// render surfaces (progressView UserMessage, the CLI transcript) recognize.
+//
+// The harness names only the tags its own child runs mint. A plugin's tag is
+// recognized by its shape, so a plugin declares nothing here and the harness
+// names no plugin: a result or an error it builds with `formatDelivery` is
+// `<family>-result` / `<family>-error` (an XML-entity-escaped body, opening
+// with the `id` attribute that builder writes first), and an activity report
+// is a bare `<family>-activity>` ending its line, whose body the plugin
+// neutralizes instead of escaping. `family` is lowercase words joined by `-`.
 //
 // Intentionally has NO host imports (no vscode, no Ink/React) so both
 // @shared (webview) and the CLI can consume it, matching subagentFollowup.ts.
 
-/** Canonical tag names, referenced by producers instead of string literals. */
+/** The tags the harness's own child runs mint, referenced by its producers
+ *  instead of string literals. */
 export const DELIVERY_TAG = {
   subagentProgress: 'subagent-progress',
   subagentResult: 'subagent-result',
   subagentError: 'subagent-error',
   backgroundResult: 'background-result',
   backgroundError: 'background-error',
-  codexResult: 'codex-result',
-  codexError: 'codex-error',
-  claudeAgentResult: 'claude-agent-result',
-  claudeAgentError: 'claude-agent-error',
   scriptResult: 'script-result',
   scriptError: 'script-error',
   childPaused: 'child-paused',
-  githubWebhookActivity: 'github-webhook-activity',
 } as const;
 
-/** Every canonical tag name — the union `DELIVERY_TAGS` entries must draw from. */
-export type DeliveryTagName = (typeof DELIVERY_TAG)[keyof typeof DELIVERY_TAG];
+const FAMILY = '[a-z][a-z0-9]*(?:-[a-z0-9]+)*';
 
-export interface DeliveryTagEntry {
-  readonly tag: DeliveryTagName;
-  /**
-   * Whether the envelope body is XML-entity-escaped (via `escapeText()` in
-   * the producer) and needs `decodeXmlEntities()` before display.
-   * `github-webhook-activity` neutralizes embedded tag names instead
-   * rather than XML-entity-escaping, so it is not in the escaped subset.
-   */
-  readonly escaped: boolean;
+/** A regex alternation matching every delivery tag name, harness-minted or a
+ *  plugin's; a plugin's carries the lookahead its shape requires. */
+export const DELIVERY_TAG_PATTERN = [
+  ...Object.values(DELIVERY_TAG),
+  `${FAMILY}-(?:result|error)(?= id=")`,
+  `${FAMILY}-activity(?=>\n)`,
+].join('|');
+
+/**
+ * Whether the envelope body is XML-entity-escaped (via `escapeText()` in
+ * the producer) and needs `decodeXmlEntities()` before display. An activity
+ * report (a plugin's bare `<family>-activity>` open on its own line)
+ * neutralizes
+ * embedded tag names rather than escaping, so it is the one kind that is
+ * not.
+ */
+export function deliveryBodyEscaped(tag: string): boolean {
+  return !tag.endsWith('-activity');
 }
-
-/** The tags whose bodies are neutralized rather than XML-entity-escaped. */
-const UNESCAPED_DELIVERY_TAGS = new Set<DeliveryTagName>([
-  DELIVERY_TAG.githubWebhookActivity,
-]);
-
-/** Every recognized child-run delivery-envelope tag, in no particular order. */
-export const DELIVERY_TAGS: readonly DeliveryTagEntry[] = Object.values(
-  DELIVERY_TAG,
-).map((tag) => ({ tag, escaped: !UNESCAPED_DELIVERY_TAGS.has(tag) }));
