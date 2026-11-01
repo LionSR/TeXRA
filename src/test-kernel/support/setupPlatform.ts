@@ -15,12 +15,8 @@ import { ConfigProvider, Context, Effect, Layer } from 'effect';
 import { afterEach, beforeEach, vi } from 'vitest';
 
 import type { AgentCatalogShape } from '@agent/index/agentCatalog';
-import type { ProcessLayerOptions } from '@controllers/session/sessionLayer';
-import {
-  GlobalValues,
-  type ProcessServices,
-  type SessionOwner,
-} from '@platform/processRuntime';
+import type { SessionOwner } from '@agent/runtime/rootLaunch';
+import { GlobalValues } from '@platform/processRuntime';
 import {
   AgentDirectories,
   AppState,
@@ -51,6 +47,10 @@ import {
   type FakeProcessPorts,
   type FakePlatformOptions,
 } from './FakePlatform';
+import type {
+  ProcessLayerOptions,
+  ProcessServices,
+} from '@texra-ai/harness/host';
 
 /** TeXRA's plugins that own row kinds or an agent-file block, as those
  *  only: what a store under test reads their rows with, and a catalog under
@@ -330,7 +330,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('./testProcessRuntime'),
     import('effect'),
     import('@test/support/fetchTestUtils'),
-    import('@platform/processRuntime'),
+    import('@agent/runtime/rootLaunch'),
     import('@agent/index/agentCatalog'),
     // The production composition even in a suite that mocks its module
     // (`AgentPackage`'s stand-in composes over this runtime).

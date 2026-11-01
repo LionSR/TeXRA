@@ -315,7 +315,7 @@ happens to carry.
 
 ```ts
 type CallServices =
-  ProcessServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
+  RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
 ```
 
 ## CellError

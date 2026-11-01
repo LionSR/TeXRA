@@ -2,16 +2,14 @@ import { Context, Effect, Layer, ManagedRuntime } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
 import { processLayer } from '@texra-ai/harness/host';
+import type { SessionOwner } from '@agent/runtime/rootLaunch';
 import { validationModelLayer } from '@cli/runtime/validationModel';
-import {
-  type ProcessServices,
-  type SessionOwner,
-  withForkFailureReporting,
-} from '@platform/processRuntime';
+import { withForkFailureReporting } from '@platform/processRuntime';
 import type { Plugin } from '@tools/plugins';
 import { initTestProcessRuntime } from './testProcessRuntime';
 import { createFakeWorkspaceRoots } from './FakePlatform';
 import { testProcessOptions } from './setupPlatform';
+import type { ProcessServices } from '@texra-ai/harness/host';
 
 /**
  * The test kernel's process runtime and session graph family (PRD

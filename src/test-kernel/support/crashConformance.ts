@@ -77,9 +77,9 @@ import {
 } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
+import { withProcessServices } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withProcessServices } from '@platform/processRuntime';
 import {
   AgentConfigSchema,
   qualifyAggregateId,

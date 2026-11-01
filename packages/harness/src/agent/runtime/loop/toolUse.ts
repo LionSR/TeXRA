@@ -29,7 +29,6 @@ import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
-import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import { RunHistory, type RunCell } from '@shared/session/runHistory';
@@ -64,6 +63,7 @@ import { openingHooks, stopHooks } from './hooks';
 import { stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { registryOf, Runs } from '../runRegistry';
+import type { RunServices } from '../ToolServices';
 import type { RunControls } from '../runs';
 import type { ChildRunBoundary } from '../childRunLoop';
 import type { RunReport } from '../runReport';
@@ -94,7 +94,7 @@ const turnResponse = (at: RunState): string =>
 type TurnServices =
   | AgentRun
   | RunHistory
-  | ProcessServices
+  | RunServices
   | Runs
   | ModelAccess
   | WorkspaceFs
@@ -178,7 +178,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // -------------------------------------------------------------- opening
   const openFresh = Effect.fn('toolUse.open')(function* (
     cell: RunCell,
-  ): Effect.fn.Return<RunCell, Error, ProcessServices> {
+  ): Effect.fn.Return<RunCell, Error, RunServices> {
     const bound = yield* SynchronizedRef.get(run.model);
     // The state its first step opens on: what the opening batch records.
     const { backend } = bound;

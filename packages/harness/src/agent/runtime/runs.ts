@@ -4,11 +4,14 @@
  * `Runs` tag that serves these is its module's.
  */
 
-import type { SessionOwner } from '@platform/processRuntime';
 import type { CommitOrdinal, RunId } from '@shared/schemas';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import type { Effect } from 'effect';
-import type { RootLaunchOptions, RootLaunchRequest } from './rootLaunch';
+import type {
+  RootLaunchOptions,
+  RootLaunchRequest,
+  SessionOwner,
+} from './rootLaunch';
 
 /** A root launch: what to run, and with which options. */
 export interface RootLaunch {

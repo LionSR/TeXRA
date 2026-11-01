@@ -1,19 +1,6 @@
 {
   "semantics": "Names the packages/harness/src directories import across an edge that does not point strictly down the layer order in packages/harness/AGENTS.md \"Layer order\" (HARNESS_LAYERS in src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts): an upward edge, an edge within one layer, or either half of a two-way directory pair. Keys are from->to directories (`entries` is the package entry files at the root); each name is module#name under the target directory, prefixed `type ` when every use across the edge is type-only (`*` is a namespace, side-effect, dynamic or export-star import). Downward edges are not listed. The ratchet fails on a new name, on a type name that gains a value use, and on a listed name that is gone or now only a type until the file is shrunk with `npx vitest run src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts -u`.",
   "names": {
-    "effect->platform": [
-      "defaults/longRunningModelTransport#installProcessHttpDispatcher",
-      "interfaces#AgentDirectories",
-      "interfaces#AppState",
-      "processRuntime#SessionOwner",
-      "secrets#Secrets",
-      "type interfaces#AgentDirectoriesPort",
-      "type interfaces#ToolMissingHandler",
-      "type processRuntime#HostSkillOptions",
-      "type processRuntime#ProcessServices",
-      "type secrets#PlatformSecrets",
-      "type workspaceRoots#WorkspaceRoots"
-    ],
     "platform->shared": [
       "schemas#AgentSourceSchema",
       "session/database#DatabaseOpenFailed",
@@ -26,21 +13,6 @@
       "type state/stateSettings#SettingsCatalog",
       "type state/stateSettings#StateSettingEntry",
       "type usageLog#UsageLog"
-    ],
-    "platform->agent": [
-      "type index/agentCatalog#AgentCatalog",
-      "type runtime/SessionHandle#SessionOwnerShape",
-      "type runtime/run/invocation#RouteRetries"
-    ],
-    "platform->skills": ["type skillSources#SkillSourceOptions"],
-    "platform->tools": [
-      "type liveTools#ToolCatalog",
-      "type toolAvailabilityService#ToolAvailability",
-      "type toolTable#ToolRegistry"
-    ],
-    "platform->effect": [
-      "type processLayer#Sessions",
-      "type sessions#AgentPlatform"
     ],
     "platform->utils": [
       "core/idHash#truncatedHexId",
@@ -85,7 +57,6 @@
       "core/tools/toolSchema#inputSchema",
       "followUp/ToolUseFollowUp#presentFollowUpResult",
       "followUp/ToolUseFollowUp#submitFollowUp",
-      "followUp/ToolUseFollowUp#wakeRun",
       "followUp/followUpMessages#senderOf",
       "index/agentCatalog#AgentCatalog",
       "memory/memoryMeta#buildFile",
@@ -127,7 +98,6 @@
       "runtime/forkRun#forkSeed",
       "runtime/historyQuery/views#HISTORY_VIEW_SUMMARY",
       "runtime/loop/step#offeredBy",
-      "runtime/resumeBlocker#resumeBlocker",
       "runtime/run/toolResultText#TOOL_RESULT_TRUNCATION_HEAD_CHARS",
       "runtime/run/toolResultText#TOOL_RESULT_TRUNCATION_TAIL_CHARS",
       "runtime/runApprovalQueue#goalGrant",
@@ -168,25 +138,6 @@
       "type storage/conversationFormat#ConversationFormatOptions",
       "type trace#AgentTrace"
     ],
-    "tools->platform": [
-      "appSignals#AppSignals",
-      "appSignals#emitAppSignal",
-      "appSignals#onAppSignal",
-      "defaults/longRunningModelTransport#undiciFetchThrough",
-      "interfaces#AgentDirectories",
-      "interfaces#AppState",
-      "interfaces#StateReadFailed",
-      "rootedFs#StorageFs",
-      "rootedFs#WorkspaceFs",
-      "type interfaces#ConfigProvider",
-      "type interfaces#StateStore",
-      "type interfaces#StateWriteFailed",
-      "type processRuntime#AgentCatalogServices",
-      "type processRuntime#GlobalValues",
-      "type processRuntime#PluginContext",
-      "type secrets#Secrets",
-      "type workspaceRoots#WorkspaceRoots"
-    ],
     "tools->transcript": ["completedRunArchive#readCompletedRunConversation"],
     "transcript->agent": [
       "runtime/run/toolResultText#formatToolResultAsText",
@@ -195,29 +146,6 @@
       "type core/definition/RunRecord#RunRecord",
       "type export/schemas#ExportNode",
       "type runtime/SessionHandle#SessionHandle"
-    ],
-    "agent->platform": [
-      "defaults/longRunningModelTransport#modelFetch",
-      "defaults/nodeProcesses#nodeProcesses",
-      "interfaces#AgentDirectories",
-      "interfaces#AgentDirectoriesFailed",
-      "interfaces#AppState",
-      "interfaces#StateReadFailed",
-      "processRuntime#SessionOwner",
-      "rootedFs#GlobalStorageFs",
-      "rootedFs#sessionFsLayer",
-      "secrets#Secrets",
-      "type defaults/nodeProcesses#ProcessProbe",
-      "type interfaces#AgentDirectoriesPort",
-      "type interfaces#ConfigProvider",
-      "type interfaces#StateStore",
-      "type interfaces#StateWriteFailed",
-      "type processRuntime#AgentCatalogServices",
-      "type processRuntime#PluginContext",
-      "type processRuntime#ProcessServices",
-      "type rootedFs#StorageFs",
-      "type rootedFs#WorkspaceFs",
-      "type workspaceRoots#WorkspaceRoots"
     ],
     "agent->tools": [
       "approval/bashApproval#buildBashApprovalRejectedResult",
