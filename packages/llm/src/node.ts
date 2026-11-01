@@ -259,6 +259,22 @@ export interface SubscriptionCredential {
 }
 
 /**
+ * The coordinator of each route that signs in with a session, keyed by every
+ * such route so a new one does not compile until it names its coordinator.
+ * Only the ChatGPT session names a plan.
+ */
+const SESSION_COORDINATORS: {
+  readonly [R in Exclude<CredentialRoute['kind'], 'api-key'>]: (
+    secrets: CredentialStore,
+  ) => SubscriptionCoordinator<
+    SubscriptionSession & { readonly planType?: string }
+  >;
+} = {
+  'chatgpt-subscription': codexCoordinator,
+  'xai-subscription': xaiCoordinator,
+};
+
+/**
  * The credential a subscription route sends, from the session `secrets`
  * stores, refreshed when it expires soon. `rejected` is a token the provider
  * rejected although its stored expiry still calls it fresh (revoked, or
@@ -269,12 +285,7 @@ export function subscriptionCredential(
   secrets: CredentialStore,
   rejected: string | undefined,
 ): Effect.Effect<SubscriptionCredential, Error, HttpClient.HttpClient> {
-  const coordinator: SubscriptionCoordinator<
-    SubscriptionSession & { readonly planType?: string }
-  > =
-    route === 'chatgpt-subscription'
-      ? codexCoordinator(secrets)
-      : xaiCoordinator(secrets);
+  const coordinator = SESSION_COORDINATORS[route](secrets);
   const session = Effect.map(coordinator.getFreshSession(), (fresh) => ({
     bearer: fresh.accessToken,
     accountId: fresh.accountId ?? null,
