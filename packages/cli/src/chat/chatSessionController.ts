@@ -501,15 +501,11 @@ export function createChatSessionController(
             // conversation. The new round continues the previous one, so bypass
             // resolution falls through to whatever the prior round had, unless
             // this round sets its own explicit value.
-            const approval = launchApproval(init.approvalPolicy());
             const run = yield* runSession.start({
               config: registeredConfig,
               runId,
               continues: rootRunId.get(),
-              approval: {
-                policy: approval.approvalPolicy,
-                delegated: approval.approveDelegatedWork,
-              },
+              approval: launchApproval(init.approvalPolicy()),
               interactive: true,
             });
             rootRunId.set(run.runId);

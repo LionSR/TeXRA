@@ -420,32 +420,15 @@ export const serviceHandlers = TexraRpcs.toLayer(
             ),
           ),
         ),
-      'task.start': ({
-        workspace,
-        runId,
-        config,
-        continues,
-        preferHelperModel,
-        approveDelegatedWork,
-        approvalPolicy,
-      }) =>
+      'task.start': ({ workspace, start }) =>
         Effect.scoped(
           Effect.gen(function* () {
             yield* refuseWhileDraining;
             const { session } = yield* open(workspace);
             const run: Run = yield* admit(
               runs,
-              session.start({
-                config,
-                runId,
-                ...(continues !== null && { continues }),
-                helperModel: preferHelperModel,
-                approval: {
-                  delegated: approveDelegatedWork,
-                  ...(approvalPolicy !== null && { policy: approvalPolicy }),
-                },
-                interactive: true,
-              }),
+              // A service task stays open for its windows' follow-ups.
+              session.start({ ...start, interactive: true }),
               // A start fails before its run opens, with no row to show
               // it: the project's windows are told here, once, and the
               // client hears that they were.

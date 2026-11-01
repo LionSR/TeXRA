@@ -18,7 +18,7 @@
  *   [`ApprovalPolicySchema`](#approvalpolicyschema), [`resolveBypass`](#resolvebypass).
  * - **Agent definitions & run outcomes**: [`AgentConfigSchema`](#agentconfigschema),
  *   [`InlinePersonaSchema`](#inlinepersonaschema), [`RunEndSchema`](#runendschema),
- *   [`RunIdSchema`](#runidschema).
+ *   [`RunIdSchema`](#runidschema), [`StartRequestSchema`](#startrequestschema).
  * - **Settings & trace export**: [`settingsCatalog`](#settingscatalog),
  *   [`configTreeRows`](#configtreerows), [`GlobalStateKey`](#globalstatekey),
  *   [`WorkspaceStateKey`](#workspacestatekey), [`TraceDocumentSchema`](#tracedocumentschema).
@@ -194,7 +194,8 @@ export {
   type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
 // A request a host sends a session, the outcome or the error class it is
-// answered with, and a tool edit's hunks as unified-diff lines.
+// answered with, a run's start as data, and a tool edit's hunks as
+// unified-diff lines.
 export {
   Cancelled,
   formatHunkLines,
@@ -203,6 +204,7 @@ export {
   Rejected,
   RequestErrorSchema,
   RuntimeRequestSchema,
+  StartRequestSchema,
   type RequestError,
   type RuntimeRequest,
 } from '@shared/session/runtimeRequest';

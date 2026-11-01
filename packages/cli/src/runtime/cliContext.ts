@@ -41,6 +41,7 @@ import { loadCliStartupConfig } from './cliConfig';
 import { loginShellEnvironment } from './loginShellEnv';
 import { resolveCliResourcesPath } from './resourcesPath';
 import { interactiveTerminalFailure } from './terminalRequirements';
+import type { StartInput } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type CliMode = 'headless' | 'interactive';
@@ -495,13 +496,12 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
  * also grants the run every bypass (an Auto-approve launch), recorded on
  * the run, never on the project. Local and service launches alike.
  */
-export function launchApproval(requested: ApprovalPolicy | undefined): {
-  readonly approvalPolicy?: ApprovalPolicy;
-  readonly approveDelegatedWork: boolean;
-} {
+export function launchApproval(
+  requested: ApprovalPolicy | undefined,
+): StartInput['approval'] {
   return {
-    ...(requested !== undefined && { approvalPolicy: requested }),
-    approveDelegatedWork: requested === 'yolo',
+    ...(requested !== undefined && { policy: requested }),
+    delegated: requested === 'yolo',
   };
 }
 

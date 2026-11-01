@@ -177,14 +177,10 @@ function launchOn(
         ),
       ),
     );
-  const approval = launchApproval(runContext.requestedApprovalPolicy);
   return session.start({
     config: request.config,
     runId: request.runId,
-    approval: {
-      policy: approval.approvalPolicy,
-      delegated: approval.approveDelegatedWork,
-    },
+    approval: launchApproval(runContext.requestedApprovalPolicy),
     interactive: options.stopAfterCycle !== true,
   });
 }
