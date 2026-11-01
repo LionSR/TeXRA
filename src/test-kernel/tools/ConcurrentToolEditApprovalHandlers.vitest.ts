@@ -2,12 +2,13 @@
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Stream } from 'effect';
+import { Effect, Fiber, Stream, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
 import { requestToolEditApproval } from '@texra-ai/harness/plugins';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionLog } from '@shared/session/runHistory';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -34,24 +35,34 @@ describe('Concurrent session tool edit approval handlers', () => {
           };
         }
 
-        function attachWindow(session: SessionHandle, appliedContent: string) {
+        function attachWindow(
+          session: Context.Context<SessionServices>,
+          appliedContent: string,
+        ) {
           return Effect.gen(function* () {
             const seen: string[] = [];
             yield* Effect.forkScoped(
-              Stream.runForEach(session.log.tail(session.log.now()), (event) =>
-                Effect.sync(() => {
-                  if (event.type !== 'request.opened') return;
-                  if (event.payload.kind !== 'toolEdit') return;
-                  seen.push(event.payload.data.relativePath);
-                  publishTestRows(session, [
-                    {
-                      type: 'request.decided',
-                      aggregateId: event.aggregateId,
-                      requestId: event.requestId,
-                      decision: { action: 'approve', content: appliedContent },
-                    },
-                  ]);
-                }),
+              Stream.runForEach(
+                Context.get(session, SessionLog).tail(
+                  Context.get(session, SessionLog).now(),
+                ),
+                (event) =>
+                  Effect.sync(() => {
+                    if (event.type !== 'request.opened') return;
+                    if (event.payload.kind !== 'toolEdit') return;
+                    seen.push(event.payload.data.relativePath);
+                    publishTestRows(session, [
+                      {
+                        type: 'request.decided',
+                        aggregateId: event.aggregateId,
+                        requestId: event.requestId,
+                        decision: {
+                          action: 'approve',
+                          content: appliedContent,
+                        },
+                      },
+                    ]);
+                  }),
               ),
             );
             return seen;
@@ -70,12 +81,18 @@ describe('Concurrent session tool edit approval handlers', () => {
 
         const runA = publishTestRunStart(sessionA);
         const runB = publishTestRunStart(sessionB);
-        yield* Effect.all([sessionA.log.settled, sessionB.log.settled], {
-          concurrency: 'unbounded',
-        });
+        yield* Effect.all(
+          [
+            Context.get(sessionA, SessionLog).settled,
+            Context.get(sessionB, SessionLog).settled,
+          ],
+          {
+            concurrency: 'unbounded',
+          },
+        );
 
         const call = (
-          session: SessionHandle,
+          session: Context.Context<SessionServices>,
           runId: typeof runA,
           request: PendingToolEdit,
         ) =>

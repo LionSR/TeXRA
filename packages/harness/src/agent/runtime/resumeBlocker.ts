@@ -4,7 +4,7 @@
  * installed plugin that is off or not trusted as it is now. An inline
  * persona travels with its record, so nothing blocks it. A resume that
  * meets one does not fail the run: the run stays interrupted, the reason
- * goes into the projection (`SessionHandle.view.markResumeBlocked`), and the
+ * goes into the projection (`SessionViewAccess.markResumeBlocked`), and the
  * session's follower (`followInterruptedTasks`) clears it once the catalog
  * says it is back, resuming the run when the session was opened to resume
  * its interrupted tasks.
@@ -22,25 +22,24 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCatalogServices } from '@agent/index/agentEntry';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
+import { SessionRoots } from '@platform/rootedFs';
 import type { StateReadFailed } from '@shared/config/settings';
 import { agentName, type ResumeBlocked } from '@shared/schemas';
 
-import type { SessionHandle } from './SessionHandle';
-
 /** What blocks resuming a run of `config` here, or null when nothing does. */
 export const resumeBlocker = Effect.fn('resumeBlocker')(function* (
-  session: SessionHandle,
   config: Pick<AgentConfig, 'agent' | 'agentSource'>,
 ): Effect.fn.Return<
   ResumeBlocked | null,
   AgentCatalogLoadError | StateReadFailed,
-  AgentCatalog | AgentCatalogServices | FileSystem.FileSystem
+  AgentCatalog | AgentCatalogServices | FileSystem.FileSystem | SessionRoots
 > {
   if (config.agentSource === 'inline') return null;
+  const roots = yield* SessionRoots;
   // The launch's own resolution: the settled catalog, rescanned once on a
   // miss, so an agent saved a moment ago is found.
   const entry = yield* (yield* AgentCatalog)
-    .forLaunch(session.roots, config.agent, config.agentSource)
+    .forLaunch(roots, config.agent, config.agentSource)
     .pipe(Effect.catchTag('AgentNotFound', () => Effect.void));
   // The catalog lists a plugin's agents only while the plugin loads, so a
   // plugin agent it misses is answered by the plugin's install record.
@@ -53,7 +52,7 @@ export const resumeBlocker = Effect.fn('resumeBlocker')(function* (
       ? { kind: 'blocked', blocker: 'agentMissing', name: config.agent }
       : null;
   const plugin = name.slice(0, name.indexOf(':'));
-  const load = yield* readInstalledPluginLoad(session.roots);
+  const load = yield* readInstalledPluginLoad(roots);
   if (load.loadable.some(({ record }) => record.name === plugin)) return null;
   // An enabled plugin the load holds back is not trusted as it is now; any
   // other is off or gone.

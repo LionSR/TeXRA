@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { withLogChannel } from '@logger/effectLog';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type { RunView } from '@shared/session/sessionView';
@@ -13,16 +13,16 @@ const CHANNEL = 'LeftoverRunSweep';
  * its parent finishes as it resumes (`closeLeftoverChildren`).
  */
 export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
-  session: SessionHandle,
   cohort: Iterable<RunView>,
 ) {
+  const requests = yield* SessionRequests;
   for (const shell of cohort) {
     if (
       shell.identity.kind !== 'process' ||
       !isTerminalOutcomePhase(shell.status)
     )
       continue;
-    yield* session.requests
+    yield* requests
       .removeRun(shell.id, 'automatic', shell.createdAt)
       .pipe(
         Effect.catch((error) =>

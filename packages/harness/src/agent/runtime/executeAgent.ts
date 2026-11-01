@@ -5,7 +5,7 @@
  * (`endRun`, `AgentRunLifecycle`). A root launch reaches it through
  * `rootRun` (`session.start`), a resume through `resumeRun`, and a child's
  * strategy through `programs.executeAgent`; it runs on a fiber
- * `RunRegistry.start` forked, which provides the session's `Runs`.
+ * `RunRegistry.start` forked, whose context carries the session's services.
  */
 import { Deferred, Effect, Exit, Fiber, Layer, Scope } from 'effect';
 
@@ -18,7 +18,7 @@ import { logUserMessage, TraceEmitter } from '@agent/trace';
 import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
-import { sessionFsLayer } from '@platform/rootedFs';
+import { SessionRoots } from '@platform/rootedFs';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import {
   type CommitOrdinal,
@@ -29,7 +29,7 @@ import {
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
-import { RunHistory } from '@shared/session/runHistory';
+import { SessionLog } from '@shared/session/runHistory';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 
@@ -46,14 +46,11 @@ import type { AgentRunServices } from './runRegistry';
 import type { RunReport } from './runReport';
 import type { ChildRunTurns } from './childRunLoop';
 import type { PreparedAgentDefinition } from './AgentLaunchContext';
-import type { SessionHandle } from './SessionHandle';
 
 const CHANNEL = 'executeAgent';
 
 /** Options for {@link executeAgent}. */
 export interface ExecuteAgentOptions {
-  /** Session owning this run's coordination state. */
-  readonly session: SessionHandle;
   /** A fresh run's registration, which its opening batch commits: the run
    *  is born with its opening or not at all. Absent, the run is resumed. */
   readonly registration?: RegisterRunOptions;
@@ -91,12 +88,12 @@ const enterRun = Effect.fn('enterRun')(function* (
   options: ExecuteAgentOptions,
   opened: Deferred.Deferred<void>,
 ) {
-  const { session } = options;
+  const log = yield* SessionLog;
   const { config, stopAfterCycle } = definition;
   const registered =
     options.registration === undefined
       ? null
-      : yield* registrationRows(session, runId, config, {
+      : yield* registrationRows(runId, config, {
           ...options.registration,
           userFollowUpSupport: stopAfterCycle
             ? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED
@@ -109,7 +106,7 @@ const enterRun = Effect.fn('enterRun')(function* (
   const registration = registered;
   let held: AgentEvent[] | null = [];
   const logger = new TraceEmitter((event) =>
-    held === null ? session.log.publish(runId, event) : held.push(event),
+    held === null ? log.publish(runId, event) : held.push(event),
   );
   yield* Effect.addFinalizer(() => Effect.sync(() => logger.close()));
   let carried = 0;
@@ -127,13 +124,13 @@ const enterRun = Effect.fn('enterRun')(function* (
   const scope = yield* Effect.scope;
   const entered: RunLaunch['entry']['entered'] = (state) =>
     Effect.sync(() => {
-      for (const e of held?.slice(carried) ?? []) session.log.publish(runId, e);
+      for (const e of held?.slice(carried) ?? []) log.publish(runId, e);
       held = null;
     }).pipe(
       Effect.andThen(
         registration === null
           ? Effect.void
-          : Scope.provide(session.log.hold(runId, { ends: true }), scope),
+          : Scope.provide(log.hold(runId, { ends: true }), scope),
       ),
       Effect.andThen(Deferred.succeed(opened, undefined)),
       Effect.andThen(options.onAdmitted?.(runId, state.commit) ?? Effect.void),
@@ -164,10 +161,9 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     parseWorkingDirectory(config.workingDirectory),
   );
 
-  // The session is resolved once at the boundary and carried in, so a
-  // delegated launch inherits the parent run's session policy and a root
-  // launch gets the process default exactly once.
-  const { session } = options;
+  // The session is the fiber's: a delegated launch runs on its parent's
+  // session, and a root launch on the session it was started on.
+  const roots = yield* SessionRoots;
   const resumed = options.registration === undefined;
   const { logger: agentLogger, entry } = yield* enterRun(
     definition,
@@ -217,15 +213,14 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
             // The session's own roots, handed to prompt assembly as data,
             // so file reads resolve in this project, not the calling
             // fiber's.
-            workspacePath: session.roots.workspace,
+            workspacePath: roots.workspace,
             workingDirectory,
-            storageRoot: session.roots.storage,
+            storageRoot: roots.storage,
           },
         );
 
   const launch: RunLaunch = {
     runId,
-    session,
     workingDirectory,
     config,
     persona,
@@ -247,13 +242,13 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
  * The run program, fresh or resumed: it opens the run's entry (a fresh run
  * registers with its opening, `options.registration`; a resume activates
  * the run its rows hold) and runs the loop with the per-run layer: its
- * `AgentRun`, the invoker, the session's run history and rooted
- * filesystems. Every way the loop exits reaches the run's terminal
+ * `AgentRun` and the invoker, over the session's services its fiber
+ * carries. Every way the loop exits reaches the run's terminal
  * (`endRun`) exactly once, as the exit of the one masked region it runs
  * in: a started run is always finalized, and a failed one arrives as a
  * FAILED report carrying its failure. Root launches use `rootRun` and
  * resumes `resumeRun`; this runs on a fiber `RunRegistry.start` forked,
- * which provides the session's `Runs`.
+ * whose context carries the session's services.
  */
 export function executeAgent(
   definition: PreparedAgentDefinition,
@@ -269,7 +264,7 @@ export function executeAgent(
       options,
       opened,
     );
-    const { config, session } = launch;
+    const { config } = launch;
     const resume = options.registration === undefined;
     const loop = runToolUse({ turns: options.turns, resume }).pipe(
       Effect.provide(
@@ -281,8 +276,6 @@ export function executeAgent(
               callbacks: { onProgress: options.onProgress },
             }),
           ),
-          Layer.provideMerge(Layer.succeed(RunHistory)(session.runHistory)),
-          Layer.provideMerge(sessionFsLayer(session.roots)),
         ),
       ),
     );
@@ -300,7 +293,6 @@ export function executeAgent(
             runId,
             config,
             definition.agentEntry.description,
-            session,
             resume,
           ),
         ),

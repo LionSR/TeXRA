@@ -29,9 +29,14 @@ import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
-import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
+import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { SessionRoots } from '@platform/rootedFs';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
-import { RunHistory, type RunCell } from '@shared/session/runHistory';
+import {
+  RunHistory,
+  SessionLog,
+  type RunCell,
+} from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
 import { turnText } from '@shared/session/runFacts';
 import { sentDefinitions } from '@tools/catalogEntries';
@@ -62,8 +67,7 @@ import { dispatchPendingResponse } from './toolUseDispatch';
 import { openingHooks, stopHooks } from './hooks';
 import { stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
-import { registryOf, Runs } from '../runRegistry';
-import type { RunServices } from '../ToolServices';
+import { registryOf, Runs, type AgentRunServices } from '../runRegistry';
 import type { RunControls } from '../runs';
 import type { ChildRunBoundary } from '../childRunLoop';
 import type { RunReport } from '../runReport';
@@ -91,14 +95,7 @@ const turnResponse = (at: RunState): string =>
   at.handedDown?.status === 'error' ? at.handedDown.error : at.answer;
 
 /** What a turn of the loop reads from its run's context. */
-type TurnServices =
-  | AgentRun
-  | RunHistory
-  | RunServices
-  | Runs
-  | ModelAccess
-  | WorkspaceFs
-  | StorageFs;
+type TurnServices = AgentRun | AgentRunServices | ModelAccess;
 
 /**
  * The policy a committed text-only response runs, read off the rows:
@@ -151,7 +148,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const run = yield* AgentRun;
   const invoker = yield* ModelInvoker;
   const access = yield* ModelAccess;
-  const { runId, session, logger } = run;
+  const { runId, logger } = run;
+  const log = yield* SessionLog;
+  const roots = yield* SessionRoots;
   const isChild = () => run.entry.parent !== null;
   // A conversation claims its own input lease, never a parent's (FollowUps).
   const followUps = yield* claimFollowUps(run);
@@ -159,7 +158,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     runId,
     logger,
     invoker,
-    stores: session.roots,
+    stores: roots,
   });
 
   // ---------------------------------------------------------------- state
@@ -172,13 +171,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // ------------------------------------------------------------ host port
   const controls: RunControls = {
     oneShot: run.toolPolicy.stopAfterCycle === true,
-    ...modelSwitchPort(run, access),
+    ...modelSwitchPort(run, access, yield* Inbox),
   };
 
   // -------------------------------------------------------------- opening
   const openFresh = Effect.fn('toolUse.open')(function* (
     cell: RunCell,
-  ): Effect.fn.Return<RunCell, Error, RunServices> {
+  ): Effect.fn.Return<RunCell, Error, AgentRunServices> {
     const bound = yield* SynchronizedRef.get(run.model);
     // The state its first step opens on: what the opening batch records.
     const { backend } = bound;
@@ -218,8 +217,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           run.persona.prompt,
           run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`))),
           {
-            workspace: session.roots.workspace,
-            settings: session.roots,
+            workspace: roots.workspace,
+            settings: roots,
             textOnly: bound.textOnly,
           },
         );
@@ -239,7 +238,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                   run.fileService.locateSource(p),
                 ),
                 bound.config.capabilities,
-                run.session.roots.config,
+                roots.config,
               )
             : Effect.succeed({ parts: [], kinds: [] }),
         );
@@ -406,7 +405,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const loopBody = (cell: RunCell) =>
     Effect.gen(function* () {
       // A resumed run first finishes what its children were left as.
-      if (start.resume) yield* closeLeftoverChildren(session, runId);
+      if (start.resume) yield* closeLeftoverChildren(runId);
       for (;;) {
         let state = yield* cell.current;
         const parked =
@@ -461,7 +460,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         state = yield* compaction.finish(cell);
         // The turn's trace rows are queued ahead of the boundary: the
         // barrier lets the open streams `waiting` closes count every one.
-        yield* session.log.settled;
+        yield* log.settled;
         // The turn boundary, in one batch: Stop hooks, the steps (`waiting`
         // closes open streams and is the rest a resume's receipt reads), a
         // child's turn result with its parent's delivery, and a Stop hook's
@@ -476,7 +475,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             : null;
         const ending = [
           positionRow(runId, state, 'turn.end'),
-          ...session.trace.closure(runId),
+          ...log.closure(runId),
           positionRow(runId, state, 'waiting'),
           ...(childTurn?.rows ?? []),
         ];

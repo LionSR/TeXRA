@@ -12,6 +12,7 @@
  */
 import {
   Cause,
+  type Context,
   Effect,
   Exit,
   Option,
@@ -32,8 +33,18 @@ import {
   type DisplaySessionEvent,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
+import {
+  HistoryPageSchema,
+  HistoryQueryFailed,
+  HistoryQueryRefused,
+  SessionLog,
+  type HistoryCell,
+  type HistoryPage,
+  type HistoryQuery,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import { recordOf } from '@shared/session/runRowReads';
-import type { SessionView } from '@shared/session/sessionView';
+import { type SessionView } from '@shared/session/sessionView';
 
 import { HISTORY_QUERY_CHILD_SOURCE } from './childSource';
 import {
@@ -44,7 +55,6 @@ import {
   replaceRuns,
   type HistoryWrite,
 } from './views';
-import type { SessionHandle } from '../SessionHandle';
 import type { PlatformError } from 'effect/PlatformError';
 
 const CHANNEL = 'HistoryQuery';
@@ -58,37 +68,6 @@ const STORE_HEAP_LIMIT_BYTES = 1024 * 1024 * 1024;
 /** Capped rows per append keep requests bounded for any history length. */
 const APPEND_ROWS = 500;
 
-/** A correctable query refusal: SQLite's error or the exceeded limit. */
-export class HistoryQueryRefused extends Schema.TaggedError<HistoryQueryRefused>()(
-  'HistoryQueryRefused',
-  {
-    reason: Schema.Literals([
-      'not-a-read',
-      'rejected',
-      'timeout',
-      'result-too-large',
-    ]),
-    message: Schema.String,
-  },
-) {}
-
-/** A store failure: process startup, exit, or rejected history rows. */
-export class HistoryQueryFailed extends Schema.TaggedError<HistoryQueryFailed>()(
-  'HistoryQueryFailed',
-  {
-    message: Schema.String,
-    cause: Schema.optional(Schema.Defect()),
-  },
-) {}
-
-const CellSchema = Schema.Union([Schema.String, Schema.Number, Schema.Null]);
-export type HistoryCell = typeof CellSchema.Type;
-const PageSchema = Schema.Struct({
-  columns: Schema.Array(Schema.String),
-  rows: Schema.Array(Schema.Array(CellSchema)),
-  more: Schema.Boolean,
-});
-export type HistoryPage = typeof PageSchema.Type;
 /** A reply line: the request's value, or the refusal the process reports. */
 const ReplySchema = Schema.Union([
   Schema.Struct({ ok: Schema.Literal(true), value: Schema.Unknown }),
@@ -97,7 +76,10 @@ const ReplySchema = Schema.Union([
 const ReplyLineSchema = Schema.fromJsonString(ReplySchema);
 
 /** The session a store reads: its display tail, current commit and view. */
-type HistorySession = Pick<SessionHandle, 'log' | 'view'>;
+interface HistorySession {
+  readonly log: SessionLog['Service'];
+  readonly view: SessionViewAccess['Service'];
+}
 
 interface Store {
   readonly scope: Scope.Closeable;
@@ -257,18 +239,22 @@ const openStore = Effect.fn('HistoryQuery.open')(function* (
   }).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
 });
 
-export class HistoryQuery {
+/** The session's {@link HistoryQuery}, over its log and view. */
+export class HistoryQueryStore implements Context.Service.Shape<
+  typeof HistoryQuery
+> {
   /** Built in the session's scope: the store's process closes with it. */
-  static readonly make = (
-    session: HistorySession,
-  ): Effect.Effect<HistoryQuery, never, Scope.Scope | ChildProcessSpawner> =>
-    Effect.gen(function* () {
-      return new HistoryQuery(
-        session,
-        yield* Effect.scope,
-        yield* ChildProcessSpawner,
-      );
-    });
+  static readonly make: Effect.Effect<
+    HistoryQueryStore,
+    never,
+    Scope.Scope | ChildProcessSpawner | SessionLog | SessionViewAccess
+  > = Effect.gen(function* () {
+    return new HistoryQueryStore(
+      { log: yield* SessionLog, view: yield* SessionViewAccess },
+      yield* Effect.scope,
+      yield* ChildProcessSpawner,
+    );
+  });
 
   private readonly lane = Semaphore.makeUnsafe(1);
   private store: Store | undefined;
@@ -377,7 +363,7 @@ export class HistoryQuery {
         });
       }
       if (reply.value instanceof HistoryQueryRefused) return yield* reply.value;
-      return yield* Schema.decodeUnknownEffect(PageSchema)(
+      return yield* Schema.decodeUnknownEffect(HistoryPageSchema)(
         reply.value.value,
       ).pipe(failedWith('The history query process sent an unreadable page.'));
     });

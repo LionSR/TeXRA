@@ -2,7 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer, Queue } from 'effect';
+import { Deferred, Effect, Fiber, Layer, Queue, Context } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -49,7 +49,9 @@ function loopLayer(init: HarnessInit) {
     nativeToolTestLayer(),
   ).pipe(
     Layer.provideMerge(agentRunTestLayer(init)),
-    Layer.provideMerge(Layer.succeed(RunHistory)(init.session.runHistory)),
+    Layer.provideMerge(
+      Layer.succeed(RunHistory)(Context.get(init.session, RunHistory)),
+    ),
   );
 }
 
@@ -128,7 +130,7 @@ describe('tool dispatch interrupted mid-turn', () => {
 
         // call-a settled before the stop, call-b was in flight, call-c is a
         // later barrier that never started.
-        const interrupted = yield* session.runHistory
+        const interrupted = yield* Context.get(session, RunHistory)
           .load(runId)
           .pipe(Effect.orDie);
         // No assistant tool turn and no tool group: the paid response is
@@ -158,7 +160,7 @@ describe('tool dispatch interrupted mid-turn', () => {
         // so and decides whether to retry it.
         expect(toolC.call).not.toHaveBeenCalled();
 
-        const delivered = yield* session.runHistory
+        const delivered = yield* Context.get(session, RunHistory)
           .load(runId)
           .pipe(Effect.orDie);
         const group = delivered?.messages.find(
@@ -257,7 +259,7 @@ describe('tool dispatch interrupted mid-turn', () => {
       const resumed = yield* run(true, [textTurn('It was not run again.')]);
       expect(resumed.outcome).toBe('completed');
       expect(call).toHaveBeenCalledTimes(3);
-      const delivered = yield* session.runHistory
+      const delivered = yield* Context.get(session, RunHistory)
         .load(runId)
         .pipe(Effect.orDie);
       const group = delivered?.messages.find(

@@ -2,13 +2,23 @@
  *  transactions that commit the lifecycle rows (built beside their readers
  *  in `shared/session/runFacts.ts`; record accessors: `runRecords.ts`). */
 
-import { Cause, Effect, Exit, Result, Schema, type Scope } from 'effect';
+import {
+  Cause,
+  Context,
+  Effect,
+  Exit,
+  Result,
+  Schema,
+  type Scope,
+} from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
+import { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import type { TransactionPart } from '@agent/runtime/childTurnResult';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { consumedRows, haltedPositionRow } from '@agent/runtime/loop/rows';
+import { Runs } from '@agent/runtime/runRegistry';
+import { SessionRoots } from '@platform/rootedFs';
 import {
   RUN_OUTCOME,
   RunRecordFieldsSchema,
@@ -19,7 +29,13 @@ import {
   type RunId,
   type RunOutcome,
 } from '@shared/schemas';
-import { unloadable } from '@shared/session/runHistory';
+import {
+  Approvals,
+  RunHistory,
+  SessionLog,
+  unloadable,
+  type SessionViewAccess,
+} from '@shared/session/runHistory';
 import {
   activationDrafts,
   type RegisterRunOptions,
@@ -52,31 +68,32 @@ function pinRunWorkingDirectory(record: RunRecord, root?: string): RunRecord {
 /** A defect is the path's failure, as a refusal is: its caller words it. */
 const defectAsFailure = Effect.catchDefect((d) => Effect.fail(ensureError(d)));
 
+/** What opening a run's rows reads of its session. */
+type OpenServices = SessionLog | SessionRoots | Approvals;
+
 /** The stop ending the run is the session's own clean close: its halt says so. */
-const closedBySession = (session: SessionHandle, input: Ending): boolean =>
-  input.stopped === true &&
-  session.runs.get(input.runId)?.stopReason === 'shutdown';
+const closedBySession = (runs: Runs['Service'], input: Ending): boolean =>
+  input.stopped === true && runs.get(input.runId)?.stopReason === 'shutdown';
 
 /** A resume's activation: its `run.activate`, the grants it ends, and a
  *  `run.config` if its configuration changed (its model kept: only a
  *  switch moves it). Read in the activation's transaction, under its claim. */
 export const activationRows = Effect.fn('activationRows')(function* (
-  session: SessionHandle,
   runId: RunId,
   config: RunRecord,
-): Effect.fn.Return<readonly SessionEventDraft[], Error> {
-  const stored = yield* getRunRecords(session, runId).readRunRecord();
+): Effect.fn.Return<readonly SessionEventDraft[], Error, OpenServices> {
+  const stored = yield* getRunRecords(runId).readRunRecord();
   const next = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
     pinRunWorkingDirectory(
       stored?.model === undefined ? config : { ...config, model: stored.model },
-      session.roots.workspace,
+      (yield* SessionRoots).workspace,
     ),
   );
   const changed =
     stored === null || stableStringify(stored) !== stableStringify(next);
   return activationDrafts(
     runId,
-    yield* session.approvals.activationRows(runId),
+    yield* (yield* Approvals).activationRows(runId),
     changed ? next : null,
   );
 });
@@ -84,16 +101,15 @@ export const activationRows = Effect.fn('activationRows')(function* (
 /** Register a run whose loop is not this process's (an agent CLI, bash)
  *  alone; a run this process's loop drives registers with its opening. */
 export const registerRun = Effect.fn('registerRun')(function* (
-  session: SessionHandle,
   runId: RunId,
   record: RunRecord,
   options: RegisterRunOptions,
-): Effect.fn.Return<void, Error> {
+): Effect.fn.Return<void, Error, OpenServices | RunHistory> {
   return yield* Effect.gen(function* () {
-    const opens = yield* registrationRows(session, runId, record, options);
+    const opens = yield* registrationRows(runId, record, options);
     const rows = Effect.succeed(opens.rows);
     const born = opens.start !== null;
-    const cell = yield* session.runHistory.open(
+    const cell = yield* (yield* RunHistory).open(
       runId,
       born ? { registration: rows } : { activation: () => rows },
     );
@@ -106,19 +122,18 @@ export const registerRun = Effect.fn('registerRun')(function* (
  *  first history in one batch, so no crash leaves it registered without
  *  that history. */
 export const registrationRows = Effect.fn('registrationRows')(function* (
-  session: SessionHandle,
   runId: RunId,
   record: RunRecord,
   options: RegisterRunOptions,
-): Effect.fn.Return<Registration, Error> {
+): Effect.fn.Return<Registration, Error, OpenServices> {
   return yield* Effect.gen(function* () {
     // A re-registration takes the existing run's claim over as it commits.
-    const prior = yield* getRunRecords(session, runId).exists();
+    const prior = yield* getRunRecords(runId).exists();
     if (options.parentRunId !== undefined) {
       // A barrier first (a queued `run.start` reads absent); the database
       // refuses a closed or unborn parent, this only words the refusal.
-      yield* session.log.transact([]);
-      if (!(yield* getRunRecords(session, options.parentRunId).exists()))
+      yield* (yield* SessionLog).transact([]);
+      if (!(yield* getRunRecords(options.parentRunId).exists()))
         return yield* Effect.fail(
           new Error(`Parent run ${options.parentRunId} is unavailable.`),
         );
@@ -126,9 +141,9 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
     // Its configuration rides the batch that takes the claim, never
     // compared before it is held (a takeover skips nothing on a stale read).
     const config = yield* Schema.decodeUnknownEffect(RunRecordFieldsSchema)(
-      pinRunWorkingDirectory(record, session.roots.workspace),
+      pinRunWorkingDirectory(record, (yield* SessionRoots).workspace),
     );
-    const ended = prior ? yield* session.approvals.activationRows(runId) : [];
+    const ended = prior ? yield* (yield* Approvals).activationRows(runId) : [];
     return registrationDrafts(runId, config, options, !prior, ended);
   }).pipe(defectAsFailure);
 });
@@ -150,7 +165,7 @@ export interface FinalizeRunInput {
    *  committed with that end (or, if refused, the notice that it was lost). */
   readonly lastTurn?: (
     outcome: RunOutcome,
-  ) => Effect.Effect<TransactionPart | undefined>;
+  ) => Effect.Effect<TransactionPart | undefined, never, EndServices>;
 }
 
 /** The `run.end` held (`wrote`: this call's); none if unborn or held back. */
@@ -163,6 +178,16 @@ const endOf = ({ outcome, error, output }: Omit<RunEnd, 'usage'>) =>
   error ? { outcome, error, output } : { outcome, output };
 
 type Ending = Omit<FinalizeRunInput, 'lastTurn'>;
+
+/** What a run's end reads of its session. */
+export type EndServices = SessionLog | Inbox | Runs | RunHistory;
+
+/** The caller's {@link EndServices}, for the publisher job an end runs in:
+ *  a job runs on the session's publisher, outside its caller's context. */
+export const endServices = Effect.map(
+  Effect.context<EndServices>(),
+  Context.pick(SessionLog, Inbox, Runs, RunHistory),
+);
 
 /** The cancellation of every request `state` leaves open: a run that ends
  *  answers them, so no surface keeps offering one nobody waits on. */
@@ -189,14 +214,14 @@ const cancelledRequests = (
  *  open lets the run's claim go with it, so whoever delivers it ends the
  *  run under a claim nobody holds. */
 export const endIn = Effect.fn('endIn')(function* (
-  session: SessionHandle,
   tx: Pick<SessionTransaction, 'append' | 'release'>,
   input: Ending,
   last?: TransactionPart,
 ) {
   const { append } = tx;
   const { runId, outcome, error } = input;
-  const facts = yield* session.log.facts(runId);
+  const log = yield* SessionLog;
+  const facts = yield* log.facts(runId);
   // A run never created has nothing to end: its launch reports the failure.
   if (facts === null) return { end: null, wrote: false };
   const lastTurn: Effect.Success<TransactionPart> = yield* last ??
@@ -221,15 +246,15 @@ export const endIn = Effect.fn('endIn')(function* (
       output: input.output,
     });
     written = endOf(end);
-    const closed = closedBySession(session, input);
+    const closed = closedBySession(yield* Runs, input);
     halt =
       facts.position === null
         ? []
         : [haltedPositionRow(facts.position, persisted, closed)];
-    const unapplied = (yield* session.followUps.read(runId)).followUps;
+    const unapplied = (yield* (yield* Inbox).read(runId)).followUps;
     closing = [
       ...consumedRows(runId)(unapplied, { kind: 'dropped', reason: 'ended' }),
-      ...session.trace.closure(runId, persisted),
+      ...log.closure(runId, persisted),
       end,
     ];
   }
@@ -238,7 +263,7 @@ export const endIn = Effect.fn('endIn')(function* (
   const result = { end, wrote: written !== null };
   const beside = [...closing, ...lastTurn.rows];
   const cell = yield* Effect.result(
-    session.runHistory.open(runId, { within: append }),
+    (yield* RunHistory).open(runId, { within: append }),
   );
   if (Result.isSuccess(cell)) {
     const cancels =
@@ -261,21 +286,22 @@ export const endIn = Effect.fn('endIn')(function* (
  *  (`cascade`) claims a born run and retires the children its open calls
  *  own; a driver's own end, or a stop whose child is live, is refused. */
 const beforeEnd = Effect.fn('beforeEnd')(function* (
-  session: SessionHandle,
   runId: RunId,
   cascade: boolean,
 ) {
-  const facts = yield* session.log.facts(runId);
-  if (cascade && facts !== null) yield* session.log.hold(runId, { ends: true });
-  for (const child of yield* openOwnedChildren(session, runId)) {
-    if (!cascade || session.runs.get(child.runId) !== undefined)
+  const log = yield* SessionLog;
+  const runs = yield* Runs;
+  const facts = yield* log.facts(runId);
+  if (cascade && facts !== null) yield* log.hold(runId, { ends: true });
+  for (const child of yield* openOwnedChildren(runId)) {
+    if (!cascade || runs.get(child.runId) !== undefined)
       return yield* Effect.fail(
         new Error(
           `Run ${runId} cannot end while its open call ${child.callId} owns run ${child.runId}, which has not ended`,
         ),
       );
     // Retired CANCELLED (an outcome it wrote stands).
-    yield* finalizeRun(session, {
+    yield* finalizeRun({
       runId: child.runId,
       outcome: RUN_OUTCOME.CANCELLED,
       ownerless: true,
@@ -289,22 +315,28 @@ const beforeEnd = Effect.fn('beforeEnd')(function* (
  *  driver's or not, answering the end the store holds. An end that does
  *  not commit fails it, after a FAILED backstop end it tries alone, loudly. */
 export const finalizeRun = Effect.fn('finalizeRun')(function* (
-  session: SessionHandle,
   input: FinalizeRunInput,
-): Effect.fn.Return<FinalizedRun, Error, Scope.Scope> {
+): Effect.fn.Return<
+  FinalizedRun,
+  Error,
+  Scope.Scope | EndServices | SessionViewAccess | SessionRoots
+> {
   const { runId, outcome, ownerless } = input;
+  const services = yield* endServices;
+  const log = Context.get(services, SessionLog);
   const end = (ending: Ending, lastTurn?: TransactionPart) =>
     Effect.exit(
-      session.log.transact((tx) =>
-        endIn(session, tx, ending, lastTurn).pipe(Effect.scoped),
+      log.transact((tx) =>
+        endIn(tx, ending, lastTurn).pipe(
+          Effect.scoped,
+          Effect.provide(services),
+        ),
       ),
     );
-  const stood = yield* beforeEnd(session, runId, ownerless === true).pipe(
-    defectAsFailure,
-  );
+  const stood = yield* defectAsFailure(beforeEnd(runId, ownerless === true));
   // Read once readied (a refusal leaves them unread): rows the store refused
   // fail the run unless a stop ended it, whoever ends it.
-  const lost = yield* session.trace.lost(runId);
+  const lost = yield* log.lost(runId);
   const failed = lost !== undefined && input.stopped !== true;
   const requested = {
     ...input,
@@ -318,7 +350,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   const read =
     Exit.isFailure(status) && lastTurn !== undefined
       ? yield* Effect.result(
-          session.log.runRows(qualifyAggregateId('run', runId), 'lifecycle'),
+          log.runRows(qualifyAggregateId('run', runId), 'lifecycle'),
         )
       : undefined;
   if (read?._tag === 'Success' && Exit.isFailure(status)) {
@@ -335,15 +367,15 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     const deliveryId = lostResultId(runId, since?.commit);
     const text = `The result of run ${runId} was lost: ${cause}`;
     const notice = Effect.gen(function* () {
-      const to = yield* persistedParentRunId(session, runId);
+      const to = yield* persistedParentRunId(runId);
       if (to === undefined) return { rows: [] };
       const from = { kind: 'run', runId } as const;
-      const { rows, sent } = yield* session.followUps
+      const { rows, sent } = yield* (yield* Inbox)
         .admission(to, { text, from, deliveryId }, {})
         .pipe(Effect.catch((e) => Effect.succeed({ rows: [], sent: e })));
       if ('kind' in sent && sent.kind !== 'refused') return { rows };
       const note = `parent not told (${'kind' in sent ? sent.reason : sent.message})`;
-      yield* session.log.afterCommit(Effect.logWarning(`${runId}: ${note}`));
+      yield* log.afterCommit(Effect.logWarning(`${runId}: ${note}`));
       return { rows, note };
     });
     const had = [cause, requested.error?.message].filter(Boolean);

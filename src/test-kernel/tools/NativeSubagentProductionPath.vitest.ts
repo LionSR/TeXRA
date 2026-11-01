@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Fiber, Layer, Schema, Scope, Stream } from 'effect';
+import { Effect, Fiber, Layer, Schema, Scope, Stream, Context } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -67,14 +67,20 @@ import type { AppendedMessage } from '@agent/runtime/storedTurn';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
 
 // Local imports - shared/runtime boundaries
-import { submitFollowUp, wakeRun } from '@agent/followUp/ToolUseFollowUp';
+import {
+  submitFollowUp,
+  wakeRun,
+  Inbox,
+} from '@agent/followUp/ToolUseFollowUp';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { launchDetachedSubagent } from '@agent/runtime/delegation/subagentRun';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionRoots } from '@platform/rootedFs';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { NO_FACTS } from '@shared/session/runFacts';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -116,7 +122,7 @@ const parentConfig = Schema.decodeUnknownSync(AgentConfigSchema)({
 });
 
 const tempDirs = useTempDirs();
-let session: SessionHandle;
+let session: Context.Context<SessionServices>;
 let childId: RunId | undefined;
 let resumedRuns: RunId[];
 let parentFiber: Fiber.Fiber<unknown, Error> | undefined;
@@ -339,11 +345,13 @@ async function waitForPersistedResult(
   await vi.waitFor(
     async () => {
       const report = await Effect.runPromise(
-        getRunRecords(session, runId).readReport(),
+        getRunRecords(runId).readReport().pipe(Effect.provide(session)),
       );
       expect(report).toContain(expectedText);
       await expect(
-        Effect.runPromise(getRunRecords(session, runId).readResultMeta()),
+        Effect.runPromise(
+          getRunRecords(runId).readResultMeta().pipe(Effect.provide(session)),
+        ),
       ).resolves.toMatchObject({
         output: { response: expectedText },
       });
@@ -358,9 +366,11 @@ function childRunId(resultOutput: string | undefined): RunId {
   return match[1] as RunId;
 }
 
-function interruptActiveRuns(session: SessionHandle): void {
-  for (const runId of session.runs.get().map((run) => run.runId)) {
-    registryOf(session.runs).interrupt(runId);
+function interruptActiveRuns(session: Context.Context<SessionServices>): void {
+  for (const runId of Context.get(session, Runs)
+    .get()
+    .map((run) => run.runId)) {
+    registryOf(Context.get(session, Runs)).interrupt(runId);
   }
 }
 
@@ -368,9 +378,12 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
   return Effect.promise(() =>
     vi.waitFor(
       async () => {
-        await Effect.runPromise(session.log.settled);
+        await Effect.runPromise(Context.get(session, SessionLog).settled);
         const transcript = await Effect.runPromise(
-          readCompletedRunConversation(PARENT_RUN_ID, session),
+          readCompletedRunConversation(
+            PARENT_RUN_ID,
+            Context.get(session, SessionRoots).config,
+          ).pipe(Effect.provide(session)),
         );
         expect(
           transcript.filter(
@@ -379,7 +392,9 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
               row.text !== 'Parent noted progress.',
           ),
         ).toHaveLength(count + 1);
-        expect(session.view.run(PARENT_RUN_ID)?.status).toBe(RUN_PHASE.WAITING);
+        expect(
+          Context.get(session, SessionViewAccess).run(PARENT_RUN_ID)?.status,
+        ).toBe(RUN_PHASE.WAITING);
       },
       { timeout: 20_000 },
     ),
@@ -389,7 +404,7 @@ function waitForParentTurns(count: number): Effect.Effect<void> {
 /** Queue a user's input on a stopped run, which the next resume reads. */
 function queueRecovery(runId: RunId, text: string) {
   return Effect.asVoid(
-    session.followUps.send(runId, { text, from: { kind: 'user' } }),
+    Context.get(session, Inbox).send(runId, { text, from: { kind: 'user' } }),
   );
 }
 
@@ -400,7 +415,9 @@ function queueRecovery(runId: RunId, text: string) {
  */
 function waitForClaimRelease(runId: RunId): Promise<void> {
   return vi.waitFor(async () => {
-    expect(await Effect.runPromise(session.log.owns(runId))).toBe(false);
+    expect(
+      await Effect.runPromise(Context.get(session, SessionLog).owns(runId)),
+    ).toBe(false);
   });
 }
 
@@ -465,12 +482,11 @@ async function launchWaitingChild(options: {
   // fiber is its stop target by run id.
   parentFiber = testRuntime().runFork(
     startAwaited(
-      session.runs,
+      Context.get(session, Runs),
       PARENT_RUN_ID,
-      prepareAgentDefinition({ config: parentConfig, session }).pipe(
+      prepareAgentDefinition({ config: parentConfig }).pipe(
         Effect.flatMap((definition) =>
           executeAgent(definition, PARENT_RUN_ID, {
-            session,
             registration: {
               identity: { kind: 'agent', agent: PARENT_AGENT },
               parentRunId: OUTER_RUN_ID,
@@ -484,9 +500,12 @@ async function launchWaitingChild(options: {
 
   const parentCall = {
     callId: 'parent-call',
-    env: { roots: session.roots, workingDirectory: process.cwd() },
+    env: {
+      roots: Context.get(session, SessionRoots),
+      workingDirectory: process.cwd(),
+    },
     emit: () => undefined,
-    runs: session.runs,
+    session,
     responseId: 'parent-response',
     instruction: undefined,
     attempt: 1,
@@ -503,10 +522,12 @@ async function launchWaitingChild(options: {
     },
     run: {
       runId: PARENT_RUN_ID,
-      session,
       opening: null,
       callbacks: {},
-      fileService: new RunFileService(PARENT_RUN_ID, session.roots),
+      fileService: new RunFileService(
+        PARENT_RUN_ID,
+        Context.get(session, SessionRoots),
+      ),
       scope: Scope.makeUnsafe(),
       config: Schema.decodeUnknownSync(AgentConfigSchema)({
         agent: 'chat',
@@ -532,7 +553,7 @@ async function launchWaitingChild(options: {
         workingDirectory: process.cwd(),
       },
       { runId: generateRunId(), grants: NO_APPROVAL_GRANTS },
-    ).pipe(Effect.provideService(Runs, session.runs)),
+    ).pipe(Effect.provide(session)),
   );
   expect(launch.status).toBe('executed');
   const runId = childRunId(launch.output);
@@ -554,11 +575,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
       openTestDefaultSession({ roots: testWorkspaceRoots() }),
     );
     publishTestRunStart(session, OUTER_RUN_ID);
-    await Effect.runPromise(session.log.settled);
+    await Effect.runPromise(Context.get(session, SessionLog).settled);
     childId = undefined;
     // Every resume a send started: the run owed one.
     resumedRuns = [];
-    const { programs } = registryOf(session.runs);
+    const { programs } = registryOf(Context.get(session, Runs));
     const resume = programs.resume;
     vi.spyOn(programs, 'resume').mockImplementation((runId, ...rest) => {
       resumedRuns.push(runId);
@@ -595,10 +616,12 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(
           observedRequests.find(({ model }) => model === CHILD_MODEL)?.tools,
         ).toContain('grep');
-        const firstControls = session.runs.get(runId)?.controls;
+        const firstControls = Context.get(session, Runs).get(runId)?.controls;
         const initialBindings = bindingMocks.bindModel.mock.calls.length;
         yield* waitForParentTurns(1);
-        const budget = yield* registryOf(session.runs).childRunBudget(1);
+        const budget = yield* registryOf(
+          Context.get(session, Runs),
+        ).childRunBudget(1);
         expect(yield* budget.takeIfAvailable(1)).toBe(true);
         yield* budget.release(1);
 
@@ -606,7 +629,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
         yield* waitForParentTurns(2);
-        expect(session.runs.get(runId)?.controls).toBe(firstControls);
+        expect(Context.get(session, Runs).get(runId)?.controls).toBe(
+          firstControls,
+        );
         expect(bindingMocks.bindModel).toHaveBeenCalledTimes(initialBindings);
 
         // The next turn asks the model with the follow-up as its last message
@@ -620,11 +645,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           'Result A.',
         );
 
-        yield* session.log.settled;
+        yield* Context.get(session, SessionLog).settled;
         const archivedChild = yield* readCompletedRunConversation(
           runId,
-          session,
-        );
+          Context.get(session, SessionRoots).config,
+        ).pipe(Effect.provide(session));
         expect(archivedChild).toEqual([
           expect.objectContaining({ kind: 'user-message' }),
           { kind: 'assistant-text', text: 'Result A.' },
@@ -642,8 +667,8 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
         const archivedParent = yield* readCompletedRunConversation(
           PARENT_RUN_ID,
-          session,
-        );
+          Context.get(session, SessionRoots).config,
+        ).pipe(Effect.provide(session));
         const parentText = JSON.stringify(archivedParent);
         expect(parentText.match(/Result A\./g)).toHaveLength(1);
         expect(parentText.match(/Result B\./g)).toHaveLength(1);
@@ -655,19 +680,24 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         expect(resumedRuns).toEqual([]);
         expect(parentTurns).toHaveLength(0);
-        yield* session.runs.stop(runId, { reason: 'user' }).settlement;
+        yield* Context.get(session, Runs)
+          .stop(runId, { reason: 'user' })
+          .settlement.pipe(Effect.provide(session));
         yield* Effect.promise(() => waitForClaimRelease(runId));
         yield* waitForParentTurns(2);
         const afterStop = yield* readCompletedRunConversation(
           PARENT_RUN_ID,
-          session,
-        );
+          Context.get(session, SessionRoots).config,
+        ).pipe(Effect.provide(session));
         expect(JSON.stringify(afterStop).match(/Result B\./g)).toHaveLength(1);
         childTurns.push({ text: 'Recovered result C.' });
         parentTurns.push({ text: 'Parent received recovered result C.' });
         yield* queueRecovery(runId, 'Continue after restart.');
         const recovered = yield* Effect.forkChild(
-          withProcessServices(testRuntime(), resumeRun(runId, { session })),
+          withProcessServices(
+            testRuntime(),
+            resumeRun(runId, {}).pipe(Effect.provide(session)),
+          ),
         );
         yield* Effect.promise(() =>
           waitForPersistedResult(runId, 'Recovered result C.'),
@@ -676,7 +706,9 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(
           yield* Fiber.join(recovered).pipe(Effect.timeout('5 seconds')),
         ).toEqual({ activation: expect.any(Number) });
-        const recoveredControls = session.runs.get(runId)?.controls;
+        const recoveredControls = Context.get(session, Runs).get(
+          runId,
+        )?.controls;
         expect(recoveredControls).toBeDefined();
         childTurns.push({ text: 'Recovered result D.' });
         parentTurns.push({ text: 'Parent received recovered result D.' });
@@ -686,34 +718,41 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             text: 'Continue in the recovered run.',
             from: { kind: 'user' as const },
           },
-          {
-            session,
-          },
-        );
+          {},
+        ).pipe(Effect.provide(session));
         yield* Effect.promise(() =>
           waitForPersistedResult(runId, 'Recovered result D.'),
         );
         yield* waitForParentTurns(4);
-        expect(session.runs.get(runId)?.controls).toBe(recoveredControls);
-        yield* session.runs.stop(runId, { reason: 'user' }).settlement;
+        expect(Context.get(session, Runs).get(runId)?.controls).toBe(
+          recoveredControls,
+        );
+        yield* Context.get(session, Runs)
+          .stop(runId, { reason: 'user' })
+          .settlement.pipe(Effect.provide(session));
         yield* Effect.promise(() => waitForClaimRelease(runId));
 
         // An already idle saved run needs no new input or model turn to
         // acknowledge recovery, and its live driver still owns later input.
-        yield* Effect.flatten(wakeRun(runId, session)).pipe(
-          Effect.timeout('5 seconds'),
-        );
-        expect(session.runs.get(runId)?.controls).toBeDefined();
-        yield* session.view.changes.pipe(
+        yield* Effect.flatten(
+          wakeRun(runId).pipe(Effect.provide(session)),
+        ).pipe(Effect.timeout('5 seconds'));
+        expect(Context.get(session, Runs).get(runId)?.controls).toBeDefined();
+        yield* Context.get(session, SessionViewAccess).changes.pipe(
           Stream.filter(
             (view) => view.runs.get(runId)?.status === RUN_PHASE.WAITING,
           ),
           Stream.runHead,
           Effect.timeout('5 seconds'),
         );
-        expect((yield* readChildTurnState(session, runId)).active).toBeNull();
+        expect(
+          (yield* readChildTurnState(runId).pipe(Effect.provide(session)))
+            .active,
+        ).toBeNull();
         expect(childTurns).toHaveLength(0);
-        yield* session.runs.stop(runId, { reason: 'user' }).settlement;
+        yield* Context.get(session, Runs)
+          .stop(runId, { reason: 'user' })
+          .settlement.pipe(Effect.provide(session));
         yield* Effect.promise(() => waitForClaimRelease(runId));
         bindingMocks.bindModel.mockReturnValueOnce(
           Effect.fail(new Error('Recovered model binding failed.')),
@@ -725,7 +764,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(
           (yield* withProcessServices(
             testRuntime(),
-            Effect.flip(resumeRun(runId, { session })),
+            Effect.flip(resumeRun(runId, {}).pipe(Effect.provide(session))),
           )).message,
         ).toBe('The run ended without entering the session.');
         yield* waitForParentTurns(5);
@@ -795,13 +834,15 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             async () => {
               await expect(
                 Effect.runPromise(
-                  getRunRecords(session, runId).readResultMeta(),
+                  getRunRecords(runId)
+                    .readResultMeta()
+                    .pipe(Effect.provide(session)),
                 ),
               ).resolves.toMatchObject({
                 output: { response: '' },
               });
               const report = await Effect.runPromise(
-                getRunRecords(session, runId).readReport(),
+                getRunRecords(runId).readReport().pipe(Effect.provide(session)),
               );
               expect(report).not.toContain('Result A.');
               expect(report).not.toContain('<response>');
@@ -811,11 +852,11 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         yield* waitForParentTurns(2);
 
-        yield* session.log.settled;
+        yield* Context.get(session, SessionLog).settled;
         const archivedChild = yield* readCompletedRunConversation(
           runId,
-          session,
-        );
+          Context.get(session, SessionRoots).config,
+        ).pipe(Effect.provide(session));
         // Turn 2 added the user instruction but no new assistant row.
         expect(archivedChild).toEqual([
           expect.objectContaining({ kind: 'user-message' }),
@@ -833,8 +874,8 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
 
         const archivedParent = yield* readCompletedRunConversation(
           PARENT_RUN_ID,
-          session,
-        );
+          Context.get(session, SessionRoots).config,
+        ).pipe(Effect.provide(session));
         const parentText = JSON.stringify(archivedParent);
         expect(parentText.match(/Result A\./g)).toHaveLength(1);
         expect(resumedRuns).toEqual([]);

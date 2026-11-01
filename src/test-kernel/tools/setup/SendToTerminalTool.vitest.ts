@@ -5,11 +5,12 @@ import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Context } from 'effect';
 import { describe } from 'vitest';
 
 // Local imports
 
+import { SessionLog } from '@shared/session/runHistory';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -43,7 +44,9 @@ async function setupTool(): Promise<{
     },
   );
   const runId = publishTestRunStart(testDefaultSession());
-  await Effect.runPromise(testDefaultSession().log.settled);
+  await Effect.runPromise(
+    Context.get(testDefaultSession(), SessionLog).settled,
+  );
   return { runs, runId };
 }
 

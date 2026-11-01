@@ -2,7 +2,7 @@
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Schema } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Schema, Context } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -16,6 +16,7 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import { Runs } from '@agent/runtime/runRegistry';
 import { launchProcessChild } from '@agent/runtime/delegation/detachedChildRun';
 import { aggregateTarget } from '@shared/schemas';
+import { SessionLog } from '@shared/session/runHistory';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
   createProcessSession,
@@ -43,7 +44,7 @@ describe('child run progress events', () => {
   beforeEach(async () => {
     const session = await Effect.runPromise(createProcessSession());
     publishTestRunStart(session, parentRunId);
-    await Effect.runPromise(session.log.settled);
+    await Effect.runPromise(Context.get(session, SessionLog).settled);
   });
 
   it.effect(
@@ -55,42 +56,45 @@ describe('child run progress events', () => {
         const releasePublication = yield* Deferred.make<void>();
         // The registration's transaction is the one whose rows hold the
         // child's `run.start`: it commits, then waits for the release.
-        const transact = session.log.transact.bind(session.log) as (
+        const log = Context.get(session, SessionLog);
+        const transact = log.transact.bind(log) as (
           work: unknown,
         ) => Effect.Effect<unknown, unknown>;
-        const publication = vi
-          .spyOn(session.log, 'transact')
-          .mockImplementation(((work: unknown) =>
-            transact(work).pipe(
-              Effect.tap((value) => {
-                const start = Array.isArray(value)
-                  ? (value as readonly SessionEvent[]).find(
-                      (row) => row.type === 'run.start',
-                    )
-                  : undefined;
-                if (start === undefined) return Effect.void;
-                // The run is its own aggregate: the birth fact carries no
-                // second copy of the id.
-                const target = aggregateTarget(start.aggregateId);
-                if (target.kind !== 'run') {
-                  throw new Error('expected a run aggregate for run.start');
-                }
-                return Deferred.succeed(committed, target.id).pipe(
-                  Effect.andThen(Deferred.await(releasePublication)),
-                );
-              }),
-            )) as unknown as typeof session.log.transact);
+        const publication = vi.spyOn(log, 'transact').mockImplementation(((
+          work: unknown,
+        ) =>
+          transact(work).pipe(
+            Effect.tap((value) => {
+              const start = Array.isArray(value)
+                ? (value as readonly SessionEvent[]).find(
+                    (row) => row.type === 'run.start',
+                  )
+                : undefined;
+              if (start === undefined) return Effect.void;
+              // The run is its own aggregate: the birth fact carries no
+              // second copy of the id.
+              const target = aggregateTarget(start.aggregateId);
+              if (target.kind !== 'run') {
+                throw new Error('expected a run aggregate for run.start');
+              }
+              return Deferred.succeed(committed, target.id).pipe(
+                Effect.andThen(Deferred.await(releasePublication)),
+              );
+            }),
+          )) as unknown as SessionLog['Service']['transact']);
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => publication.mockRestore()),
         );
         const buildLaunch = vi.fn(() => Effect.succeed(neverRunStrategy));
         const launching = yield* Effect.forkChild(
-          launchProcessChild(session, parentRunId, {
+          launchProcessChild(parentRunId, {
             identity: { kind: 'agent', agent: 'codex', tool: 'codex' },
             description: 'Cancelled admission',
             config,
             buildLaunch,
-          }).pipe(Effect.provideService(Runs, session.runs)),
+          })
+            .pipe(Effect.provideService(Runs, Context.get(session, Runs)))
+            .pipe(Effect.provide(session)),
         );
         const id = yield* Deferred.await(committed);
         const interrupting = yield* Effect.forkChild(
@@ -103,10 +107,11 @@ describe('child run progress events', () => {
         yield* Fiber.join(interrupting);
         yield* Fiber.await(launching);
         expect(buildLaunch).not.toHaveBeenCalled();
-        expect((yield* getRunRecords(session, id).readRunEnd())?.outcome).toBe(
-          RUN_OUTCOME.CANCELLED,
-        );
-        expect(yield* session.log.owns(id)).toBe(false);
+        expect(
+          (yield* getRunRecords(id).readRunEnd().pipe(Effect.provide(session)))
+            ?.outcome,
+        ).toBe(RUN_OUTCOME.CANCELLED);
+        expect(yield* Context.get(session, SessionLog).owns(id)).toBe(false);
         expect(
           Exit.isFailure(
             yield* Effect.exit(seedReport(session, id, 'unowned')),
@@ -127,7 +132,7 @@ describe('child run progress events', () => {
         // The launch dies with the loop's throw, so flip the defect back
         // into the error channel.
         const defect = yield* Effect.flip(
-          launchProcessChild(testDefaultSession(), parentRunId, {
+          launchProcessChild(parentRunId, {
             identity: { kind: 'agent', agent: 'codex', tool: 'codex' },
             description: 'Fail during synchronous loop setup',
             config,
@@ -135,19 +140,24 @@ describe('child run progress events', () => {
               childRunId = context.runId;
               // Before the loop reserves its stop target, no stop can find
               // the run: a stop never reaches a run it cannot interrupt.
-              visibleBeforeLoop = session.runs.get(context.runId) !== undefined;
+              visibleBeforeLoop =
+                Context.get(session, Runs).get(context.runId) !== undefined;
               throw setupError;
             },
-          }).pipe(
-            Effect.provideService(Runs, session.runs),
-            Effect.catchDefect((cause) => Effect.fail(cause)),
-          ),
+          })
+            .pipe(
+              Effect.provideService(Runs, Context.get(session, Runs)),
+              Effect.catchDefect((cause) => Effect.fail(cause)),
+            )
+            .pipe(Effect.provide(testDefaultSession())),
         );
         expect(defect).toBe(setupError);
         expect(visibleBeforeLoop).toBe(false);
         if (!childRunId) throw new Error('the child launch was never built');
         expect(
-          yield* getRunRecords(session, childRunId).readRunEnd(),
+          yield* getRunRecords(childRunId)
+            .readRunEnd()
+            .pipe(Effect.provide(session)),
         ).toMatchObject({ outcome: 'failed' });
       }),
   );

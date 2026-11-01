@@ -10,7 +10,7 @@
  * winner's loop.
  */
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer } from 'effect';
+import { Deferred, Effect, Fiber, Layer, type Context } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -49,7 +49,7 @@ vi.mock('@texra/tools/agentCli/codexImport', async (importActual) => {
 
 import '@test/support/sessionGraphTestSetup';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
@@ -69,7 +69,10 @@ import type { RunId } from '@texra-ai/harness/schemas';
 /** The tool's call layer under `run`, serving `registry` as the step would. */
 const toolLayer = (
   registry: AgentCliSessionRegistry,
-  run?: { readonly session: SessionHandle; readonly runId: RunId },
+  run?: {
+    readonly session: Context.Context<SessionServices>;
+    readonly runId: RunId;
+  },
 ) =>
   Layer.merge(
     nativeToolTestLayer(run && { run: { ...run, toolPolicy: {} } }),

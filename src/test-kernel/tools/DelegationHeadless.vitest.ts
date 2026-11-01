@@ -16,7 +16,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Exit, Fiber, Schema, Stream } from 'effect';
+import { Effect, Exit, Fiber, Schema, Stream, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 import '@test/support/sessionGraphTestSetup';
@@ -30,9 +30,15 @@ import {
 import { withProcessServices } from '@texra-ai/harness/host';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { agentTool } from '@agent/runtime/delegation/AgentTool';
 import { executeSubagentInBand } from '@agent/runtime/delegation/inBandSubagentRun';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { Interactions } from '@agent/runtime/HostInteractions';
+import {
+  SessionLog,
+  Approvals,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import {
   nativeToolTestLayer,
   testModelCell,
@@ -62,7 +68,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 const MODEL = 'openai/gpt-5.6-terra';
 
 interface Parent {
-  readonly session: SessionHandle;
+  readonly session: Context.Context<SessionServices>;
   readonly runId: RunId;
   readonly storage: string;
 }
@@ -75,7 +81,10 @@ const parkedParent = (bypass = true) =>
     const session = yield* openTestDefaultSession({ roots });
     const runId = yield* parkedRoot(session, 'Parent.');
     if (bypass)
-      yield* session.approvals.change(runId, humanGrant(['superYolo'], true));
+      yield* Context.get(session, Approvals).change(
+        runId,
+        humanGrant(['superYolo'], true),
+      );
     return { session, runId, storage: roots.storage } satisfies Parent;
   });
 
@@ -112,8 +121,7 @@ const runInBand = (parent: Parent, runId: RunId) =>
       instruction: 'Check the proof.',
     },
     parentRunId: parent.runId,
-    session: parent.session,
-  }).pipe(Effect.provideService(Runs, parent.session.runs), (program) =>
+  }).pipe(Effect.provide(parent.session), (program) =>
     withProcessServices(testRuntime(), program),
   );
 
@@ -141,24 +149,28 @@ const rowOf = (
  * assert that nothing was asked at all.
  */
 const answerOpenedRequests = (
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   decision: RequestDecision,
 ) =>
   Effect.gen(function* () {
     const openedKinds: string[] = [];
-    yield* Stream.runForEach(session.log.tail(session.log.now()), (event) =>
-      Effect.sync(() => {
-        if (event.type !== 'request.opened') return;
-        openedKinds.push(event.payload.kind);
-        publishTestRows(session, [
-          {
-            type: 'request.decided',
-            aggregateId: event.aggregateId,
-            requestId: event.requestId,
-            decision,
-          },
-        ]);
-      }),
+    yield* Stream.runForEach(
+      Context.get(session, SessionLog).tail(
+        Context.get(session, SessionLog).now(),
+      ),
+      (event) =>
+        Effect.sync(() => {
+          if (event.type !== 'request.opened') return;
+          openedKinds.push(event.payload.kind);
+          publishTestRows(session, [
+            {
+              type: 'request.decided',
+              aggregateId: event.aggregateId,
+              requestId: event.requestId,
+              decision,
+            },
+          ]);
+        }),
     ).pipe(Effect.forkScoped);
     return openedKinds;
   });
@@ -262,7 +274,7 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
         // cannot present prompts, or opens a prompt nobody may answer.
         const parent = yield* parkedParent(false);
         setTestApprovalPolicy('never');
-        yield* parent.session.interactions.use({
+        yield* Context.get(parent.session, Interactions).use({
           approvalPromptsUnavailable: true,
         });
         const opened = yield* answerOpenedRequests(parent.session, {
@@ -287,14 +299,16 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
         // its children mid-turn, as a stop-with-detach does.
         yield* delegateReview(parent, PARKED);
         const child = yield* untilAttempt(parent);
-        const registry = registryOf(parent.session.runs);
+        const registry = registryOf(Context.get(parent.session, Runs));
         yield* registry['detachActiveChildren'](parent.runId);
         yield* releasePark(parent);
 
         yield* untilStored(parent.storage, (rows) =>
           rows.some((row) => row.run === child && row.type === 'run.report'),
         );
-        expect(parent.session.view.run(child)?.parentId).toBeNull();
+        expect(
+          Context.get(parent.session, SessionViewAccess).run(child)?.parentId,
+        ).toBeNull();
         expect(yield* queuedFollowUps(parent.session, parent.runId)).toEqual(
           [],
         );

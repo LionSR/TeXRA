@@ -1,5 +1,13 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Scheduler, Semaphore } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Scheduler,
+  Semaphore,
+  Context,
+} from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import {
@@ -12,19 +20,29 @@ import {
 import { DatabaseWriteFailed } from '@texra-ai/harness/host';
 import * as resumability from '@agent/storage/resumability';
 import * as runLifecycle from '@agent/storage/runLifecycle';
-import { Inbox, type InboxPort } from '@agent/followUp/Inbox';
+import { SessionInbox, type InboxPort } from '@agent/followUp/Inbox';
 import { RunInput } from '@agent/followUp/RunInput';
-import { submitFollowUp, wakeRun } from '@agent/followUp/ToolUseFollowUp';
+import {
+  Inbox,
+  submitFollowUp,
+  wakeRun,
+} from '@agent/followUp/ToolUseFollowUp';
+import { Interactions } from '@agent/runtime/HostInteractions';
 import { resumeRun, type ResumeAttempt } from '@agent/runtime/resumeRun';
 import {
   RunRegistry,
   type RunPrograms,
   type RunRegistryInit,
+  Runs,
 } from '@agent/runtime/runRegistry';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { DatabaseClaimRefused } from '@shared/session/database';
 import type { Append } from '@shared/session/sessionEvents';
-import { runStateAppend } from '@shared/session/runHistory';
+import {
+  runStateAppend,
+  SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRowReads';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import type { CommitOrdinal } from '@texra-ai/harness/transcript';
@@ -36,7 +54,7 @@ const settle = Effect.promise(
 
 /** What a log transaction's job receives (its last `transact` overload). */
 type Transaction = Parameters<
-  Parameters<SessionHandle['log']['transact']>[0]
+  Parameters<SessionLog['Service']['transact']>[0]
 >[0];
 
 /** Whether the run took the resume, or the parent whose open call owns it. */
@@ -70,8 +88,6 @@ function recordedFollowUps(
   options: {
     claimRefused?: boolean;
     failWrites?: number;
-    /** The port's resume; the default succeeds. */
-    resume?: (runId: RunId) => Effect.Effect<Effect.Effect<void>>;
   } = {},
 ) {
   const rows: SessionEvent[] = [];
@@ -149,13 +165,12 @@ function recordedFollowUps(
       }),
     settled: Effect.void,
   } as InboxPort['log'];
-  const followUps = new Inbox({
+  const followUps = new SessionInbox({
     log,
     detach: (job) => {
       Effect.runFork(publisher.withPermits(1)(job(append)));
     },
     run: () => undefined,
-    resume: options.resume ?? (() => Effect.succeed(Effect.void)),
   });
   const queuedRows = (runId: RunId) =>
     rows.flatMap((row) =>
@@ -198,15 +213,12 @@ type RunState = 'live' | 'idle';
 function fakeSession(
   state: RunState,
   { deferFork = false } = {},
-): SessionHandle {
+): Context.Context<SessionServices> {
   if (state === 'idle')
     vi.spyOn(resumability, 'runRejection').mockReturnValue(
       Effect.succeed(null),
     );
-  // The port's resume is the session's own wake, as the session layer wires it.
-  recorded = recordedFollowUps({
-    resume: (runId) => wakeRun(runId, session),
-  });
+  recorded = recordedFollowUps();
   const { followUps, live } = recorded;
   /** The session's resume decision: a run that took it is live here from
    *  then on. */
@@ -229,15 +241,33 @@ function fakeSession(
         });
       },
     );
+  // cast: the fake view knows every run, with no fields.
+  const view = { run: () => ({}) } as unknown as SessionViewAccess['Service'];
+  // cast: the fake log serves only what a wake reads.
+  const log = {
+    records: () => Effect.succeed([]),
+    owner: () => Effect.succeed({ ownerId: null, liveness: null }),
+    hold: () => Effect.void,
+  } as unknown as SessionLog['Service'];
   const registry = new RunRegistry({
-    session: () => session,
-    // cast: the fake decision reads no process service.
-    fork: ((effect: Effect.Effect<unknown, unknown>) =>
+    view,
+    log,
+    // cast: the fake reads no setting.
+    roots: undefined as unknown as RunRegistryInit['roots'],
+    // cast: the fake decision reads no process service, only the session.
+    fork: ((effect: Effect.Effect<unknown, unknown, SessionServices>) =>
       Effect.runFork(
-        deferFork ? Effect.andThen(Effect.yieldNow, effect) : effect,
+        Effect.provide(
+          deferFork ? Effect.andThen(Effect.yieldNow, effect) : effect,
+          session,
+        ),
       )) as unknown as RunRegistryInit['fork'],
     // cast: a wake reaches only the session's resume decision.
-    programs: { resume } as unknown as RunPrograms,
+    programs: {
+      resume,
+      finalize: (input: Parameters<RunPrograms['finalize']>[0]) =>
+        runLifecycle.finalizeRun(input),
+    } as unknown as RunPrograms,
     wake: () => {},
   });
   // The registry's records, but a generation `live` here as the case says.
@@ -247,17 +277,15 @@ function fakeSession(
         ? { runId, live: true, readsMessages: true }
         : registry.get(runId),
   });
-  const session = {
-    runs,
-    view: { run: () => ({}) },
-    interactions: { emit: () => Effect.void },
-    log: {
-      records: () => Effect.succeed([]),
-      owner: () => Effect.succeed({ ownerId: null, liveness: null }),
-      hold: () => Effect.void,
-    },
-    followUps,
-  } as unknown as SessionHandle;
+  // cast: a wake and a send read only these owners of the session.
+  const session = Context.make(Runs, runs).pipe(
+    Context.add(SessionViewAccess, view),
+    Context.add(SessionLog, log),
+    Context.add(Interactions, {
+      emit: () => Effect.void,
+    } as unknown as Interactions['Service']),
+    Context.add(Inbox, followUps),
+  ) as unknown as Context.Context<SessionServices>;
   return session;
 }
 
@@ -285,17 +313,17 @@ describe('wakeRun', () => {
           .spyOn(runLifecycle, 'finalizeRun')
           .mockReturnValue(Effect.succeed({ end: null, wrote: false }));
 
-        const woken = yield* wakeRun(runId, session).pipe(
-          withResumePort(decide),
-        );
-        session.runs.stop(runId, {
+        const woken = yield* wakeRun(runId)
+          .pipe(withResumePort(decide))
+          .pipe(Effect.provide(session));
+        Context.get(session, Runs).stop(runId, {
           reason: 'user',
           detachActiveChildren: false,
         });
         yield* woken;
 
         expect(decide).not.toHaveBeenCalled();
-        expect(ended).toHaveBeenCalledWith(session, {
+        expect(ended).toHaveBeenCalledWith({
           runId,
           outcome: 'cancelled',
           ownerless: true,
@@ -319,11 +347,14 @@ describe('wakeRun races', () => {
         const decide = vi.fn(() => Effect.succeed(false));
 
         const caller = yield* Effect.forkChild(
-          resumeRun(runId, { session }).pipe(withResumePort(decide)),
+          resumeRun(runId, {}).pipe(
+            withResumePort(decide),
+            Effect.provide(session),
+          ),
           { startImmediately: true },
         );
         yield* Fiber.interrupt(caller);
-        yield* session.runs.get(runId)?.drained ?? Effect.void;
+        yield* Context.get(session, Runs).get(runId)?.drained ?? Effect.void;
 
         expect(decide).not.toHaveBeenCalled();
       }),
@@ -349,12 +380,15 @@ describe('wakeRun races', () => {
         );
 
         const caller = yield* Effect.forkChild(
-          resumeRun(child, { session }).pipe(withResumePort(decide)),
+          resumeRun(child, {}).pipe(
+            withResumePort(decide),
+            Effect.provide(session),
+          ),
           { startImmediately: true },
         );
-        const woken = yield* wakeRun(child, session).pipe(
-          withResumePort(decide),
-        );
+        const woken = yield* wakeRun(child)
+          .pipe(withResumePort(decide))
+          .pipe(Effect.provide(session));
         yield* Fiber.interrupt(caller);
         answered.resolve();
         yield* woken;
@@ -379,7 +413,9 @@ describe('wakeRun races', () => {
         for (const _ of [1, 2])
           wakes.push(
             yield* Effect.forkChild(
-              wakeRun(runId, session).pipe(withResumePort(decide)),
+              wakeRun(runId)
+                .pipe(withResumePort(decide))
+                .pipe(Effect.provide(session)),
             ),
           );
         for (const wake of wakes) yield* Fiber.join(wake);
@@ -408,8 +444,9 @@ describe('submitFollowUp', () => {
         for (const text of ['one', 'two', 'three']) {
           fibers.push(
             yield* Effect.forkChild(
-              submitFollowUp(runId, user(text), { session }).pipe(
+              submitFollowUp(runId, user(text), {}).pipe(
                 withResumePort(tryResumeRun),
+                Effect.provide(session),
               ),
             ),
           );
@@ -433,7 +470,8 @@ describe('submitFollowUp', () => {
         const resumed = createDeferred<boolean>();
         const started = yield* Deferred.make<void>();
         const fiber = yield* Effect.forkChild(
-          submitFollowUp(runId, user('keep this input'), { session }).pipe(
+          submitFollowUp(runId, user('keep this input'), {}).pipe(
+            Effect.provide(session),
             withResumePort(() => {
               Deferred.doneUnsafe(started, Effect.void);
               return Effect.promise(() => resumed.promise);
@@ -464,8 +502,9 @@ describe('submitFollowUp', () => {
       };
 
       expect(
-        yield* submitFollowUp(runId, message, { session }).pipe(
+        yield* submitFollowUp(runId, message, {}).pipe(
           withResumePort(tryResumeRun),
+          Effect.provide(session),
         ),
       ).toEqual({ status: 'queued' });
       expect(recorded.queued(runId)).toEqual(['from a peer']);
@@ -481,8 +520,9 @@ describe('submitFollowUp', () => {
       const delivery = childResult('exec-1:turn:1:delivery');
 
       expect(
-        yield* submitFollowUp(runId, delivery, { session }).pipe(
+        yield* submitFollowUp(runId, delivery, {}).pipe(
           withResumePort(tryResumeRun),
+          Effect.provide(session),
         ),
       ).toEqual({ status: 'queued' });
 
@@ -490,8 +530,9 @@ describe('submitFollowUp', () => {
       // another parent message; the live generation reads the one row.
       for (let replay = 0; replay < 100; replay++) {
         expect(
-          yield* submitFollowUp(runId, delivery, { session }).pipe(
+          yield* submitFollowUp(runId, delivery, {}).pipe(
             withResumePort(tryResumeRun),
+            Effect.provide(session),
           ),
         ).toEqual({ status: 'sent' });
       }
@@ -519,7 +560,7 @@ describe('Inbox readers', () => {
           ),
         );
         yield* followUps.send(id, user('between generations'));
-        yield* followUps.wake(id);
+        yield* followUps.owesResume(id);
 
         const input = yield* followUps.open(id);
         expect(yield* taken(input)).toEqual([

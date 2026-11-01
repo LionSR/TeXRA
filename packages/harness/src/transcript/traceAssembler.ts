@@ -14,7 +14,6 @@
 import { Effect } from 'effect';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { getRunRecords } from '@agent/storage/runRecords';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import {
   isDisplaySessionEvent,
@@ -22,6 +21,7 @@ import {
   type RequestDecision,
   type RunId,
 } from '@shared/schemas';
+import { SessionLog } from '@shared/session/runHistory';
 import { isRequestDecision, recordOf } from '@shared/session/runRowReads';
 
 import type { TraceDocument } from './traceDocumentSchema';
@@ -73,10 +73,10 @@ export type AssembleTraceResult =
  */
 export const assembleTrace = Effect.fn('assembleTrace')(function* (
   runId: RunId,
-  session: SessionHandle,
-): Effect.fn.Return<AssembleTraceResult, Error> {
+): Effect.fn.Return<AssembleTraceResult, Error, SessionLog> {
+  const log = yield* SessionLog;
   const [record, events] = yield* Effect.all(
-    [getRunRecords(session, runId).readRunRecord(), session.log.display(runId)],
+    [getRunRecords(runId).readRunRecord(), log.display(runId)],
     { concurrency: 2 },
   );
   if (!record) return { status: 'config_missing' };

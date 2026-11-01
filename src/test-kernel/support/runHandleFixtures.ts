@@ -9,30 +9,35 @@ import {
   type AgentRunServices,
 } from '@agent/runtime/runRegistry';
 import type { RunsShape } from '@agent/runtime/runs';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { emptySessionView } from '@shared/session/sessionView';
 import type { RunId } from '@shared/schemas';
+import { testWorkspaceRoots } from './testWorkspaceRoots';
 import { testRuntime } from './testProcessRuntime';
 
 /** A registry's launch door over the harness's process runtime, standing in
  *  for the session context the session layer forks runs from. */
-export const testRunFork: RunRegistryInit['fork'] = (effect) =>
-  testRuntime().runFork(effect);
+export const testRunFork: RunRegistryInit['fork'] = <A, E>(
+  effect: Parameters<RunRegistryInit['fork']>[0],
+) =>
+  // cast: a test registry starts programs that read no session service
+  testRuntime().runFork(effect as Effect.Effect<A, E>);
 
 /** A registry over an empty fold: no run has a view, which is what a
  *  fixture that never publishes a phase-moving row would see. */
 export function testRunRegistry(): RunRegistry {
   // The registry reads its session's view (empty here), claims (no-ops)
   // and its own `run.detach` batches (dropped); nothing else.
-  const session = {
-    view: { run: () => undefined, ref: emptyView },
+  // cast: the registry reads only these members of its view and log.
+  return new RunRegistry({
+    view: {
+      run: () => undefined,
+      ref: emptyView,
+    } as unknown as RunRegistryInit['view'],
     log: {
       transact: () => Effect.succeed([]),
       hold: () => Effect.void,
-    },
-  } as unknown as SessionHandle;
-  return new RunRegistry({
-    session: () => session,
+    } as unknown as RunRegistryInit['log'],
+    roots: testWorkspaceRoots(),
     fork: testRunFork,
     programs: testRunPrograms,
     wake: () => {},
@@ -51,6 +56,11 @@ export const testRunPrograms: RunPrograms = {
     Effect.flatMap(
       Effect.promise(() => import('@agent/runtime/resumeRun')),
       (module) => module.decideResume(...args),
+    ),
+  finalize: (...args) =>
+    Effect.flatMap(
+      Effect.promise(() => import('@agent/storage/runLifecycle')),
+      (module) => module.finalizeRun(...args),
     ),
 };
 

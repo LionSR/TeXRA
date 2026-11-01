@@ -21,8 +21,8 @@
  */
 import { Context, Effect, type ManagedRuntime, References } from 'effect';
 
-import { SessionOwner } from '@agent/runtime/rootLaunch';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionRoots } from '@platform/rootedFs';
 import type { LocalSession, Sessions } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
@@ -83,14 +83,20 @@ const testSessions: Effect.Effect<Sessions['Service']> = Effect.suspend(
 
 /** `handle`'s session as a host holds it (`LocalSession`): the one the
  *  installed sessions list for its root, which is open. */
-export function testSessionOf(handle: SessionHandle): LocalSession {
+export function testSessionOf(
+  handle: Context.Context<SessionServices>,
+): LocalSession {
   const session = Effect.runSync(
     Effect.map(testSessions, (installed) => installed.list).pipe(
       Effect.flatten,
       Effect.provideService(References.PreventSchedulerYield, true),
     ),
-  ).find((open) => open.roots.storage === handle.roots.storage);
+  ).find(
+    (open) => open.roots.storage === Context.get(handle, SessionRoots).storage,
+  );
   if (session === undefined)
-    throw new Error(`No session is open at ${handle.roots.storage}.`);
+    throw new Error(
+      `No session is open at ${Context.get(handle, SessionRoots).storage}.`,
+    );
   return session;
 }

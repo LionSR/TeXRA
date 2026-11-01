@@ -1,12 +1,15 @@
 // Third-party imports
 import { layer } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { requestToolEditApproval } from '@texra-ai/harness/plugins';
+import { Interactions } from '@agent/runtime/HostInteractions';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { type CliApprovalPromptHooks } from '@cli/runtime/approval/approvalPrompts';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { createHeadlessCliHostInteractions } from '@cli/runtime/approvalAdapter';
+import { SessionLog } from '@shared/session/runHistory';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
   publishTestRunStart,
@@ -52,7 +55,7 @@ const useCliHostInteractions = (
       hooks,
     );
     yield* Effect.acquireRelease(
-      handle.interactions.use(interactions),
+      Context.get(handle, Interactions).use(interactions),
       (detach) => Effect.sync(detach),
     );
   });
@@ -68,7 +71,7 @@ function ensureRun(runId: RunId) {
     started.add(runId);
     const handle = yield* sessionHandle;
     publishTestRunStart(handle, runId);
-    yield* handle.log.settled;
+    yield* Context.get(handle, SessionLog).settled;
   });
 }
 
@@ -126,24 +129,27 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.layer))(
             );
             yield* ensureRun(ROOT_RUN);
             const handle = yield* sessionHandle;
-            const result = yield* handle.requests.ask(ROOT_RUN, {
-              kind: 'proposal',
-              data: {
-                requestId: 'proposal-1',
-                allowBypass: true,
-                runId: ROOT_RUN,
-                agent: 'review',
-                model: 'deepseek/deepseek-v4-flash',
-                instruction: 'Please check this proof.',
-                memories: [],
-                inputFiles: [],
-                contextFiles: [],
-                mediaFiles: [],
-                outputFiles: [],
-                task: false,
-                options: {},
+            const result = yield* Context.get(handle, SessionRequests).ask(
+              ROOT_RUN,
+              {
+                kind: 'proposal',
+                data: {
+                  requestId: 'proposal-1',
+                  allowBypass: true,
+                  runId: ROOT_RUN,
+                  agent: 'review',
+                  model: 'deepseek/deepseek-v4-flash',
+                  instruction: 'Please check this proof.',
+                  memories: [],
+                  inputFiles: [],
+                  contextFiles: [],
+                  mediaFiles: [],
+                  outputFiles: [],
+                  task: false,
+                  options: {},
+                },
               },
-            });
+            );
 
             expect(result).toMatchObject({ action: 'deny' });
             expect(prompted).toEqual([]);

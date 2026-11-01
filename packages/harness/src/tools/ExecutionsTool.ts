@@ -9,7 +9,14 @@
  */
 
 // Third-party imports
-import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
+import {
+  Context,
+  Duration,
+  Effect,
+  FileSystem,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage/runRecords';
@@ -17,18 +24,19 @@ import {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,
 } from '@agent/storage/runWorkspaceFiles';
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { requireToolRun } from '@agent/runtime/RunCall';
-import type { Runs } from '@agent/runtime/runRegistry';
+import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
+import { Runs } from '@agent/runtime/runRegistry';
 import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
-import { StorageFs } from '@platform/rootedFs';
+import { SessionRoots, StorageFs } from '@platform/rootedFs';
 import {
   isRunId,
+  qualifyAggregateId,
   ToolError,
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { isLiveRun, type SessionView } from '@shared/session/sessionView';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -66,9 +74,8 @@ import { shouldSkipWait } from './executions/waitCoordination';
 import { scriptCallsView } from './executions/scriptCallsView';
 
 interface RunToolContext {
-  readonly session: SessionHandle;
   readonly runId: RunId;
-  /** The session's runs, off the engine door (`RunCallShape.runs`). */
+  /** The session's runs, off its call's session (`RunCallShape.session`). */
   readonly runs: Runs['Service'];
 }
 
@@ -100,14 +107,14 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
       (view.queuedFollowUps.get(context.runId) ?? []).map((f) => f.followUpId);
     const started = phases(initial);
     const held = new Set(sent(initial));
-    const change = context.session.view.changes.pipe(
+    const { changes, ref } = yield* SessionViewAccess;
+    const change = changes.pipe(
       Stream.filter(
         (view) =>
           phases(view) !== started || sent(view).some((id) => !held.has(id)),
       ),
       Stream.runHead,
     );
-    const { ref } = context.session.view;
     const alreadySettled = Effect.suspend(() =>
       settled(SubscriptionRef.getUnsafe(ref)) ? Effect.void : Effect.never,
     );
@@ -144,9 +151,17 @@ interface RouteRequest<A extends ExecutionsAction> {
   /** The `{path}` segment, `/`-joined. */
   readonly rest: string;
 }
+/** What the routes read of the calling run's session: its owners, which
+ *  the call's run carries (`RunCallShape.session`). */
+type SessionReads =
+  RunToolCall['session'] extends Context.Context<infer S> ? S : never;
 type RouteHandler<A extends ExecutionsAction> = (
   request: RouteRequest<A>,
-) => Effect.Effect<ToolResult, Error, FileSystem.FileSystem | StorageFs>;
+) => Effect.Effect<
+  ToolResult,
+  Error,
+  FileSystem.FileSystem | StorageFs | SessionReads
+>;
 type RouteActions = {
   readonly [A in ExecutionsAction]?: RouteHandler<A>;
 };
@@ -167,13 +182,14 @@ const EXECUTION_ROUTES: ReadonlyArray<{
     summary: 'List executions (paginated; use offset/limit for pages)',
     actions: {
       view: ({ context, input }) =>
-        listExecutions(context, input.offset, input.limit),
+        listExecutions(context.runId, input.offset, input.limit),
       wait: ({ context, input }) =>
         waitForRuns(context, input.timeout, input.ids).pipe(
-          Effect.andThen(listExecutions(context, input.offset, input.limit)),
+          Effect.andThen(
+            listExecutions(context.runId, input.offset, input.limit),
+          ),
         ),
-      query: ({ context, input }) =>
-        queryHistory(context.session, input.sql, input.params),
+      query: ({ input }) => queryHistory(input.sql, input.params),
     },
   },
   {
@@ -189,8 +205,11 @@ const EXECUTION_ROUTES: ReadonlyArray<{
           yield* waitForRuns(context, input.timeout, [runId]);
           // The child's deliveries still queued on the caller: this result
           // answers them, and its settlement consumes them with it.
-          const queued = yield* context.session.followUps.read(context.runId);
-          const answered = queued.followUps
+          const { followUps } = yield* (yield* SessionLog).runRows(
+            qualifyAggregateId('run', context.runId),
+            'input',
+          );
+          const answered = followUps
             .map(({ followUpId }) => followUpId)
             .filter((followUpId) => followUpId.startsWith(`${runId}:`));
           const summary = yield* showSummary(context, runId, {
@@ -200,7 +219,7 @@ const EXECUTION_ROUTES: ReadonlyArray<{
         }),
       kill: ({ context, runId }) => handleKill(context, runId),
       send: ({ context, input, runId }) =>
-        sendToRun(context.session, context.runId, runId, input.message),
+        sendToRun(context.runId, runId, input.message),
     },
   },
   {
@@ -238,14 +257,14 @@ const EXECUTION_ROUTES: ReadonlyArray<{
     summary:
       'stdout/stderr of a background command, readable WHILE IT RUNS (report/result only exist once it finishes)',
     actions: {
-      view: ({ context, input, runId }) =>
-        showOutput(context.session, runId, input.view_range ?? undefined),
+      view: ({ input, runId }) =>
+        showOutput(runId, input.view_range ?? undefined),
     },
   },
   {
     path: '/executions/{id}/files',
     summary: 'Generated files (workflows only)',
-    actions: { view: ({ context, runId }) => listFiles(context, runId) },
+    actions: { view: ({ runId }) => listFiles(runId) },
   },
   {
     path: '/executions/{id}/files/{path}',
@@ -292,8 +311,8 @@ const EXECUTION_PATH_LIST = EXECUTION_ROUTES.map(
 const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
   input: ExecutionsToolInput,
 ) {
-  const { run, runs } = yield* requireToolRun('executions');
-  const context = { session: run.session, runId: run.runId, runs };
+  const { run, session } = yield* requireToolRun('executions');
+  const context = { runId: run.runId, runs: Context.get(session, Runs) };
   const segments = getPathSegments(input.path);
   const route = EXECUTION_ROUTES.find(({ path }) => {
     const parts = path.split('/').slice(1);
@@ -328,7 +347,7 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
     input,
     runId: yield* resolveRunId(context, segments[1] ?? 'current'),
     rest: segments.slice(3).join('/'),
-  });
+  }).pipe(Effect.provide(session));
 });
 
 function resolveRunId(
@@ -351,14 +370,14 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
   const { runs } = context;
   const candidates = ids?.length ? ids : runs.get().map((r) => r.runId);
   // Skip runs already done (see shouldSkipWait) on the view the wait starts from.
-  const initial = SubscriptionRef.getUnsafe(context.session.view.ref);
+  const initial = SubscriptionRef.getUnsafe((yield* SessionViewAccess).ref);
   const pendingIds = [...new Set(candidates)].filter(
-    (id) => !shouldSkipWait(context.session, initial, id),
+    (id) => !shouldSkipWait(runs, initial, id),
   );
   if (pendingIds.length === 0) return;
 
   yield* awaitStatusChange(context, initial, timeout, pendingIds, (view) =>
-    pendingIds.every((id) => shouldSkipWait(context.session, view, id)),
+    pendingIds.every((id) => shouldSkipWait(runs, view, id)),
   );
 });
 
@@ -380,23 +399,22 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
     readonly suppressAutoDeliveredSubagentReport?: boolean;
   } = {},
 ) {
-  const session = context.session;
-  const view = yield* session.view.read([runId]);
+  const view = yield* (yield* SessionViewAccess).read([runId]);
   const run = view.runs.get(runId);
 
   // An open run is in the view; one launched here may not have opened yet.
   if (!run)
     return yield* Effect.fail(
-      missingRun(session, runId, `Run not found: ${runId}`),
+      missingRun(context.runs, runId, `Run not found: ${runId}`),
     );
 
   // The report is a private record row, never part of the display fold.
-  const report = yield* getRunRecords(session, runId).readReport();
+  const report = yield* getRunRecords(runId).readReport();
   const lines = buildSummaryLines(run);
 
   // A background script's calls, from its rows, under the same bounds.
   if (run.identity.kind === 'script') {
-    const { calls } = yield* scriptRunCalls(session, runId);
+    const { calls } = yield* scriptRunCalls(runId);
     lines.push(
       '',
       'Script:',
@@ -450,7 +468,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   }
 
   // Only your own children, by the attached parent the fold reads.
-  const view = yield* context.session.view.read([]);
+  const view = yield* (yield* SessionViewAccess).read([]);
   if (view.runs.get(runId)?.parentId !== context.runId) {
     return yield* Effect.fail(
       new ToolError(`Cannot kill run ${runId}: not a child of this session.`),
@@ -458,7 +476,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   }
 
   // The permission gate: off, or a stored value that fails its schema, denies.
-  const killDenial = yield* orchestratorKillDenial(context.session.roots);
+  const killDenial = yield* orchestratorKillDenial(yield* SessionRoots);
   if (killDenial !== undefined) {
     return yield* Effect.fail(new ToolError(killDenial));
   }
@@ -483,9 +501,9 @@ const showReport = Effect.fn('ExecutionsTool.showReport')(function* (
   context: RunToolContext,
   runId: RunId,
 ) {
-  const records = getRunRecords(context.session, runId);
+  const records = getRunRecords(runId);
   const [report, note] = yield* Effect.all(
-    [records.readReport(), turnAttributionNote(runId, context.session)],
+    [records.readReport(), turnAttributionNote(runId)],
     { concurrency: 2 },
   );
   if (!report) {
@@ -505,10 +523,7 @@ const showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(function* (
   runId: RunId,
 ) {
   const [result, note] = yield* Effect.all(
-    [
-      getRunRecords(context.session, runId).readResult(),
-      turnAttributionNote(runId, context.session),
-    ],
+    [getRunRecords(runId).readResult(), turnAttributionNote(runId)],
     { concurrency: 2 },
   );
   if (!result) {
@@ -527,7 +542,7 @@ const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (
   context: RunToolContext,
   runId: RunId,
 ) {
-  const records = getRunRecords(context.session, runId);
+  const records = getRunRecords(runId);
   const record = yield* records.readRunRecord();
 
   if (!record) {
@@ -540,7 +555,7 @@ const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (
   // the fold decides from the stamped identity. Read from the fold's
   // listing tier rather than the live view, so a run no port holds is
   // filtered by the same rule as one that is.
-  const run = (yield* context.session.view.read([])).runs.get(runId);
+  const run = (yield* (yield* SessionViewAccess).read([])).runs.get(runId);
   return executed(
     serializeFilteredConfig(
       record,
@@ -556,11 +571,9 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
     offset: number,
     limit: number,
   ) {
-    const records = getRunRecords(context.session, runId);
-    const conversation = yield* readCompletedRunConversation(
-      runId,
-      context.session,
-    );
+    const records = getRunRecords(runId);
+    const { config } = yield* SessionRoots;
+    const conversation = yield* readCompletedRunConversation(runId, config);
 
     if (conversation.length === 0) {
       // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
@@ -593,10 +606,9 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
 );
 
 const listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
-  { session }: RunToolContext,
   runId: RunId,
 ) {
-  const { storage } = session.roots;
+  const { storage } = yield* SessionRoots;
   const files = yield* listRunGeneratedFiles(runId, storage);
   if (files.length === 0) {
     return executed('No files generated for this run.');
@@ -618,7 +630,7 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
   const displayPath = `/executions/${runId}/files/${filePath}`;
   yield* assertNoParentTraversal(filePath);
   const fullPath = yield* findExistingRunStoragePathUnder(
-    context.session.roots.storage,
+    (yield* SessionRoots).storage,
     runId,
     filePath,
   );
@@ -635,7 +647,7 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
 
 const listWorkspaceFiles = Effect.fn('ExecutionsTool.listWorkspaceFiles')(
   function* (context: RunToolContext, runId: RunId) {
-    const records = getRunRecords(context.session, runId);
+    const records = getRunRecords(runId);
     const [record, paths] = yield* Effect.all(
       [records.readRunRecord(), records.readWorkspaceFiles()],
       { concurrency: 2 },
@@ -662,7 +674,7 @@ const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
     filePath: string,
     viewRange?: readonly [number, number],
   ) {
-    const records = getRunRecords(context.session, runId);
+    const records = getRunRecords(runId);
     const [record, paths] = yield* Effect.all(
       [records.readRunRecord(), records.readWorkspaceFiles()],
       { concurrency: 2 },

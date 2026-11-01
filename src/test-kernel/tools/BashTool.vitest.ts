@@ -5,7 +5,14 @@ import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
 
 // Third-party imports
-import { Deferred, Effect, Fiber, Schedule, SubscriptionRef } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Fiber,
+  Schedule,
+  SubscriptionRef,
+  Context,
+} from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
@@ -16,8 +23,10 @@ import {
   RUN_PHASE,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import { registryOf } from '@agent/runtime/runRegistry';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import { getRunRecords } from '@agent/storage/runRecords';
+import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { SessionViewAccess } from '@shared/session/runHistory';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -49,7 +58,9 @@ function holdCommand(): (result: ExecResult) => void {
 
 /** Close the parent's input so the background run's delivery ends. */
 function detachBackgroundRun(parentRunId: RunId): void {
-  Effect.runFork(testDefaultSession().followUps.closeInput(parentRunId));
+  Effect.runFork(
+    Context.get(testDefaultSession(), Inbox).closeInput(parentRunId),
+  );
 }
 
 /**
@@ -68,7 +79,7 @@ async function parkRunWaiting(runId: RunId): Promise<void> {
   ]);
   await vi.waitFor(() => {
     assert.equal(
-      testDefaultSession().view.run(runId)?.status,
+      Context.get(testDefaultSession(), SessionViewAccess).run(runId)?.status,
       RUN_PHASE.WAITING,
     );
   });
@@ -190,13 +201,17 @@ describe('BashTool', () => {
         let runId = '' as RunId;
         const wakeReached = Deferred.makeUnsafe<void>();
         // The resume a wake starts is the run's one resume in flight.
-        const { programs } = registryOf(testDefaultSession().runs);
+        const { programs } = registryOf(
+          Context.get(testDefaultSession(), Runs),
+        );
         const decide = programs.resume;
         vi.spyOn(programs, 'resume').mockImplementation((...args) => {
           const session = testDefaultSession();
           skippedAtResumeTime ??= shouldSkipWait(
-            session,
-            SubscriptionRef.getUnsafe(session.view.ref),
+            Context.get(session, Runs),
+            SubscriptionRef.getUnsafe(
+              Context.get(session, SessionViewAccess).ref,
+            ),
             runId,
           );
           Deferred.doneUnsafe(wakeReached, Effect.void);
@@ -234,7 +249,9 @@ describe('BashTool', () => {
         // The user stop lands CANCELLED on the run phase; only afterwards does
         // the killed process report its non-zero exit.
         const stopSettlement = yield* Effect.forkChild(
-          testDefaultSession().runs.stop(runId, { reason: 'user' }).settlement,
+          Context.get(testDefaultSession(), Runs)
+            .stop(runId, { reason: 'user' })
+            .settlement.pipe(Effect.provide(testDefaultSession())),
         );
         resolveCommand({
           success: false,
@@ -245,14 +262,16 @@ describe('BashTool', () => {
         });
 
         yield* Fiber.join(stopSettlement);
-        const records = getRunRecords(testDefaultSession(), runId);
-        yield* records.readRunEnd().pipe(
-          Effect.repeat({
-            while: (end) => end?.outcome !== RUN_OUTCOME.CANCELLED,
-            schedule: Schedule.spaced('10 millis'),
-          }),
-          Effect.timeout('1 second'),
-        );
+        yield* getRunRecords(runId)
+          .readRunEnd()
+          .pipe(
+            Effect.repeat({
+              while: (end) => end?.outcome !== RUN_OUTCOME.CANCELLED,
+              schedule: Schedule.spaced('10 millis'),
+            }),
+            Effect.timeout('1 second'),
+            Effect.provide(testDefaultSession()),
+          );
         detachBackgroundRun(parentRunId);
       }),
   );

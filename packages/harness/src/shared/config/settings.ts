@@ -17,7 +17,7 @@ const CHANNEL = 'settings';
  *
  * A setting answers for the stores the caller holds as data. A session's
  * `WorkspaceRoots` carries all of them, so a tool call's `call.roots`, a run's
- * `session.roots` and a host command's `session.roots` are passed directly,
+ * `SessionRoots` and a host command's `session.roots` are passed directly,
  * and the value answers for that project rather than for whichever roots the
  * calling fiber happens to carry. The row is looked up by key in the
  * catalog the stores' `ConfigProvider` carries (`config.catalog`); a key that

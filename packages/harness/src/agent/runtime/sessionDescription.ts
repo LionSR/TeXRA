@@ -10,10 +10,10 @@
 import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { helperCall } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
+import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import {
   qualifyAggregateId,
@@ -21,6 +21,7 @@ import {
   type RunId,
   type RunOutcome,
 } from '@shared/schemas';
+import { SessionLog } from '@shared/session/runHistory';
 import type { UsageLog } from '@shared/usageLog';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import type { RouteRetries } from './run/invocation';
@@ -100,7 +101,7 @@ const DESCRIPTION_DEADLINE = '20 seconds';
  * and every renderer read.
  *
  * The helper model is resolved against the session's settings slots
- * (`session.roots`) and the process `Secrets` read from context.
+ * (`SessionRoots`) and the process `Secrets` read from context.
  */
 export const generateSessionDescription = Effect.fn(
   'generateSessionDescription',
@@ -108,23 +109,29 @@ export const generateSessionDescription = Effect.fn(
   runId: RunId,
   config: AgentConfig,
   agentDescription: string | undefined,
-  session: SessionHandle,
   resumed: boolean,
 ): Effect.fn.Return<
   void,
   never,
-  HttpClient.HttpClient | UsageLog | RouteRetries | Secrets
+  | HttpClient.HttpClient
+  | UsageLog
+  | RouteRetries
+  | Secrets
+  | SessionLog
+  | SessionRoots
 > {
   const instruction = getDisplayedInstruction(config);
   if (!instruction) return;
+  const log = yield* SessionLog;
+  const roots = yield* SessionRoots;
   yield* Effect.gen(function* () {
     if (resumed) {
       // A run already described, or one gone, keeps what it has.
-      const facts = yield* session.log.facts(runId);
+      const facts = yield* log.facts(runId);
       if (facts === null || facts.title !== null) return;
     }
     const text = yield* helperCall(
-      session.roots,
+      roots,
       {
         userPrompt: buildUserPrompt(
           config.agent,
@@ -161,7 +168,7 @@ export const generateSessionDescription = Effect.fn(
     // would then turn into a warning, leaving the terminal drain to write a
     // COMPLETED row over a fact nobody hears about. A refused commit is this
     // path's own failure and the one thing the warning is for.
-    yield* session.log.transact([
+    yield* log.transact([
       {
         type: 'run.description',
         aggregateId: qualifyAggregateId('run', runId),

@@ -1,6 +1,6 @@
-/** One session's store-facing owners: the log (`SessionLog`, the one
- *  transaction door with its reads and claims) and the trace sink
- *  (`RunTrace`), over the root's publisher and database.
+/** One session's store-facing owner: the log (`SessionLog`, the one
+ *  transaction door with its reads, claims and each run's trace), over the
+ *  root's publisher and database.
  *
  *  "Published" means folded: a transaction returns once the session's tail
  *  has delivered, and its view has folded, every commit it made, so a caller
@@ -18,7 +18,6 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type { RunTrace } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import {
   qualifyAggregateId,
@@ -63,7 +62,6 @@ import { TextChunkSource } from './sessionSources';
  *  its transactions. */
 export interface SessionStore {
   readonly log: SessionLogShape;
-  readonly trace: RunTrace;
   /** The publisher's detached door: for a producer with no fiber to wait on
    *  (the inbox's own sends, an interrupted request's cancellation). */
   readonly detach: SessionEventsShape['detach'];
@@ -322,6 +320,8 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
           : transact((tx) => tx.append(work));
       },
       publish: trace.publish,
+      lost: trace.lost,
+      closure: trace.closure,
       settled,
       afterCommit,
       now: () => SubscriptionRef.getUnsafe(database.observedCommit),
@@ -357,7 +357,6 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
     };
     return {
       log,
-      trace,
       detach: events.detach,
       removeRun: events.removeRun,
       // Pulled in order: `foldedRead` moves once a read's rows were run.

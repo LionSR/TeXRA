@@ -18,18 +18,18 @@ import {
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
-import { withSessionFs } from '@platform/rootedFs';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { SessionRoots, withSessionFs } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
 import { recordOf } from '@shared/session/runRowReads';
-import { Rejected, type RequestError } from '@shared/session/runtimeRequest';
-import type {
-  OutcomeOf,
-  RunFilesResult,
-  RuntimeRequest,
+import {
+  Rejected,
+  type RequestError,
+  type OutcomeOf,
+  type RunFilesResult,
+  type RuntimeRequest,
 } from '@shared/session/runtimeRequest';
-import type { SessionLogShape } from '@shared/session/sessionLog';
+import { SessionLog } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { absentReason } from '@utils/files/fsEntryExists';
 import { copyOrRemoveRunDir } from '@utils/files/runStorageFs';
@@ -150,7 +150,7 @@ export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
 export type RunFilesServices = FileSystem.FileSystem | Path.Path;
 
 /**
- * Answer a `run.files` request on `session` as one step on the inactive run
+ * Answer a `run.files` request on its session as one step on the inactive run
  * (`runs`: the registry's `withInactiveRunStep`), its claim taken for the
  * operation: a run launched here or held by another live process refuses
  * it, a launch arriving meanwhile waits for it, and the claim is never taken
@@ -158,10 +158,6 @@ export type RunFilesServices = FileSystem.FileSystem | Path.Path;
  * requesting app's.
  */
 export const runFiles = (
-  session: {
-    readonly roots: WorkspaceRoots;
-    readonly log: Pick<SessionLogShape, 'hold'>;
-  },
   runs: {
     readonly withInactiveRunStep: <A, E, R>(
       runId: RunId,
@@ -169,44 +165,52 @@ export const runFiles = (
     ) => Effect.Effect<A, E | Error, R>;
   },
   req: Extract<RuntimeRequest, { kind: 'run.files' }>,
-): Effect.Effect<OutcomeOf<'run.files'>, RequestError, RunFilesServices> =>
-  runs
-    .withInactiveRunStep(
-      req.runId,
-      session.log.hold(req.runId).pipe(
-        Effect.andThen(
-          copyOrRemoveRunDir(req.runId, req.files).pipe(
-            Effect.map((found): RunFilesResult => {
-              if (!found) return { status: 'noFiles' };
-              return req.files.op === 'copy'
-                ? { status: 'done', to: req.files.to }
-                : { status: 'done' };
-            }),
-            Effect.catch((error) =>
-              Effect.logError(
-                `The ${req.files.op} of run ${req.runId} failed`,
-              ).pipe(
-                Effect.annotateLogs({ data: error }),
-                Effect.as<RunFilesResult>({
-                  status: 'error',
-                  error: toErrorMessage(error),
-                }),
+): Effect.Effect<
+  OutcomeOf<'run.files'>,
+  RequestError,
+  RunFilesServices | SessionLog | SessionRoots
+> =>
+  Effect.gen(function* () {
+    const roots = yield* SessionRoots;
+    const log = yield* SessionLog;
+    return yield* runs
+      .withInactiveRunStep(
+        req.runId,
+        log.hold(req.runId).pipe(
+          Effect.andThen(
+            copyOrRemoveRunDir(req.runId, req.files).pipe(
+              Effect.map((found): RunFilesResult => {
+                if (!found) return { status: 'noFiles' };
+                return req.files.op === 'copy'
+                  ? { status: 'done', to: req.files.to }
+                  : { status: 'done' };
+              }),
+              Effect.catch((error) =>
+                Effect.logError(
+                  `The ${req.files.op} of run ${req.runId} failed`,
+                ).pipe(
+                  Effect.annotateLogs({ data: error }),
+                  Effect.as<RunFilesResult>({
+                    status: 'error',
+                    error: toErrorMessage(error),
+                  }),
+                ),
               ),
             ),
           ),
+          Effect.scoped,
         ),
-        Effect.scoped,
-      ),
-    )
-    .pipe(
-      Effect.mapError((cause) =>
-        cause instanceof Rejected
-          ? cause
-          : new Rejected({
-              reason: `This run is running or held elsewhere: ${toErrorMessage(cause)}`,
-            }),
-      ),
-      Effect.map((result) => ({ kind: 'runFiles', result }) as const),
-      (program) => withSessionFs(session.roots, program),
-      withLogChannel('runFiles'),
-    );
+      )
+      .pipe(
+        Effect.mapError((cause) =>
+          cause instanceof Rejected
+            ? cause
+            : new Rejected({
+                reason: `This run is running or held elsewhere: ${toErrorMessage(cause)}`,
+              }),
+        ),
+        Effect.map((result) => ({ kind: 'runFiles', result }) as const),
+        (program) => withSessionFs(roots, program),
+        withLogChannel('runFiles'),
+      );
+  });

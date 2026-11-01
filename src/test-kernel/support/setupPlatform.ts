@@ -371,8 +371,10 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
           open: (init) =>
             Effect.flatMap(testSessionOwner, (owner) => owner.open(init)),
           list: Effect.flatMap(testSessionOwner, (owner) => owner.list),
-          holds: (session) =>
-            Effect.flatMap(testSessionOwner, (owner) => owner.holds(session)),
+          holds: (root, runs) =>
+            Effect.flatMap(testSessionOwner, (owner) =>
+              owner.holds(root, runs),
+            ),
           close: (root) =>
             Effect.flatMap(testSessionOwner, (owner) => owner.close(root)),
           closeAll: Effect.flatMap(testSessionOwner, (owner) => owner.closeAll),

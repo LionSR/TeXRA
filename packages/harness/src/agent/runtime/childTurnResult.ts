@@ -7,9 +7,10 @@
  * has the parent open, the child is marked "result waiting"; the parent's
  * process delivers the result later (`deliverHeld`).
  */
-import { Effect, type Scope } from 'effect';
+import { Context, Effect, type Scope } from 'effect';
 
 import type { InboxItem, Sent, SendOptions } from '@agent/followUp/Inbox';
+import { Inbox, wakeIfOwed } from '@agent/followUp/ToolUseFollowUp';
 import type { AgentTrace } from '@agent/trace';
 import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
@@ -26,8 +27,8 @@ import type {
 } from '@shared/session/database';
 import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
+import { SessionLog } from '@shared/session/runHistory';
 import type { RunInputDraft } from '@shared/session/runState';
-import type { SessionHandle } from './SessionHandle';
 
 const CHANNEL = 'childTurnResult';
 
@@ -64,11 +65,21 @@ export const warn = (
 
 /** {@link warn}, once the job this runs in commits; never if it rolls back. */
 const warnOnCommit = (
-  { log }: Pick<SessionHandle, 'log'>,
   trace: AgentTrace | undefined,
   message: string,
   data: unknown,
-): Effect.Effect<void> => log.afterCommit(warn(trace, message, data));
+): Effect.Effect<void, never, SessionLog> =>
+  SessionLog.use((log) => log.afterCommit(warn(trace, message, data)));
+
+/** What a transaction part reads of its session. */
+export type PartServices = SessionLog | Inbox;
+
+/** The caller's {@link PartServices}, for the publisher job a part runs in:
+ *  a job runs on the session's publisher, outside its caller's context. */
+export const partServices = Effect.map(
+  Effect.context<PartServices>(),
+  Context.pick(SessionLog, Inbox),
+);
 
 /** The rows a turn result commits, all on the child's aggregate. */
 export type TurnResultRow = Extract<
@@ -110,7 +121,7 @@ export type TransactionPart = Effect.Effect<
     readonly note?: string;
   },
   Error,
-  Scope.Scope
+  Scope.Scope | PartServices
 >;
 
 /**
@@ -180,7 +191,6 @@ export function childTurnResult(params: {
  *  child's rows. A closed, deleted or unreadable parent refuses it, with a
  *  warning once the job commits; the child's own rows still commit. */
 export const parentAdmission = (
-  session: Pick<SessionHandle, 'followUps' | 'log'>,
   to: RunId,
   item: InboxItem,
   options: SendOptions,
@@ -188,22 +198,20 @@ export const parentAdmission = (
 ): Effect.Effect<
   { readonly rows: readonly RunInputDraft[]; readonly sent: Sent },
   DatabaseClaimError,
-  Scope.Scope
+  Scope.Scope | PartServices
 > => {
   const refused = (error: DatabaseNotOwner | DatabaseReadFailed) =>
     Effect.as(
-      warnOnCommit(
-        session,
-        trace,
-        `Parent run ${to} is closed or cannot be read.`,
-        { parentRunId: to, error },
-      ),
+      warnOnCommit(trace, `Parent run ${to} is closed or cannot be read.`, {
+        parentRunId: to,
+        error,
+      }),
       {
         rows: [],
         sent: { kind: 'refused', reason: 'notResumable' } satisfies Sent,
       },
     );
-  return session.followUps.admission(to, item, options).pipe(
+  return Inbox.use((inbox) => inbox.admission(to, item, options)).pipe(
     Effect.catchTags({
       DatabaseReadFailed: refused,
       DatabaseNotOwner: (error) =>
@@ -221,29 +229,24 @@ export const parentAdmission = (
  * Any other refusal is a warning once the job commits.
  */
 export const deliverIn = (
-  session: SessionHandle,
   { to, item, end }: ChildDelivery,
   trace: AgentTrace | undefined,
 ): TransactionPart =>
   Effect.gen(function* () {
     const child = item.from.runId;
-    if ((yield* persistedParentRunId(session, child)) !== to) {
+    if ((yield* persistedParentRunId(child)) !== to) {
       yield* warnOnCommit(
-        session,
         trace,
         'Turn result not delivered: child was detached from its orchestrator. The result remains in the run report.',
         { runId: child },
       );
       return { rows: [] };
     }
-    const { rows, sent } = yield* parentAdmission(session, to, item, {}, trace);
+    const { rows, sent } = yield* parentAdmission(to, item, {}, trace);
     if (sent.kind === 'refused' && sent.reason === 'ownedElsewhere') {
-      yield* warnOnCommit(
-        session,
-        trace,
-        'Result waiting: parent is open elsewhere.',
-        { parentRunId: to },
-      );
+      yield* warnOnCommit(trace, 'Result waiting: parent is open elsewhere.', {
+        parentRunId: to,
+      });
       return {
         rows: [
           {
@@ -259,7 +262,6 @@ export const deliverIn = (
     }
     if (sent.kind === 'refused')
       yield* warnOnCommit(
-        session,
         trace,
         `Turn result not delivered: parent run is unavailable (${sent.reason}). The result remains in the run report.`,
         { parentRunId: to, reason: sent.reason },
@@ -274,7 +276,6 @@ export const deliverIn = (
  * place.
  */
 export const turnResultPart = (
-  session: SessionHandle,
   { rows, delivery }: ChildTurnResult,
   trace: AgentTrace | undefined,
   waiting?: RunInputDraft,
@@ -282,7 +283,7 @@ export const turnResultPart = (
   const own = waiting === undefined ? [] : [waiting];
   return delivery === undefined
     ? Effect.succeed({ rows: [...rows, ...own] })
-    : Effect.map(deliverIn(session, delivery, trace), (parent) => ({
+    : Effect.map(deliverIn(delivery, trace), (parent) => ({
         ...parent,
         rows: [...rows, ...parent.rows, ...(parent.held === true ? [] : own)],
       }));
@@ -293,12 +294,11 @@ export const turnResultPart = (
  *  this process holds for a run not yet created. */
 export const parentEdgeIn = Effect.fn('childTurnResult.parentEdgeIn')(
   function* (
-    session: SessionHandle,
     child: RunId,
     launchParent: RunId,
-  ): Effect.fn.Return<RunId | null, Error> {
-    if (!(yield* getRunRecords(session, child).exists())) return launchParent;
-    return (yield* persistedParentRunId(session, child)) ?? null;
+  ): Effect.fn.Return<RunId | null, Error, SessionLog> {
+    if (!(yield* getRunRecords(child).exists())) return launchParent;
+    return (yield* persistedParentRunId(child)) ?? null;
   },
 );
 
@@ -309,54 +309,48 @@ export const parentEdgeIn = Effect.fn('childTurnResult.parentEdgeIn')(
  * refused.
  */
 export const sendToParent = (
-  session: SessionHandle,
   item: InboxItem & { readonly from: { readonly kind: 'run' } },
   launchParent: RunId,
   options: SendOptions,
   trace: AgentTrace | undefined,
-): Effect.Effect<RunId | null, Error> =>
+): Effect.Effect<RunId | null, Error, PartServices> =>
   Effect.suspend(() => {
     let reached: RunId | null = null;
     const part = Effect.gen(function* () {
-      const to = yield* parentEdgeIn(session, item.from.runId, launchParent);
+      const to = yield* parentEdgeIn(item.from.runId, launchParent);
       if (to === null) return { rows: [] };
-      const admitted = yield* parentAdmission(
-        session,
-        to,
-        item,
-        options,
-        trace,
-      );
+      const admitted = yield* parentAdmission(to, item, options, trace);
       reached = admitted.sent.kind === 'refused' ? null : to;
       return admitted;
     });
-    return Effect.map(commitPart(session, part), () => reached);
+    return Effect.map(commitPart(part), () => reached);
   });
 
 /** Commit a part in one transaction of its own. */
 export const commitPart = (
-  { log }: Pick<SessionHandle, 'log'>,
   part: TransactionPart,
-): Effect.Effect<void, Error> =>
-  log.transact((tx) =>
-    Effect.gen(function* () {
-      const { rows } = yield* part;
-      yield* tx.append(rows);
-    }).pipe(Effect.scoped),
-  );
+): Effect.Effect<void, Error, PartServices> =>
+  Effect.gen(function* () {
+    const services = yield* partServices;
+    yield* Context.get(services, SessionLog).transact((tx) =>
+      Effect.gen(function* () {
+        const { rows } = yield* part;
+        yield* tx.append(rows);
+      }).pipe(Effect.scoped, Effect.provide(services)),
+    );
+  });
 
 /** After the transaction that queued `delivery` commits: resume the parent
  *  if the delivery obliges one and no generation here reads it
- *  (`Inbox.wake`). A refused resume is told to the user by the resume; a
+ *  (`wakeIfOwed`). A refused resume is told to the user by the resume; a
  *  wake that could not read the parent is a warning, and an explicit Resume
  *  delivers the result. */
 export const wakeParent = Effect.fn('childTurnResult.wakeParent')(function* (
-  session: SessionHandle,
   delivery: ChildDelivery | undefined,
   trace: AgentTrace | undefined,
-): Effect.fn.Return<void, Error> {
+) {
   if (delivery === undefined) return;
-  const woken = yield* session.followUps.wake(delivery.to);
+  const woken = yield* wakeIfOwed(delivery.to);
   // The child's boundary waits for its parent's resumed turn.
   if (woken !== false) return yield* woken;
   yield* warn(

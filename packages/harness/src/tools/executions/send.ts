@@ -16,7 +16,8 @@ import {
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { senderOf } from '@agent/followUp/followUpMessages';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { Runs } from '@agent/runtime/runRegistry';
+import { SessionViewAccess } from '@shared/session/runHistory';
 import { ToolError, type RunId } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { executed } from '@tools/core/result';
@@ -28,12 +29,12 @@ import { previewLabel } from '@utils/text/stringUtils';
  * has no rows, but it is no unknown run).
  */
 export const missingRun = (
-  session: SessionHandle,
+  runs: Runs['Service'],
   runId: RunId,
   notFound: string,
 ): ToolError =>
   new ToolError(
-    session.runs.get(runId) !== undefined
+    runs.get(runId) !== undefined
       ? `Run '${runId}' has not started yet; retry in a moment.`
       : notFound,
   );
@@ -46,7 +47,6 @@ export const missingRun = (
  * is refused, and only the user's own message continues it.
  */
 export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
-  session: SessionHandle,
   caller: RunId | undefined,
   target: RunId,
   message: string,
@@ -56,12 +56,12 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
       new ToolError('A run cannot send a message to itself.'),
     );
   }
-  const view = yield* session.view.read([]);
+  const view = yield* (yield* SessionViewAccess).read([]);
   const recipient = view.runs.get(target);
   if (!recipient)
     return yield* Effect.fail(
       missingRun(
-        session,
+        yield* Runs,
         target,
         `Run '${target}' not found. Use the executions tool to list runs.`,
       ),
@@ -82,7 +82,7 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
       displayText: `Message from ${sender}: ${previewLabel(message)}`,
       from: senderOf(caller),
     },
-    { session },
+    {},
   );
   const name = `'${recipient.label}' (${target})`;
   const shown = presentFollowUpResult(result);

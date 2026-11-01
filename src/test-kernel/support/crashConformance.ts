@@ -78,13 +78,16 @@ import {
   Schema,
   Stream,
   SubscriptionRef,
+  Context,
 } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
 import { withProcessServices } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { rootRun } from '@agent/runtime/rootLaunch';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { Runs } from '@agent/runtime/runRegistry';
+import { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
@@ -94,6 +97,7 @@ import {
 } from '@shared/schemas';
 import { ProjectDatabases } from '@shared/session/database';
 import { generateRunId } from '@shared/schemas';
+import { SessionLog } from '@shared/session/runHistory';
 import {
   closeTestDefaultSession,
   openTestDefaultSession,
@@ -279,9 +283,9 @@ const takeSnapshot = (
 };
 
 /** Approve every request the runs open above commit `after`. */
-const approveAll = (session: SessionHandle, after = 0) =>
+const approveAll = (session: Context.Context<SessionServices>, after = 0) =>
   Stream.runForEach(
-    session.log
+    Context.get(session, SessionLog)
       .tail(0)
       .pipe(
         Stream.filter(
@@ -292,7 +296,7 @@ const approveAll = (session: SessionHandle, after = 0) =>
       if (event.type !== 'request.opened') return Effect.void;
       const target = aggregateTarget(event.aggregateId);
       if (target.kind !== 'run') return Effect.void;
-      return session.requests
+      return Context.get(session, SessionRequests)
         .decide(target.id, event.requestId, { action: 'approve' })
         .pipe(Effect.ignore);
     },
@@ -340,20 +344,27 @@ const requested = (rows: readonly Row[], root: string, kind: string) =>
  * model switch and a compaction once the run parks, then, once it has
  * answered from the summary, a fork of the conversation.
  */
-const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
+const userSteps = (
+  session: Context.Context<SessionServices>,
+  storage: string,
+  root: RunId,
+) =>
   Effect.gen(function* () {
     // A switch, then a compaction, each asked for once: a request whose
     // row is committed is the resumed run's to apply.
     if (!requested(rowsOf(storage), root, 'model')) {
       yield* until(storage, (rows) => parkedAfter(rows, root, 1));
-      const controls = session.runs.get(root)?.controls;
+      const controls = Context.get(session, Runs).get(root)?.controls;
       if (controls === undefined)
         return yield* Effect.die('the parked run has no live controls');
       yield* controls.switchModel(SWITCH_TO);
     }
     if (!requested(rowsOf(storage), root, 'compact')) {
       yield* until(storage, (rows) => parkedAfter(rows, root, 1));
-      yield* session.requests.request({ kind: 'run.compact', runId: root });
+      yield* Context.get(session, SessionRequests).request({
+        kind: 'run.compact',
+        runId: root,
+      });
     }
     if (!rowsOf(storage).some(isFork)) {
       yield* until(
@@ -362,7 +373,7 @@ const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
           editsOf(rows, root).includes('compaction') &&
           parkedAfter(rows, root, 2),
       );
-      yield* session.requests.request({
+      yield* Context.get(session, SessionRequests).request({
         kind: 'run.fork',
         runId: root,
         at: null,
@@ -370,7 +381,7 @@ const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
     }
     if (bashBypassOf(rowsOf(storage), root) !== 'off') {
       for (const enabled of [true, false]) {
-        yield* session.requests.request({
+        yield* Context.get(session, SessionRequests).request({
           kind: 'policy.set',
           change: { field: 'bypass', runId: root, bypass: 'bash', enabled },
         });
@@ -383,7 +394,7 @@ const userSteps = (session: SessionHandle, storage: string, root: RunId) =>
           );
       }
     }
-  });
+  }).pipe(Effect.provide(session));
 
 /** The root's own bash bypass, as its newest `approval.policy` row says. */
 const bashBypassOf = (rows: readonly Row[], root: string) => {
@@ -637,8 +648,12 @@ function violations(
  */
 const cleanPass = (
   roots: ReturnType<typeof testWorkspaceRoots>,
-  launch: (session: SessionHandle) => Effect.Effect<unknown, unknown>,
-  steps: (session: SessionHandle) => Effect.Effect<void, unknown>,
+  launch: (
+    session: Context.Context<SessionServices>,
+  ) => Effect.Effect<unknown, unknown>,
+  steps: (
+    session: Context.Context<SessionServices>,
+  ) => Effect.Effect<void, unknown>,
 ) =>
   Effect.gen(function* () {
     const points = yield* Effect.scoped(
@@ -698,7 +713,7 @@ const resumeFrom = (
   n: number,
   root: RunId,
   steps: (
-    session: SessionHandle,
+    session: Context.Context<SessionServices>,
     storage: string,
   ) => Effect.Effect<void, unknown>,
 ) =>
@@ -747,7 +762,7 @@ const resumeFrom = (
             ),
           ).pipe(
             Effect.andThen(
-              session.requests
+              Context.get(session, SessionRequests)
                 // cast: the store's logical id of a run aggregate is its RunId.
                 .decide(row.run as RunId, String(json(row).requestId), {
                   action: 'approve',
@@ -759,7 +774,7 @@ const resumeFrom = (
         if (!prefix.some((row) => row.run === root && row.type === 'run.end')) {
           const resumed = yield* withProcessServices(
             testRuntime(),
-            resumeRun(root, { session }),
+            resumeRun(root, {}).pipe(Effect.provide(session)),
           );
           if (!('activation' in resumed))
             return `the resume was refused: ${JSON.stringify(resumed)}`;
@@ -801,7 +816,7 @@ export function crashConformanceSuite(): void {
             (session) =>
               withProcessServices(
                 testRuntime(),
-                rootRun(session, {
+                rootRun({
                   config: Schema.decodeUnknownSync(AgentConfigSchema)({
                     agent: 'golden_crash',
                     model: 'openai/gpt-5.6-sol',
@@ -809,7 +824,7 @@ export function crashConformanceSuite(): void {
                   }),
                   runId: root,
                   interactive: true,
-                }),
+                }).pipe(Effect.provide(session)),
               ),
             (session) => userSteps(session, roots.storage, root),
           );
@@ -1048,7 +1063,7 @@ export function crashConformanceSuite(): void {
               (session) =>
                 withProcessServices(
                   testRuntime(),
-                  rootRun(session, {
+                  rootRun({
                     config: Schema.decodeUnknownSync(AgentConfigSchema)({
                       agent: 'golden_delivery',
                       model: 'openai/gpt-5.6-sol',
@@ -1056,7 +1071,7 @@ export function crashConformanceSuite(): void {
                     }),
                     runId: root,
                     interactive: true,
-                  }),
+                  }).pipe(Effect.provide(session)),
                 ),
               (session) =>
                 Effect.gen(function* () {
@@ -1064,7 +1079,7 @@ export function crashConformanceSuite(): void {
                     // Each child's settlement finds the root held by another
                     // live process (its admission's verdict); every later
                     // admission is this process's, which runs the root.
-                    const inbox = session.followUps;
+                    const inbox = Context.get(session, Inbox);
                     const admission = inbox.admission.bind(inbox);
                     const refused = new Set<string>();
                     // Decided as the job runs, not when the part is built.
@@ -1204,7 +1219,7 @@ export function crashConformanceSuite(): void {
               by: 'user' as const,
             },
           ];
-          yield* session.log.transact([
+          yield* Context.get(session, SessionLog).transact([
             {
               type: 'run.start',
               aggregateId: run,
@@ -1215,7 +1230,7 @@ export function crashConformanceSuite(): void {
             },
           ]);
           const cut = join(roots.storage, 'cut');
-          yield* session.log.transact((tx) =>
+          yield* Context.get(session, SessionLog).transact((tx) =>
             Effect.gen(function* () {
               yield* tx.append(titled('first half'));
               yield* Effect.sync(() => {
@@ -1265,7 +1280,7 @@ export function crashConformanceSuite(): void {
             (session) =>
               withProcessServices(
                 testRuntime(),
-                rootRun(session, {
+                rootRun({
                   config: Schema.decodeUnknownSync(AgentConfigSchema)(
                     asDocumentTask({
                       agent: 'polish',
@@ -1278,7 +1293,7 @@ export function crashConformanceSuite(): void {
                   ),
                   runId: root,
                   interactive: true,
-                }),
+                }).pipe(Effect.provide(session)),
               ),
             () => ended(roots.storage),
           );

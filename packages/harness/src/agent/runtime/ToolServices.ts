@@ -1,7 +1,11 @@
 import { Context, Effect, Schema, type Scope } from 'effect';
 import type { ToolContext } from '@agent/core/tools/ToolTypes';
 import type { AgentCatalog } from '@agent/index/agentCatalog';
-import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
+import {
+  Inbox,
+  runInbox,
+  type RunInbox,
+} from '@agent/followUp/ToolUseFollowUp';
 import { getRunRecords } from '@agent/storage/runRecords';
 import {
   launchChildAgent,
@@ -12,19 +16,30 @@ import {
   type ProcessChildLaunch,
 } from '@agent/runtime/delegation/detachedChildRun';
 import type { PlatformServices } from '@platform/processRuntime';
-import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
+import { SessionRoots, StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   qualifyAggregateId,
   type RunEnd,
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
+import {
+  Approvals,
+  HistoryQuery,
+  RunHistory,
+  SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import type { ToolAvailability } from '@tools/toolAvailabilityService';
 import type { ToolRegistry } from '@tools/toolTable';
 
 import { Runs } from './runRegistry';
-import type { RouteRetries } from './run/invocation';
+import { Interactions } from './HostInteractions';
+import { ProjectTools } from './loop/step';
+import { SessionRequests } from './requestPolicy';
 import type { RunCallShape } from './RunCall';
+import type { RouteRetries } from './run/invocation';
+import type { SessionServices } from './rootLaunch';
 
 /**
  * What a run's program requires of the process: the platform services every
@@ -116,6 +131,28 @@ const noRunChildRuns: ChildRunsShape = Object.freeze({
   requested: () => noRun,
 });
 
+/** The session's services, picked from its run's fiber: what each call's
+ *  run carries (`RunCallShape.session`), which a built-in runs over and
+ *  the doors a plugin's tool calls through ({@link childRuns}) provide. */
+export const sessionServices = Effect.map(
+  Effect.context<SessionServices>(),
+  Context.pick(
+    Runs,
+    SessionLog,
+    SessionViewAccess,
+    Approvals,
+    RunHistory,
+    HistoryQuery,
+    Inbox,
+    Interactions,
+    SessionRequests,
+    ProjectTools,
+    SessionRoots,
+    WorkspaceFs,
+    StorageFs,
+  ),
+);
+
 /** The door, as the run loop provides it beside each call ({@link childRuns});
  *  outside a run it is the refusal, which is the reference's default. */
 export const ChildRuns = Context.Reference<ChildRunsShape>(
@@ -124,25 +161,26 @@ export const ChildRuns = Context.Reference<ChildRunsShape>(
 );
 
 /** The door of one call: over the call's place in its run and the
- *  session's runs, which the loop read where it dispatched the call. A
- *  launch runs under exactly those, so nothing of the dispatching fiber's
- *  context reaches it, and a plugin's tool sees neither. */
+ *  session's services, which the loop picked where it dispatched the call.
+ *  A launch runs under exactly those, so nothing else of the dispatching
+ *  fiber's context reaches it, and a plugin's tool sees neither. */
 export const childRuns = (call: RunCallShape): ChildRunsShape => {
-  const { session, runId } = call.run;
+  const { session } = call;
+  const { runId } = call.run;
+  const log = Context.get(session, SessionLog);
+  const inSession = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    Effect.provide(effect, session);
   return {
-    launch: launchChildAgent,
-    launchProcess: (launch) =>
-      launchProcessChild(session, runId, launch).pipe(
-        Effect.provideService(Runs, call.runs),
-      ),
-    inbox: (id) => Effect.succeed(runInbox(session, id)),
-    parent: (id) => Effect.succeed(session.runs.get(id)?.parent),
+    launch: (launch) => inSession(launchChildAgent(launch)),
+    launchProcess: (launch) => inSession(launchProcessChild(runId, launch)),
+    inbox: (id) => Effect.succeed(runInbox(id, session)),
+    parent: (id) => Effect.succeed(Context.get(session, Runs).get(id)?.parent),
     records: (id) => ({
-      exists: getRunRecords(session, id).exists(),
-      end: getRunRecords(session, id).readRunEnd(),
+      exists: inSession(getRunRecords(id).exists()),
+      end: inSession(getRunRecords(id).readRunEnd()),
     }),
     fact: (id, arm) =>
-      Effect.map(session.log.facts(id), (held) => {
+      Effect.map(log.facts(id), (held) => {
         const row = held?.facts[`${arm.plugin}/${arm.kind}`];
         return row === undefined
           ? undefined
@@ -150,7 +188,7 @@ export const childRuns = (call: RunCallShape): ChildRunsShape => {
       }),
     requested: (id, requestId) =>
       Effect.map(
-        session.log.runRows(qualifyAggregateId('run', id), 'requests'),
+        log.runRows(qualifyAggregateId('run', id), 'requests'),
         (rows) => rows.requests[requestId] !== undefined,
       ),
   };

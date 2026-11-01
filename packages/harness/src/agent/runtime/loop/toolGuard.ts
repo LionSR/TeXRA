@@ -12,13 +12,14 @@
  */
 import { isDeepStrictEqual } from 'node:util';
 
-import { Effect, Result, Schema } from 'effect';
+import { Context, Effect, Result, Schema } from 'effect';
 
 import {
   ToolContext,
   type CallRequests,
   type ITool,
 } from '@agent/core/tools/ToolTypes';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   approvalPolicyDenialMessage,
   decideApproval,
@@ -38,7 +39,12 @@ import {
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { callRequestId, type AttemptRequests } from '@shared/session/inFlight';
-import type { CellError, RunCell } from '@shared/session/runHistory';
+import {
+  Approvals,
+  SessionLog,
+  type CellError,
+  type RunCell,
+} from '@shared/session/runHistory';
 import { isRequestDecision } from '@shared/session/runRowReads';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type {
@@ -55,10 +61,11 @@ import {
 } from '@tools/approval/bashApproval';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { recordedDecision } from '../requestPolicy';
+import { Interactions } from '../HostInteractions';
+import { recordedDecision, SessionRequests } from '../requestPolicy';
 import { RunCall, requireToolRun } from '../RunCall';
 import type { AgentRunShape } from '../run/AgentRun';
-import type { SessionHandle } from '../SessionHandle';
+import type { SessionServices } from '../rootLaunch';
 import type { PluginToolServices } from '../ToolServices';
 import type { preToolUse } from './hooks';
 
@@ -84,13 +91,12 @@ const OPERATIONS = {
  */
 export const sessionPermission =
   (
-    session: Pick<SessionHandle, 'interactions' | 'roots'> & {
-      readonly approvals: Pick<SessionApprovals, 'policy' | 'bypass'>;
-    },
+    approvals: Pick<SessionApprovals, 'policy' | 'bypass'>,
+    interactions: Interactions['Service'],
+    roots: WorkspaceRoots,
   ): ApprovalsWithPermission['permission'] =>
   (runId, operation, hook) => {
     const [grant, setting, kind] = OPERATIONS[operation];
-    const { approvals, interactions, roots } = session;
     const canPresent = !interactions.approvalPromptsUnavailable;
     const policy = approvals.policy(runId);
     const decision = decideApproval({
@@ -227,8 +233,9 @@ const rejection = Effect.fn('toolUse.guard')(function* (
       : undefined;
 
   const operation = guard?.command?.grant ?? 'call';
-  const { run } = yield* requireToolRun('A call the loop asks about');
-  const answer = run.session.approvals.permission(run.runId, operation, hook);
+  const { run, session } = yield* requireToolRun('A call the loop asks about');
+  const approvals = Context.get(session, Approvals);
+  const answer = approvals.permission(run.runId, operation, hook);
   if (answer === 'allow') return undefined;
   const decision =
     answer === 'ask'
@@ -279,7 +286,8 @@ export const guardedToolCall = (
  * of the call.
  */
 export const callRequests = (
-  run: Pick<AgentRunShape, 'session' | 'runId'>,
+  run: Pick<AgentRunShape, 'runId'>,
+  session: Context.Context<SessionServices>,
   cell: Pick<RunCell, 'opened'>,
   commit: (
     rows: readonly RunHistoryDraft[],
@@ -295,7 +303,10 @@ export const callRequests = (
     DatabaseReadFailed | LogWriteError
   >;
 } => {
-  const { session, runId } = run;
+  const { runId } = run;
+  const sessionRequests = Context.get(session, SessionRequests);
+  const log = Context.get(session, SessionLog);
+  const interactions = Context.get(session, Interactions);
   let reentering = standing;
   let opened = raised;
   // Through the decision authority's own check, so an answer a surface
@@ -307,7 +318,7 @@ export const callRequests = (
     reentering = null;
     if (open === null) return Effect.void;
     return Effect.asVoid(
-      session.requests.decide(runId, open.requestId, {
+      sessionRequests.decide(runId, open.requestId, {
         action: 'cancel',
         cause: retireCause,
       }),
@@ -341,7 +352,7 @@ export const callRequests = (
           return recordedDecision(payload, reentered.request.decision).pipe(
             Effect.map(answered),
           );
-        return session.requests
+        return sessionRequests
           .ask(runId, payload, {
             ...(blobs && { blobs }),
             open: (rows) => {
@@ -355,7 +366,7 @@ export const callRequests = (
                   : commit(decided).pipe(Effect.as(from));
               }
               return retireStanding.pipe(
-                Effect.andThen(Effect.sync(() => session.log.now())),
+                Effect.andThen(Effect.sync(() => log.now())),
                 Effect.flatMap((from) => commit(rows).pipe(Effect.as(from))),
               );
             },
@@ -377,7 +388,7 @@ export const callRequests = (
           },
         ]),
       ).pipe(Effect.asVoid),
-    present: session.interactions.emit.bind(session.interactions),
+    present: interactions.emit.bind(interactions),
   };
   return { requests, retireStanding };
 };

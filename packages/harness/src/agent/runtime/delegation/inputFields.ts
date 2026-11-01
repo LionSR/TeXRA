@@ -18,19 +18,23 @@ import {
 
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { displayToStoragePath } from '@agent/memory/memoryUtils';
+import { SessionRoots } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
+import type {
+  RunHistory,
+  SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { Settings } from '@shared/config/settings';
-import type { SettingsStores } from '@shared/config/settings';
+import { Settings, type SettingsStores } from '@shared/config/settings';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import type { ToolRegistry } from '@tools/toolTable';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
-import { entryExists } from '@utils/files/fsEntryExists';
+import { absentReason, entryExists } from '@utils/files/fsEntryExists';
 import { ensureError, formatError } from '@utils/errors/errorMessage';
 import { escapesRoot } from '@utils/core/pathCore';
 
@@ -228,31 +232,32 @@ const assertWorkflowFilesExist = Effect.fn('assertWorkflowFilesExist')(
 
 /**
  * Resolve workflow file dependencies against their owning session's roots,
- * read once from `session.roots` rather than from an ambient session scope.
+ * read once from the session's `SessionRoots`.
  */
 export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
   function* (
-    session: SessionHandle,
     parentRunId: RunId,
     label: string,
     files: readonly string[],
   ): Effect.fn.Return<
     { file: string; absolutePath: string }[],
     Error,
-    FileSystem.FileSystem | ToolRegistry
+    | FileSystem.FileSystem
+    | ToolRegistry
+    | SessionLog
+    | SessionViewAccess
+    | RunHistory
+    | SessionRoots
   > {
     const fs = yield* FileSystem.FileSystem;
     return yield* Effect.gen(function* () {
-      const { storage, workspace } = session.roots;
+      const { storage, workspace } = yield* SessionRoots;
       // Storage is created by the first store that writes to it, so a
       // session that has not written (an ephemeral one) may have none yet;
       // then no referenced file can lie under it.
-      const storageRoot = yield* fs.realPath(storage).pipe(
-        Effect.catchIf(
-          (error) => error.reason._tag === 'NotFound',
-          () => Effect.void,
-        ),
-      );
+      const storageRoot = yield* fs
+        .realPath(storage)
+        .pipe(Effect.catchIf(absentReason, () => Effect.void));
       const references = yield* Effect.forEach(
         files,
         (file) =>
@@ -307,7 +312,6 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
               const output = yield* resolveChildRunOutput(
                 parentRunId,
                 runStoragePath,
-                session,
               );
               if (!output)
                 return yield* Effect.fail(

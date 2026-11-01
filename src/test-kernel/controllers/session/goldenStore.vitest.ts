@@ -40,7 +40,15 @@ import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer, Result, Schema, Stream, SubscriptionRef } from 'effect';
+import {
+  Effect,
+  Layer,
+  Result,
+  Schema,
+  Stream,
+  SubscriptionRef,
+  Context,
+} from 'effect';
 import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
 
 import {
@@ -70,6 +78,7 @@ import { isDisplaySessionEvent, ROW_KINDS } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
+import { SessionViewAccess } from '@shared/session/runHistory';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
@@ -726,18 +735,21 @@ describe('the golden run killed after its effect', () => {
       });
       const result = yield* withProcessServices(
         testRuntime(),
-        resumeRun(KILLED, { session }),
+        resumeRun(KILLED, {}).pipe(Effect.provide(session)),
       );
       if (!('activation' in result)) throw new Error('resume refused');
       // The resumed activation rests, or ends.
       yield* Stream.runHead(
-        Stream.filter(session.view.changes, (view) => {
-          const run = view.runs.get(KILLED);
-          return (
-            view.cursor > result.activation &&
-            (run?.status === 'waiting' || run?.durableOutcome != null)
-          );
-        }),
+        Stream.filter(
+          Context.get(session, SessionViewAccess).changes,
+          (view) => {
+            const run = view.runs.get(KILLED);
+            return (
+              view.cursor > result.activation &&
+              (run?.status === 'waiting' || run?.durableOutcome != null)
+            );
+          },
+        ),
       );
       yield* closeTestDefaultSession;
       const settled = raw(storage, (db) =>

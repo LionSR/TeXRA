@@ -6,12 +6,13 @@ import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
 import { generateRunId } from '@texra-ai/harness/schemas';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
+import { SessionLog } from '@shared/session/runHistory';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeHost } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -61,7 +62,7 @@ describe('ConfigTools — update_config approval', () => {
       );
       const runId = generateRunId();
       publishTestRunStart(session, runId);
-      yield* session.log.settled;
+      yield* Context.get(session, SessionLog).settled;
       const requests = yield* Effect.acquireRelease(
         Effect.sync(() =>
           autoDecideRequests(session, () => ({ action: 'reject' })),

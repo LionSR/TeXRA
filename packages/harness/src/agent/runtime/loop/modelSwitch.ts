@@ -6,6 +6,7 @@
 import { Effect, SynchronizedRef } from 'effect';
 
 import { selectModel } from '@texra-ai/llm';
+import type { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunState } from '@shared/session/runState';
@@ -82,6 +83,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
 export function modelSwitchPort(
   run: AgentRunShape,
   access: ModelAccess['Service'],
+  inbox: Inbox['Service'],
 ) {
   /** Why `model` cannot replace the run's, decided as the next bind will. */
   const admission = (model: string) =>
@@ -100,7 +102,7 @@ export function modelSwitchPort(
       // Queued on the run's input, durable at once; the loop binds and
       // records it at its next model boundary, which consumes it. A switch
       // back to the current model is queued too: the latest request wins.
-      const sent = yield* run.session.followUps.send(run.runId, {
+      const sent = yield* inbox.send(run.runId, {
         text: `/model ${model}`,
         from: { kind: 'user' },
         control: { kind: 'model', model },

@@ -44,6 +44,7 @@ import {
   Schema,
   Stream,
   SubscriptionRef,
+  Context,
 } from 'effect';
 import { TestClock } from 'effect/testing';
 import * as Reactivity from 'effect/reactivity/Reactivity';
@@ -69,8 +70,9 @@ import {
 } from '@texra-ai/harness/schemas';
 import { LocalRuntimeStateSchema } from '@texra-ai/harness/transcript';
 import * as toast from '@agent/runtime/HostInteractions';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { Runs } from '@agent/runtime/runRegistry';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
@@ -89,11 +91,14 @@ import {
   databaseLayer,
   globalDatabaseLayer,
 } from '@controllers/session/Database';
+import { SessionRoots } from '@platform/rootedFs';
 import {
   runStateAppend,
   RunHistory,
   RunHistoryRefused,
   type RunCell,
+  SessionLog,
+  SessionViewAccess,
 } from '@shared/session/runHistory';
 import { Database } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
@@ -358,10 +363,10 @@ beforeAll(() => {
 /** Enqueue rows on a session's publisher and return at once, as a
  *  detached producer does; a reader waits on `session.log.settled`. */
 const publishTestRows = (
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   rows: readonly SessionEventDraft[],
 ): void => {
-  Effect.runFork(seedRows(session.log)(rows));
+  Effect.runFork(seedRows(Context.get(session, SessionLog))(rows));
 };
 
 /** The view access a request handler reads: the fold's level and one run
@@ -560,17 +565,26 @@ describe('Sessions owner', () => {
           accepted: () => true,
           settlement: Effect.void,
         }));
-        const session = {
-          view: viewAccess(view.ref),
-          runs: { stop },
-          roots: createFakeWorkspaceRoots({
-            globalState: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
-          }),
-        } as unknown as SessionHandle;
+        // cast: the stop handler reads only these of the session's owners.
+        const session = Context.make(
+          SessionViewAccess,
+          viewAccess(view.ref) as unknown as SessionViewAccess['Service'],
+        ).pipe(
+          Context.add(Runs, { stop } as unknown as Runs['Service']),
+          Context.add(
+            SessionRoots,
+            createFakeWorkspaceRoots({
+              globalState: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
+            }),
+          ),
+        ) as Context.Context<SessionServices>;
         const events = yield* SessionEvents;
         const requests = sessionRequests({
-          session: () => session,
-          log: { ...db, removeRun: events.removeRun, detach: events.detach },
+          log: { ...db, removeRun: events.removeRun },
+          // cast: no request here asks, decides or holds a claim.
+          asks: {} as Parameters<typeof sessionRequests>[0]['asks'],
+          sessionLog: {} as SessionLog['Service'],
+          view: Context.get(session, SessionViewAccess),
           local,
           plugins: toolTable([]),
           services: yield* Effect.context<
@@ -579,7 +593,6 @@ describe('Sessions owner', () => {
             | Path.Path
             | ChildProcessSpawner
           >(),
-          closed: () => false,
         });
         // The displayed fold was built as SELF and considers this run writable.
         // This requesting process is OTHER; it must respect the current claim.
@@ -592,7 +605,9 @@ describe('Sessions owner', () => {
           runId: RUN,
           reason: 'user',
         } as const;
-        const refused = yield* requests.request(request).pipe(Effect.flip);
+        const refused = yield* requests
+          .request(request)
+          .pipe(Effect.flip, Effect.provide(session));
         expect(refused._tag).toBe('NotOwner');
         expect(stop).not.toHaveBeenCalled();
 
@@ -604,7 +619,9 @@ describe('Sessions owner', () => {
           ),
         }));
         // A released claim is not held, even while the display still says so.
-        expect(yield* requests.request(request)).toEqual({ kind: 'done' });
+        expect(
+          yield* requests.request(request).pipe(Effect.provide(session)),
+        ).toEqual({ kind: 'done' });
         // A stop that leaves the child policy unset leaves it to the stop,
         // which reads the session's "Keep subagents running".
         expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, {
@@ -622,12 +639,19 @@ describe('Sessions owner', () => {
         const view = yield* SessionViewService;
         const events = yield* SessionEvents;
         const removeRun = vi.fn(events.removeRun);
-        const session = {
-          view: viewAccess(view.ref),
-        } as unknown as SessionHandle;
+        // cast: the delete's admission reads only the session's view.
+        const session = Context.make(
+          SessionViewAccess,
+          viewAccess(view.ref) as unknown as SessionViewAccess['Service'],
+        ).pipe(
+          Context.add(Runs, {} as Runs['Service']),
+        ) as Context.Context<SessionServices>;
         const requests = sessionRequests({
-          session: () => session,
-          log: { ...db, removeRun, detach: events.detach },
+          log: { ...db, removeRun },
+          // cast: no request here asks, decides or holds a claim.
+          asks: {} as Parameters<typeof sessionRequests>[0]['asks'],
+          sessionLog: {} as SessionLog['Service'],
+          view: Context.get(session, SessionViewAccess),
           local: yield* SubscriptionRef.make(
             Schema.decodeUnknownSync(LocalRuntimeStateSchema)({
               self: [SELF],
@@ -643,7 +667,6 @@ describe('Sessions owner', () => {
             | Path.Path
             | ChildProcessSpawner
           >(),
-          closed: () => false,
         });
         yield* settle(view.ref, (v) => v.runs.has(RUN));
         // The host rendered Delete session from this view; by the time the
@@ -664,7 +687,7 @@ describe('Sessions owner', () => {
         }));
         const refused = yield* requests
           .request({ kind: 'run.delete', runId: RUN })
-          .pipe(Effect.flip);
+          .pipe(Effect.flip, Effect.provide(session));
         expect(refused).toMatchObject({
           _tag: 'Rejected',
           reason: expect.stringContaining('stop it first'),
@@ -699,8 +722,8 @@ describe('Sessions owner', () => {
               aggregateId: qualifyAggregateId('run', RUN),
             },
           ]);
-          yield* session.log.settled;
-          expect(session.log.now()).toBe(3);
+          yield* Context.get(session, SessionLog).settled;
+          expect(Context.get(session, SessionLog).now()).toBe(3);
           publishTestRows(session, [
             {
               type: 'run.position',
@@ -718,13 +741,16 @@ describe('Sessions owner', () => {
           yield* Effect.promise(() =>
             vi.waitFor(() =>
               expect(
-                SubscriptionRef.getUnsafe(session.view.ref).runs.get(OLDER)
-                  ?.status,
+                SubscriptionRef.getUnsafe(
+                  Context.get(session, SessionViewAccess).ref,
+                ).runs.get(OLDER)?.status,
               ).toBe(RUN_PHASE.WAITING),
             ),
           );
           const received = yield* Effect.all(
-            [RUN, OLDER].map((id) => session.log.display(id)),
+            [RUN, OLDER].map((id) =>
+              Context.get(session, SessionLog).display(id),
+            ),
           );
           expect(
             received.flat().filter((event) => event.type === 'run.position'),
@@ -748,14 +774,14 @@ describe('Sessions owner', () => {
           publishTestRows(session, [
             { ...runEnd, aggregateId: qualifyAggregateId('run', OLDER) },
           ]);
-          yield* session.log.settled;
+          yield* Context.get(session, SessionLog).settled;
           // The live run's `run.end` reaches the folded tail once the view
           // has folded it, and a `waiting` step never does: of the rows the
           // presenter saw, one is an end, the live run's.
           yield* Effect.promise(() =>
             vi.waitFor(() =>
               expect(
-                presented.mock.calls.flatMap(([, row]) =>
+                presented.mock.calls.flatMap(([row]) =>
                   row.type === 'run.end' ? [row.aggregateId] : [],
                 ),
               ).toEqual([qualifyAggregateId('run', OLDER)]),

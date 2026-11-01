@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Layer, Schema } from 'effect';
+import { Effect, Layer, Schema, Context } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 
 import {
@@ -12,7 +12,9 @@ import {
 } from '@texra-ai/harness/schemas';
 import { ToolRegistry } from '@texra-ai/harness/plugins';
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionRoots } from '@platform/rootedFs';
+import { SessionLog } from '@shared/session/runHistory';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -42,7 +44,7 @@ setupPlatform({
   storagePath: fakePath('storage'),
   workspacePath: fakePath('workspace'),
 });
-let session: SessionHandle;
+let session: Context.Context<SessionServices>;
 beforeEach(async () => {
   session = await Effect.runPromise(createProcessSession());
 });
@@ -88,14 +90,14 @@ const resolveLayer = Layer.merge(
 
 const persistCompletedChild = (parentId: RunId = parentRunId) =>
   Effect.gen(function* () {
-    const storageRoot = session.roots.storage;
+    const storageRoot = Context.get(session, SessionRoots).storage;
     const absolutePath = path.join(
       storageRoot,
       `executions/${childRunId}/${relativePath}`,
     );
     publishTestRunStart(session, parentId);
-    yield* session.log.settled;
-    yield* seedRows(session.log)([
+    yield* Context.get(session, SessionLog).settled;
+    yield* seedRows(Context.get(session, SessionLog))([
       {
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', childRunId),
@@ -120,7 +122,7 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
         }),
       },
     ]);
-    yield* session.log.transact([
+    yield* Context.get(session, SessionLog).transact([
       {
         type: 'run.result',
         aggregateId: qualifyAggregateId('run', childRunId),
@@ -128,7 +130,7 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
       },
     ]);
     // How the child ended, and what it declared, is its `run.end` row's.
-    yield* session.log.transact([
+    yield* Context.get(session, SessionLog).transact([
       {
         type: 'run.end',
         aggregateId: qualifyAggregateId('run', childRunId),
@@ -157,9 +159,9 @@ describe('resolveChildRunOutput', () => {
       const absolutePath = yield* persistCompletedChild(otherParentRunId);
 
       const error = yield* Effect.flip(
-        resolveChildRunOutput(parentRunId, absolutePath, session).pipe(
-          Effect.provide(resolveLayer),
-        ),
+        resolveChildRunOutput(parentRunId, absolutePath)
+          .pipe(Effect.provide(resolveLayer))
+          .pipe(Effect.provide(session)),
       );
       expect(error.message).toContain('is not a direct child');
     }),
@@ -168,11 +170,9 @@ describe('resolveChildRunOutput', () => {
   it.effect('rejects paths outside run storage', () =>
     Effect.gen(function* () {
       const error = yield* Effect.flip(
-        resolveChildRunOutput(
-          parentRunId,
-          fakePath('workspace/draft.tex'),
-          session,
-        ).pipe(Effect.provide(resolveLayer)),
+        resolveChildRunOutput(parentRunId, fakePath('workspace/draft.tex'))
+          .pipe(Effect.provide(resolveLayer))
+          .pipe(Effect.provide(session)),
       );
       expect(error.message).toContain('not inside run storage');
     }),

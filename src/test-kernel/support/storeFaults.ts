@@ -34,17 +34,15 @@ import {
   Ref,
   Schema,
   type Scope,
+  type Context,
 } from 'effect';
 import { afterEach, beforeEach, vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
 import { withProcessServices } from '@texra-ai/harness/host';
 import { AgentCatalog } from '@agent/index/agentCatalog';
-import { rootRun } from '@agent/runtime/rootLaunch';
-import type {
-  SessionHandle,
-  SessionHandleInit,
-} from '@agent/runtime/SessionHandle';
+import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
+import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
 import {
   AgentConfigSchema,
   type RunId,
@@ -492,7 +490,7 @@ export const parkedAfter =
  * scope.
  */
 export const parkedRoot = (
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   instruction = 'Start here.',
 ): Effect.Effect<RunId, Cause.TimeoutError, Scope.Scope> =>
   Effect.gen(function* () {
@@ -500,7 +498,7 @@ export const parkedRoot = (
     const runId = generateRunId();
     yield* withProcessServices(
       testRuntime(),
-      rootRun(session, {
+      rootRun({
         config: Schema.decodeUnknownSync(AgentConfigSchema)({
           agent: 'assistant',
           model: 'openai/gpt-5.6-sol',
@@ -508,7 +506,7 @@ export const parkedRoot = (
         }),
         runId,
         interactive: true,
-      }),
+      }).pipe(Effect.provide(session)),
     ).pipe(Effect.forkScoped);
     yield* untilStored(storage, parkedAfter(runId, 1, storage));
     return runId;
@@ -517,7 +515,7 @@ export const parkedRoot = (
 /** A root run parked in a store whose process crashed, and the session
  *  opened over that store since. */
 interface CrashedRun {
-  readonly session: SessionHandle;
+  readonly session: Context.Context<SessionServices>;
   readonly runId: RunId;
   readonly storage: string;
 }
