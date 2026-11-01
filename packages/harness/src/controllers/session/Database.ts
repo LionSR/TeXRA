@@ -151,10 +151,11 @@ FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
 WHERE s.id IN (${AGGREGATE_LIST})
 `;
 /** The aggregates whose existence or claim changed after an ordinal
- *  (`aggregate_change`, `storeSchema.ts`); after none, the last one. */
+ *  (`aggregate_change`, `storeSchema.ts`); after none, the last one. One
+ *  bound, so the read seeks the primary key past the ordinal. */
 const CHANGED_SINCE = `SELECT kind, logical_id AS logicalId, change
-  FROM aggregate_change WHERE change > ? OR (? IS NULL
-    AND change = (SELECT max(change) FROM aggregate_change)) ORDER BY change`;
+  FROM aggregate_change WHERE change >= coalesce(? + 1,
+    (SELECT max(change) FROM aggregate_change)) ORDER BY change`;
 
 /** Stored rows a display page reads before it runs on to its batch's end. */
 const DISPLAY_PAGE_ROWS = 2000;
@@ -866,8 +867,7 @@ export const databaseLayer = (
           projected(
             Effect.gen(function* () {
               const cursor = yield* currentCommit;
-              const after = since ?? null;
-              const changed = yield* exec(CHANGED_SINCE, [after, after]);
+              const changed = yield* exec(CHANGED_SINCE, [since ?? null]);
               const change = Number(changed.at(-1)?.change ?? since ?? 0);
               const events = yield* decodedRows(inputRows, [
                 LISTED_TYPES,
