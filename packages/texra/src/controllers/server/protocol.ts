@@ -80,13 +80,14 @@ export const BUILD_VERSION: string =
  *  each procedure's hash of its payload, success and error JSON Schemas at
  *  that version. `protocolVersion.vitest.ts` fails when one moves, and
  *  `npm run protocol:bump` advances the version and rewrites the hashes
- *  together. */
+ *  together. A hash sees what JSON Schema shows: an opaque `Schema.declare`
+ *  or a `Schema.Json` field moves none. */
 export const PROTOCOL: {
   readonly version: number;
   readonly shapes: Readonly<Record<string, string>>;
-} = {
+} = Object.freeze({
   version: 42,
-  shapes: {
+  shapes: Object.freeze({
     'service.hello': 'b883cf64d52c',
     'service.stop': '8d19317aa364',
     'tasks.list': 'f53aa5564aa8',
@@ -103,8 +104,8 @@ export const PROTOCOL: {
     'state.set': 'e377b902a4e3',
     'host.focus': 'fd20627c2222',
     'host.answer': 'cc171cdead15',
-  },
-};
+  }),
+});
 
 /** What `service.hello` and `texra service status` report. */
 export const ServiceInfoSchema = Schema.Struct({
