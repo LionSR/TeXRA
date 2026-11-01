@@ -218,15 +218,6 @@ export function createDesktopPreviewHost(
       }
 
       const outputDirectory = path.dirname(sourcePath);
-      const { hasLatexCompiler } = yield* Effect.promise(
-        () => import('@latex/latexToolchain'),
-      );
-      if (!(yield* hasLatexCompiler())) {
-        yield* fail(
-          `No LaTeX compiler found for ${sourcePath}. Install latexmk or pdflatex to compile and preview this file.`,
-        );
-      }
-
       const { compileLatex2Pdf } = yield* Effect.promise(
         () => import('@latex/texTools'),
       );
@@ -238,6 +229,11 @@ export function createDesktopPreviewHost(
           {
             outputDirectory,
           },
+        ),
+      ).pipe(
+        // No compiler to drive: the message names it and how to install one.
+        Effect.catchTag('ToolMissing', (missing) =>
+          fail(`Cannot preview ${sourcePath}: ${missing.message}`),
         ),
       );
       if (!built.ok) {

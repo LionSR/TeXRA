@@ -25,7 +25,6 @@ import {
   Secrets,
   type ProcessRuntime,
   type GlobalValues,
-  ToolMissingHandler,
   withProcessServices,
   StateStores,
   withLogChannel,
@@ -61,7 +60,6 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   executeVscodeCommand,
   safeExecuteCommand,
-  vscodeToolMissingReporter,
 } from '@frontend/system/commandUtils';
 import { installUnhandledRejectionSurface } from '@frontend/system/unhandledRejectionSurface';
 import { initializeLatexSupport } from '@frontend/setup';
@@ -136,8 +134,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   context: vscode.ExtensionContext,
   workspaceRoot: string | undefined,
   extras: {
-    /** The editor's tool-missing UI, served as `ToolMissingReporter` below. */
-    readonly toolMissingHandler?: ToolMissingHandler;
     /** The background service this window is a client of: reached once
      *  the runtime that serves its record exists. A window that reaches it
      *  reads the project's state there and opens no project store. */
@@ -198,7 +194,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
             ),
         ),
         agentDirectories: agentDirectoriesLayer(context.extensionPath),
-        toolMissingReporter: extras.toolMissingHandler,
         usageLog: usageLogLayer({
           version: extensionVersion,
           editorType: vscode.env.appName || undefined,
@@ -437,7 +432,6 @@ const activateExtension = Effect.fn('activateExtension')(function* (
     context,
     workspaceRoot,
     {
-      toolMissingHandler: vscodeToolMissingReporter,
       service: reachExtensionService(context.extensionPath),
     },
   );

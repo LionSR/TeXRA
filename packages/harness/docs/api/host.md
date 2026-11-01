@@ -1769,9 +1769,6 @@ interface ProcessLayerOptions {
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
-  /** The host's tool-missing reporter, served as `ToolMissingReporter`;
-   *  absent (no UI for it), a probe still answers, without surfacing. */
-  readonly toolMissingReporter?: ToolMissingHandler;
   /** The app's directories on every command's PATH (`CommandDirs`). */
   readonly commandDirs?: () => readonly string[];
   /**
@@ -2630,36 +2627,6 @@ interface ToolCatalogShape {
    *  no switch was written. */
   readonly disabled: Effect.Effect<ReadonlySet<string>, StateReadFailed>;
 }
-```
-
-## ToolMissingHandler
-
-The host's optional "tool is missing" reporter. The VS Code host is the only
-one with a UI for it; every other host omits it, and callers treat an absent
-reporter as silence. It settles its own presentation failures, so the probe
-that reports a missing tool still gets its answer.
-
-```ts
-type ToolMissingHandler = (
-  message: string,
-  /** The guide page that covers installing the tool, when one is known. */
-  docsPage?: string,
-) => Effect.Effect<void>;
-```
-
-## ToolMissingReporter
-
-The process's tool-missing reporter as an Effect service, provided once
-by the composition root through `processLayer`. A program that needs to surface a
-missing tool yields it via `Effect.serviceOption`, so an absent reporter is
-silence rather than a missing requirement. A host without a tool-missing UI
-omits the service.
-
-```ts
-class ToolMissingReporter extends Context.Service<
-  ToolMissingReporter,
-  ToolMissingHandler
->()('@texra-ai/harness/platform/ToolMissingReporter')
 ```
 
 ## toPosixPath

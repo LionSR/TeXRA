@@ -7,7 +7,7 @@ import {
 } from '@texra-ai/harness/host';
 import { pathExists, readNormalizedFile } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
-import { runToolWithCheck } from '@texra/utils/system/toolChecks';
+import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { SettingsStores } from '@texra-ai/harness/host';
@@ -87,8 +87,8 @@ const rejectionReason = Effect.fn('texcount.rejectionReason')(function* (
 
 /**
  * Invoke `texcount`. The subprocess is cancelled by the fiber's own
- * interruption, which `runToolWithCheck` carries into the spawn, so no caller
- * threads a signal in.
+ * interruption, which `runTool` carries into the spawn, so no caller threads
+ * a signal in. A missing texcount is the caller's `ToolMissing`.
  */
 const runTexcount = Effect.fn('texcount.runTexcount')(function* (
   workspaceRoot: string | undefined,
@@ -100,21 +100,13 @@ const runTexcount = Effect.fn('texcount.runTexcount')(function* (
   Error,
   ChildProcessSpawner
 > {
-  const result = yield* runToolWithCheck('texcount', args, {
+  const result = yield* runTool('texcount', args, {
     channel: CHANNEL,
     // The file arguments are workspace-relative, so the root the caller
     // counted for is also the directory texcount resolves them against.
     cwd: workspaceRoot,
     settings,
-    showError: true,
   });
-
-  if (!result) {
-    return {
-      stdout: null,
-      error: `texcount did not return a result for ${context}.`,
-    };
-  }
 
   if (result.success && result.stdout) {
     yield* Effect.logDebug(`Successfully counted ${context}`);

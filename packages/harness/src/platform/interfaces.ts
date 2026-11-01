@@ -250,31 +250,3 @@ export class AgentDirectories extends Context.Service<
   AgentDirectories,
   AgentDirectoriesPort
 >()('@texra-ai/harness/platform/AgentDirectories') {}
-
-// ---------------------------------------------------------------------------
-// Tool-missing reporter
-// ---------------------------------------------------------------------------
-
-/**
- * The host's optional "tool is missing" reporter. The VS Code host is the only
- * one with a UI for it; every other host omits it, and callers treat an absent
- * reporter as silence. It settles its own presentation failures, so the probe
- * that reports a missing tool still gets its answer.
- */
-export type ToolMissingHandler = (
-  message: string,
-  /** The guide page that covers installing the tool, when one is known. */
-  docsPage?: string,
-) => Effect.Effect<void>;
-
-/**
- * The process's tool-missing reporter as an Effect service, provided once
- * by the composition root through `processLayer`. A program that needs to surface a
- * missing tool yields it via `Effect.serviceOption`, so an absent reporter is
- * silence rather than a missing requirement. A host without a tool-missing UI
- * omits the service.
- */
-export class ToolMissingReporter extends Context.Service<
-  ToolMissingReporter,
-  ToolMissingHandler
->()('@texra-ai/harness/platform/ToolMissingReporter') {}

@@ -105,7 +105,6 @@ export class Sessions extends Context.Service<
             agentDirectories: Layer.succeed(AgentDirectories)(
               platform.agentDirectories,
             ),
-            toolMissingReporter: platform.toolMissingHandler,
             commandDirs: platform.commandDirs,
             // An embedder's console has no live level filter of its own, so
             // the package speaks at the informational level, not flooding it.

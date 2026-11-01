@@ -7,6 +7,7 @@ import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import type { LatexFormatterValue } from '@texra/shared/constants/latexConfig';
 
 // Local file imports
+import type { ToolMissing } from '@texra/utils/system/toolChecks';
 import { LATEXINDENT_CONFIG_KEY, runLatexIndent } from './latexindentpt';
 import { TEXFMT_CONFIG_KEY, runTexFmt } from './texfmt';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -23,7 +24,11 @@ interface LatexFormatterDefinition {
     workspaceRoot: string | undefined,
     configPath: string,
     settings: SettingsStores,
-  ): Effect.Effect<boolean, never, FileSystem.FileSystem | ChildProcessSpawner>;
+  ): Effect.Effect<
+    boolean,
+    ToolMissing,
+    FileSystem.FileSystem | ChildProcessSpawner
+  >;
 }
 
 export interface LatexFormatter extends LatexFormatterDefinition {
