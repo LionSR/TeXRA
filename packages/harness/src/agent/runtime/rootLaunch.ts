@@ -1,7 +1,6 @@
-import { Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
+import { Context, Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { SessionOwner } from '@platform/processRuntime';
 import {
   APPROVAL_BYPASS_KINDS,
   inheritedGrants,
@@ -9,7 +8,8 @@ import {
   type ApprovalPolicyLimit,
 } from '@shared/approvalBypassKind';
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
-import type { CommitOrdinal, RunId } from '@shared/schemas';
+import type { CommitOrdinal, RunId, SessionCloseReport } from '@shared/schemas';
+import type { SessionOpenError } from '@shared/session/database';
 import { generateRunId } from '@utils/core';
 import { humanGrant } from './runApprovalQueue';
 import {
@@ -19,7 +19,7 @@ import {
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { applyHelperModelPreference } from './helperModelName';
 import { registryOf } from './runRegistry';
-import type { SessionHandle } from './SessionHandle';
+import type { SessionHandle, SessionHandleInit } from './SessionHandle';
 
 /**
  * Options for a root launch (`Runs.launch({ request, options })`). Fields
@@ -54,6 +54,37 @@ export interface RootLaunchOptions extends Pick<ExecuteAgentOptions, 'tools'> {
    */
   approvalPolicy?: ApprovalPolicy;
 }
+
+/** The process's session owner: one session per workspace storage root,
+ *  served by `processLayer` over the `LayerMap` that owns every session's
+ *  lifetime. Every opener (the hosts' default sessions, the desktop's
+ *  projects, the service's tasks, the SDK's `Sessions`) reaches it from
+ *  context. A handle `open` returns is borrowed access with no disposal
+ *  obligation: `close` is how a session ends, and the process layer's own
+ *  release closes whatever is still open. */
+export class SessionOwner extends Context.Service<
+  SessionOwner,
+  {
+    /** The session of `init.roots`' storage root: the one already open
+     *  there, or built now over `init`, which is read only then: a later
+     *  opener of the same root gets the session the first one built. */
+    readonly open: (
+      init: SessionHandleInit,
+    ) => Effect.Effect<SessionHandle, SessionOpenError>;
+    /** Every session the owner holds, waiting within the close budget. */
+    readonly list: Effect.Effect<readonly SessionHandle[]>;
+    /** Whether it still holds `session`: its root's entry, never another's. */
+    readonly holds: (session: SessionHandle) => Effect.Effect<boolean>;
+    /** Close a storage root's session: refuse new runs, stop its own ones
+     *  and wait inside `SESSION_CLOSE_DEADLINE_MS`, report those still
+     *  live abandoned, flush, release. A root with no open session reports
+     *  `settled`. Never touches another root's session. */
+    readonly close: (root: string) => Effect.Effect<SessionCloseReport>;
+    /** A process shutdown's close: drain what the plugins' pollers admitted,
+     *  then close every held session at once, under one deadline. */
+    readonly closeAll: Effect.Effect<readonly SessionCloseReport[]>;
+  }
+>()('@texra-ai/harness/SessionOwner') {}
 
 /** A fresh launch; a persisted run resumes through `resumeRun`. */
 export interface RootLaunchRequest {

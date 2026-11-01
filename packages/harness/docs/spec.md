@@ -151,7 +151,7 @@ The publisher offers these doors:
   (`agent/runtime/SessionEvents.ts:311-319`).
 - `drain`: End the inbox and run what it holds within the close deadline of
   5,000 ms (`agent/runtime/SessionEvents.ts:252-290`,
-  `agent/runtime/SessionHandle.ts:395`).
+  `agent/runtime/SessionHandle.ts:366`).
 
 A job MUST NOT wait on its own publisher; doing so is a defect
 (`agent/runtime/SessionEvents.ts:197-202`, `:299`). A job MAY run again whole
@@ -171,7 +171,7 @@ took is released best effort: a refused release is logged and the claim stays
 until another process proves this one dead
 (`controllers/session/sessionStore.ts:223-235`, `:262`). A trace row emitted on
 its own reaches the publisher through `SessionLog.publish`
-(`agent/runtime/SessionHandle.ts:97-100`); a call's card rows and a turn's
+(`agent/runtime/SessionHandle.ts:103-106`); a call's card rows and a turn's
 closing rows commit inside the run's own batches instead
 (`agent/runtime/loop/toolUseDispatch.ts:550-554`,
 `agent/runtime/loop/toolUse.ts:497-500`). `SessionLog.settled` is the barrier

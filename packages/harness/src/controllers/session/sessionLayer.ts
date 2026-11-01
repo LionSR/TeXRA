@@ -35,28 +35,25 @@ import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { decideResume } from '@agent/runtime/resumeRun';
-import { rootRun } from '@agent/runtime/rootLaunch';
+import { rootRun, SessionOwner } from '@agent/runtime/rootLaunch';
 import { onHeldResult } from '@agent/runtime/runLaunchGuard';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { sessionPermission } from '@agent/runtime/loop/toolGuard';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { registryOf, RunRegistry } from '@agent/runtime/runRegistry';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
+import type { RunServices } from '@agent/runtime/ToolServices';
 import {
   SESSION_CLOSE_DEADLINE_MS,
   type SessionHandle,
   type SessionHandleInit,
 } from '@agent/runtime/SessionHandle';
+import { followInterruptedTasks } from '@agent/runtime/interruptedTasks';
 import { mcpConfigPathOf } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { AppSignals } from '@platform/appSignals';
-import {
-  holdProcessRoot,
-  SessionOwner,
-  type HostSkillOptions,
-  type ProcessServices,
-} from '@platform/processRuntime';
+import { holdProcessRoot } from '@platform/processRuntime';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { globalStorageFsLayer } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
@@ -83,14 +80,13 @@ import {
 } from '@shared/session/database';
 import type { SettingsCatalog } from '@shared/state/stateSettings';
 import { UsageLog } from '@shared/usageLog';
-import { ToolCatalogOwner } from '@tools/liveTools';
+import { ToolCatalogOwner, type ToolCatalog } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { announceWrites, armsOf, type Plugin } from '@tools/plugins';
 import { toolAvailabilityLayer } from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
-import { followInterruptedTasks } from '@tools/interruptedTasks';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { databaseLayer, globalDatabaseLayer } from './Database';
 import { globalAppStateLayer, processStoresLayer } from './appStateStore';
@@ -175,7 +171,7 @@ const sessionHandleLayer = (key: SessionKey) =>
       // fibers (registered before their fork) published their last rows.
       yield* Effect.addFinalizer(() => store.close);
       // The runs' fork and the project's tools end with this scope.
-      const fork = yield* FiberSet.makeRuntime<ProcessServices>();
+      const fork = yield* FiberSet.makeRuntime<RunServices>();
       const tools = yield* (yield* ToolCatalogOwner).session;
       const interactions = new SessionHostInteractions(key.open.interactions);
       // Each run's `.env`, read as it launches.
@@ -209,7 +205,7 @@ const sessionHandleLayer = (key: SessionKey) =>
           },
           local: local.ref,
           plugins,
-          services: yield* Effect.context<ProcessServices>(),
+          services: yield* Effect.context<RunServices>(),
           closed: store.closed,
         }),
         approvals: {
@@ -482,10 +478,10 @@ const closeSession = (root: string) =>
     return { settled, abandoned } satisfies SessionCloseReport;
   }).pipe(Effect.uninterruptible, withPerKeyLane(rootLanes, root));
 
-/** What a composition root composes its process from: the app's plugins, its
- *  skill sources and the host's own ports; what every host builds the same
- *  way (the process identity, the global root's database) has a default. */
-export interface ProcessLayerOptions {
+/** What the process services are composed from: the app's plugins and the
+ *  host's own ports; what every host builds the same way (the process
+ *  identity, the global root's database) has a default. */
+export interface ProcessServicesOptions {
   /** The process-start read the process identity is derived from, once per
    *  process: absent, this Node process's own (`nodeProcesses.selfIdentity`). */
   readonly processStart?: Effect.Effect<
@@ -503,7 +499,6 @@ export interface ProcessLayerOptions {
    * and the tool catalog over it (`ToolCatalog`).
    */
   readonly plugins: readonly Plugin[];
-  readonly skills?: HostSkillOptions;
   readonly secrets: Layer.Layer<Secrets, never, AppSignals>;
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */
@@ -566,7 +561,9 @@ export function ownerProcessLayer({
   globalDatabase: globalDatabaseOption,
   minimumLogLevel,
   workspace,
-}: ProcessLayerOptions): Layer.Layer<ProcessServices | SessionOwner> {
+}: ProcessServicesOptions): Layer.Layer<
+  RunServices | ToolCatalog | SessionOwner
+> {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
   const appState =
     appStateOption ?? globalAppStateLayer(globalStorage, settings);

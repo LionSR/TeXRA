@@ -20,13 +20,11 @@
 import { Deferred, Effect, Queue, type Scope } from 'effect';
 
 import { wakeRun } from '@agent/followUp/ToolUseFollowUp';
-import { resumeBlocker } from '@agent/runtime/resumeBlocker';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage/runRecords';
 import type { AgentCatalog } from '@agent/index/agentCatalog';
+import type { AgentCatalogServices } from '@agent/index/agentEntry';
 import { withLogChannel } from '@logger/effectLog';
 import { onAppSignal } from '@platform/appSignals';
-import type { AgentCatalogServices } from '@platform/processRuntime';
 import {
   RESUME_ON_OPEN_SETTING,
   RESTING_SUBSTATES,
@@ -36,6 +34,9 @@ import {
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { claimStanding } from '@shared/session/database';
 import { Settings } from '@shared/config/settings';
+
+import { resumeBlocker } from './resumeBlocker';
+import type { SessionHandle } from './SessionHandle';
 
 const CHANNEL = 'InterruptedTasks';
 

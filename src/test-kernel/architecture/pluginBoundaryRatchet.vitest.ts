@@ -94,7 +94,6 @@ const SERVICE_HOMES = new Set([
   'packages/texra/src/tools/claudeAgentPlugin.ts',
   'packages/texra/src/tools/codexPlugin.ts',
   'packages/texra/src/tools/registry.ts',
-  'packages/harness/src/platform/processRuntime.ts',
 ]);
 
 const files = () => ALL_HOST_PRODUCTION_ROOTS.flatMap(productionFilesUnder);

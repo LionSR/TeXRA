@@ -13,6 +13,19 @@ export interface SkillSourceOptions {
   readonly additionalPaths?: readonly string[];
 }
 
+/**
+ * A process's skill sources (`ProcessLayerOptions.skills`,
+ * `Composition.skills`): its bundled resources tree, under which each of its
+ * tool plugins ships its bundled skills (`plugins/<id>/skills`), and its
+ * process-wide source options (the CLI's flags). All three hosts discover
+ * custom roots, project skills, user skills and the bundled ones in that
+ * precedence. A process given none discovers no skills at all.
+ */
+export interface HostSkillOptions {
+  readonly resourcesPath: string;
+  readonly skillSourceOptions?: SkillSourceOptions;
+}
+
 /** The other agent tools' folders whose `skills/` an interop listing reads. */
 export const INTEROP_SKILL_DIRS = Object.freeze([
   '.agents',

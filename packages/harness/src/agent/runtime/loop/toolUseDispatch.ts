@@ -49,7 +49,6 @@ import {
   type ScriptScope,
   type ScriptSource,
 } from '@agent/runtime/RunCall';
-import type { ProcessServices } from '@platform/processRuntime';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
   qualifyAggregateId,
@@ -109,6 +108,7 @@ import { callRequests, guardedToolCall } from './toolGuard';
 import { callHookText, preToolUse } from './hooks';
 import { appendRow, displayRow, positionRow } from './rows';
 import { Runs } from '../runRegistry';
+import type { RunServices } from '../ToolServices';
 import type { StepTools } from './step';
 import type { InvokeError } from '../ModelInvoker';
 
@@ -366,7 +366,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
 ): Effect.fn.Return<
   void,
   InvokeError,
-  ProcessServices | Runs | WorkspaceFs | StorageFs | FileSystem.FileSystem
+  RunServices | Runs | WorkspaceFs | StorageFs | FileSystem.FileSystem
 > {
   const { dispatch, fact, input } = call;
   const { run, cell, step, responseId } = dispatch;
@@ -732,7 +732,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   // Made after that finalizer, so it closes first: no call the guest
   // issued still runs when the finalizer reads what it left.
   const fork = yield* FiberMap.makeRuntime<
-    ProcessServices | Runs | WorkspaceFs | StorageFs,
+    RunServices | Runs | WorkspaceFs | StorageFs,
     string
   >();
   // Opened once, labelled by the script's title, which its first call carries.
@@ -1033,7 +1033,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
 ): Effect.fn.Return<
   DispatchOutcome,
   InvokeError,
-  AgentRun | ProcessServices | Runs | WorkspaceFs | StorageFs
+  AgentRun | RunServices | Runs | WorkspaceFs | StorageFs
 > {
   const run = yield* AgentRun;
   const { runId, logger } = run;

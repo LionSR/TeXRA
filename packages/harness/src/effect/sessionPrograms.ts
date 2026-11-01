@@ -21,13 +21,13 @@ import { Context, Effect, Schema, SubscriptionRef } from 'effect';
 import { AgentCatalog, AgentNotFound } from '@agent/index/agentCatalog';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeRun } from '@agent/runtime/resumeRun';
+import { SessionOwner } from '@agent/runtime/rootLaunch';
 import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { asksApproval } from '@agent/runtime/agentToolResolution';
 
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
-import { SessionOwner, type ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentConfigSchema,
@@ -46,6 +46,7 @@ import {
 import { attachHost } from './requestAnswerer.js';
 import { runView } from './runHandle.js';
 import { sessionReads } from './sessionReads.js';
+import type { ProcessServices } from './processLayer.js';
 import type { Sessions } from './processLayer.js';
 import type {
   OpenOptions,

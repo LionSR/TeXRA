@@ -18,7 +18,7 @@ import {
 } from '@shared/state/stateSettings';
 import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
 
-import type { AgentPlatform } from '../../effect/sessions.js';
+import type { AgentPlatform } from '../agentPlatform';
 
 /** Filesystem locations used by the default Node platform. */
 export interface NodePlatformOptions {
