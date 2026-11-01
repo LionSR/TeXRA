@@ -1776,7 +1776,8 @@ tool name listed twice, a second plugin continuing waiting runs or
 recording one request kind's decisions, a switch on a plugin with no
 availability probe) fails the build with {@link PluginsRefused} before
 anything is built, so the refusal names the plugin rather than failing
-the first session open.
+the first session open. The global store is seeded with the first-install
+tool switches as it is built, unless `seedToolSwitches` is `false`.
 
 ```ts
 function processLayer(
@@ -1793,14 +1794,6 @@ What a composition root composes its process from: the services' options
 interface ProcessLayerOptions extends ProcessServicesOptions {
   /** The host's skill sources; absent, the process discovers no skills. */
   readonly skills?: HostSkillOptions;
-  /**
-   * Whether the build seeds the first-install tool switches, turning the
-   * opt-in plugins off before the user first sets them (a no-op once the
-   * user's list exists). Absent, it does; `false` for a process whose
-   * global store refuses every write, such as a CLI entry that must create
-   * nothing under its storage root.
-   */
-  readonly seedToolSwitches?: boolean;
 }
 ```
 
@@ -1871,6 +1864,10 @@ interface ProcessServicesOptions {
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
   >;
+  /** Seed the first-install tool switches (opt-in plugins off) unless the
+   *  user's list exists: absent, yes; `false` for a store that refuses
+   *  writes, a CLI entry's that must create nothing under its root. */
+  readonly seedToolSwitches?: boolean;
   /** The dependency probes every tool gate and Tools dashboard read: absent,
    *  every host's; a test harness passes one that starts no probe. */
   readonly toolAvailability?: typeof toolAvailabilityLayer;

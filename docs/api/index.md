@@ -77,6 +77,7 @@ import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
 const platform = nodePlatform({
+  agentsDir: './agents',
   storageDir: './.agent-storage',
   workspaceDir: process.cwd(),
 });

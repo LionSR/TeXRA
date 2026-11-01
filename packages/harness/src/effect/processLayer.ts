@@ -25,7 +25,6 @@ import {
   type HostSkillOptions,
 } from '@skills/skillSources';
 import type { ToolCatalog } from '@tools/liveTools';
-import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 import { toolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { CommandDirs } from '@utils/system/platformPaths';
@@ -50,14 +49,6 @@ export type ProcessServices = RunServices | ToolCatalog;
 export interface ProcessLayerOptions extends ProcessServicesOptions {
   /** The host's skill sources; absent, the process discovers no skills. */
   readonly skills?: HostSkillOptions;
-  /**
-   * Whether the build seeds the first-install tool switches, turning the
-   * opt-in plugins off before the user first sets them (a no-op once the
-   * user's list exists). Absent, it does; `false` for a process whose
-   * global store refuses every write, such as a CLI entry that must create
-   * nothing under its storage root.
-   */
-  readonly seedToolSwitches?: boolean;
 }
 
 /** The runtime a composition root makes over `processLayer`: the process
@@ -166,7 +157,8 @@ export class Sessions extends Context.Service<
  * recording one request kind's decisions, a switch on a plugin with no
  * availability probe) fails the build with {@link PluginsRefused} before
  * anything is built, so the refusal names the plugin rather than failing
- * the first session open.
+ * the first session open. The global store is seeded with the first-install
+ * tool switches as it is built, unless `seedToolSwitches` is `false`.
  */
 export function processLayer(
   options: ProcessLayerOptions,
@@ -183,13 +175,6 @@ function sessionsLayer(
   const sessions = Layer.effect(
     Sessions,
     Effect.gen(function* () {
-      // The catalog follows the switches as they change, so a seed written
-      // once the process services are built still reaches it. A global
-      // store that cannot be read or written is a platform defect.
-      if (options.seedToolSwitches ?? true)
-        yield* seedDisabledToolDefaults(yield* AppState, options.plugins).pipe(
-          Effect.orDie,
-        );
       return yield* makeSessions(
         yield* SessionOwner,
         yield* Effect.context<ProcessServices>(),

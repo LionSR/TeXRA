@@ -83,7 +83,10 @@ import { UsageLog } from '@shared/usageLog';
 import { ToolCatalogOwner, type ToolCatalog } from '@tools/liveTools';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 import { announceWrites, armsOf, type Plugin } from '@tools/plugins';
-import { toolAvailabilityLayer } from '@tools/toolAvailability';
+import {
+  seedDisabledToolDefaults,
+  toolAvailabilityLayer,
+} from '@tools/toolAvailability';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
 import { ToolRegistry } from '@tools/toolTable';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
@@ -517,6 +520,10 @@ export interface ProcessServicesOptions {
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
   >;
+  /** Seed the first-install tool switches (opt-in plugins off) unless the
+   *  user's list exists: absent, yes; `false` for a store that refuses
+   *  writes, a CLI entry's that must create nothing under its root. */
+  readonly seedToolSwitches?: boolean;
   /** The dependency probes every tool gate and Tools dashboard read: absent,
    *  every host's; a test harness passes one that starts no probe. */
   readonly toolAvailability?: typeof toolAvailabilityLayer;
@@ -557,6 +564,7 @@ export function ownerProcessLayer({
   plugins,
   secrets,
   appState: appStateOption,
+  seedToolSwitches = true,
   agentDirectories,
   toolAvailability = toolAvailabilityLayer,
   usageLog = UsageLog.disabled,
@@ -567,8 +575,17 @@ export function ownerProcessLayer({
   RunServices | ToolCatalog | SessionOwner
 > {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
-  const appState =
-    appStateOption ?? globalAppStateLayer(globalStorage, settings);
+  // Seeded as the store is built, before the tool catalog first reads the
+  // switches: a store with no change feed (an embedder's) is read only once.
+  const appState = (
+    appStateOption ?? globalAppStateLayer(globalStorage, settings)
+  ).pipe(
+    Layer.tap((context) =>
+      seedToolSwitches
+        ? seedDisabledToolDefaults(Context.get(context, AppState), plugins)
+        : Effect.void,
+    ),
+  );
   const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.unwrap(

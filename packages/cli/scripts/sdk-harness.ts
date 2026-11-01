@@ -79,6 +79,7 @@ const approveAll: ApprovalHandler = (request) =>
   });
 
 const platform = nodePlatform({
+  agentsDir: `${storageDir}/no-agents`,
   storageDir,
   workspaceDir: workspace,
 });
