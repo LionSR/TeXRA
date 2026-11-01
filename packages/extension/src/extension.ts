@@ -171,10 +171,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         setup: vscodeSetupPlatform,
         storageRoot: defaultNodeStorageRoot(),
         resourcesPath: path.join(context.extensionPath, 'resources'),
-        agentIssues: {
-          report: (message, docsId) =>
-            showLoggedMessageWithDocs('AgentLoad', message, docsId),
-        },
+        agentIssues: showLoggedMessageWithDocs,
         usageLog: usageLogLayer({
           version: extensionVersion,
           editorType: vscode.env.appName || undefined,

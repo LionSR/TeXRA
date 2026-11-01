@@ -15,7 +15,6 @@ import { Effect, Layer, type LogLevel } from 'effect';
 import {
   AgentDirectories,
   AgentDirectoryService,
-  type AgentDirectoryServiceOptions,
   AppState,
   processLayer,
   type ProcessLayerOptions,
@@ -58,8 +57,13 @@ export interface TexraProcessHost extends Omit<
   readonly minimumLogLevel: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;
-  /** Where a custom agent directory's problem is shown; absent, logged. */
-  readonly agentIssues?: AgentDirectoryServiceOptions['issueReporter'];
+  /** Where a custom agent directory's problem is shown, on the agent-load
+   *  log channel it is given; absent, the problem is logged there. */
+  readonly agentIssues?: (
+    channel: string,
+    message: string,
+    docsId: 'custom-agents',
+  ) => Effect.Effect<void>;
   /**
    * The global stores served in place of the storage root's own, for a
    * process that must create nothing under that root (the platform-less CLI
@@ -70,6 +74,9 @@ export interface TexraProcessHost extends Omit<
     readonly globalDatabase: Layer.Layer<GlobalDatabase>;
   };
 }
+
+/** The log channel the agent directories report on. */
+const AGENT_LOAD_CHANNEL = 'AgentLoad';
 
 /** The process services, sessions and windows of one TeXRA host process. */
 export const texraProcessLayer = ({
@@ -105,11 +112,16 @@ export const texraProcessLayer = ({
         AppState,
         (state) =>
           new AgentDirectoryService({
-            channel: 'AgentLoad',
+            channel: AGENT_LOAD_CHANNEL,
             resourcesPath: resourcesPath ?? '',
             state,
             teamMembers,
-            ...(agentIssues && { issueReporter: agentIssues }),
+            ...(agentIssues && {
+              issueReporter: {
+                report: (message, docsId) =>
+                  agentIssues(AGENT_LOAD_CHANNEL, message, docsId),
+              },
+            }),
           }),
       ),
     ),
