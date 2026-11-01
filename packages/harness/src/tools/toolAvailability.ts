@@ -95,7 +95,9 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
       }),
     );
     if (!seeded) return;
-    yield* Effect.logInfo(
+    // Debug: the seed runs while a host's runtime builds, before the CLI's
+    // platform silences its stderr diagnostics.
+    yield* Effect.logDebug(
       `First install: plugins switched off by default: ${defaults.join(', ')}`,
     ).pipe(withLogChannel(CHANNEL));
   },

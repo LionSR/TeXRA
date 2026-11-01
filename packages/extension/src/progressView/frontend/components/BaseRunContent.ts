@@ -82,7 +82,7 @@ export abstract class BaseRunContent extends LitElement {
         .run=${this.run}
         .view=${this.view}
         .surface=${this.surface}
-        .toolIcons=${this.host.toolIcons}
+        .tools=${this.host.tools}
       ></log-list>
     </div>`;
   }

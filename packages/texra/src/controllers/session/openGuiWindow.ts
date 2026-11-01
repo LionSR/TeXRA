@@ -55,6 +55,7 @@ import type {
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import type { MessageHost } from '@texra/hosts/uiHosts';
+import type { TexraPlugin } from '@texra/tools/registry';
 import {
   ToolEditApprovalController,
   type ToolEditApprovalHost,
@@ -77,7 +78,6 @@ import {
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
-import { toolIconsOf } from '@texra/controllers/settingsView/ToolDashboardData';
 import { hostFailure } from './hostCallFailure';
 import {
   createHostRunActions,
@@ -258,7 +258,7 @@ interface GuiWindowPorts {
   /** The snapshot reads only this host answers. */
   readonly snapshot: Omit<
     Parameters<typeof createHostSnapshotSource>[0],
-    'project' | 'toolIcons' | 'root' | 'stores' | 'publish'
+    'project' | 'tools' | 'root' | 'stores' | 'publish'
   >;
   readonly toolEdits: ToolEditApprovalHost;
   /** Emits when the window gains focus, so the project's calls come here
@@ -331,10 +331,19 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     Effect.asVoid(Effect.forkDetach(Scope.close(bridgeScope, Exit.void))),
   );
   const hostSnapshot = yield* SubscriptionRef.make<HostSnapshot | null>(null);
+  // cast: the table holds TeXRA's list as listed, each entry a `TexraPlugin`.
+  const plugins = [
+    ...(yield* ToolRegistry).entries.values(),
+  ] as readonly TexraPlugin[];
   const snapshot = createHostSnapshotSource({
     ...ports.snapshot,
     project: ports.project,
-    toolIcons: toolIconsOf((yield* ToolRegistry).entries),
+    tools: {
+      icons: Object.fromEntries(
+        plugins.flatMap((plugin) => Object.entries(plugin.icons ?? {})),
+      ),
+      terminalOutput: plugins.flatMap((plugin) => plugin.terminalOutput ?? []),
+    },
     root: roots.workspace,
     stores: roots,
     publish: (next) => SubscriptionRef.set(hostSnapshot, next),

@@ -21,8 +21,6 @@ import {
 import { Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import {
   AppState,
-  processLayer,
-  Secrets,
   type ProcessRuntime,
   type GlobalValues,
   withProcessServices,
@@ -66,8 +64,10 @@ import { initializeLatexSupport } from '@frontend/setup';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { refreshStatusBarOnViewChanges } from '@frontend/statusBar/statusBarSessionEvents';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
-import { agentDirectoriesLayer } from '@frontend/agents/agentDirectoriesLayer';
-import { announce } from '@frontend/ui/errorHandlingUtils';
+import {
+  announce,
+  showLoggedMessageWithDocs,
+} from '@frontend/ui/errorHandlingUtils';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
@@ -83,7 +83,6 @@ import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import {
   settingsTabByCommand,
   type CommandId,
@@ -93,11 +92,9 @@ import {
   serviceSession,
 } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
-import { bootstrapHost } from '@texra/controllers/hostBootstrap';
+import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
-import { makeEditorHost } from '@texra/tools/editorHost';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
-import { texraPlugins } from '@texra/tools/registry';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
@@ -150,9 +147,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     defaultNodeStorageRoot(),
     workspaceRoot,
   );
-  // The editor registry the plugins' editor tools read, which this
-  // process's windows answer for.
-  const editors = makeEditorHost();
   // Usage logging is anonymous: a runtime service with no account behind it.
   const extensionVersion =
     typeof context.extension.packageJSON?.version === 'string'
@@ -160,40 +154,24 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       : undefined;
   const managed = withForkFailureReporting(
     ManagedRuntime.make(
-      processLayer({
-        storageRoot: defaultNodeStorageRoot(),
-        settings: TEXRA_SETTINGS.catalog,
-        commandDirs: commandDirs,
-        plugins: texraPlugins({
-          name: 'vscode',
-          editors,
-          inquiryPanel: true,
-          // The Comments UI behind the `inline_comment` tool. The provider reads
-          // the controller this host registers at activation, so it is a value
-          // from module load; nothing about it waits on that registration.
-          inlineComments: inlineCommentProvider,
-          // Lean through the Lean 4 extension, not a direct `lake` pool.
-          lean: Layer.effect(
-            LeanLanguageServices,
-            Effect.map(AppState, createVscodeLeanLanguageServices),
-          ),
-          // The editor's commands, extensions and terminal, for the setup tools
-          // and the Lean 4 probe.
-          setup: vscodeSetupPlatform,
-        }),
-        skills: {
-          resourcesPath: path.join(context.extensionPath, 'resources'),
-        },
-        // The one credential store every host shares (`~/.texra/secrets/`):
-        // the background service reads the keys this window saves.
-        secrets: Secrets.announcing(
-          (announce) =>
-            new FileSecrets(
-              secretsDirectory(defaultNodeStorageRoot()),
-              announce,
-            ),
+      texraProcessLayer({
+        name: 'vscode',
+        inquiryPanel: true,
+        // The Comments UI behind the `inline_comment` tool. The provider reads
+        // the controller this host registers at activation, so it is a value
+        // from module load; nothing about it waits on that registration.
+        inlineComments: inlineCommentProvider,
+        // Lean through the Lean 4 extension, not a direct `lake` pool.
+        lean: Layer.effect(
+          LeanLanguageServices,
+          Effect.map(AppState, createVscodeLeanLanguageServices),
         ),
-        agentDirectories: agentDirectoriesLayer(context.extensionPath),
+        // The editor's commands, extensions and terminal, for the setup tools
+        // and the Lean 4 probe.
+        setup: vscodeSetupPlatform,
+        storageRoot: defaultNodeStorageRoot(),
+        resourcesPath: path.join(context.extensionPath, 'resources'),
+        agentIssues: showLoggedMessageWithDocs,
         usageLog: usageLogLayer({
           version: extensionVersion,
           editorType: vscode.env.appName || undefined,
@@ -206,7 +184,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         // the workspace's `.env`, as its tasks do, without it ever being
         // merged into the extension host's shared `process.env`.
         workspace: workspaceRoot,
-      }).pipe(Layer.merge(HostWindows.layer(editors))),
+      }),
     ),
   );
   const runtime: ProcessRuntime = managed;
@@ -276,8 +254,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         repoState: yield* (yield* StateStores).repo(storage, workspaceRoot),
         globalState,
       });
-      // The once-per-process writes the shared bootstrap owns.
-      yield* bootstrapHost({ roots });
       // The one-time telemetry notice, one information message; VS Code's own
       // switch being off means nothing is sent, so nothing to announce.
       const notice = vscode.env.isTelemetryEnabled

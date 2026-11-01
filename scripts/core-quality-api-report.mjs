@@ -334,7 +334,7 @@ export function apiReports(rootDir) {
           [
             `# \`${entry}\` API report`,
             '',
-            `Generated from \`${source}\` by \`node scripts/check-core-quality.mjs --update\`; do not edit. A diff here is a change to the public surface.`,
+            `Generated from \`${source}\` by \`npm run docgen\`; do not edit. A diff here is a change to the public surface.`,
             '',
             `Exports: ${exports.length}`,
             '',

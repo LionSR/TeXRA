@@ -1,6 +1,6 @@
 # `@texra-ai/llm/node` API report
 
-Generated from `packages/llm/src/node.ts` by `node scripts/check-core-quality.mjs --update`; do not edit. A diff here is a change to the public surface.
+Generated from `packages/llm/src/node.ts` by `npm run docgen`; do not edit. A diff here is a change to the public surface.
 
 Exports: 26
 

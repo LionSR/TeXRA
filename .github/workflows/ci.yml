@@ -129,10 +129,11 @@ jobs:
         env:
           TEXRA_RATCHET_BASE: origin/${{ github.base_ref || 'main' }}
         run: |
-          # Checkout is shallow. The ratchet check judges this tree against its
-          # merge base with the target: fetch the target tip if it is missing,
-          # then deepen the target and HEAD until git finds the merge base. The
-          # check fails loudly if it still cannot.
+          # Checkout is shallow. The ratchet checks (the allowlists and the
+          # core-quality counts, both reading TEXRA_RATCHET_BASE) judge this
+          # tree against its merge base with the target: fetch the target tip
+          # if it is missing, then deepen the target and HEAD until git finds
+          # the merge base. The checks fail loudly if it still cannot.
           if ! git rev-parse --verify "$TEXRA_RATCHET_BASE^{commit}" >/dev/null 2>&1; then
             git fetch --no-tags --depth=1 origin \
               "+refs/heads/${TEXRA_RATCHET_BASE#origin/}:refs/remotes/$TEXRA_RATCHET_BASE"

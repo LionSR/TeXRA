@@ -1,44 +1,44 @@
 #!/usr/bin/env node
 // The core-quality ratchet (owner, 2026-10-03: "super high coding quality like
 // pi" for the harness and llm cores). core-quality-measure.mjs counts each
-// rule's sites per core file; this gate holds those counts to
-// config/ratchets/core-quality/<rule>.json, the public surface of the core
-// packages to config/api-reports/, and their API references to
-// packages/{harness,llm}/docs/api/.
-//
-// Counts are shrink-only. A file whose count rose, or a file absent from the
-// baseline with a site, fails. A count that fell is stale headroom and fails
-// too, because a later PR could regrow into it unnoticed; `--update` lowers
-// counts and drops zeroed files but never raises one or adds a file. The one
-// exception is file-size, whose value is a cap on a file's line count: a
-// shorter file passes, and `--update` lowers a cap only to the file's length
-// rounded up to a multiple of FILE_SIZE_STEP, and only when that is below the
-// cap, so an edit that trims a few lines leaves file-size.json as it was.
-// A rule listed in ZERO_RULES
-// (ratchet-zero-rules.mjs) has no baseline file: any site fails.
+// rule's sites per core file; this gate holds those counts to the merge base
+// with origin/main (ratchet-base.mjs: `--base <ref>` or TEXRA_RATCHET_BASE,
+// the pull request's target in CI). The same analyzer runs over the base's
+// tree, extracted with `git archive`, so a file whose count rose fails and
+// names its sites, a file new on the head starts at zero, a renamed file
+// keeps its count once the rename is staged, and a count that fell needs no
+// edit: nothing is committed and nothing regenerated. A rule listed in
+// ZERO_RULES (ratchet-zero-rules.mjs) fails any site. file-size is a cap: a
+// file may not grow past its base length rounded up to a multiple of
+// FILE_SIZE_STEP, which never rises, so small edits inside the step are free.
 // shallow-modules budgets interface elements while a module is shallow, so
 // reducing its public surface lowers the row and deepening it removes it.
 //
-// The API reports are not budgets but review diffs: any change to an entry's
-// exports fails until `--update` regenerates the report, so the diff of the
-// public surface shows up in the PR that changes it. The API references
-// regenerate the same way, so a TSDoc edit lands with its published page.
+// The public surface of the core packages is held to config/api-reports/ and
+// their API references to packages/{harness,llm}/docs/api/. Those are not
+// budgets but review diffs: any change to an entry's exports fails until
+// `--docgen` regenerates the report, so the diff of the public surface shows
+// up in the PR that changes it. The API references regenerate the same way,
+// so a TSDoc edit lands with its published page.
 //
-//   node scripts/check-core-quality.mjs            check
-//   node scripts/check-core-quality.mjs --update   lower baselines, rewrite reports and references
-//   node scripts/check-core-quality.mjs --report   per-package totals and hotspots
-//   node scripts/check-core-quality.mjs --update --move packages/harness/src/agent/=packages/harness/src/
-//     carry a moved file's or directory's rows to its new path (a rename is
-//     not a new site); with --update only, and the counts still only shrink
+//   node scripts/check-core-quality.mjs               check against the merge base
+//   node scripts/check-core-quality.mjs --base <ref>  check against the merge base with <ref>
+//   node scripts/check-core-quality.mjs --docgen      rewrite the API reports and references
+//   node scripts/check-core-quality.mjs --report      per-package totals and hotspots
 
+import { execFileSync } from 'node:child_process';
 import console from 'node:console';
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -47,43 +47,37 @@ import { parseArgs } from 'node:util';
 import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { GENERATED_DIRS, apiReports } from './core-quality-api-report.mjs';
 import { RULES, measure } from './core-quality-measure.mjs';
+import { git, ratchetBase, renamesSince } from './ratchet-base.mjs';
 import { ZERO_RULES } from './ratchet-zero-rules.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
-const baselineDir = path.join(rootDir, 'config', 'ratchets', 'core-quality');
 const SITES_SHOWN = 8;
-/** The line step file-size caps are lowered in. */
+/** The line step a file-size cap is rounded up in. */
 const FILE_SIZE_STEP = 25;
 
-const baselinePath = (rule) => path.join(baselineDir, `${rule}.json`);
 const heldAtZero = (rule) =>
   Object.hasOwn(ZERO_RULES, `config/ratchets/core-quality/${rule}.json`);
 
-/** The rule's baseline with each `from=to` path prefix re-keyed. */
-function readBaseline(rule, moves) {
-  const file = baselinePath(rule);
-  if (!existsSync(file)) return null;
-  const rekey = (key) => {
-    const move = moves.find(([from]) => key.startsWith(from));
-    return move == null ? key : `${move[1]}${key.slice(move[0].length)}`;
-  };
-  return Object.fromEntries(
-    Object.entries(JSON.parse(readFileSync(file, 'utf8'))).map(
-      ([key, value]) => [rekey(key), value],
-    ),
+/** The rules measured over the base commit's tree. */
+async function measureBase(base) {
+  // The measurement compares resolved paths with its root, and the temp
+  // directory is a symlink on macOS.
+  const dir = realpathSync(
+    mkdtempSync(path.join(tmpdir(), 'core-quality-base-')),
   );
-}
-
-function writeJson(file, value) {
-  const sorted = Object.fromEntries(
-    Object.entries(value).toSorted(([left], [right]) =>
-      left.localeCompare(right),
-    ),
-  );
-  writeFileSync(file, `${JSON.stringify(sorted, null, 2)}\n`);
+  try {
+    const tar = path.join(dir, 'base.tar');
+    git('archive', '--format=tar', '--output', tar, base);
+    const tree = path.join(dir, 'tree');
+    mkdirSync(tree);
+    execFileSync('tar', ['-xf', tar, '-C', tree]);
+    return (await measure(tree)).byRule;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 function describeSites(entry) {
@@ -94,51 +88,36 @@ function describeSites(entry) {
   return [...shown, ...(more > 0 ? [`      … ${more} more`] : [])].join('\n');
 }
 
-/** The baseline problems of one rule, as messages. */
-function checkRule(rule, baseline, actual) {
+/**
+ * The keys whose count rose above the base's, as messages. `base` is the
+ * rule's base measurement, or null for a rule held at zero; `baseKey` maps a
+ * head key to the base's (a renamed file keeps its row).
+ */
+function checkRule(rule, base, actual, baseKey) {
   const problems = [];
-  for (const [file, entry] of actual) {
-    const allowed = baseline[file] ?? 0;
-    if (entry.value > allowed) {
-      problems.push(
-        `${rule}: ${file} has ${entry.value}, baseline ${allowed} — ${RULES[rule]}\n${describeSites(entry)}`,
-      );
-    }
-  }
-  if (rule === 'file-size') return problems;
-  for (const [file, allowed] of Object.entries(baseline)) {
-    const value = actual.get(file)?.value ?? 0;
-    if (value < allowed) {
-      problems.push(
-        `${rule}: ${file} has ${value}, baseline ${allowed}: stale headroom — run \`node scripts/check-core-quality.mjs --update\` in the same change`,
-      );
-    }
+  for (const [key, entry] of actual) {
+    const before = base?.get(baseKey(key));
+    const allowed =
+      before == null
+        ? 0
+        : rule === 'file-size'
+          ? Math.ceil(before.value / FILE_SIZE_STEP) * FILE_SIZE_STEP
+          : before.value;
+    if (entry.value <= allowed) continue;
+    const bound =
+      base == null
+        ? 'held at zero'
+        : before == null
+          ? 'not at the merge base: a new file, or a move whose rename is not staged'
+          : `merge base ${allowed}${allowed === before.value ? '' : ` (${before.value} lines rounded up to ${FILE_SIZE_STEP})`}`;
+    problems.push(
+      `${rule}: ${key} has ${entry.value}, ${bound} — ${RULES[rule]}\n${describeSites(entry)}`,
+    );
   }
   return problems;
 }
 
-/** The lowered baseline of one rule, and every file it would widen. */
-function lowered(rule, baseline, actual) {
-  const next = {};
-  const widened = [];
-  for (const [file, entry] of actual) {
-    const allowed = baseline[file] ?? 0;
-    if (entry.value > allowed)
-      widened.push(
-        `${rule}: ${file} has ${entry.value}, above its baseline ${allowed}; --update never widens a baseline. ${RULES[rule]}`,
-      );
-    next[file] =
-      rule === 'file-size'
-        ? Math.min(
-            allowed,
-            Math.ceil(entry.value / FILE_SIZE_STEP) * FILE_SIZE_STEP,
-          )
-        : entry.value;
-  }
-  return { next, widened };
-}
-
-function checkReports(reports, update) {
+function checkReports(reports, write) {
   const problems = [];
   const existing = new Set(
     GENERATED_DIRS.flatMap((dir) => {
@@ -153,12 +132,12 @@ function checkReports(reports, update) {
     const file = path.join(rootDir, name);
     const current = existsSync(file) ? readFileSync(file, 'utf8') : null;
     if (current === text) continue;
-    if (update) {
+    if (write) {
       mkdirSync(path.dirname(file), { recursive: true });
       writeFileSync(file, text);
     } else
       problems.push(
-        `api-report: ${name} ${current == null ? 'is missing' : 'differs from the package exports'} — run \`node scripts/check-core-quality.mjs --update\` and review the diff`,
+        `api-report: ${name} ${current == null ? 'is missing' : 'differs from the package exports'} — run \`npm run docgen\` and review the diff`,
       );
   }
   for (const name of existing) {
@@ -177,7 +156,7 @@ const NOT_PER_FILE = new Set([
   'durable-invariants',
 ]);
 
-function printReport(files, byRule, moduleDepths) {
+function printReport({ files, byRule, moduleDepths }) {
   const packageOf = (file) =>
     CORE_QUALITY_DIRS.find((dir) => file === dir || file.startsWith(`${dir}/`));
   const lineCount = (file) =>
@@ -284,73 +263,61 @@ function printReport(files, byRule, moduleDepths) {
   }
 }
 
-const main = async () => {
-  const { values } = parseArgs({
-    options: {
-      update: { type: 'boolean', default: false },
-      report: { type: 'boolean', default: false },
-      move: { type: 'string', multiple: true, default: [] },
-    },
-  });
-  const moves = values.move.map((spec) => spec.split('='));
-  if (moves.length > 0 && !values.update) {
-    throw new Error('--move re-keys the baselines, so it needs --update');
-  }
-  const { files, byRule, moduleDepths } = await measure(rootDir);
-  if (values.report) {
-    printReport(files, byRule, moduleDepths);
-    return;
-  }
-  const problems = [];
-  mkdirSync(baselineDir, { recursive: true });
-  // An update writes nothing until every rule is checked: one rule it
-  // would widen leaves every baseline as it was, and all are reported.
-  const writes = [];
-  for (const [rule, actual] of byRule) {
-    if (heldAtZero(rule)) {
-      problems.push(...checkRule(rule, {}, actual));
-      continue;
-    }
-    const baseline = readBaseline(rule, moves);
-    if (values.update) {
-      // A rule without a baseline file is new: its first baseline is today's count.
-      const { next, widened } =
-        baseline == null
-          ? {
-              next: Object.fromEntries(
-                [...actual].map(([file, entry]) => [file, entry.value]),
-              ),
-              widened: [],
-            }
-          : lowered(rule, baseline, actual);
-      problems.push(...widened);
-      writes.push([baselinePath(rule), next]);
-    } else if (baseline == null) {
-      problems.push(
-        `${rule}: config/ratchets/core-quality/${rule}.json is missing`,
-      );
-    } else {
-      problems.push(...checkRule(rule, baseline, actual));
-    }
-  }
-  if (problems.length === 0)
-    for (const [file, next] of writes) writeJson(file, next);
-  problems.push(
-    ...checkReports(
-      apiReports(rootDir),
-      values.update && problems.length === 0,
-    ),
-  );
+function conclude(problems, passed) {
   if (problems.length > 0) {
     console.error(
       `core-quality: ${problems.length} problem(s)\n\n${problems.join('\n\n')}`,
     );
     process.exitCode = 1;
-  } else if (!values.update) {
-    console.log(
-      `core-quality: ${files.length} core files hold their baselines`,
+  } else console.log(passed);
+}
+
+const main = async () => {
+  const { values } = parseArgs({
+    options: {
+      base: { type: 'string' },
+      docgen: { type: 'boolean', default: false },
+      report: { type: 'boolean', default: false },
+    },
+  });
+  if (values.docgen) {
+    conclude(
+      checkReports(apiReports(rootDir), true),
+      'core-quality: API reports and references rewritten',
+    );
+    return;
+  }
+  if (values.report) {
+    printReport(await measure(rootDir));
+    return;
+  }
+  const { target, base } = ratchetBase(values.base);
+  const { files, byRule } = await measure(rootDir);
+  const before = await measureBase(base);
+  const renamed = new Map(renamesSince(base).map(([from, to]) => [to, from]));
+  const baseKey = (key) => renamed.get(key) ?? key;
+  const problems = [];
+  for (const [rule, actual] of byRule) {
+    problems.push(
+      ...checkRule(
+        rule,
+        heldAtZero(rule) ? null : before.get(rule),
+        actual,
+        baseKey,
+      ),
     );
   }
+  problems.push(...checkReports(apiReports(rootDir), false));
+  conclude(
+    problems,
+    `core-quality: ${files.length} core files hold their counts against ${target} (fork point ${base.slice(0, 10)})`,
+  );
 };
 
-await main();
+try {
+  await main();
+} catch (error) {
+  // The message carries git's own output, so the cause adds only a stack.
+  console.error(`core-quality: ${error.message}`);
+  process.exitCode = 1;
+}

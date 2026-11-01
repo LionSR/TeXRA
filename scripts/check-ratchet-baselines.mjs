@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 /**
- * Reject widening of config/ratchets/** against the point where this tree left
- * TEXRA_RATCHET_BASE (default: origin/main), its merge base. A row the target
- * shrank after the fork is not this tree's widening: git keeps the target's
- * value for a row the branch did not touch. The JSON files remain the
- * authority; this only compares the working tree with `git show <base>:<path>`,
- * allowing new baseline files.
+ * Reject widening of the committed allowlists, config/ratchets/*.json,
+ * against the point where this tree left the target branch, its merge base
+ * (ratchet-base.mjs: `--base <ref>` or TEXRA_RATCHET_BASE, origin/main by
+ * default). A row the target shrank after the fork is not this tree's
+ * widening: git keeps the target's value for a row the branch did not touch.
+ * The JSON files remain the authority; this only compares the working tree
+ * with `git show <base>:<path>`, allowing new baseline files. The
+ * core-quality counts have no file: check-core-quality.mjs measures them
+ * against the same base.
  *
- * Rows may move, because files and modules move (M8, `--move`): each added
- * row consumes one removed row of the same file, used once. A numeric donor
- * must carry an equal or greater count; an allowlist donor must match the
- * added item on every field that is not a path; and the added row's key must
- * be the donor's with each path that differs renamed by a move in
+ * Rows may move, because files and modules move: each added row consumes one
+ * removed row of the same file, used once. A numeric donor must carry an
+ * equal or greater count; an allowlist donor must match the added item on
+ * every field that is not a path; and the added row's key must be the
+ * donor's with each path that differs renamed by a move in
  * `git diff --find-renames <base>` (a module specifier names the file it
  * resolves to by its trailing path, and a `module#name` names its module).
  * Retained rows cannot grow.
@@ -28,40 +31,23 @@
  */
 
 // Node imports
-import { execFileSync } from 'node:child_process';
 import console from 'node:console';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
+import { git, ratchetBase, renamesSince } from './ratchet-base.mjs';
 import { ZERO_RULES } from './ratchet-zero-rules.mjs';
-import { walkFiles } from './walkFiles.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
 const baselineDir = 'config/ratchets';
-const target = process.env.TEXRA_RATCHET_BASE ?? 'origin/main';
 const REFUTED_CANDIDATES = `${baselineDir}/refuted-candidates.json`;
 const ROW_KINDS_EVER = 'config/storage/row-kinds-ever.json';
-const git = (...args) =>
-  execFileSync('git', args, {
-    cwd: rootDir,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-const base = (() => {
-  try {
-    return git('merge-base', target, 'HEAD').trim();
-  } catch (cause) {
-    throw new Error(
-      `no merge base between ${target} and HEAD (${String(cause.stderr ?? cause.message).trim()}); fetch ${target} and enough history, or set TEXRA_RATCHET_BASE`,
-      { cause },
-    );
-  }
-})();
 const isObject = (value) =>
   value != null && typeof value === 'object' && !Array.isArray(value);
 const isCount = (value) => Number.isFinite(value) && value >= 0;
@@ -91,12 +77,6 @@ function readBaseline(file, text) {
     if (rows.has(key)) fail(`${key} (duplicate entry)`);
     rows.set(key, value);
   };
-  if (Object.values(data).every(isCount)) {
-    return {
-      shape: 'counts',
-      rows: new Map(Object.entries(data)),
-    };
-  }
   const [shape] = Object.keys(data).filter((key) => key !== 'semantics');
   if (
     !hasKeys(data, ['semantics', shape]) ||
@@ -205,24 +185,11 @@ function donates(donor, value) {
   return donor === value;
 }
 
-/** Every file the tree moved since the base, as `[from, to]` stems. The
- *  `-z` stream is records: a status, then one path, or two for a rename
- *  or copy (`R`/`C` plus a score). */
-function renamesSinceBase() {
-  const stem = (file) => file.replace(/\.[cm]?[jt]sx?$/, '');
-  const fields = git('diff', '--find-renames', '--name-status', '-z', base)
-    .split('\0')
-    .filter(Boolean);
-  const renames = [];
-  for (let i = 0; i < fields.length;) {
-    const status = fields[i];
-    const paths = /^[RC]/.test(status) ? 2 : 1;
-    if (status.startsWith('R'))
-      renames.push([stem(fields[i + 1]), stem(fields[i + 2])]);
-    i += 1 + paths;
-  }
-  return renames;
-}
+/** Every file the tree moved since the base, as `[from, to]` stems. */
+const renamedStems = (base) =>
+  renamesSince(base).map((pair) =>
+    pair.map((file) => file.replace(/\.[cm]?[jt]sx?$/, '')),
+  );
 
 /** Whether `name` (a path or an `@alias/` specifier) names the file `stem`. */
 function names(name, stem) {
@@ -299,20 +266,25 @@ function checkBaseline(file, previous, current, renames) {
 }
 
 function main() {
+  const { values } = parseArgs({ options: { base: { type: 'string' } } });
+  const { target, base } = ratchetBase(values.base);
   // A git-show failure propagates; only a path absent from the base's tree is
-  // a new baseline.
+  // a new baseline. An allowlist is a top-level file of the directory.
+  const isBaseline = (file) => file.endsWith('.json');
   const baseFiles = new Set(
-    git('ls-tree', '-r', '--name-only', base, '--', baselineDir)
+    git('ls-tree', '--name-only', base, '--', `${baselineDir}/`)
       .trim()
-      .split('\n'),
+      .split('\n')
+      .filter(isBaseline),
   );
   const files = existsSync(path.join(rootDir, baselineDir))
-    ? walkFiles(path.join(rootDir, baselineDir))
-        .map((entry) => `${baselineDir}/${entry.relativePath}`)
+    ? readdirSync(path.join(rootDir, baselineDir))
+        .filter(isBaseline)
+        .map((name) => `${baselineDir}/${name}`)
         .toSorted()
     : [];
   const problems = [];
-  const renames = renamesSinceBase();
+  const renames = renamedStems(base);
   let newFiles = 0;
   for (const file of files) {
     const current = readBaseline(
