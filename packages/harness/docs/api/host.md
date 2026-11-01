@@ -1770,10 +1770,19 @@ becomes the process's global one, and the rest of its HTTP traffic follows
 the same proxy policy. An embedder's process (`Sessions.layer`) keeps its
 own global dispatcher: its model traffic carries the transport anyway.
 
+A plugin list the harness cannot compose (the defects `toolTable`
+refuses: an id that is not lowercase letters, digits and dashes, an id or
+tool name listed twice, a second plugin continuing waiting runs or
+recording one request kind's decisions, a switch on a plugin with no
+availability probe) fails the build with {@link PluginsRefused} before
+anything is built, so the refusal names the plugin rather than failing
+the first session open. The global store is seeded with the first-install
+tool switches as it is built, unless `seedToolSwitches` is `false`.
+
 ```ts
 function processLayer(
   options: ProcessLayerOptions,
-): Layer.Layer<ProcessServices | Sessions>
+): Layer.Layer<ProcessServices | Sessions, PluginsRefused>
 ```
 
 ## ProcessLayerOptions
@@ -1782,16 +1791,27 @@ What a composition root composes its process from: the services' options
 (`ownerProcessLayer`) and its skill sources.
 
 ```ts
-interface ProcessLayerOptions extends ProcessServicesOptions {
+interface ProcessLayerOptions extends Omit<
+  ProcessServicesOptions,
+  'appState'
+> {
   /** The host's skill sources; absent, the process discovers no skills. */
   readonly skills?: HostSkillOptions;
+  /** The global store: absent, the global root's (`globalAppStateLayer`);
+   *  else the SDK's embedder store, or a platform-less CLI entry's refusal. */
+  readonly appState?: ProcessServicesOptions['appState'];
+  /** Seed the first-install tool switches (opt-in plugins off) unless the
+   *  user's list exists; `false` for a store that refuses every write. */
+  readonly seedToolSwitches?: boolean;
 }
 ```
 
 ## ProcessRuntime
 
 The runtime a composition root makes over `processLayer`: the process
-services, and the `Sessions` that open and close its sessions.
+services, and the `Sessions` that open and close its sessions. Its build
+cannot fail, so the root has already decided what a `PluginsRefused`
+means (a host with a fixed list, `Layer.orDie`).
 
 ```ts
 type ProcessRuntime = ManagedRuntime.ManagedRuntime<
@@ -1845,12 +1865,9 @@ interface ProcessServicesOptions {
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
   /** The app's directories on every command's PATH (`CommandDirs`). */
   readonly commandDirs?: () => readonly string[];
-  /**
-   * The host's global application-state layer, acquired in this runtime's
-   * scope. Absent, the global root's values (`globalAppStateLayer`); the
-   * SDK's embedder store, or a platform-less CLI entry's refusing one.
-   */
-  readonly appState?: Layer.Layer<
+  /** The global application-state layer, acquired in this runtime's scope
+   *  (`processLayer` picks the host's and seeds it). */
+  readonly appState: Layer.Layer<
     AppState,
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
@@ -2241,22 +2258,6 @@ the service is that value, not a thunk resolved per member call.
 class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
   '@texra-ai/harness/platform/Secrets',
 )
-```
-
-## seedDisabledToolDefaults
-
-Seed the disabled-tool list for first-time users only, on every host and
-in the agent package: every plugin of `plugins` whose switch starts `off`.
-DISABLED_TOOLS is its own fresh-install signal: only this seed writes it
-before the user does, so an absent value means the list was never set, and
-a present one (an empty list included) holds the user's choices, which a
-re-seed would silently undo. The read and the seed are one `modify`, so a
-switch another process records between them is kept. A recorded id that
-names no plugin of `plugins` is kept: one composition's list is not every
-list that shares the store, and an id no plugin has switches nothing.
-
-```ts
-const seedDisabledToolDefaults: (state: StateStore, plugins: readonly Plugin[]) => Effect<void, StateReadFailed | StateWriteFailed, never>
 ```
 
 ## SentReasoning

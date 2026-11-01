@@ -89,7 +89,7 @@ import { ToolRegistry } from '@tools/toolTable';
 import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { databaseLayer, globalDatabaseLayer } from './Database';
-import { globalAppStateLayer, processStoresLayer } from './appStateStore';
+import { processStoresLayer } from './appStateStore';
 import { projectDatabaseLayer } from './projectDatabase';
 import { deletionCollector } from './deletionCleanup';
 import { ownerLiveness } from './ownerLiveness';
@@ -507,12 +507,9 @@ export interface ProcessServicesOptions {
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
   /** The app's directories on every command's PATH (`CommandDirs`). */
   readonly commandDirs?: () => readonly string[];
-  /**
-   * The host's global application-state layer, acquired in this runtime's
-   * scope. Absent, the global root's values (`globalAppStateLayer`); the
-   * SDK's embedder store, or a platform-less CLI entry's refusing one.
-   */
-  readonly appState?: Layer.Layer<
+  /** The global application-state layer, acquired in this runtime's scope
+   *  (`processLayer` picks the host's and seeds it). */
+  readonly appState: Layer.Layer<
     AppState,
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
@@ -556,7 +553,7 @@ export function ownerProcessLayer({
   settings,
   plugins,
   secrets,
-  appState: appStateOption,
+  appState,
   agentDirectories,
   toolAvailability = toolAvailabilityLayer,
   usageLog = UsageLog.disabled,
@@ -567,8 +564,6 @@ export function ownerProcessLayer({
   RunServices | ToolCatalog | SessionOwner
 > {
   const globalStorage = resolveGlobalStoragePath(storageRoot);
-  const appState =
-    appStateOption ?? globalAppStateLayer(globalStorage, settings);
   const catalog = pluginCatalogLayer(plugins, mcpConfigPathOf(storageRoot));
   // Non-failing: `selfIdentity()` reads an unreadable identity as undefined.
   const identity = Layer.unwrap(
