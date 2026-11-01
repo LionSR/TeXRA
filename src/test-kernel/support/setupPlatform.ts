@@ -24,6 +24,7 @@ import {
 } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { GOAL_PLAN_KIND } from '@shared/schemas';
 import { GlobalDatabase, type CurrentValues } from '@shared/session/database';
 import { UsageLog } from '@shared/usageLog';
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
@@ -92,6 +93,7 @@ const BARE_PLUGINS: readonly Plugin[] = [
     id: 'goal',
     toggle: 'off',
     availability: { check: () => Effect.succeed({ available: true }) },
+    factKinds: [GOAL_PLAN_KIND],
   }),
   ...FACT_KIND_PLUGINS,
 ];
