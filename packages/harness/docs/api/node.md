@@ -32,13 +32,16 @@ Node.js platform implementation and host building blocks for
 
 ## absentReason
 
-The failures an existence probe reads as absent: the path is not there
+Whether a failure means nothing is at the path: it is not there
 (`ENOENT`), or a parent component is a file rather than a directory
-(`ENOTDIR`), which the platform reports as `BadResource`. Every other
-failure propagates.
+(`ENOTDIR`), the two cases Node's own `statSync(path, { throwIfNoEntry:
+false })` reads as no entry. It answers for the standard library's
+`PlatformError`, which reports `ENOTDIR` as `BadResource`, and for a bare
+Node error. Every other failure (`EACCES`, `ELOOP`, `EISDIR`, ...) is not
+absence and propagates from a caller that recovers only this.
 
 ```ts
-const absentReason: (error: PlatformError) => boolean
+const absentReason: (error: unknown) => boolean
 ```
 
 ## canonicalizeWorkspacePath

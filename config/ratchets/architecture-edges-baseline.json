@@ -30,7 +30,6 @@
     { "from": "model", "to": "platform", "kind": "value" },
     { "from": "model", "to": "shared", "kind": "value" },
     { "from": "model", "to": "utils", "kind": "value" },
-    { "from": "platform", "to": "common", "kind": "value" },
     { "from": "platform", "to": "logger", "kind": "value" },
     { "from": "platform", "to": "shared", "kind": "value" },
     { "from": "platform", "to": "utils", "kind": "value" },

@@ -103,7 +103,7 @@ carries its text instead.
 1. Declare the arm in the session event schema
    (`packages/harness/src/shared/schemas/sessionEvent.ts`, or the trace arms in
    `packages/harness/src/shared/schemas/traceEvent.ts`), then add its type to
-   the `AgentEvent` union in `packages/harness/src/agent/trace/events.ts`.
+   the `AgentEvent` union in `packages/harness/src/shared/session/agentEvent.ts`.
 2. Handle it where the session view folds rows
    (`packages/harness/src/shared/session/sessionView.ts`) and in any renderer
    that switches on the row type.

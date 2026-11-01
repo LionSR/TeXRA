@@ -14,11 +14,12 @@ import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { registrationRows } from '@agent/storage/runLifecycle';
-import { logUserMessage, TraceEmitter, type AgentEvent } from '@agent/trace';
+import { logUserMessage, TraceEmitter } from '@agent/trace';
 import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
 import { sessionFsLayer } from '@platform/rootedFs';
+import type { AgentEvent } from '@shared/session/agentEvent';
 import {
   type CommitOrdinal,
   isTaskConfig,

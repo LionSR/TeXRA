@@ -166,7 +166,12 @@ export const underCopy = Effect.fnUntraced(function* <E>(
     Effect.onError(() =>
       Effect.all([
         run(sql, 'ROLLBACK').pipe(Effect.ignore),
-        fs.remove(staged, { force: true }).pipe(Effect.ignore),
+        fs.remove(staged, { force: true }).pipe(
+          Effect.ignore({
+            log: 'Warn',
+            message: `A staged store copy stays behind: ${staged}`,
+          }),
+        ),
       ]),
     ),
   );

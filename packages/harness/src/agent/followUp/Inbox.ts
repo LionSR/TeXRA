@@ -6,7 +6,6 @@
  */
 import { Effect, Result, type Scope } from 'effect';
 
-import type { ClaimError, SessionLog } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { qualifyAggregateId, type RunId } from '@shared/schemas';
 import {
@@ -25,6 +24,7 @@ import {
   type Append,
   type SessionEventsShape,
 } from '@shared/session/sessionEvents';
+import type { ClaimError, SessionLogShape } from '@shared/session/sessionLog';
 import type { PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
 import { needsWake, RunInput } from './RunInput';
@@ -39,7 +39,10 @@ const CLOSED = Object.freeze({
 /** The session doors the inbox works through (the session layer wires them). */
 export interface InboxPort {
   /** The session's log: a send is one transaction under the run's claim. */
-  readonly log: Pick<SessionLog, 'transact' | 'runRows' | 'hold' | 'settled'>;
+  readonly log: Pick<
+    SessionLogShape,
+    'transact' | 'runRows' | 'hold' | 'settled'
+  >;
   /** Enqueue a job on the session's publisher and return. */
   readonly detach: SessionEventsShape['detach'];
   /** The run as the session view holds it: its parent (`null` at top

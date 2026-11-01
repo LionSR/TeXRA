@@ -21,10 +21,7 @@ import {
   type RunPrograms,
   type RunRegistryInit,
 } from '@agent/runtime/runRegistry';
-import type {
-  SessionHandle,
-  SessionTransaction,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { DatabaseClaimRefused } from '@shared/session/database';
 import type { Append } from '@shared/session/sessionEvents';
 import { runStateAppend } from '@shared/session/runHistory';
@@ -36,6 +33,11 @@ import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 const settle = Effect.promise(
   () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
 );
+
+/** What a log transaction's job receives (its last `transact` overload). */
+type Transaction = Parameters<
+  Parameters<SessionHandle['log']['transact']>[0]
+>[0];
 
 /** Whether the run took the resume, or the parent whose open call owns it. */
 type TryResume = (
@@ -105,7 +107,7 @@ function recordedFollowUps(
     transact: <A, E>(
       work:
         | readonly SessionEventDraft[]
-        | ((tx: SessionTransaction) => Effect.Effect<A, E>),
+        | ((tx: Transaction) => Effect.Effect<A, E>),
     ) =>
       typeof work === 'function'
         ? publisher.withPermits(1)(

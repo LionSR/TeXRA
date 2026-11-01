@@ -176,7 +176,7 @@ export {
   type FollowUpSenderInput,
 } from '@agent/followUp/followUpMessages';
 // What a call's requests and a decision hook's commits fail with.
-export type { LogWriteError } from '@agent/runtime/SessionHandle';
+export type { LogWriteError } from '@shared/session/sessionLog';
 export type { CellError, RunHistoryRefused } from '@shared/session/runHistory';
 export type { RunHistoryInconsistent } from '@shared/session/runState';
 export type { StepRoot } from '@utils/files/externalRoots';

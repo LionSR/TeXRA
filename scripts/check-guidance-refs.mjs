@@ -158,7 +158,7 @@ const EVENT_VOCABULARY_SOURCES = [
   'packages/harness/src/shared/schemas/traceEvent.ts',
   // `stream.chunk` is transient, so it has no session arm and is declared only
   // on the trace union.
-  'packages/harness/src/agent/trace/events.ts',
+  'packages/harness/src/shared/session/agentEvent.ts',
 ];
 
 // A `run.position` row's `at` and the loop phase the fold maps it to share

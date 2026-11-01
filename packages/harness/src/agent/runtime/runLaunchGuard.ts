@@ -30,6 +30,7 @@ import { heldElsewhereBy } from '@shared/session/database';
 import { recordOf } from '@shared/session/runRowReads';
 import type { RunRows } from '@shared/session/runRowsShape';
 import type { RunView } from '@shared/session/sessionView';
+import type { SessionTransaction } from '@shared/session/sessionLog';
 import { aggregateError } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -42,7 +43,7 @@ import {
 } from './childTurnResult';
 import { formatDelivery } from './deliveryEnvelope';
 import { presentRunFailure } from './HostInteractions';
-import type { SessionHandle, SessionTransaction } from './SessionHandle';
+import type { SessionHandle } from './SessionHandle';
 
 /**
  * Hand a registered process child to its loop, which owns its end from

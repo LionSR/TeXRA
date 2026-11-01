@@ -151,7 +151,7 @@ The publisher offers these doors:
   (`agent/runtime/SessionEvents.ts:251-259`).
 - `drain`: End the inbox and run what it holds within the close deadline of
   5,000 ms (`agent/runtime/SessionEvents.ts:192-230`,
-  `agent/runtime/SessionHandle.ts:360`).
+  `agent/runtime/SessionHandle.ts:205`).
 
 A job MUST NOT wait on its own publisher; doing so is a defect
 (`agent/runtime/SessionEvents.ts:137-142`, `:239`). A job MAY run again whole
@@ -171,7 +171,7 @@ took is released best effort: a refused release is logged and the claim stays
 until another process proves this one dead
 (`controllers/session/sessionStore.ts:223-235`, `:262`). A trace row emitted on
 its own reaches the publisher through `SessionLog.publish`
-(`agent/runtime/SessionHandle.ts:103-106`); a call's card rows and a turn's
+(`shared/session/sessionLog.ts:67-70`); a call's card rows and a turn's
 closing rows commit inside the run's own batches instead
 (`agent/runtime/loop/toolUseDispatch.ts:550-554`,
 `agent/runtime/loop/toolUse.ts:497-500`). `SessionLog.settled` is the barrier
@@ -369,7 +369,7 @@ points are normative:
 - **W3**, `tool.intent`: commits after PreToolUse hooks and the guard, before
   the body runs, once per attempt
   (`agent/runtime/loop/toolUseDispatch.ts:528-557`;
-  `agent/runtime/loop/toolGuard.ts:251-271`).
+  `agent/runtime/loop/toolGuard.ts:244-264`).
 - **W4**, `tool.result`: commits, with the call's card rows, before the delivery
   that lets the loop continue (`agent/runtime/loop/toolUseDispatch.ts:380-406`,
   `:656-680`, `:1019-1024`).
@@ -407,8 +407,8 @@ does not cover a compaction summary, whose answer its caller lands as a
 
 **W3.** A call's `tool.intent` MUST commit after its PreToolUse hooks and its
 guard, and before its body (`agent/runtime/loop/toolUseDispatch.ts:528-557`,
-`agent/runtime/loop/toolGuard.ts:251-271`). The guard asks for a command's
-approval (`agent/runtime/loop/toolGuard.ts:163-167`, `:226-245`). A slow tool's
+`agent/runtime/loop/toolGuard.ts:244-264`). The guard asks for a command's
+approval (`agent/runtime/loop/toolGuard.ts:156-160`, `:219-238`). A slow tool's
 `tool.start` card MUST commit in the intent's batch
 (`agent/runtime/loop/toolUseDispatch.ts:550-554`). An attempt whose intent is
 already committed MUST NOT commit another

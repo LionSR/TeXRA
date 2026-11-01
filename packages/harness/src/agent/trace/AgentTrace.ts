@@ -12,7 +12,7 @@
  */
 import type { MessageType, RunOutcome, ToolUseLog } from '@shared/schemas';
 
-import type { AgentEvent } from './events';
+import type { AgentEvent } from '@shared/session/agentEvent';
 
 /** A sink the trace was built with: it receives every event emitted on the
  *  trace until the trace closes. */
