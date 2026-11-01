@@ -34,6 +34,7 @@ import {
   AgentError,
   isUserAbort,
 } from '@texra-ai/harness/host';
+import type { CliRunResult } from '@cli/schemas/cliOutput';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
@@ -49,11 +50,7 @@ import { attachCliSessionProgressProjection } from './sessionProgressSubscriptio
 import { createCliRuntimeHost } from './cliPresentationHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr, writeTextStderrAndWait } from './logSinks';
-import {
-  type CliRunResult,
-  readCliPluginPins,
-  runOutcomeExitCode,
-} from './terminalStatus';
+import { readCliPluginPins, runOutcomeExitCode } from './terminalStatus';
 import {
   CliUsageError,
   launchApproval,
