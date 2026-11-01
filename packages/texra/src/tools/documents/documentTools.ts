@@ -357,9 +357,9 @@ const COMPILE_SKIPPED: Readonly<Record<CompileSkip, string>> = {
 export const DocumentCompileTool = defineTool({
   name: 'document_compile',
   description:
-    "Compile a revision's .tex outputs. Resolves to `{ failures, skipped }`: the outputs that failed with their logs, and why no check ran at all (`disabled`: auto-compile is off; `no-tex`: no .tex output; `no-compiler`: no LaTeX compiler is installed; `errored`: the check failed), else null. Run it before `document_diff`, not beside it: each call records the run's documents whole.",
+    "Compile a revision's .tex outputs. Resolves to `{ failures, checked, skipped }`: the outputs that failed with their logs, whether a check ran, and why none did (`disabled`: auto-compile is off; `no-tex`: no .tex output; `no-compiler`: no LaTeX compiler is installed; `errored`: the check failed), else null. Run it before `document_diff`, not beside it: each call records the run's documents whole.",
   scriptReturns:
-    "{ failures: { output: string; log: string }[]; skipped: 'disabled' | 'no-tex' | 'no-compiler' | 'errored' | null }",
+    "{ failures: { output: string; log: string }[]; checked: boolean; skipped: 'disabled' | 'no-tex' | 'no-compiler' | 'errored' | null }",
   replay: 'safe',
   schema: Schema.Struct({ revision: RevisionSchema }),
   execute: Effect.fn('document_compile')(function* ({ revision }) {
@@ -394,7 +394,11 @@ export const DocumentCompileTool = defineTool({
       output: failure.displayName,
       log: failure.logRelativePath,
     }));
-    const value = { failures: summary, skipped: check.skipped };
+    const value = {
+      failures: summary,
+      checked: check.skipped === null,
+      skipped: check.skipped,
+    };
     if (check.skipped !== null) {
       // The rejection gate sees no failures here, so it says what it skips.
       const unverified =

@@ -58,7 +58,7 @@ for (let revision = 0; revision < revisions; revision += 1) {
   if (context.reflect && revision + 1 < revisions) {
     const review = await tools.document_review({
       revision,
-      checked: compiled.skipped === null,
+      checked: compiled.checked,
     });
     const critic = await agent(review.prompt, {
       agentName: 'builtIn:critic',

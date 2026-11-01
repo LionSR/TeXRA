@@ -103,12 +103,20 @@ export const probeCommand = Effect.fn('toolChecks.probeCommand')(function* (
 });
 
 /**
- * Whether a catalog tool answers its version probe: what the status surfaces
- * (the doctor, the setup assistant, the settings view, the dependency banner)
- * report.
+ * Whether a catalog tool answers its version probe, under its name or one of
+ * its `alternates`: what the status surfaces (the doctor, the setup
+ * assistant, the settings view, the dependency banner) report.
  */
-export const probeTool = (tool: LatexToolName) =>
-  probeCommand(tool, LATEX_TOOL_ENTRIES[tool].versionArgs ?? ['--version']);
+export const probeTool = Effect.fn('toolChecks.probeTool')(function* (
+  tool: LatexToolName,
+): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
+  const { versionArgs = ['--version'], alternates = [] } =
+    LATEX_TOOL_ENTRIES[tool];
+  for (const command of [tool, ...alternates]) {
+    if (yield* probeCommand(command, versionArgs)) return true;
+  }
+  return false;
+});
 
 /**
  * Run a catalog tool. No probe precedes the run, so an installed tool costs

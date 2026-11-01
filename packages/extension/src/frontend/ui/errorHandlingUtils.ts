@@ -50,8 +50,11 @@ export function showLoggedErrorMessage(
   prefix: string,
   err: unknown,
 ): Effect.Effect<string> {
-  const message = formatError(prefix, err);
-  if (!(err instanceof ToolMissing)) return showLoggedMessage(channel, message);
+  if (!(err instanceof ToolMissing))
+    return showLoggedMessage(channel, formatError(prefix, err));
+  // Whole, not truncated as `formatError` would: the install steps are the
+  // point of the notice.
+  const message = `${prefix}: ${err.message}`;
   return Effect.gen(function* () {
     yield* Effect.logError(message).pipe(withLogChannel(channel));
     const choice = yield* announce(

@@ -298,9 +298,14 @@ interface LatexToolEntry {
   /** The binary name, probed as `<name> --version` or on PATH. */
   readonly name: string;
   /** How to install it on each platform, the text a missing tool reports. */
-  readonly guide: Guide;
+  readonly guide: Readonly<Guide>;
   /** The version arguments, when not `--version` (GraphicsMagick has none). */
   readonly versionArgs?: readonly string[];
+  /**
+   * Other names the binary ships as, probed in turn when `name` does not
+   * answer: Ghostscript's Windows builds are `gswin64c` and `gswin32c`.
+   */
+  readonly alternates?: readonly string[];
   /** Display name for missing-dependency lists; defaults to the name. */
   readonly label?: string;
   readonly doctor: DoctorRole;
@@ -415,6 +420,7 @@ const LATEX_TOOLS = [
   {
     name: 'gs',
     guide: GHOSTSCRIPT_INSTALL_GUIDE,
+    alternates: ['gswin64c', 'gswin32c'],
     doctor: { row: 'none' },
     probe: 'required',
     core: true,
@@ -442,8 +448,25 @@ type CatalogEntry = (typeof LATEX_TOOLS)[number];
 export type LatexToolName = CatalogEntry['name'];
 
 /** Each catalog entry by its name: how the runner probes and installs it. */
-export const LATEX_TOOL_ENTRIES = Object.fromEntries(
-  LATEX_TOOLS.map((tool) => [tool.name, tool]),
+export const LATEX_TOOL_ENTRIES = Object.freeze(
+  Object.fromEntries(
+    // Frozen copies through: the entries cross module boundaries, and an
+    // edited guide would change what every later missing tool reports.
+    LATEX_TOOLS.map((tool: LatexToolEntry) => [
+      tool.name,
+      Object.freeze({
+        ...tool,
+        guide: Object.freeze({ ...tool.guide }),
+        doctor: Object.freeze({ ...tool.doctor }),
+        ...(tool.versionArgs && {
+          versionArgs: Object.freeze([...tool.versionArgs]),
+        }),
+        ...(tool.alternates && {
+          alternates: Object.freeze([...tool.alternates]),
+        }),
+      }),
+    ]),
+  ),
   // cast: the entries are keyed by every catalog name, one each.
 ) as Readonly<Record<LatexToolName, LatexToolEntry>>;
 
