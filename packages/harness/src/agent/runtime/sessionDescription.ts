@@ -95,7 +95,8 @@ const DESCRIPTION_DEADLINE = '20 seconds';
  * A resumed run (`resumed`) is described only while it has no
  * `run.description` row, as when its process died before the helper
  * answered, so no run is described twice.
- * Uses the configured helper model for a one-shot, non-streaming call.
+ * Uses the configured helper model, else the run's own, for a one-shot,
+ * non-streaming call.
  * On success, commits the run's `run.description` row, which the meta fold
  * and every renderer read.
  *
@@ -139,7 +140,7 @@ export const generateSessionDescription = Effect.fn(
       },
       // No automatic retry and a short deadline: the run's end joins this
       // fiber, and a label is not worth holding it through route backoff.
-      0,
+      { retries: 0, runModel: config.model },
     ).pipe(
       Effect.timeoutOrElse({
         duration: DESCRIPTION_DEADLINE,

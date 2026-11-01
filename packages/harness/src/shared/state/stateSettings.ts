@@ -26,7 +26,6 @@ import {
   INHERITED_WORKSPACE_AGENTS,
   QualifiedSkillNameSchema,
 } from '@shared/schemas';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import {
   PROVIDER_ENDPOINT_STATE_ENTRIES,
   PROVIDER_REGION_SETTINGS,
@@ -549,12 +548,13 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Model picker preferences ---------------------------------------------
   {
     key: GlobalStateKey.HELPER_MODEL,
-    schema: Schema.String.check(Schema.isMinLength(1)).pipe(
-      Schema.withDecodingDefault(Effect.succeed(DEFAULT_HELPER_MODEL)),
-    ),
+    // No default here: absent means none is configured, and a helper call
+    // uses the run's own model. An app names its own (`settingsCatalog`'s
+    // `defaults`).
+    schema: Schema.UndefinedOr(Schema.String.check(Schema.isMinLength(1))),
     title: 'Helper model',
     description:
-      'Model used for auxiliary tasks: instruction polishing, merges, and session descriptions.',
+      "Model used for auxiliary tasks: instruction polishing, merges, and session descriptions. When unset, a run's helper calls use the run's own model.",
     category: 'model',
     slot: 'globalState',
   },
@@ -654,12 +654,33 @@ export interface SettingsCatalog {
 }
 
 /** The harness's rows, then `rows` (an app's own, its plugins' included),
- *  stored under `namespace`. A key declared twice is a defect and throws. */
+ *  stored under `namespace`. A key declared twice is a defect and throws, and
+ *  so does a `defaults` key that names no harness row. */
 export function settingsCatalog(options: {
   readonly namespace: string;
   readonly rows: readonly StateSettingEntry[];
+  /** The app's own defaults for harness rows, by key: the value an absent
+   *  key reads as (the helper model, which the harness leaves unset). */
+  readonly defaults?: Readonly<Record<string, unknown>>;
 }): SettingsCatalog {
-  const rows = [...HARNESS_SETTINGS, ...options.rows];
+  const appDefaults = options.defaults ?? {};
+  const unowned = Object.keys(appDefaults).filter(
+    (key) => !HARNESS_SETTINGS.some((row) => row.key === key),
+  );
+  if (unowned.length > 0) {
+    throw new Error(`No harness setting has the key ${unowned.join(', ')}.`);
+  }
+  const harnessRows = HARNESS_SETTINGS.map((row) =>
+    Object.hasOwn(appDefaults, row.key)
+      ? {
+          ...row,
+          schema: row.schema.pipe(
+            Schema.withDecodingDefault(Effect.succeed(appDefaults[row.key])),
+          ),
+        }
+      : row,
+  );
+  const rows = [...harnessRows, ...options.rows];
   const byKey = new Map<string, StateSettingEntry>();
   for (const row of rows) {
     if (byKey.has(row.key)) {
