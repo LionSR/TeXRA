@@ -176,6 +176,11 @@ const sessionHandleLayer = (key: SessionKey) =>
       const interactions = new SessionHostInteractions(key.open.interactions);
       // Each run's `.env`, read as it launches.
       const env = workspaceEnvironmentLayer(key.open.roots.workspace);
+      const approvals = createSessionApprovals({
+        view,
+        log: store.log,
+        roots: key.open.roots,
+      });
       const runs = new RunRegistry({
         session: () => session,
         fork: (run) => fork(Effect.provide(run, env)),
@@ -205,8 +210,12 @@ const sessionHandleLayer = (key: SessionKey) =>
           closed: store.closed,
         }),
         approvals: {
-          ...createSessionApprovals(() => session),
-          permission: sessionPermission(() => session),
+          ...approvals,
+          permission: sessionPermission({
+            approvals,
+            interactions,
+            roots: key.open.roots,
+          }),
         },
         interactions,
         followUps: new Inbox({
@@ -217,7 +226,7 @@ const sessionHandleLayer = (key: SessionKey) =>
         }),
         trace: store.trace,
         runHistory: makeRunHistory(store.log),
-        history: yield* HistoryQuery.make(() => session),
+        history: yield* HistoryQuery.make({ log: store.log, view }),
       };
       // The session's teardown is this scope's finalizers, run in the reverse
       // of their registration: first the runs, so no run is admitted over a
