@@ -2,7 +2,7 @@
 
 Source: `origin/main` 808521a8ed (2026-10-30), read in the worktree `.claude/worktrees/coauthor-7d-children`. Paths are relative to `packages/harness/src` unless they start with `packages/`. Line counts are `.ts` files, tests excluded. Nothing was built or run for this pass.
 
-Update, 2026-10-30: these measurements remain tied to `808521a8ed`. The owning comparison's ["Landed (2026-10-30)"](../../implemented/architecture/2026-10-30-harness-design-against-pi-durable-and-deepseek.md#landed-2026-10-30) table records what the eight moves changed; the [row-reader baseline](https://github.com/LionSR/TeXRA/blob/784dbab9251a148f75695530bacc19c3bf91ad3c/config/ratchets/row-readers-baseline.json), 43 entries below, holds 14 file entries across eight row kinds since M4. The M6 accounting correction below applies to both revisions.
+Update, 2026-10-30: these measurements remain tied to `808521a8ed`. The owning comparison's ["Landed (2026-10-30)"](../../implemented/architecture/2026-10-30-harness-design-against-pi-durable-and-deepseek.md#landed-2026-10-30) table records what the eight moves changed; the [row-reader baseline](https://github.com/LionSR/TeXRA/blob/784dbab9251a148f75695530bacc19c3bf91ad3c/config/ratchets/row-readers-baseline.json) holds 14 file entries across eight row kinds since M4, and the 43 entries below are the historical `808521a8ed` count, not the remaining one. The M6 accounting correction below applies to both revisions.
 
 ## 1. Module map
 
