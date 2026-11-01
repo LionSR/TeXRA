@@ -310,12 +310,12 @@ export const databaseLayer = (
         '"commit"',
       );
       const aggregate = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-        WHERE s.kind = ? AND s.logical_id = ? AND e.seq >= ?
+        WHERE s.kind = ? AND s.logical_id = ? AND e.seq BETWEEN ? AND ?
         ORDER BY e.seq`;
       // Named: for an `IN` list the planner walks the aggregate's seq index.
       const typedRows = `SELECT ${EVENT_COLUMNS} FROM event e
         INDEXED BY event_aggregate_type ${EVENT_JOINS}
-        WHERE s.kind = ? AND s.logical_id = ? AND e.seq >= ?
+        WHERE s.kind = ? AND s.logical_id = ? AND e.seq BETWEEN ? AND ?
           AND e.type IN (SELECT value FROM json_each(?)) ORDER BY e.seq`;
       // A deletion marker closes its run and stays its last row until collected.
       const pendingDeletions = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
@@ -821,16 +821,19 @@ export const databaseLayer = (
             exec(UPSERT_KIND, [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]),
           ),
         }),
-        readAggregate: (id, fromSeq, types) =>
-          query(
+        readAggregate: (
+          id,
+          fromSeq,
+          types,
+          toSeq = Number.MAX_SAFE_INTEGER,
+        ) => {
+          const range = [...aggregateColumns(id), fromSeq, toSeq];
+          return query(
             types === undefined
-              ? decodedRows(aggregate, [...aggregateColumns(id), fromSeq], true)
-              : decodedRows(
-                  typedRows,
-                  [...aggregateColumns(id), fromSeq, JSON.stringify(types)],
-                  true,
-                ),
-          ),
+              ? decodedRows(aggregate, range, true)
+              : decodedRows(typedRows, [...range, JSON.stringify(types)], true),
+          );
+        },
         readDisplayAggregate: (id, fromSeq) =>
           projected(
             decodedRows(displayAggregate, [
