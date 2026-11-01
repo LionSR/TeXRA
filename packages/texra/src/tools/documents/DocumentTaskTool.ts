@@ -102,9 +102,7 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
           documentTaskPatch(
             { ...chosen, agent: key, agentSource: null },
             entry,
-            Schema.decodeUnknownSync(DocumentTaskOptionsSchema)(
-              chosen.options ?? {},
-            ),
+            chosen.options ?? undefined,
           );
         return patch
           ? { script: patch.script, outputFiles: patch.outputFiles }

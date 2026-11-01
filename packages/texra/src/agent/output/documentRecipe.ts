@@ -21,7 +21,6 @@ import { agentKey, agentName } from '@texra-ai/harness/schemas';
 import {
   DOCUMENT_TASK_BLOCK,
   DocumentTaskOptionsSchema,
-  type DocumentTaskOptions,
 } from '@texra/shared/plugins/documents';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
@@ -91,10 +90,10 @@ type DocumentTaskPatch = Required<
 /**
  * The patch that launches `config` as the document task of `entry`, or null
  * when `entry` has no task block: its run opens on the recipe and offers the
- * recipe's tools with the launch's `options`, and its revisions' agent
- * calls were approved with the launch. The outputs are the launch's
- * explicit list unless it names only inputs, else the task's own
- * (`task.outputs`).
+ * recipe's tools with the launch's `options`, decoded here with their
+ * defaults, and its revisions' agent calls were approved with the launch.
+ * The outputs are the launch's explicit list unless it names only inputs,
+ * else the task's own (`task.outputs`).
  */
 export function documentTaskPatch(
   config: Pick<
@@ -102,7 +101,7 @@ export function documentTaskPatch(
     'agent' | 'agentSource' | 'inputFiles' | 'outputFiles'
   >,
   entry: AgentEntry,
-  options: DocumentTaskOptions,
+  options: unknown = {},
 ): DocumentTaskPatch | null {
   const task = documentTaskOf(entry);
   if (task === null) return null;
@@ -119,7 +118,7 @@ export function documentTaskPatch(
       tools: [...DOCUMENT_TASK_TOOLS],
       kind: 'recipe',
       block: DOCUMENT_TASK_BLOCK.key,
-      options,
+      options: Schema.decodeUnknownSync(DocumentTaskOptionsSchema)(options),
     },
   };
 }
@@ -158,8 +157,6 @@ export const documentTaskConfig = Effect.fn('documentTaskConfig')(function* <
       outputFiles: config.outputFiles ?? [],
     },
     entry,
-    // The options' defaults: this launch names none.
-    Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({}),
   );
   if (patch === null)
     return yield* new DocumentTaskRefused({

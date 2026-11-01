@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { Effect, FileSystem, Result, Schema } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 import { hasMagic } from 'glob';
 
 import {
@@ -8,7 +8,6 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
-import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 
@@ -226,13 +225,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         // The entry resolved above has a task, so the patch is never null.
         const config: AgentConfigPayload = {
           ...launch,
-          ...documentTaskPatch(
-            launch,
-            agent,
-            Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({
-              reflect: init.reflect,
-            }),
-          ),
+          ...documentTaskPatch(launch, agent, { reflect: init.reflect }),
         };
 
         return yield* executeCliWorkflowConfig(config, runContext, {
