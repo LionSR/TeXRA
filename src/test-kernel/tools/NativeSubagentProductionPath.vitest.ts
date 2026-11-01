@@ -73,6 +73,7 @@ import { submitFollowUp, wakeRun } from '@agent/followUp/ToolUseFollowUp';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { launchDetachedSubagent } from '@agent/runtime/delegation/subagentRun';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
+import { NO_FACTS } from '@shared/session/runFacts';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -487,6 +488,8 @@ async function launchWaitingChild(options: {
     logId: 'parent-card',
     script: null,
     scriptCalls: null,
+    // The parent has read and edited nothing: the launch reads no facts.
+    facts: Effect.succeed(NO_FACTS),
     requests: {
       nextId: (prefix: string) => prefix,
       open: () => Effect.die(new Error('This fixture opens no request.')),

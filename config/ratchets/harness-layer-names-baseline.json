@@ -104,7 +104,6 @@
       "runtime/AgentLaunchContext#prepareAgentDefinition",
       "runtime/RunCall#RunCall",
       "runtime/RunCall#callerRun",
-      "runtime/RunCall#recordToolFileRead",
       "runtime/RunCall#requireFileReadForEdit",
       "runtime/RunCall#requireRun",
       "runtime/RunCall#requireToolRun",

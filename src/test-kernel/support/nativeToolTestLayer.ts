@@ -19,6 +19,7 @@ import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { sessionFsLayer } from '@platform/rootedFs';
 import type { SettingsStores } from '@shared/config/settings';
 import type { DraftBlob } from '@shared/session/historyTurns';
+import { NO_FACTS } from '@shared/session/runFacts';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
@@ -64,21 +65,22 @@ export const testRunTools = (
   steps: noStep(),
 });
 
-/** Each invocation owns its read set; tests may supply a run and the
- *  roots it answers for. The call's `Runs` are its run's session's; a call
- *  outside any run gets a registry over an empty fold, as it tracks no run. */
+/** Tests may supply a run and the roots it answers for; the run's facts
+ *  (what it read and edited) are read from its session's store, as a
+ *  resumed process reads them. The call's `Runs` are its run's session's;
+ *  a call outside any run gets a registry over an empty fold, as it tracks
+ *  no run. */
 export function nativeToolTestLayer(
   options: Partial<Omit<ToolEnv, 'run'>> &
     Partial<Pick<ToolContextShape, 'callId' | 'emit'>> & {
       run?: TestCallRun;
-      readFiles?: Set<string>;
       origin?: Partial<
         Pick<RunCallShape, 'responseId' | 'instruction' | 'attempt' | 'logId'>
       >;
     } = {},
 ) {
   const roots = options.roots ?? testWorkspaceRoots();
-  const { run, readFiles, origin, workingDirectory, stepRoots } = options;
+  const { run, origin, workingDirectory, stepRoots } = options;
   const callId = options.callId ?? `call-${crypto.randomUUID()}`;
   // A fixture is the slice of the run its case reads; the run answers for
   // its own config and trace with the inert pair.
@@ -93,12 +95,7 @@ export function nativeToolTestLayer(
     steps: noStep(),
     scope: Scope.makeUnsafe(),
     opening: null,
-    // The run's files hold what it read: a case that seeds or checks that
-    // set shares its own with the run.
-    fileService: Object.assign(
-      new RunFileService(run.runId, roots),
-      readFiles && { readFiles },
-    ),
+    fileService: new RunFileService(run.runId, roots),
     callbacks: {},
     ...run,
   };
@@ -116,6 +113,12 @@ export function nativeToolTestLayer(
           instruction: undefined,
           attempt: 1,
           logId: `log-${callId}`,
+          // The run's rows as the store holds them: what a case seeds
+          // (`seedEditedFiles`) is what the call reads.
+          facts: toolRun.session.runHistory.load(toolRun.runId).pipe(
+            Effect.map((state) => state ?? NO_FACTS),
+            Effect.orDie,
+          ),
           script: null,
           scriptCalls: null,
           ...origin,

@@ -3,11 +3,7 @@ import * as path from 'node:path';
 import { DateTime, Effect, type FileSystem, Option, Stream } from 'effect';
 
 // Local imports
-import {
-  callerRun,
-  recordToolFileRead,
-  requireFileReadForEdit,
-} from '@agent/runtime/RunCall';
+import { callerRun, requireFileReadForEdit } from '@agent/runtime/RunCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import {
   DIRECTORY_LISTING_DEPTH,
@@ -244,9 +240,10 @@ const view = Effect.fn('MemoryTool.view')(function* (
   }
 
   const stats = yield* (yield* StorageFs).stat(resolvedPath);
+  // A view's result, like a write's, names the file (`reads`): a later change
+  // of it requires that in the run's rows, whichever process runs the change.
   if (stats.type === 'Directory') {
     const allEntries = yield* buildDirectoryListing(resolvedPath, stats);
-    yield* recordToolFileRead(inputPath);
 
     const { page, start, end, total } = paginateToolListing(
       allEntries,
@@ -255,14 +252,16 @@ const view = Effect.fn('MemoryTool.view')(function* (
     );
 
     const header = `Contents of ${inputPath} (showing ${start}–${end} of ${total}, up to ${DIRECTORY_LISTING_DEPTH} levels deep):`;
-    return executed(
-      `${header}\nSIZE\tMODIFIED\tBY\tPATH\n${page.join('\n')}${formatPaginationHint(end, total)}`,
-      `Listed directory: ${inputPath} (${start}–${end} of ${total})`,
-    );
+    return {
+      ...executed(
+        `${header}\nSIZE\tMODIFIED\tBY\tPATH\n${page.join('\n')}${formatPaginationHint(end, total)}`,
+        `Listed directory: ${inputPath} (${start}–${end} of ${total})`,
+      ),
+      reads: [inputPath],
+    };
   }
 
   const { meta, content } = yield* readMemoryFile(resolvedPath);
-  yield* recordToolFileRead(inputPath);
   const lines = splitContentLines(content);
 
   // Build metadata suffix for the summary
@@ -274,12 +273,10 @@ const view = Effect.fn('MemoryTool.view')(function* (
   const summarySuffix =
     metaParts.length > 0 ? ` (${metaParts.join(', ')})` : '';
 
-  return formatFileView({
-    path: inputPath,
-    lines,
-    viewRange,
-    summarySuffix,
-  });
+  return {
+    ...formatFileView({ path: inputPath, lines, viewRange, summarySuffix }),
+    reads: [inputPath],
+  };
 });
 
 const create = Effect.fn('MemoryTool.create')(function* (
@@ -305,12 +302,14 @@ const create = Effect.fn('MemoryTool.create')(function* (
     recursive: true,
   });
   yield* writeAttributed(resolvedPath, fileText, invocation);
-  yield* recordToolFileRead(inputPath);
 
-  return executed(
-    `File created successfully at: ${inputPath}`,
-    `Created memory file: ${inputPath}`,
-  );
+  return {
+    ...executed(
+      `File created successfully at: ${inputPath}`,
+      `Created memory file: ${inputPath}`,
+    ),
+    reads: [inputPath],
+  };
 });
 
 const strReplace = Effect.fn('MemoryTool.strReplace')(function* (
@@ -350,15 +349,17 @@ const strReplace = Effect.fn('MemoryTool.strReplace')(function* (
 
   const updated = replacement.content;
   yield* writeAttributed(resolvedPath, updated, invocation, meta);
-  yield* recordToolFileRead(inputPath);
 
   const updatedLines = updated.split('\n');
   const numbered = formatLinesWithNumbers(updatedLines);
 
-  return executed(
-    `The file has been edited.\n${numbered.join('\n')}`,
-    `Replaced text in: ${inputPath}`,
-  );
+  return {
+    ...executed(
+      `The file has been edited.\n${numbered.join('\n')}`,
+      `Replaced text in: ${inputPath}`,
+    ),
+    reads: [inputPath],
+  };
 });
 
 const insert = Effect.fn('MemoryTool.insert')(function* (
@@ -397,12 +398,14 @@ const insert = Effect.fn('MemoryTool.insert')(function* (
     invocation,
     meta,
   );
-  yield* recordToolFileRead(inputPath);
 
-  return executed(
-    `The file ${inputPath} has been edited.`,
-    `Inserted text at line ${insertLine} in: ${inputPath}`,
-  );
+  return {
+    ...executed(
+      `The file ${inputPath} has been edited.`,
+      `Inserted text at line ${insertLine} in: ${inputPath}`,
+    ),
+    reads: [inputPath],
+  };
 });
 
 const deleteMemory = Effect.fn('MemoryTool.delete')(function* (
