@@ -35,7 +35,7 @@ import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '@texra/tools/lean/leanLanguageServices';
-import { defineBuiltinPlugin, type Plugin } from '@tools/plugins';
+import { definePlugin, type Plugin } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 import {
@@ -88,7 +88,7 @@ export const storePluginsLayer = Layer.succeed(ToolRegistry)(
  *  tool): a suite that resolves a run's tools runs on the session graph's
  *  runtime or provides `pluginCatalogLayer`. */
 const BARE_PLUGINS: readonly Plugin[] = [
-  defineBuiltinPlugin({
+  definePlugin({
     id: 'goal',
     toggle: 'off',
     availability: { check: () => Effect.succeed({ available: true }) },

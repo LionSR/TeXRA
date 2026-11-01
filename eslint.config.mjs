@@ -49,6 +49,8 @@ const COMPOSITION_ROOT_FILES = new Set([
   // the process runtime the session graph runs on, over the plugin list its
   // setup module passes (`sessionGraphTestSetup`).
   path.join(__dirname, 'src/test-kernel/support/sessionGraphInstall.ts'),
+  // Its layer form: the session graph a block builds with `it.layer`.
+  path.join(__dirname, 'src/test-kernel/support/testKernel.ts'),
 ]);
 
 // The CLI reads process input only through its runtime context and writes to
@@ -138,8 +140,8 @@ const EFFECT_RUN_ENTRIES = [
 // quality like pi"): the harness side of the package split (PR #13639,
 // harness-package-split.md §1) plus the model package. `any`, `new Promise`,
 // `.then(` and `Effect.run*` outside a named entry are hard lint errors here
-// (the blocks below); the rest is the shrink-only ratchet in
-// scripts/check-core-quality.mjs over config/ratchets/core-quality/.
+// (the blocks below); the rest is the ratchet in
+// scripts/check-core-quality.mjs, measured against the merge base.
 export const CORE_QUALITY_DIRS = [
   'packages/harness/src/agent',
   'packages/harness/src/shared/session',

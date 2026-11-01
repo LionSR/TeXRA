@@ -1,14 +1,14 @@
 /**
  * A tool call made under a run, as only the harness's built-in tools read
- * it (`RunCall`): the run's step and callbacks, the response and attempt
- * the call belongs to, the script that issued it, and, for a `script` call,
- * the door its guest calls the run's tools through. `RunCall` is a
- * `Context.Reference` whose default is null, so a standalone host
- * invocation outside a run provides nothing. The public contract every tool
- * reads, the run included, is `ToolContext`; an app's tool reads nothing
- * else. `requireFileReadForEdit` here answers an edit's read prerequisite
- * from the run's facts (`RunCallShape.facts`), so a resumed run counts the
- * reads its rows record.
+ * it (`RunCall`): the run's session, step and callbacks, the session's
+ * runs, the response and attempt the call belongs to, the script that
+ * issued it, and, for a `script` call, the door its guest calls the run's
+ * tools through. `RunCall` is a `Context.Reference` whose default is null,
+ * so a standalone host invocation outside a run provides nothing. The
+ * public contract every tool reads, the run included, is `ToolContext`; an
+ * app's tool reads nothing else. `requireFileReadForEdit` here answers an
+ * edit's read prerequisite from the run's facts (`RunCallShape.facts`), so
+ * a resumed run counts the reads its rows record.
  */
 import {
   Context,
@@ -41,9 +41,10 @@ import { errorResult } from '@tools/core/result';
 import type { RunFileService } from '@utils/files/runStorage';
 
 import type { InvokeError } from './ModelInvoker';
-import type { ToolServices } from './ToolServices';
+import type { PluginToolServices } from './ToolServices';
 import type { BoundModel } from './modelAccess/ModelAccess';
 import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
+import type { Runs } from './runRegistry';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -192,6 +193,9 @@ type BuiltinRun = ToolRun &
 export interface RunCallShape {
   /** The run the call works for, as the built-ins read it. */
   readonly run: BuiltinRun;
+  /** The session's runs, which a built-in hands the launch it makes; no
+   *  tool is served them, a plugin's reaches them through `ChildRuns`. */
+  readonly runs: Runs['Service'];
   /** The response whose call this is; a script's calls are its script's.
    *  A provider's call ids are unique within one response only. */
   readonly responseId: string;
@@ -214,7 +218,11 @@ export interface RunCallShape {
    *  issues: an end of it other than an interrupt settles each still without
    *  a result as skipped, before the script's own result commits; an
    *  interrupt leaves the rows for the resume. Null for any other call. */
-  readonly scriptCalls: Effect.Effect<ScriptDoor, never, ToolServices> | null;
+  readonly scriptCalls: Effect.Effect<
+    ScriptDoor,
+    never,
+    PluginToolServices
+  > | null;
   /** What the call's `PreToolUse` hooks said, for the review its body
    *  opens (an edit, a plan, a delegation proposal); absent: no answer. */
   readonly hook?: 'allow' | 'ask';
@@ -227,14 +235,6 @@ export const RunCall = Context.Reference<RunCallShape | null>(
   '@texra-ai/harness/agent/RunCall',
   { defaultValue: () => null },
 );
-
-/** The session of a call's run, for the harness's own helpers a plugin's
- *  tool may call (an edit's approval, which `accept_run_files` asks for);
- *  a plugin's tool reads no session. */
-export const sessionOf = (run: ToolRun): AgentRunShape['session'] =>
-  // The run on every call the runtime makes is its `AgentRun`.
-  // cast: `toolUseDispatch` puts the `AgentRun`, which has its session.
-  (run as BuiltinRun).session;
 
 /** The run the current call works for; none for a standalone host call. */
 export const callerRun: Effect.Effect<ToolRun | undefined, never, ToolContext> =

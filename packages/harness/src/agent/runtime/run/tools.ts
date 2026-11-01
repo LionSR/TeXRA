@@ -7,7 +7,7 @@
  * window is a duplicate that never executes.
  */
 import { Effect, Predicate, Result, Schema } from 'effect';
-import type { RuntimeToolRegistry } from '@agent/runtime/ToolServices';
+import type { ResolvedTools } from '@agent/runtime/agentToolResolution';
 import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
@@ -62,7 +62,7 @@ export function parseCallArguments(
 export function dispatchFactsFor(
   calls: readonly LocalCall[],
   /** The request's step's tools; undefined while no step is open. */
-  registry: RuntimeToolRegistry | undefined,
+  registry: ResolvedTools['registry'] | undefined,
   logger: AgentTrace,
 ): readonly DispatchFacts[] {
   const parsed = calls.map((call) => ({
@@ -131,7 +131,7 @@ export const skippedByScriptEnd = (started: boolean): string =>
  */
 export const replayable = Effect.fn('toolUse.replayable')(function* (
   fact: Pick<DispatchFacts, 'toolName' | 'replay'>,
-  registry: RuntimeToolRegistry,
+  registry: ResolvedTools['registry'],
   input: unknown,
   logger: Pick<AgentTrace, 'warn'>,
   attempt: number,

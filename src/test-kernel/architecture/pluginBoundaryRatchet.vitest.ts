@@ -11,7 +11,6 @@ import {
   type PluginDefinition,
   type ToolRun,
 } from '@texra-ai/harness/plugins';
-import type { RuntimeTool } from '@agent/runtime/ToolServices';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
@@ -26,7 +25,7 @@ import {
   REPO_ROOT,
   stripComments,
 } from '../support/repoScan';
-import type { Plugin, ToolResult } from '@texra-ai/harness';
+import type { ITool, Plugin, ToolResult } from '@texra-ai/harness';
 
 /**
  * Invariants 1 and 6 of the core concepts, for what a plugin brings: its
@@ -278,7 +277,7 @@ describe('plugin rosters', () => {
   // rest).
   it('refuses a plugin tool that requires the session runs', () => {
     type PluginTool = NonNullable<Plugin['tools']>[number];
-    const requiring = <R>(service: R): RuntimeTool<Error, R> => ({
+    const requiring = <R>(service: R): ITool<Error, R> => ({
       definition: { name: 'probe' },
       call: () => Effect.die(service),
     });
@@ -298,7 +297,7 @@ describe('plugin rosters', () => {
     type PluginTool = NonNullable<Plugin['tools']>[number];
     const calling = <R>(
       call: () => Effect.Effect<ToolResult, Error, R>,
-    ): RuntimeTool<Error, R> => ({ definition: { name: 'probe' }, call });
+    ): ITool<Error, R> => ({ definition: { name: 'probe' }, call });
     const session = null as unknown as SessionHandle;
     const probes: PluginTool[] = [
       // @ts-expect-error a plugin's tool never reaches a root launch

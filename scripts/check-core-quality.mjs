@@ -46,7 +46,7 @@ import { parseArgs } from 'node:util';
 
 import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { GENERATED_DIRS, apiReports } from './core-quality-api-report.mjs';
-import { RULES, measure } from './core-quality-measure.mjs';
+import { CORE_FILE_LINES, RULES, measure } from './core-quality-measure.mjs';
 import { git, ratchetBase, renamesSince } from './ratchet-base.mjs';
 import { ZERO_RULES } from './ratchet-zero-rules.mjs';
 
@@ -91,25 +91,31 @@ function describeSites(entry) {
 /**
  * The keys whose count rose above the base's, as messages. `base` is the
  * rule's base measurement, or null for a rule held at zero; `baseKey` maps a
- * head key to the base's (a renamed file keeps its row).
+ * head key to the base's (a renamed file keeps its row). A key the base
+ * measurement lacks had no site there (for file-size, at most
+ * CORE_FILE_LINES lines); a file new on the head, or moved without its
+ * rename staged, reads the same way.
  */
 function checkRule(rule, base, actual, baseKey) {
   const problems = [];
   for (const [key, entry] of actual) {
-    const before = base?.get(baseKey(key));
+    const before = base?.get(baseKey(key))?.value;
+    const baseValue = before ?? (rule === 'file-size' ? CORE_FILE_LINES : 0);
     const allowed =
-      before == null
-        ? 0
-        : rule === 'file-size'
-          ? Math.ceil(before.value / FILE_SIZE_STEP) * FILE_SIZE_STEP
-          : before.value;
+      rule === 'file-size'
+        ? Math.ceil(baseValue / FILE_SIZE_STEP) * FILE_SIZE_STEP
+        : baseValue;
     if (entry.value <= allowed) continue;
+    const absent =
+      rule === 'file-size'
+        ? `merge base at most ${CORE_FILE_LINES} lines (within the threshold there)`
+        : 'merge base 0 (no site there)';
     const bound =
       base == null
         ? 'held at zero'
         : before == null
-          ? 'not at the merge base: a new file, or a move whose rename is not staged'
-          : `merge base ${allowed}${allowed === before.value ? '' : ` (${before.value} lines rounded up to ${FILE_SIZE_STEP})`}`;
+          ? `${absent}: a new file, or a move whose rename is not staged`
+          : `merge base ${allowed}${allowed === before ? '' : ` (${before} lines rounded up to ${FILE_SIZE_STEP})`}`;
     problems.push(
       `${rule}: ${key} has ${entry.value}, ${bound} — ${RULES[rule]}\n${describeSites(entry)}`,
     );

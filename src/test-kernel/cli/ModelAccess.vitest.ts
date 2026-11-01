@@ -1,18 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { layer } from '@effect/vitest';
+import { beforeEach, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 
 import {
   selectCliRunnableModel,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import type { ModelOptionData } from '@texra/shared/pickerOptions';
-import type {
-  ProcessServices,
-  RunModelDecisionReason,
-} from '@texra-ai/harness/host';
+import type { RunModelDecisionReason } from '@texra-ai/harness/host';
 
 const readModelOptionsMock = vi.hoisted(() => vi.fn());
 
@@ -25,8 +22,6 @@ vi.mock('@model/computeModelOptions', () => ({
 vi.mock('@texra/model/modelOptions', () => ({
   modelOptionsFrom: (rows: readonly ModelOptionData[]) => rows,
 }));
-
-setupPlatform({});
 
 function model(
   value: string,
@@ -63,69 +58,64 @@ function missingKeyModel(value: string): CliModelAccess {
 
 /**
  * The process stores every access lookup reads, threaded in by the caller the
- * way the CLI composition root threads its own.
+ * way the CLI composition root threads its own: the fake settings stores and
+ * a runtime over the block's graph.
  */
-const fake = makeFakeSettingsStores();
-const stores = {
-  ...fake.stores,
-  // Read when a lookup runs: the kernel builds its runtime after collection.
-  get runtime() {
-    return testRuntime();
-  },
-};
+const stores = Effect.map(SessionGraph.runtime, (runtime) => ({
+  ...makeFakeSettingsStores().stores,
+  runtime,
+}));
 
-/**
- * Model access returns Effects; this suite is their run boundary, the same
- * way a citty command action or the Ink form load is in production.
- */
-function run<A, E>(effect: Effect.Effect<A, E, ProcessServices>): Promise<A> {
-  return stores.runtime.runPromise(effect);
-}
-
-function resolveModelFromAccessList(
+/** The lookup for one fallback reason, over the process stores. */
+const resolveModelFromAccessList = (
   accessList: readonly CliModelAccess[],
   model: string,
   { fallbackReason }: { readonly fallbackReason: RunModelDecisionReason },
-) {
-  return run(
+) =>
+  Effect.flatMap(stores, (processStores) =>
     selectCliRunnableModel([{ model, reason: fallbackReason }], {
       accessList,
-      stores,
+      stores: processStores,
     }),
   );
-}
 
-describe('CLI model access resolution', () => {
-  beforeEach(() => {
-    readModelOptionsMock.mockReset();
-  });
-
-  it('owns fallback behavior by model source', async () => {
-    const entries = [
-      missingKeyModel('missingModel'),
-      model('deepseek/deepseek-v4-flash'),
-    ];
-
-    await expect(
-      resolveModelFromAccessList(entries, 'missingModel', {
-        fallbackReason: 'explicit-override',
-      }),
-    ).rejects.toThrow(
-      'Model "missingModel" is not available (missing api key). Available models: deepseek/deepseek-v4-flash.',
-    );
-    await expect(
-      resolveModelFromAccessList(entries, 'missingModel', {
-        fallbackReason: 'command-config',
-      }),
-    ).resolves.toEqual({
-      model: 'deepseek/deepseek-v4-flash',
-      notice:
-        'Model "missingModel" is not available (missing api key). Available models: deepseek/deepseek-v4-flash. Using "deepseek/deepseek-v4-flash" instead.',
+layer(SessionGraph.layer)('CLI model access resolution', (it) => {
+  // A fresh default host per test, as the lookups read its stores.
+  it.layer(FakeHost.layer({}), { buildPerTest: true })((it) => {
+    beforeEach(() => {
+      readModelOptionsMock.mockReset();
     });
-    await expect(
-      resolveModelFromAccessList(entries, 'missingModel', {
-        fallbackReason: 'builtin-default',
+
+    it.effect('owns fallback behavior by model source', () =>
+      Effect.gen(function* () {
+        const entries = [
+          missingKeyModel('missingModel'),
+          model('deepseek/deepseek-v4-flash'),
+        ];
+
+        const refused = yield* Effect.flip(
+          resolveModelFromAccessList(entries, 'missingModel', {
+            fallbackReason: 'explicit-override',
+          }),
+        );
+        expect(refused.message).toContain(
+          'Model "missingModel" is not available (missing api key). Available models: deepseek/deepseek-v4-flash.',
+        );
+        expect(
+          yield* resolveModelFromAccessList(entries, 'missingModel', {
+            fallbackReason: 'command-config',
+          }),
+        ).toEqual({
+          model: 'deepseek/deepseek-v4-flash',
+          notice:
+            'Model "missingModel" is not available (missing api key). Available models: deepseek/deepseek-v4-flash. Using "deepseek/deepseek-v4-flash" instead.',
+        });
+        expect(
+          yield* resolveModelFromAccessList(entries, 'missingModel', {
+            fallbackReason: 'builtin-default',
+          }),
+        ).toEqual({ model: 'deepseek/deepseek-v4-flash' });
       }),
-    ).resolves.toEqual({ model: 'deepseek/deepseek-v4-flash' });
+    );
   });
 });

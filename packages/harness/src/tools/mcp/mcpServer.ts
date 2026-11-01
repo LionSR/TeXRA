@@ -22,7 +22,8 @@
 import { Duration, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
-import type { RuntimeTool } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
@@ -182,7 +183,7 @@ function mcpTool(
   server: string,
   rpc: JsonRpcConnection,
   listed: (typeof ListToolsResultSchema.Type)['tools'][number],
-): RuntimeTool {
+): ITool<Error, PluginToolServices> {
   const name = mcpToolName(server, listed.name);
   const describe = (input: unknown) =>
     `mcp ${server} ${listed.name} ${JSON.stringify(input)}`;
@@ -343,7 +344,7 @@ const connect = (config: McpServerConfig) =>
     yield* decode(InitializeResultSchema, initialized, 'initialize');
     yield* rpc.notify('notifications/initialized');
 
-    const tools = new Map<string, RuntimeTool>();
+    const tools = new Map<string, ITool<Error, PluginToolServices>>();
     let cursor: string | undefined;
     do {
       const page = yield* decode(
