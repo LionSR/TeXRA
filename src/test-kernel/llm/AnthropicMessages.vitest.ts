@@ -317,11 +317,12 @@ describe('canonical Anthropic Messages protocol', () => {
           outputTokens: 11,
           totalTokens: 73,
           cachedInputTokens: 20,
+          cacheWriteTokens: 30,
           reasoningTokens: 6,
+          toolUsePromptTokens: null,
           providerUsage: {
             kind: 'anthropic',
             uncachedInputTokens: 12,
-            cacheCreationTokens: 30,
             cacheCreation5mTokens: 11,
             cacheCreation1hTokens: 19,
           },

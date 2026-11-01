@@ -28,7 +28,6 @@ import {
   sumUsageStats,
   TokenUsageStatsSchema,
   type AggregateId,
-  type ExtendedTokenUsageStats,
   type SessionEvent,
   type TokenUsageStats,
 } from '@shared/schemas';
@@ -91,27 +90,16 @@ interface Projector {
   ) => readonly ProjectionOp[];
 }
 
-/** A priced row's spend as the `usage` display row carries it; an absent
- *  field stays absent, as `JSON.stringify` and `sumUsageStats` read it. */
-function pricedUsage(event: SessionEvent): ExtendedTokenUsageStats | null {
+/** A priced row's spend as the `usage` display row carries it: its counts,
+ *  cost, route and plan, without the call's surface and response time. */
+function pricedUsage(event: SessionEvent): TokenUsageStats | null {
   let priced = null;
   if (event.type === 'context.edit') priced = event.payload.usage;
   if (event.type === 'model.message' && event.payload.kind === 'response')
     priced = event.payload.usage;
   if (priced == null) return null;
-  return {
-    inputTokens: priced.inputTokens,
-    outputTokens: priced.outputTokens,
-    cost: priced.cost,
-    cacheReadInputTokens: priced.cachedInputTokens,
-    cacheMissInputTokens: priced.cacheMissInputTokens,
-    cacheCreationInputTokens: priced.cacheCreationTokens,
-    reasoningTokens: priced.reasoningTokens,
-    toolUseTokens: priced.toolUsePromptTokens,
-    elapsedTime: priced.responseTimeMs / 1000,
-    usageRoute: priced.usageRoute,
-    usagePlan: priced.usagePlan,
-  };
+  const { provider, responseTimeMs, ...usage } = priced;
+  return usage;
 }
 
 const PROJECTORS = {
@@ -135,7 +123,8 @@ const PROJECTORS = {
     },
   },
   usage: {
-    version: 1,
+    // v2: the rows carry `TurnUsage`'s count names and no `elapsedTime`.
+    version: 2,
     inputs: ['model.message', 'context.edit', 'usage'],
     prior: 'run_usage',
     table: 'run_usage',

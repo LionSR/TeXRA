@@ -199,7 +199,9 @@ function scriptedResult(
       outputTokens: 5,
       totalTokens: 15,
       cachedInputTokens: null,
+      cacheWriteTokens: null,
       reasoningTokens: null,
+      toolUsePromptTokens: null,
     },
   });
 }

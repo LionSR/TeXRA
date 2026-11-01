@@ -29,14 +29,24 @@ export const UsageRouteSchema = Schema.Literals([
 /** The route a request's usage is billed through. */
 export type UsageRoute = typeof UsageRouteSchema.Type;
 
+/**
+ * Priced token counts under the names of the package's `TurnUsage`, from
+ * one call or summed over many. A count the provider did not report is
+ * absent.
+ */
 export const TokenUsageStatsSchema = Schema.Struct({
   inputTokens: TokenCountSchema,
   outputTokens: TokenCountSchema,
   cost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
-  cacheReadInputTokens: Schema.optional(TokenCountSchema),
+  /** Prompt tokens read from the provider's cache. */
+  cachedInputTokens: Schema.optional(TokenCountSchema),
+  /** Prompt tokens billed at the full input rate: input minus cache reads. */
   cacheMissInputTokens: Schema.optional(TokenCountSchema),
-  cacheCreationInputTokens: Schema.optional(TokenCountSchema),
+  /** Prompt tokens written to the provider's cache (Anthropic). */
+  cacheWriteTokens: Schema.optional(TokenCountSchema),
   reasoningTokens: Schema.optional(TokenCountSchema),
+  /** Prompt tokens a provider-run tool added (Google). */
+  toolUsePromptTokens: Schema.optional(TokenCountSchema),
   usageRoute: Schema.optional(UsageRouteSchema),
   /** The subscription plan that covered this usage, when the route names one
    *  (today only `chatgpt-subscription`). Recorded per usage row so a resumed
@@ -58,10 +68,11 @@ export function emptyUsageStats(): EmptyUsageStats {
     inputTokens: 0,
     outputTokens: 0,
     cost: 0,
-    cacheReadInputTokens: 0,
+    cachedInputTokens: 0,
     cacheMissInputTokens: 0,
-    cacheCreationInputTokens: 0,
+    cacheWriteTokens: 0,
     reasoningTokens: 0,
+    toolUsePromptTokens: 0,
   };
 }
 
@@ -100,19 +111,6 @@ export function sumUsageStats(
   return total;
 }
 
-/** Extended token usage with per-round deltas. */
-export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.mapFields(
-  Struct.assign({
-    elapsedTime: Schema.optional(
-      Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
-    ),
-    toolUseTokens: Schema.optional(TokenCountSchema),
-  }),
-);
-
-export type ExtendedTokenUsageStats =
-  (typeof ExtendedTokenUsageStatsSchema)['Type'];
-
 /**
  * Schema for the totals recorded when a run ends.
  *
@@ -125,9 +123,9 @@ export const RunUsageTotalsSchema = Schema.Struct({
   totalInputTokens: TokenCountSchema,
   totalOutputTokens: TokenCountSchema,
   totalCost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
-  totalCacheReadInputTokens: TokenCountSchema,
+  totalCachedInputTokens: TokenCountSchema,
   totalCacheMissInputTokens: TokenCountSchema,
-  totalCacheCreationInputTokens: TokenCountSchema,
+  totalCacheWriteTokens: TokenCountSchema,
   totalReasoningTokens: TokenCountSchema,
   totalToolUsePromptTokens: TokenCountSchema,
 });
@@ -140,9 +138,9 @@ export const EMPTY_RUN_USAGE_TOTALS: RunUsageTotals = Object.freeze({
   totalInputTokens: 0,
   totalOutputTokens: 0,
   totalCost: 0,
-  totalCacheReadInputTokens: 0,
+  totalCachedInputTokens: 0,
   totalCacheMissInputTokens: 0,
-  totalCacheCreationInputTokens: 0,
+  totalCacheWriteTokens: 0,
   totalReasoningTokens: 0,
   totalToolUsePromptTokens: 0,
 });

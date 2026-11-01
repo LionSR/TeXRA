@@ -180,7 +180,7 @@ after every job enqueued before it
 
 ### 2.4 Row versions and the store gate
 
-Each row kind carries its own version (`shared/schemas/rowVersions.ts:72-155`).
+Each row kind carries its own version (`shared/schemas/rowVersions.ts:72-197`).
 A row MUST be written at its kind's current version
 (`controllers/session/rowCodec.ts:173-178`). The `stored_kind` table records the
 highest version each kind was written at
@@ -201,7 +201,7 @@ retired; their rows fail only their own run's reads
 (`shared/schemas/rowVersions.ts:44-56`, `controllers/session/rowCodec.ts:287`).
 
 Before 1.0 a core kind changes with no upcaster. Its version is bumped when an
-older build's row would read wrong (`shared/schemas/rowVersions.ts:72-155`). A
+older build's row would read wrong (`shared/schemas/rowVersions.ts:72-197`). A
 plugin's arm versions its own `value` and may carry upcasters for it
 (`tools/plugins.ts:78`, `controllers/session/rowCodec.ts:329`). A row is then
 classified by the reader (`controllers/session/rowCodec.ts:268-334`):
@@ -251,7 +251,7 @@ run aggregate is ignored by name, and an unknown kind is refused
 
 Read through the run history, and by the store's usage projection, which turns
 the priced usage on `response` and `context.edit` rows into a projected `usage`
-row (`controllers/session/projections.ts:101-120`, `:140-159`), and by the
+row (`controllers/session/projections.ts:93-103`, `:125-158`), and by the
 display reader, which selects `tool.result` to fill the adjacent `tool.end`
 card's result before it drops the private row
 (`controllers/session/rowCodec.ts:83-83`,

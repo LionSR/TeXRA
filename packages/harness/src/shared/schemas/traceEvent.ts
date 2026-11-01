@@ -8,7 +8,7 @@ import { FileListEntrySchema, LogLevelSchema, MessageTypeSchema } from './log';
 import { ToolCallStatusSchema, ToolCardSchema } from './progressView/data';
 import { RunOutcomeSchema } from './run';
 import { StageKindSchema } from './taskGroup';
-import { ExtendedTokenUsageStatsSchema } from './usage';
+import { TokenUsageStatsSchema } from './usage';
 
 function trace<T extends string, const F extends Schema.Struct.Fields>(
   type: T,
@@ -68,10 +68,9 @@ export const TranscriptEventSchema = Schema.Union([
    * database projects one from each priced `model.message` response and
    * `context.edit` summary (`Database`'s display reads). A child's spend
    * is on the child's own run, never on its parent's. An
-   * agent-CLI child, which has no run history, stores one per turn. `elapsedTime`
-   * is the turn's response time in seconds.
+   * agent-CLI child, which has no run history, stores one per turn.
    */
-  trace('usage', { usage: ExtendedTokenUsageStatsSchema }),
+  trace('usage', { usage: TokenUsageStatsSchema }),
   trace('context.state', {
     inputTokens: ContextStateDataSchema.fields.inputTokens,
     contextWindow: ContextStateDataSchema.fields.contextWindow,

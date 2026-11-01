@@ -496,7 +496,9 @@ function validationModel(config: ModelConfig): {
         outputTokens: 1,
         totalTokens: inputTokens + 1,
         cachedInputTokens: null,
+        cacheWriteTokens: null,
         reasoningTokens: null,
+        toolUsePromptTokens: null,
       },
     };
   };

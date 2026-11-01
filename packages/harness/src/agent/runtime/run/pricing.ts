@@ -25,23 +25,13 @@ export function priceTurnUsage(
 ): NormalizedUsage | null {
   if (usage === null) return null;
   const usageRoute = bound.billing;
-  const provider = usage.providerUsage;
   const inputTokens = usage.inputTokens ?? 0;
-  const cached = usage.cachedInputTokens ?? undefined;
-  const reasoning = usage.reasoningTokens ?? undefined;
-  let cacheCreationTokens: number | undefined;
-  let toolUsePromptTokens: number | undefined;
-  switch (provider?.kind) {
-    case 'anthropic':
-      cacheCreationTokens = provider.cacheCreationTokens ?? undefined;
-      break;
-    case 'google':
-      toolUsePromptTokens = provider.toolUsePromptTokens ?? undefined;
-      break;
-    case 'xai':
-    case undefined:
-      break;
-  }
+  const {
+    cachedInputTokens: cached,
+    cacheWriteTokens,
+    reasoningTokens,
+    toolUsePromptTokens,
+  } = usage;
   return {
     inputTokens,
     outputTokens: usage.outputTokens ?? 0,
@@ -53,13 +43,13 @@ export function priceTurnUsage(
     provider: bound.origin.protocol,
     usageRoute,
     ...(bound.plan !== undefined ? { usagePlan: bound.plan } : {}),
-    ...(cached !== undefined ? { cachedInputTokens: cached } : {}),
-    ...(cached !== undefined && inputTokens >= cached
+    ...(cached !== null ? { cachedInputTokens: cached } : {}),
+    ...(cached !== null && inputTokens >= cached
       ? { cacheMissInputTokens: inputTokens - cached }
       : {}),
-    ...(cacheCreationTokens !== undefined ? { cacheCreationTokens } : {}),
-    ...(reasoning !== undefined ? { reasoningTokens: reasoning } : {}),
-    ...(toolUsePromptTokens !== undefined ? { toolUsePromptTokens } : {}),
+    ...(cacheWriteTokens !== null ? { cacheWriteTokens } : {}),
+    ...(reasoningTokens !== null ? { reasoningTokens } : {}),
+    ...(toolUsePromptTokens !== null ? { toolUsePromptTokens } : {}),
   };
 }
 
