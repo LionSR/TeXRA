@@ -53,7 +53,8 @@ export const RUN_ROW_READS = {
 /** One read of a run's rows: a key of {@link RUN_ROW_READS}. */
 export type RunRowRead = keyof typeof RUN_ROW_READS;
 
-/** What one lifecycle or record row changes on `rows`. */
+/** What one lifecycle or record row changes on `rows`. Every kind has a
+ *  case, so a new kind does not compile until it is decided here. */
 function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
   switch (row.type) {
     case 'run.start': {
@@ -113,7 +114,29 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
         ...(rows.end === null && { heldParks: [...rows.heldParks, held] }),
       };
     }
-    default:
+    // The shared rows (`applyRunRow`), the transcript tier and the run
+    // history record nothing here.
+    case 'run.model':
+    case 'followup.queued':
+    case 'followup.consumed':
+    case 'request.opened':
+    case 'request.decided':
+    case 'log':
+    case 'stage.start':
+    case 'stage.end':
+    case 'tool.start':
+    case 'tool.end':
+    case 'usage':
+    case 'context.state':
+    case 'stream.start':
+    case 'stream.end':
+    case 'response.finalized':
+    case 'model.message':
+    case 'context.edit':
+    case 'tool.intent':
+    case 'tools.offered':
+    case 'context.blob':
+    case 'hook.outcome':
       return {};
   }
 }
