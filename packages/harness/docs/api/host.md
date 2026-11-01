@@ -1866,9 +1866,8 @@ interface ProcessServicesOptions {
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
   >;
-  /** Seed the first-install tool switches (opt-in plugins off) unless the
-   *  user's list exists: absent, yes; `false` for a store that refuses
-   *  writes, a CLI entry's that must create nothing under its root. */
+  /** Seed the first-install tool switches unless the user's list exists;
+   *  `false` for a store that refuses writes (a platform-less CLI entry's). */
   readonly seedToolSwitches?: boolean;
   /** The dependency probes every tool gate and Tools dashboard read: absent,
    *  every host's; a test harness passes one that starts no probe. */
