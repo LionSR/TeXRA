@@ -316,12 +316,14 @@ export const DocumentExtractTool = defineTool({
         message: 'Missing output files detected',
       });
     // An open reply was cut off: the model hit its output limit.
-    if (!reply.includes(OUTPUT_END_TAG)) {
-      const message = `Revision ${revision + 1} did not close its documents, so its output may be incomplete. Raise the model's max output tokens to let it finish.`;
-      logger.warn(message);
+    const truncated = reply.includes(OUTPUT_END_TAG)
+      ? undefined
+      : `Revision ${revision + 1} did not close its documents, so its output may be incomplete. Raise the model's max output tokens to let it finish.`;
+    if (truncated !== undefined) {
+      logger.warn(truncated);
       yield* docs.requests.present('requestShowInstruction', {
         key: 'roundOutputLimit',
-        message,
+        message: truncated,
       });
     }
     yield* present(
@@ -334,9 +336,10 @@ export const DocumentExtractTool = defineTool({
     return {
       ...executed(
         (files.length > 0
-          ? `Revision ${revision + 1} wrote: ${files.join(', ')}`
+          ? `Revision ${revision + 1} wrote: ${files.join(', ')}.`
           : `Revision ${revision + 1} wrote no documents.`) +
-          (missing.length > 0 ? ` Missing: ${missing.join(', ')}.` : ''),
+          (missing.length > 0 ? ` Missing: ${missing.join(', ')}.` : '') +
+          (truncated === undefined ? '' : ` ${truncated}`),
         `Revision ${revision + 1}: ${files.length} files`,
       ),
       value: { files, missing },

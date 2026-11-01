@@ -1,4 +1,5 @@
 // Node imports
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import {
   normalizeFilePath,
@@ -157,7 +158,24 @@ export function commitAcceptedFile<E>(
       '\r\n',
       '\n',
     );
-    yield* fs.writeFileString(targetLocation.absolutePath, editedContent);
+    // Staged beside the target and renamed over it, so a crash mid-write
+    // leaves the user's file whole: the old content or the new, never part.
+    const staged = path.join(
+      path.dirname(targetLocation.absolutePath),
+      `.${targetFileName}.${randomUUID()}.tmp`,
+    );
+    yield* fs.writeFileString(staged, editedContent).pipe(
+      Effect.andThen(fs.rename(staged, targetLocation.absolutePath)),
+      Effect.onError(() =>
+        fs.remove(staged, { force: true }).pipe(
+          Effect.ignore({
+            log: 'Warn',
+            message: `A staged accept file stays behind: ${staged}`,
+          }),
+        ),
+      ),
+      Effect.uninterruptible,
+    );
     if (targetLocation.kind === 'workspace') {
       yield* emitAppSignal('workspaceFilesWritten', {
         absolutePaths: [targetLocation.absolutePath],
