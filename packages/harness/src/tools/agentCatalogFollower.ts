@@ -102,9 +102,9 @@ export const reloadAgentCatalog = Effect.flatMap(
  * recursive watcher on Linux can, reported as `Unknown`) is retried on a
  * bounded backoff; a missing or unreadable directory fails fast. A watch that
  * ends cleanly (the directory was deleted or replaced) counts as a change and
- * is restarted, up to five times. Whatever ends the watching is logged, and
- * edits then apply when the directory setting changes or the process
- * restarts.
+ * is restarted, up to five times. Whatever else ends the watching, short of
+ * its scope closing, is logged, and edits then apply when the directory
+ * setting changes or the process restarts.
  */
 const watchCustomDirectory = Stream.unwrap(
   Effect.gen(function* () {
@@ -130,9 +130,13 @@ const watchCustomDirectory = Stream.unwrap(
       ),
       Stream.concat(stopped('the watch ended')),
       // fs.watch can also throw synchronously (ENOENT after a race, EMFILE,
-      // ENOSPC), which surfaces as a defect.
+      // ENOSPC), which surfaces as a defect. An interruption alone is the
+      // watch's scope closing (the setting changed, or the process is
+      // shutting down), not a failure.
       Stream.catchCause((cause) =>
-        stopped(toErrorMessage(Cause.squash(cause))),
+        Cause.hasInterruptsOnly(cause)
+          ? Stream.fromEffect(Effect.interrupt)
+          : stopped(toErrorMessage(Cause.squash(cause))),
       ),
     );
   }).pipe(

@@ -231,6 +231,17 @@ describe(
           expect(launched).toContain('bash');
           expect(resumed).toContain('read_file');
           expect(resumed).not.toContain('bash');
+          // The notice names only the declared tools it withholds: `plan`,
+          // which the persona declares and the goal plugin also injects,
+          // once.
+          const withheld = storedRows(storage).flatMap((row) => {
+            if (row.run !== runId || row.type !== 'log') return [];
+            const { message } = JSON.parse(row.data) as { message: string };
+            const names = /^Not offering ([^:]+):/.exec(message)?.[1];
+            return names === undefined ? [] : names.split(', ');
+          });
+          expect(withheld).toContain('bash');
+          expect(withheld.filter((name) => name === 'plan')).toEqual(['plan']);
         }),
     );
 
