@@ -52,7 +52,7 @@ export class AppState extends Context.Service<AppState, AppStateStore>()(
  * created, or the platform refused the filesystem call behind either.
  *
  * {@link AgentDirectoriesPort}'s readers raise it as the failure of the
- * read itself, for the same reason {@link StateWriteFailed} exists: the reads
+ * read itself, for the same reason `StateWriteFailed` exists: the reads
  * travel with the agent-catalog load beside them, so a caller inside a program
  * composes the read rather than adopting a rejection it cannot type.
  */
