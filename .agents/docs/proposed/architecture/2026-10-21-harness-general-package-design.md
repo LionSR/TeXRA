@@ -246,7 +246,8 @@ the `Effect.run*` entry allowlist and recorded in `refuted-candidates`. If the
 ruling holds, the file is deleted and nothing else changes.
 
 Superseded: the 2026-09-21 ruling holds (rulings ledger, "The agent SDK's
-public surface is Effect") and the 2026-10-06 decision on #13723 stands
+public surface is Effect") and the 2026-10-06 decision on item 8 of the tracking issue #13723
+("./promise ... no implementation for now") stands
 ([harness package split](../../implemented/architecture/2026-10-02-harness-package-split.md),
 "There is no Promise API"); `./promise` is not built for 1.0 and the entry
 stays in the table above as the refused option.
