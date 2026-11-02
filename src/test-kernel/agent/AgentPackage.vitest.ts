@@ -1,3 +1,5 @@
+import '@test/support/sessionGraphTestSetup';
+
 // Third-party imports
 import { it } from '@effect/vitest';
 import {
@@ -15,12 +17,24 @@ import { describe, expect } from 'vitest';
 
 // Local imports - package API under test
 import { SessionRequests } from '@agent/runtime/requestPolicy';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
   emptySessionView,
   type SessionView as RuntimeSessionView,
 } from '@shared/session/sessionView';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
+import {
+  closeTestSession,
+  openTestDefaultSession,
+} from '@test/support/sessionEnd';
+import { REAL_RUN_TIMEOUT, validationHost } from '@test/support/storeFaults';
+import {
+  testRuntime,
+  testSessionOwner,
+} from '@test/support/testProcessRuntime';
+import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { makeSessions } from '../../../packages/harness/src/effect/sessionPrograms';
 import { runView } from '../../../packages/harness/src/effect/runHandle';
 import type { TranscriptSubscription } from '@texra-ai/harness/transcript';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -217,3 +231,55 @@ describe('agent package sessions', () => {
       }).pipe(Effect.scoped),
   );
 });
+
+/** `session` as the package hands it to an embedder (`Sessions.open`),
+ *  launching under the test process's session owner. */
+const packageSession = (session: Context.Context<SessionServices>) =>
+  Effect.gen(function* () {
+    const owner = yield* testSessionOwner;
+    const sessions = yield* makeSessions(
+      { ...owner, open: () => Effect.succeed(session) },
+      yield* testRuntime().contextEffect,
+    );
+    return yield* sessions.open(testWorkspaceRoots());
+  });
+
+describe(
+  'agent package sessions over a real store',
+  { timeout: REAL_RUN_TIMEOUT },
+  () => {
+    validationHost('texra-package-');
+
+    it.live(
+      "R19: a root run a model error ends reads as a failed RunEnd with the error's kind, not a RunFailure",
+      () =>
+        Effect.gen(function* () {
+          const roots = testWorkspaceRoots();
+          // No host answers: the session an embedder opens by default.
+          const sdk = yield* packageSession(
+            yield* openTestDefaultSession({
+              roots,
+              interactions: { approvalPromptsUnavailable: true },
+            }),
+          );
+          const run = yield* sdk.start({
+            agent: {
+              name: 'overflowing',
+              description: 'Sends a request the provider refuses.',
+              prompt: 'GOLDEN-OVERFLOW: answer.',
+            },
+            instruction: 'Answer.',
+            model: 'openai/gpt-5.6-sol',
+          });
+
+          const end = yield* run.result;
+          expect(end).toMatchObject({
+            outcome: 'failed',
+            error: { kind: 'context-window' },
+          });
+          expect(end.error?.message).toContain('exceeds the context window');
+          yield* closeTestSession(roots.storage);
+        }),
+    );
+  },
+);
