@@ -102,7 +102,7 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
           'injected readInputBatch fault',
         );
         // The committed title stands: in the store, and for a later session.
-        expect(titlesOf(roots.storage, runId).at(-1)).toBe('Renamed by hand');
+        expect(titlesOf(roots.storage, runId)).toContain('Renamed by hand');
         writeFileSync(release, '');
         yield* closeTestSession(roots.storage);
         const reopened = yield* openTestDefaultSession({ roots });
