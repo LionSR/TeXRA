@@ -411,11 +411,12 @@ interface LocalSession extends Session {
      * new one as it is written. `drained`, if given, is updated to the
      * position each read reached.
      *
-     * Another process writing to the same store is seen here as soon as its
-     * commit is read, while `current` and `changes` take it up on the
-     * store's next poll (about 250 ms). A caller that acts on an event here
-     * and then needs the snapshot to show it waits on `changes` rather than
-     * reading `current` once.
+     * Another process's commit reaches this stream and the view on the same
+     * poll of the store (about 250 ms), but the view applies it on its own
+     * update fiber, so `current` read right after an event here can still
+     * be the snapshot before it. A caller that acts on an event and then
+     * needs the snapshot to show it waits on `changes` rather than reading
+     * `current` once.
      */
     readonly events: (
       from: CommitOrdinal,
