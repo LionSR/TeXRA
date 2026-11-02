@@ -1,6 +1,3 @@
-// Test composition imports
-import '@test/support/sessionGraphTestSetup';
-
 // E2E fixtures for the promoted "one loop, N strategies" child-run driver.
 // These exercise the loop's own mechanics (queue acquire/drain, one
 // run-handle interrupt target for the child's whole lifetime, per-turn delivery, terminal
@@ -9,7 +6,7 @@ import '@test/support/sessionGraphTestSetup';
 // Identical assertions apply regardless of which strategy is plugged in,
 // since delivery/interrupt/terminal choreography all live in the loop.
 
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import {
   Deferred,
   Effect,
@@ -65,26 +62,25 @@ import { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import { SessionRoots } from '@platform/rootedFs';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { captureLogEntries } from '@test/support/logSinkCapture';
-import { closeTestDefaultSession } from '@test/support/sessionEnd';
-import { testRuntime } from '@test/support/testProcessRuntime';
-import { setupPlatform } from '@test/support/setupPlatform';
-import { sessionStoreFaults } from '@test/support/storeFaults';
+import {
+  persistentTestSession,
+  sessionStoreFaults,
+} from '@test/support/storeFaults';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import {
-  createProcessSession,
   publishTestRunStart,
   queuedFollowUps,
 } from '@test/support/sessionTestUtils';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { shouldSkipWait } from '@tools/executions/waitCoordination';
 import type { ProcessChildStrategy } from '@texra-ai/harness/plugins';
 
 // A persistent store under a temp root, so a case can fail its writes
 // (`sessionStoreFaults`); its run ends are the real `finalizeRun`'s.
 const tempDirs = useTempDirs();
-setupPlatform(() => createTempDirPlatform('texra-child-loop-', tempDirs));
 
 let session: Context.Context<SessionServices>;
 
@@ -243,235 +239,261 @@ const refuseNextRunEnd = Effect.gen(function* () {
   yield* faults.failNext('appendAll', 'run.end');
 });
 
-beforeEach(async () => {
-  session = await Effect.runPromise(createProcessSession({ persistent: true }));
+/** Each case's start: the session over the test's store, with the parent's
+ *  `run.start` committed. The session closes with the test's scope. */
+const setUp = Effect.gen(function* () {
+  session = yield* persistentTestSession();
   publishTestRunStart(session, PARENT_RUN_ID);
-  await Effect.runPromise(Context.get(session, SessionLog).settled);
+  yield* Context.get(session, SessionLog).settled;
+});
+
+beforeEach(() => {
   vi.clearAllMocks();
   mocks.wakeRun.mockReturnValue(Effect.succeed(Effect.void));
 });
 
-afterEach(async () => {
+afterEach(() => {
   setLogSink(null);
-  await testRuntime().runPromise(closeTestDefaultSession);
 });
 
 describe('childRunLoop E2E fixtures', () => {
-  it.effect.each([RUN_OUTCOME.CANCELLED, RUN_OUTCOME.FAILED])(
-    'persists %s when the run ends before its engine handle exists',
-    (outcome) =>
-      Effect.gen(function* () {
-        const runId = loopRunId();
-        yield* Context.get(session, SessionLog).settled;
-        yield* Context.get(session, SessionLog).hold(runId);
-        const launch = () =>
-          Effect.andThen(
-            Effect.yieldNow,
-            Effect.fail(new Error('Engine startup failed')),
-          );
-        let stop: ReturnType<Runs['Service']['stop']> | undefined;
-        // The stop lands once the launch opened its activation, before its
-        // program runs.
-        const registry = registryOf(Context.get(session, Runs));
-        const start = registry.start.bind(registry);
-        // cast: the generic `start`'s parameters infer as never; the spy
-        // forwards them unchanged.
-        const forward = start as (
-          ...args: readonly unknown[]
-        ) => Effect.Effect<Fiber.Fiber<unknown, unknown>>;
-        const claim = vi.spyOn(registry, 'start').mockImplementationOnce(
-          // cast: the forwarding body is `start` itself, typed as such.
-          ((...args: readonly unknown[]) =>
-            Effect.tap(forward(...args), () =>
-              Effect.sync(() => {
-                if (outcome === RUN_OUTCOME.CANCELLED)
-                  stop = Context.get(session, Runs).stop(runId, {
-                    reason: 'user',
-                    detachActiveChildren: false,
-                  });
-              }),
-            )) as typeof start,
-        );
-        const loop = yield* startNativeLoop(runId, {
-          stageLabel: 'Engine startup',
-          launch,
-          formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
-          formatError: () => 'error',
-        }).pipe(Effect.ensuring(Effect.sync(() => claim.mockRestore())));
-        if (stop) yield* stop.settlement.pipe(Effect.provide(session));
-        // A stopped loop's fiber ends interrupted.
-        yield* Fiber.await(loop);
-
-        expect(yield* runEnds(runId)).toMatchObject([{ outcome }]);
-      }),
-  );
-
-  it.effect(
-    'keeps a consumed prompt queued when the turn result fails to persist',
-    () =>
-      Effect.gen(function* () {
-        // The prompt's `followup.consumed` rows commit with the turn's
-        // settlement, so a refused batch consumes nothing: the relaunched
-        // loop seeds the prompt and runs it again.
-        const runId = loopRunId();
-        const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
-        const loop = yield* startLoop(runId, strategy);
-
-        yield* resolveTurn(1, { kind: 'interim', value: 'first' });
-        yield* Context.get(session, Inbox).send(runId, {
-          text: 'keep going',
-          from: { kind: 'user' as const },
-        });
-        yield* turnStarted(2);
-
-        // The last (failed) turn's settlement rides the child's `run.end`,
-        // which the store refuses: the end that commits instead records the
-        // lost result, and the prompt it would have consumed stays queued.
-        yield* refuseNextRunEnd;
-        yield* resolveTurn(2, { kind: 'error-turn', value: 'final' });
-
-        // The lost result is the end's, not the loop's: the loop ends cleanly.
-        expect(Exit.isSuccess(yield* Fiber.await(loop))).toBe(true);
-        expect(yield* queuedTexts(runId)).toEqual(['keep going']);
-        expect(yield* runEnds(runId)).toMatchObject([
-          {
-            error: {
-              kind: 'result-lost',
-              message: expect.stringContaining('injected appendAll fault'),
-            },
-          },
-        ]);
-      }),
-  );
-
-  it.effect(
-    '#8093 regression: a terminal turn finalizes this child before its wake step is even reached, so a resumed parent never self-stalls waiting on it',
-    () =>
-      Effect.gen(function* () {
-        // Regression: parent continuation submission can await the ENTIRE resumed
-        // turn (`wakeRun` → … → `executeAgent`).
-        // Before #8093, the loop awaited split enqueue/wake work inline in the
-        // turn loop, and only finalized this child afterward in the outer
-        // `finally` — so a resumed parent that
-        // immediately calls `executions` with action=wait on this same run
-        // could find it still RUNNING and block on itself for the whole wait
-        // budget. Prove the fixed ordering: by the moment the wake step is even
-        // reached, this run is already terminal — a resumed parent's wait
-        // would resolve immediately instead of racing its own wake.
-        const runId = loopRunId();
-
-        const wakeReached = yield* Deferred.make<void>();
-        const releaseWake = yield* Deferred.make<void>();
-        let skippedAtWakeTime = false;
-        mocks.wakeRun.mockImplementation(() =>
+  layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+    it.layer(
+      FakeHost.layer(() =>
+        createTempDirPlatform('texra-child-loop-', tempDirs),
+      ),
+      { buildPerTest: true },
+    )((it) => {
+      it.effect.each([RUN_OUTCOME.CANCELLED, RUN_OUTCOME.FAILED])(
+        'persists %s when the run ends before its engine handle exists',
+        (outcome) =>
           Effect.gen(function* () {
-            // Snapshot registry state the instant the wake step is reached. The
-            // same moment a resumed parent's own turn would begin running.
-            skippedAtWakeTime = shouldSkipWait(
-              Context.get(session, Runs),
-              SubscriptionRef.getUnsafe(
-                Context.get(session, SessionViewAccess).ref,
-              ),
-              runId,
+            yield* setUp;
+            const runId = loopRunId();
+            yield* Context.get(session, SessionLog).settled;
+            yield* Context.get(session, SessionLog).hold(runId);
+            const launch = () =>
+              Effect.andThen(
+                Effect.yieldNow,
+                Effect.fail(new Error('Engine startup failed')),
+              );
+            let stop: ReturnType<Runs['Service']['stop']> | undefined;
+            // The stop lands once the launch opened its activation, before its
+            // program runs.
+            const registry = registryOf(Context.get(session, Runs));
+            const start = registry.start.bind(registry);
+            // cast: the generic `start`'s parameters infer as never; the spy
+            // forwards them unchanged.
+            const forward = start as (
+              ...args: readonly unknown[]
+            ) => Effect.Effect<Fiber.Fiber<unknown, unknown>>;
+            const claim = vi.spyOn(registry, 'start').mockImplementationOnce(
+              // cast: the forwarding body is `start` itself, typed as such.
+              ((...args: readonly unknown[]) =>
+                Effect.tap(forward(...args), () =>
+                  Effect.sync(() => {
+                    if (outcome === RUN_OUTCOME.CANCELLED)
+                      stop = Context.get(session, Runs).stop(runId, {
+                        reason: 'user',
+                        detachActiveChildren: false,
+                      });
+                  }),
+                )) as typeof start,
             );
-            yield* Deferred.succeed(wakeReached, undefined);
-            yield* Deferred.await(releaseWake);
-            return Effect.void;
+            const loop = yield* startNativeLoop(runId, {
+              stageLabel: 'Engine startup',
+              launch,
+              formatDelivery: (turn) =>
+                Effect.succeed(`delivered:${turn.value}`),
+              formatError: () => 'error',
+            }).pipe(Effect.ensuring(Effect.sync(() => claim.mockRestore())));
+            if (stop) yield* stop.settlement.pipe(Effect.provide(session));
+            // A stopped loop's fiber ends interrupted.
+            yield* Fiber.await(loop);
+
+            expect(yield* runEnds(runId)).toMatchObject([{ outcome }]);
           }),
-        );
+      );
 
-        const loop = yield* startLoop(runId, {
-          stageLabel: 'Finalize-before-wake test',
-          launch: () => Effect.succeed({ kind: 'terminal', value: 'done' }),
-          formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
-          formatError: () => 'error',
-        });
+      it.effect(
+        'keeps a consumed prompt queued when the turn result fails to persist',
+        () =>
+          Effect.gen(function* () {
+            yield* setUp;
+            // The prompt's `followup.consumed` rows commit with the turn's
+            // settlement, so a refused batch consumes nothing: the relaunched
+            // loop seeds the prompt and runs it again.
+            const runId = loopRunId();
+            const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
+            const loop = yield* startLoop(runId, strategy);
 
-        yield* Deferred.await(wakeReached);
-        expect(skippedAtWakeTime).toBe(true);
+            yield* resolveTurn(1, { kind: 'interim', value: 'first' });
+            yield* Context.get(session, Inbox).send(runId, {
+              text: 'keep going',
+              from: { kind: 'user' as const },
+            });
+            yield* turnStarted(2);
 
-        yield* Deferred.succeed(releaseWake, undefined);
-        yield* Fiber.join(loop);
-        expect(Context.get(session, Runs).get(runId)).toBeUndefined();
-      }),
-  );
+            // The last (failed) turn's settlement rides the child's `run.end`,
+            // which the store refuses: the end that commits instead records the
+            // lost result, and the prompt it would have consumed stays queued.
+            yield* refuseNextRunEnd;
+            yield* resolveTurn(2, { kind: 'error-turn', value: 'final' });
 
-  it.effect(
-    "a stop after a detached child's own completed end tells its parent the result alone",
-    () =>
-      Effect.gen(function* () {
-        // The native run commits its `run.end` (completed) with its
-        // delivery, then still holds the run when its parent's stop lands:
-        // the window between the run's end and its loop's terminal.
-        const runId = loopRunId();
-        const ended = yield* Deferred.make<void>();
-        const logs = captureLogEntries();
-        const turn: FakeTurn = { kind: 'terminal', value: 'done' };
-        const strategy: NativeChildStrategy<FakeTurn, SessionServices> = {
-          stageLabel: 'Stopped after its end',
-          launch: (_notify, turns) =>
-            Effect.gen(function* () {
-              yield* endActivation({
-                runId,
-                outcome: RUN_OUTCOME.COMPLETED,
-                lastTurn: () => turns.finishLastTurn(turn),
-              });
-              yield* Deferred.succeed(ended, undefined);
-              return yield* Effect.never;
-            }),
-          formatDelivery: (done) => Effect.succeed(`delivered:${done.value}`),
-          formatError: () => 'error',
-          stopNotice: () => Effect.succeed('stopped'),
-        };
-        const { fiber } = yield* startDetachedChildRunLoop({
-          runId,
-          parentRunId: PARENT_RUN_ID,
-          agentName: 'fake',
-          strategy,
-        }).pipe(Effect.provide(session));
-        yield* Deferred.await(ended);
-        yield* Context.get(session, Runs)
-          .stop(runId, { reason: 'user', detachActiveChildren: false })
-          .settlement.pipe(Effect.provide(session));
-        yield* Fiber.await(fiber);
-        // The late-failure observer joins the same fiber.
-        yield* Effect.yieldNow;
+            // The lost result is the end's, not the loop's: the loop ends cleanly.
+            expect(Exit.isSuccess(yield* Fiber.await(loop))).toBe(true);
+            expect(yield* queuedTexts(runId)).toEqual(['keep going']);
+            expect(yield* runEnds(runId)).toMatchObject([
+              {
+                error: {
+                  kind: 'result-lost',
+                  message: expect.stringContaining('injected appendAll fault'),
+                },
+              },
+            ]);
+          }),
+      );
 
-        expect(yield* runEnds(runId)).toMatchObject([
-          { outcome: RUN_OUTCOME.COMPLETED },
-        ]);
-        expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(['delivered:done']);
-        expect(logs.at('ERROR')).toEqual([]);
-      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
-  );
+      it.effect(
+        '#8093 regression: a terminal turn finalizes this child before its wake step is even reached, so a resumed parent never self-stalls waiting on it',
+        () =>
+          Effect.gen(function* () {
+            yield* setUp;
+            // Regression: parent continuation submission can await the ENTIRE resumed
+            // turn (`wakeRun` → … → `executeAgent`).
+            // Before #8093, the loop awaited split enqueue/wake work inline in the
+            // turn loop, and only finalized this child afterward in the outer
+            // `finally` — so a resumed parent that
+            // immediately calls `executions` with action=wait on this same run
+            // could find it still RUNNING and block on itself for the whole wait
+            // budget. Prove the fixed ordering: by the moment the wake step is even
+            // reached, this run is already terminal — a resumed parent's wait
+            // would resolve immediately instead of racing its own wake.
+            const runId = loopRunId();
 
-  it.effect(
-    'preserves #7491: a failed runTurn (thrown, not a value) delivers formatError to the parent',
-    () =>
-      Effect.gen(function* () {
-        const runId = loopRunId();
-        const { strategy, resolveTurn, rejectTurn } = createFakeStrategy();
-        const firstDelivered = yield* Deferred.make<void>();
-        mocks.wakeRun.mockImplementation(() =>
-          Effect.as(Deferred.succeed(firstDelivered, undefined), Effect.void),
-        );
+            const wakeReached = yield* Deferred.make<void>();
+            const releaseWake = yield* Deferred.make<void>();
+            let skippedAtWakeTime = false;
+            mocks.wakeRun.mockImplementation(() =>
+              Effect.gen(function* () {
+                // Snapshot registry state the instant the wake step is reached. The
+                // same moment a resumed parent's own turn would begin running.
+                skippedAtWakeTime = shouldSkipWait(
+                  Context.get(session, Runs),
+                  SubscriptionRef.getUnsafe(
+                    Context.get(session, SessionViewAccess).ref,
+                  ),
+                  runId,
+                );
+                yield* Deferred.succeed(wakeReached, undefined);
+                yield* Deferred.await(releaseWake);
+                return Effect.void;
+              }),
+            );
 
-        const loop = yield* startLoop(runId, strategy);
+            const loop = yield* startLoop(runId, {
+              stageLabel: 'Finalize-before-wake test',
+              launch: () => Effect.succeed({ kind: 'terminal', value: 'done' }),
+              formatDelivery: (turn) =>
+                Effect.succeed(`delivered:${turn.value}`),
+              formatError: () => 'error',
+            });
 
-        yield* resolveTurn(1, { kind: 'interim', value: 'first' });
-        yield* Deferred.await(firstDelivered);
-        yield* Context.get(session, Inbox).send(runId, {
-          text: 'resume please',
-          from: { kind: 'user' as const },
-        });
+            yield* Deferred.await(wakeReached);
+            expect(skippedAtWakeTime).toBe(true);
 
-        yield* rejectTurn(2, new Error('resume storage unreadable'));
+            yield* Deferred.succeed(releaseWake, undefined);
+            yield* Fiber.join(loop);
+            expect(Context.get(session, Runs).get(runId)).toBeUndefined();
+          }),
+      );
 
-        yield* Fiber.join(loop);
-        expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual([
-          'delivered:first',
-          'error:thrown',
-        ]);
-      }),
-  );
+      it.effect(
+        "a stop after a detached child's own completed end tells its parent the result alone",
+        () =>
+          Effect.gen(function* () {
+            yield* setUp;
+            // The native run commits its `run.end` (completed) with its
+            // delivery, then still holds the run when its parent's stop lands:
+            // the window between the run's end and its loop's terminal.
+            const runId = loopRunId();
+            const ended = yield* Deferred.make<void>();
+            const logs = captureLogEntries();
+            const turn: FakeTurn = { kind: 'terminal', value: 'done' };
+            const strategy: NativeChildStrategy<FakeTurn, SessionServices> = {
+              stageLabel: 'Stopped after its end',
+              launch: (_notify, turns) =>
+                Effect.gen(function* () {
+                  yield* endActivation({
+                    runId,
+                    outcome: RUN_OUTCOME.COMPLETED,
+                    lastTurn: () => turns.finishLastTurn(turn),
+                  });
+                  yield* Deferred.succeed(ended, undefined);
+                  return yield* Effect.never;
+                }),
+              formatDelivery: (done) =>
+                Effect.succeed(`delivered:${done.value}`),
+              formatError: () => 'error',
+              stopNotice: () => Effect.succeed('stopped'),
+            };
+            const { fiber } = yield* startDetachedChildRunLoop({
+              runId,
+              parentRunId: PARENT_RUN_ID,
+              agentName: 'fake',
+              strategy,
+            }).pipe(Effect.provide(session));
+            yield* Deferred.await(ended);
+            yield* Context.get(session, Runs)
+              .stop(runId, { reason: 'user', detachActiveChildren: false })
+              .settlement.pipe(Effect.provide(session));
+            yield* Fiber.await(fiber);
+            // The late-failure observer joins the same fiber.
+            yield* Effect.yieldNow;
+
+            expect(yield* runEnds(runId)).toMatchObject([
+              { outcome: RUN_OUTCOME.COMPLETED },
+            ]);
+            expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual([
+              'delivered:done',
+            ]);
+            expect(logs.at('ERROR')).toEqual([]);
+          }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
+      );
+
+      it.effect(
+        'preserves #7491: a failed runTurn (thrown, not a value) delivers formatError to the parent',
+        () =>
+          Effect.gen(function* () {
+            yield* setUp;
+            const runId = loopRunId();
+            const { strategy, resolveTurn, rejectTurn } = createFakeStrategy();
+            const firstDelivered = yield* Deferred.make<void>();
+            mocks.wakeRun.mockImplementation(() =>
+              Effect.as(
+                Deferred.succeed(firstDelivered, undefined),
+                Effect.void,
+              ),
+            );
+
+            const loop = yield* startLoop(runId, strategy);
+
+            yield* resolveTurn(1, { kind: 'interim', value: 'first' });
+            yield* Deferred.await(firstDelivered);
+            yield* Context.get(session, Inbox).send(runId, {
+              text: 'resume please',
+              from: { kind: 'user' as const },
+            });
+
+            yield* rejectTurn(2, new Error('resume storage unreadable'));
+
+            yield* Fiber.join(loop);
+            expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual([
+              'delivered:first',
+              'error:thrown',
+            ]);
+          }),
+      );
+    });
+  });
 });

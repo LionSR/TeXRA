@@ -27,8 +27,8 @@ const testHostBridge: HostBridgeApi = {
 // The host and its roots now, for the modules a suite evaluates as it loads;
 // the process services once the suite is collected, so they compose over its
 // `vi.mock` registrations. The session graph family is installed by the test
-// file's own imports (`sessionTestUtils`, `defaultSessionTestSetup`), after
-// its mocks.
+// file's own imports (`sessionGraphTestSetup`, directly or through
+// `sessionTestUtils`), after its mocks.
 await bindFakeHost(createFakeHost());
 beforeAll(() => installFakeHost(installedHost()));
 
