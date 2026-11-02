@@ -48,6 +48,7 @@ import {
   type HostInteractions,
   type ProcessRuntime,
   type ProcessServices,
+  type ValidationModel,
 } from '@texra-ai/harness/host';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
@@ -63,6 +64,7 @@ import {
 } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { texraPlugins } from '@texra/tools/registry';
+import type { Plugin } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 
 import {
@@ -153,6 +155,30 @@ const PROCESS_SERVICES = [
   SessionOwner,
 ] as const;
 
+/** The process over TeXRA's plugins and `extra`, its validation route
+ *  served by `model`. */
+const composedProcess = (
+  extra: readonly Plugin[],
+  model: Layer.Layer<ValidationModel>,
+) =>
+  Layer.unwrap(
+    Effect.sync(() =>
+      processLayer({
+        ...testProcessOptions(
+          [
+            ...texraPlugins({ name: 'vscode', setup: fakeSetupPlatform }),
+            ...extra,
+          ],
+          installedHost().roots.storageRoot,
+        ),
+        processStart: Effect.succeed('vitest'),
+      }).pipe(Layer.provide(model)),
+    ),
+    // cast: `processLayer` serves the internal `SessionOwner` beside
+    // `Sessions` (provideMerge); the suites' root launches and
+    // `sessionHandleOf` ask it.
+  ) as Layer.Layer<ProcessServices | Sessions | SessionOwner>;
+
 /**
  * The process every TeXRA host composes, as a layer: `processLayer` over
  * TeXRA's plugins (with the installed host's setup platform) and the fake
@@ -163,20 +189,14 @@ const PROCESS_SERVICES = [
  * way validation does.
  */
 export const SessionGraph = {
-  layer: Layer.unwrap(
-    Effect.sync(() =>
-      processLayer({
-        ...testProcessOptions(
-          texraPlugins({ name: 'vscode', setup: fakeSetupPlatform }),
-          installedHost().roots.storageRoot,
-        ),
-        processStart: Effect.succeed('vitest'),
-      }).pipe(Layer.provide(validationModelLayer)),
-    ),
-    // cast: `processLayer` serves the internal `SessionOwner` beside
-    // `Sessions` (provideMerge); the suites' root launches and
-    // `sessionHandleOf` ask it.
-  ) as Layer.Layer<ProcessServices | Sessions | SessionOwner>,
+  layer: composedProcess([], validationModelLayer),
+
+  /**
+   * The same process with `plugins` beside TeXRA's and `model` answering
+   * every model call: for a case that composes two processes in turn, as a
+   * restart with a changed plugin does.
+   */
+  with: composedProcess,
 
   /**
    * A `ProcessRuntime` over the calling fiber's services, for a subject that

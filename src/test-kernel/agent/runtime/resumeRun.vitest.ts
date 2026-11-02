@@ -32,18 +32,30 @@
  * - a message sent while a resume decides only watches that resume, so the
  *   resume's caller leaving loses the wake;
  * - a run whose process died before its title was written stays untitled
- *   after its resume, or a resume titles it a second time.
+ *   after its resume, or a resume titles it a second time;
+ * - R7 of the harness 1.0 release acceptance: a script started before a
+ *   crash runs, after a plugin's module changed, the new module source
+ *   instead of the one it started with; or a step started after the
+ *   change keeps the old one.
  */
 import '@test/support/sessionGraphTestSetup';
 
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Cause, Effect, Fiber, Context } from 'effect';
+import { Cause, Effect, Fiber, Context, Layer, Schema, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { withProcessServices } from '@texra-ai/harness/host';
+import {
+  originOf,
+  type Model,
+  type TurnEvent,
+  type TurnResult,
+} from '@texra-ai/llm';
+import { defineTool, Sessions } from '@texra-ai/harness';
+import { ValidationModel, withProcessServices } from '@texra-ai/harness/host';
+import { definePlugin } from '@texra-ai/harness/plugins';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import {
@@ -58,6 +70,7 @@ import { queuedFollowUps } from '@test/support/sessionTestUtils';
 import {
   answersOf,
   claimHolder,
+  crashedCopy,
   parkedRunAfterCrash,
   sessionStoreFaults,
   storedRows,
@@ -65,6 +78,7 @@ import {
   REAL_RUN_TIMEOUT,
   validationHost,
 } from '@test/support/storeFaults';
+import { SessionGraph } from '@test/support/testKernel';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { makeSessions } from '../../../../packages/harness/src/effect/sessionPrograms';
@@ -493,6 +507,215 @@ describe(
         yield* untilStored(storage, () => titles().length > 0);
         expect(titles()).toHaveLength(1);
       }),
+    );
+  },
+);
+
+/** The release file a case's `wait_release` calls wait for. */
+const releaseFile = () => join(testWorkspaceRoots().workspace!, 'release');
+
+/**
+ * A native plugin whose script module `builtIn:notes` exports `version`,
+ * and whose `wait_release` tool, safe to repeat, waits for the release file.
+ */
+const notesPlugin = (version: number) =>
+  definePlugin({
+    id: 'notes',
+    tools: [
+      defineTool({
+        name: 'wait_release',
+        description: 'Wait until the release file exists.',
+        replay: 'safe',
+        schema: Schema.Struct({ file: Schema.String }),
+        execute: ({ file }) =>
+          Effect.gen(function* () {
+            while (!existsSync(file)) yield* Effect.sleep('20 millis');
+            return {
+              status: 'executed' as const,
+              output: 'released',
+              summary: 'released',
+            };
+          }),
+      }),
+    ],
+    scriptModules: { notes: `export const version = ${version};` },
+  });
+
+/** The script each step runs: the module's version, after a wait in the
+ *  first step only. */
+const versionScript = (wait: boolean) =>
+  [
+    "const { version } = await import('builtIn:notes');",
+    ...(wait
+      ? [
+          `await tools.wait_release({ file: ${JSON.stringify(releaseFile())} });`,
+        ]
+      : []),
+    'return { version };',
+  ].join('\n');
+
+/**
+ * The model of the module cases, behind the validation route: the first
+ * step runs a script that waits, the second a script that does not, the
+ * third answers. A step is its count of tool results.
+ */
+const moduleModel = Layer.succeed(ValidationModel)({
+  enabled: Effect.succeed(true),
+  bind: (config) => {
+    const origin = originOf({
+      protocol: 'openai-responses',
+      requestedModel: config.id,
+      deployment: {
+        endpoint: 'https://validation.invalid/v1',
+        credentialScope: 'validation',
+      },
+    });
+    const model: Model = {
+      prepareTurn: (request) =>
+        Effect.succeed({
+          ...origin,
+          mode: 'foreground',
+          system: request.system,
+          messages: request.messages,
+          tools: request.tools ?? [],
+          transport: { kind: 'http' },
+          controls: {
+            temperature: 0,
+            maxOutputTokens: request.maxOutputTokens ?? config.maxOutputTokens,
+            store: false,
+            parallelToolCalls: true,
+            toolChoice: request.toolChoice ?? 'auto',
+            reasoning: null,
+            serviceTier: null,
+          },
+        }),
+      streamTurn: (turn) =>
+        Stream.sync(() => {
+          const step = turn.messages.filter((m) => m.role === 'tool').length;
+          const content: TurnResult['content'] =
+            step < 2
+              ? [
+                  {
+                    kind: 'local-call',
+                    providerCallId: `script-${step}`,
+                    name: 'script',
+                    argumentsText: JSON.stringify({
+                      title: `Step ${step}`,
+                      code: versionScript(step === 0),
+                    }),
+                  },
+                ]
+              : [
+                  {
+                    kind: 'message',
+                    content: [{ kind: 'text', text: 'Both steps ran.' }],
+                  },
+                ];
+          return {
+            kind: 'completed',
+            result: {
+              kind: 'http',
+              providerResponseId: `response-${step}`,
+              requestedOrigin: origin,
+              returnedModel: config.id,
+              modelFingerprint: null,
+              content,
+              finishReason: step < 2 ? 'tool-calls' : 'stop',
+              usage: null,
+            },
+          } satisfies TurnEvent;
+        }),
+    };
+    return { origin, model };
+  },
+});
+
+/** A process as every TeXRA host composes it, with the notes plugin at
+ *  module `version`, on the module model. */
+const moduleProcess = (version: number) =>
+  SessionGraph.with([notesPlugin(version)], moduleModel);
+
+/** The values the run's `script` calls returned, in order. */
+const scriptValues = (storage: string, runId: RunId) =>
+  storedRows(storage).flatMap((row) => {
+    if (row.run !== runId || row.type !== 'tool.result') return [];
+    const { payload } = JSON.parse(row.data) as {
+      payload: { callId: string; result: { value?: unknown } };
+    };
+    // The model's own calls, not the ones a script made.
+    return payload.callId.startsWith('script-') && !payload.callId.includes('/')
+      ? [{ call: payload.callId, value: payload.result.value }]
+      : [];
+  });
+
+describe(
+  'resumeRun over a changed plugin module',
+  { timeout: REAL_RUN_TIMEOUT },
+  () => {
+    validationHost('texra-module-');
+
+    it.live(
+      'R7: a script started before the crash runs its saved module source; a step started after the update imports the new one',
+      () =>
+        Effect.gen(function* () {
+          const roots = testWorkspaceRoots();
+          // The first process, at module version 1, dies while the first
+          // step's script waits.
+          const { runId, storage } = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const sessions = yield* Sessions;
+              const session = yield* sessions.open(roots, {
+                persistent: true,
+                host: {},
+              });
+              const run = yield* session.start({
+                agent: {
+                  name: 'module_reader',
+                  description: 'Reads a module version in two steps.',
+                  prompt: 'Read the module version.',
+                  tools: ['script', 'wait_release'],
+                },
+                instruction: 'Read the version twice.',
+                model: 'openai/gpt-5.6-sol',
+              });
+              yield* untilStored(roots.storage, (rows) =>
+                rows.some(
+                  (row) =>
+                    row.run === run.runId &&
+                    row.type === 'tool.intent' &&
+                    row.data.includes('"kind":"script"'),
+                ),
+              );
+              const storage = crashedCopy(roots.storage);
+              yield* sessions.close(roots);
+              return { runId: run.runId, storage };
+            }).pipe(Effect.provide(moduleProcess(1))),
+          );
+          expect(scriptValues(storage, runId)).toEqual([]);
+
+          // The second process, at module version 2, resumes it: the started
+          // script finishes on its saved source, the next step's script
+          // imports the update.
+          writeFileSync(releaseFile(), '');
+          const end = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const sessions = yield* Sessions;
+              const session = yield* sessions.open(
+                { ...roots, storage },
+                { persistent: true, host: {} },
+              );
+              const run = yield* session.resume(runId);
+              const end = yield* run.result;
+              yield* sessions.close({ ...roots, storage });
+              return end;
+            }).pipe(Effect.provide(moduleProcess(2))),
+          );
+          expect(end.outcome).toBe('completed');
+          expect(scriptValues(storage, runId)).toEqual([
+            { call: 'script-0', value: { version: 1 } },
+            { call: 'script-1', value: { version: 2 } },
+          ]);
+        }),
     );
   },
 );
