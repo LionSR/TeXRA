@@ -23,7 +23,7 @@ import {
   type BackgroundToggles,
   type ModelSettings,
 } from '@model/modelSettings';
-import { modelFetch } from '@platform/defaults/longRunningModelTransport';
+import { runModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
 import type { ModelBackend } from '@shared/schemas';
@@ -185,7 +185,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       // Background delivery, where the binding can carry it, wins over the
       // persistent WebSocket.
       background: backgroundOn(settings.background, turn),
-      fetch: yield* modelFetch,
+      fetch: yield* runModelFetch,
     },
   });
   return {

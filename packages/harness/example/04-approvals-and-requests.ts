@@ -9,7 +9,7 @@
  *    and stops the interactive run cleanly via `session.request({ kind: 'run.stop' })`,
  *    after which its `result` is the `cancelled` end it stored.
  */
-import { Effect, Schema, Stream } from 'effect';
+import { Effect, Layer, Schema, Stream } from 'effect';
 import { defineTool, Sessions, type PendingRequest } from '@texra-ai/harness';
 import {
   definePlugin,
@@ -42,7 +42,7 @@ const preprintPlugin = definePlugin({
   tools: [publishPreprintTool],
 });
 
-const { platform, requests } = await makeExampleWorkspace([
+const { platform, requests, route } = await makeExampleWorkspace([
   {
     toolCalls: [
       {
@@ -80,7 +80,7 @@ const program = Effect.gen(function* () {
       tools: ['publish_preprint'],
     },
     instruction: 'Stage the manuscript for arXiv.',
-    model: 'anthropic/claude-sonnet-5-5',
+    model: route.model,
     interactive: true,
   });
 
@@ -138,7 +138,7 @@ const program = Effect.gen(function* () {
     Sessions.layer({
       platform,
       plugins: [...harnessBuiltins, preprintPlugin],
-    }),
+    }).pipe(Layer.provide(route.transport)),
   ),
 );
 

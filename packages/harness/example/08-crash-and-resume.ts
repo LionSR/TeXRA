@@ -16,7 +16,7 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 
-import { Effect, Option, Schema, Stream } from 'effect';
+import { Effect, Layer, Option, Schema, Stream } from 'effect';
 import { defineTool, Sessions } from '@texra-ai/harness';
 import {
   definePlugin,
@@ -71,7 +71,7 @@ const submit = (verdict: string, expect: string): ScriptedTurn => ({
 
 // The killed process answers the parent's first turn and the first child;
 // this one only the second child and the parent's last turn.
-const { platform, workspace, requests } = await makeExampleWorkspace(
+const { platform, workspace, requests, route } = await makeExampleWorkspace(
   crashing
     ? [
         {
@@ -86,7 +86,9 @@ const { platform, workspace, requests } = await makeExampleWorkspace(
       ],
   existing,
 );
-const layer = Sessions.layer({ platform, plugins });
+const layer = Sessions.layer({ platform, plugins }).pipe(
+  Layer.provide(route.transport),
+);
 
 const crashProgram = Effect.gen(function* () {
   const session = yield* (yield* Sessions).open(platform.roots, {
@@ -99,7 +101,7 @@ const crashProgram = Effect.gen(function* () {
       tools: ['script', 'hold'],
     },
     instruction: 'Review in two rounds.',
-    model: 'anthropic/claude-sonnet-5-5',
+    model: route.model,
   });
   process.stdout.write(`started ${run.runId}\n`);
   const end = yield* run.result;

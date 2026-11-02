@@ -12,13 +12,13 @@
  *    the first `run1` handle again: they are its own activation's, and the
  *    read ends without waiting for the resumed one.
  */
-import { Effect, Option, Stream } from 'effect';
+import { Effect, Layer, Option, Stream } from 'effect';
 import { responseText, Sessions } from '@texra-ai/harness';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
 import { makeExampleWorkspace } from './_support.ts';
 
-const { platform, requests } = await makeExampleWorkspace([
+const { platform, requests, route } = await makeExampleWorkspace([
   { text: 'Drafted section 1 with an informal proof sketch.' },
   { text: 'Rewrote section 1 with Lemma 1 and a formal proof.' },
 ]);
@@ -35,7 +35,7 @@ const program = Effect.gen(function* () {
       tools: ['read_file'],
     },
     instruction: 'Draft section 1.',
-    model: 'anthropic/claude-sonnet-5-5',
+    model: route.model,
     interactive: true,
   });
 
@@ -124,7 +124,11 @@ const program = Effect.gen(function* () {
   );
 }).pipe(
   Effect.scoped,
-  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
+  Effect.provide(
+    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
+      Layer.provide(route.transport),
+    ),
+  ),
 );
 
 await Effect.runPromise(program);

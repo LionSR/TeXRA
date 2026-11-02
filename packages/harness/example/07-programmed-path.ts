@@ -16,7 +16,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { Effect, Schema } from 'effect';
+import { Effect, Layer, Schema } from 'effect';
 import { defineTool, Sessions } from '@texra-ai/harness';
 import { definePlugin, harnessBuiltins } from '@texra-ai/harness/plugins';
 
@@ -82,7 +82,7 @@ return {
   longCell: page.rows[0]?.[1]?.length ?? null,
 };`;
 
-const { platform, agentsDir, requests } = await makeExampleWorkspace([
+const { platform, agentsDir, requests, route } = await makeExampleWorkspace([
   { text: 'Inline persona reply.', expect: 'Inline start.' },
   {
     expect: 'Outline and review.',
@@ -121,7 +121,7 @@ const shape = (request: Readonly<Record<string, unknown>> | undefined) =>
 const program = Effect.gen(function* () {
   const sessions = yield* Sessions;
   const session = yield* sessions.open(platform.roots);
-  const model = 'anthropic/claude-sonnet-5-5';
+  const { model } = route;
 
   const inline = yield* session.start({
     agent: PERSONA,
@@ -175,7 +175,10 @@ const program = Effect.gen(function* () {
 }).pipe(
   Effect.scoped,
   Effect.provide(
-    Sessions.layer({ platform, plugins: [...harnessBuiltins, latexPlugin] }),
+    Sessions.layer({
+      platform,
+      plugins: [...harnessBuiltins, latexPlugin],
+    }).pipe(Layer.provide(route.transport)),
   ),
 );
 
