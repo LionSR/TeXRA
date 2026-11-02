@@ -13,7 +13,8 @@ import {
 
 import type { AgentTrace, StageHandle, TraceEmitter } from '@agent/trace';
 import { endActivation } from '@agent/runtime/AgentRunLifecycle';
-import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox, followUpServices } from '@agent/followUp/ToolUseFollowUp';
+import type { FollowUpServices } from '@agent/followUp/ToolUseFollowUp';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import {
   registryOf,
@@ -27,6 +28,7 @@ import {
   commitPart,
   deliverIn,
   parentEdgeIn,
+  partServices,
   sendToParent,
   traceLog,
   turnResultPart,
@@ -76,19 +78,22 @@ export interface ChildRunPort {
 /**
  * A native run's child policy: each turn runs under `turnPermit` (a child
  * waiting for input holds no slot) and its result commits in the batch that
- * ends it (its boundary's `waiting` row, or the last turn's `run.end`).
+ * ends it (its boundary's `waiting` row, or the last turn's `run.end`). `R`:
+ * the services they read of the run that calls them, its loop and its end.
  */
-export interface ChildRunTurns<TTurn> extends ChildRunBoundary<TTurn> {
+export interface ChildRunTurns<TTurn, R> extends ChildRunBoundary<TTurn, R> {
   /** Finish the run's last turn: what its `run.end` transaction writes. A
    *  failure here is the loop's, raised once the run is joined. */
-  finishLastTurn(turn: TTurn): Effect.Effect<TransactionPart | undefined>;
+  finishLastTurn(
+    turn: TTurn,
+  ): Effect.Effect<TransactionPart | undefined, never, R>;
 }
 
 /** What a native run's loop takes of its child policy. */
-export interface ChildRunBoundary<TTurn> {
-  turnPermit<A, E, R>(
-    turn: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E | Error, R>;
+export interface ChildRunBoundary<TTurn, R> {
+  turnPermit<A, E, RTurn>(
+    turn: Effect.Effect<A, E, RTurn>,
+  ): Effect.Effect<A, E | Error, R | RTurn>;
   /** Finish a turn the run goes on from: rows for its boundary batch, the
    *  parent's delivery written in that batch's transaction, and the parent's
    *  resume to run once the batch commits ({@link wakeParent}). */
@@ -98,7 +103,8 @@ export interface ChildRunBoundary<TTurn> {
       readonly alongside: Alongside<Error> | undefined;
       readonly wakeParent: Effect.Effect<void, Error>;
     },
-    Error
+    Error,
+    R
   >;
 }
 
@@ -136,10 +142,11 @@ export interface NativeChildStrategy<
   R = never,
 > extends ChildStrategyBase<TTurn, R> {
   /** `notify` is best-effort live progress. A child reports no spend: its
-   *  priced calls are rows on its own run, summed over the run tree. */
+   *  priced calls are rows on its own run, summed over the run tree. Its
+   *  run calls `turns` within this effect, under the services it runs with. */
   launch(
     notify: (update: SubagentProgressUpdate) => void,
-    turns: ChildRunTurns<TTurn>,
+    turns: ChildRunTurns<TTurn, R | FollowUpServices>,
   ): Effect.Effect<TTurn, Error, R>;
   /** Record the report without routing it to a parent: a headless caller
    *  awaits and reads it itself. */
@@ -513,51 +520,45 @@ const endTurns = Effect.fn('childRunLoop.endTurns')(function* <TTurn, R>(
 });
 
 /** The turns a native run's own loop finishes, on its own fiber, under the
- *  services this loop runs with. */
+ *  services of the run that calls them. What a turn hands back to run later
+ *  carries the caller's services, picked: the parent's delivery runs in the
+ *  job committing the turn's batch, and holds the parent's claim for that
+ *  job's scope alone. */
 function nativeTurns<TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   strategy: NativeChildStrategy<TTurn, R>,
-  services: Context.Context<R | AgentRunServices>,
-): ChildRunTurns<TTurn> {
-  const provided = Effect.provide(services);
+): ChildRunTurns<TTurn, R | FollowUpServices> {
   return {
     turnPermit: Effect.fn('childRunLoop.turnPermit')(function* (turn) {
-      yield* provided(beginTurn(loop, false));
+      yield* beginTurn(loop, false);
       return yield* loop.budget ? loop.budget.withPermit(turn) : turn;
     }),
-    finishTurn: (turn) =>
-      Effect.map(
-        buildTurnResult(loop, { turn, err: null, turnIsError: false }),
-        ({ result: { rows, delivery } }) => ({
-          rows,
-          alongside:
-            delivery &&
-            provided(
-              Effect.map(deliverIn(delivery, loop.trace), (part) => part.rows),
-            ),
-          wakeParent: provided(wakeParent(delivery, loop.trace)),
-        }),
-      ).pipe(provided),
+    finishTurn: Effect.fn('childRunLoop.finishTurn')(function* (turn) {
+      const turned = { turn, err: null, turnIsError: false };
+      const { rows, delivery } = (yield* buildTurnResult(loop, turned)).result;
+      const parts = yield* partServices;
+      const delivered = delivery && deliverIn(delivery, loop.trace);
+      return {
+        rows,
+        alongside:
+          delivered &&
+          Effect.map(Effect.provide(delivered, parts), (part) => part.rows),
+        wakeParent: Effect.provide(
+          wakeParent(delivery, loop.trace),
+          yield* followUpServices,
+        ),
+      };
+    }),
     // The native run's own `run.end` commits these.
-    finishLastTurn: (turn) =>
-      strategy.isTurnInterrupted?.(turn) === true
-        ? Effect.succeed(undefined)
-        : recordLastTurn(
-            loop,
-            {
-              turn,
-              err: null,
-              turnIsError: strategy.isTurnError?.(turn) === true,
-            },
-            true,
-          ).pipe(
-            Effect.map((end) =>
-              end.kind === 'finished'
-                ? turnResultPart(end.result, loop.trace)
-                : undefined,
-            ),
-            provided,
-          ),
+    finishLastTurn: Effect.fn('childRunLoop.finishLastTurn')(function* (turn) {
+      if (strategy.isTurnInterrupted?.(turn) === true) return undefined;
+      const turnIsError = strategy.isTurnError?.(turn) === true;
+      const turned = { turn, err: null, turnIsError };
+      const end = yield* recordLastTurn(loop, turned, true);
+      return end.kind === 'finished'
+        ? turnResultPart(end.result, loop.trace)
+        : undefined;
+    }),
   };
 }
 
@@ -593,14 +594,11 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   strategy: NativeChildStrategy<TTurn, R>,
 ): Effect.fn.Return<TTurn | undefined, Error, R | AgentRunServices> {
   const { runId } = loop.params;
-  const context = yield* Effect.context<R | AgentRunServices>();
-  const turns = nativeTurns(loop, strategy, context);
+  const notify = progressNotify(loop, strategy, yield* partServices);
   loop.turnStart = yield* Clock.currentTimeMillis;
   const turned = yield* attemptTurn(
     loop,
-    Effect.suspend(() =>
-      strategy.launch(progressNotify(loop, strategy, context), turns),
-    ),
+    Effect.suspend(() => strategy.launch(notify, nativeTurns(loop, strategy))),
   );
   const { turn } = turned;
   // A turn that reports itself stopped stops the child.

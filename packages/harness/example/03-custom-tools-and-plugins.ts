@@ -6,7 +6,7 @@
  * `definePlugin`, and runs a two-turn agent loop where the model invokes the
  * tool on turn 1 and summarizes the tool output on turn 2.
  */
-import { Effect, Schema } from 'effect';
+import { Effect, Layer, Schema } from 'effect';
 import { defineTool, Sessions } from '@texra-ai/harness';
 import {
   definePlugin,
@@ -50,7 +50,7 @@ const latexMetricsPlugin = definePlugin({
   tools: [countEquationsTool],
 });
 
-const { platform, requests } = await makeExampleWorkspace([
+const { platform, requests, route } = await makeExampleWorkspace([
   {
     toolCalls: [
       {
@@ -80,7 +80,7 @@ const program = Effect.gen(function* () {
       tools: ['count_equations'],
     },
     instruction: 'Count the equations in section 1.',
-    model: 'anthropic/claude-sonnet-5-5',
+    model: route.model,
   });
 
   const end = yield* run.result;
@@ -93,7 +93,7 @@ const program = Effect.gen(function* () {
     Sessions.layer({
       platform,
       plugins: [...harnessBuiltins, latexMetricsPlugin],
-    }),
+    }).pipe(Layer.provideMerge(route.transport)),
   ),
 );
 

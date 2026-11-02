@@ -404,7 +404,33 @@ stores it holds.
 Model requests carry their own HTTP transport: the environment's proxy policy
 (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and a 30-minute stream inactivity
 timeout, bound to each model rather than installed as your process's global
-dispatcher.
+dispatcher. To answer model requests yourself, for a scripted model in a test
+or a recording transport, merge `ModelFetch` (a `fetch`) beneath
+`Sessions.layer`; every model request of the layer's runs then goes through
+it, and it owns the proxy policy and timeouts too:
+
+```ts
+import { Effect, Layer } from 'effect';
+import { ModelFetch, Sessions } from '@texra-ai/harness';
+
+const scripted: typeof fetch = async () =>
+  new Response(/* the provider's wire reply */);
+
+program.pipe(
+  Effect.provide(
+    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
+      Layer.provideMerge(Layer.succeed(ModelFetch)(scripted)),
+    ),
+  ),
+);
+```
+
+The fetch has to stay in the runtime's context, where the runs read it, so
+the sample merges it with `Layer.provideMerge` rather than handing it only to
+the layer's build with `Layer.provide`. Leave it out and the harness's own
+transport carries the requests.
+[`example/_support.ts`](./example/_support.ts) answers with an in-memory
+Anthropic Messages stream this way.
 
 The harness's log entries (a store that failed, a plugin that did not load, a
 run's warnings) print to the console until you name another destination:

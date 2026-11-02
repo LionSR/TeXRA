@@ -12,8 +12,7 @@
     "@effect/sql-sqlite-node": "^4.1.0",
     "@texra-ai/harness": "file:harness.tgz",
     "@texra-ai/llm": "file:llm.tgz",
-    "effect": "^4.1.0",
-    "undici": "^8.0.2"
+    "effect": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.19.0"
