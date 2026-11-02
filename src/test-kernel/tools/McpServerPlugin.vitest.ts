@@ -124,7 +124,7 @@ const writtenText = (file: string) =>
 describe('MCP server plugins', () => {
   // Live clock: a real child process answers over stdio, and the approval's
   // `request.opened` row is delivered by a consumer of the session's log.
-  it.layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+  it.layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.effect(
       'offers a configured server tools, gates each call on approval, and stops the server with the composition',
       () =>

@@ -89,7 +89,7 @@ describe(
   'native agent launch activation',
   { timeout: REAL_RUN_TIMEOUT },
   () => {
-    layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+    layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
       it.layer(validationHost('texra-activation-'), { buildPerTest: true })(
         (it) => {
           // A root's refused opening is the ownership suite's

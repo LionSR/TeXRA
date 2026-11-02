@@ -109,7 +109,7 @@ const run = (context: CliContext, id: RunId = RUN_ID) =>
   );
 
 // Live clock: the command runs as its entry runs it.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'runResumeCommand',
   (it) => {
     beforeEach(() => {

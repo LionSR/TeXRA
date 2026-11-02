@@ -48,7 +48,7 @@ const launch = (session: Context.Context<SessionServices>, runId: RunId) =>
   );
 
 describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
-  layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.layer(validationHost('texra-ownership-'), { buildPerTest: true })(
       (it) => {
         it.effect(

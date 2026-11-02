@@ -285,7 +285,7 @@ const openAiKeyChecks = (): number =>
 layer(
   boundSessionView.pipe(
     Layer.provideMerge(TestSession.layer()),
-    Layer.provideMerge(SessionGraph.layer),
+    Layer.provideMerge(SessionGraph.hosted),
   ),
   { excludeTestServices: true },
 )('TUI request decisions', (it) => {

@@ -43,7 +43,7 @@ layer(seeded, { buildPerTest: true })('seedDisabledToolDefaults', (it) => {
  * A dashboard refresh forks the version probes; an interrupted refresh must
  * stop the `<tool> --version` process it spawned, not leave it running.
  */
-layer(SessionGraph.layer)('external tool availability probes', (it) => {
+layer(SessionGraph.hosted)('external tool availability probes', (it) => {
   it.effect('an interrupted version probe stops the process it spawned', () =>
     Effect.gen(function* () {
       const spawner = scriptedSpawnerLayer(() => 'hang');

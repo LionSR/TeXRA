@@ -100,7 +100,7 @@ function requestEdit(path: string, proposedContent: string) {
 }
 
 // One session for the file: the runs it starts stay started across its cases.
-layer(Layer.provideMerge(TestSession.layer(), SessionGraph.layer))(
+layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted))(
   'CLI approval adapter',
   (it) => {
     describe('approval prompt hooks', () => {

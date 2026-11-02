@@ -45,7 +45,7 @@ const invoke = (input: unknown) =>
     Effect.provide(withSetup(nativeToolTestLayer())),
   );
 
-layer(SessionGraph.layer)('InvokeCommandTool allowlist', (it) => {
+layer(SessionGraph.hosted)('InvokeCommandTool allowlist', (it) => {
   it.effect(
     'rejects command arguments so credentials cannot reach the host',
     () =>

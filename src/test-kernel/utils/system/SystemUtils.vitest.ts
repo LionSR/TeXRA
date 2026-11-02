@@ -15,7 +15,6 @@ import { describe, expect } from 'vitest';
 // Local imports
 import { executeCommand } from '@texra-ai/harness/node';
 import { waitForCondition } from '@test/support/asyncTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
@@ -78,10 +77,9 @@ async function waitForPublishedPid(pidFile: string): Promise<number> {
 describe('executeCommand', () => {
   const tempDirs = useTempDirs();
 
-  // The cases below hand `executeCommand` the same directory the fake
-  // platform's workspace names, so the spawn has a real cwd on disk.
+  // The cases below hand `executeCommand` the repository root, so the spawn
+  // has a real cwd on disk.
   const WORKSPACE = process.cwd();
-  setupPlatform({ workspacePath: WORKSPACE });
 
   it.live(
     "withholds TeXRA's provider key variables from the child and keeps the rest",

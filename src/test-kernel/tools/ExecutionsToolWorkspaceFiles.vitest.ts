@@ -47,7 +47,7 @@ const perTest = Layer.provideMerge(
 );
 
 // Live clock: the session's publisher and readers run on real turns.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'ExecutionsTool',
   (it) => {
     it.layer(perTest, { buildPerTest: true })((it) => {

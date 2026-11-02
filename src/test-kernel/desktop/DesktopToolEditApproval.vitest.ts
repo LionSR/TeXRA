@@ -40,7 +40,7 @@ async function pathExists(filePath: string): Promise<boolean> {
 
 // Live clock: the window follows the session's log, and the user acts on
 // it, on real turns.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'desktop tool edit approval',
   (it) => {
     afterEach(() => {

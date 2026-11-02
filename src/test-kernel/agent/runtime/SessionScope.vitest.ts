@@ -13,7 +13,7 @@ import {
 } from '@test/support/testKernel';
 
 // The file's process default session, beside the one each case opens.
-layer(Layer.provideMerge(TestSession.layer(), SessionGraph.layer), {
+layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
   excludeTestServices: true,
 })('sendFollowUp host-path session routing', (it) => {
   it.effect(

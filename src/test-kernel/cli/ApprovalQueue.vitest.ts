@@ -38,7 +38,7 @@ function bashPayload(runId: RunId | '', requestId = `bash-${runId}`) {
 
 // The view is bound on a runtime over the session graph, as the chat entry
 // binds it; the surface itself is read synchronously.
-layer(Layer.provideMerge(boundTestSessionView, SessionGraph.layer), {
+layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
   excludeTestServices: true,
 })('CLI approval surface', (it) => {
   beforeEach(() => rootRunId.set(ROOT));

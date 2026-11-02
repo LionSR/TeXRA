@@ -130,7 +130,7 @@ function launchBackgroundBash(
 const sessionHandle = Effect.flatMap(TestSession, sessionHandleOf);
 
 // Live clock: the background runs settle on real turns.
-layer(SessionGraph.layer, { excludeTestServices: true })('BashTool', (it) => {
+layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
   afterEach(() => {
     vi.restoreAllMocks();
   });

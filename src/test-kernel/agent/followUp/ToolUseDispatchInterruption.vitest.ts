@@ -86,7 +86,7 @@ function executedTool(name: string) {
  * turn in history at all and the settled calls stay row facts. Resume settles
  * what is left and delivers the group once.
  */
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'tool dispatch interrupted mid-turn',
   (it) => {
     it.effect(

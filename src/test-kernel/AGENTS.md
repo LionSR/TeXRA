@@ -49,10 +49,15 @@ by what it reaches, not by how many tests it has:
   DOM, one module registry shared between files. Several times cheaper per
   suite than `kernel`, and deterministic, because nothing in it installs or replaces
   anything.
-- **`kernel`** — everything that needs a host: the fake platform installed per
-  file, each file in its own module registry. The DOM suites (`progressView`,
-  `settings`, `frontend`, `desktop`) live here too; a Lit element
-  class is bound to the window that first loaded it.
+- **`kernel`** — everything that needs a host, each file in its own module
+  registry. A suite states what it runs over as layers its blocks build with
+  `@effect/vitest`'s `layer(...)` and `it.layer(...)`
+  (`support/testKernel.ts`: `FakeHost.layer`; `SessionGraph.layer` over the
+  block's host, or `SessionGraph.hosted` with a default one; and
+  `TestSession.layer`). No host is installed by default, and a block's scope
+  releases what it built. The DOM suites (`progressView`, `settings`,
+  `frontend`, `desktop`) live here too; a Lit element class is bound to the
+  window that first loaded it.
 
 Membership is computed from the suite's source, not declared. A suite under a
 `pure` directory is `pure` unless it calls `vi.mock` / `vi.doMock` on a
@@ -126,7 +131,7 @@ testing guides.
 
 ## Test fixtures and fakes
 
-- **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across suites is promoted to `src/test-kernel/support/`.
+- **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across suites is promoted to `src/test-kernel/support/`, where a module-scope `await` or `Effect.run*` is an ESLint error that no disable comment reaches: what a suite runs over is a layer its blocks build.
 
 - **One fake per port.** Tests use the shared fakes in `src/test-kernel/support/` for platform ports. A local fake for a port that already has a shared fake requires a one-line comment naming the capability the shared fake deliberately lacks.
 

@@ -71,7 +71,7 @@ const planSession = Effect.fn('planSession')(function* (runId: RunId) {
 });
 
 /** The process, over a fresh default host for the test. */
-const perTest = Layer.provideMerge(FakeHost.layer(), SessionGraph.layer);
+const perTest = Layer.provideMerge(SessionGraph.layer, FakeHost.layer());
 
 // Live clock: the plan request is opened and answered on the session's log.
 layer(perTest, { buildPerTest: true, excludeTestServices: true })(

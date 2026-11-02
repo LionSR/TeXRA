@@ -710,7 +710,7 @@ describe('Sessions owner', () => {
 
   // Real polling loops (`vi.waitFor`) on the session graph's live work: a
   // live clock, so nothing the session does waits on a test clock.
-  it.layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+  it.layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.effect(
       'delivers committed runtime facts and never announces a rejected write',
       () =>

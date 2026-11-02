@@ -44,7 +44,7 @@ function viewMemory(storageFs: RootedFileSystem, memoryPath?: string) {
   );
 }
 
-layer(SessionGraph.layer)('MemoryTool view with an omitted path', (it) => {
+layer(SessionGraph.hosted)('MemoryTool view with an omitted path', (it) => {
   it.effect(
     'lists the empty memory root instead of erroring on a fresh session',
     () =>

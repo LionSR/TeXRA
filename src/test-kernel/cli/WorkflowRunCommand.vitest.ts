@@ -230,7 +230,7 @@ const seedStartedRun = (
     },
   ]);
 
-layer(SessionGraph.layer)('CLI run command, workflow agents', (it) => {
+layer(SessionGraph.hosted)('CLI run command, workflow agents', (it) => {
   beforeEach(() => {
     vi.clearAllMocks();
     pendingRunStarts = [];

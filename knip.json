@@ -4,7 +4,6 @@
     ".": {
       "entry": [
         "src/test-kernel/**/*.vitest.ts",
-        "src/test-kernel/support/setupFakePlatform.ts",
         "src/test-kernel/desktop/electronTestStub.ts",
         "scripts/**/*.mjs!"
       ],

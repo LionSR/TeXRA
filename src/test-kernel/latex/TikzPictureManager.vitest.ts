@@ -1,16 +1,16 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { pathToLocationIn } from '@texra-ai/harness/host';
 import { TikzPictureManager } from '@latex/TikzPictureManager';
-import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { FakeHost } from '@test/support/testKernel';
 
 function extractFromPaper(content: string) {
-  return Effect.promise(() =>
-    installPlatform({
+  return Layer.build(
+    FakeHost.layer({
       workspacePath: fakePath('workspace'),
       files: { '/workspace/paper.tex': content },
     }),

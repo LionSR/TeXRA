@@ -18,7 +18,7 @@ const clipboardMock = vi.hoisted(() => ({
 vi.mock('@cli/runtime/clipboardImage', () => clipboardMock);
 
 // Live clock: the paste queue waits on real fibers.
-layer(Layer.provideMerge(boundTestSessionView, SessionGraph.layer), {
+layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
   excludeTestServices: true,
 })('InputBar slash submit', (it) => {
   it('does not persist commands whose input may contain a credential', () => {

@@ -267,7 +267,7 @@ function stubExecuteCliDeps(): void {
 // Live clock: the run is forked in-fiber, but the command's shutdown step
 // settles on the process runtime, and the session's publisher runs on real
 // turns.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'executeCliConfig',
   (it) => {
     it.layer(perTest, { buildPerTest: true })((it) => {

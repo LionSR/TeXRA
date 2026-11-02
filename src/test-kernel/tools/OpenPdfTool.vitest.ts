@@ -31,13 +31,13 @@ const editors = makeEditorHost();
 const perTest = Layer.provideMerge(
   TestSession.layer(undefined, { host: {} }),
   Layer.provideMerge(
+    SessionGraph.layer,
     FakeHost.layer({
       workspacePath: fakePath('workspace'),
       // A real PDF outside the working directory, so only the path rule
       // refuses it.
       files: { '/run/paper.pdf': '%PDF-1.4\n' },
     }),
-    SessionGraph.layer,
   ),
 );
 

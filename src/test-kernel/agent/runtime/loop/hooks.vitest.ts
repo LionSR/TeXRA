@@ -116,7 +116,7 @@ const installRewriteHook = (dir: string, runs: string, rewritten: string) =>
   });
 
 describe('run loop hooks', { timeout: REAL_RUN_TIMEOUT }, () => {
-  layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.layer(validationHost('texra-hooks-'), { buildPerTest: true })((it) => {
       it.effect(
         'R22: a rewrite committed before a crash keeps the original call, runs only the rewritten input, and never runs the hook again',

@@ -90,7 +90,7 @@ const parkTerminal = (
   });
 
 // The file's session, as the process default session a host opens.
-layer(Layer.provideMerge(TestSession.layer(), SessionGraph.layer), {
+layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
   excludeTestServices: true,
 })('endRun', (it) => {
   it.effect(

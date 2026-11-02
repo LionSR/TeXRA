@@ -196,8 +196,9 @@ function testBodyRuns(sourceFile) {
     if (ts.isCallExpression(node)) {
       const callee = node.expression;
       // A property access is a run on a runtime the file holds (`Effect`,
-      // `runtime`, `testRuntime()`, a bundled copy); a bare identifier counts
-      // only when the file does not declare that name itself.
+      // `runtime`, a runtime a helper returns, a bundled copy); a bare
+      // identifier counts only when the file does not declare that name
+      // itself.
       const name = ts.isPropertyAccessExpression(callee)
         ? callee.name.text
         : ts.isIdentifier(callee) && !shadowed.has(callee.text)

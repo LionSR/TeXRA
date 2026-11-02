@@ -55,7 +55,7 @@ function usage<A>(
 
 // Live clock: the adapters' retries and the in-flight requests run in real
 // time.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'SubscriptionUsageService',
   (it) => {
     afterEach(() => {

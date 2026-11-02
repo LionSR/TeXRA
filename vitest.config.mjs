@@ -32,10 +32,10 @@ const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 // installs process-wide state, so nothing can leak. Measured on 136 suites:
 // 28s against 1m55s isolated, and deterministic.
 //
-// The `kernel` project is everything else: the fake host installed per file,
-// each file in its own module registry, because module-scope state
-// (`platform()`, the process runtime, `vi.mock` factories) still leaks between
-// files when the registry is shared.
+// The `kernel` project is everything else: each file in its own module
+// registry, because module-scope state (the fake host a block installs,
+// `vi.mock` factories, a DOM) still leaks between files when the registry is
+// shared.
 //
 // Membership is computed from the suite's source, not declared: a suite under
 // one of these directories is `pure` unless it mocks a repository module
@@ -78,8 +78,7 @@ const REACHES_A_HOST = [
   /from\s+['"](?:lit|lit-html|lit\/|@lit\/|jsdom)/,
   /@vitest-environment\s+jsdom|new JSDOM\s*\(/,
   /from\s+['"]@platform\//,
-  /from\s+['"]@test\/support\/(?:setupPlatform|setupFakePlatform|FakePlatform|FakeHosts|tempDirPlatform|nativeToolTestLayer|sessionTestUtils|sessionGraphTestSetup|crashConformance|testProcessRuntime|testWorkspaceRoots|testKernel)['"]/,
-  /import\s+['"]@test\/support\/sessionGraphTestSetup['"]/,
+  /from\s+['"]@test\/support\/(?:setupPlatform|FakePlatform|FakeHosts|tempDirPlatform|nativeToolTestLayer|sessionTestUtils|crashConformance|testWorkspaceRoots|testKernel)['"]/,
 ];
 // What the scan cannot see is a suite that changes process-wide state a
 // library reads once — an environment variable chalk takes its color level
@@ -151,10 +150,13 @@ export default defineConfig({
           isolate: true,
           include: ['src/test-kernel/**/*.vitest.ts'],
           exclude: pureSuites,
-          // The temp home first: no module loads before the real one is gone.
+          // The temp home first, then the check that nothing still reaches
+          // the real one: setup files run in order, so no module of the
+          // repository loads before the real home is gone. A suite's host
+          // comes from its own blocks (`FakeHost.layer`).
           setupFiles: [
             'src/test-kernel/support/isolateHome.ts',
-            'src/test-kernel/support/setupFakePlatform.ts',
+            'src/test-kernel/support/homeIsolationCheck.ts',
           ],
         },
       },

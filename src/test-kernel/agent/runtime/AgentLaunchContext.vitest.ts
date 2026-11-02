@@ -30,7 +30,7 @@ const EXECUTION_ID = 'a00101' as RunId;
 
 const tempDirs = useTempDirs();
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'AgentLaunchContext',
   (it) => {
     // The built-in agents are the bundled personas: a launch resolves its

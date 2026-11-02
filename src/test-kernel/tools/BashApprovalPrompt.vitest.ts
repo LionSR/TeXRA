@@ -60,7 +60,7 @@ function watchBashRequests(session: Context.Context<SessionServices>) {
 }
 
 // Live clock: the session's publisher and readers run on real turns.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'command approval queueing',
   (it) => {
     // The project's policy is the fake host's setting, shared by the file.

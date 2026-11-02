@@ -10,8 +10,8 @@ import { getChatGptSubscriptionStatus } from '@texra/tools/setup/platform';
 
 /** The process over a host that passes a setup platform. */
 const perTest = Layer.provideMerge(
-  FakeHost.layer({}, { setup: {} }),
   SessionGraph.layer,
+  FakeHost.layer({}, { setup: {} }),
 );
 
 afterEach(() => {

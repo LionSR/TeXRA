@@ -152,7 +152,7 @@ const persistCompletedChild = (
     return absolutePath;
   });
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'resolveChildRunOutput',
   (it) => {
     it.layer(

@@ -23,7 +23,7 @@ const installFakePlatform = (files: Record<string, string> = {}) =>
     }),
   );
 
-layer(SessionGraph.layer)('approved write', (it) => {
+layer(SessionGraph.hosted)('approved write', (it) => {
   it.effect(
     'applies an approved edit over unrelated concurrent changes and refuses conflicting ones',
     () =>

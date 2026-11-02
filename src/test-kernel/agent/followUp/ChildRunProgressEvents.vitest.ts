@@ -48,7 +48,7 @@ const parentSession = Effect.gen(function* () {
   return session;
 });
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'child run progress events',
   (it) => {
     it.effect(

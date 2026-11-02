@@ -66,7 +66,7 @@ function withGlobWorkspace(
   );
 }
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'GlobTool match metadata',
   (it) => {
     it.effect.each([

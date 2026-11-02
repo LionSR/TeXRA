@@ -7,7 +7,7 @@ import { installedHost } from '@test/support/setupPlatform';
 import { SessionGraph } from '@test/support/testKernel';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'applyHelperModelPreference',
   (it) => {
     // No credential is stored, so the helper model cannot run: the launch

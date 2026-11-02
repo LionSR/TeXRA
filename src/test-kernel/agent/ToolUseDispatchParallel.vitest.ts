@@ -337,7 +337,7 @@ const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
     ).pipe(Effect.orDie),
   ).pipe(Effect.provide(kit.layer), Effect.provide(kit.session));
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'tool-use dispatch',
   (it) => {
     it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {

@@ -243,7 +243,7 @@ describe(
   'agent package sessions over a real store',
   { timeout: REAL_RUN_TIMEOUT },
   () => {
-    layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+    layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
       it.layer(validationHost('texra-package-'), { buildPerTest: true })(
         (it) => {
           it.effect(

@@ -135,7 +135,7 @@ function createRegistry(
 // The default session lives for the file; each case runs over a fresh host.
 // Live clock: a stop's settlement and the registry's forks run on real
 // event-loop turns, as on the process runtime.
-layer(Layer.provideMerge(TestSession.layer(), SessionGraph.layer), {
+layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
   excludeTestServices: true,
 })('runRegistry', (it) => {
   it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {

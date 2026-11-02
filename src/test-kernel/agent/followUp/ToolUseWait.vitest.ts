@@ -112,7 +112,7 @@ function userTexts(state: RunState | null): string[] {
   );
 }
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'a run waiting for input',
   (it) => {
     describe('a parked child run', () => {

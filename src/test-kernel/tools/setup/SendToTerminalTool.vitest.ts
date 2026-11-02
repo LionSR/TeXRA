@@ -72,7 +72,7 @@ const callTool = (
   );
 
 // Live clock: the session's publisher and readers run on real turns.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'SendToTerminalTool',
   (it) => {
     it.effect('rejects commands containing newlines', () =>
