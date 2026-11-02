@@ -50,6 +50,8 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@texra-ai/harness/schemas';
+import { effectDiagnosticsLayer, setLogSink } from '@texra-ai/harness/node';
+import { endActivation } from '@agent/runtime/AgentRunLifecycle';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import {
   startChildRunLoop,
@@ -57,10 +59,12 @@ import {
   type NativeChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import { createChildRun } from '@agent/runtime/delegation/childRun';
+import { startDetachedChildRunLoop } from '@agent/runtime/delegation/detachedChildRun';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import { SessionRoots } from '@platform/rootedFs';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import { closeTestDefaultSession } from '@test/support/sessionEnd';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { sessionStoreFaults } from '@test/support/storeFaults';
@@ -247,6 +251,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  setLogSink(null);
   await Effect.runPromise(closeTestDefaultSession);
 });
 
@@ -388,6 +393,55 @@ describe('childRunLoop E2E fixtures', () => {
         yield* Fiber.join(loop);
         expect(Context.get(session, Runs).get(runId)).toBeUndefined();
       }),
+  );
+
+  it.effect(
+    "a stop after a detached child's own completed end tells its parent the result alone",
+    () =>
+      Effect.gen(function* () {
+        // The native run commits its `run.end` (completed) with its
+        // delivery, then still holds the run when its parent's stop lands:
+        // the window between the run's end and its loop's terminal.
+        const runId = loopRunId();
+        const ended = yield* Deferred.make<void>();
+        const logs = captureLogEntries();
+        const turn: FakeTurn = { kind: 'terminal', value: 'done' };
+        const strategy: NativeChildStrategy<FakeTurn, SessionServices> = {
+          stageLabel: 'Stopped after its end',
+          launch: (_notify, turns) =>
+            Effect.gen(function* () {
+              yield* endActivation({
+                runId,
+                outcome: RUN_OUTCOME.COMPLETED,
+                lastTurn: () => turns.finishLastTurn(turn),
+              });
+              yield* Deferred.succeed(ended, undefined);
+              return yield* Effect.never;
+            }),
+          formatDelivery: (done) => Effect.succeed(`delivered:${done.value}`),
+          formatError: () => 'error',
+          stopNotice: () => Effect.succeed('stopped'),
+        };
+        const { fiber } = yield* startDetachedChildRunLoop({
+          runId,
+          parentRunId: PARENT_RUN_ID,
+          agentName: 'fake',
+          strategy,
+        }).pipe(Effect.provide(session));
+        yield* Deferred.await(ended);
+        yield* Context.get(session, Runs)
+          .stop(runId, { reason: 'user', detachActiveChildren: false })
+          .settlement.pipe(Effect.provide(session));
+        yield* Fiber.await(fiber);
+        // The late-failure observer joins the same fiber.
+        yield* Effect.yieldNow;
+
+        expect(yield* runEnds(runId)).toMatchObject([
+          { outcome: RUN_OUTCOME.COMPLETED },
+        ]);
+        expect(yield* queuedTexts(PARENT_RUN_ID)).toEqual(['delivered:done']);
+        expect(logs.at('ERROR')).toEqual([]);
+      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
   );
 
   it.effect(
