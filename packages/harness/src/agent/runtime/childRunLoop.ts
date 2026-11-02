@@ -58,6 +58,7 @@ import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { outcomeFromCause } from '@shared/runs/runStatus';
 import { aggregateError } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { formatWallSeconds } from '@utils/text/stringUtils';
 
 /** A stopped child's pause: the notice its parent reads, and the id a
  *  tool call names to continue it (a Codex thread, a Claude session), which
@@ -319,7 +320,7 @@ function attemptTurn<TTurn, R, RTurn>(
         const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
         yield* loop.log(
           'info',
-          `Turn completed in ${(wallTimeMs / 1000).toFixed(1)}s`,
+          `Turn completed in ${formatWallSeconds(wallTimeMs)}`,
         );
         const turnIsError = strategy.isTurnError?.(turn) === true;
         const turnError = turnIsError
@@ -489,11 +490,13 @@ const recordLastTurn = <TTurn, R>(
   handedOff: boolean,
 ): Effect.Effect<ChildEnd, never, R | SessionLog> =>
   buildTurnResult(loop, turned, true).pipe(
-    Effect.map((built): ChildEnd => ({
-      kind: 'finished',
-      ...built,
-      handedOff,
-    })),
+    Effect.map(
+      (built): ChildEnd => ({
+        kind: 'finished',
+        ...built,
+        handedOff,
+      }),
+    ),
     Effect.catch((error) => Effect.succeed<ChildEnd>({ kind: 'error', error })),
     Effect.tap((end) => Effect.sync(() => (loop.end = end))),
   );

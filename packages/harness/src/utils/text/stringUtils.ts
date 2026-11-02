@@ -20,6 +20,11 @@ export function formatCompactDuration(durationMs: number): string {
   });
 }
 
+/** Wall-clock time as seconds with one decimal (`12.3s`), for run and command results. */
+export function formatWallSeconds(wallTimeMs: number): string {
+  return `${(wallTimeMs / 1000).toFixed(1)}s`;
+}
+
 /**
  * Format token counts for compact usage displays.
  *
