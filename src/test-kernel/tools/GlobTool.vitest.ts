@@ -102,12 +102,15 @@ describe('GlobTool match metadata', () => {
           Effect.gen(function* () {
             const walk = vi.spyOn(Glob.prototype, 'walk');
 
-            const result = yield* GlobTool.call({ pattern: '../*' });
+            // The extglob reaches `..` only through the compiled matcher.
+            for (const pattern of ['../*', '@(..|a)/*']) {
+              const result = yield* GlobTool.call({ pattern });
 
-            expect(result.status).toBe('error');
-            expect(result.error).toContain(
-              'must stay under the search directory',
-            );
+              expect(result.status).toBe('error');
+              expect(result.error).toContain(
+                'must stay under the search directory',
+              );
+            }
             expect(walk).not.toHaveBeenCalled();
           }),
         );
