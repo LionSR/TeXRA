@@ -177,7 +177,10 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
           }),
         );
         yield* opening.reached;
-        const leaving = yield* Effect.forkChild(Fiber.interrupt(cancelled));
+        // The interrupt is delivered while the opening is still held.
+        const leaving = yield* Effect.forkChild(Fiber.interrupt(cancelled), {
+          startImmediately: true,
+        });
         yield* opening.release;
         yield* Fiber.join(leaving);
         expect(Exit.hasInterrupts(yield* Fiber.await(cancelled))).toBe(true);
