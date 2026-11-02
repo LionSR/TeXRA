@@ -673,7 +673,13 @@ export function settingsCatalog(options: {
   const harnessRows = HARNESS_SETTINGS.map((row) => {
     if (!Object.hasOwn(appDefaults, row.key)) return row;
     // An app default the row's own schema refuses is a defect of the app:
-    // it fails here, where the catalog is built, not at the first read.
+    // it fails here, where the catalog is built, not at the first read. The
+    // default stands in for the absent stored value before decoding, so the
+    // value checked is the value an absent key decodes from; `undefined`
+    // would only mask the row's own default, and is refused.
+    if (appDefaults[row.key] === undefined) {
+      throw new Error(`The app default for ${row.key} is undefined.`);
+    }
     Schema.decodeUnknownSync(row.schema)(appDefaults[row.key]);
     return {
       ...row,
