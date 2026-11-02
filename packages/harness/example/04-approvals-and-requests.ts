@@ -9,7 +9,7 @@
  *    and stops the interactive run cleanly via `session.request({ kind: 'run.stop' })`,
  *    after which its `result` is the `cancelled` end it stored.
  */
-import { Effect, Schema, Stream } from 'effect';
+import { Effect, Layer, Schema, Stream } from 'effect';
 import { defineTool, Sessions, type PendingRequest } from '@texra-ai/harness';
 import {
   definePlugin,
@@ -42,7 +42,7 @@ const preprintPlugin = definePlugin({
   tools: [publishPreprintTool],
 });
 
-const { platform, requests } = await makeExampleWorkspace([
+const { platform, requests, route } = await makeExampleWorkspace([
   {
     toolCalls: [
       {
@@ -80,7 +80,7 @@ const program = Effect.gen(function* () {
       tools: ['publish_preprint'],
     },
     instruction: 'Stage the manuscript for arXiv.',
-    model: 'anthropic/claude-sonnet-5-5',
+    model: route.model,
     interactive: true,
   });
 
@@ -92,6 +92,9 @@ const program = Effect.gen(function* () {
     ),
   );
   console.log('[04] cycle 1 status=waiting modelTurns=', requests.length);
+  // The wait the first cycle ended on (its row's seq): the second cycle
+  // ends on a later one, on the scripted model and a real route alike.
+  const firstWait = session.view.current().runs.get(run.runId)?.forkPoint;
 
   // Send a follow-up message through the runtime command protocol
   const followUpOutcome = yield* session.request({
@@ -109,7 +112,7 @@ const program = Effect.gen(function* () {
       return (
         current?.status === 'waiting' &&
         pendingFollowUps === 0 &&
-        requests.length === 3
+        current.forkPoint !== firstWait
       );
     }),
   );
@@ -138,7 +141,7 @@ const program = Effect.gen(function* () {
     Sessions.layer({
       platform,
       plugins: [...harnessBuiltins, preprintPlugin],
-    }),
+    }).pipe(Layer.provideMerge(route.transport)),
   ),
 );
 

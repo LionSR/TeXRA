@@ -53,13 +53,15 @@ const DETACHED_FORK_ALLOWLIST: Readonly<Record<string, number>> = {
  * plugin's port (its process layer's, never run- or session-scoped) that a
  * host omits (`InlineComments`) or that its probe reads only while the
  * layer is up (`LeanLanguageServices`). The validation model is a process
- * port only the CLI's validation build provides.
+ * port only the CLI's validation build provides, and the model fetch one
+ * only an embedder that answers model requests itself provides.
  */
 const SERVICE_OPTION = /\bEffect\.serviceOption\(\s*([A-Za-z_$][\w$]*)/g;
 
 const OPTIONAL_PROCESS_PORTS = new Set([
   'InlineComments',
   'LeanLanguageServices',
+  'ModelFetch',
   'ValidationModel',
 ]);
 
