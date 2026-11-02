@@ -1,24 +1,21 @@
-import '@test/support/sessionGraphTestSetup';
-
 // Node imports
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Context } from 'effect';
-import { it } from '@effect/vitest';
-import { describe, expect } from 'vitest';
+import { Effect, FileSystem, Layer } from 'effect';
+import { layer } from '@effect/vitest';
+import { expect } from 'vitest';
 
 // Local imports
 import { WorkspaceFs } from '@texra-ai/harness/host';
-import { SessionRoots } from '@platform/rootedFs';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
-  closeTestSession,
-  openTestDefaultSession,
-} from '@test/support/sessionEnd';
+  FakeHost,
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 import { AcceptRunFilesTool } from '@texra/tools/AcceptRunFilesTool';
 
 // Local file imports
@@ -28,83 +25,88 @@ import type { RunId } from '@texra-ai/harness/schemas';
 const runId = 'abcdef' as RunId;
 const storagePath = '/storage';
 
-describe('accept_run_files progress events', () => {
-  it.live(
+// The process session over the host's roots, opened as a host whose
+// person answers from the view: its runs' requests wait for a decision.
+layer(
+  TestSession.layer(undefined, { host: {} }).pipe(
+    Layer.provideMerge(SessionGraph.layer),
+    Layer.provideMerge(
+      FakeHost.layer({ workspacePath: '/workspace', storagePath }),
+    ),
+  ),
+  { excludeTestServices: true },
+)('accept_run_files progress events', (it) => {
+  it.effect(
     'refuses symlinked run-storage entries so unemitted files cannot be accepted',
     () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installPlatform({ workspacePath: '/workspace', storagePath }),
-        );
-        const session = yield* openTestDefaultSession({
-          roots: testWorkspaceRoots(),
-          transcriptMode: { kind: 'ephemeral' },
-        });
-        yield* Effect.addFinalizer(() =>
-          closeTestSession(Context.get(session, SessionRoots).storage),
-        );
-        publishTestRunStart(session, runId);
-        const requests = autoDecideRequests(session, () => ({
-          action: 'approve',
-        }));
-        yield* Effect.addFinalizer(() => Effect.sync(requests.detach));
+      Effect.flatMap(Effect.flatMap(TestSession, sessionHandleOf), (session) =>
+        Effect.gen(function* () {
+          publishTestRunStart(session, runId);
+          const requests = autoDecideRequests(session, () => ({
+            action: 'approve',
+          }));
+          yield* Effect.addFinalizer(() => Effect.sync(requests.detach));
 
-        // Each run-storage entry the walk probes, with the type `lstat`
-        // reports for it, keyed by the absolute path the code joins (an
-        // interpolated `/` names a different file where the separator is
-        // not `/`).
-        const entries = new Map<string, FileSystem.File.Type>(
-          [
-            `executions/${runId}`,
-            `executions/${runId}/r1`,
-            `executions/${runId}/r1/Draft`,
-          ].map((entry) => [path.join(storagePath, entry), 'Directory']),
-        );
-        entries.set(
-          path.join(storagePath, `executions/${runId}/r1/Draft/appendices.tex`),
-          'SymbolicLink',
-        );
-        const written: string[] = [];
-        const workspaceFs = yield* WorkspaceFs;
-        const processFs = yield* FileSystem.FileSystem;
-        const rootInfo = yield* processFs.stat('/');
-        const probe = (target: string, real: typeof processFs.stat) => {
-          const type = entries.get(target);
-          return type === undefined
-            ? real(target)
-            : Effect.succeed({ ...rootInfo, type });
-        };
+          // Each run-storage entry the walk probes, with the type `lstat`
+          // reports for it, keyed by the absolute path the code joins (an
+          // interpolated `/` names a different file where the separator is
+          // not `/`).
+          const entries = new Map<string, FileSystem.File.Type>(
+            [
+              `executions/${runId}`,
+              `executions/${runId}/r1`,
+              `executions/${runId}/r1/Draft`,
+            ].map((entry) => [path.join(storagePath, entry), 'Directory']),
+          );
+          entries.set(
+            path.join(
+              storagePath,
+              `executions/${runId}/r1/Draft/appendices.tex`,
+            ),
+            'SymbolicLink',
+          );
+          const written: string[] = [];
+          const workspaceFs = yield* WorkspaceFs;
+          const processFs = yield* FileSystem.FileSystem;
+          const rootInfo = yield* processFs.stat('/');
+          const probe = (target: string, real: typeof processFs.stat) => {
+            const type = entries.get(target);
+            return type === undefined
+              ? real(target)
+              : Effect.succeed({ ...rootInfo, type });
+          };
 
-        const result = yield* AcceptRunFilesTool.call({
-          execution_id: runId,
-          files: [
-            {
-              path: 'r1/Draft/appendices.tex',
-              original: 'Draft/appendices.tex',
-            },
-          ],
-        }).pipe(
-          Effect.provideService(WorkspaceFs, {
-            ...workspaceFs,
-            writeFile: (target: string) =>
-              Effect.sync(() => void written.push(target)),
-          }),
-          Effect.provideService(FileSystem.FileSystem, {
-            ...processFs,
-            lstat: (target: string) => probe(target, processFs.lstat),
-            stat: (target: string) => probe(target, processFs.stat),
-          }),
-          Effect.provide(
-            nativeToolTestLayer({
-              run: { runId, session, toolPolicy: {} },
+          const result = yield* AcceptRunFilesTool.call({
+            execution_id: runId,
+            files: [
+              {
+                path: 'r1/Draft/appendices.tex',
+                original: 'Draft/appendices.tex',
+              },
+            ],
+          }).pipe(
+            Effect.provideService(WorkspaceFs, {
+              ...workspaceFs,
+              writeFile: (target: string) =>
+                Effect.sync(() => void written.push(target)),
             }),
-          ),
-        );
+            Effect.provideService(FileSystem.FileSystem, {
+              ...processFs,
+              lstat: (target: string) => probe(target, processFs.lstat),
+              stat: (target: string) => probe(target, processFs.stat),
+            }),
+            Effect.provide(
+              nativeToolTestLayer({
+                run: { runId, session, toolPolicy: {} },
+              }),
+            ),
+          );
 
-        expect(result.status).toBe('error');
-        expect(result.error).toContain('symlink');
-        expect(requests.opened).toEqual([]);
-        expect(written).toEqual([]);
-      }).pipe(Effect.provide(nativeToolTestLayer())),
+          expect(result.status).toBe('error');
+          expect(result.error).toContain('symlink');
+          expect(requests.opened).toEqual([]);
+          expect(written).toEqual([]);
+        }).pipe(Effect.provide(nativeToolTestLayer())),
+      ),
   );
 });

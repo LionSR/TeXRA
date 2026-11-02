@@ -45,9 +45,11 @@ import {
   ToolAvailability,
   ToolCatalog,
   UsageLog,
+  type HostInteractions,
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness/host';
+import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { validationModelLayer } from '@cli/runtime/validationModel';
@@ -258,3 +260,37 @@ export const sessionHandleOf = (
         : Effect.succeed(handle);
     }),
   );
+
+/** The sessions `isolatedTestSession` opened in this file, which name their
+ *  storage roots. */
+let isolatedSessions = 0;
+
+/**
+ * A session of the calling scope's own, beside the block's: over the
+ * installed fake host's roots with a storage root of its own (one root
+ * holds one session, so a test opens as many as it needs), with
+ * `interactions` attached as its presentation host when given. It is
+ * opened as by a host whose person answers from the view (`host: {}`), so
+ * a request its runs open waits for its decision rather than being denied.
+ * Returns the internal handle a suite seeds rows on and hands run-scoped
+ * code; the session closes with the scope.
+ */
+export const isolatedTestSession = (
+  interactions?: HostInteractions,
+): Effect.Effect<
+  Context.Context<SessionServices>,
+  SessionOpenError,
+  Sessions | SessionOwner | Scope.Scope
+> =>
+  Effect.gen(function* () {
+    isolatedSessions += 1;
+    const roots = testWorkspaceRoots();
+    const session = yield* TestSession.open(
+      { ...roots, storage: `${roots.storage}/isolated/${isolatedSessions}` },
+      { host: {} },
+    );
+    const handle = yield* sessionHandleOf(session);
+    if (interactions !== undefined)
+      yield* Context.get(handle, Interactions).use(interactions);
+    return handle;
+  });

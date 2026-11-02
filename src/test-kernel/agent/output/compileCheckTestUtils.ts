@@ -5,8 +5,8 @@ import * as path from 'node:path';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
+import { FakeHost } from '@test/support/testKernel';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
@@ -69,11 +69,10 @@ export function compileContext(
   };
 }
 
-/** Seeds the workspace/run-storage layout auto-compile reads through. */
-export function initLatexPlatform(
-  files: Record<string, string>,
-): Promise<void> {
-  return installPlatform({
+/** A host seeded with the workspace/run-storage layout auto-compile reads
+ *  through. */
+export function latexHost(files: Record<string, string>) {
+  return FakeHost.layer({
     files,
     storagePath,
     workspacePath,

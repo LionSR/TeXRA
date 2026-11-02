@@ -1,22 +1,27 @@
-import { it } from '@effect/vitest';
-import { Effect, Context } from 'effect';
-import { describe, expect } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Context, Layer } from 'effect';
+import { expect } from 'vitest';
 import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+  FakeHost,
+  isolatedTestSession,
+  SessionGraph,
+} from '@test/support/testKernel';
 
-setupPlatform({ workspacePath: '/workspace' });
-
-describe('persisted parent edge', () => {
+layer(
+  Layer.provideMerge(
+    SessionGraph.layer,
+    FakeHost.layer({ workspacePath: '/workspace' }),
+  ),
+  { excludeTestServices: true },
+)('persisted parent edge', (it) => {
   it.effect(
     'retains parent identity in the child creation even when reads exclude parent history',
     () =>
       Effect.gen(function* () {
-        const session = yield* createTestSession();
+        const session = yield* isolatedTestSession();
         publishTestRunStart(session, 'aaa0ff' as RunId);
         yield* Context.get(session, SessionLog).settled;
         const rows = yield* Context.get(session, SessionLog).transact([

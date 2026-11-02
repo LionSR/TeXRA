@@ -1,76 +1,86 @@
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect, Context } from 'effect';
-import { beforeEach, describe, expect } from 'vitest';
+import { expect } from 'vitest';
 import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import { finalizeRun } from '@agent/storage/runLifecycle';
-import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+  FakeHost,
+  isolatedTestSession,
+  SessionGraph,
+} from '@test/support/testKernel';
 
-setupPlatform({ workspacePath: '/workspace' });
-let session: Context.Context<SessionServices>;
 const id = 'bbb001' as RunId;
-beforeEach(async () => {
-  session = await Effect.runPromise(createTestSession());
+
+/** The test's session, with the run `id` started on it. */
+const startedSession = Effect.gen(function* () {
+  const session = yield* isolatedTestSession();
   publishTestRunStart(session, id);
-  await Effect.runPromise(Context.get(session, SessionLog).settled);
+  yield* Context.get(session, SessionLog).settled;
+  return session;
 });
 
-describe('run metadata updates', () => {
-  it.effect(
-    'preserves description and outcome when independent facts overlap',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.all(
-          [
-            Context.get(session, SessionLog).transact([
-              {
-                type: 'run.description',
-                by: 'model',
-                aggregateId: qualifyAggregateId('run', id),
-                description: 'A described session',
-              },
-            ]),
-            finalizeRun({
-              runId: id,
-              outcome: 'completed',
-            }).pipe(Effect.provide(session)),
-          ],
-          { concurrency: 'unbounded' },
-        );
-        expect(
-          (yield* Context.get(session, SessionViewAccess).read([id])).runs.get(
-            id,
-          ),
-        ).toMatchObject({
-          description: 'A described session',
-          status: 'completed',
-        });
-      }),
-  );
-  // A model switch that cannot apply fails the run: its end consumes the
-  // request, so no resume meets it again.
-  it.effect('settles a request the run never applied with its end', () =>
-    Effect.gen(function* () {
-      yield* Context.get(session, Inbox).send(id, {
-        text: '/model gone',
-        from: { kind: 'user' },
-        control: { kind: 'model', model: 'gone' },
-      });
-      expect(
-        (yield* Context.get(session, Inbox).read(id)).followUps,
-      ).toHaveLength(1);
-      yield* finalizeRun({ runId: id, outcome: 'failed' }).pipe(
-        Effect.provide(session),
+layer(SessionGraph.layer, { excludeTestServices: true })(
+  'run metadata updates',
+  (it) => {
+    it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {
+      buildPerTest: true,
+    })((it) => {
+      it.effect(
+        'preserves description and outcome when independent facts overlap',
+        () =>
+          Effect.gen(function* () {
+            const session = yield* startedSession;
+            yield* Effect.all(
+              [
+                Context.get(session, SessionLog).transact([
+                  {
+                    type: 'run.description',
+                    by: 'model',
+                    aggregateId: qualifyAggregateId('run', id),
+                    description: 'A described session',
+                  },
+                ]),
+                finalizeRun({
+                  runId: id,
+                  outcome: 'completed',
+                }).pipe(Effect.provide(session)),
+              ],
+              { concurrency: 'unbounded' },
+            );
+            expect(
+              (yield* Context.get(session, SessionViewAccess).read([
+                id,
+              ])).runs.get(id),
+            ).toMatchObject({
+              description: 'A described session',
+              status: 'completed',
+            });
+          }),
       );
-      expect((yield* Context.get(session, Inbox).read(id)).followUps).toEqual(
-        [],
+      // A model switch that cannot apply fails the run: its end consumes the
+      // request, so no resume meets it again.
+      it.effect('settles a request the run never applied with its end', () =>
+        Effect.gen(function* () {
+          const session = yield* startedSession;
+          yield* Context.get(session, Inbox).send(id, {
+            text: '/model gone',
+            from: { kind: 'user' },
+            control: { kind: 'model', model: 'gone' },
+          });
+          expect(
+            (yield* Context.get(session, Inbox).read(id)).followUps,
+          ).toHaveLength(1);
+          yield* finalizeRun({ runId: id, outcome: 'failed' }).pipe(
+            Effect.provide(session),
+          );
+          expect(
+            (yield* Context.get(session, Inbox).read(id)).followUps,
+          ).toEqual([]);
+        }),
       );
-    }),
-  );
-});
+    });
+  },
+);
