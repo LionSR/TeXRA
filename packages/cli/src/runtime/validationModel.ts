@@ -16,6 +16,7 @@ import { Effect, Layer, Stream } from 'effect';
 import {
   type Model,
   type ModelConfig,
+  ModelError,
   type ModelOrigin,
   originOf,
   type ResolvedTurn,
@@ -536,6 +537,13 @@ function validationModel(config: ModelConfig): {
             envVar('TEXRA_INTERNAL_VALIDATE_GOLDEN'),
             envVar(FLAG),
           ]);
+        // A golden turn the provider refuses as too long for the model.
+        if (golden === '1' && turn.system?.includes('GOLDEN-OVERFLOW'))
+          return yield* new ModelError({
+            kind: 'context-overflow',
+            message: 'The request exceeds the context window.',
+            status: 400,
+          });
         return complete(
           turn,
           scriptFanout === '1',
