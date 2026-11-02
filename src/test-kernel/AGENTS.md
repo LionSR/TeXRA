@@ -59,9 +59,9 @@ decided by what it reaches, not by how many tests it has:
   registry and its own worker, several times the cost per suite: a suite that
   calls `vi.mock` / `vi.doMock` (its factory's module would be what the next
   suite imports) or `vi.resetModules`, or brings its own DOM (`lit`, `jsdom`),
-  and every suite under `desktop`, `progressView` and `settings`, whose
-  helpers bring the window. A Lit element class is bound to the window that
-  first loaded it.
+  and every suite under `desktop`, `progressView` and `settings`, where
+  helpers a scan of the suite does not see bring a window or load modules
+  afresh. A Lit element class is bound to the window that first loaded it.
 
 Membership is computed from the suite's source, not declared: a suite that
 needs its own registry is `isolated`; otherwise a suite under a `pure`

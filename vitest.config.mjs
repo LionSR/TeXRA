@@ -86,9 +86,10 @@ const NEEDS_OWN_REGISTRY = [
   /from\s+['"](?:lit|lit-html|lit\/|@lit\/|jsdom)/,
   /@vitest-environment\s+jsdom|new JSDOM\s*\(/,
 ];
-// The suites here bring their DOM, or load modules afresh, through helpers of
-// their own (`settings/litComponentTestUtils.ts`,
-// `desktop/loadSourceModule.ts`) that a scan of the suite does not see.
+// The DOM directories: their suites bring a window or load modules afresh
+// through helpers a scan of the suite does not see
+// (`settings/litComponentTestUtils.ts`, `desktop/loadSourceModule.ts`), so
+// the directory decides for every suite in it.
 const DOM_DIRS = ['desktop', 'progressView', 'settings'];
 // What the scan cannot see is a suite that changes process-wide state: an
 // environment variable a library reads once (chalk's color level), a file
