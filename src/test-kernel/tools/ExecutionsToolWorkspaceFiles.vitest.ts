@@ -7,10 +7,11 @@ import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 
-import { Effect } from 'effect';
+import { Effect, Context } from 'effect';
 
 import { beforeEach, describe, expect } from 'vitest';
 
+import { SessionLog } from '@shared/session/runHistory';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -73,7 +74,7 @@ describe('ExecutionsTool', () => {
           const runId = 'abc123' as RunId;
           const session = testDefaultSession();
           publishTestRunStart(session, runId);
-          yield* session.log.settled;
+          yield* Context.get(session, SessionLog).settled;
           yield* seedRunRecord(session, runId, {
             agent: 'chat',
             model: 'deepseek/deepseek-v4-flash',

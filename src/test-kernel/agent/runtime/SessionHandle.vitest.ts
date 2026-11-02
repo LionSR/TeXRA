@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Context } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import {
@@ -17,14 +17,16 @@ import {
   JsonStore,
   nodeFileServices,
 } from '@texra-ai/harness/node';
-import { registryOf } from '@agent/runtime/runRegistry';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import { Interactions } from '@agent/runtime/HostInteractions';
+import { Approvals } from '@shared/session/runHistory';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
-describe('SessionHandle', () => {
+describe('Context.Context<SessionServices>', () => {
   it.effect(
     "follows the project's persisted policy, which a reconnecting window cannot replace",
     () =>
@@ -51,17 +53,17 @@ describe('SessionHandle', () => {
         const before = yield* createTestSession({
           roots: { ...roots, storage: `${roots.storage}/policy-before` },
         });
-        expect(before.approvals.policy()).toBe('yolo');
+        expect(Context.get(before, Approvals).policy()).toBe('yolo');
         // Window B sets Ask; the service restarts (a fresh session over the
         // same file) while window A still shows Auto-approve. A window has
         // no door to tell the service a policy, so A's reconnect changes
         // nothing: both sessions answer with the file's value.
         yield* windowB.set(STORED_POLICY_KEY, 'ask');
-        expect(before.approvals.policy()).toBe('ask');
+        expect(Context.get(before, Approvals).policy()).toBe('ask');
         const after = yield* createTestSession({
           roots: { ...roots, storage: `${roots.storage}/policy-after` },
         });
-        expect(after.approvals.policy()).toBe('ask');
+        expect(Context.get(after, Approvals).policy()).toBe('ask');
         yield* closeSessionOf(before);
         yield* closeSessionOf(after);
       }).pipe(Effect.provide(nodeFileServices)),
@@ -73,10 +75,11 @@ describe('SessionHandle', () => {
       let attempted = false;
       // The handle's owners unwind after the session's runs: run work
       // reaching the registry from inside that unwind is already refused.
-      vi.spyOn(session.interactions, 'dispose').mockImplementation(() =>
+      const interactions = Context.get(session, Interactions);
+      vi.spyOn(interactions, 'dispose').mockImplementation(() =>
         Effect.gen(function* () {
           attempted = true;
-          const refused = yield* registryOf(session.runs)
+          const refused = yield* registryOf(Context.get(session, Runs))
             .withInactiveRunStep(generateRunId(), Effect.void)
             .pipe(Effect.flip, Effect.orDie);
           expect(refused.message).toBe(

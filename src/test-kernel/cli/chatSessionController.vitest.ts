@@ -13,6 +13,7 @@ import {
   Scope,
   Stream,
   SubscriptionRef,
+  Context,
 } from 'effect';
 import { layer } from '@effect/vitest';
 import { beforeEach, expect, onTestFinished, vi } from 'vitest';
@@ -71,7 +72,9 @@ import {
   type RuntimeRequest,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { registryOf } from '@agent/runtime/runRegistry';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import { Interactions } from '@agent/runtime/HostInteractions';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
@@ -86,6 +89,7 @@ import {
   TuiSession,
   type RootRunSettled,
 } from '@cli/chat/tui/state/sessionRunState';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
@@ -299,14 +303,14 @@ const installOwnerSession = Effect.fn('installOwnerSession')(function* () {
     request: ((req: RuntimeRequest) =>
       Effect.gen(function* (): Effect.fn.Return<Outcome> {
         if (req.kind === 'run.stop') {
-          yield* session.runs
+          yield* Context.get(session, Runs)
             .stop(req.runId, {
               detachActiveChildren: req.detachActiveChildren ?? undefined,
               reason: req.reason,
             })
             .settlement // The handler words a refused stop as a request error; this
             // stub has no such vocabulary, so a refusal is a defect here.
-            .pipe(Effect.orDie);
+            .pipe(Effect.orDie, Effect.provide(session));
         }
         return { kind: 'done' };
       })) as Session['request'],
@@ -318,8 +322,8 @@ const installOwnerSession = Effect.fn('installOwnerSession')(function* () {
   });
   return {
     session,
-    runs: registryOf(session.runs),
-    interactions: session.interactions,
+    runs: registryOf(Context.get(session, Runs)),
+    interactions: Context.get(session, Interactions),
   };
 });
 /** A resumed run whose result reads `outcome` when the chat awaits it. */
@@ -458,7 +462,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.layer), {
 
           // The launch's `run.start` rows are detached publishes: the stop
           // claims the child's aggregate, so they commit first.
-          yield* runtimeSession.log.settled;
+          yield* Context.get(runtimeSession, SessionLog).settled;
           // The stop Ctrl-C sends under "Keep subagents running": the root
           // stops and its live children detach.
           const owner = mocks.sessionStub() as Session;
@@ -475,7 +479,10 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.layer), {
           // promotion lands with that batch rather than with the stop's admission.
           yield* Effect.promise(() =>
             vi.waitFor(() =>
-              expect(runtimeSession.view.run(childRun)?.parentId).toBeNull(),
+              expect(
+                Context.get(runtimeSession, SessionViewAccess).run(childRun)
+                  ?.parentId,
+              ).toBeNull(),
             ),
           );
 
@@ -483,7 +490,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.layer), {
           // already stated in the plane.
           const requestId = 'bash-detached-child';
           const approval = yield* Effect.forkScoped(
-            runtimeSession.requests.ask(childRun, {
+            Context.get(runtimeSession, SessionRequests).ask(childRun, {
               kind: 'bash',
               data: {
                 requestId,
@@ -496,9 +503,9 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.layer), {
           yield* Effect.promise(() =>
             vi.waitFor(() =>
               expect(
-                SubscriptionRef.getUnsafe(runtimeSession.view.ref).requests.map(
-                  (request) => request.requestId,
-                ),
+                SubscriptionRef.getUnsafe(
+                  Context.get(runtimeSession, SessionViewAccess).ref,
+                ).requests.map((request) => request.requestId),
               ).toEqual([requestId]),
             ),
           );

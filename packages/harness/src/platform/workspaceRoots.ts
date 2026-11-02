@@ -1,12 +1,12 @@
 /**
  * Per-workspace roots: the four host services whose value depends on which
- * project (workspace folder) a piece of code is working on. They live on the
- * owning `SessionHandle` rather than on a process-wide object,
+ * project (workspace folder) a piece of code is working on. They are the
+ * owning session's (`SessionRoots`) rather than a process-wide object,
  * so one process can hold many sessions, each rooted in its own folder.
  *
  * Resolution is by hand, not by ambient scope: a caller answers for the
  * workspace whose roots it was given — a tool call's `call.roots`, a run's
- * `session.roots`, a host command's `session.roots`. There is no ambient
+ * or a request's `SessionRoots`, a host command's `session.roots`. There is no ambient
  * holder: `SessionHandleInit.roots` is required, so every session is opened over roots its composition root named, and this
  * module declares the record without holding one.
  */

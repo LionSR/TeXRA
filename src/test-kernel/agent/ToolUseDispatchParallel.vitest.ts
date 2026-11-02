@@ -48,7 +48,6 @@ import {
   DatabaseWriteFailed,
   type PluginContext,
 } from '@texra-ai/harness/host';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
@@ -57,7 +56,13 @@ import type { ResolvedTools } from '@agent/runtime/agentToolResolution';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import { RunHistory, type RunCell } from '@shared/session/runHistory';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import {
+  RunHistory,
+  type RunCell,
+  SessionLog,
+} from '@shared/session/runHistory';
 import { freshRunState, type RunState } from '@shared/session/runState';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -207,7 +212,7 @@ const RESPONSE_ID = '9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d';
 
 function agentRun(
   runId: RunId,
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
 ): AgentRunShape {
   return testAgentRun(
@@ -223,7 +228,7 @@ function agentRun(
 
 interface DispatchKit {
   readonly runId: RunId;
-  readonly session: SessionHandle;
+  readonly session: Context.Context<SessionServices>;
   /** The folded state with the turn's response pending and unsettled. */
   readonly state: RunState;
   /** The cell a live dispatch runs on: opened before the response, which
@@ -255,8 +260,8 @@ const openDispatch = Effect.fn('openDispatch')(function* (
   const runId = dispatchRunId();
   const tools = new Map(Object.entries(options.tools));
   publishTestRunStart(session, runId);
-  yield* session.log.settled;
-  const cell = yield* session.runHistory.open(runId, {
+  yield* Context.get(session, SessionLog).settled;
+  const cell = yield* Context.get(session, RunHistory).open(runId, {
     activation: () => Effect.succeed([]),
   });
   yield* cell.append([
@@ -295,7 +300,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
   const layer = Layer.mergeAll(
     nativeToolTestLayer(),
     Layer.succeed(AgentRun, agentRun(runId, session, model)),
-    Layer.succeed(RunHistory, session.runHistory),
+    Layer.succeed(RunHistory, Context.get(session, RunHistory)),
   );
   return {
     runId,
@@ -322,10 +327,11 @@ const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
       modules: {},
     },
     // The run's pending requests, as its `FollowUps.controls` reads them.
-    Effect.map(kit.session.followUps.read(kit.runId), ({ followUps }) =>
-      followUps.filter((f) => f.control !== undefined),
+    Effect.map(
+      Context.get(kit.session, Inbox).read(kit.runId),
+      ({ followUps }) => followUps.filter((f) => f.control !== undefined),
     ).pipe(Effect.orDie),
-  ).pipe(Effect.provide(kit.layer));
+  ).pipe(Effect.provide(kit.layer), Effect.provide(kit.session));
 
 describe('tool-use dispatch', () => {
   // Failure modes: a SQL page reaches the guest as display text, losing its
@@ -363,8 +369,8 @@ return { columns: page.columns, count: page.rows.length,
       });
       yield* Effect.addFinalizer(() => closeSessionOf(kit.session));
       yield* dispatch(kit, [ExecutionsTool.definition]);
-      yield* kit.session.log.settled;
-      const { results } = yield* kit.session.log.runRows(
+      yield* Context.get(kit.session, SessionLog).settled;
+      const { results } = yield* Context.get(kit.session, SessionLog).runRows(
         qualifyAggregateId('run', kit.runId),
         'results',
       );
@@ -417,7 +423,9 @@ return { columns: page.columns, count: page.rows.length,
           expect(Cause.squash(exit.cause)).toBe(failure);
           expect(Cause.hasInterrupts(exit.cause)).toBe(true);
         }
-        const saved = yield* kit.session.runHistory.load(kit.runId);
+        const saved = yield* Context.get(kit.session, RunHistory).load(
+          kit.runId,
+        );
         expect(settledIds(saved)).toEqual([]);
         expect(saved?.pendingResponse).not.toBeNull();
         yield* closeSessionOf(kit.session);
@@ -466,8 +474,8 @@ return { columns: page.columns, count: page.rows.length,
         ]);
 
         // The results as the run history committed them, in commit order.
-        yield* kit.session.log.settled;
-        const { results } = yield* kit.session.log.runRows(
+        yield* Context.get(kit.session, SessionLog).settled;
+        const { results } = yield* Context.get(kit.session, SessionLog).runRows(
           qualifyAggregateId('run', kit.runId),
           'results',
         );

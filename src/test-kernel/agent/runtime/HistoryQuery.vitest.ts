@@ -3,12 +3,17 @@ import '@test/support/sessionGraphTestSetup';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import { Effect, Fiber, Stream, SubscriptionRef, Context } from 'effect';
 import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
-import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { HistoryQueryStore } from '@agent/runtime/historyQuery/HistoryQuery';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import {
+  HistoryQuery,
+  SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
@@ -32,13 +37,17 @@ import {
  */
 
 const withSession = <A, E>(
-  body: (session: SessionHandle) => Effect.Effect<A, E>,
+  body: (session: Context.Context<SessionServices>) => Effect.Effect<A, E>,
 ) => Effect.acquireUseRelease(createTestSession(), body, closeSessionOf);
 
-const query = (session: SessionHandle, sql: string, params: string[] = []) =>
+const query = (
+  session: Context.Context<SessionServices>,
+  sql: string,
+  params: string[] = [],
+) =>
   Effect.gen(function* () {
-    yield* session.log.settled.pipe(Effect.orDie);
-    return yield* session.history.query(sql, params);
+    yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
+    return yield* Context.get(session, HistoryQuery).query(sql, params);
   });
 
 describe('HistoryQuery', () => {
@@ -101,24 +110,28 @@ describe('HistoryQuery', () => {
   it.live('fills runs from a view that reached the rows in events', () =>
     withSession((session) =>
       Effect.gen(function* () {
-        yield* session.log.settled.pipe(Effect.orDie);
-        const before = SubscriptionRef.getUnsafe(session.view.ref);
+        yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
+        const before = SubscriptionRef.getUnsafe(
+          Context.get(session, SessionViewAccess).ref,
+        );
         publishTestRunStart(session);
-        yield* session.log.settled.pipe(Effect.orDie);
+        yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
         // A view whose current snapshot predates the run, and whose next
         // one has applied it.
         const lagging = {
-          ...session.view,
+          ...Context.get(session, SessionViewAccess),
           ref: yield* SubscriptionRef.make(before),
           changes: Stream.make(
             before,
-            SubscriptionRef.getUnsafe(session.view.ref),
+            SubscriptionRef.getUnsafe(
+              Context.get(session, SessionViewAccess).ref,
+            ),
           ),
         };
-        const history = yield* HistoryQuery.make({
-          log: session.log,
-          view: lagging,
-        });
+        const history = yield* HistoryQueryStore.make.pipe(
+          Effect.provideService(SessionLog, Context.get(session, SessionLog)),
+          Effect.provideService(SessionViewAccess, lagging),
+        );
         const page = yield* history.query(
           'SELECT (SELECT count(DISTINCT run_id) FROM events), (SELECT count(*) FROM runs)',
           [],

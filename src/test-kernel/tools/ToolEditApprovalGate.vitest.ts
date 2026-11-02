@@ -7,7 +7,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber, FileSystem } from 'effect';
+import { Effect, Fiber, FileSystem, Context } from 'effect';
 import { describe, beforeEach, afterEach, vi } from 'vitest';
 
 // Local imports
@@ -23,6 +23,10 @@ import {
 } from '@texra-ai/harness/plugins';
 import { WorkspaceFs } from '@texra-ai/harness/host';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
+import { Interactions } from '@agent/runtime/HostInteractions';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { SessionRoots } from '@platform/rootedFs';
+import { SessionLog, Approvals } from '@shared/session/runHistory';
 import {
   setTestApprovalPolicy,
   publishTestRunStart,
@@ -72,7 +76,7 @@ async function installPlatform(
   });
   detachHostInteractions();
   detachHostInteractions = Effect.runSync(
-    testDefaultSession().interactions.use({
+    Context.get(testDefaultSession(), Interactions).use({
       approvalDenied: () => {
         policyDenials += 1;
       },
@@ -159,12 +163,17 @@ function inRun<A, E>(effect: Effect.Effect<A, E, PluginToolServices>) {
 describe('Tool edit approval gating', () => {
   beforeEach(async () => {
     await installPlatform();
-    setTestApprovalPolicy('ask', testDefaultSession().roots);
+    setTestApprovalPolicy(
+      'ask',
+      Context.get(testDefaultSession(), SessionRoots),
+    );
     policyDenials = 0;
     workspaceWrites.mockReset();
     relativeFiles.clear();
     runId = publishTestRunStart(testDefaultSession(), generateRunId());
-    await Effect.runPromise(testDefaultSession().log.settled);
+    await Effect.runPromise(
+      Context.get(testDefaultSession(), SessionLog).settled,
+    );
     decisions = autoDecideRequests(testDefaultSession(), () => nextDecision());
   });
 
@@ -223,7 +232,10 @@ describe('Tool edit approval gating', () => {
       yield* Effect.tryPromise(() =>
         installPlatform({ 'toolUse.requireEditApproval': false }),
       );
-      setTestApprovalPolicy('never', testDefaultSession().roots);
+      setTestApprovalPolicy(
+        'never',
+        Context.get(testDefaultSession(), SessionRoots),
+      );
 
       const write = stubWorkspaceFile('denied.txt', {
         exists: false,
@@ -264,7 +276,7 @@ describe('Tool edit approval gating', () => {
         }),
       );
 
-      yield* testDefaultSession().approvals.change(
+      yield* Context.get(testDefaultSession(), Approvals).change(
         runId,
         humanGrant(['toolEdit'], true),
       );
@@ -316,7 +328,9 @@ describe('Tool edit approval gating', () => {
             : undefined;
         assert.ok(address, 'the request names its proposal by address');
         const session = testDefaultSession();
-        const stored = (yield* session.log.blobs([address])).get(address);
+        const stored = (yield* Context.get(session, SessionLog).blobs([
+          address,
+        ])).get(address);
         assert.ok(stored, 'the store holds the proposal under that address');
         const content: unknown = JSON.parse(stored);
         assert.ok(typeof content === 'object' && content !== null);
@@ -329,11 +343,13 @@ describe('Tool edit approval gating', () => {
           'beta\n',
         );
         // The door a surface reads the diff through answers from the store.
-        const { preview } = yield* session.requests.request({
-          kind: 'request.preview',
-          runId,
-          requestId: opened.requestId,
-        });
+        const { preview } = yield* Context.get(session, SessionRequests)
+          .request({
+            kind: 'request.preview',
+            runId,
+            requestId: opened.requestId,
+          })
+          .pipe(Effect.provide(session));
         assert.deepStrictEqual(preview, content);
         decideRequest(
           session,

@@ -21,6 +21,7 @@ import {
   Scope,
   Stream,
   SynchronizedRef,
+  Context,
 } from 'effect';
 import { TestClock } from 'effect/testing';
 import { it } from '@effect/vitest';
@@ -52,7 +53,6 @@ import {
   Settings,
   UsageLog,
 } from '@texra-ai/harness/host';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
@@ -61,10 +61,15 @@ import { ModelInvoker, modelInvokerLayer } from '@agent/runtime/ModelInvoker';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { Runs } from '@agent/runtime/runRegistry';
+import { SessionRoots } from '@platform/rootedFs';
 import {
   RunHistory,
   RunHistoryRefused,
   type RunCell,
+  SessionLog,
+  SessionViewAccess,
 } from '@shared/session/runHistory';
 import { freshRunState, type RunState } from '@shared/session/runState';
 import {
@@ -279,7 +284,7 @@ const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
  */
 function agentRun(
   runId: RunId,
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
 ): AgentRunShape {
   return testAgentRun(
@@ -305,7 +310,9 @@ interface InvokerKit {
   /** The run's cell, holding the folded state of the freshly opened run. */
   readonly cell: RunCell;
   /** `ModelInvoker` and this run's history, with nothing left to provide. */
-  readonly layer: Layer.Layer<ModelInvoker | RunHistory | RouteRetries>;
+  readonly layer: Layer.Layer<
+    ModelInvoker | RunHistory | RouteRetries | SessionServices
+  >;
 }
 
 /**
@@ -313,7 +320,7 @@ interface InvokerKit {
  * that writes to it.
  */
 const openRun = Effect.fn('openRun')(function* (
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   model: Model,
 ): Effect.fn.Return<
   InvokerKit,
@@ -321,8 +328,8 @@ const openRun = Effect.fn('openRun')(function* (
 > {
   const runId = retryRunId();
   publishTestRunStart(session, runId);
-  yield* session.log.settled.pipe(Effect.orDie);
-  const cell = yield* session.runHistory.open(runId, {
+  yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
+  const cell = yield* Context.get(session, RunHistory).open(runId, {
     activation: () => Effect.succeed([]),
   });
   yield* cell.append([
@@ -334,7 +341,7 @@ const openRun = Effect.fn('openRun')(function* (
   // The retries the binding carries, read from the session as `bindModel`
   // reads them.
   const automaticRetries = yield* Settings.get<number>(
-    session.roots,
+    Context.get(session, SessionRoots),
     MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
   ).pipe(Effect.orDie);
   const bound = yield* SynchronizedRef.make(
@@ -352,9 +359,10 @@ const openRun = Effect.fn('openRun')(function* (
         ),
       ),
     ),
-    Layer.merge(Layer.succeed(RunHistory, session.runHistory)),
+    Layer.merge(Layer.succeed(RunHistory, Context.get(session, RunHistory))),
     // The process's route gate, as `processLayer` serves it.
     Layer.provideMerge(Layer.effect(RouteRetries, ModelRetryGate.make)),
+    Layer.provideMerge(Layer.succeedContext(session)),
   );
   return { runId, cell, layer };
 });
@@ -517,10 +525,14 @@ describe('ModelInvoker retry', () => {
       // The response retires the failure the gate recorded in its own batch:
       // a crash before the loop's next snapshot resumes a recovered run, not
       // one that re-reads the stale error and finishes FAILED.
-      expect((yield* session.runHistory.load(runId))?.lastError).toBeNull();
+      expect(
+        (yield* Context.get(session, RunHistory).load(runId))?.lastError,
+      ).toBeNull();
       // The decision neither parks nor ends the run: the phase the fold
       // reports is still running.
-      expect(session.view.run(runId)?.status).toBe(RUN_PHASE.RUNNING);
+      expect(Context.get(session, SessionViewAccess).run(runId)?.status).toBe(
+        RUN_PHASE.RUNNING,
+      );
       requests.detach();
       yield* Fiber.interrupt(pump);
       yield* closeSessionOf(session);
@@ -553,7 +565,7 @@ describe('ModelInvoker retry', () => {
         yield* Fiber.interrupt(fiber);
 
         // The resume opens the run again from its stored rows.
-        const cell = yield* session.runHistory.open(kit.runId);
+        const cell = yield* Context.get(session, RunHistory).open(kit.runId);
         const resumed = yield* invokeOn({ ...kit, cell });
 
         expect(resumed.kind).toBe('response');
@@ -592,7 +604,7 @@ describe('ModelInvoker retry', () => {
         const fiber = yield* Effect.forkChild(invokeOn({ ...kit, cell }));
         while (stub.attempts() < sent) yield* settle;
         yield* Fiber.interrupt(fiber);
-        cell = yield* session.runHistory.open(kit.runId);
+        cell = yield* Context.get(session, RunHistory).open(kit.runId);
       }
       const resumed = yield* invokeOn({ ...kit, cell });
 
@@ -635,7 +647,9 @@ describe('ModelInvoker retry', () => {
       }
       // A denial is not a cancel: the run stays running so the failure can
       // terminalize (#7331).
-      expect(session.view.run(runId)?.status).toBe(RUN_PHASE.RUNNING);
+      expect(Context.get(session, SessionViewAccess).run(runId)?.status).toBe(
+        RUN_PHASE.RUNNING,
+      );
       expect(stub.attempts()).toBe(1);
       yield* closeSessionOf(session);
     }),
@@ -731,8 +745,9 @@ describe('ModelInvoker retry', () => {
       Effect.gen(function* () {
         const session = yield* sessionWithInteractions(undefined);
         const stopped = new Map<RunId, 'user' | 'shutdown'>();
-        const get = session.runs.get.bind(session.runs);
-        vi.spyOn(session.runs, 'get').mockImplementation(((runId?: RunId) => {
+        const runs = Context.get(session, Runs);
+        const get = runs.get.bind(runs);
+        vi.spyOn(runs, 'get').mockImplementation(((runId?: RunId) => {
           if (runId === undefined) return get();
           const live = get(runId);
           const stopReason = stopped.get(runId);
@@ -748,7 +763,7 @@ describe('ModelInvoker retry', () => {
             ...live,
             stopReason,
           };
-        }) as typeof session.runs.get);
+        }) as Runs['Service']['get']);
         const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
           origin: ORIGIN,
           providerResponseId: PROVIDER_RESPONSE_ID,
@@ -797,12 +812,12 @@ describe('ModelInvoker retry', () => {
           yield* Deferred.await(observing);
           stopped.set(kit.runId, reason);
           yield* Fiber.interrupt(fiber);
-          const state = yield* session.runHistory.load(kit.runId);
+          const state = yield* Context.get(session, RunHistory).load(kit.runId);
           if (state === null)
             throw new Error('The run has no run history state.');
           const resumed = yield* invokeOn({
             ...kit,
-            cell: yield* session.runHistory.open(kit.runId),
+            cell: yield* Context.get(session, RunHistory).open(kit.runId),
           });
           return {
             calls,

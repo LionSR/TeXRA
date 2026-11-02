@@ -2260,8 +2260,8 @@ function sessionFsLayer(
 
 ## SessionHostInteractions
 
-Stable per-session presentation owner. The `SessionHandle` exposes this
-object once, while one host at a time attaches and detaches; the host the
+Stable per-session presentation owner. The session serves this object
+once (`Interactions`), while one host at a time attaches and detaches; the host the
 session was opened with answers while none is, and notices raised while
 none is are replayed to the next one.
 

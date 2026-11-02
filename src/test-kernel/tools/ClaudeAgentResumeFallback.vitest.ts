@@ -17,7 +17,7 @@
  * - a detached loop's failure after the tool answered is never said.
  */
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer } from 'effect';
+import { Deferred, Effect, Fiber, Layer, type Context } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -43,7 +43,7 @@ vi.mock('@texra/tools/agentCli/claudeAgentImport', async (importActual) => {
 
 import '@test/support/sessionGraphTestSetup';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
@@ -61,7 +61,7 @@ import { ClaudeAgentTool } from '@texra/tools/agentCli/claudeAgent';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 interface Parent {
-  readonly session: SessionHandle;
+  readonly session: Context.Context<SessionServices>;
   readonly runId: RunId;
   readonly storage: string;
 }

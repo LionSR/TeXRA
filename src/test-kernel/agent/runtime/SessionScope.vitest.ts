@@ -1,8 +1,9 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp, Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { SessionLog } from '@shared/session/runHistory';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
@@ -17,9 +18,9 @@ describe('sendFollowUp host-path session routing', () => {
       Effect.gen(function* () {
         const processSession = yield* createTestSession();
         const parentRun = publishTestRunStart(processSession);
-        yield* processSession.log.settled;
+        yield* Context.get(processSession, SessionLog).settled;
         yield* Effect.addFinalizer(() =>
-          processSession.followUps
+          Context.get(processSession, Inbox)
             .closeInput(parentRun)
             .pipe(Effect.andThen(closeSessionOf(processSession))),
         );
@@ -30,10 +31,8 @@ describe('sendFollowUp host-path session routing', () => {
           yield* submitFollowUp(
             parentRun,
             { text: 'continue', from: { kind: 'user' as const } },
-            {
-              session: processSession,
-            },
-          ),
+            {},
+          ).pipe(Effect.provide(processSession)),
         ).toEqual({ status: 'queued' });
 
         // The default session does not own this run; selecting the actual
@@ -44,10 +43,8 @@ describe('sendFollowUp host-path session routing', () => {
           yield* submitFollowUp(
             parentRun,
             { text: 'continue', from: { kind: 'user' as const } },
-            {
-              session: testDefaultSession(),
-            },
-          ),
+            {},
+          ).pipe(Effect.provide(testDefaultSession())),
         ).toEqual({
           status: 'failed',
           reason: 'finished',

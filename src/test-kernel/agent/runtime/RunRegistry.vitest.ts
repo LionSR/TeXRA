@@ -1,6 +1,14 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Exit, Fiber, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  SubscriptionRef,
+  Context,
+} from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -14,8 +22,13 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { RunRegistry, RunLive } from '@agent/runtime/runRegistry';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { runStateAppend } from '@shared/session/runHistory';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionRoots } from '@platform/rootedFs';
+import {
+  runStateAppend,
+  SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import { aggregateTarget } from '@shared/schemas';
 import {
   startAwaited,
@@ -39,6 +52,7 @@ setupPlatform({ workspacePath: '/workspace' });
 function createRegistry(): {
   setPhase: (runId: RunId, status: RunPhase) => void;
   registry: RunRegistry;
+  session: Context.Context<SessionServices>;
 } {
   const views = new Map<RunId, RunView>();
   const setPhase = (runId: RunId, status: RunPhase) => {
@@ -68,37 +82,43 @@ function createRegistry(): {
           views.set(id, { ...views.get(id), parentId: null } as RunView);
         }
     });
-  const session = {
-    ...real,
-    view: {
-      ...real.view,
-      ref: grantView,
-      run: (runId: RunId) => views.get(runId),
-    },
-    log: {
-      ...real.log,
-      transact: ((work: unknown) =>
-        typeof work === 'function'
-          ? real.log.transact((tx) =>
-              (work as (job: typeof tx) => Effect.Effect<unknown>)({
-                ...tx,
-                append: ((drafts: readonly SessionEventDraft[]) =>
-                  drafts.some((draft) => draft.type === 'run.detach')
-                    ? Effect.as(fold(drafts), [])
-                    : runStateAppend(tx.append)(drafts)) as typeof tx.append,
-              }),
-            )
-          : Effect.succeed([])) as SessionHandle['log']['transact'],
-      hold: () => Effect.void,
-    },
-  } as SessionHandle;
+  const view: SessionViewAccess['Service'] = {
+    ...Context.get(real, SessionViewAccess),
+    ref: grantView,
+    run: (runId: RunId) => views.get(runId),
+  };
+  const log: SessionLog['Service'] = {
+    ...Context.get(real, SessionLog),
+    transact: ((work: unknown) =>
+      typeof work === 'function'
+        ? Context.get(real, SessionLog).transact((tx) =>
+            (work as (job: typeof tx) => Effect.Effect<unknown>)({
+              ...tx,
+              append: ((drafts: readonly SessionEventDraft[]) =>
+                drafts.some((draft) => draft.type === 'run.detach')
+                  ? Effect.as(fold(drafts), [])
+                  : runStateAppend(tx.append)(drafts)) as typeof tx.append,
+            }),
+          )
+        : Effect.succeed([])) as SessionLog['Service']['transact'],
+    hold: () => Effect.void,
+  };
   const registry = new RunRegistry({
-    session: () => session,
+    roots: Context.get(real, SessionRoots),
+    view,
+    log,
     fork: testRunFork,
     programs: testRunPrograms,
     wake: () => {},
   });
-  return { setPhase, registry };
+  // The session the registry's stops end runs over: the real one, with the
+  // view and log the registry reads.
+  const session = Context.add(
+    Context.add(real, SessionViewAccess, view),
+    SessionLog,
+    log,
+  );
+  return { setPhase, registry, session };
 }
 
 describe('runRegistry', () => {
@@ -148,7 +168,7 @@ describe('runRegistry', () => {
     "refuses a child under a stopped parent from the stop's request to its fold and on (issue #12442)",
     () =>
       Effect.gen(function* () {
-        const { setPhase, registry } = createRegistry();
+        const { setPhase, registry, session } = createRegistry();
         yield* Effect.addFinalizer(() => Effect.sync(() => registry.dispose()));
         const rootRunId = generateRunId();
         const childRunId = generateRunId();
@@ -185,10 +205,12 @@ describe('runRegistry', () => {
         // while the parent's `run.end` has not folded yet. The stop still
         // stands on the parent's activation, so a child whose lineage read
         // preceded the stop is refused as it registers.
-        yield* registry.stop(rootRunId, {
-          detachActiveChildren: true,
-          reason: 'user',
-        }).settlement;
+        yield* registry
+          .stop(rootRunId, {
+            detachActiveChildren: true,
+            reason: 'user',
+          })
+          .settlement.pipe(Effect.provide(session));
         expect(registry.bornDetached(childRunId)).toBe(true);
         expect(yield* refusal(lateChildRunId)).toMatchObject(stopped);
 

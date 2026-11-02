@@ -16,14 +16,14 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentError } from '@common/errors/agentErrors';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { attachErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
+import { SessionRoots } from '@platform/rootedFs';
 import { HARNESS_INSTRUCTION_KEY, type CommitOrdinal } from '@shared/schemas';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { ToolRegistry } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { declaredToolNames } from './agentToolResolution';
-import type { SessionHandle } from './SessionHandle';
-import type { SessionHostInteractions } from './HostInteractions';
+import { Interactions, type SessionHostInteractions } from './HostInteractions';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -99,23 +99,19 @@ export const activationIfOpened = (
 export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
   function* (input: {
     config: AgentConfig;
-    session: SessionHandle;
     /** The launch ends the run after one cycle (an awaited child). */
     stopAfterCycle?: boolean;
   }) {
     const fullConfig = input.config;
-    const interactions = input.session.interactions;
+    const interactions = yield* Interactions;
+    const roots = yield* SessionRoots;
     // A persona the config carries (its schema admitted it) is the agent;
     // a named one resolves over a settled catalog, and a miss says why.
     const agentEntry =
       fullConfig.persona != null
         ? agentEntryOf(fullConfig.persona, { source: 'inline', path: '' })
         : yield* (yield* AgentCatalog)
-            .forLaunch(
-              input.session.roots,
-              fullConfig.agent,
-              fullConfig.agentSource,
-            )
+            .forLaunch(roots, fullConfig.agent, fullConfig.agentSource)
             .pipe(
               Effect.catchTag('AgentNotFound', (missed) =>
                 presentLaunchError(
@@ -129,7 +125,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     if (agentEntry.source === 'plugin')
       yield* requirePluginAgentLoads(
         agentEntry,
-        yield* readInstalledPluginLoad(input.session.roots),
+        yield* readInstalledPluginLoad(roots),
       );
     const { persona } = agentEntry;
 

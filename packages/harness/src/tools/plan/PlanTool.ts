@@ -12,12 +12,18 @@ import { Effect, Result, Schema, SubscriptionRef } from 'effect';
 // Local imports
 import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
 import { goalGrant } from '@agent/runtime/runApprovalQueue';
+import { Runs } from '@agent/runtime/runRegistry';
 import { withLogChannel } from '@logger/effectLog';
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
 import { Settings } from '@shared/config/settings';
+import {
+  RunHistory,
+  SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import {
   GOAL_MAX_COST_SETTING,
   GOAL_PLAN_KIND,
@@ -104,14 +110,15 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   // running while its run has not ended, or, unborn while it waits for the
   // child-run budget, while this process holds it. "Keep agents running"
   // detached, a goal is still found by the call that launched it.
-  const { session, runId } = call.run;
+  const { runId } = call.run;
   // A plan call, by the response its result names (`RunFacts.calls`).
-  const issued = (yield* session.runHistory.load(runId))?.calls ?? {};
-  const { results } = yield* session.log.runRows(
+  const issued = (yield* (yield* RunHistory).load(runId))?.calls ?? {};
+  const { results } = yield* (yield* SessionLog).runRows(
     qualifyAggregateId('run', runId),
     'results',
   );
-  const { runs } = SubscriptionRef.getUnsafe(session.view.ref);
+  const { runs } = SubscriptionRef.getUnsafe((yield* SessionViewAccess).ref);
+  const live = yield* Runs;
   // A goal that ended still holds the conversation while work it started
   // (a round's background agent) runs on.
   const stillRunning = (id: RunId): boolean => {
@@ -138,9 +145,7 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
         : [];
     })
     .find((goal) =>
-      runs.has(goal)
-        ? stillRunning(goal)
-        : session.runs.get(goal) !== undefined,
+      runs.has(goal) ? stillRunning(goal) : live.get(goal) !== undefined,
     );
   if (running !== undefined)
     return executed(
@@ -293,6 +298,8 @@ export const PlanTool = defineTool({
   schema: PlanToolInputSchema,
   execute: (input: PlanToolInput) =>
     Effect.flatMap(requireToolRun('plan'), (call) =>
-      executeUpdate(call, { objective: input.objective }),
+      executeUpdate(call, { objective: input.objective }).pipe(
+        Effect.provide(call.session),
+      ),
     ),
 });

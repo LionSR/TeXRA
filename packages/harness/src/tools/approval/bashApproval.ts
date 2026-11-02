@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Context, Effect } from 'effect';
 
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
@@ -8,6 +8,7 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy } from '@shared/session/approvalDecision';
+import { Approvals } from '@shared/session/runHistory';
 import { errorResult } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
 
@@ -35,14 +36,13 @@ export interface BashApprovalRequest {
 export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
   request: BashApprovalRequest,
 ): Effect.fn.Return<DecisionOf<'bash'>, Error, ToolContext> {
-  const { run, requests } = yield* requireToolRun('A bash approval');
-  const { runId, session } = run;
+  const { run, requests, session } = yield* requireToolRun('A bash approval');
+  const { runId } = run;
+  const approvals = Context.get(session, Approvals);
   const granted = () =>
     request.grant !== null &&
-    session.approvals.bypass(
-      runId,
-      request.grant === 'bash' ? 'bash' : 'superYolo',
-    ) !== null;
+    approvals.bypass(runId, request.grant === 'bash' ? 'bash' : 'superYolo') !==
+      null;
 
   // The payload every host lists: a blank directory is dropped, so no
   // renderer decides what an empty `cwd` means.
@@ -67,7 +67,7 @@ export const requestBashApproval = Effect.fn('requestBashApproval')(function* (
       ? Effect.succeed<DecisionOf<'bash'>>({ action: 'approve' })
       : prompt,
   );
-  return yield* session.approvals.enqueue('bash', runId, {
+  return yield* approvals.enqueue('bash', runId, {
     prompt: atDispatch,
     bypassed: atDispatch,
   });

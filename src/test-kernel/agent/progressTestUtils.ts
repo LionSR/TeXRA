@@ -1,4 +1,4 @@
-import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import { Effect, Fiber, Stream, SubscriptionRef, Context } from 'effect';
 
 // Local imports
 import {
@@ -12,8 +12,10 @@ import {
   type HostInteractions,
   SessionHostInteractions,
 } from '@texra-ai/harness/host';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { Interactions } from '@agent/runtime/HostInteractions';
 import { aggregateTarget } from '@shared/schemas';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTestSession,
@@ -38,7 +40,7 @@ interface RecordingProgressSink {
 /** A request a run opened, as the fold and every surface read it. */
 type OpenedRequest = Extract<DisplaySessionEvent, { type: 'request.opened' }>;
 
-type SessionEventReader = Pick<SessionHandle, 'log'>;
+type SessionEventReader = Context.Context<SessionLog>;
 
 /**
  * Read the committed prefix using its drain coordinate, including private rows
@@ -48,20 +50,22 @@ async function readSessionEvents(
   session: SessionEventReader,
   fromCommit = 0,
 ): Promise<DisplaySessionEvent[]> {
-  const through = session.log.now();
+  const through = Context.get(session, SessionLog).now();
   if (through <= fromCommit) return [];
   return testRuntime().runPromise(
     Effect.gen(function* () {
       const drained = yield* SubscriptionRef.make(fromCommit);
-      return yield* session.log.tail(fromCommit, drained).pipe(
-        Stream.interruptWhen(
-          SubscriptionRef.changes(drained).pipe(
-            Stream.filter((cursor) => cursor >= through),
-            Stream.runHead,
+      return yield* Context.get(session, SessionLog)
+        .tail(fromCommit, drained)
+        .pipe(
+          Stream.interruptWhen(
+            SubscriptionRef.changes(drained).pipe(
+              Stream.filter((cursor) => cursor >= through),
+              Stream.runHead,
+            ),
           ),
-        ),
-        Stream.runCollect,
-      );
+          Stream.runCollect,
+        );
     }),
   );
 }
@@ -74,7 +78,7 @@ export function recordSessionEvents(
   session: SessionEventReader,
   filter: { readonly aggregateId?: string } = {},
 ): { readonly read: () => Promise<DisplaySessionEvent[]> } {
-  const start = session.log.now();
+  const start = Context.get(session, SessionLog).now();
   return {
     async read() {
       const events = await readSessionEvents(session, start);
@@ -124,7 +128,7 @@ export function createRecordingHost(): {
  * run and every surface read.
  */
 export function decideRequest(
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   request: { readonly runId: RunId; readonly requestId: string },
   decision: RequestDecision,
 ): void {
@@ -145,14 +149,14 @@ export function decideRequest(
  * request.
  */
 export function autoDecideRequests(
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   decide: (request: OpenedRequest) => RequestDecision | null,
 ): { readonly opened: OpenedRequest[]; readonly detach: () => void } {
   const opened: OpenedRequest[] = [];
   const fiber = testRuntime().runFork(
     Stream.runForEach(
-      session.log
-        .tail(session.log.now())
+      Context.get(session, SessionLog)
+        .tail(Context.get(session, SessionLog).now())
         .pipe(
           Stream.filter(
             (event): event is OpenedRequest => event.type === 'request.opened',
@@ -183,27 +187,27 @@ export function autoDecideRequests(
 
 /** Publish the run's existence fact when the view has yet to hold it. */
 async function ensureRunStart(
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   runId: RunId,
 ): Promise<void> {
   // A start already queued has yet to reach the view, and a second one is
   // refused by the substrate.
-  await Effect.runPromise(session.log.settled);
-  if (session.view.run(runId) !== undefined) return;
+  await Effect.runPromise(Context.get(session, SessionLog).settled);
+  if (Context.get(session, SessionViewAccess).run(runId) !== undefined) return;
   publishTestRunStart(session, runId);
-  await Effect.runPromise(session.log.settled);
+  await Effect.runPromise(Context.get(session, SessionLog).settled);
 }
 
 /** Fold a run to its running phase from the activation row that carries it. */
 export async function seedActiveRun(
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   runId: RunId,
 ): Promise<void> {
   await ensureRunStart(session, runId);
   publishTestRows(session, [
     { type: 'run.activate', aggregateId: qualifyAggregateId('run', runId) },
   ]);
-  await Effect.runPromise(session.log.settled);
+  await Effect.runPromise(Context.get(session, SessionLog).settled);
 }
 
 /**
@@ -230,7 +234,8 @@ export const sessionWithInteractions = Effect.fn('sessionWithInteractions')(
       Object.assign(session, { interactions });
       return session;
     }
-    if (interactions) yield* session.interactions.use(interactions);
+    if (interactions)
+      yield* Context.get(session, Interactions).use(interactions);
     return session;
   },
 );

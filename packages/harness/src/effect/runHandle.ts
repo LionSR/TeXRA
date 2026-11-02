@@ -6,9 +6,11 @@
  * (`sessionPrograms.ts`), so a reader that leaves, or a handle nobody reads,
  * changes nothing about the run.
  */
-import { Effect, Stream, SubscriptionRef } from 'effect';
+import { Context, Effect, Stream, SubscriptionRef } from 'effect';
 
-import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { Runs } from '@agent/runtime/runRegistry';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { replayTrace } from '@controllers/session/runTrace';
 import {
@@ -17,6 +19,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { lastLifecycleRow } from '@shared/session/runFacts';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { descendantRuns, type SessionView } from '@shared/session/sessionView';
 
 import { RunFailure } from './errors.js';
@@ -25,27 +28,33 @@ import type { Run } from './sessions.js';
 /** The {@link Run} of `runId`'s activation at `activation` on `session`;
  *  `redirectedFrom`, the owned child a resume of it was asked for. */
 export function runView(
-  session: RuntimeSessionHandle,
+  session: Context.Context<SessionServices>,
   runId: RunId,
   activation: CommitOrdinal,
   redirectedFrom?: RunId,
 ): Run {
+  const log = Context.get(session, SessionLog);
+  const view = Context.get(session, SessionViewAccess);
   const failure = (message: string, cause: unknown = new Error(message)) =>
     new RunFailure({ cause, message });
   // The activation is over once its end or the next activation commits, or
   // once nothing here holds the run any more: an end that did not save, a
   // session closing.
   const over = Effect.raceFirst(
-    session.log.tail(activation).pipe(
+    log.tail(activation).pipe(
       Stream.filter((row) => lastLifecycleRow([row], runId) !== undefined),
       Stream.runHead,
     ),
-    Effect.suspend(() => session.runs.get(runId)?.drained ?? Effect.void),
+    Effect.suspend(
+      () => Context.get(session, Runs).get(runId)?.drained ?? Effect.void,
+    ),
   );
   // Read once the view applied it, so a view read afterwards includes it.
   const result = over.pipe(
-    Effect.andThen(session.log.settled),
-    Effect.andThen(() => getRunRecords(session, runId).readRunEnd(activation)),
+    Effect.andThen(log.settled),
+    Effect.andThen(() =>
+      getRunRecords(runId).readRunEnd(activation).pipe(Effect.provide(session)),
+    ),
     Effect.mapError((error) =>
       failure(`Run ${runId}'s end could not be read: ${error.message}`, error),
     ),
@@ -75,7 +84,7 @@ export function runView(
           ];
           if (ids.join('\0') === subscribed) return Effect.void;
           subscribed = ids.join('\0');
-          return session.view.subscribe(
+          return view.subscribe(
             port,
             ids.map((id) => ({
               id: qualifyAggregateId('run', id),
@@ -84,11 +93,11 @@ export function runView(
           );
         };
         yield* Effect.acquireRelease(
-          interest(SubscriptionRef.getUnsafe(session.view.ref)),
-          () => session.view.subscribe(port, []),
+          interest(SubscriptionRef.getUnsafe(view.ref)),
+          () => view.subscribe(port, []),
         );
         const replayed = qualifyAggregateId('run', runId);
-        return session.view.changes.pipe(
+        return view.changes.pipe(
           // The level replays on subscribe, and the fold lands the
           // activation's row and the subscription's replay asynchronously,
           // so a replayed level can predate them: the run absent, its
@@ -110,9 +119,12 @@ export function runView(
       }),
     ),
     // Every reader replays this activation from the session's rows.
-    events: replayTrace(session, runId, activation, result),
-    interrupt: session.requests
+    events: replayTrace({ view, log }, runId, activation, result),
+    interrupt: Context.get(session, SessionRequests)
       .request({ kind: 'run.stop', runId, reason: 'user' })
-      .pipe(Effect.ignore({ log: 'Warn', message: `Stopping run ${runId}` })),
+      .pipe(
+        Effect.provide(session),
+        Effect.ignore({ log: 'Warn', message: `Stopping run ${runId}` }),
+      ),
   };
 }
