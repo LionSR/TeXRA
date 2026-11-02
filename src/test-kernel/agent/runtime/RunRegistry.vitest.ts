@@ -22,7 +22,11 @@ import {
   type SessionEventDraft,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { RunRegistry, RunLive } from '@agent/runtime/runRegistry';
+import {
+  RunRegistry,
+  RunLive,
+  type RunRegistryInit,
+} from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRoots } from '@platform/rootedFs';
 import {
@@ -48,12 +52,16 @@ import {
 const defaultSession = Effect.flatMap(TestSession, sessionHandleOf);
 
 /**
- * Wires a registry over the default session. The registry holds no phase of
- * its own: `setPhase` states the phase the fold carries (`RunView.status`)
- * the way the session's tail does, and a committed `run.detach` folds the way
- * the view's does: the child's edge is gone.
+ * Wires a registry over the default session, whose runs start on `fork`.
+ * The registry holds no phase of its own: `setPhase` states the phase the
+ * fold carries (`RunView.status`) the way the session's tail does, and a
+ * committed `run.detach` folds the way the view's does: the child's edge is
+ * gone.
  */
-function createRegistry(real: Context.Context<SessionServices>): {
+function createRegistry(
+  real: Context.Context<SessionServices>,
+  fork: RunRegistryInit['fork'],
+): {
   setPhase: (runId: RunId, status: RunPhase) => void;
   registry: RunRegistry;
   session: Context.Context<SessionServices>;
@@ -110,7 +118,7 @@ function createRegistry(real: Context.Context<SessionServices>): {
     roots: Context.get(real, SessionRoots),
     view,
     log,
-    fork: testRunFork,
+    fork,
     programs: testRunPrograms,
     wake: () => {},
   });
@@ -137,7 +145,10 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.layer), {
       "keeps shutdown draining after the run's terminal until run cleanup releases its lane",
       () =>
         Effect.gen(function* () {
-          const { registry } = createRegistry(yield* defaultSession);
+          const { registry } = createRegistry(
+            yield* defaultSession,
+            yield* testRunFork,
+          );
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => registry.dispose()),
           );
@@ -183,6 +194,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.layer), {
         Effect.gen(function* () {
           const { setPhase, registry, session } = createRegistry(
             yield* defaultSession,
+            yield* testRunFork,
           );
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => registry.dispose()),
@@ -259,7 +271,10 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.layer), {
       'refuses owned runs and reserves an idle deletion before a competing launch',
       () =>
         Effect.gen(function* () {
-          const { registry } = createRegistry(yield* defaultSession);
+          const { registry } = createRegistry(
+            yield* defaultSession,
+            yield* testRunFork,
+          );
           const runId = 'abcd12' as RunId;
           const started = yield* Deferred.make<void>();
           const finish = yield* Deferred.make<void>();

@@ -159,7 +159,6 @@
       "@transcript/completedRunArchive",
       "@transcript/traceAssembler",
       "@utils/core/idHash",
-      "@utils/core/pathCore",
       "@utils/files/externalRoots",
       "@utils/files/fileLocation",
       "@utils/files/fsEntryExists",

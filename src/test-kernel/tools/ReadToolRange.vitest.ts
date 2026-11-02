@@ -6,7 +6,7 @@ import { expect } from 'vitest';
 // Local imports
 import { fakePath } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { FakeHost } from '@test/support/testKernel';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { ReadFileTool } from '@tools/ReadTool';
 
 /** 10 lines: "line 1" … "line 10". */
@@ -30,46 +30,48 @@ const host = FakeHost.layer({
   },
 });
 
-layer(host, { buildPerTest: true })('read_file line ranges', (it) => {
-  it.effect.each([
-    {
-      name: 'an empty view when the start is past EOF',
-      range: { start: 50, end: 60 },
-      summary:
-        'Read small.txt (no lines in requested range) (requested end 60 exceeds file length 10)',
-      contains: [],
-      excludes: [],
-      empty: true,
-    },
-    {
-      name: 'the array range form some models emit',
-      range: [2, 4],
-      summary: 'Read lines 2-4 of small.txt',
-      contains: ['line 2', 'line 4'],
-      excludes: ['line 5'],
-    },
-  ])('reads $name', ({ range, summary, contains, excludes, empty }) =>
-    Effect.gen(function* () {
-      const result = yield* callRead({ path: 'small.txt', range });
-
-      expect(result.summary).toBe(summary);
-      if (empty) expect(result.output).toBe('');
-      for (const line of contains) expect(result.output).toContain(line);
-      for (const line of excludes) expect(result.output).not.toContain(line);
-    }),
-  );
-
-  it.effect(
-    'reports remaining lines when a start-only range is truncated',
-    () =>
+layer(SessionGraph.layer)('read_file line ranges', (it) => {
+  it.layer(host, { buildPerTest: true })((it) => {
+    it.effect.each([
+      {
+        name: 'an empty view when the start is past EOF',
+        range: { start: 50, end: 60 },
+        summary:
+          'Read small.txt (no lines in requested range) (requested end 60 exceeds file length 10)',
+        contains: [],
+        excludes: [],
+        empty: true,
+      },
+      {
+        name: 'the array range form some models emit',
+        range: [2, 4],
+        summary: 'Read lines 2-4 of small.txt',
+        contains: ['line 2', 'line 4'],
+        excludes: ['line 5'],
+      },
+    ])('reads $name', ({ range, summary, contains, excludes, empty }) =>
       Effect.gen(function* () {
-        const result = yield* callRead({
-          path: 'large.txt',
-          range: { start: 2 },
-        });
+        const result = yield* callRead({ path: 'small.txt', range });
 
-        expect(result.summary).toBe('Read lines 2-2001 of large.txt');
-        expect(result.output).toContain('...(truncated, 499 more lines)');
+        expect(result.summary).toBe(summary);
+        if (empty) expect(result.output).toBe('');
+        for (const line of contains) expect(result.output).toContain(line);
+        for (const line of excludes) expect(result.output).not.toContain(line);
       }),
-  );
+    );
+
+    it.effect(
+      'reports remaining lines when a start-only range is truncated',
+      () =>
+        Effect.gen(function* () {
+          const result = yield* callRead({
+            path: 'large.txt',
+            range: { start: 2 },
+          });
+
+          expect(result.summary).toBe('Read lines 2-2001 of large.txt');
+          expect(result.output).toContain('...(truncated, 499 more lines)');
+        }),
+    );
+  });
 });

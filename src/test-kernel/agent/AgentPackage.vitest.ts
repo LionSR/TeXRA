@@ -17,7 +17,7 @@ import { describe, expect } from 'vitest';
 
 // Local imports - package API under test
 import { SessionRequests } from '@agent/runtime/requestPolicy';
-import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
   emptySessionView,
@@ -279,7 +279,7 @@ describe(
           });
           expect(end.error?.message).toContain('exceeds the context window');
           yield* closeTestSession(roots.storage);
-        }),
+        }).pipe(Effect.provideServiceEffect(SessionOwner, testSessionOwner)),
     );
   },
 );

@@ -62,6 +62,7 @@ import { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import { SessionRoots } from '@platform/rootedFs';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { closeTestDefaultSession } from '@test/support/sessionEnd';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { sessionStoreFaults } from '@test/support/storeFaults';
 import {
@@ -247,7 +248,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await Effect.runPromise(closeTestDefaultSession);
+  await testRuntime().runPromise(closeTestDefaultSession);
 });
 
 describe('childRunLoop E2E fixtures', () => {

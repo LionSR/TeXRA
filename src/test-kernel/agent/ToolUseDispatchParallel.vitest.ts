@@ -51,7 +51,10 @@ import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import type { ResolvedTools } from '@agent/runtime/agentToolResolution';
 import type { Runs } from '@agent/runtime/runRegistry';
-import type { PluginToolServices } from '@agent/runtime/ToolServices';
+import type {
+  PluginToolServices,
+  RunServices,
+} from '@agent/runtime/ToolServices';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Inbox } from '@agent/followUp/ToolUseFollowUp';
@@ -231,8 +234,14 @@ interface DispatchKit {
   readonly cell: RunCell;
   /** The tools the dispatch's step offers. */
   readonly tools: ResolvedTools['registry'];
+  /** The run's services and its calls', over the block's process services. */
   readonly layer: Layer.Layer<
-    AgentRun | RunHistory | Runs | Exclude<PluginToolServices, Scope.Scope>
+    | AgentRun
+    | RunHistory
+    | Runs
+    | Exclude<PluginToolServices, RunServices | Scope.Scope>,
+    never,
+    RunServices
   >;
 }
 
@@ -596,9 +605,7 @@ return { columns: page.columns, count: page.rows.length,
           // than a pair of trace publications: exactly one open and one close
           // reach the display plane, and the interrupted second call opens
           // none.
-          const types = (yield* Effect.promise(() => recorded.read())).map(
-            (event) => event.type,
-          );
+          const types = (yield* recorded.read).map((event) => event.type);
           expect(types.filter((type) => type === 'tool.start')).toHaveLength(1);
           expect(types.filter((type) => type === 'tool.end')).toHaveLength(1);
         }),

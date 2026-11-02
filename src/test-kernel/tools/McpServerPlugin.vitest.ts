@@ -198,15 +198,10 @@ describe('MCP server plugins', () => {
             publishTestRunStart(session, runId);
             yield* Context.get(session, SessionLog).settled;
             const requestOpened = yield* Deferred.make<void>();
-            const requests = yield* Effect.acquireRelease(
-              Effect.sync(() =>
-                autoDecideRequests(session, () => {
-                  Deferred.doneUnsafe(requestOpened, Effect.void);
-                  return null;
-                }),
-              ),
-              (requests) => Effect.sync(() => requests.detach()),
-            );
+            const requests = yield* autoDecideRequests(session, () => {
+              Deferred.doneUnsafe(requestOpened, Effect.void);
+              return null;
+            });
             const tool = resolved.registry.get('mcp__fixture__echo')!;
             const call = yield* Effect.forkChild(
               guardedToolCall(tool, { text: 'hi' }).pipe(
@@ -245,48 +240,48 @@ describe('MCP server plugins', () => {
         }),
       20_000,
     );
-  });
 
-  // Failure mode: a call the run stops waiting for (a stop, or the call's
-  // timeout) is never cancelled, so the server keeps working on it.
-  it.live(
-    'tells the server when a call is abandoned',
-    () =>
-      Effect.gen(function* () {
-        const dir = yield* tempDir;
-        const pidFile = path.join(dir, 'pid');
-        writeFileSync(path.join(dir, 'server.cjs'), FIXTURE_SERVER);
-        writeFileSync(
-          path.join(dir, 'mcp.json'),
-          JSON.stringify({
-            mcpServers: {
-              fixture: {
-                command: process.execPath,
-                args: [path.join(dir, 'server.cjs'), pidFile],
-                env: { FIXTURE_MODE: 'hang' },
+    // Failure mode: a call the run stops waiting for (a stop, or the call's
+    // timeout) is never cancelled, so the server keeps working on it.
+    it.effect(
+      'tells the server when a call is abandoned',
+      () =>
+        Effect.gen(function* () {
+          const dir = yield* tempDir;
+          const pidFile = path.join(dir, 'pid');
+          writeFileSync(path.join(dir, 'server.cjs'), FIXTURE_SERVER);
+          writeFileSync(
+            path.join(dir, 'mcp.json'),
+            JSON.stringify({
+              mcpServers: {
+                fixture: {
+                  command: process.execPath,
+                  args: [path.join(dir, 'server.cjs'), pidFile],
+                  env: { FIXTURE_MODE: 'hang' },
+                },
               },
-            },
-          }),
-        );
-        const services = yield* Layer.build(mcpToolTableLayer(dir));
-        const resolved = yield* resolveTestStep({
-          tools: [{ name: 'mcp__fixture__*' }],
-          injectTools: false,
-          stores: installedHost().roots,
-          workspaceRoot: undefined,
-        }).pipe(Effect.provideContext(services));
-        const tool = resolved.registry.get('mcp__fixture__echo')!;
+            }),
+          );
+          const services = yield* Layer.build(mcpToolTableLayer(dir));
+          const resolved = yield* resolveTestStep({
+            tools: [{ name: 'mcp__fixture__*' }],
+            injectTools: false,
+            stores: installedHost().roots,
+            workspaceRoot: undefined,
+          }).pipe(Effect.provideContext(services));
+          const tool = resolved.registry.get('mcp__fixture__echo')!;
 
-        const call = yield* Effect.forkChild(tool.call({ text: 'hi' }));
-        const requestId = Number(yield* writtenText(`${pidFile}.called`));
-        yield* Fiber.interrupt(call);
+          const call = yield* Effect.forkChild(tool.call({ text: 'hi' }));
+          const requestId = Number(yield* writtenText(`${pidFile}.called`));
+          yield* Fiber.interrupt(call);
 
-        expect(
-          JSON.parse(yield* writtenText(`${pidFile}.cancelled`)),
-        ).toStrictEqual({ requestId });
-      }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
-    20_000,
-  );
+          expect(
+            JSON.parse(yield* writtenText(`${pidFile}.cancelled`)),
+          ).toStrictEqual({ requestId });
+        }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
+      20_000,
+    );
+  });
 
   it.live('reports an invalid config without quoting its text', () =>
     Effect.gen(function* () {

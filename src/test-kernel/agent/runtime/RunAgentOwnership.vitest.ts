@@ -59,7 +59,10 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
   it.live('refuses a second launch while the first is still running', () =>
     Effect.gen(function* () {
       const roots = testWorkspaceRoots();
-      const session = yield* openTestDefaultSession({ roots });
+      const session = yield* withProcessServices(
+        testRuntime(),
+        openTestDefaultSession({ roots }),
+      );
       const runId = generateRunId();
       const first = yield* Effect.forkChild(launch(session, runId));
       yield* untilStored(roots.storage, parkedAfter(runId, 1, roots.storage));
@@ -84,7 +87,10 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
     () =>
       Effect.gen(function* () {
         const roots = testWorkspaceRoots();
-        const session = yield* openTestDefaultSession({ roots });
+        const session = yield* withProcessServices(
+          testRuntime(),
+          openTestDefaultSession({ roots }),
+        );
         const runId = generateRunId();
         const faults = yield* sessionStoreFaults(roots.storage);
         yield* faults.failNext('appendAll', 'run.start');
@@ -103,7 +109,10 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
     () =>
       Effect.gen(function* () {
         const roots = testWorkspaceRoots();
-        const session = yield* openTestDefaultSession({ roots });
+        const session = yield* withProcessServices(
+          testRuntime(),
+          openTestDefaultSession({ roots }),
+        );
         const runId = generateRunId();
         const faults = yield* sessionStoreFaults(roots.storage);
         // The opening's append claims the run; the hold the run takes on

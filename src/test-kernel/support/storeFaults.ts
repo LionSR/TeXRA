@@ -401,10 +401,10 @@ export function validationHost(prefix: string): void {
     await Effect.runPromise(
       fakeHostSecrets.set(apiKeySecretName('openai'), 'validation-fake-key'),
     );
-    await Effect.runPromise(closeTestDefaultSession);
+    await testRuntime().runPromise(closeTestDefaultSession);
   });
   afterEach(async () => {
-    await Effect.runPromise(closeTestDefaultSession);
+    await testRuntime().runPromise(closeTestDefaultSession);
     vi.unstubAllEnvs();
     for (const [key, value] of Object.entries(restore)) {
       if (value === undefined) delete process.env[key];
@@ -537,20 +537,26 @@ export const parkedRunAfterCrash = (
 ): Effect.Effect<CrashedRun, Error> =>
   Effect.gen(function* () {
     const roots = testWorkspaceRoots();
-    const session = yield* openTestDefaultSession({ roots });
+    const session = yield* withProcessServices(
+      testRuntime(),
+      openTestDefaultSession({ roots }),
+    );
     // The launch lives in this scope: closing it, after the session, is the
     // kill, and a setup that fails on the way kills it too.
     const { runId, storage } = yield* Effect.scoped(
       Effect.gen(function* () {
         const runId = yield* parkedRoot(session, options.instruction);
         const copy = crashedCopy(roots.storage, options.owner);
-        yield* closeTestDefaultSession;
+        yield* withProcessServices(testRuntime(), closeTestDefaultSession);
         return { runId, storage: copy };
       }),
     );
-    const reopened = yield* openTestDefaultSession({
-      roots: { ...roots, storage },
-      ...(options.interactions && { interactions: options.interactions }),
-    });
+    const reopened = yield* withProcessServices(
+      testRuntime(),
+      openTestDefaultSession({
+        roots: { ...roots, storage },
+        ...(options.interactions && { interactions: options.interactions }),
+      }),
+    );
     return { session: reopened, runId, storage };
   });

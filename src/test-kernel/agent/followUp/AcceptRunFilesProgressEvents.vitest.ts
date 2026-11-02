@@ -42,10 +42,9 @@ layer(
       Effect.flatMap(Effect.flatMap(TestSession, sessionHandleOf), (session) =>
         Effect.gen(function* () {
           publishTestRunStart(session, runId);
-          const requests = autoDecideRequests(session, () => ({
+          const requests = yield* autoDecideRequests(session, () => ({
             action: 'approve',
           }));
-          yield* Effect.addFinalizer(() => Effect.sync(requests.detach));
 
           // Each run-storage entry the walk probes, with the type `lstat`
           // reports for it, keyed by the absolute path the code joins (an

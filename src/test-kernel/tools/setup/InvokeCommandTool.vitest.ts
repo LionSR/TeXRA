@@ -2,13 +2,12 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
-import { describe } from 'vitest';
 
 // Local imports
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { FakeHost } from '@test/support/testKernel';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { InvokeCommandTool } from '@texra/tools/setup/InvokeCommandTool';
 
 // Local file imports
@@ -46,7 +45,7 @@ const invoke = (input: unknown) =>
     Effect.provide(withSetup(nativeToolTestLayer())),
   );
 
-describe('InvokeCommandTool allowlist', () => {
+layer(SessionGraph.layer)('InvokeCommandTool allowlist', (it) => {
   it.effect(
     'rejects command arguments so credentials cannot reach the host',
     () =>

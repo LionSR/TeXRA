@@ -1,12 +1,10 @@
 import '@test/support/sessionGraphTestSetup';
 
-import { Effect, References, type Context } from 'effect';
+import { Effect, References } from 'effect';
 
-import type { SessionServices } from '@agent/runtime/rootLaunch';
-import {
-  openTestDefaultSession,
-  tryTestDefaultSession,
-} from '@test/support/sessionEnd';
+import { SessionOwner } from '@agent/runtime/rootLaunch';
+import { openTestDefaultSession } from '@test/support/sessionEnd';
+import { testSessionOwner } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // An ephemeral session's graph builds synchronously, so the default is open
@@ -17,20 +15,8 @@ Effect.runSync(
   openTestDefaultSession({
     roots: testWorkspaceRoots(),
     transcriptMode: { kind: 'ephemeral' },
-  }).pipe(Effect.provideService(References.PreventSchedulerYield, true)),
+  }).pipe(
+    Effect.provideServiceEffect(SessionOwner, testSessionOwner),
+    Effect.provideService(References.PreventSchedulerYield, true),
+  ),
 );
-
-/**
- * The file's default session this setup opened, or the one a suite reopened
- * through `openTestDefaultSession`. Access with none open is a lifecycle
- * error.
- */
-export function testDefaultSession(): Context.Context<SessionServices> {
-  const session = tryTestDefaultSession();
-  if (!session) {
-    throw new Error(
-      'The default session is not open. Import @test/support/defaultSessionTestSetup or call openTestDefaultSession() first.',
-    );
-  }
-  return session;
-}

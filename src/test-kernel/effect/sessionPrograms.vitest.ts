@@ -35,7 +35,7 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
-import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
   closeTestSession,
   openTestDefaultSession,
@@ -205,7 +205,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
           expect(endsOf(roots.storage, runId)).toEqual(['cancelled']);
           expect(claimHolder(roots.storage, runId)).toBeNull();
         }
-      }),
+      }).pipe(Effect.provideServiceEffect(SessionOwner, testSessionOwner)),
   );
 
   it.live(
@@ -246,7 +246,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
         expect(String(exits[0])).toContain('injected readInputBatch fault');
         yield* closeTestSession(roots.storage);
         expect(claimHolder(roots.storage, run.runId)).toBeNull();
-      }),
+      }).pipe(Effect.provideServiceEffect(SessionOwner, testSessionOwner)),
   );
 
   it.live(
@@ -323,7 +323,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
         yield* Scope.close(listener, Exit.void);
         yield* untilSubscribed(sdk, []);
         yield* closeTestSession(storage);
-      }),
+      }).pipe(Effect.provideServiceEffect(SessionOwner, testSessionOwner)),
   );
 
   it.live(
@@ -372,7 +372,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
         expect(requestsOf(roots.storage, runId)).toBe(0);
         expect(subscribed(sdk)).toEqual([]);
         yield* closeTestSession(roots.storage);
-      }),
+      }).pipe(Effect.provideServiceEffect(SessionOwner, testSessionOwner)),
   );
 
   it.live(
@@ -414,6 +414,6 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
         ]);
         expect(claimHolder(roots.storage, run.runId)).toBeNull();
         yield* closeTestSession(roots.storage);
-      }),
+      }).pipe(Effect.provideServiceEffect(SessionOwner, testSessionOwner)),
   );
 });

@@ -663,7 +663,10 @@ const cleanPass = (
   Effect.gen(function* () {
     const points = yield* Effect.scoped(
       Effect.gen(function* () {
-        const session = yield* openTestDefaultSession({ roots });
+        const session = yield* withProcessServices(
+          testRuntime(),
+          openTestDefaultSession({ roots }),
+        );
         // The session's own store handle: the process holds one per root.
         const databases = yield* withProcessServices(
           testRuntime(),
@@ -685,7 +688,7 @@ const cleanPass = (
         yield* approveAll(session);
         const run = yield* launch(session).pipe(Effect.forkChild);
         yield* steps(session);
-        yield* closeTestDefaultSession;
+        yield* withProcessServices(testRuntime(), closeTestDefaultSession);
         yield* Fiber.interrupt(run);
         // Every transaction observed, through the store's last commit.
         const last = Math.max(
@@ -741,9 +744,10 @@ const resumeFrom = (
     const prefix = rowsOf(storage);
     const refused = yield* Effect.scoped(
       Effect.gen(function* () {
-        const session = yield* openTestDefaultSession({
-          roots: { ...roots, storage },
-        });
+        const session = yield* withProcessServices(
+          testRuntime(),
+          openTestDefaultSession({ roots: { ...roots, storage } }),
+        );
         yield* approveAll(session, n);
         // What the prefix left pending is answered once the resume has
         // activated the request's run: a resume that retired it instead does
@@ -787,7 +791,9 @@ const resumeFrom = (
         yield* steps(session, storage);
         return null;
       }).pipe(
-        Effect.ensuring(closeTestDefaultSession),
+        Effect.ensuring(
+          withProcessServices(testRuntime(), closeTestDefaultSession),
+        ),
         Effect.timeout('60 seconds'),
         Effect.catchCause((cause) =>
           Effect.succeed(`the resume stalled: ${String(cause)}`),
@@ -1329,9 +1335,10 @@ export function crashConformanceSuite(): void {
           }
           const reopened = yield* Effect.scoped(
             Effect.gen(function* () {
-              const session = yield* openTestDefaultSession({
-                roots: { ...roots, storage },
-              });
+              const session = yield* withProcessServices(
+                testRuntime(),
+                openTestDefaultSession({ roots: { ...roots, storage } }),
+              );
               const log = Context.get(session, SessionLog);
               const isEnded = (rows: readonly Row[]) =>
                 of(rows, detached, 'run.end').length > 0;
@@ -1347,7 +1354,11 @@ export function crashConformanceSuite(): void {
                 released: Exit.isSuccess(closed),
                 control: yield* log.owner(control),
               };
-            }).pipe(Effect.ensuring(closeTestDefaultSession)),
+            }).pipe(
+              Effect.ensuring(
+                withProcessServices(testRuntime(), closeTestDefaultSession),
+              ),
+            ),
           );
           const final = rowsOf(storage);
           const after = (run: RunId) =>
@@ -1389,7 +1400,10 @@ export function crashConformanceSuite(): void {
       Effect.scoped(
         Effect.gen(function* () {
           const roots = testWorkspaceRoots();
-          const session = yield* openTestDefaultSession({ roots });
+          const session = yield* withProcessServices(
+            testRuntime(),
+            openTestDefaultSession({ roots }),
+          );
           const run = qualifyAggregateId('run', generateRunId());
           const titled = (description: string) => [
             {
@@ -1429,7 +1443,11 @@ export function crashConformanceSuite(): void {
             'run.description',
             'run.description',
           ]);
-        }).pipe(Effect.ensuring(closeTestDefaultSession)),
+        }).pipe(
+          Effect.ensuring(
+            withProcessServices(testRuntime(), closeTestDefaultSession),
+          ),
+        ),
       ),
     );
     /**

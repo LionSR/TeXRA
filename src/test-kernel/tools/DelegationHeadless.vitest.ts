@@ -78,7 +78,10 @@ interface Parent {
 const parkedParent = (bypass = true) =>
   Effect.gen(function* () {
     const roots = testWorkspaceRoots();
-    const session = yield* openTestDefaultSession({ roots });
+    const session = yield* withProcessServices(
+      testRuntime(),
+      openTestDefaultSession({ roots }),
+    );
     const runId = yield* parkedRoot(session, 'Parent.');
     if (bypass)
       yield* Context.get(session, Approvals).change(
@@ -109,6 +112,7 @@ const delegateReview = (parent: Parent, prompt = 'Check the proof.') =>
           },
         }),
       ),
+      (program) => withProcessServices(testRuntime(), program),
     );
 
 /** The in-band path a script's awaited `agent()` takes. */

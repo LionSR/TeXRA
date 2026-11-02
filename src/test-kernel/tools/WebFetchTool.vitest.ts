@@ -1,10 +1,11 @@
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
+import { afterAll, beforeAll, expect, vi } from 'vitest';
 
 import { fetch as undiciFetch } from 'undici';
 
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { SessionGraph } from '@test/support/testKernel';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
 
 // The tool connects through undici's own `fetch`; the real one stays the
@@ -28,7 +29,7 @@ function clearProxyEnv() {
   for (const name of PROXY_ENV) vi.stubEnv(name, undefined);
 }
 
-describe('WebFetchTool', () => {
+layer(SessionGraph.layer)('WebFetchTool', (it) => {
   beforeAll(clearProxyEnv);
   afterAll(() => vi.unstubAllEnvs());
 
