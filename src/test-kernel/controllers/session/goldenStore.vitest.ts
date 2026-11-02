@@ -349,8 +349,9 @@ describe('the golden 1.0 store', () => {
               : [],
           ),
         ).toEqual([['read_file', 'executions', 'memory', 'plan']]);
-        // The plan the chat ran as a goal: a run on the goal's program, its
-        // agent the chat's, that ends with what its one round verified.
+        // The plan the chat ran as a goal: a run on the default strategy, its
+        // agent the chat's, that ends with the goal's result: what its one
+        // round verified, and what that round spent.
         const goal = qualifyAggregateId('run', GOAL);
         expect(
           events.flatMap((event) =>
@@ -360,8 +361,9 @@ describe('the golden 1.0 store', () => {
           ),
         ).toEqual([
           {
-            status: 'completed',
+            outcome: 'completed',
             rounds: 1,
+            spent: 0.000048,
             report: 'The golden chat is answered.',
           },
         ]);

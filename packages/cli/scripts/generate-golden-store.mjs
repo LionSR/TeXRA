@@ -30,7 +30,7 @@
  *   "Keep agents running" turned on in `/config`, Codex switched on in
  *   `/plugins`, and a plugin's `PostToolUse` hook on `codex` enabled: a
  *   plan the user runs as a goal
- *   (`r` on the approval), which runs the goal template as a background
+ *   (`r` on the approval), which runs the default goal strategy as a background
  *   script of the chat whose one round, a fork of the chat (`self()`),
  *   runs a command under the goal's grant, unasked, and submits its
  *   verdict, and the chat's turn on the goal's result; then
