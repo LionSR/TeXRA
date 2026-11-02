@@ -71,9 +71,10 @@ const defectAsFailure = Effect.catchDefect((d) => Effect.fail(ensureError(d)));
 /** What opening a run's rows reads of its session. */
 type OpenServices = SessionLog | SessionRoots | Approvals;
 
-/** The stop ending the run is the session's own clean close: its halt says so. */
+/** A stop ending the run is the session's own clean close: its halt says so. */
 const closedBySession = (runs: Runs['Service'], input: Ending): boolean =>
-  input.stopped === true && runs.get(input.runId)?.stopReason === 'shutdown';
+  input.outcome === RUN_OUTCOME.CANCELLED &&
+  runs.stopCause(input.runId) === 'shutdown';
 
 /** A resume's activation: its `run.activate`, the grants it ends, and a
  *  `run.config` if its configuration changed (its model kept: only a
@@ -155,8 +156,6 @@ export interface FinalizeRunInput {
   /** An end no driver here writes (a stop that reached no live target, a
    *  failed hand-off, a backstop), under a claim it takes itself. */
   readonly ownerless?: boolean;
-  /** A stop ended the run: a trace row the store refused does not fail it. */
-  readonly stopped?: boolean;
   /** The classified error behind a FAILED outcome, when the run has one. */
   readonly error?: RunEnd['error'];
   /** What the run produced; absent (empty) for a backstop or a child. */
@@ -305,7 +304,6 @@ const beforeEnd = Effect.fn('beforeEnd')(function* (
       runId: child.runId,
       outcome: RUN_OUTCOME.CANCELLED,
       ownerless: true,
-      stopped: true,
     });
   }
   return facts?.end != null;
@@ -335,9 +333,9 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
     );
   const stood = yield* defectAsFailure(beforeEnd(runId, ownerless === true));
   // Read once readied (a refusal leaves them unread): rows the store refused
-  // fail the run unless a stop ended it, whoever ends it.
+  // fail the run unless a stop ended it (CANCELLED), whoever ends it.
   const lost = yield* log.lost(runId);
-  const failed = lost !== undefined && input.stopped !== true;
+  const failed = lost !== undefined && outcome !== RUN_OUTCOME.CANCELLED;
   const requested = {
     ...input,
     outcome: failed ? RUN_OUTCOME.FAILED : outcome,

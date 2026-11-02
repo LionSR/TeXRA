@@ -104,11 +104,7 @@ const OWNERS: readonly {
     fact: 'why a run is being stopped (precedence included)',
     owner: RUN_REGISTRY,
     use: 'assigns',
-    name: 'stopReason',
-    also: {
-      'packages/harness/src/common/plugins/hookProtocol.ts':
-        'a hook output field of the same name, not a run stop',
-    },
+    name: 'stopCause',
   },
   {
     fact: "a run's parent edge before its rows exist",

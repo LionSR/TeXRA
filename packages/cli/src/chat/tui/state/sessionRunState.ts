@@ -37,7 +37,7 @@ interface RootRunClaim {
   readonly runCompleted: boolean;
   /** A stop was asked of this claim's run. The run consumes it as it
    *  completes, and the conversation continues after; why the run stopped
-   *  is the run registry's fact (`LiveRun.stopReason`), not held here. */
+   *  is the run registry's fact (`RunsShape.stopCause`), not held here. */
   readonly stop: boolean;
 }
 

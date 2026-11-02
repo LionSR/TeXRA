@@ -98,7 +98,7 @@ export const observeBackground = <E>(
   ).pipe(
     Effect.onInterrupt(() =>
       Effect.flatMap(Runs, (runs) =>
-        runs.get(run.runId)?.stopReason === 'user' ? cancel : Effect.void,
+        runs.stopCause(run.runId) === 'user' ? cancel : Effect.void,
       ),
     ),
   );

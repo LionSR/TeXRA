@@ -340,9 +340,7 @@ describe(
             reason: 'user',
             detachActiveChildren: false,
           });
-          expect(Context.get(session, Runs).get(runId)?.stopReason).toBe(
-            'user',
-          );
+          expect(Context.get(session, Runs).stopCause(runId)).toBe('user');
           yield* stop.settlement.pipe(Effect.provide(session));
           yield* input.release;
           yield* Fiber.join(resumed);
@@ -381,9 +379,7 @@ describe(
             reason: 'user',
             detachActiveChildren: false,
           });
-          expect(Context.get(session, Runs).get(runId)?.stopReason).toBe(
-            'user',
-          );
+          expect(Context.get(session, Runs).stopCause(runId)).toBe('user');
           yield* launched.release;
           yield* Fiber.join(resumed);
 

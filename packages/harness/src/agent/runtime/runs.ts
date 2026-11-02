@@ -44,8 +44,6 @@ export interface LiveRun {
    *  and a run with no loop of its own (a background command) reads what
    *  its launch said it takes. */
   readonly readsMessages: boolean;
-  /** Why it was stopped here, while it unwinds from that stop. */
-  readonly stopReason: StopCause | undefined;
   /** Resolves once every owner of it here has left. */
   readonly drained: Effect.Effect<void>;
 }
@@ -62,6 +60,9 @@ export interface RunsShape {
    *  it is in flight here. */
   get(runId: RunId): LiveRun | undefined;
   get(): readonly LiveRun[];
+  /** Why the launch of `runId` here is stopping, while it unwinds from that
+   *  stop: the one answer to whether a stop reached it, and how. */
+  stopCause(runId: RunId): StopCause | undefined;
 }
 
 /**
