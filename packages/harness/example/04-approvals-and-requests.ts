@@ -92,6 +92,9 @@ const program = Effect.gen(function* () {
     ),
   );
   console.log('[04] cycle 1 status=waiting modelTurns=', requests.length);
+  // The wait the first cycle ended on (its row's seq): the second cycle
+  // ends on a later one, on the scripted model and a real route alike.
+  const firstWait = session.view.current().runs.get(run.runId)?.forkPoint;
 
   // Send a follow-up message through the runtime command protocol
   const followUpOutcome = yield* session.request({
@@ -109,7 +112,7 @@ const program = Effect.gen(function* () {
       return (
         current?.status === 'waiting' &&
         pendingFollowUps === 0 &&
-        requests.length === 3
+        current.forkPoint !== firstWait
       );
     }),
   );
