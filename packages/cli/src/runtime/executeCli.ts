@@ -4,7 +4,6 @@ import {
   Effect,
   Exit,
   Fiber,
-  Predicate,
   Result,
   Scope,
   Stream,
@@ -58,7 +57,6 @@ import {
   projectApprovalPolicy,
   type CliContext,
 } from './cliContext';
-import type { DatabaseNotOwner } from '@texra-ai/harness/schemas';
 import type { LocalSession, SessionOpenError } from '@texra-ai/harness';
 
 /** What a headless run starts: a host's whole configuration (the
@@ -541,17 +539,7 @@ export function executeCliConfig(
               yield* onFinalized(launchRunId);
             }
           });
-          // A run another owner holds now is that owner's to finalize.
-          yield* drain.pipe(
-            Effect.catch((error: unknown) =>
-              Predicate.isTagged(
-                error,
-                'DatabaseNotOwner' satisfies DatabaseNotOwner['_tag'],
-              )
-                ? Effect.void
-                : Effect.fail(ensureError(error)),
-            ),
-          );
+          yield* drain;
         }
         // A failed run's end reaches the host through the session's
         // presenter, which `settled` waits for: the presentation host stays

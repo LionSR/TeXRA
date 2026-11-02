@@ -1112,15 +1112,6 @@ Consolidates scattered `.toLowerCase().endsWith('.ext')` patterns.
 function hasExtension(filePath: string, extension: string): boolean
 ```
 
-## heldElsewhereBy
-
-The owner a claim refusal or a `DatabaseNotOwner` of an open aggregate
-names (not proven alive); null for a closed or ownerless one.
-
-```ts
-const heldElsewhereBy: (error: unknown) => string | null
-```
-
 ## helperCall
 
 One helper call: bind the configured helper model (else `runModel`) for
