@@ -103,7 +103,7 @@ const expectClonedInto = (cwd: string) =>
   });
 
 // Live clock: the entry and its scripted processes run in real time.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'CLI Overleaf clone command',
   (it) => {
     const tempDirs = useTempDirs();

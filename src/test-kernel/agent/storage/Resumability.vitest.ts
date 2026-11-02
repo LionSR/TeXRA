@@ -52,7 +52,7 @@ const fail = (session: Session, runId: RunId) =>
     },
   ]);
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'deriveResumability',
   (it) => {
     it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {

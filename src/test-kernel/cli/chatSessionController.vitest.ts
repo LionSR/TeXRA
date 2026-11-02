@@ -335,7 +335,7 @@ const resumedRun = (
 // Live clock: the controller's stops and resumes settle on real event-loop
 // turns. The view is bound for the block; the host with the mocked stores is
 // fresh per test, as the stub's roots read it.
-layer(Layer.provideMerge(boundTestSessionView, SessionGraph.layer), {
+layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
   excludeTestServices: true,
 })('createChatSessionController', (it) => {
   it.layer(hostWithMockedStores, { buildPerTest: true })((it) => {

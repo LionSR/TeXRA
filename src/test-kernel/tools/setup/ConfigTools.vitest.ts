@@ -20,7 +20,7 @@ import {
 } from '@test/agent/progressTestUtils';
 import { UpdateConfigTool } from '@texra/tools/setup/ConfigTools';
 
-layer(SessionGraph.layer)('ConfigTools — update_config allowlist', (it) => {
+layer(SessionGraph.hosted)('ConfigTools — update_config allowlist', (it) => {
   it.effect('rejects a non-allowlisted key without writing', () =>
     Effect.gen(function* () {
       const { roots } = createFakeHost();
@@ -43,7 +43,7 @@ layer(SessionGraph.layer)('ConfigTools — update_config allowlist', (it) => {
 });
 
 // Live clock: a real request is opened and answered on the session's log.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'ConfigTools — update_config approval',
   (it) => {
     // `requiresApproval: true` means the run loop asks before the body runs.

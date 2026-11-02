@@ -127,7 +127,7 @@ describe(
   'claude_agent tool launch and resume fallback',
   { timeout: REAL_RUN_TIMEOUT },
   () => {
-    layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+    layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
       it.layer(validationHost('texra-claude-resume-'), { buildPerTest: true })(
         (it) => {
           const setUp = Effect.gen(function* () {

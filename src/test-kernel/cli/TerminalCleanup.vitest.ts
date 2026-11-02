@@ -28,7 +28,7 @@ const NO_TERMINAL_CAPABILITIES = {
 };
 
 // The title reads the fold's output: here, no runs and no requests.
-layer(Layer.provideMerge(boundTestSessionView, SessionGraph.layer), {
+layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
   excludeTestServices: true,
 })('terminal cleanup', (it) => {
   beforeEach(() => seedView(viewWith([])));

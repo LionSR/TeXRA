@@ -1,8 +1,5 @@
-import '@test/support/sessionGraphTestSetup';
-
 import { Effect, Context } from 'effect';
 import { TraceEmitter } from '@agent/trace';
-import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
@@ -20,7 +17,6 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import type { SessionOpenError } from '@shared/session/database';
 import type { TranscriptView } from '@shared/session/sessionView';
 import { applyTranscriptEvent } from '@shared/session/transcriptUpdate';
 import {
@@ -32,47 +28,7 @@ import {
   type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { generateRunId } from '@shared/schemas';
-import { testSessionOwner } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-
-/** What a test supplies: the isolated roots are this helper's job. */
-/** An open's init; `persistent` keeps the root's own store. */
-type TestSessionInit = Partial<SessionHandleInit> & {
-  readonly persistent?: boolean;
-};
-
-let opened = 0;
-
-/**
- * Open an isolated session with an explicitly ephemeral transcript, on a
- * storage root of its own under the process roots (one root holds one
- * session): it shares a graph with no other test session and not with the
- * process default session.
- */
-export const createTestSession = (
-  init: TestSessionInit = {},
-): Effect.Effect<Context.Context<SessionServices>, SessionOpenError> =>
-  Effect.flatMap(testSessionOwner, (owner) => {
-    const installed = testWorkspaceRoots();
-    opened += 1;
-    const { persistent, ...open } = init;
-    return owner.open({
-      ...open,
-      roots: init.roots ?? {
-        workspace: installed.workspace,
-        storageRoot: installed.storageRoot,
-        storage: `${installed.storage}/test-sessions/${opened}`,
-        globalStorage: installed.globalStorage,
-        config: installed.config,
-        workspaceState: installed.workspaceState,
-        repoState: installed.repoState,
-        globalState: installed.globalState,
-      },
-      ...(!persistent && {
-        transcriptMode: init.transcriptMode ?? { kind: 'ephemeral' },
-      }),
-    });
-  });
 
 /**
  * Enqueue rows on the session's publisher and return at once, as a detached

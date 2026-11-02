@@ -107,7 +107,7 @@ function ndjsonRecords(output: string): Record<string, unknown>[] {
 }
 
 // Live clock: the renderer paints on real event-loop turns.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'CLI run progress renderer',
   (it) => {
     // A session of its own per case.

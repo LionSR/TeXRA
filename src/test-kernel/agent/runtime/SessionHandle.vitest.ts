@@ -29,7 +29,7 @@ import {
 } from '@test/support/testKernel';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'Context.Context<SessionServices>',
   (it) => {
     it.effect(

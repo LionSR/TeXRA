@@ -596,7 +596,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   });
 
   // Live clock: real runs settle on real turns.
-  it.layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+  it.layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.effect(
       'keeps one native run and model binding across both delivered turns',
       () =>

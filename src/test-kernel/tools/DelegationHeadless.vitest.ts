@@ -196,7 +196,7 @@ const releasePark = (parent: Parent) =>
   );
 
 describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
-  layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.layer(validationHost('texra-delegation-'), { buildPerTest: true })(
       (it) => {
         it.effect(

@@ -60,7 +60,7 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
 
 const quietSession = () => isolatedTestSession({ emit: () => {} });
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'tool-use progress events',
   (it) => {
     describe('the tool-use turn', () => {

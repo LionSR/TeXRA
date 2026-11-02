@@ -35,9 +35,11 @@ export const testRunRegistry: Effect.Effect<
   RunRegistry,
   never,
   RunServices | Scope.Scope
-> = Effect.map(
+> = Effect.zipWith(
   testRunFork,
-  (fork) =>
+  // The empty fold the registry reads its grants from.
+  SubscriptionRef.make(emptySessionView('test-run-registry')),
+  (fork, emptyView) =>
     // The registry reads its session's view (empty here), claims (no-ops)
     // and its own `run.detach` batches (dropped); nothing else.
     // cast: the registry reads only these members of its view and log.
@@ -76,11 +78,6 @@ export const testRunPrograms: RunPrograms = {
       (module) => module.finalizeRun(...args),
     ),
 };
-
-/** The empty fold a {@link testRunRegistry} reads its grants from. */
-const emptyView = Effect.runSync(
-  SubscriptionRef.make(emptySessionView('test-run-registry')),
-);
 
 /**
  * A run whose generation is live on the run registry, the way a real launch

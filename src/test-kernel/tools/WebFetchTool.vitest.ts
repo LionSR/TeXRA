@@ -29,7 +29,7 @@ function clearProxyEnv() {
   for (const name of PROXY_ENV) vi.stubEnv(name, undefined);
 }
 
-layer(SessionGraph.layer)('WebFetchTool', (it) => {
+layer(SessionGraph.hosted)('WebFetchTool', (it) => {
   beforeAll(clearProxyEnv);
   afterAll(() => vi.unstubAllEnvs());
 

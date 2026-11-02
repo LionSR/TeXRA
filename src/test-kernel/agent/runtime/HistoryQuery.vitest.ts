@@ -45,7 +45,7 @@ const query = (
     return yield* Context.get(session, HistoryQuery).query(sql, params);
   });
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'HistoryQuery',
   (it) => {
     it.effect(

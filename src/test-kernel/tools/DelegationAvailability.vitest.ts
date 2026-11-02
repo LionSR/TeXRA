@@ -8,7 +8,7 @@ import { installedHost } from '@test/support/setupPlatform';
 import { withEnv } from '@test/support/testEnv';
 import { SessionGraph } from '@test/support/testKernel';
 
-layer(SessionGraph.layer)('delegation model availability', (it) => {
+layer(SessionGraph.hosted)('delegation model availability', (it) => {
   // Only an OpenAI key is stored, so a named Anthropic model cannot run: the
   // launch is refused, never silently swapped for a model that can. The
   // environment is the fake host's, which holds no key.

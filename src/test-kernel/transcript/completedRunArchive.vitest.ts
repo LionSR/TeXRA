@@ -50,7 +50,7 @@ function runConfig(
 }
 
 // Live clock: the session's publisher and the resume run on real turns.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'completedRunArchive facade',
   (it) => {
     // The built-in agents are the bundled personas, so a resume resolves the

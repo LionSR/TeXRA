@@ -57,7 +57,7 @@ function createContext(
   };
 }
 
-layer(Layer.provideMerge(TestSession.layer(), SessionGraph.layer))(
+layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted))(
   'handleTuiSlashCommand',
   (it) => {
     afterEach(() => {

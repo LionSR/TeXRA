@@ -426,7 +426,7 @@ const caseHost = (maxAttempts?: number) =>
 
 // Live clock for the session graph and the sessions it opens, as on the
 // process runtime; each case brings its own host and test clock.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'ModelInvoker retry',
   (it) => {
     it.layer(caseHost(0), { buildPerTest: true })((it) => {

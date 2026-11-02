@@ -1,29 +1,28 @@
 // Third-party imports
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 // Local imports
-import {
-  setupPlatform,
-  fakeProcessServices,
-} from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { FakeHost } from '@test/support/testKernel';
 import {
   getExtractedDocOutputFileName,
   getSafeDocumentRelativePath,
 } from '@texra/utils/files/outputFileUtils';
 import { getXmlFormatFromReadableFiles } from '@utils/files/varsUtils';
 
-describe('workflow prompt file names', () => {
-  setupPlatform({
+layer(
+  FakeHost.layer({
     workspacePath: fakePath('workspace'),
     files: {
       '/workspace/chapter/main.tex': 'workspace text',
       '/outside/absolute.tex': 'external text',
     },
-  });
-
+  }),
+  { buildPerTest: true },
+)('workflow prompt file names', (it) => {
   // #12803: with no workspace root, a relative entry makes
   // `workspaceAbsolutePath` throw. Resolved as an argument that throw was a
   // defect outside the per-file recovery and failed the whole batch; it must
@@ -39,7 +38,7 @@ describe('workflow prompt file names', () => {
 
         expect(xml).toContain('<document name="absolute.tex">');
         expect(skipped.map((entry) => entry.file)).toEqual(['relative.tex']);
-      }).pipe(Effect.provide(fakeProcessServices())),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it('keeps extracted outputs inside the round directory for absolute document names', () => {

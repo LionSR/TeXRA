@@ -66,7 +66,7 @@ const writeRun = (
     seedRunRecord(session, id, config(agent)),
   );
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'run listing normalization',
   (it) => {
     it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {

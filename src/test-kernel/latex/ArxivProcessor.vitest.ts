@@ -13,7 +13,6 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import { setLogSink } from '@texra-ai/harness/node';
 import { ArxivProcessor } from '@latex/arxivProcessor';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempDirs = useTempDirs();
@@ -34,8 +33,6 @@ afterEach(async () => {
 });
 
 describe('arXiv source download filenames', () => {
-  setupPlatform({});
-
   it.live(
     'refuses an archive entry that already exists at the root, then places a clean one',
     () =>

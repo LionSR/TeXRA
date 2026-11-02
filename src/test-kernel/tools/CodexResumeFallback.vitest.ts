@@ -127,7 +127,7 @@ describe(
   'codex tool - atomic resume fallback',
   { timeout: REAL_RUN_TIMEOUT },
   () => {
-    layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+    layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
       it.layer(validationHost('texra-codex-resume-'), { buildPerTest: true })(
         (it) => {
           it.effect(

@@ -40,7 +40,7 @@ const withStartedSession = <A, E>(
     return yield* body(session).pipe(Effect.provide(session));
   });
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'canonical run records',
   (it) => {
     it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {

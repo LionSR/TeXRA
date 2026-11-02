@@ -30,7 +30,7 @@ const host = FakeHost.layer({
   },
 });
 
-layer(SessionGraph.layer)('read_file line ranges', (it) => {
+layer(SessionGraph.hosted)('read_file line ranges', (it) => {
   it.layer(host, { buildPerTest: true })((it) => {
     it.effect.each([
       {

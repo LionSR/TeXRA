@@ -726,7 +726,7 @@ describe('the golden run killed after its effect', () => {
     ),
   );
 
-  layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.layer(killedHost, { buildPerTest: true })((it) => {
       it.effect(
         'reports the command as an unknown outcome and never reruns it',

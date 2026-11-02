@@ -148,7 +148,7 @@ describe(
   'resumeRun over a crashed store',
   { timeout: REAL_RUN_TIMEOUT },
   () => {
-    layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+    layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
       it.layer(validationHost('texra-resume-'), { buildPerTest: true })(
         (it) => {
           it.effect(
@@ -709,7 +709,7 @@ describe(
   'resumeRun over a changed plugin module',
   { timeout: REAL_RUN_TIMEOUT },
   () => {
-    layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+    layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
       it.layer(validationHost('texra-module-'), { buildPerTest: true })(
         (it) => {
           it.effect(

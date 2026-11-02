@@ -25,7 +25,7 @@ import {
   TestSession,
 } from '@test/support/testKernel';
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'session isolation',
   (it) => {
     it.effect(

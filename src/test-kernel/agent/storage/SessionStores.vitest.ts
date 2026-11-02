@@ -12,7 +12,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'committed run removal',
   (it) => {
     it.effect(

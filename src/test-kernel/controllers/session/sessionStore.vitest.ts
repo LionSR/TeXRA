@@ -45,7 +45,7 @@ const titlesOf = (storage: string, runId: string) =>
     );
 
 describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
-  layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.layer(validationHost('texra-store-'), { buildPerTest: true })((it) => {
       it.effect(
         'R24: a commit whose view never shows it fails its caller, and the committed rows stand',

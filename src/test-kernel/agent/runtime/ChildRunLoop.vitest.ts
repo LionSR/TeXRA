@@ -257,7 +257,7 @@ afterEach(() => {
 });
 
 describe('childRunLoop E2E fixtures', () => {
-  layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.layer(
       FakeHost.layer(() =>
         createTempDirPlatform('texra-child-loop-', tempDirs),

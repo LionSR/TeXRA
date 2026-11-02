@@ -59,7 +59,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-layer(SessionGraph.layer)('setup credential reporting', (it) => {
+layer(SessionGraph.hosted)('setup credential reporting', (it) => {
   it.layer(host, { buildPerTest: true })((it) => {
     it.effect(
       'reports the active host and provider-key origin without secret values',

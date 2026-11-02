@@ -130,7 +130,7 @@ const untilSubscribed = (session: LocalSession, ids: readonly RunId[]) => {
 };
 
 describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
-  layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.layer(validationHost('texra-handoff-'), { buildPerTest: true })((it) => {
       it.effect(
         'R4: a start cancelled at the hand-off and a session close leave no run, claim, reader or process behind',

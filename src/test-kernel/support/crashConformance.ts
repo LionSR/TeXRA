@@ -805,7 +805,7 @@ export function crashConformanceSuite(): void {
       ),
     ).pipe(Layer.provideMerge(validationHost('texra-crash-')));
 
-    layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+    layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
       it.layer(crashHost, { buildPerTest: true })((it) => {
         it.effect(
           'resumes from every commit point to the clean outcome, running nothing twice',

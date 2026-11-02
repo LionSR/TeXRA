@@ -40,7 +40,7 @@ function createStdoutStub(writeResults: boolean[] = [true]) {
   };
 }
 
-layer(SessionGraph.layer)('NdjsonStdoutSink', (it) => {
+layer(SessionGraph.hosted)('NdjsonStdoutSink', (it) => {
   it.effect('preserves records added while stdout is backpressured', () =>
     Effect.gen(function* () {
       yield* useCliLogRuntime;

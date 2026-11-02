@@ -139,7 +139,7 @@ const perTest = Layer.provideMerge(
 );
 
 // Live clock: the background run settles on real turns.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'ExecutionsTool /executions/{id}/output',
   (it) => {
     afterEach(() => {

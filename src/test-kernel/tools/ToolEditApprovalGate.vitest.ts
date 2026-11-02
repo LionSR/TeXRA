@@ -173,7 +173,7 @@ const setUp = (config: Record<string, unknown> = {}) =>
   });
 
 // Live clock: requests are opened and answered on the session's log.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'Tool edit approval gating',
   (it) => {
     afterEach(() => {

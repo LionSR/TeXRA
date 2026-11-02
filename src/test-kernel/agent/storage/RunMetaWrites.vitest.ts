@@ -22,7 +22,7 @@ const startedSession = Effect.gen(function* () {
   return session;
 });
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'run metadata updates',
   (it) => {
     it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {

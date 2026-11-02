@@ -41,7 +41,7 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'run registration and finalization',
   (it) => {
     it.layer(FakeHost.layer({ workspacePath: '/workspace/root' }), {
