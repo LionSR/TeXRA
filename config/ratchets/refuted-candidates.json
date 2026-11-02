@@ -176,7 +176,7 @@
       "id": "SESSION-one-view-service",
       "candidate": "merge SessionViewService (the view updater's ref and changes) into SessionViewAccess, so a session has one view service",
       "why": "Two layers, not two copies. SessionViewService is the view updater: the session's own view and the cross-process RemoteSessionView (which has no store) are both built on it. SessionViewAccess is the session's view as runs and readers take it: local state, transcript subscriptions, marks, gated by the store's doors-shut flag. The store (folded is derived from ref) and ownerLiveness read the updater because they are built before the access. One service would need the doors-shut flag owned below the store as a new tag (one tag deleted, one added, no element removed) and would hand RemoteSessionView a store dependency it does not use. Measured on main e0ba9992b0 after #14546.",
-      "ruling": "https://github.com/LionSR/TeXRA/pulls?q=is%3Apr+head%3Adocs%2Frefute-view-service-merge",
+      "ruling": "https://github.com/LionSR/TeXRA/pull/14559",
       "symbols": [
         {
           "file": "packages/harness/src/controllers/session/SessionView.ts",
