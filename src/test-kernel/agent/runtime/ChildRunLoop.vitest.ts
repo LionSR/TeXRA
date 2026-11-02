@@ -462,6 +462,51 @@ describe('childRunLoop E2E fixtures', () => {
       );
 
       it.effect(
+        'lets a stopped parent go after each turn a native child delivers',
+        () =>
+          Effect.gen(function* () {
+            yield* setUp;
+            const log = Context.get(session, SessionLog);
+            // The parent stops: its driver's hold ends, releasing its claim.
+            yield* Effect.scoped(log.hold(PARENT_RUN_ID, { ends: true }));
+            expect(yield* log.owns(PARENT_RUN_ID)).toBe(false);
+            const runId = loopRunId();
+            yield* log.settled;
+            const owned: boolean[] = [];
+            const strategy: NativeChildStrategy<FakeTurn> = {
+              stageLabel: 'Delivers two turns',
+              launch: (_notify, turns) =>
+                Effect.gen(function* () {
+                  for (const value of ['one', 'two']) {
+                    yield* turns.turnPermit(Effect.void);
+                    const { rows, alongside } = yield* turns.finishTurn({
+                      kind: 'interim',
+                      value,
+                    });
+                    // As the run loop commits a turn boundary: the child's
+                    // rows and the parent's delivery in one transaction,
+                    // whose scope is the delivery's hold on the parent.
+                    yield* log.transact((tx) =>
+                      Effect.gen(function* () {
+                        const beside =
+                          alongside === undefined ? [] : yield* alongside;
+                        yield* tx.append([...rows, ...beside]);
+                      }).pipe(Effect.scoped),
+                    );
+                    owned.push(yield* log.owns(PARENT_RUN_ID));
+                  }
+                  return { kind: 'terminal', value: 'done' } as const;
+                }).pipe(Effect.provide(session)),
+              formatDelivery: (turn) =>
+                Effect.succeed(`delivered:${turn.value}`),
+              formatError: () => 'error',
+            };
+            yield* Fiber.join(yield* startNativeLoop(runId, strategy));
+            expect(owned).toStrictEqual([false, false]);
+          }),
+      );
+
+      it.effect(
         'preserves #7491: a failed runTurn (thrown, not a value) delivers formatError to the parent',
         () =>
           Effect.gen(function* () {
