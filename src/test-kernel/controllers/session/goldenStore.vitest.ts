@@ -21,9 +21,6 @@
  * result committed. A resume that runs that command again, or reports it
  * as anything but an unknown outcome, fails.
  */
-// Test composition imports
-import '@test/support/defaultSessionTestSetup';
-
 // Node imports
 import {
   cpSync,
@@ -39,7 +36,7 @@ import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
-import { it } from '@effect/vitest';
+import { it, layer } from '@effect/vitest';
 import {
   Effect,
   Layer,
@@ -49,7 +46,7 @@ import {
   SubscriptionRef,
   Context,
 } from 'effect';
-import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
+import { afterAll, describe, expect, vi } from 'vitest';
 
 import {
   qualifyAggregateId,
@@ -57,7 +54,7 @@ import {
   RunIdSchema,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { AgentCatalog, withProcessServices } from '@texra-ai/harness/host';
+import { AgentCatalog } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { runHistoryRows } from '@agent/runtime/storedTurn';
@@ -82,16 +79,13 @@ import { SessionViewAccess } from '@shared/session/runHistory';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
-import {
-  closeTestDefaultSession,
-  openTestDefaultSession,
-} from '@test/support/sessionEnd';
-import { setupPlatform, storePluginsLayer } from '@test/support/setupPlatform';
+import { storePluginsLayer } from '@test/support/setupPlatform';
+import { persistentTestSession } from '@test/support/storeFaults';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { texraPlugins } from '@texra/tools/registry';
 import { factKindsOf } from '@tools/plugins';
@@ -666,113 +660,124 @@ describe('the golden run killed after its effect', () => {
     'src/test-kernel/fixtures/storage/golden-effect/approved.txt',
   );
   const tempDirs = useTempDirs();
-  setupPlatform(async () => {
-    const host = await createTempDirPlatform('texra-golden-kill-', tempDirs);
-    const agents = {
-      custom: () => Effect.succeed(AGENTS),
-      customConfigured: () => Effect.succeed(false),
-      builtIn: () => Effect.succeed(AGENTS),
-      builtInToolUse: () => Effect.succeed(AGENTS),
-    };
-    return {
-      ...host,
-      platform: { ...host.platform, agentDirectories: agents },
-    };
-  });
   const VALIDATION = {
     TEXRA_INTERNAL_VALIDATE_MODEL: '1',
     TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
   };
-  let restore: Record<string, string | undefined> = {};
-  beforeEach(async () => {
-    const { storage, workspace } = testWorkspaceRoots();
-    if (workspace === undefined) throw new Error('no test workspace');
-    const flag = join(storage, 'validation-flag');
-    restore = Object.fromEntries(
-      [...Object.keys(VALIDATION), 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG'].map(
-        (key) => [key, process.env[key]],
-      ),
-    );
-    Object.assign(process.env, VALIDATION, {
-      TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
-    });
-    cpSync(goldenRoot(), storage, { recursive: true });
-    mkdirSync(workspace, { recursive: true });
-    cpSync(EFFECT, join(workspace, 'approved.txt'));
-    raw(storage, (db) => {
-      // The path lands inside a JSON string, so it goes in escaped as one:
-      // a Windows path's backslashes would otherwise corrupt the row.
-      db.prepare(
-        `UPDATE event SET data = replace(data, '/golden/project', ?)
+  /** The test's host as the kill left it: the golden store and the effect on
+   *  a temp-dir host whose agents are the fixtures', loaded into the block's
+   *  catalog, with the validation model answering. The release puts the
+   *  environment back. */
+  const killedHost = Layer.effectDiscard(
+    Effect.gen(function* () {
+      const { storage, workspace } = (yield* FakeHost).roots;
+      if (workspace === undefined) throw new Error('no test workspace');
+      const flag = join(storage, 'validation-flag');
+      yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          for (const [name, value] of Object.entries({
+            ...VALIDATION,
+            TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
+          }))
+            vi.stubEnv(name, value);
+        }),
+        () => Effect.sync(() => vi.unstubAllEnvs()),
+      );
+      cpSync(goldenRoot(), storage, { recursive: true });
+      mkdirSync(workspace, { recursive: true });
+      cpSync(EFFECT, join(workspace, 'approved.txt'));
+      raw(storage, (db) => {
+        // The path lands inside a JSON string, so it goes in escaped as one:
+        // a Windows path's backslashes would otherwise corrupt the row.
+        db.prepare(
+          `UPDATE event SET data = replace(data, '/golden/project', ?)
          WHERE type IN ('run.start', 'run.config') AND aggregate =
            (SELECT id FROM event_sequence WHERE logical_id = ?)`,
-      ).run(JSON.stringify(workspace).slice(1, -1), KILLED);
-      // The kill, on this host: an owner whose process is gone.
-      db.prepare(
-        'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
-      ).run(
-        JSON.stringify([os.hostname().toLowerCase(), process.pid, 'killed']),
-        KILLED,
-      );
-    });
-    writeFileSync(flag, 'texra-cli-run-validation\n');
-    await testRuntime().runPromise(
-      AgentCatalog.use((catalog) => catalog.refresh),
-    );
-    await testRuntime().runPromise(closeTestDefaultSession);
-  });
-  afterEach(async () => {
-    await testRuntime().runPromise(closeTestDefaultSession);
-    for (const [key, value] of Object.entries(restore)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  });
+        ).run(JSON.stringify(workspace).slice(1, -1), KILLED);
+        // The kill, on this host: an owner whose process is gone.
+        db.prepare(
+          'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
+        ).run(
+          JSON.stringify([os.hostname().toLowerCase(), process.pid, 'killed']),
+          KILLED,
+        );
+      });
+      writeFileSync(flag, 'texra-cli-run-validation\n');
+      yield* AgentCatalog.use((catalog) => catalog.refresh).pipe(Effect.orDie);
+    }),
+  ).pipe(
+    Layer.provideMerge(
+      FakeHost.layer(async () => {
+        const host = await createTempDirPlatform(
+          'texra-golden-kill-',
+          tempDirs,
+        );
+        const agents = {
+          custom: () => Effect.succeed(AGENTS),
+          customConfigured: () => Effect.succeed(false),
+          builtIn: () => Effect.succeed(AGENTS),
+          builtInToolUse: () => Effect.succeed(AGENTS),
+        };
+        return {
+          ...host,
+          platform: { ...host.platform, agentDirectories: agents },
+        };
+      }),
+    ),
+  );
 
-  it.live('reports the command as an unknown outcome and never reruns it', () =>
-    Effect.gen(function* () {
-      const { storage, workspace } = testWorkspaceRoots();
-      const session = yield* withProcessServices(
-        testRuntime(),
-        openTestDefaultSession({ roots: testWorkspaceRoots() }),
-      );
-      const result = yield* withProcessServices(
-        testRuntime(),
-        resumeRun(KILLED, {}).pipe(Effect.provide(session)),
-      );
-      if (!('activation' in result)) throw new Error('resume refused');
-      // The resumed activation rests, or ends.
-      yield* Stream.runHead(
-        Stream.filter(
-          Context.get(session, SessionViewAccess).changes,
-          (view) => {
-            const run = view.runs.get(KILLED);
-            return (
-              view.cursor > result.activation &&
-              (run?.status === 'waiting' || run?.durableOutcome != null)
+  layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+    it.layer(killedHost, { buildPerTest: true })((it) => {
+      it.effect(
+        'reports the command as an unknown outcome and never reruns it',
+        () =>
+          Effect.gen(function* () {
+            const { storage, workspace } = testWorkspaceRoots();
+            // The resume, in a session that closes before the store is read.
+            yield* Effect.scoped(
+              Effect.gen(function* () {
+                const session = yield* persistentTestSession();
+                const result = yield* resumeRun(KILLED, {}).pipe(
+                  Effect.provide(session),
+                );
+                if (!('activation' in result))
+                  throw new Error('resume refused');
+                // The resumed activation rests, or ends.
+                yield* Stream.runHead(
+                  Stream.filter(
+                    Context.get(session, SessionViewAccess).changes,
+                    (view) => {
+                      const run = view.runs.get(KILLED);
+                      return (
+                        view.cursor > result.activation &&
+                        (run?.status === 'waiting' ||
+                          run?.durableOutcome != null)
+                      );
+                    },
+                  ),
+                );
+              }),
             );
-          },
-        ),
-      );
-      yield* withProcessServices(testRuntime(), closeTestDefaultSession);
-      const settled = raw(storage, (db) =>
-        db
-          .prepare(
-            `SELECT json_extract(e.data, '$.payload') AS payload
+            const settled = raw(storage, (db) =>
+              db
+                .prepare(
+                  `SELECT json_extract(e.data, '$.payload') AS payload
              FROM event e JOIN event_sequence s ON s.id = e.aggregate
              WHERE s.logical_id = ? AND e.type = 'tool.result'`,
-          )
-          .all(KILLED)
-          .map((row) => JSON.parse(String(row.payload)) as unknown),
+                )
+                .all(KILLED)
+                .map((row) => JSON.parse(String(row.payload)) as unknown),
+            );
+            expect(settled).toHaveLength(1);
+            expect(JSON.stringify(settled[0])).toContain('outcome is unknown');
+            // The effect the killed process left, and nothing more.
+            expect(
+              readFileSync(join(workspace!, 'approved.txt'), 'utf8')
+                .split(/\r?\n/)
+                .filter(Boolean),
+            ).toEqual(['approved']);
+          }),
       );
-      expect(settled).toHaveLength(1);
-      expect(JSON.stringify(settled[0])).toContain('outcome is unknown');
-      // The effect the killed process left, and nothing more.
-      expect(
-        readFileSync(join(workspace!, 'approved.txt'), 'utf8')
-          .split(/\r?\n/)
-          .filter(Boolean),
-      ).toEqual(['approved']);
-    }),
-  );
+    });
+  });
 });

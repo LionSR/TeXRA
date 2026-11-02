@@ -10,16 +10,15 @@
  *   hook rewrote it to, or runs it without the person's approval;
  * - the resume runs the hook again.
  */
-import '@test/support/sessionGraphTestSetup';
-
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Context, Effect, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { InstalledPlugins, withProcessServices } from '@texra-ai/harness/host';
+import { Sessions } from '@texra-ai/harness';
+import { InstalledPlugins } from '@texra-ai/harness/host';
 import {
   AgentConfigSchema,
   generateRunId,
@@ -27,23 +26,17 @@ import {
 } from '@texra-ai/harness/schemas';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { rootRun, SessionOwner } from '@agent/runtime/rootLaunch';
-import {
-  closeTestSession,
-  openTestDefaultSession,
-} from '@test/support/sessionEnd';
+import { rootRun } from '@agent/runtime/rootLaunch';
 import {
   crashedCopy,
+  persistentTestSession,
   REAL_RUN_TIMEOUT,
   storedRows,
   type StoredRow,
   untilStored,
   validationHost,
 } from '@test/support/storeFaults';
-import {
-  testRuntime,
-  testSessionOwner,
-} from '@test/support/testProcessRuntime';
+import { SessionGraph } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 /** A file's lines, none when it is absent. */
@@ -116,112 +109,101 @@ const installRewriteHook = (dir: string, runs: string, rewritten: string) =>
       }),
     );
     const roots = testWorkspaceRoots();
-    yield* withProcessServices(
-      testRuntime(),
-      Effect.gen(function* () {
-        yield* InstalledPlugins.install(
-          { kind: 'local', path: dir },
-          [],
-          roots,
-        );
-        yield* InstalledPlugins.enable('rewrite-hooks', roots, () =>
-          Effect.succeed(true),
-        );
-      }),
+    yield* InstalledPlugins.install({ kind: 'local', path: dir }, [], roots);
+    yield* InstalledPlugins.enable('rewrite-hooks', roots, () =>
+      Effect.succeed(true),
     );
   });
 
 describe('run loop hooks', { timeout: REAL_RUN_TIMEOUT }, () => {
-  validationHost('texra-hooks-');
-
-  it.live(
-    'R22: a rewrite committed before a crash keeps the original call, runs only the rewritten input, and never runs the hook again',
-    () =>
-      Effect.gen(function* () {
-        const roots = testWorkspaceRoots();
-        const effects = join(roots.workspace!, 'effects.log');
-        const hookRuns = join(roots.workspace!, 'hook-runs.log');
-        const original = `echo original >> ${effects}`;
-        const rewritten = `echo rewritten >> ${effects}`;
-        yield* installRewriteHook(
-          join(roots.storage, 'rewrite-hooks'),
-          hookRuns,
-          rewritten,
-        );
-
-        // The model asks for the original command; the hook rewrites it and
-        // asks the person; the process dies while the request waits.
-        const runId = generateRunId();
-        const storage = yield* Effect.scoped(
+  layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+    it.layer(validationHost('texra-hooks-'), { buildPerTest: true })((it) => {
+      it.effect(
+        'R22: a rewrite committed before a crash keeps the original call, runs only the rewritten input, and never runs the hook again',
+        () =>
           Effect.gen(function* () {
-            const session = yield* openTestDefaultSession({ roots });
-            yield* withProcessServices(
-              testRuntime(),
-              rootRun({
-                config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                  agent: 'command_runner',
-                  agentSource: 'inline',
-                  persona: {
-                    name: 'command_runner',
-                    description: 'Runs one command.',
-                    prompt: `GOLDEN-APPROVAL bash ${original}`,
-                    tools: ['bash'],
-                  },
-                  model: 'openai/gpt-5.6-sol',
-                  instruction: 'Run the command.',
-                }),
+            const roots = testWorkspaceRoots();
+            const effects = join(roots.workspace!, 'effects.log');
+            const hookRuns = join(roots.workspace!, 'hook-runs.log');
+            const original = `echo original >> ${effects}`;
+            const rewritten = `echo rewritten >> ${effects}`;
+            yield* installRewriteHook(
+              join(roots.storage, 'rewrite-hooks'),
+              hookRuns,
+              rewritten,
+            );
+
+            // The model asks for the original command; the hook rewrites it and
+            // asks the person; the process dies while the request waits.
+            const runId = generateRunId();
+            const storage = yield* Effect.scoped(
+              Effect.gen(function* () {
+                const session = yield* persistentTestSession(roots);
+                yield* rootRun({
+                  config: Schema.decodeUnknownSync(AgentConfigSchema)({
+                    agent: 'command_runner',
+                    agentSource: 'inline',
+                    persona: {
+                      name: 'command_runner',
+                      description: 'Runs one command.',
+                      prompt: `GOLDEN-APPROVAL bash ${original}`,
+                      tools: ['bash'],
+                    },
+                    model: 'openai/gpt-5.6-sol',
+                    instruction: 'Run the command.',
+                  }),
+                  runId,
+                }).pipe(Effect.provide(session));
+                yield* untilStored(roots.storage, (rows) =>
+                  rows.some(
+                    (row) => row.run === runId && row.type === 'request.opened',
+                  ),
+                );
+                const copy = crashedCopy(roots.storage);
+                yield* Sessions.use((sessions) => sessions.close(roots));
+                return copy;
+              }),
+            );
+            expect(linesOf(hookRuns)).toEqual(['ran']);
+            expect(rowsOf(storage, runId, 'hook.outcome')).toMatchObject([
+              { payload: { updatedInput: { command: rewritten } } },
+            ]);
+            const [pending] = rowsOf(storage, runId, 'request.opened') as {
+              requestId: string;
+            }[];
+
+            // A fresh process resumes the run; the person approves.
+            const session = yield* persistentTestSession({ ...roots, storage });
+            const resumed = yield* resumeRun(runId, {}).pipe(
+              Effect.provide(session),
+            );
+            expect(resumed).toMatchObject({ activation: expect.any(Number) });
+            expect(
+              yield* Context.get(session, SessionRequests).decide(
                 runId,
-              }).pipe(Effect.provide(session)),
-            );
-            yield* untilStored(roots.storage, (rows) =>
-              rows.some(
-                (row) => row.run === runId && row.type === 'request.opened',
+                pending!.requestId,
+                { action: 'approve' },
               ),
+            ).toBe(true);
+            yield* untilStored(
+              storage,
+              () => rowsOf(storage, runId, 'tool.result').length > 0,
             );
-            const copy = crashedCopy(roots.storage);
-            yield* closeTestSession(roots.storage);
-            return copy;
+            yield* Sessions.use((sessions) =>
+              sessions.close({ ...roots, storage }),
+            );
+
+            // The call is the model's own; only the rewritten command ran, once,
+            // and the hook did not run again.
+            expect(commandsAsked(storage, runId)).toEqual([original]);
+            expect(rowsOf(storage, runId, 'tool.result')).toMatchObject([
+              { payload: { disposition: 'executed' } },
+            ]);
+            expect(linesOf(effects)).toEqual(['rewritten']);
+            expect(linesOf(hookRuns)).toEqual(['ran']);
+            expect(rowsOf(storage, runId, 'hook.outcome')).toHaveLength(1);
           }),
-        );
-        expect(linesOf(hookRuns)).toEqual(['ran']);
-        expect(rowsOf(storage, runId, 'hook.outcome')).toMatchObject([
-          { payload: { updatedInput: { command: rewritten } } },
-        ]);
-        const [pending] = rowsOf(storage, runId, 'request.opened') as {
-          requestId: string;
-        }[];
-
-        // A fresh process resumes the run; the person approves.
-        const session = yield* openTestDefaultSession({
-          roots: { ...roots, storage },
-        });
-        const resumed = yield* withProcessServices(
-          testRuntime(),
-          resumeRun(runId, {}).pipe(Effect.provide(session)),
-        );
-        expect(resumed).toMatchObject({ activation: expect.any(Number) });
-        expect(
-          yield* Context.get(session, SessionRequests).decide(
-            runId,
-            pending!.requestId,
-            { action: 'approve' },
-          ),
-        ).toBe(true);
-        yield* untilStored(
-          storage,
-          () => rowsOf(storage, runId, 'tool.result').length > 0,
-        );
-        yield* closeTestSession(storage);
-
-        // The call is the model's own; only the rewritten command ran, once,
-        // and the hook did not run again.
-        expect(commandsAsked(storage, runId)).toEqual([original]);
-        expect(rowsOf(storage, runId, 'tool.result')).toMatchObject([
-          { payload: { disposition: 'executed' } },
-        ]);
-        expect(linesOf(effects)).toEqual(['rewritten']);
-        expect(linesOf(hookRuns)).toEqual(['ran']);
-        expect(rowsOf(storage, runId, 'hook.outcome')).toHaveLength(1);
-      }).pipe(Effect.provideServiceEffect(SessionOwner, testSessionOwner)),
-  );
+      );
+    });
+  });
 });

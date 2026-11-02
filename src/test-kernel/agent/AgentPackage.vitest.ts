@@ -1,7 +1,5 @@
-import '@test/support/sessionGraphTestSetup';
-
 // Third-party imports
-import { it } from '@effect/vitest';
+import { it, layer } from '@effect/vitest';
 import {
   Cause,
   Context,
@@ -24,15 +22,12 @@ import {
   type SessionView as RuntimeSessionView,
 } from '@shared/session/sessionView';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import {
-  closeTestSession,
-  openTestDefaultSession,
-} from '@test/support/sessionEnd';
 import { REAL_RUN_TIMEOUT, validationHost } from '@test/support/storeFaults';
 import {
-  testRuntime,
-  testSessionOwner,
-} from '@test/support/testProcessRuntime';
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { makeSessions } from '../../../packages/harness/src/effect/sessionPrograms';
 import { runView } from '../../../packages/harness/src/effect/runHandle';
@@ -233,13 +228,13 @@ describe('agent package sessions', () => {
 });
 
 /** `session` as the package hands it to an embedder (`Sessions.open`),
- *  launching under the test process's session owner. */
+ *  launching under the block's session owner. */
 const packageSession = (session: Context.Context<SessionServices>) =>
   Effect.gen(function* () {
-    const owner = yield* testSessionOwner;
+    const owner = yield* SessionOwner;
     const sessions = yield* makeSessions(
       { ...owner, open: () => Effect.succeed(session) },
-      yield* testRuntime().contextEffect,
+      yield* (yield* SessionGraph.runtime).contextEffect,
     );
     return yield* sessions.open(testWorkspaceRoots());
   });
@@ -248,38 +243,43 @@ describe(
   'agent package sessions over a real store',
   { timeout: REAL_RUN_TIMEOUT },
   () => {
-    validationHost('texra-package-');
+    layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+      it.layer(validationHost('texra-package-'), { buildPerTest: true })(
+        (it) => {
+          it.effect(
+            "R19: a root run a model error ends reads as a failed RunEnd with the error's kind, not a RunFailure",
+            () =>
+              Effect.gen(function* () {
+                const roots = testWorkspaceRoots();
+                // No host answers: the session an embedder opens by default.
+                const sdk = yield* packageSession(
+                  yield* Effect.flatMap(
+                    TestSession.open(roots, { persistent: true }),
+                    sessionHandleOf,
+                  ),
+                );
+                const run = yield* sdk.start({
+                  agent: {
+                    name: 'overflowing',
+                    description: 'Sends a request the provider refuses.',
+                    prompt: 'GOLDEN-OVERFLOW: answer.',
+                  },
+                  instruction: 'Answer.',
+                  model: 'openai/gpt-5.6-sol',
+                });
 
-    it.live(
-      "R19: a root run a model error ends reads as a failed RunEnd with the error's kind, not a RunFailure",
-      () =>
-        Effect.gen(function* () {
-          const roots = testWorkspaceRoots();
-          // No host answers: the session an embedder opens by default.
-          const sdk = yield* packageSession(
-            yield* openTestDefaultSession({
-              roots,
-              interactions: { approvalPromptsUnavailable: true },
-            }),
+                const end = yield* run.result;
+                expect(end).toMatchObject({
+                  outcome: 'failed',
+                  error: { kind: 'context-window' },
+                });
+                expect(end.error?.message).toContain(
+                  'exceeds the context window',
+                );
+              }),
           );
-          const run = yield* sdk.start({
-            agent: {
-              name: 'overflowing',
-              description: 'Sends a request the provider refuses.',
-              prompt: 'GOLDEN-OVERFLOW: answer.',
-            },
-            instruction: 'Answer.',
-            model: 'openai/gpt-5.6-sol',
-          });
-
-          const end = yield* run.result;
-          expect(end).toMatchObject({
-            outcome: 'failed',
-            error: { kind: 'context-window' },
-          });
-          expect(end.error?.message).toContain('exceeds the context window');
-          yield* closeTestSession(roots.storage);
-        }).pipe(Effect.provideServiceEffect(SessionOwner, testSessionOwner)),
-    );
+        },
+      );
+    });
   },
 );
