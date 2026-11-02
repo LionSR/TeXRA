@@ -1,15 +1,12 @@
-// Test composition imports
-import '@test/support/defaultSessionTestSetup';
-
 // Third-party imports
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 // Local imports
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { FakeHost } from '@test/support/testKernel';
 import { ReadFileTool } from '@tools/ReadTool';
 
 /** 10 lines: "line 1" … "line 10". */
@@ -25,17 +22,15 @@ const callRead = (input: unknown) =>
     ),
   );
 
-describe('read_file line ranges', () => {
-  beforeEach(async () => {
-    await installFakePlatform({
-      workspacePath: fakePath('workspace'),
-      files: {
-        '/workspace/large.txt': LARGE,
-        '/workspace/small.txt': SMALL,
-      },
-    });
-  });
+const host = FakeHost.layer({
+  workspacePath: fakePath('workspace'),
+  files: {
+    '/workspace/large.txt': LARGE,
+    '/workspace/small.txt': SMALL,
+  },
+});
 
+layer(host, { buildPerTest: true })('read_file line ranges', (it) => {
   it.effect.each([
     {
       name: 'an empty view when the start is past EOF',

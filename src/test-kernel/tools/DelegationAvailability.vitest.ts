@@ -1,17 +1,17 @@
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 import { apiKeySecretName } from '@texra-ai/llm';
 import { selectAvailableDelegationModel } from '@agent/runtime/delegation/delegationAvailability';
-import {
-  fakeProcessServices,
-  installedHost,
-} from '@test/support/setupPlatform';
+import { installedHost } from '@test/support/setupPlatform';
+import { withEnv } from '@test/support/testEnv';
+import { SessionGraph } from '@test/support/testKernel';
 
-describe('delegation model availability', () => {
+layer(SessionGraph.layer)('delegation model availability', (it) => {
   // Only an OpenAI key is stored, so a named Anthropic model cannot run: the
-  // launch is refused, never silently swapped for a model that can.
+  // launch is refused, never silently swapped for a model that can. The
+  // environment is the fake host's, which holds no key.
   it.effect(
     'rejects an explicitly requested model that is not currently available',
     () =>
@@ -31,6 +31,6 @@ describe('delegation model availability', () => {
         expect(failure.message).toContain(
           'Model "anthropic/claude-opus-5-5" is not currently available for delegation',
         );
-      }).pipe(Effect.provide(fakeProcessServices())),
+      }).pipe(withEnv({})),
   );
 });

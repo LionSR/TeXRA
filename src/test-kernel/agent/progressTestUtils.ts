@@ -21,12 +21,10 @@ import {
   SessionHostInteractions,
 } from '@texra-ai/harness/host';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { Interactions } from '@agent/runtime/HostInteractions';
 import { aggregateTarget } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
-  createTestSession,
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
@@ -217,36 +215,6 @@ export async function seedActiveRun(
   ]);
   await Effect.runPromise(Context.get(session, SessionLog).settled);
 }
-
-/**
- * An isolated session for node tests, with the given host interactions
- * attached: a test hands this session to run-scoped code, whose
- * `session.interactions` (presentation) and `session.approvals` (bypass
- * state, queues) reads reach the owners attached here. A session's facts are
- * read back with {@link recordSessionEvents}. Passing another session's
- * `SessionHostInteractions` makes it this session's owner too, so a
- * recording host can be shared across the sessions of one test.
- */
-export const sessionWithInteractions = Effect.fn('sessionWithInteractions')(
-  function* (
-    interactions:
-      | HostInteractions
-      | SessionHostInteractions
-      | Pick<SessionHostInteractions, 'emit'>
-      | undefined,
-  ) {
-    const session = yield* createTestSession();
-    if (interactions instanceof SessionHostInteractions) {
-      // The session's own approvals stay: they are already bound to its
-      // `publishApprovalPolicy`, the one channel bypass state travels.
-      Object.assign(session, { interactions });
-      return session;
-    }
-    if (interactions)
-      yield* Context.get(session, Interactions).use(interactions);
-    return session;
-  },
-);
 
 /** A tool whose calls the run's command grant answers, as the shell's do;
  *  its body only reports that it ran. */

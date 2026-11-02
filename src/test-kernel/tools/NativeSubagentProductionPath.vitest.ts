@@ -10,12 +10,9 @@ import { Effect, Fiber, Layer, Schema, Scope, Stream, Context } from 'effect';
  * replaced by the deterministic handlers below.
  */
 
-// Test composition imports
-import '@test/support/defaultSessionTestSetup';
-
 // Third-party imports
 import { it } from '@effect/vitest';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, describe, expect, vi } from 'vitest';
 import {
   type Model,
   ModelError,
@@ -59,7 +56,7 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { type BoundModel, RunFileService } from '@texra-ai/harness/plugins';
-import { AgentCatalog, withProcessServices } from '@texra-ai/harness/host';
+import { AgentCatalog } from '@texra-ai/harness/host';
 import { getRunRecords, readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
@@ -83,8 +80,6 @@ import { NO_FACTS } from '@shared/session/runFacts';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { noopTrace } from '@test/support/noopTrace';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   nativeToolTestLayer,
@@ -96,11 +91,12 @@ import {
   makeTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { setupPlatform, type FakeHost } from '@test/support/setupPlatform';
 import {
-  closeTestDefaultSession,
-  openTestDefaultSession,
-} from '@test/support/sessionEnd';
+  FakeHost,
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { ScriptTool } from '@tools/codemode/ScriptTool';
 import { readCompletedRunConversation } from '@transcript/completedRunArchive';
@@ -301,7 +297,7 @@ function scriptedBoundModel(
   };
 }
 
-async function integrationPlatform(): Promise<FakeHost> {
+async function integrationPlatform(): Promise<FakeHost['Service']> {
   const host = await createTempDirPlatform('texra-9531-production-', tempDirs);
   const agentsDir = await makeTempDir('texra-9531-agents-', tempDirs);
   await Promise.all([
@@ -425,9 +421,9 @@ function waitForClaimRelease(runId: RunId): Promise<void> {
  * Queue the second-assertion follow-up onto a WAITING child through the real
  * executions `send` path, from the parent run, asserting the queue accepted it.
  */
-async function queueSecondAssertionFollowUp(runId: RunId) {
-  const resumed = await testRuntime().runPromise(
-    ExecutionsTool.call({
+function queueSecondAssertionFollowUp(runId: RunId) {
+  return Effect.gen(function* () {
+    const resumed = yield* ExecutionsTool.call({
       path: `/executions/${runId}`,
       action: 'send',
       message: 'Now prove the second assertion.',
@@ -445,9 +441,9 @@ async function queueSecondAssertionFollowUp(runId: RunId) {
           },
         }),
       ),
-    ),
-  );
-  expect(resumed.status).toBe('executed');
+    );
+    expect(resumed.status).toBe('executed');
+  });
 }
 
 /**
@@ -455,94 +451,91 @@ async function queueSecondAssertionFollowUp(runId: RunId) {
  * tool-use child through the real delegation path. Returns once the launch is
  * accepted; the child's first turn may still be in flight.
  */
-async function launchWaitingChild(options: {
+function launchWaitingChild(options: {
   readonly parentTurns: Array<ScriptedTurn | 'hang'>;
   readonly childTurns: Array<ScriptedTurn | 'hang'>;
   readonly childGate?: Promise<unknown>;
-}): Promise<{
-  readonly runId: RunId;
-  readonly observedRequests: ObservedRequest[];
-}> {
-  const observedRequests: ObservedRequest[] = [];
-  bindingMocks.bindModel.mockImplementation(
-    (input: { readonly config: BoundModel['config'] }) =>
-      Effect.succeed(
-        scriptedBoundModel(
-          input.config,
-          input.config.ref === CHILD_MODEL
-            ? options.childTurns
-            : options.parentTurns,
-          observedRequests,
-          options.childGate,
+}) {
+  return Effect.gen(function* () {
+    const observedRequests: ObservedRequest[] = [];
+    bindingMocks.bindModel.mockImplementation(
+      (input: { readonly config: BoundModel['config'] }) =>
+        Effect.succeed(
+          scriptedBoundModel(
+            input.config,
+            input.config.ref === CHILD_MODEL
+              ? options.childTurns
+              : options.parentTurns,
+            observedRequests,
+            options.childGate,
+          ),
         ),
-      ),
-  );
+    );
 
-  // Admitted on the run's lane like every production launch, so the run's
-  // fiber is its stop target by run id.
-  parentFiber = testRuntime().runFork(
-    startAwaited(
-      Context.get(session, Runs),
-      PARENT_RUN_ID,
-      prepareAgentDefinition({ config: parentConfig }).pipe(
-        Effect.flatMap((definition) =>
-          executeAgent(definition, PARENT_RUN_ID, {
-            registration: {
-              identity: { kind: 'agent', agent: PARENT_AGENT },
-              parentRunId: OUTER_RUN_ID,
-            },
-          }),
-        ),
-      ),
-    ),
-  );
-  await Effect.runPromise(waitForParentTurns(0));
-
-  const parentCall = {
-    callId: 'parent-call',
-    env: {
-      roots: Context.get(session, SessionRoots),
-      workingDirectory: process.cwd(),
-    },
-    emit: () => undefined,
-    session,
-    responseId: 'parent-response',
-    instruction: undefined,
-    attempt: 1,
-    logId: 'parent-card',
-    script: null,
-    scriptCalls: null,
-    // The parent has read and edited nothing: the launch reads no facts.
-    facts: Effect.succeed(NO_FACTS),
-    requests: {
-      nextId: (prefix: string) => prefix,
-      open: () => Effect.die(new Error('This fixture opens no request.')),
-      post: () => Effect.die(new Error('This fixture posts no request.')),
-      present: () => Effect.void,
-    },
-    run: {
-      runId: PARENT_RUN_ID,
-      opening: null,
-      callbacks: {},
-      fileService: new RunFileService(
+    // Admitted on the run's lane like every production launch, so the run's
+    // fiber is its stop target by run id.
+    parentFiber = yield* Effect.forkDetach(
+      startAwaited(
+        Context.get(session, Runs),
         PARENT_RUN_ID,
-        Context.get(session, SessionRoots),
+        prepareAgentDefinition({ config: parentConfig }).pipe(
+          Effect.flatMap((definition) =>
+            executeAgent(definition, PARENT_RUN_ID, {
+              registration: {
+                identity: { kind: 'agent', agent: PARENT_AGENT },
+                parentRunId: OUTER_RUN_ID,
+              },
+            }),
+          ),
+        ),
       ),
-      scope: Scope.makeUnsafe(),
-      config: Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent: 'chat',
-        model: PARENT_MODEL,
-      }),
-      model: testModelCell(PARENT_MODEL),
-      logger: noopTrace,
-      parentStage: noopTrace.openStage('Run: chat'),
-      toolPolicy: {},
-      steps: noStep(),
-    },
-  };
-  // A direct `agent` call's launch: a fresh child id, inherited approvals.
-  const launch = await testRuntime().runPromise(
-    launchDetachedSubagent(
+    );
+    yield* waitForParentTurns(0);
+
+    const parentCall = {
+      callId: 'parent-call',
+      env: {
+        roots: Context.get(session, SessionRoots),
+        workingDirectory: process.cwd(),
+      },
+      emit: () => undefined,
+      session,
+      responseId: 'parent-response',
+      instruction: undefined,
+      attempt: 1,
+      logId: 'parent-card',
+      script: null,
+      scriptCalls: null,
+      // The parent has read and edited nothing: the launch reads no facts.
+      facts: Effect.succeed(NO_FACTS),
+      requests: {
+        nextId: (prefix: string) => prefix,
+        open: () => Effect.die(new Error('This fixture opens no request.')),
+        post: () => Effect.die(new Error('This fixture posts no request.')),
+        present: () => Effect.void,
+      },
+      run: {
+        runId: PARENT_RUN_ID,
+        opening: null,
+        callbacks: {},
+        fileService: new RunFileService(
+          PARENT_RUN_ID,
+          Context.get(session, SessionRoots),
+        ),
+        scope: Scope.makeUnsafe(),
+        config: Schema.decodeUnknownSync(AgentConfigSchema)({
+          agent: 'chat',
+          model: PARENT_MODEL,
+        }),
+        model: testModelCell(PARENT_MODEL),
+        logger: noopTrace,
+        parentStage: noopTrace.openStage('Run: chat'),
+        toolPolicy: {},
+        steps: noStep(),
+      },
+    };
+    // A direct `agent` call's launch: a fresh child id, inherited approvals.
+    const launch = yield* launchDetachedSubagent(
       parentCall,
       {
         agent: CHILD_AGENT,
@@ -553,334 +546,355 @@ async function launchWaitingChild(options: {
         workingDirectory: process.cwd(),
       },
       { runId: generateRunId(), grants: NO_APPROVAL_GRANTS },
-    ).pipe(Effect.provide(session)),
-  );
-  expect(launch.status).toBe('executed');
-  const runId = childRunId(launch.output);
-  childId = runId;
-  return { runId, observedRequests };
+    ).pipe(Effect.provide(session));
+    expect(launch.status).toBe('executed');
+    const runId = childRunId(launch.output);
+    childId = runId;
+    return { runId, observedRequests };
+  });
 }
 
-describe('native subagent production delivery path', { retry: 2 }, () => {
-  setupPlatform(integrationPlatform);
-
-  beforeEach(async () => {
-    await testRuntime().runPromise(
-      AgentCatalog.use((catalog) => catalog.refresh),
-    );
-    // The process session over a persistent store: one session per root,
-    // so the ephemeral default this file's setup installed gives way to it.
-    await Effect.runPromise(closeTestDefaultSession);
-    session = await Effect.runPromise(
-      openTestDefaultSession({ roots: testWorkspaceRoots() }),
-    );
-    publishTestRunStart(session, OUTER_RUN_ID);
-    await Effect.runPromise(Context.get(session, SessionLog).settled);
-    childId = undefined;
-    // Every resume a send started: the run owed one.
-    resumedRuns = [];
-    const { programs } = registryOf(Context.get(session, Runs));
-    const resume = programs.resume;
-    vi.spyOn(programs, 'resume').mockImplementation((runId, ...rest) => {
-      resumedRuns.push(runId);
-      return resume(runId, ...rest);
-    });
-    parentFiber = undefined;
+/**
+ * Every case's start, for the test's scope: the integration host with its
+ * agents loaded, the process session over a persistent store with the outer
+ * run started, and every resume a send starts recorded. The scope's close
+ * stops what the case left running and waits for the child to let its claim
+ * go, before the session closes.
+ */
+const setUp = Effect.gen(function* () {
+  yield* Layer.build(FakeHost.layer(integrationPlatform));
+  yield* AgentCatalog.use((catalog) => catalog.refresh);
+  session = yield* Effect.flatMap(
+    TestSession.open(undefined, { persistent: true, host: {} }),
+    sessionHandleOf,
+  );
+  publishTestRunStart(session, OUTER_RUN_ID);
+  yield* Context.get(session, SessionLog).settled;
+  childId = undefined;
+  // Every resume a send started: the run owed one.
+  resumedRuns = [];
+  const { programs } = registryOf(Context.get(session, Runs));
+  const resume = programs.resume;
+  vi.spyOn(programs, 'resume').mockImplementation((runId, ...rest) => {
+    resumedRuns.push(runId);
+    return resume(runId, ...rest);
   });
+  parentFiber = undefined;
+  yield* Effect.addFinalizer(() =>
+    Effect.gen(function* () {
+      interruptActiveRuns(session);
+      if (parentFiber) yield* Fiber.await(parentFiber);
+      const child = childId;
+      if (child) yield* Effect.promise(() => waitForClaimRelease(child));
+    }),
+  );
+});
 
-  afterEach(async () => {
-    interruptActiveRuns(session);
-    if (parentFiber) await Effect.runPromise(Fiber.await(parentFiber));
-    if (childId) await waitForClaimRelease(childId);
-    await Effect.runPromise(closeTestDefaultSession);
+describe('native subagent production delivery path', { retry: 2 }, () => {
+  afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it.live(
-    'keeps one native run and model binding across both delivered turns',
-    () =>
-      Effect.gen(function* () {
-        const parentTurns = [
-          { text: 'Parent ready.' },
-          { text: 'Parent received result A.' },
-          { text: 'Parent received result B.' },
-        ];
-        const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
-        const { runId, observedRequests } = yield* Effect.promise(() =>
-          launchWaitingChild({ parentTurns, childTurns }),
-        );
+  // Live clock: real runs settle on real turns.
+  it.layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+    it.effect(
+      'keeps one native run and model binding across both delivered turns',
+      () =>
+        Effect.gen(function* () {
+          yield* setUp;
+          const parentTurns = [
+            { text: 'Parent ready.' },
+            { text: 'Parent received result A.' },
+            { text: 'Parent received result B.' },
+          ];
+          const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
+          const { runId, observedRequests } = yield* launchWaitingChild({
+            parentTurns,
+            childTurns,
+          });
 
-        yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        // A child is offered what it declares, though its parent's step
-        // offered nothing: a launcher's tools do not bound its child.
-        expect(
-          observedRequests.find(({ model }) => model === CHILD_MODEL)?.tools,
-        ).toContain('grep');
-        const firstControls = Context.get(session, Runs).get(runId)?.controls;
-        const initialBindings = bindingMocks.bindModel.mock.calls.length;
-        yield* waitForParentTurns(1);
-        const budget = yield* registryOf(
-          Context.get(session, Runs),
-        ).childRunBudget(1);
-        expect(yield* budget.takeIfAvailable(1)).toBe(true);
-        yield* budget.release(1);
+          yield* Effect.promise(() =>
+            waitForPersistedResult(runId, 'Result A.'),
+          );
+          // A child is offered what it declares, though its parent's step
+          // offered nothing: a launcher's tools do not bound its child.
+          expect(
+            observedRequests.find(({ model }) => model === CHILD_MODEL)?.tools,
+          ).toContain('grep');
+          const firstControls = Context.get(session, Runs).get(runId)?.controls;
+          const initialBindings = bindingMocks.bindModel.mock.calls.length;
+          yield* waitForParentTurns(1);
+          const budget = yield* registryOf(
+            Context.get(session, Runs),
+          ).childRunBudget(1);
+          expect(yield* budget.takeIfAvailable(1)).toBe(true);
+          yield* budget.release(1);
 
-        yield* Effect.promise(() => queueSecondAssertionFollowUp(runId));
+          yield* queueSecondAssertionFollowUp(runId);
 
-        yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
-        yield* waitForParentTurns(2);
-        expect(Context.get(session, Runs).get(runId)?.controls).toBe(
-          firstControls,
-        );
-        expect(bindingMocks.bindModel).toHaveBeenCalledTimes(initialBindings);
+          yield* Effect.promise(() =>
+            waitForPersistedResult(runId, 'Result B.'),
+          );
+          yield* waitForParentTurns(2);
+          expect(Context.get(session, Runs).get(runId)?.controls).toBe(
+            firstControls,
+          );
+          expect(bindingMocks.bindModel).toHaveBeenCalledTimes(initialBindings);
 
-        // The next turn asks the model with the follow-up as its last message
-        // and turn 1's answer still in the history it carries.
-        const childResumeRequest = observedRequests.find(
-          ({ model, messages }) =>
-            model === CHILD_MODEL &&
-            JSON.stringify(messages.at(-1) ?? '').includes('second assertion'),
-        );
-        expect(JSON.stringify(childResumeRequest?.messages)).toContain(
-          'Result A.',
-        );
+          // The next turn asks the model with the follow-up as its last message
+          // and turn 1's answer still in the history it carries.
+          const childResumeRequest = observedRequests.find(
+            ({ model, messages }) =>
+              model === CHILD_MODEL &&
+              JSON.stringify(messages.at(-1) ?? '').includes(
+                'second assertion',
+              ),
+          );
+          expect(JSON.stringify(childResumeRequest?.messages)).toContain(
+            'Result A.',
+          );
 
-        yield* Context.get(session, SessionLog).settled;
-        const archivedChild = yield* readCompletedRunConversation(
-          runId,
-          Context.get(session, SessionRoots).config,
-        ).pipe(Effect.provide(session));
-        expect(archivedChild).toEqual([
-          expect.objectContaining({ kind: 'user-message' }),
-          { kind: 'assistant-text', text: 'Result A.' },
-          {
-            kind: 'user-message',
-            parts: [
-              {
-                type: 'text',
-                text: expect.stringContaining('second assertion'),
-              },
-            ],
-          },
-          { kind: 'assistant-text', text: 'Result B.' },
-        ]);
+          yield* Context.get(session, SessionLog).settled;
+          const archivedChild = yield* readCompletedRunConversation(
+            runId,
+            Context.get(session, SessionRoots).config,
+          ).pipe(Effect.provide(session));
+          expect(archivedChild).toEqual([
+            expect.objectContaining({ kind: 'user-message' }),
+            { kind: 'assistant-text', text: 'Result A.' },
+            {
+              kind: 'user-message',
+              parts: [
+                {
+                  type: 'text',
+                  text: expect.stringContaining('second assertion'),
+                },
+              ],
+            },
+            { kind: 'assistant-text', text: 'Result B.' },
+          ]);
 
-        const archivedParent = yield* readCompletedRunConversation(
-          PARENT_RUN_ID,
-          Context.get(session, SessionRoots).config,
-        ).pipe(Effect.provide(session));
-        const parentText = JSON.stringify(archivedParent);
-        expect(parentText.match(/Result A\./g)).toHaveLength(1);
-        expect(parentText.match(/Result B\./g)).toHaveLength(1);
-        expect(archivedParent).toEqual(
-          expect.arrayContaining([
-            { kind: 'assistant-text', text: 'Parent received result A.' },
-            { kind: 'assistant-text', text: 'Parent received result B.' },
-          ]),
-        );
-        expect(resumedRuns).toEqual([]);
-        expect(parentTurns).toHaveLength(0);
-        yield* Context.get(session, Runs)
-          .stop(runId, { reason: 'user' })
-          .settlement.pipe(Effect.provide(session));
-        yield* Effect.promise(() => waitForClaimRelease(runId));
-        yield* waitForParentTurns(2);
-        const afterStop = yield* readCompletedRunConversation(
-          PARENT_RUN_ID,
-          Context.get(session, SessionRoots).config,
-        ).pipe(Effect.provide(session));
-        expect(JSON.stringify(afterStop).match(/Result B\./g)).toHaveLength(1);
-        childTurns.push({ text: 'Recovered result C.' });
-        parentTurns.push({ text: 'Parent received recovered result C.' });
-        yield* queueRecovery(runId, 'Continue after restart.');
-        const recovered = yield* Effect.forkChild(
-          withProcessServices(
-            testRuntime(),
+          const archivedParent = yield* readCompletedRunConversation(
+            PARENT_RUN_ID,
+            Context.get(session, SessionRoots).config,
+          ).pipe(Effect.provide(session));
+          const parentText = JSON.stringify(archivedParent);
+          expect(parentText.match(/Result A\./g)).toHaveLength(1);
+          expect(parentText.match(/Result B\./g)).toHaveLength(1);
+          expect(archivedParent).toEqual(
+            expect.arrayContaining([
+              { kind: 'assistant-text', text: 'Parent received result A.' },
+              { kind: 'assistant-text', text: 'Parent received result B.' },
+            ]),
+          );
+          expect(resumedRuns).toEqual([]);
+          expect(parentTurns).toHaveLength(0);
+          yield* Context.get(session, Runs)
+            .stop(runId, { reason: 'user' })
+            .settlement.pipe(Effect.provide(session));
+          yield* Effect.promise(() => waitForClaimRelease(runId));
+          yield* waitForParentTurns(2);
+          const afterStop = yield* readCompletedRunConversation(
+            PARENT_RUN_ID,
+            Context.get(session, SessionRoots).config,
+          ).pipe(Effect.provide(session));
+          expect(JSON.stringify(afterStop).match(/Result B\./g)).toHaveLength(
+            1,
+          );
+          childTurns.push({ text: 'Recovered result C.' });
+          parentTurns.push({ text: 'Parent received recovered result C.' });
+          yield* queueRecovery(runId, 'Continue after restart.');
+          const recovered = yield* Effect.forkChild(
             resumeRun(runId, {}).pipe(Effect.provide(session)),
-          ),
-        );
-        yield* Effect.promise(() =>
-          waitForPersistedResult(runId, 'Recovered result C.'),
-        );
-        yield* waitForParentTurns(3);
-        expect(
-          yield* Fiber.join(recovered).pipe(Effect.timeout('5 seconds')),
-        ).toEqual({ activation: expect.any(Number) });
-        const recoveredControls = Context.get(session, Runs).get(
-          runId,
-        )?.controls;
-        expect(recoveredControls).toBeDefined();
-        childTurns.push({ text: 'Recovered result D.' });
-        parentTurns.push({ text: 'Parent received recovered result D.' });
-        yield* submitFollowUp(
-          runId,
-          {
-            text: 'Continue in the recovered run.',
-            from: { kind: 'user' as const },
-          },
-          {},
-        ).pipe(Effect.provide(session));
-        yield* Effect.promise(() =>
-          waitForPersistedResult(runId, 'Recovered result D.'),
-        );
-        yield* waitForParentTurns(4);
-        expect(Context.get(session, Runs).get(runId)?.controls).toBe(
-          recoveredControls,
-        );
-        yield* Context.get(session, Runs)
-          .stop(runId, { reason: 'user' })
-          .settlement.pipe(Effect.provide(session));
-        yield* Effect.promise(() => waitForClaimRelease(runId));
+          );
+          yield* Effect.promise(() =>
+            waitForPersistedResult(runId, 'Recovered result C.'),
+          );
+          yield* waitForParentTurns(3);
+          expect(
+            yield* Fiber.join(recovered).pipe(Effect.timeout('5 seconds')),
+          ).toEqual({ activation: expect.any(Number) });
+          const recoveredControls = Context.get(session, Runs).get(
+            runId,
+          )?.controls;
+          expect(recoveredControls).toBeDefined();
+          childTurns.push({ text: 'Recovered result D.' });
+          parentTurns.push({ text: 'Parent received recovered result D.' });
+          yield* submitFollowUp(
+            runId,
+            {
+              text: 'Continue in the recovered run.',
+              from: { kind: 'user' as const },
+            },
+            {},
+          ).pipe(Effect.provide(session));
+          yield* Effect.promise(() =>
+            waitForPersistedResult(runId, 'Recovered result D.'),
+          );
+          yield* waitForParentTurns(4);
+          expect(Context.get(session, Runs).get(runId)?.controls).toBe(
+            recoveredControls,
+          );
+          yield* Context.get(session, Runs)
+            .stop(runId, { reason: 'user' })
+            .settlement.pipe(Effect.provide(session));
+          yield* Effect.promise(() => waitForClaimRelease(runId));
 
-        // An already idle saved run needs no new input or model turn to
-        // acknowledge recovery, and its live driver still owns later input.
-        yield* Effect.flatten(
-          wakeRun(runId).pipe(Effect.provide(session)),
-        ).pipe(Effect.timeout('5 seconds'));
-        expect(Context.get(session, Runs).get(runId)?.controls).toBeDefined();
-        yield* Context.get(session, SessionViewAccess).changes.pipe(
-          Stream.filter(
-            (view) => view.runs.get(runId)?.status === RUN_PHASE.WAITING,
-          ),
-          Stream.runHead,
-          Effect.timeout('5 seconds'),
-        );
-        expect(
-          (yield* readChildTurnState(runId).pipe(Effect.provide(session)))
-            .active,
-        ).toBeNull();
-        expect(childTurns).toHaveLength(0);
-        yield* Context.get(session, Runs)
-          .stop(runId, { reason: 'user' })
-          .settlement.pipe(Effect.provide(session));
-        yield* Effect.promise(() => waitForClaimRelease(runId));
-        bindingMocks.bindModel.mockReturnValueOnce(
-          Effect.fail(new Error('Recovered model binding failed.')),
-        );
-        parentTurns.push({ text: 'Parent received failed recovery.' });
-        yield* queueRecovery(runId, 'Keep this unconsumed input.');
-        // Its turn fails before it opens: the resume hands no run over, and
-        // the parent hears the failure.
-        expect(
-          (yield* withProcessServices(
-            testRuntime(),
-            Effect.flip(resumeRun(runId, {}).pipe(Effect.provide(session))),
-          )).message,
-        ).toBe('The run ended without entering the session.');
-        yield* waitForParentTurns(5);
+          // An already idle saved run needs no new input or model turn to
+          // acknowledge recovery, and its live driver still owns later input.
+          yield* Effect.flatten(
+            wakeRun(runId).pipe(Effect.provide(session)),
+          ).pipe(Effect.timeout('5 seconds'));
+          expect(Context.get(session, Runs).get(runId)?.controls).toBeDefined();
+          yield* Context.get(session, SessionViewAccess).changes.pipe(
+            Stream.filter(
+              (view) => view.runs.get(runId)?.status === RUN_PHASE.WAITING,
+            ),
+            Stream.runHead,
+            Effect.timeout('5 seconds'),
+          );
+          expect(
+            (yield* readChildTurnState(runId).pipe(Effect.provide(session)))
+              .active,
+          ).toBeNull();
+          expect(childTurns).toHaveLength(0);
+          yield* Context.get(session, Runs)
+            .stop(runId, { reason: 'user' })
+            .settlement.pipe(Effect.provide(session));
+          yield* Effect.promise(() => waitForClaimRelease(runId));
+          bindingMocks.bindModel.mockReturnValueOnce(
+            Effect.fail(new Error('Recovered model binding failed.')),
+          );
+          parentTurns.push({ text: 'Parent received failed recovery.' });
+          yield* queueRecovery(runId, 'Keep this unconsumed input.');
+          // Its turn fails before it opens: the resume hands no run over, and
+          // the parent hears the failure.
+          expect(
+            (yield* Effect.flip(
+              resumeRun(runId, {}).pipe(Effect.provide(session)),
+            )).message,
+          ).toBe('The run ended without entering the session.');
+          yield* waitForParentTurns(5);
 
-        // A background script's launch that fails before its run opens
-        // fails the `script` call, as the `agent` call's does: the model
-        // reads the failure in the call's own result instead of waiting
-        // for a follow-up that never comes.
-        bindingMocks.bindModel.mockReturnValueOnce(
-          Effect.fail(new Error('Script model binding failed.')),
-        );
-        expect(
-          yield* ScriptTool.call({
-            code: 'await 1;',
-            run_in_background: true,
-          }).pipe(
-            Effect.provide(
-              Layer.mergeAll(
-                nativeToolTestLayer({
-                  run: {
-                    runId: PARENT_RUN_ID,
-                    session,
-                    config: parentConfig,
-                    model: testModelCell(PARENT_MODEL),
-                    toolPolicy: {},
-                  },
-                }),
-                // The background branch never reaches the sandbox.
-                Layer.mock(CodeSandbox, {}),
+          // A background script's launch that fails before its run opens
+          // fails the `script` call, as the `agent` call's does: the model
+          // reads the failure in the call's own result instead of waiting
+          // for a follow-up that never comes.
+          bindingMocks.bindModel.mockReturnValueOnce(
+            Effect.fail(new Error('Script model binding failed.')),
+          );
+          expect(
+            yield* ScriptTool.call({
+              code: 'await 1;',
+              run_in_background: true,
+            }).pipe(
+              Effect.provide(
+                Layer.mergeAll(
+                  nativeToolTestLayer({
+                    run: {
+                      runId: PARENT_RUN_ID,
+                      session,
+                      config: parentConfig,
+                      model: testModelCell(PARENT_MODEL),
+                      toolPolicy: {},
+                    },
+                  }),
+                  // The background branch never reaches the sandbox.
+                  Layer.mock(CodeSandbox, {}),
+                ),
               ),
             ),
-          ),
-        ).toMatchObject({
-          status: 'error',
-          error: expect.stringContaining('Script model binding failed.'),
-        });
-      }),
-    60_000,
-  );
+          ).toMatchObject({
+            status: 'error',
+            error: expect.stringContaining('Script model binding failed.'),
+          });
+        }),
+      60_000,
+    );
 
-  it.live(
-    'does not redeliver turn 1 when the resumed turn produces no new assistant message',
-    () =>
-      Effect.gen(function* () {
-        const parentTurns = [
-          { text: 'Parent ready.' },
-          { text: 'Parent received result A.' },
-          { text: 'Parent closed out an empty second turn.' },
-        ];
-        // Turn 2 is answerless: the scripted transport ends the turn with no text,
-        // so the resumed cycle completes without adding an assistant message.
-        const childTurns = [{ text: 'Result A.' }, { text: '' }];
-        const { runId } = yield* Effect.promise(() =>
-          launchWaitingChild({ parentTurns, childTurns }),
-        );
+    it.effect(
+      'does not redeliver turn 1 when the resumed turn produces no new assistant message',
+      () =>
+        Effect.gen(function* () {
+          yield* setUp;
+          const parentTurns = [
+            { text: 'Parent ready.' },
+            { text: 'Parent received result A.' },
+            { text: 'Parent closed out an empty second turn.' },
+          ];
+          // Turn 2 is answerless: the scripted transport ends the turn with no text,
+          // so the resumed cycle completes without adding an assistant message.
+          const childTurns = [{ text: 'Result A.' }, { text: '' }];
+          const { runId } = yield* launchWaitingChild({
+            parentTurns,
+            childTurns,
+          });
 
-        yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
-        yield* waitForParentTurns(1);
+          yield* Effect.promise(() =>
+            waitForPersistedResult(runId, 'Result A.'),
+          );
+          yield* waitForParentTurns(1);
 
-        yield* Effect.promise(() => queueSecondAssertionFollowUp(runId));
+          yield* queueSecondAssertionFollowUp(runId);
 
-        // The answerless turn still delivers: its report/result overwrite turn 1's
-        // with an explicitly empty response rather than replaying 'Result A.' — and
-        // the parent is resumed a second time to consume that empty delivery.
-        yield* Effect.promise(() =>
-          vi.waitFor(
-            async () => {
-              await expect(
-                Effect.runPromise(
+          // The answerless turn still delivers: its report/result overwrite turn 1's
+          // with an explicitly empty response rather than replaying 'Result A.' — and
+          // the parent is resumed a second time to consume that empty delivery.
+          yield* Effect.promise(() =>
+            vi.waitFor(
+              async () => {
+                await expect(
+                  Effect.runPromise(
+                    getRunRecords(runId)
+                      .readResultMeta()
+                      .pipe(Effect.provide(session)),
+                  ),
+                ).resolves.toMatchObject({
+                  output: { response: '' },
+                });
+                const report = await Effect.runPromise(
                   getRunRecords(runId)
-                    .readResultMeta()
+                    .readReport()
                     .pipe(Effect.provide(session)),
-                ),
-              ).resolves.toMatchObject({
-                output: { response: '' },
-              });
-              const report = await Effect.runPromise(
-                getRunRecords(runId).readReport().pipe(Effect.provide(session)),
-              );
-              expect(report).not.toContain('Result A.');
-              expect(report).not.toContain('<response>');
-            },
-            { timeout: 10_000 },
-          ),
-        );
-        yield* waitForParentTurns(2);
-
-        yield* Context.get(session, SessionLog).settled;
-        const archivedChild = yield* readCompletedRunConversation(
-          runId,
-          Context.get(session, SessionRoots).config,
-        ).pipe(Effect.provide(session));
-        // Turn 2 added the user instruction but no new assistant row.
-        expect(archivedChild).toEqual([
-          expect.objectContaining({ kind: 'user-message' }),
-          { kind: 'assistant-text', text: 'Result A.' },
-          {
-            kind: 'user-message',
-            parts: [
-              {
-                type: 'text',
-                text: expect.stringContaining('second assertion'),
+                );
+                expect(report).not.toContain('Result A.');
+                expect(report).not.toContain('<response>');
               },
-            ],
-          },
-        ]);
+              { timeout: 10_000 },
+            ),
+          );
+          yield* waitForParentTurns(2);
 
-        const archivedParent = yield* readCompletedRunConversation(
-          PARENT_RUN_ID,
-          Context.get(session, SessionRoots).config,
-        ).pipe(Effect.provide(session));
-        const parentText = JSON.stringify(archivedParent);
-        expect(parentText.match(/Result A\./g)).toHaveLength(1);
-        expect(resumedRuns).toEqual([]);
-        expect(parentTurns).toHaveLength(0);
-      }),
-    60_000,
-  );
+          yield* Context.get(session, SessionLog).settled;
+          const archivedChild = yield* readCompletedRunConversation(
+            runId,
+            Context.get(session, SessionRoots).config,
+          ).pipe(Effect.provide(session));
+          // Turn 2 added the user instruction but no new assistant row.
+          expect(archivedChild).toEqual([
+            expect.objectContaining({ kind: 'user-message' }),
+            { kind: 'assistant-text', text: 'Result A.' },
+            {
+              kind: 'user-message',
+              parts: [
+                {
+                  type: 'text',
+                  text: expect.stringContaining('second assertion'),
+                },
+              ],
+            },
+          ]);
+
+          const archivedParent = yield* readCompletedRunConversation(
+            PARENT_RUN_ID,
+            Context.get(session, SessionRoots).config,
+          ).pipe(Effect.provide(session));
+          const parentText = JSON.stringify(archivedParent);
+          expect(parentText.match(/Result A\./g)).toHaveLength(1);
+          expect(resumedRuns).toEqual([]);
+          expect(parentTurns).toHaveLength(0);
+        }),
+      60_000,
+    );
+  });
 });
