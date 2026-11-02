@@ -1,12 +1,12 @@
 /**
  * The kernel suite never touches the real home. The first setup file of
- * every kernel suite: before any repository module loads, each worker
- * points HOME, USERPROFILE, the XDG directories and the Windows profile
- * folders at a temp folder of its own, so `~/.texra` (the global store, the
- * credential file, the service socket) resolves inside it. A worker keeps
- * one folder for every file it runs, since a module it already loaded may
- * hold a path resolved from it. The worker's pid marks the swap as its own:
- * an environment inherited from elsewhere never stands in for it.
+ * every suite in the `kernel` and `isolated` projects: before any repository
+ * module loads, each worker points HOME, USERPROFILE, the XDG directories and
+ * the Windows profile folders at a temp folder of its own, so `~/.texra` (the
+ * global store, the credential file, the service socket) resolves inside it.
+ * A worker keeps one folder for every file it runs, since a module it already
+ * loaded may hold a path resolved from it. The worker's pid marks the swap as
+ * its own: an environment inherited from elsewhere never stands in for it.
  *
  * It imports none of the harness or app modules: the next setup file,
  * `homeIsolationCheck.ts`, loads the ones it checks once the swap is done,

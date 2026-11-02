@@ -34,7 +34,7 @@ ruling and argues against it explicitly.
 | Observability and the trace plane                          | [observability plane](./implemented/architecture/2026-09-09-observability-plane.md)                                                |
 | Dual systems and Promise/Effect seams                      | [effect round trips and dual systems](./implemented/simplification/2026-09-17-effect-round-trips-and-dual-systems.md)              |
 | Which Effect facility replaces what                        | [effect facility adoption](./implemented/simplification/2026-09-20-effect-facility-adoption.md)                                    |
-| Test estate, tiers and the registry                        | [shared module registry](./proposed/testing/2026-09-10-shared-module-registry.md)                                                  |
+| Test estate, tiers and the registry                        | [shared module registry](./implemented/testing/2026-09-10-shared-module-registry.md)                                               |
 | GUI nouns, one home per action, cuts                       | [GUI code as tool](./implemented/feature/2026-10-02-gui-code-as-tool.md)                                                           |
 | Desktop and extension UX: open work                        | [UX principles and work order](./proposed/feature/2026-09-26-desktop-and-extension-ux-roadmap.md)                                  |
 | What the repo owes an autonomous agent                     | [agent-refactorability gates](./implemented/process/2026-09-20-agent-refactorability-gates.md)                                     |

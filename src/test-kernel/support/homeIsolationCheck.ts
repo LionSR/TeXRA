@@ -1,11 +1,12 @@
 /**
- * The second setup file of every kernel suite: it fails loudly if anything
- * still resolves to the real home or a real TeXRA directory once
- * `isolateHome.ts` swapped it out: the environment, `os.homedir()`, or the
- * global TeXRA root a host opens. Vitest runs the setup files in order, so
- * the modules this one imports load only after the swap, and none of them
- * reads the home first. The temp folder itself may sit under the real home
- * (Windows keeps temp in `%USERPROFILE%\AppData\Local\Temp`).
+ * The second setup file of every suite in the `kernel` and `isolated`
+ * projects: it fails loudly if anything still resolves to the real home or a
+ * real TeXRA directory once `isolateHome.ts` swapped it out: the environment,
+ * `os.homedir()`, or the global TeXRA root a host opens. Vitest runs the
+ * setup files in order, so the modules this one imports load only after the
+ * swap, and none of them reads the home first. The temp folder itself may sit
+ * under the real home (Windows keeps temp in
+ * `%USERPROFILE%\AppData\Local\Temp`).
  */
 import * as os from 'node:os';
 import * as path from 'node:path';
