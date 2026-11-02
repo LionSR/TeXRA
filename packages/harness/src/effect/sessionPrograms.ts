@@ -161,32 +161,20 @@ function start(
         new Error(`Run ${runId} already exists in this session.`),
       );
     // `rootRun` stops a run whose opening is interrupted. A caller
-    // interrupted after it returns, before this hands the handle back, never
-    // holds the run either, so the run is stopped here: the interruption is
-    // read once more after the handle is built, and any interruption that
-    // leaves the run registered stops it.
-    const stopUnheld = Effect.suspend(() =>
-      Context.get(session, Runs).get(runId) === undefined
-        ? Effect.void
-        : Context.get(session, SessionRequests)
-            .request({ kind: 'run.stop', runId, reason: 'user' })
-            .pipe(
-              Effect.provide(session),
-              Effect.ignore({ log: 'Warn', message: `Stopping run ${runId}` }),
-            ),
-    );
-    return yield* Effect.uninterruptibleMask((restore) =>
-      restore(
-        rootRun({ ...input, config, runId }).pipe(
-          Effect.provideService(SessionOwner, owner),
-          Effect.provide(session),
-        ),
-      ).pipe(
-        Effect.mapError(runFailure),
-        Effect.map((activation) => runView(session, runId, activation)),
-        Effect.tap(() => restore(Effect.void)),
-        Effect.onInterrupt(() => stopUnheld),
-      ),
+    // interrupted after the run opened, before this hands its handle back,
+    // never holds the run either: the handle, built as the run opens, stops
+    // it. Only this call's own handle, so a caller that never opened the run
+    // stops nobody else's.
+    let opened: Run | undefined;
+    return yield* rootRun({ ...input, config, runId }).pipe(
+      Effect.provideService(SessionOwner, owner),
+      Effect.provide(session),
+      Effect.mapError(runFailure),
+      Effect.map((activation) => {
+        opened = runView(session, runId, activation);
+        return opened;
+      }),
+      Effect.onInterrupt(() => opened?.interrupt ?? Effect.void),
     );
   });
 }
