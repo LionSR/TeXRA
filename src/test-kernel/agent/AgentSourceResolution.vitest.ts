@@ -4,8 +4,8 @@ import { resolve } from 'node:path';
 
 // Third-party imports
 import { Effect, Layer } from 'effect';
-import { it } from '@effect/vitest';
-import { afterAll, beforeAll, describe, expect } from 'vitest';
+import { layer } from '@effect/vitest';
+import { afterAll, expect } from 'vitest';
 
 // Local imports
 import {
@@ -22,24 +22,47 @@ import { FakeStateStore } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import {
+  createFakeHost,
   fakeHostAgentDirectories,
   installedHost,
-  installPlatform,
   storePluginsLayer,
 } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-
-/** The suite's catalog, loaded once the fake host is installed. */
-let catalog: AgentCatalogShape;
+import { FakeHost } from '@test/support/testKernel';
 
 /** Resolve exactly as launch does: through the single launch resolver, by the
  * source the delegation captured at validation time (see `getAgentPath`). */
-function launchAs(entry: AgentEntry | undefined) {
+function launchAs(catalog: AgentCatalogShape, entry: AgentEntry | undefined) {
   return entry
     ? catalog.forLaunch(installedHost().roots, entry.name, entry.source)
     : Effect.succeed(undefined);
 }
+
+const tempDirs: string[] = [];
+
+/** The catalog, loaded over the installed fake host. The host answers
+ *  `custom()` from a temp directory of its own, so nothing in this load
+ *  reaches the global storage view. */
+const loadCatalog = Effect.provide(
+  Effect.gen(function* () {
+    const loaded = yield* AgentCatalog;
+    yield* loaded.refresh;
+    return loaded;
+  }),
+  AgentCatalog.layer.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Layer.succeed(GlobalStorageFs)({} as RootedFileSystem),
+        Layer.succeed(AgentDirectories)(fakeHostAgentDirectories),
+        AppState.layer(new FakeStateStore()),
+        nodePlatformLayer,
+        testHttpClientLayer,
+        storePluginsLayer,
+      ),
+    ),
+  ),
+);
 
 /**
  * A custom agent named `assistant` shadows the bundled `assistant`. A bare
@@ -47,11 +70,11 @@ function launchAs(entry: AgentEntry | undefined) {
  * validated the built-in carries the entry's *source*, and launch resolves the
  * exact `(source, name)` key, so it cannot diverge from what validation
  * accepted.
+ *
+ * The block runs on the live clock, as a host's catalog load does.
  */
-describe('shadowed agent resolution', () => {
-  const tempDirs: string[] = [];
-
-  beforeAll(async () => {
+layer(
+  FakeHost.layer(async () => {
     const customAgents: Record<string, string[]> = {
       'assistant.yaml': [
         'name: assistant',
@@ -67,7 +90,7 @@ describe('shadowed agent resolution', () => {
       await writeFile(resolve(customDir, fileName), `${lines.join('\n')}\n`);
     }
 
-    await installPlatform(
+    return createFakeHost(
       {},
       {
         agentDirectories: {
@@ -80,32 +103,9 @@ describe('shadowed agent resolution', () => {
         },
       },
     );
-
-    // The fake host answers `custom()` from a temp directory of its own, so
-    // nothing in this load reaches the global storage view.
-    catalog = await Effect.runPromise(
-      Effect.provide(
-        Effect.gen(function* () {
-          const loaded = yield* AgentCatalog;
-          yield* loaded.refresh;
-          return loaded;
-        }),
-        AgentCatalog.layer.pipe(
-          Layer.provide(
-            Layer.mergeAll(
-              Layer.succeed(GlobalStorageFs)({} as RootedFileSystem),
-              Layer.succeed(AgentDirectories)(fakeHostAgentDirectories),
-              AppState.layer(new FakeStateStore()),
-              nodePlatformLayer,
-              testHttpClientLayer,
-              storePluginsLayer,
-            ),
-          ),
-        ),
-      ),
-    );
-  });
-
+  }),
+  { excludeTestServices: true },
+)('shadowed agent resolution', (it) => {
   afterAll(async () => {
     await cleanupTempDirs(tempDirs);
   });
@@ -114,12 +114,17 @@ describe('shadowed agent resolution', () => {
     'pins launch to the exact (source, name) entry validation captured',
     () =>
       Effect.gen(function* () {
-        const builtIn = yield* launchAs(catalog.get('builtIn:assistant'));
+        const catalog = yield* loadCatalog;
+        const builtIn = yield* launchAs(
+          catalog,
+          catalog.get('builtIn:assistant'),
+        );
         expect(builtIn?.source).toBe('builtIn');
 
         // The entry validation accepts: the name within the visible agents.
         const visible = yield* catalog.visible(installedHost().roots);
         const custom = yield* launchAs(
+          catalog,
           findAgentByIdentifier(visible, 'assistant'),
         );
         expect(custom?.source).toBe('custom');

@@ -1,28 +1,24 @@
-// Test composition imports
-import '@test/support/defaultSessionTestSetup';
-
 // Third-party imports
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect, SubscriptionRef, Context } from 'effect';
-import { describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 // Local imports
 import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import { closeSessionOf } from '@test/support/sessionEnd';
 import {
-  createTestSession,
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
+import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
 
-describe('committed run removal', () => {
-  it.live(
-    'detaches a retained child when the session receives a committed parent removal',
-    () =>
-      Effect.acquireUseRelease(
-        createTestSession(),
-        (session) =>
+layer(SessionGraph.layer, { excludeTestServices: true })(
+  'committed run removal',
+  (it) => {
+    it.effect(
+      'detaches a retained child when the session receives a committed parent removal',
+      () =>
+        Effect.flatMap(isolatedTestSession(), (session) =>
           Effect.gen(function* () {
             const parent = 'aa0001' as RunId;
             const child = 'bb0002' as RunId;
@@ -77,7 +73,7 @@ describe('committed run removal', () => {
             ).not.toBe(parent);
             expect(Context.get(session, SessionLog).now()).toBe(before + 1);
           }),
-        closeSessionOf,
-      ),
-  );
-});
+        ),
+    );
+  },
+);

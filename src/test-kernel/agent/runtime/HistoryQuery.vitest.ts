@@ -1,11 +1,9 @@
-import '@test/support/sessionGraphTestSetup';
-
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect, Fiber, Stream, SubscriptionRef, Context } from 'effect';
 import { TestClock } from 'effect/testing';
-import { describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 import { HistoryQueryStore } from '@agent/runtime/historyQuery/HistoryQuery';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -15,11 +13,8 @@ import {
   SessionViewAccess,
 } from '@shared/session/runHistory';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { closeSessionOf } from '@test/support/sessionEnd';
-import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
 
 /**
  * The history query store, over a real session. Failure modes, written
@@ -38,7 +33,7 @@ import {
 
 const withSession = <A, E>(
   body: (session: Context.Context<SessionServices>) => Effect.Effect<A, E>,
-) => Effect.acquireUseRelease(createTestSession(), body, closeSessionOf);
+) => Effect.scoped(Effect.flatMap(isolatedTestSession(), body));
 
 const query = (
   session: Context.Context<SessionServices>,
@@ -50,94 +45,97 @@ const query = (
     return yield* Context.get(session, HistoryQuery).query(sql, params);
   });
 
-describe('HistoryQuery', () => {
-  it.live(
-    'stops a runaway statement at its deadline and serves the next query',
-    () =>
+layer(SessionGraph.layer, { excludeTestServices: true })(
+  'HistoryQuery',
+  (it) => {
+    it.effect(
+      'stops a runaway statement at its deadline and serves the next query',
+      () =>
+        withSession((session) =>
+          Effect.gen(function* () {
+            publishTestRunStart(session);
+            // The store is open and fed, so the runaway's only wait is its
+            // deadline, which the test clock steps through.
+            yield* query(session, 'SELECT count(*) FROM runs');
+            const runaway = yield* Effect.gen(function* () {
+              const stopped = yield* query(
+                session,
+                'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n) SELECT count(*) FROM n',
+              ).pipe(Effect.flip, Effect.forkChild);
+              const stepping = yield* TestClock.adjust('1 second').pipe(
+                Effect.andThen(Effect.promise(() => delay(20))),
+                Effect.forever,
+                Effect.forkChild,
+              );
+              const refused = yield* Fiber.join(stopped);
+              yield* Fiber.interrupt(stepping);
+              return refused;
+            }).pipe(Effect.provide(TestClock.layer()));
+            expect(runaway).toMatchObject({
+              _tag: 'HistoryQueryRefused',
+              reason: 'timeout',
+            });
+            const next = yield* query(session, 'SELECT count(*) FROM runs');
+            expect(next.rows).toEqual([[1]]);
+          }),
+        ),
+    );
+
+    it.effect('refuses a write and a second statement', () =>
       withSession((session) =>
         Effect.gen(function* () {
           publishTestRunStart(session);
-          // The store is open and fed, so the runaway's only wait is its
-          // deadline, which the test clock steps through.
-          yield* query(session, 'SELECT count(*) FROM runs');
-          const runaway = yield* Effect.gen(function* () {
-            const stopped = yield* query(
-              session,
-              'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n) SELECT count(*) FROM n',
-            ).pipe(Effect.flip, Effect.forkChild);
-            const stepping = yield* TestClock.adjust('1 second').pipe(
-              Effect.andThen(Effect.promise(() => delay(20))),
-              Effect.forever,
-              Effect.forkChild,
-            );
-            const refused = yield* Fiber.join(stopped);
-            yield* Fiber.interrupt(stepping);
-            return refused;
-          }).pipe(Effect.provide(TestClock.layer()));
-          expect(runaway).toMatchObject({
-            _tag: 'HistoryQueryRefused',
-            reason: 'timeout',
-          });
-          const next = yield* query(session, 'SELECT count(*) FROM runs');
-          expect(next.rows).toEqual([[1]]);
+          const write = yield* query(
+            session,
+            'WITH gone AS (SELECT 1) DELETE FROM events',
+          ).pipe(Effect.flip);
+          expect(write).toMatchObject({ reason: 'rejected' });
+          const pragma = yield* query(session, 'PRAGMA query_only = OFF').pipe(
+            Effect.flip,
+          );
+          expect(pragma).toMatchObject({ reason: 'not-a-read' });
+          const two = yield* query(session, "SELECT 1; SELECT ';' -- ;").pipe(
+            Effect.flip,
+          );
+          expect(two).toMatchObject({ reason: 'not-a-read' });
+          const kept = yield* query(session, 'SELECT count(*) FROM events');
+          expect(kept.rows).toEqual([[1]]);
         }),
       ),
-  );
+    );
 
-  it.live('refuses a write and a second statement', () =>
-    withSession((session) =>
-      Effect.gen(function* () {
-        publishTestRunStart(session);
-        const write = yield* query(
-          session,
-          'WITH gone AS (SELECT 1) DELETE FROM events',
-        ).pipe(Effect.flip);
-        expect(write).toMatchObject({ reason: 'rejected' });
-        const pragma = yield* query(session, 'PRAGMA query_only = OFF').pipe(
-          Effect.flip,
-        );
-        expect(pragma).toMatchObject({ reason: 'not-a-read' });
-        const two = yield* query(session, "SELECT 1; SELECT ';' -- ;").pipe(
-          Effect.flip,
-        );
-        expect(two).toMatchObject({ reason: 'not-a-read' });
-        const kept = yield* query(session, 'SELECT count(*) FROM events');
-        expect(kept.rows).toEqual([[1]]);
-      }),
-    ),
-  );
-
-  it.live('fills runs from a view that reached the rows in events', () =>
-    withSession((session) =>
-      Effect.gen(function* () {
-        yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
-        const before = SubscriptionRef.getUnsafe(
-          Context.get(session, SessionViewAccess).ref,
-        );
-        publishTestRunStart(session);
-        yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
-        // A view whose current snapshot predates the run, and whose next
-        // one has applied it.
-        const lagging = {
-          ...Context.get(session, SessionViewAccess),
-          ref: yield* SubscriptionRef.make(before),
-          changes: Stream.make(
-            before,
-            SubscriptionRef.getUnsafe(
-              Context.get(session, SessionViewAccess).ref,
+    it.effect('fills runs from a view that reached the rows in events', () =>
+      withSession((session) =>
+        Effect.gen(function* () {
+          yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
+          const before = SubscriptionRef.getUnsafe(
+            Context.get(session, SessionViewAccess).ref,
+          );
+          publishTestRunStart(session);
+          yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
+          // A view whose current snapshot predates the run, and whose next
+          // one has applied it.
+          const lagging = {
+            ...Context.get(session, SessionViewAccess),
+            ref: yield* SubscriptionRef.make(before),
+            changes: Stream.make(
+              before,
+              SubscriptionRef.getUnsafe(
+                Context.get(session, SessionViewAccess).ref,
+              ),
             ),
-          ),
-        };
-        const history = yield* HistoryQueryStore.make.pipe(
-          Effect.provideService(SessionLog, Context.get(session, SessionLog)),
-          Effect.provideService(SessionViewAccess, lagging),
-        );
-        const page = yield* history.query(
-          'SELECT (SELECT count(DISTINCT run_id) FROM events), (SELECT count(*) FROM runs)',
-          [],
-        );
-        expect(page.rows).toEqual([[1, 1]]);
-      }).pipe(Effect.scoped, Effect.provide(nodeSpawnerLayer)),
-    ),
-  );
-});
+          };
+          const history = yield* HistoryQueryStore.make.pipe(
+            Effect.provideService(SessionLog, Context.get(session, SessionLog)),
+            Effect.provideService(SessionViewAccess, lagging),
+          );
+          const page = yield* history.query(
+            'SELECT (SELECT count(DISTINCT run_id) FROM events), (SELECT count(*) FROM runs)',
+            [],
+          );
+          expect(page.rows).toEqual([[1, 1]]);
+        }).pipe(Effect.scoped, Effect.provide(nodeSpawnerLayer)),
+      ),
+    );
+  },
+);

@@ -1,12 +1,10 @@
-import '@test/support/defaultSessionTestSetup';
-
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect, Layer, Schema, Context } from 'effect';
-import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
+import { afterAll, assert, beforeAll, expect, vi } from 'vitest';
 
 import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
 import {
@@ -27,10 +25,9 @@ import {
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { validationModelLayer } from '@cli/runtime/validationModel';
 import { RunHistory } from '@shared/session/runHistory';
-import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { fakeHostAppState, setupPlatform } from '@test/support/setupPlatform';
+import { fakeHostAppState } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -39,10 +36,14 @@ import {
   createFakeWorkspaceRoots,
   FakeSecrets,
 } from '@test/support/FakePlatform';
+import {
+  FakeHost,
+  isolatedTestSession,
+  SessionGraph,
+} from '@test/support/testKernel';
 import { texraPlugins } from '@texra/tools/registry';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
 
-import { sessionWithInteractions } from './progressTestUtils';
 import { createTestLaunchContext } from './runtime/launchContextTestUtils';
 import type { ITool } from '@texra-ai/harness';
 
@@ -134,14 +135,18 @@ afterAll(() => {
   vi.unstubAllEnvs();
 });
 
-describe('run-scoped tool resolution', () => {
-  setupPlatform({ workspacePath: process.cwd() });
-
+layer(
+  Layer.provideMerge(
+    SessionGraph.layer,
+    FakeHost.layer({ workspacePath: process.cwd() }),
+  ),
+  { excludeTestServices: true },
+)('run-scoped tool resolution', (it) => {
   it.effect(
     'a resumed step offers the recorded tools that are still the same tool, and names each one gone',
     () =>
       Effect.gen(function* () {
-        const session = yield* sessionWithInteractions({ emit: () => {} });
+        const session = yield* isolatedTestSession({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         const config = Schema.decodeUnknownSync(AgentConfigSchema)({
@@ -187,7 +192,6 @@ describe('run-scoped tool resolution', () => {
             },
           ],
         });
-        yield* closeSessionOf(session);
       }),
   );
 });

@@ -1,9 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect, Layer, Schema, Context } from 'effect';
-import { beforeEach, describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 import {
   AgentConfigSchema,
@@ -15,14 +15,15 @@ import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRoots } from '@platform/rootedFs';
 import { SessionLog } from '@shared/session/runHistory';
-import {
-  createProcessSession,
-  publishTestRunStart,
-  seedRows,
-} from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { publishTestRunStart, seedRows } from '@test/support/sessionTestUtils';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import {
+  FakeHost,
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 import {
   DOCUMENT_TASK_BLOCK,
   documentsOutputFact,
@@ -40,14 +41,9 @@ const childRunId = 'bbbbbb222222' as RunId;
 const otherParentRunId = 'cccccc333333' as RunId;
 const relativePath = 'r1/draft.tex';
 
-setupPlatform({
-  storagePath: fakePath('storage'),
-  workspacePath: fakePath('workspace'),
-});
-let session: Context.Context<SessionServices>;
-beforeEach(async () => {
-  session = await Effect.runPromise(createProcessSession());
-});
+/** The test's session over the process roots, whose storage the child's
+ *  output is resolved against. */
+const processSession = Effect.flatMap(TestSession.open(), sessionHandleOf);
 
 /** The child's declared files, as its documents report them. */
 function workflowRounds(absolutePath: string): RoundOutput[] {
@@ -88,7 +84,10 @@ const resolveLayer = Layer.merge(
   ),
 );
 
-const persistCompletedChild = (parentId: RunId = parentRunId) =>
+const persistCompletedChild = (
+  session: Context.Context<SessionServices>,
+  parentId: RunId = parentRunId,
+) =>
   Effect.gen(function* () {
     const storageRoot = Context.get(session, SessionRoots).storage;
     const absolutePath = path.join(
@@ -153,28 +152,44 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
     return absolutePath;
   });
 
-describe('resolveChildRunOutput', () => {
-  it.effect('rejects output references from an unrelated run tree', () =>
-    Effect.gen(function* () {
-      const absolutePath = yield* persistCompletedChild(otherParentRunId);
+layer(SessionGraph.layer, { excludeTestServices: true })(
+  'resolveChildRunOutput',
+  (it) => {
+    it.layer(
+      FakeHost.layer({
+        storagePath: fakePath('storage'),
+        workspacePath: fakePath('workspace'),
+      }),
+      { buildPerTest: true },
+    )((it) => {
+      it.effect('rejects output references from an unrelated run tree', () =>
+        Effect.gen(function* () {
+          const session = yield* processSession;
+          const absolutePath = yield* persistCompletedChild(
+            session,
+            otherParentRunId,
+          );
 
-      const error = yield* Effect.flip(
-        resolveChildRunOutput(parentRunId, absolutePath)
-          .pipe(Effect.provide(resolveLayer))
-          .pipe(Effect.provide(session)),
+          const error = yield* Effect.flip(
+            resolveChildRunOutput(parentRunId, absolutePath)
+              .pipe(Effect.provide(resolveLayer))
+              .pipe(Effect.provide(session)),
+          );
+          expect(error.message).toContain('is not a direct child');
+        }),
       );
-      expect(error.message).toContain('is not a direct child');
-    }),
-  );
 
-  it.effect('rejects paths outside run storage', () =>
-    Effect.gen(function* () {
-      const error = yield* Effect.flip(
-        resolveChildRunOutput(parentRunId, fakePath('workspace/draft.tex'))
-          .pipe(Effect.provide(resolveLayer))
-          .pipe(Effect.provide(session)),
+      it.effect('rejects paths outside run storage', () =>
+        Effect.gen(function* () {
+          const session = yield* processSession;
+          const error = yield* Effect.flip(
+            resolveChildRunOutput(parentRunId, fakePath('workspace/draft.tex'))
+              .pipe(Effect.provide(resolveLayer))
+              .pipe(Effect.provide(session)),
+          );
+          expect(error.message).toContain('not inside run storage');
+        }),
       );
-      expect(error.message).toContain('not inside run storage');
-    }),
-  );
-});
+    });
+  },
+);

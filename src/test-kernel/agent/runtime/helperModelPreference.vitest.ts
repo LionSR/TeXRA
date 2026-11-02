@@ -1,33 +1,34 @@
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 import { applyHelperModelPreference } from '@agent/runtime/helperModelName';
-import {
-  fakeProcessServices,
-  installedHost,
-} from '@test/support/setupPlatform';
+import { installedHost } from '@test/support/setupPlatform';
+import { SessionGraph } from '@test/support/testKernel';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
 
-describe('applyHelperModelPreference', () => {
-  // No credential is stored, so the helper model cannot run: the launch keeps
-  // the model the user selected rather than failing on the helper.
-  it.effect(
-    'falls back to the selected model when the helper model is unavailable',
-    () =>
-      Effect.gen(function* () {
-        const selected = 'anthropic/claude-sonnet-4-6';
-        const config = {
-          agent: 'latexFixer',
-          model: selected,
-        } as unknown as AgentConfig;
+layer(SessionGraph.layer, { excludeTestServices: true })(
+  'applyHelperModelPreference',
+  (it) => {
+    // No credential is stored, so the helper model cannot run: the launch
+    // keeps the model the user selected rather than failing on the helper.
+    it.effect(
+      'falls back to the selected model when the helper model is unavailable',
+      () =>
+        Effect.gen(function* () {
+          const selected = 'anthropic/claude-sonnet-4-6';
+          const config = {
+            agent: 'latexFixer',
+            model: selected,
+          } as unknown as AgentConfig;
 
-        const result = yield* applyHelperModelPreference(
-          config,
-          installedHost().roots,
-        );
+          const result = yield* applyHelperModelPreference(
+            config,
+            installedHost().roots,
+          );
 
-        expect(result.model).toBe(selected);
-      }).pipe(Effect.provide(fakeProcessServices())),
-  );
-});
+          expect(result.model).toBe(selected);
+        }),
+    );
+  },
+);
