@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Context, Effect } from 'effect';
 
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
@@ -8,6 +8,7 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy } from '@shared/session/approvalDecision';
+import { Approvals, SessionLog } from '@shared/session/runHistory';
 import { readToolEditContent } from '@shared/session/runtimeRequest';
 import { errorResult } from '@tools/core/result';
 import {
@@ -81,11 +82,13 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
     request: ToolEditProposal,
   ): Effect.fn.Return<ToolEditApprovalResult, Error, ToolContext> {
     const call = yield* requireToolRun('A tool-edit approval');
-    const { run, requests, hook } = call;
-    const { runId, session } = run;
+    const { run, requests, hook, session } = call;
+    const { runId } = run;
+    const approvals = Context.get(session, Approvals);
+    const log = Context.get(session, SessionLog);
     const acceptProposedAsIs = (): Effect.Effect<ToolEditApprovalResult> =>
       finalizeApprovalResult(request.proposedContent, request);
-    const answer = session.approvals.permission(runId, 'toolEdit', hook);
+    const answer = approvals.permission(runId, 'toolEdit', hook);
     if (answer === 'allow') return yield* acceptProposedAsIs();
     if (answer !== 'ask') return answer;
 
@@ -112,7 +115,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       relativePath: workspaceRelativePath(call.env.roots.workspace, path),
       sourceTool,
       allowBypass:
-        hook !== 'ask' && session.approvals.bypass(runId, 'toolEdit') === null,
+        hook !== 'ask' && approvals.bypass(runId, 'toolEdit') === null,
       runId,
       addedLines: lines.added,
       removedLines: lines.removed,
@@ -125,10 +128,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
           ({ payload, decision }): Effect.Effect<ToolEditApprovalResult> =>
             decision.action !== 'approve'
               ? Effect.succeed(decision)
-              : readToolEditContent(
-                  session.log.blobs,
-                  payload.data.content,
-                ).pipe(
+              : readToolEditContent(log.blobs, payload.data.content).pipe(
                   Effect.flatMap((reviewed) =>
                     // A host's edited bytes may be CRLF. The base and proposal
                     // are the request's stored ones, including after a resume.
@@ -145,7 +145,7 @@ export const requestToolEditApproval = Effect.fn('requestToolEditApproval')(
       );
     // An edit grant turned on while it waited answers it, unless a hook
     // asked.
-    return yield* session.approvals.enqueue('toolEdit', runId, {
+    return yield* approvals.enqueue('toolEdit', runId, {
       prompt: review,
       bypassed: hook === 'ask' ? review : Effect.suspend(acceptProposedAsIs),
     });

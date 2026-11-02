@@ -6,10 +6,11 @@
  * `Effect.acquireUseRelease`.
  */
 
-import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
+import { Cause, Context, Effect, Exit, SubscriptionRef } from 'effect';
 
 import { activationRows } from '@agent/storage/runLifecycle';
 import type { AgentTrace, StageHandle } from '@agent/trace';
+import { SessionRoots } from '@platform/rootedFs';
 import { grantsKept, NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   RUN_OUTCOME,
@@ -18,7 +19,13 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import { outcomeFromCause } from '@shared/runs/runStatus';
-import { RunHistory, type RunCell } from '@shared/session/runHistory';
+import {
+  Approvals,
+  RunHistory,
+  SessionLog,
+  type RunCell,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -34,17 +41,19 @@ import type { FollowUps } from '../FollowUps';
  * that parent.
  */
 const birthRows = (
-  run: Pick<AgentRunShape, 'runId' | 'session' | 'entry'>,
+  run: Pick<AgentRunShape, 'runId' | 'entry'>,
+  runs: Runs['Service'],
+  view: SessionViewAccess['Service'],
 ): readonly SessionEventDraft[] => {
   const { rows, start } = run.entry.registration ?? { rows: [], start: null };
   if (
     start === null ||
     start.parent === null ||
-    !registryOf(run.session.runs).bornDetached(run.runId)
+    !registryOf(runs).bornDetached(run.runId)
   )
     return rows;
   const snapshot = grantsKept(
-    SubscriptionRef.getUnsafe(run.session.view.ref),
+    SubscriptionRef.getUnsafe(view.ref),
     run.runId,
     start.parent.id,
     start.approvalPolicy ?? NO_APPROVAL_GRANTS,
@@ -54,6 +63,9 @@ const birthRows = (
     { type: 'approval.policy', aggregateId: start.aggregateId, snapshot },
   ];
 };
+
+/** What a resume's activation rows read of the session. */
+type ActivationServices = SessionLog | SessionRoots | Approvals;
 
 /** Why a run its rows never opened cannot be continued. */
 const NOT_RESUMABLE_MESSAGE =
@@ -70,9 +82,21 @@ const NOT_RESUMABLE_MESSAGE =
 export const openRun = Effect.fn('runProgram.openRun')(function* (
   runId: RunId,
   resume: boolean,
-): Effect.fn.Return<RunCell, Error, RunHistory | AgentRun> {
+): Effect.fn.Return<
+  RunCell,
+  Error,
+  RunHistory | AgentRun | Runs | SessionViewAccess | ActivationServices
+> {
   const runHistory = yield* RunHistory;
   const run = yield* AgentRun;
+  const runs = yield* Runs;
+  const view = yield* SessionViewAccess;
+  // The activation's rows are read in its publisher job, outside this fiber.
+  const owners = Context.pick(
+    SessionLog,
+    SessionRoots,
+    Approvals,
+  )(yield* Effect.context<ActivationServices>());
   const cell = yield* runHistory
     .open(
       runId,
@@ -81,9 +105,11 @@ export const openRun = Effect.fn('runProgram.openRun')(function* (
             activation: (state: RunState | null) =>
               state?.phase == null
                 ? Effect.fail(new Error(NOT_RESUMABLE_MESSAGE))
-                : activationRows(run.session, runId, run.config),
+                : activationRows(runId, run.config).pipe(
+                    Effect.provide(owners),
+                  ),
           }
-        : { registration: Effect.sync(() => birthRows(run)) },
+        : { registration: Effect.sync(() => birthRows(run, runs, view)) },
     )
     .pipe(
       // A resume enters once its activation settled, with the state it

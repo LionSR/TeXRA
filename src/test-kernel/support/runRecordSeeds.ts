@@ -6,26 +6,27 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { Effect, Schema } from 'effect';
+import { Effect, Schema, Context } from 'effect';
 
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { freshRunState } from '@shared/session/runState';
 import {
   qualifyAggregateId,
   RunRecordFieldsSchema,
   type RunId,
 } from '@shared/schemas';
+import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { seedRows } from './sessionTestUtils';
 
 export const seedRunRecord = (
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   runId: RunId,
   record: RunRecord,
 ) =>
   Effect.suspend(() =>
-    seedRows(session.log)([
+    seedRows(Context.get(session, SessionLog))([
       {
         type: 'run.config',
         aggregateId: qualifyAggregateId('run', runId),
@@ -35,11 +36,11 @@ export const seedRunRecord = (
   ).pipe(Effect.asVoid);
 
 export const seedReport = (
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   runId: RunId,
   report: string,
 ) =>
-  session.log
+  Context.get(session, SessionLog)
     .transact([
       {
         type: 'run.report',
@@ -53,12 +54,12 @@ export const seedReport = (
  *  handed-down call whose executed settlement records the edits, the facts
  *  `readWorkspaceFiles` folds. */
 export const seedEditedFiles = (
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   runId: RunId,
   paths: readonly string[],
 ) =>
   Effect.gen(function* () {
-    const cell = yield* session.runHistory.open(runId, {
+    const cell = yield* Context.get(session, RunHistory).open(runId, {
       activation: () => Effect.succeed([]),
     });
     const responseId = randomUUID();

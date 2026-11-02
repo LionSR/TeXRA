@@ -52,7 +52,7 @@ import {
   ModelAccess,
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
-import type { StateReadFailed } from '@shared/config/settings';
+import { SessionRoots } from '@platform/rootedFs';
 import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
@@ -66,12 +66,18 @@ import type { DatabaseReadFailed } from '@shared/session/database';
 import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { Attempt, RetryCredentials } from '@shared/session/inFlight';
 import { turnText } from '@shared/session/runFacts';
-import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
+import {
+  findStorageRefusal,
+  runRefusal,
+  SessionLog,
+  type CellError,
+  type RunCell,
+} from '@shared/session/runHistory';
+import type { StateReadFailed } from '@shared/config/settings';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
-import type { CellError, RunCell } from '@shared/session/runHistory';
 
-import { policyDecidedRows } from './requestPolicy';
+import { policyDecidedRows, SessionRequests } from './requestPolicy';
 import { AgentRun } from './run/AgentRun';
 import { runInvocation, RouteRetries } from './run/invocation';
 import { callModel, type CallResult } from './run/modelCall';
@@ -89,6 +95,7 @@ import {
 import { providerMessages } from './storedTurn';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
 import { positionRow } from './loop/rows';
+import type { SessionServices } from './rootLaunch';
 
 /** The answer the invoker gives itself for an automatic quota fallback. */
 const PERSONAL_RETRY = {
@@ -146,7 +153,10 @@ type InvocationOutcome =
 export type InvokeError = CellError | StateReadFailed | DatabaseReadFailed;
 
 /** What an invocation reads from its run's context. */
-type InvokeServices = FileSystem.FileSystem | RouteRetries;
+type InvokeServices = FileSystem.FileSystem | RouteRetries | SessionServices;
+
+/** What one attempt reads: its files, and its run's session. */
+type AttemptServices = FileSystem.FileSystem | SessionServices;
 
 export class ModelInvoker extends Context.Service<
   ModelInvoker,
@@ -174,13 +184,16 @@ export class ModelInvoker extends Context.Service<
 export const modelInvokerLayer = (): Layer.Layer<
   ModelInvoker,
   never,
-  AgentRun | UsageLog | ModelAccess | RouteRetries
+  AgentRun | UsageLog | ModelAccess | RouteRetries | SessionServices
 > =>
   Layer.effect(
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const { runId, session, logger } = run;
+      const { runId, logger } = run;
+      const log = yield* SessionLog;
+      const roots = yield* SessionRoots;
+      const requests = yield* SessionRequests;
       const aggregateId = qualifyAggregateId('run', runId);
       const usageLog = yield* UsageLog;
       const access = yield* ModelAccess;
@@ -203,7 +216,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           logger,
           modelName: bound.modelId,
           runId,
-          roots: session.roots,
+          roots,
         });
 
       interface AttemptTrace {
@@ -374,7 +387,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             contextWindow: bound.config.contextWindow,
           });
         }
-        yield* reportUsage(usageLog, bound, usage, attribution, session.roots);
+        yield* reportUsage(usageLog, bound, usage, attribution, roots);
         return { kind: 'response', state: next };
       });
 
@@ -392,7 +405,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       ): Effect.fn.Return<
         InvocationResponse,
         ModelError | InvokeError,
-        FileSystem.FileSystem
+        AttemptServices
       > {
         const state = yield* cell.current;
         const mode = yield* bound.delivery;
@@ -446,7 +459,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const resolved = yield* bound.model.prepareTurn({
           mode,
           ...(request.system !== undefined ? { system: request.system } : {}),
-          messages: yield* providerMessages(state.messages, session.log.blobs),
+          messages: yield* providerMessages(state.messages, log.blobs),
           ...(request.tools !== undefined ? { tools: request.tools } : {}),
           ...(request.toolChoice !== undefined
             ? { toolChoice: request.toolChoice }
@@ -503,7 +516,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         ): Effect.fn.Return<
           InvocationResponse,
           ModelError | InvokeError,
-          FileSystem.FileSystem
+          AttemptServices
         > {
           const background = bound.model.background;
           if (background === undefined) {
@@ -515,10 +528,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               }),
             );
           }
-          const resolved = yield* admittedTurn(
-            yield* cell.current,
-            session.log.blobs,
-          );
+          const resolved = yield* admittedTurn(yield* cell.current, log.blobs);
           const trace = openTrace();
           const started = yield* Clock.currentTimeMillis;
           const completed: AttemptOutcome = { value: null, streamedText: '' };
@@ -594,7 +604,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         error: RetryErrorInfo,
         next: FailedNext,
         bound: BoundModel,
-      ): Effect.fn.Return<readonly RunHistoryDraft[]> {
+      ): Effect.fn.Return<readonly RunHistoryDraft[], never, SessionServices> {
         const failed: RunHistoryDraft = {
           type: 'model.message',
           aggregateId,
@@ -646,7 +656,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           failed,
           ...(automatic
             ? [{ ...PERSONAL_RETRY, aggregateId, requestId }]
-            : policyDecidedRows(session, runId, payload)),
+            : yield* policyDecidedRows(runId, payload)),
         ];
       });
 
@@ -657,7 +667,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const ended = yield* runInvocation<
           InvocationResponse,
           InvokeError,
-          FileSystem.FileSystem
+          AttemptServices
         >({
           read: cell.current,
           binding: SynchronizedRef.get(run.model),
@@ -690,7 +700,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               logger.debug('Waiting for manual retry');
               // The answer is the `request.decided` row the decide
               // command lands; a closing plane cancels.
-              const row = yield* session.requests
+              const row = yield* requests
                 .decision(runId, requestId, (yield* cell.current).commit)
                 .pipe(
                   Effect.catch((error) =>
@@ -736,7 +746,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       /** A compaction summary on the run's binding; its caller lands it. */
       const call: ModelInvoker['Service']['call'] = (cell, request) =>
         Effect.flatMap(
-          providerMessages(request.messages, session.log.blobs),
+          providerMessages(request.messages, log.blobs),
           (messages) =>
             callModel({
               purpose: 'compaction',
@@ -744,7 +754,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               reacquire: (failed, renew) =>
                 rebind(cell)(renew ? 'renewed' : 'configured', failed),
               request: { ...request, messages },
-              settings: session.roots,
+              settings: roots,
               attribution,
               logger,
               record: {

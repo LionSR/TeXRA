@@ -6,7 +6,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Layer, Schema, Stream } from 'effect';
+import { Effect, Fiber, Layer, Schema, Stream, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
@@ -19,7 +19,10 @@ import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';
-import { RunHistory } from '@shared/session/runHistory';
+import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { SessionRoots } from '@platform/rootedFs';
+import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { type RunState } from '@shared/session/runState';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -58,7 +61,9 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
         }),
       ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
-        Layer.provideMerge(Layer.succeed(RunHistory)(init.session.runHistory)),
+        Layer.provideMerge(
+          Layer.succeed(RunHistory)(Context.get(init.session, RunHistory)),
+        ),
       ),
     ),
   );
@@ -74,20 +79,22 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
  */
 const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
   const requests: InvokeRequest[] = [];
-  const from = init.session.log.now();
+  const from = Context.get(init.session, SessionLog).now();
   const fiber = yield* Effect.forkChild(loopProgram(init, requests));
   const run = qualifyAggregateId('run', init.runId);
   const park = (n: number) =>
-    init.session.log.tail(from).pipe(
-      Stream.filter(
-        (row) =>
-          row.aggregateId === run &&
-          row.type === 'run.position' &&
-          row.payload.at === 'waiting',
-      ),
-      Stream.take(n + 1),
-      Stream.runDrain,
-    );
+    Context.get(init.session, SessionLog)
+      .tail(from)
+      .pipe(
+        Stream.filter(
+          (row) =>
+            row.aggregateId === run &&
+            row.type === 'run.position' &&
+            row.payload.at === 'waiting',
+        ),
+        Stream.take(n + 1),
+        Stream.runDrain,
+      );
   return { fiber, requests, park };
 });
 
@@ -135,7 +142,7 @@ describe('a parked child run', () => {
           content: { text: asked, from: { kind: 'user' as const } },
         };
         publishTestRows(session, [queued]);
-        yield* session.log.settled;
+        yield* Context.get(session, SessionLog).settled;
 
         const resumed = yield* forkLoop({
           runId,
@@ -145,15 +152,19 @@ describe('a parked child run', () => {
           script: [textTurn('second cycle'), textTurn('never reached')],
         });
         yield* resumed.park(0);
-        const resumedState = yield* session.runHistory.load(runId);
+        const resumedState = yield* Context.get(session, RunHistory).load(
+          runId,
+        );
         expect(userTexts(resumedState)).toContain(asked);
-        expect((yield* session.followUps.read(runId)).followUps).toEqual([]);
+        expect(
+          (yield* Context.get(session, Inbox).read(runId)).followUps,
+        ).toEqual([]);
         yield* Fiber.interrupt(resumed.fiber);
 
         // A producer that replays the delivery after a restart writes the
         // same id again; it names a follow-up already consumed.
         publishTestRows(session, [queued]);
-        yield* session.log.settled;
+        yield* Context.get(session, SessionLog).settled;
         const again = yield* forkLoop({
           runId,
           session,
@@ -164,7 +175,7 @@ describe('a parked child run', () => {
         yield* again.park(0);
         expect(again.requests).toHaveLength(0);
         expect(
-          userTexts(yield* session.runHistory.load(runId)).filter(
+          userTexts(yield* Context.get(session, RunHistory).load(runId)).filter(
             (text) => text === asked,
           ),
         ).toEqual([asked]);
@@ -188,9 +199,11 @@ describe('a parked root run', () => {
 
       // The rows `FollowUps.consume` commits, and then nothing: the process
       // ended before the turn that answers them began.
-      const parked = yield* session.runHistory.load(runId).pipe(Effect.orDie);
+      const parked = yield* Context.get(session, RunHistory)
+        .load(runId)
+        .pipe(Effect.orDie);
       if (parked === null) throw new Error('The run has no run history.');
-      const cell = yield* session.runHistory.open(runId);
+      const cell = yield* Context.get(session, RunHistory).open(runId);
       yield* cell.append([
         appendRow(runId, [
           { role: 'user', content: [{ kind: 'text', text: 'answer me' }] },
@@ -249,7 +262,7 @@ describe('a parked root run', () => {
           content: { text: 'go on', from: { kind: 'user' } },
         },
       ]);
-      yield* session.log.settled;
+      yield* Context.get(session, SessionLog).settled;
       const second = yield* forkLoop({
         runId,
         session,
@@ -259,21 +272,26 @@ describe('a parked root run', () => {
       yield* second.park(0);
       yield* Fiber.interrupt(second.fiber);
 
-      const { positions } = yield* session.log.runRows(
+      const { positions } = yield* Context.get(session, SessionLog).runRows(
         aggregateId,
         'positions',
       );
       const beforePlan = positions.find((row) => row.payload.at === 'waiting');
       const planOfFork = (at: number | null) =>
         Effect.gen(function* () {
-          const forked = yield* session.requests.request({
-            kind: 'run.fork',
-            runId,
-            at,
-          });
+          const forked = yield* Context.get(session, SessionRequests)
+            .request({
+              kind: 'run.fork',
+              runId,
+              at,
+            })
+            .pipe(Effect.provide(session));
           if (forked.kind !== 'forked') throw new Error(forked.kind);
           const fork = qualifyAggregateId('run', forked.runId);
-          const { facts } = yield* session.log.runRows(fork, 'facts');
+          const { facts } = yield* Context.get(session, SessionLog).runRows(
+            fork,
+            'facts',
+          );
           return facts['goal/plan']?.value ?? null;
         });
 
@@ -290,18 +308,22 @@ describe('a follow-up with media', () => {
       // or unreadable refuses the send rather than a later turn.
       const session = yield* quietSession();
       const runId = startedRun(session);
-      yield* session.log.settled;
+      yield* Context.get(session, SessionLog).settled;
       const error = yield* Effect.flip(
-        session.requests.request({
-          kind: 'followUp.send',
-          runId,
-          text: 'use this diagram',
-          media: ['/tmp/texra-unreadable-figure.png'],
-        }),
+        Context.get(session, SessionRequests)
+          .request({
+            kind: 'followUp.send',
+            runId,
+            text: 'use this diagram',
+            media: ['/tmp/texra-unreadable-figure.png'],
+          })
+          .pipe(Effect.provide(session)),
       );
 
       expect(error._tag).toBe('Rejected');
-      expect((yield* session.followUps.read(runId)).followUps).toEqual([]);
+      expect(
+        (yield* Context.get(session, Inbox).read(runId)).followUps,
+      ).toEqual([]);
     }),
   );
 
@@ -311,14 +333,15 @@ describe('a follow-up with media', () => {
     Effect.gen(function* () {
       const session = yield* quietSession();
       const runId = startedRun(session);
-      yield* session.log.settled;
+      yield* Context.get(session, SessionLog).settled;
       const file = path.join(os.tmpdir(), `texra-${generateRunId()}.png`);
       writeFileSync(file, Buffer.from(PIXEL, 'base64'));
-      const attached = yield* attachedMedia([file], session.roots).pipe(
-        Effect.provide(Layer.merge(nodePlatformLayer, nodeSpawnerLayer)),
-      );
+      const attached = yield* attachedMedia(
+        [file],
+        Context.get(session, SessionRoots),
+      ).pipe(Effect.provide(Layer.merge(nodePlatformLayer, nodeSpawnerLayer)));
       rmSync(file);
-      yield* session.followUps.send(runId, {
+      yield* Context.get(session, Inbox).send(runId, {
         text: 'see the pixel',
         from: { kind: 'user' },
         ...attached,
@@ -332,7 +355,9 @@ describe('a follow-up with media', () => {
       });
       yield* run.park(1);
       yield* Fiber.interrupt(run.fiber);
-      const state = yield* session.runHistory.load(runId).pipe(Effect.orDie);
+      const state = yield* Context.get(session, RunHistory)
+        .load(runId)
+        .pipe(Effect.orDie);
 
       const digest = attached.media?.[0]?.digest ?? '';
       expect(state?.messages).toContainEqual({
@@ -342,7 +367,9 @@ describe('a follow-up with media', () => {
           { kind: 'image', mimeType: 'image/png', digest },
         ],
       });
-      expect((yield* session.log.blobs([digest])).get(digest)).toBe(PIXEL);
+      expect(
+        (yield* Context.get(session, SessionLog).blobs([digest])).get(digest),
+      ).toBe(PIXEL);
     }),
   );
 });

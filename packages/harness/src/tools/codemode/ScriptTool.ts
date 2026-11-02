@@ -173,20 +173,25 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
     run !== undefined &&
     run.toolPolicy.stopAfterCycle !== true
   )
-    return yield* launchBackgroundScript(
-      yield* requireToolRun('script run_in_background'),
-      {
-        code: input.code,
-        ...(input.timeoutMs != null && { timeoutMs: input.timeoutMs }),
-      },
-      input.title ?? 'Script',
+    return yield* Effect.flatMap(
+      requireToolRun('script run_in_background'),
+      (call) =>
+        launchBackgroundScript(
+          call,
+          {
+            code: input.code,
+            ...(input.timeoutMs != null && { timeoutMs: input.timeoutMs }),
+          },
+          input.title ?? 'Script',
+        ).pipe(Effect.provide(call.session)),
     );
-  const issued = (yield* RunCall)?.scriptCalls;
-  if (issued == null)
+  const runCall = yield* RunCall;
+  const issued = runCall?.scriptCalls;
+  if (runCall == null || issued == null)
     return yield* Effect.fail(
       new ToolError('A script runs only as a call of an agent run.'),
     );
-  const scriptCalls = yield* issued;
+  const scriptCalls = yield* issued.pipe(Effect.provide(runCall.session));
   const sandbox = yield* CodeSandbox;
   // The last `RUN_LOG_MAX_LINES` lines the guest logged, for the result.
   const tail: string[] = [];

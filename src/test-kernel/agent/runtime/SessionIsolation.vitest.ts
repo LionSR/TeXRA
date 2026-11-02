@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Schema } from 'effect';
+import { Effect, Schema, Context } from 'effect';
 
 import { describe, expect } from 'vitest';
 import {
@@ -10,6 +10,8 @@ import {
 } from '@texra-ai/harness/schemas';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 
+import { Runs } from '@agent/runtime/runRegistry';
+import { SessionLog } from '@shared/session/runHistory';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { startAwaited } from '@test/support/runHandleFixtures';
@@ -58,18 +60,20 @@ describe('session isolation', () => {
               label: 'Running stage',
             },
           ]);
-          yield* session.log.settled;
+          yield* Context.get(session, SessionLog).settled;
           // A live run whose stop ends it, as its lifecycle's terminal does.
           yield* Effect.forkDetach(
             startAwaited(
-              session.runs,
+              Context.get(session, Runs),
               runId,
               Effect.never.pipe(
                 Effect.onInterrupt(() =>
-                  finalizeRun(session, {
+                  finalizeRun({
                     runId,
                     outcome: RUN_OUTCOME.CANCELLED,
-                  }).pipe(Effect.orDie),
+                  })
+                    .pipe(Effect.orDie)
+                    .pipe(Effect.provide(session)),
                 ),
               ),
             ),
@@ -78,7 +82,9 @@ describe('session isolation', () => {
         }
         // Each session claims runs in its own root: paper B never holds
         // paper A's run.
-        expect(yield* sessionB.log.owns('a0da01' as RunId)).toBe(false);
+        expect(
+          yield* Context.get(sessionB, SessionLog).owns('a0da01' as RunId),
+        ).toBe(false);
         yield* Effect.all(
           [closeSessionOf(sessionA), closeSessionOf(sessionB)],
           {
@@ -96,7 +102,7 @@ describe('session isolation', () => {
           });
           const ends = (runId: string) =>
             Effect.map(
-              reopened.log.runRows(
+              Context.get(reopened, SessionLog).runRows(
                 qualifyAggregateId(
                   'run',
                   Schema.decodeUnknownSync(RunIdSchema)(runId),

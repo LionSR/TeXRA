@@ -24,9 +24,9 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { finalizeRun } from '@agent/storage/runLifecycle';
-import { getRunRecords } from '@agent/storage/runRecords';
+import type { finalizeRun } from '@agent/storage/runLifecycle';
 import type { RunAttempt } from '@agent/followUp/ToolUseFollowUp';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { grantsKept, type ApprovalGrants } from '@shared/approvalBypassKind';
 import { Settings } from '@shared/config/settings';
 import {
@@ -36,10 +36,11 @@ import {
   type RunId,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
+import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import type { SessionHandle } from './SessionHandle';
+
 import type {
   LiveRun,
   RunControls,
@@ -51,6 +52,7 @@ import type {
 import type { executeAgent } from './executeAgent';
 import type { decideResume } from './resumeRun';
 import type { RunServices } from './ToolServices';
+import type { SessionServices } from './rootLaunch';
 
 /** A launch already has the run here: the one refusal for that fact. Hosts
  *  word it from `message`; a resume reads the tag to report the run
@@ -75,25 +77,30 @@ class RunAdmissionClosed extends Schema.TaggedError<RunAdmissionClosed>()(
  * cancelled.
  */
 export interface RunRegistryInit {
-  /** The session these runs belong to, resolved when first used. */
-  readonly session: () => SessionHandle;
+  /** The session's view: each run's parent edge and phase. */
+  readonly view: SessionViewAccess['Service'];
+  /** The session's log: each run's claim and detach batch. */
+  readonly log: SessionLog['Service'];
+  /** The session's roots: the stop policy's setting slots. */
+  readonly roots: WorkspaceRoots;
   /** The fork every run starts on: the session's context, never a caller's, since a fork from a tool call reads that call's run services; a child's parent is data (`parentRunId`), not fiber ancestry. */
   readonly fork: <A, E>(
-    effect: Effect.Effect<A, E, RunServices>,
+    effect: Effect.Effect<A, E, Exclude<AgentRunServices, Runs>>,
   ) => Fiber.Fiber<A, E>;
   /** The run programs these runs run, given by the session layer: an import
    *  of them here would close a cycle (their tools reach `Runs`). */
   readonly programs: RunPrograms;
   /** Nothing here holds the run any more: wake it for the input it holds
-   *  (`Inbox.wake`). */
+   *  (`wakeIfOwed`). */
   readonly wake: (runId: RunId) => void;
 }
 
-/** The run programs: a run's program (fresh or resumed) and a resume's
- *  decision. */
+/** The run programs: a run's program (fresh or resumed), a resume's
+ *  decision, and the end a stop owes a run nothing here ends. */
 export interface RunPrograms {
   readonly executeAgent: typeof executeAgent;
   readonly resume: typeof decideResume;
+  readonly finalize: typeof finalizeRun;
 }
 
 type AnyFiber = Fiber.Fiber<unknown, unknown>;
@@ -163,7 +170,7 @@ export class RunRegistry implements RunsShape {
     const readsMessages =
       controls !== undefined
         ? !controls.oneShot
-        : this.init.session().view.run(runId)?.followUpSupport !==
+        : this.init.view.run(runId)?.followUpSupport !==
           USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
     return {
       runId,
@@ -187,7 +194,7 @@ export class RunRegistry implements RunsShape {
    *  exists, its activation's for one not yet created. A decision that
    *  writes reads the run's records in its job instead. */
   private attachedParent(runId: RunId): RunId | null {
-    const run = this.init.session().view.run(runId);
+    const run = this.init.view.run(runId);
     return run
       ? run.parentId
       : (this.activations.get(runId)?.unbornParent ?? null);
@@ -225,7 +232,7 @@ export class RunRegistry implements RunsShape {
     if (parentRunId === null) return;
     const stopping = this.activations.get(parentRunId)?.stop !== undefined;
     if (stopping && launched) return;
-    const folded = this.init.session().view.run(parentRunId)?.status;
+    const folded = this.init.view.run(parentRunId)?.status;
     if (stopping || folded === RUN_PHASE.CANCELLED)
       throw new Error(
         `Cannot launch child run ${childRunId} under run ${parentRunId}: that run was stopped.`,
@@ -243,8 +250,8 @@ export class RunRegistry implements RunsShape {
     runId: RunId,
     program: Effect.Effect<A, E, R>,
     settle: (
-      admitted: Effect.Effect<A, E | Error, R>,
-    ) => Effect.Effect<B, E2, R>,
+      admitted: Effect.Effect<A, E | Error, R | SessionServices>,
+    ) => Effect.Effect<B, E2, R | SessionServices>,
     launchParent: RunId | null = null,
     attempt?: RunAttempt,
   ): Effect.Effect<Fiber.Fiber<B, E2>> {
@@ -390,10 +397,8 @@ export class RunRegistry implements RunsShape {
     runId: RunId,
     operation: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | Error, R> {
-    const session = this.init.session();
-    const hold = Effect.flatMap(
-      getRunRecords(session, runId).exists(),
-      (born) => (born ? session.log.hold(runId, { ends: true }) : Effect.void),
+    const hold = Effect.flatMap(this.init.log.facts(runId), (born) =>
+      born !== null ? this.init.log.hold(runId, { ends: true }) : Effect.void,
     );
     return Effect.scoped(
       Effect.uninterruptibleMask((restore) =>
@@ -488,9 +493,7 @@ export class RunRegistry implements RunsShape {
     const key = GlobalStateKey.DETACH_SUBAGENTS_ON_STOP;
     const apply = Effect.flatMap(
       asked === undefined
-        ? Effect.suspend(() =>
-            Settings.get<boolean>(this.init.session().roots, key),
-          )
+        ? Effect.suspend(() => Settings.get<boolean>(this.init.roots, key))
         : Effect.succeed(asked),
       (detach) =>
         (detach ? this.detachActiveChildren(runId) : Effect.void).pipe(
@@ -518,7 +521,7 @@ export class RunRegistry implements RunsShape {
         }),
       ),
     );
-    const held = this.init.session().log.hold(runId, { ends: true });
+    const held = this.init.log.hold(runId, { ends: true });
     return {
       accepted: () => reached,
       settlement: local ? apply : Effect.scoped(Effect.andThen(held, apply)),
@@ -531,11 +534,11 @@ export class RunRegistry implements RunsShape {
   private stopEnd(
     runId: RunId,
     cause: StopCause | undefined,
-  ): Effect.Effect<void, Error> | undefined {
+  ): Effect.Effect<void, Error, SessionServices> | undefined {
     if (cause !== 'user') return undefined;
     const { CANCELLED: outcome } = RUN_OUTCOME;
     const end = { runId, outcome, ownerless: true, stopped: true };
-    return Effect.asVoid(finalizeRun(this.init.session(), end));
+    return Effect.asVoid(this.programs.finalize(end));
   }
 
   /** The session is closing: refuse every run registered from here on, and
@@ -590,20 +593,20 @@ export class RunRegistry implements RunsShape {
    * children, so none is admitted in between.
    */
   private detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
-    const session = this.init.session();
-    return session.log.transact((tx) =>
+    const { log } = this.init;
+    return log.transact((tx) =>
       Effect.gen({ self: this }, function* () {
         const children = this.childRunIds(parentRunId);
-        const view = SubscriptionRef.getUnsafe(session.view.ref);
+        const view = SubscriptionRef.getUnsafe(this.init.view.ref);
         // Each born child's kept grants, from its rows: the view may not
         // hold a child born a moment ago.
         const kept = new Map<RunId, ApprovalGrants>();
         for (const id of children) {
-          const facts = yield* session.log.facts(id);
+          const facts = yield* log.facts(id);
           if (facts?.start == null || facts.grants === null) continue;
           const parent = facts.start.parent?.id ?? parentRunId;
           kept.set(id, grantsKept(view, id, parent, facts.grants));
-          yield* session.log.hold(id);
+          yield* log.hold(id);
         }
         if (kept.size > 0)
           yield* tx.append(
@@ -616,7 +619,7 @@ export class RunRegistry implements RunsShape {
             }),
           );
         // Only a child still here: one gone since has no birth left to cut.
-        yield* session.log.afterCommit(
+        yield* log.afterCommit(
           Effect.sync(() => {
             for (const id of children)
               if (!kept.has(id)) {
@@ -659,8 +662,7 @@ export class RunRegistry implements RunsShape {
 /**
  * The session's runs ({@link RunsShape}). Built by the session layer in the
  * session's scope and disposed when that scope closes (`sessionLayer.ts`);
- * the session record carries the same value (`SessionHandle.runs`) for a
- * host that holds the session. Effect code below a launch takes it from
+ * its runs, its requests and a host that holds the session take it from
  * context.
  */
 export class Runs extends Context.Service<Runs, RunsShape>()(
@@ -675,6 +677,7 @@ export const registryOf = (runs: RunsShape): RunRegistry =>
 
 /**
  * The services every step of an agent run reads on the way down: what the
- * run requires of the process and the `Runs` of the session it is launched on.
+ * run requires of the process and the services of the session it is
+ * launched on.
  */
-export type AgentRunServices = RunServices | Runs;
+export type AgentRunServices = RunServices | SessionServices;

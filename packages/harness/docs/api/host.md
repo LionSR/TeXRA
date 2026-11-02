@@ -1026,10 +1026,13 @@ function getEnabledModels(state: Pick<StateStore, 'get'>)
 ## getHelperModelName
 
 The helper model a run, a merge, or the Models tab uses: the configured
-choice while it is enabled, else the built-in default. The built-in default
-is always accepted because it is used for internal auxiliary tasks, not
-user-facing generation; never fall back to the first picker model, which is
-a premium default. An empty enabled list falls through to the default too.
+choice while it is enabled, else the catalog's default for the setting;
+`undefined` when neither names one, and a run's helper calls use its own
+model. The harness names no default: an app's catalog supplies its own
+(`settingsCatalog`'s `defaults`). That default is always accepted because it
+serves internal auxiliary tasks, not user-facing generation; a disabled
+choice falls back to it, never to the first picker model, which is a
+premium default.
 
 The one resolution of the chain: every surface that shows or uses the
 helper model reads it here, from the setting slots the caller holds.
@@ -1111,15 +1114,16 @@ function hasExtension(filePath: string, extension: string): boolean
 
 ## helperCall
 
-One helper call: bind the configured helper model for this call alone and
-run one completion through the one retry loop (`run/invocation.ts`),
-gated on the process's retry gate, priced and reported to the usage log as
-`attribution`. No row is written. Returns the turn's assistant text.
-`stores` are the asking session's setting slots: the binding, the retry
-limit and the usage consent read them, beside the process `Secrets`.
+One helper call: bind the configured helper model (else `runModel`) for
+this call alone and run one completion through the one retry loop
+(`run/invocation.ts`), gated on the process's retry gate, priced and
+reported to the usage log as `attribution`. No row is written. Returns the
+turn's assistant text. `stores` are the asking session's setting slots: the
+binding, the retry limit and the usage consent read them, beside the
+process `Secrets`.
 
 ```ts
-const helperCall: (stores: SettingsStores, args_1: HelperPrompt, attribution: UsageAttribution, retries?: number | undefined) => Effect<string, Error | CallFailure, Secrets | HttpClient | UsageLog | RouteRetries>
+const helperCall: (stores: SettingsStores, args_1: HelperPrompt, attribution: UsageAttribution, args_3?: { readonly retries?: number | undefined; readonly runModel?: string | undefined; } | undefined) => Effect<string, Error | CallFailure, Secrets | HttpClient | UsageLog | RouteRetries>
 ```
 
 ## HelperPrompt
@@ -2247,8 +2251,8 @@ function sessionFsLayer(
 
 ## SessionHostInteractions
 
-Stable per-session presentation owner. The `SessionHandle` exposes this
-object once, while one host at a time attaches and detaches; the host the
+Stable per-session presentation owner. The session serves this object
+once (`Interactions`), while one host at a time attaches and detaches; the host the
 session was opened with answers while none is, and notices raised while
 none is are replayed to the next one.
 
@@ -2277,7 +2281,7 @@ function setModelEnabled(input: {
 Every read and write of a setting; see the module comment.
 
 ```ts
-const Settings: Readonly<{ readonly get: <T>(stores: SettingsStores, key: string) => Effect<T, StateReadFailed, never>; readonly inspect: <T>(stores: SettingsStores, key: string) => Effect<StoredSetting<T>, StateReadFailed, never>; readonly getConfig: <T>(config: ConfigProvider, key: string) => T; readonly set: (stores: SettingsStores, key: string, value: unknown, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly reset: (stores: SettingsStores, key: string, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly state: <S extends Schema.Codec<unknown, unknown>>(store: Pick<StateStore, "get">, key: string, schema: S) => Effect<S["Type"], StateReadFailed, never>; }>
+const Settings: Readonly<{ readonly get: <T>(stores: SettingsStores, key: string) => Effect<T, StateReadFailed, never>; readonly inspect: <T>(stores: SettingsStores, key: string) => Effect<StoredSetting<T>, StateReadFailed, never>; readonly getConfig: <T>(config: ConfigProvider, key: string) => T; readonly defaultOf: <T>(catalog: SettingsCatalog, key: string) => T; readonly set: (stores: SettingsStores, key: string, value: unknown, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly reset: (stores: SettingsStores, key: string, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly state: <S extends Schema.Codec<unknown, unknown>>(store: Pick<StateStore, "get">, key: string, schema: S) => Effect<S["Type"], StateReadFailed, never>; }>
 ```
 
 ## SettingsStores

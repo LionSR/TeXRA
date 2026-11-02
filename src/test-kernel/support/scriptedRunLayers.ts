@@ -6,7 +6,14 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { Effect, Layer, Schema, type Scope, SynchronizedRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Layer,
+  Schema,
+  type Scope,
+  SynchronizedRef,
+} from 'effect';
 
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
@@ -14,13 +21,14 @@ import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { positionRow } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
 import {
   ModelAccess,
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionRoots } from '@platform/rootedFs';
 import { turnText } from '@shared/session/runFacts';
 import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { RunCell } from '@shared/session/runHistory';
@@ -272,10 +280,13 @@ function scriptedInvoker(
  * no step opened, no callbacks. `over` names what the case under test reads.
  */
 export function testAgentRun(
-  base: Pick<AgentRunShape, 'runId' | 'session' | 'logger' | 'model' | 'scope'>,
+  base: Pick<AgentRunShape, 'runId' | 'logger' | 'model' | 'scope'> & {
+    readonly session: Context.Context<SessionServices>;
+  },
   over: Partial<AgentRunShape> = {},
 ): AgentRunShape {
-  const { runId, session, logger, model } = base;
+  const { session, ...run } = base;
+  const { runId, logger, model } = run;
   return {
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
       agent: 'chat',
@@ -298,7 +309,7 @@ export function testAgentRun(
       entered: () => Effect.void,
       initialUserMessage: 'Do the thing.',
     },
-    fileService: new RunFileService(runId, session.roots),
+    fileService: new RunFileService(runId, Context.get(session, SessionRoots)),
     ...testRunTools(installedHost().roots),
     finalToolName: null,
     swapModel: (next) =>
@@ -307,7 +318,7 @@ export function testAgentRun(
       ),
     declinedRoutes: [],
     callbacks: {},
-    ...base,
+    ...run,
     ...over,
   };
 }
@@ -315,7 +326,7 @@ export function testAgentRun(
 /** A scripted conversation run. */
 export interface ScriptedRunInit {
   readonly runId: RunId;
-  readonly session: SessionHandle;
+  readonly session: Context.Context<SessionServices>;
   readonly tools?: Record<string, ITool>;
   readonly logger?: TraceEmitter;
   readonly bound?: TestBinding;
@@ -331,6 +342,7 @@ export interface ScriptedRunInit {
 }
 
 export function agentRunTestLayer(init: ScriptedRunInit) {
+  // The run's session services, which the loop reads from its fiber.
   return Layer.effect(
     AgentRun,
     Effect.gen(function* () {
@@ -367,12 +379,15 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
         },
       );
     }),
-  );
+  ).pipe(Layer.provideMerge(Layer.succeedContext(init.session)));
 }
 
 /** A run id whose start is already on the session's log; with
  *  `parentRunId`, a child of that run, whose start goes first. */
-export function startedRun(session: SessionHandle, parentRunId?: RunId): RunId {
+export function startedRun(
+  session: Context.Context<SessionServices>,
+  parentRunId?: RunId,
+): RunId {
   const runId = generateRunId();
   if (parentRunId !== undefined) publishTestRunStart(session, parentRunId);
   publishTestRunStart(session, runId, { parent: parentRunId ?? null });

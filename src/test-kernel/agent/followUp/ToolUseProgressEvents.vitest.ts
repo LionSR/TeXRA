@@ -2,7 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
@@ -48,11 +48,13 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
         Layer.provideMerge(
           agentRunTestLayer({ stopAfterCycle: true, ...init }),
         ),
-        Layer.provideMerge(Layer.succeed(RunHistory)(init.session.runHistory)),
+        Layer.provideMerge(
+          Layer.succeed(RunHistory)(Context.get(init.session, RunHistory)),
+        ),
       ),
     ),
   );
-  const state = yield* init.session.runHistory
+  const state = yield* Context.get(init.session, RunHistory)
     .load(init.runId)
     .pipe(Effect.orDie);
   return { result, requests, state };

@@ -24,8 +24,8 @@ import {
  * policy). The list names files, and only shrinks.
  */
 const REGISTRY_IMPORTERS: Readonly<Record<string, string>> = {
-  // The session layer builds each session's registry and closes it.
-  'packages/harness/src/controllers/session/sessionLayer.ts': 'session layer',
+  // The session's owners: the registry built, and its runs drained at close.
+  'packages/harness/src/controllers/session/sessionOwners.ts': 'session layer',
   // A deletion is an inactive-run step on the registry's lane.
   'packages/harness/src/controllers/session/SessionRequests.ts':
     'session layer',

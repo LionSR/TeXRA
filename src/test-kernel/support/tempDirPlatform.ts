@@ -3,7 +3,7 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, Context } from 'effect';
 import { afterEach } from 'vitest';
 
 // Local imports
@@ -11,6 +11,7 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
+import { SessionRoots } from '@platform/rootedFs';
 import { isPathWithin } from '@utils/core/pathCore';
 
 // Local file imports
@@ -102,10 +103,13 @@ export async function cleanupTempDirs(tempDirs: string[]): Promise<void> {
               (yield* owner.list)
                 .filter((session) =>
                   uniqueDirs.some((directory) =>
-                    isPathWithin(directory, session.roots.storage),
+                    isPathWithin(
+                      directory,
+                      Context.get(session, SessionRoots).storage,
+                    ),
                   ),
                 )
-                .map((session) => session.roots.storage),
+                .map((session) => Context.get(session, SessionRoots).storage),
             );
             return yield* Effect.forEach(roots, owner.close, {
               concurrency: 'unbounded',

@@ -1,7 +1,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Context } from 'effect';
 
 // Test composition imports
 
@@ -9,6 +9,7 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
+import { SessionRoots } from '@platform/rootedFs';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -49,7 +50,7 @@ describe('OpenPdfTool', () => {
         transcriptMode: { kind: 'ephemeral' },
       }),
     );
-    sessionRoot = session.roots.storage;
+    sessionRoot = Context.get(session, SessionRoots).storage;
   });
 
   afterEach(async () => {
@@ -69,7 +70,10 @@ describe('OpenPdfTool', () => {
   const installOpener = Effect.gen(function* () {
     const openPdf = vi.fn<(request: OpenPdfRequest) => Effect.Effect<void>>();
     openPdf.mockReturnValue(Effect.void);
-    yield* editors.attach(testDefaultSession().roots.storage, { openPdf });
+    yield* editors.attach(
+      Context.get(testDefaultSession(), SessionRoots).storage,
+      { openPdf },
+    );
     return openPdf;
   });
 

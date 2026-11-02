@@ -32,7 +32,15 @@
  * section whose text an update changed: nothing a request sends differs
  * from the latest record unrecorded.
  */
-import { Effect, Exit, Record, Schema, Scope, SynchronizedRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Exit,
+  Record,
+  Schema,
+  Scope,
+  SynchronizedRef,
+} from 'effect';
 import { ModelProvider } from '@texra-ai/llm';
 import stableStringify from 'safe-stable-stringify';
 
@@ -42,6 +50,7 @@ import { readDelegationTargets } from '@agent/runtime/delegation/delegationAvail
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginContext } from '@platform/processRuntime';
+import { SessionRoots } from '@platform/rootedFs';
 import { Settings } from '@shared/config/settings';
 import {
   AGENT_SKILLS_CONFIG_KEY,
@@ -55,6 +64,7 @@ import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { toolDefinitionsFor, toolDigests } from '@tools/catalogEntries';
 import { readDisabledTools } from '@tools/plugins';
+import type { SessionTools } from '@tools/sessionTools';
 import { sha256 } from '@utils/core/idHash';
 import type { StepRoot } from '@utils/files/externalRoots';
 
@@ -64,11 +74,19 @@ import {
   resolveStepTools,
   type ResolvedTools,
 } from '../agentToolResolution';
+import { Interactions } from '../HostInteractions';
 import { hostCapabilitiesOf, liveToolGates } from '../requestPolicy';
 import { blobRows, contextAt, stored } from '../run/requestContext';
 import { appendRow, SCRIPT_TOOL_NAME } from './rows';
 import { stepHooks, type StepHook } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
+
+/** The project's side of the tool catalog ({@link SessionTools}): its
+ *  plugin layers and MCP servers, built in the session's scope and closed
+ *  with it. A run holds what it declares here, and each step pins from it. */
+export class ProjectTools extends Context.Service<ProjectTools, SessionTools>()(
+  '@texra-ai/harness/session/ProjectTools',
+) {}
 
 /** The tools one step offers. */
 export interface StepTools extends ResolvedTools {
@@ -190,7 +208,7 @@ const openStep = Effect.fn('Step.open')(function* (
   openingSystem: string | undefined,
   recordedHooks: readonly string[] | null = null,
 ) {
-  const { roots } = run.session;
+  const roots = yield* SessionRoots;
   const scope = yield* Scope.fork(run.scope);
   const step = yield* Effect.gen(function* () {
     // A trusted script's tools are fixed; else read the switches live.
@@ -198,14 +216,14 @@ const openStep = Effect.fn('Step.open')(function* (
     const off = trusted
       ? Effect.succeed(new Set<string>())
       : readDisabledTools(roots.globalState);
-    const pinned = yield* run.session.tools
+    const pinned = yield* (yield* ProjectTools)
       .pin(off, { installed: true, held: run.toolInputs.held })
       .pipe(Scope.provide(scope));
-    const { policy, ...gates } = liveToolGates(run);
+    const { policy, ...gates } = yield* liveToolGates(run);
     const resolved = yield* resolveStepTools(pinned.entries, {
       ...run.toolInputs,
       ...gates,
-      hostCapabilities: yield* hostCapabilitiesOf(run.session, pinned, scope),
+      hostCapabilities: yield* hostCapabilitiesOf(pinned, scope),
       ...(trusted && { approvalPromptsUnavailable: false }),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
@@ -364,7 +382,7 @@ const openStep = Effect.fn('Step.open')(function* (
     warnings.push(
       `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
     );
-    run.session.interactions.approvalDenied(step.denied, run.runId);
+    (yield* Interactions).approvalDenied(step.denied, run.runId);
   }
   // Reported where the change is recorded, not at every step.
   for (const message of warnings) {
@@ -460,7 +478,7 @@ export const resolveActivations = Effect.fn('Step.resolveActivations')(
   function* (run: AgentRunShape, names: readonly string[]) {
     const open = yield* SynchronizedRef.get(run.steps);
     if (open === null || names.length === 0) return [...names];
-    const { roots } = run.session;
+    const roots = yield* SessionRoots;
     const { named } = yield* loadRuntimeSkillCatalog({
       roots,
       plugins: { loadable: open.skills.plugins, withheld: [] },

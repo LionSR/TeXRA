@@ -18,6 +18,7 @@ import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { qualifyAggregateId, type InvocationRef } from '@shared/schemas';
 
 import type { RunCell } from '@shared/session/runHistory';
+import { Runs } from '../runRegistry';
 import type { InvokeError } from '../ModelInvoker';
 import type { AgentRunShape } from './AgentRun';
 
@@ -96,9 +97,9 @@ export const observeBackground = <E>(
     onEvent,
   ).pipe(
     Effect.onInterrupt(() =>
-      run.session.runs.get(run.runId)?.stopReason === 'user'
-        ? cancel
-        : Effect.void,
+      Effect.flatMap(Runs, (runs) =>
+        runs.get(run.runId)?.stopReason === 'user' ? cancel : Effect.void,
+      ),
     ),
   );
 };
@@ -117,7 +118,7 @@ export const submitAndObserve = Effect.fn('ModelInvoker.background')(function* (
   bound: BoundModel,
   onEvent: (event: BackgroundEvent) => Effect.Effect<void, InvokeError>,
   completed: { value: TurnResult | null },
-): Effect.fn.Return<void, ModelError | InvokeError> {
+): Effect.fn.Return<void, ModelError | InvokeError, Runs> {
   const background = bound.model.background;
   if (background === undefined) {
     return yield* new ModelError({

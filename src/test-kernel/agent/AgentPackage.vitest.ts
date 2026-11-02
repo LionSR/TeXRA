@@ -2,6 +2,7 @@
 import { it } from '@effect/vitest';
 import {
   Cause,
+  Context,
   Deferred,
   Effect,
   Exit,
@@ -13,10 +14,13 @@ import {
 import { describe, expect } from 'vitest';
 
 // Local imports - package API under test
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { Runs } from '@agent/runtime/runRegistry';
 import {
   emptySessionView,
   type SessionView as RuntimeSessionView,
 } from '@shared/session/sessionView';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { runView } from '../../../packages/harness/src/effect/runHandle';
 import type { TranscriptSubscription } from '@texra-ai/harness/transcript';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -151,8 +155,17 @@ class RelaunchedSession extends FakeSession {
  *  commits, as `session.start` gives it. */
 const startedRun = (fake: FakeSession) =>
   Effect.map(fake.open(), (activation) =>
-    runView(fake as never, RUN_ID as RunId, activation),
+    runView(contextOf(fake), RUN_ID as RunId, activation),
   );
+
+/** `fake` as the session's owners a run's view reads. */
+const contextOf = (fake: FakeSession) =>
+  // cast: the fake carries only what a run's view reads of each owner.
+  Context.make(SessionLog, fake.log as never).pipe(
+    Context.add(SessionViewAccess, fake.view as never),
+    Context.add(Runs, fake.runs as never),
+    Context.add(SessionRequests, fake.requests as never),
+  ) as never;
 
 describe('agent package sessions', () => {
   it.live(

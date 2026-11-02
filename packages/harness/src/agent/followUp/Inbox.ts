@@ -50,10 +50,6 @@ export interface InboxPort {
   readonly run: (
     runId: RunId,
   ) => Pick<RunView, 'parentId' | 'status'> | undefined;
-  /** Resume the run for its input, or join its resume in flight (the
-   *  resume tells the user what it does not take), and give back the
-   *  resume's end. */
-  readonly resume: (runId: RunId) => Effect.Effect<Effect.Effect<void>>;
 }
 
 /** One message a producer sends. */
@@ -98,7 +94,7 @@ export type InboxClosed =
   | { readonly kind: 'session' };
 
 /** The session's follow-up inbox; see the module comment. */
-export class Inbox {
+export class SessionInbox {
   private readonly readers = new Map<RunId, RunInput>();
   /** Each run's sends, admitted one at a time in call order. */
   readonly sendLanes = new Map<RunId, PerKeyLane>();
@@ -116,7 +112,8 @@ export class Inbox {
   /** Append one message to the run's input in one job under its claim:
    *  refused, writing nothing, when the input is closed with no reader here
    *  or another live process holds the run; a replay writes nothing. A row
-   *  no reader here takes is the sender's to {@link wake} for. */
+   *  no reader here takes is the sender's to wake the run for, when
+   *  {@link owesResume}. */
   send(
     runId: RunId,
     item: InboxItem,
@@ -187,25 +184,23 @@ export class Inbox {
     );
   }
 
-  /** Resume the run, or join its resume in flight here, if its input
-   *  obliges one (`needsWake`) and no reader here takes it, once the
-   *  publisher settled. False only if the input could not be read; else the
-   *  resume's end, for a caller to wait on (at once if none started). */
-  wake(runId: RunId): Effect.Effect<false | Effect.Effect<void>> {
+  /** Whether the run is owed a resume: its input obliges one
+   *  (`needsWake`) and no reader here takes it, read once the publisher
+   *  settled. Undefined only if the input could not be read (`wakeRun`'s
+   *  caller resumes it). */
+  owesResume(runId: RunId): Effect.Effect<boolean | undefined> {
     return Effect.gen({ self: this }, function* () {
       yield* this.port.log.settled;
-      if (this.disposed || this.readers.has(runId)) return Effect.void;
+      if (this.disposed || this.readers.has(runId)) return false;
       const input = yield* this.read(runId);
-      if (input.inputClosed || !needsWake(input, this.port.run))
-        return Effect.void;
-      return yield* this.port.resume(runId);
+      return !input.inputClosed && needsWake(input, this.port.run);
     }).pipe(
       Effect.catch((error) =>
         Effect.as(
           warnWith(
             `Run ${runId} was not woken; an explicit Resume delivers what is queued`,
           )(error),
-          false as const,
+          undefined,
         ),
       ),
     );

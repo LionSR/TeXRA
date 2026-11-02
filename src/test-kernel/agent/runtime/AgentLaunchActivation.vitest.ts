@@ -21,7 +21,6 @@ import { withProcessServices } from '@texra-ai/harness/host';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { rootRun } from '@agent/runtime/rootLaunch';
-import { Runs } from '@agent/runtime/runRegistry';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
   parkedAfter,
@@ -58,11 +57,11 @@ describe(
           const parentRunId = generateRunId();
           yield* withProcessServices(
             testRuntime(),
-            rootRun(session, {
+            rootRun({
               config: config('Parent.'),
               runId: parentRunId,
               interactive: true,
-            }),
+            }).pipe(Effect.provide(session)),
           ).pipe(Effect.forkChild);
           yield* untilStored(
             roots.storage,
@@ -76,18 +75,16 @@ describe(
             testRuntime(),
             prepareAgentDefinition({
               config: config('Refused.'),
-              session,
             }).pipe(
               Effect.flatMap((definition) =>
                 executeAgent(definition, runId, {
-                  session,
                   registration: {
                     identity: { kind: 'agent', agent: 'assistant' },
                     parentRunId,
                   },
                 }),
               ),
-              Effect.provideService(Runs, session.runs),
+              Effect.provide(session),
             ),
           );
           expect(ended).toMatchObject({

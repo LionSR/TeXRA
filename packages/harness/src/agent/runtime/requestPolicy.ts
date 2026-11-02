@@ -23,7 +23,13 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
-import { runStateAppend } from '@shared/session/runHistory';
+import { SessionRoots } from '@platform/rootedFs';
+import {
+  Approvals,
+  runStateAppend,
+  SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import { isRequestDecision } from '@shared/session/runRowReads';
 
 import {
@@ -58,44 +64,59 @@ import type { LogWriteError } from '@shared/session/sessionLog';
 import type { ToolStep } from '@tools/sessionTools';
 
 import { HostCapabilities, type StepToolInputs } from './agentToolResolution';
+import { Interactions } from './HostInteractions';
 import { RunCall } from './RunCall';
 import type { AgentRunShape } from './run/AgentRun';
 import type {
   AskOptions,
   RequestRow,
-  SessionHandle,
-  SessionRequests,
+  SessionRequestsShape,
 } from './SessionHandle';
+
+/** The session's approvals and its presentation host: what the policy's
+ *  answers read. */
+const policyOwners = Effect.all({
+  approvals: Approvals,
+  interactions: Interactions,
+});
+type PolicyOwners = Effect.Success<typeof policyOwners>;
+type DecidedDraft = Extract<RunHistoryDraft, { type: 'request.decided' }>;
 
 /** What the session's host can answer, read live: a host attached after a
  *  run started still answers for it. */
-const canPresent = (session: SessionHandle): boolean =>
-  !session.interactions.approvalPromptsUnavailable;
+const canPresent = ({ interactions }: PolicyOwners): boolean =>
+  !interactions.approvalPromptsUnavailable;
 
 /** The policy's answer for a run's approval-gated tools under what the
  *  host can answer: whether a step withholds them, and the `permission_mode`
  *  a plugin hook is told. */
-export const executableDecision = (
-  session: SessionHandle,
+const decideExecutable = (
+  owners: PolicyOwners,
   runId: RunId,
-  policy = session.approvals.policy(runId),
+  policy = owners.approvals.policy(runId),
   // A run whose delegated work is bypassed (an Auto-approve launch) is
   // asked nothing: every approval it would open is granted.
-  scopedBypass = session.approvals.bypass(runId, 'superYolo') !== null,
+  scopedBypass = owners.approvals.bypass(runId, 'superYolo') !== null,
 ): ApprovalPolicyDecision =>
   decideApproval({
     policy,
     promptRequired: true,
     scopedBypass,
-    canPresent: canPresent(session),
+    canPresent: canPresent(owners),
   });
+
+/** {@link decideExecutable} for `runId` under the session's own policy. */
+export const executableDecision = (
+  runId: RunId,
+): Effect.Effect<ApprovalPolicyDecision, never, Approvals | Interactions> =>
+  Effect.map(policyOwners, (owners) => decideExecutable(owners, runId));
 
 /** The policy's answer for one request: a plan follows the executable rule
  *  (`never` denies, `yolo` approves, `ask` presents or, with nobody to ask,
  *  denies), and a question or a retry is denied under `yolo` rather than
  *  answered on a person's behalf. */
 function answerFor(
-  session: SessionHandle,
+  owners: PolicyOwners,
   runId: RunId,
   payload: PermissionPayload,
   hook: 'allow' | 'ask' | undefined,
@@ -105,17 +126,17 @@ function answerFor(
       readonly denial?: ApprovalPolicyDenial;
     }
   | undefined {
-  const policy = session.approvals.policy(runId);
+  const policy = owners.approvals.policy(runId);
   switch (payload.kind) {
     case 'planApproval': {
-      const answer = session.approvals.permission(runId, 'plan', hook);
+      const answer = owners.approvals.permission(runId, 'plan', hook);
       if (answer === 'ask') return undefined;
       return { decision: answer === 'allow' ? { action: 'approve' } : answer };
     }
     case 'userQuestion': {
       const decision = decideHumanInputRequest({
         policy,
-        canPresent: canPresent(session),
+        canPresent: canPresent(owners),
       });
       if (decision === 'present') return undefined;
       return {
@@ -129,7 +150,7 @@ function answerFor(
     case 'retry': {
       const decision = decideRetryApproval({
         policy,
-        canPresent: canPresent(session),
+        canPresent: canPresent(owners),
         isCredentialFailure: isCredentialRetryFailure(
           payload.data.errorDetails,
         ),
@@ -156,15 +177,15 @@ function answerFor(
  * none when a surface decides. A denial is told to the attached host as the
  * request opens.
  */
-export function policyDecidedRows(
-  session: SessionHandle,
+function decidedRows(
+  owners: PolicyOwners,
   runId: RunId,
   payload: PermissionPayload,
   hook?: 'allow' | 'ask',
-): Extract<RunHistoryDraft, { type: 'request.decided' }>[] {
-  const answer = answerFor(session, runId, payload, hook);
+): DecidedDraft[] {
+  const answer = answerFor(owners, runId, payload, hook);
   if (answer === undefined) return [];
-  if (answer.denial) session.interactions.approvalDenied(answer.denial, runId);
+  if (answer.denial) owners.interactions.approvalDenied(answer.denial, runId);
   return [
     {
       type: 'request.decided',
@@ -175,69 +196,76 @@ export function policyDecidedRows(
   ];
 }
 
+/** {@link decidedRows} under the session's own policy and host. */
+export const policyDecidedRows = (
+  runId: RunId,
+  payload: PermissionPayload,
+): Effect.Effect<DecidedDraft[], never, Approvals | Interactions> =>
+  Effect.map(policyOwners, (owners) => decidedRows(owners, runId, payload));
+
 /** Whether a step's approval-gated tools are withheld, read live from its
  *  session's policy, its grants and its host, and the policy read (which a
  *  denial names). A fresh run's opening reads its uncommitted `run.start`. */
-export function liveToolGates({
-  session,
+export const liveToolGates = ({
   runId,
   entry,
-}: Pick<AgentRunShape, 'session' | 'runId'> & {
+}: Pick<AgentRunShape, 'runId'> & {
   readonly entry: Pick<AgentRunShape['entry'], 'registration'>;
-}): Pick<StepToolInputs, 'approvalPromptsUnavailable'> & {
-  readonly policy: ApprovalPolicy;
-} {
-  const view = SubscriptionRef.getUnsafe(session.view.ref);
-  const start = entry.registration?.start ?? null;
-  const source =
-    start === null
-      ? view
-      : withUnborn(view, runId, start.parent?.id ?? null, start.approvalPolicy);
-  const policy = runPolicy(session.approvals.policy(), source, runId);
-  const bypassed = resolveBypass(source, runId, 'superYolo') !== null;
-  return {
-    approvalPromptsUnavailable: isApprovalDenied(
-      executableDecision(session, runId, policy, bypassed),
-    ),
-    policy,
-  };
-}
+}): Effect.Effect<
+  Pick<StepToolInputs, 'approvalPromptsUnavailable'> & {
+    readonly policy: ApprovalPolicy;
+  },
+  never,
+  SessionViewAccess | Approvals | Interactions
+> =>
+  Effect.gen(function* () {
+    const owners = yield* policyOwners;
+    const view = SubscriptionRef.getUnsafe((yield* SessionViewAccess).ref);
+    const start = entry.registration?.start ?? null;
+    const parent = start?.parent?.id ?? null;
+    const source =
+      start === null
+        ? view
+        : withUnborn(view, runId, parent, start.approvalPolicy);
+    const policy = runPolicy(owners.approvals.policy(), source, runId);
+    const bypassed = resolveBypass(source, runId, 'superYolo') !== null;
+    return {
+      approvalPromptsUnavailable: isApprovalDenied(
+        decideExecutable(owners, runId, policy, bypassed),
+      ),
+      policy,
+    };
+  });
 
 /** What the session's host serves now: the union of what each plugin of
  *  the step's capability-gated tools says (`HostCapabilities`), each read
  *  from its own services; none without one. */
 export const hostCapabilitiesOf = (
-  session: SessionHandle,
   step: ToolStep,
   scope: Scope.Scope,
-): Effect.Effect<ReadonlySet<string>> => {
+): Effect.Effect<ReadonlySet<string>, never, SessionRoots> => {
   const serving = new Set(
     [...step.entries.values()].flatMap(({ tool, plugin }) =>
       tool.hostCapability === undefined ? [] : [plugin],
     ),
   );
-  return Effect.map(
-    Effect.forEach(serving, (plugin) =>
+  return Effect.gen(function* () {
+    const { storage } = yield* SessionRoots;
+    const served = yield* Effect.forEach(serving, (plugin) =>
       Scope.provide(step.services(new Set([plugin])), scope).pipe(
         Effect.map((services) =>
           Option.match(Context.getOption(services, HostCapabilities), {
             onNone: () => [],
-            onSome: ({ of }) => [...of(session.roots.storage)],
+            onSome: ({ of }) => [...of(storage)],
           }),
         ),
       ),
-    ),
-    (served) => new Set(served.flat()),
-  );
+    );
+    return new Set(served.flat());
+  });
 };
 
 const CHANNEL = 'requestPolicy';
-
-/** What a session's asks are built over. */
-export interface RequestAsksInit {
-  /** The session the requests are asked on, resolved when first used. */
-  readonly session: () => SessionHandle;
-}
 
 /** A recorded decision, as its request takes it: a surface's answer is
  *  checked before it is recorded and the runtime's own writers use only
@@ -255,14 +283,16 @@ export const recordedDecision = <P extends Parameters<typeof decisionFits>[0]>(
       );
 
 /** Build one session's {@link SessionRequests} `ask`, `decide` and
- *  `decision`. */
-export function requestAsks({
-  session,
-}: RequestAsksInit): Pick<SessionRequests, 'ask' | 'decide' | 'decision'> {
-  const decide: SessionRequests['decide'] = (runId, requestId, answer) =>
-    session().log.transact((tx) =>
-      decisionRow(runId, requestId, answer, tx.append),
-    );
+ *  `decision`, over its log, its policy and its host. */
+export const requestAsks: Effect.Effect<
+  Pick<SessionRequestsShape, 'ask' | 'decide' | 'decision'>,
+  never,
+  SessionLog | Approvals | Interactions
+> = Effect.gen(function* () {
+  const log = yield* SessionLog;
+  const owners = yield* policyOwners;
+  const decide: SessionRequestsShape['decide'] = (runId, requestId, answer) =>
+    log.transact((tx) => decisionRow(runId, requestId, answer, tx.append));
 
   /** The `request.decided` row for `requestId`, if the request is still
    *  open: the body of one publisher transaction, whether a surface or an
@@ -278,10 +308,7 @@ export function requestAsks({
   ) =>
     Effect.gen(function* () {
       const aggregateId = qualifyAggregateId('run', runId);
-      const { requests } = yield* session().log.runRows(
-        aggregateId,
-        'requests',
-      );
+      const { requests } = yield* log.runRows(aggregateId, 'requests');
       if (requests[requestId]?.decision !== null) return false;
       yield* runStateAppend(append)([
         { type: 'request.decided', aggregateId, requestId, decision },
@@ -289,29 +316,24 @@ export function requestAsks({
       return true;
     });
 
-  const decision: SessionRequests['decision'] = (runId, requestId, from) => {
+  const decision: SessionRequestsShape['decision'] = (runId, id, from) => {
     const aggregate = qualifyAggregateId('run', runId);
-    return session()
-      .log.tail(from)
-      .pipe(
-        Stream.filter(isRequestDecision),
-        Stream.filter(
-          (event) =>
-            event.aggregateId === aggregate && event.requestId === requestId,
-        ),
-        Stream.runHead,
-        Effect.flatMap(
-          Option.match({
-            onNone: () =>
-              Effect.fail(
-                new Error(
-                  `The session closed before request ${requestId} was decided.`,
-                ),
-              ),
-            onSome: Effect.succeed,
-          }),
-        ),
-      );
+    return log.tail(from).pipe(
+      Stream.filter(isRequestDecision),
+      Stream.filter(
+        (event) => event.aggregateId === aggregate && event.requestId === id,
+      ),
+      Stream.runHead,
+      Effect.flatMap(
+        Option.match({
+          onNone: () =>
+            Effect.fail(
+              new Error(`The session closed before request ${id} was decided.`),
+            ),
+          onSome: Effect.succeed,
+        }),
+      ),
+    );
   };
 
   const ask = <P extends PermissionPayload, E = never>(
@@ -327,9 +349,9 @@ export function requestAsks({
       options.open ??
       ((opened) =>
         Effect.suspend(() => {
-          const from = session().log.now();
-          return session()
-            .log.transact((tx) => runStateAppend(tx.append)(opened))
+          const from = log.now();
+          return log
+            .transact((tx) => runStateAppend(tx.append)(opened))
             .pipe(Effect.as(from));
         }));
     return Effect.gen(function* () {
@@ -341,7 +363,7 @@ export function requestAsks({
           payload,
           ...(options.blobs && { blobs: options.blobs }),
         },
-        ...policyDecidedRows(session(), runId, payload, (yield* RunCall)?.hook),
+        ...decidedRows(owners, runId, payload, (yield* RunCall)?.hook),
       ];
       const from = yield* open(rows);
       return yield* decision(runId, requestId, from).pipe(
@@ -363,4 +385,11 @@ export function requestAsks({
   };
 
   return { ask, decide, decision };
-}
+});
+
+/** The session's requests ({@link SessionRequestsShape}): the one handler
+ *  of every request a surface issues, and its runs' questions to a person. */
+export class SessionRequests extends Context.Service<
+  SessionRequests,
+  SessionRequestsShape
+>()('@texra-ai/harness/session/SessionRequests') {}

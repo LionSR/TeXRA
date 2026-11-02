@@ -4,12 +4,13 @@ import '@test/support/sessionGraphTestSetup';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Context } from 'effect';
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
 // Local imports
 import { WorkspaceFs } from '@texra-ai/harness/host';
+import { SessionRoots } from '@platform/rootedFs';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -40,7 +41,7 @@ describe('accept_run_files progress events', () => {
           transcriptMode: { kind: 'ephemeral' },
         });
         yield* Effect.addFinalizer(() =>
-          closeTestSession(session.roots.storage),
+          closeTestSession(Context.get(session, SessionRoots).storage),
         );
         publishTestRunStart(session, runId);
         const requests = autoDecideRequests(session, () => ({

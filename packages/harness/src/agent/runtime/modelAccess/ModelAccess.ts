@@ -92,6 +92,8 @@ export interface BindRequest {
 /** The configured helper model, for one call; `rejected` as for a run's. */
 interface HelperRequest {
   readonly purpose: 'helper';
+  /** The asking run's model, bound when no helper model is configured. */
+  readonly runModel?: string;
   readonly rejected?: string;
 }
 
@@ -122,15 +124,20 @@ export class ModelAccess extends Context.Service<
 const settingsOf = (stores: SettingsStores) =>
   Effect.mapError(readModelSettings(stores), RouteUnavailable.of);
 
-/** The helper model's request: the configured model. Its bind decides
- *  whether it can serve now, as a run's does. */
+/** The helper model's request: the configured model, else the asking run's.
+ *  Its bind decides whether it can serve now, as a run's does. */
 const helperRequest = Effect.fn('ModelAccess.helper')(function* (
   stores: SettingsStores,
+  runModel: string | undefined,
 ): Effect.fn.Return<BindRequest, RouteUnavailable> {
-  const modelId = yield* Effect.mapError(
-    getHelperModelName(stores),
-    RouteUnavailable.of,
-  );
+  const modelId =
+    (yield* Effect.mapError(getHelperModelName(stores), RouteUnavailable.of)) ??
+    runModel;
+  if (modelId === undefined) {
+    return yield* RouteUnavailable.of(
+      new Error('No helper model is configured, and no run model to use.'),
+    );
+  }
   // One-shot deterministic text: the whole output budget, never sampled.
   return { modelId, declinedRoutes: [], textOnly: true, temperature: 0 };
 });
@@ -206,8 +213,10 @@ export const modelAccessLayer = (
         bind: (request) =>
           inProject(
             'purpose' in request
-              ? Effect.flatMap(helperRequest(stores), (helper) =>
-                  bindOver(stores, { ...helper, rejected: request.rejected }),
+              ? Effect.flatMap(
+                  helperRequest(stores, request.runModel),
+                  (helper) =>
+                    bindOver(stores, { ...helper, rejected: request.rejected }),
                 )
               : bindOver(stores, request),
           ),

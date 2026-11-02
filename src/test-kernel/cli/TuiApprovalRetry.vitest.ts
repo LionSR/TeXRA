@@ -3,7 +3,14 @@
 // with `session.openRequest`; the surface answers with `request.decide`.
 
 import { layer } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer, SubscriptionRef } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Fiber,
+  Layer,
+  SubscriptionRef,
+  Context,
+} from 'effect';
 import { afterEach, beforeEach, expect, type MockInstance, vi } from 'vitest';
 import {
   API_KEY_ENV_NAMES,
@@ -46,11 +53,18 @@ vi.mock('@cli/chat/tui/state/subscriptionPreference', () => ({
   setCliSubscriptionPreference: mocks.setCliSubscriptionPreference,
 }));
 
+import { Interactions } from '@agent/runtime/HostInteractions';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
 import { createTuiHostInteractions } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
+import {
+  SessionLog,
+  Approvals,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { installedHost } from '@test/support/setupPlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
@@ -89,8 +103,10 @@ const sessionHandle = Effect.flatMap(TestSession, sessionHandleOf);
  */
 const cancelOpenRequests = Effect.gen(function* () {
   const session = yield* sessionHandle;
-  for (const request of SubscriptionRef.getUnsafe(session.view.ref).requests) {
-    yield* session.requests
+  for (const request of SubscriptionRef.getUnsafe(
+    Context.get(session, SessionViewAccess).ref,
+  ).requests) {
+    yield* (yield* TestSession)
       .request({
         kind: 'request.decide',
         runId: request.runId,
@@ -99,7 +115,7 @@ const cancelOpenRequests = Effect.gen(function* () {
       })
       .pipe(Effect.ignore);
   }
-  yield* session.log.settled;
+  yield* Context.get(session, SessionLog).settled;
   resetCliState();
 });
 
@@ -119,12 +135,9 @@ const tui = Effect.gen(function* () {
   } as unknown as CliRuntimeHost;
   const session = yield* sessionHandle;
   yield* Effect.addFinalizer(() => cancelOpenRequests);
-  const detachHost = yield* session.interactions.use(
+  const detachHost = yield* Context.get(session, Interactions).use(
     createTuiHostInteractions(presentationHost, cliContext, {
-      requests: {
-        request: session.requests.request,
-        view: session.view,
-      },
+      requests: yield* TestSession,
       settings: settingsStores.stores,
       runtime: yield* SessionGraph.runtime,
     }),
@@ -160,7 +173,7 @@ function ensureRun(runId: RunId) {
     started.add(runId);
     const session = yield* sessionHandle;
     publishTestRunStart(session, runId, { parent: root ?? null });
-    yield* session.log.settled.pipe(Effect.orDie);
+    yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
   });
 }
 
@@ -170,7 +183,7 @@ function openRequest(runId: RunId, payload: PermissionPayload) {
   return Effect.gen(function* () {
     yield* ensureRun(runId);
     const session = yield* sessionHandle;
-    return yield* session.requests.ask(runId, payload);
+    return yield* Context.get(session, SessionRequests).ask(runId, payload);
   }).pipe(Effect.mapError((cause) => new Error(String(cause))));
 }
 
@@ -205,10 +218,9 @@ function chatGptSubscriptionRetry(label: string): RetryPermission {
 /** Answer the request the modal is showing. */
 const decideCurrent = (decision: SurfaceDecision) =>
   Effect.gen(function* () {
-    const session = yield* sessionHandle;
     currentApproval
       .get()
-      ?.decide(session.requests, yield* SessionGraph.runtime, decision);
+      ?.decide(yield* TestSession, yield* SessionGraph.runtime, decision);
   });
 
 /** The decision a retry on the user's own key lands. */
@@ -245,7 +257,7 @@ function waitForApproval(
  *  entry binds it. */
 const boundSessionView = Layer.effectDiscard(
   Effect.gen(function* () {
-    const { view } = yield* sessionHandle;
+    const view = Context.get(yield* sessionHandle, SessionViewAccess);
     const unbind = bindSessionView(yield* SessionGraph.runtime, {
       current: () => SubscriptionRef.getUnsafe(view.ref),
       changes: view.changes,
@@ -310,7 +322,9 @@ layer(
       expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
       const session = yield* sessionHandle;
       yield* waitFor(() =>
-        expect(session.approvals.bypass(runId, 'bash') !== null).toBe(true),
+        expect(
+          Context.get(session, Approvals).bypass(runId, 'bash') !== null,
+        ).toBe(true),
       );
     }),
   );
@@ -380,9 +394,11 @@ layer(
         finishLookup?.();
         yield* settle();
         const session = yield* sessionHandle;
-        yield* session.log.settled;
+        yield* Context.get(session, SessionLog).settled;
         expect(
-          SubscriptionRef.getUnsafe(session.view.ref).requests.some(
+          SubscriptionRef.getUnsafe(
+            Context.get(session, SessionViewAccess).ref,
+          ).requests.some(
             (request) => request.requestId === permission.requestId,
           ),
         ).toBe(true);

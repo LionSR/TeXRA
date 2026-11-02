@@ -6,7 +6,6 @@
  */
 
 // Local imports
-import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
 import { agentTool } from '@agent/runtime/delegation/AgentTool';
 import { GOAL_PLAN_KIND } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -111,7 +110,7 @@ export const multiAgent: Plugin = definePlugin({
  * tools are on, as every chat run does; its session layer is the code
  * sandbox the scripts run in.
  */
-export const codemode = definePlugin<CodeSandbox>({
+export const codemode = definePlugin({
   id: 'codemode',
   tools: SCRIPT_TOOLS,
   injectedWhen: { script: GlobalStateKey.SCRIPT_ONLY },

@@ -3,7 +3,6 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { applyHelperModelPreference } from '@agent/runtime/helperModelName';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import {
   fakeProcessServices,
   installedHost,
@@ -18,7 +17,6 @@ describe('applyHelperModelPreference', () => {
     () =>
       Effect.gen(function* () {
         const selected = 'anthropic/claude-sonnet-4-6';
-        expect(DEFAULT_HELPER_MODEL).not.toBe(selected);
         const config = {
           agent: 'latexFixer',
           model: selected,

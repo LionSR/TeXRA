@@ -5,13 +5,15 @@ import { strict as assert } from 'node:assert';
 import { it } from '@effect/vitest';
 
 // Third-party imports
-import { Effect, Fiber, Schema } from 'effect';
+import { Effect, Fiber, Schema, Context } from 'effect';
 import { beforeEach, afterEach, describe, vi } from 'vitest';
 
 // Local imports
 
 import { type RunId, RunIdSchema } from '@texra-ai/harness/schemas';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
+import { Runs } from '@agent/runtime/runRegistry';
+import { SessionLog } from '@shared/session/runHistory';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -58,7 +60,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
     );
     // The completion commits on the parent's input; its wake follows.
     const followUp = vi
-      .spyOn(toolUseFollowUp, 'wakeRun')
+      .spyOn(toolUseFollowUp, 'wakeIfOwed')
       .mockReturnValue(Effect.succeed(Effect.void));
 
     publishTestRunStart(testDefaultSession(), PARENT_RUN_ID);
@@ -82,7 +84,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
     );
 
     yield* Effect.promise(() => outputEmitted);
-    yield* testDefaultSession().log.settled;
+    yield* Context.get(testDefaultSession(), SessionLog).settled;
     const reported = /Run ID: (\S+)/.exec(launched.output ?? '')?.[1];
     assert.ok(reported, 'Background launch should report its run ID');
     const runId = Schema.decodeUnknownSync(RunIdSchema)(reported);
@@ -110,7 +112,7 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
 
 function readOutput(runId: RunId, viewRange?: [number, number]) {
   return Effect.gen(function* () {
-    yield* testDefaultSession().log.settled;
+    yield* Context.get(testDefaultSession(), SessionLog).settled;
     return yield* ExecutionsTool.call({
       path: `/executions/${runId}/output`,
       ...(viewRange ? { view_range: viewRange } : {}),
@@ -180,11 +182,16 @@ describe('ExecutionsTool /executions/{id}/output', () => {
         const childId = publishTestRunStart(session, undefined, {
           parent: PARENT_RUN_ID,
         });
-        yield* session.log.settled;
+        yield* Context.get(session, SessionLog).settled;
         // Launched and admitted, its program not yet past its setup: the
         // window between `start` and the child's loop being under way.
         const launch = yield* Effect.forkChild(
-          startAwaited(session.runs, childId, Effect.never, PARENT_RUN_ID),
+          startAwaited(
+            Context.get(session, Runs),
+            childId,
+            Effect.never,
+            PARENT_RUN_ID,
+          ),
           { startImmediately: true },
         );
 

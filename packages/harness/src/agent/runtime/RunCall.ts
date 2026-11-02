@@ -1,7 +1,6 @@
 /**
  * A tool call made under a run, as only the harness's built-in tools read
- * it (`RunCall`): the run's session, step and callbacks, the session's
- * runs, the response and attempt the call belongs to, the script that
+ * it (`RunCall`): the run's step and callbacks, the session's runs, the response and attempt the call belongs to, the script that
  * issued it, and, for a `script` call, the door its guest calls the run's
  * tools through. `RunCall` is a `Context.Reference` whose default is null,
  * so a standalone host invocation outside a run provides nothing. The
@@ -41,10 +40,10 @@ import { errorResult } from '@tools/core/result';
 import type { RunFileService } from '@utils/files/runStorage';
 
 import type { InvokeError } from './ModelInvoker';
+import type { SessionServices } from './rootLaunch';
 import type { PluginToolServices } from './ToolServices';
 import type { BoundModel } from './modelAccess/ModelAccess';
 import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
-import type { Runs } from './runRegistry';
 import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
@@ -188,18 +187,19 @@ declare module '../core/tools/ToolTypes.js' {
 }
 
 /** The run as the harness's built-in tools read it: what a plugin's tool
- *  sees (`ToolRun`), with its session, its open step and its host
- *  callbacks. */
-type BuiltinRun = ToolRun &
-  Pick<AgentRunShape, 'session' | 'steps' | 'callbacks'>;
+ *  sees (`ToolRun`), with its open step and its host callbacks. A built-in
+ *  reads its session's owners from its run's context. */
+type BuiltinRun = ToolRun & Pick<AgentRunShape, 'steps' | 'callbacks'>;
 
 /** A call made under a run, as its loop dispatched it (`RunCall`). */
 export interface RunCallShape {
   /** The run the call works for, as the built-ins read it. */
   readonly run: BuiltinRun;
-  /** The session's runs, which a built-in hands the launch it makes; no
-   *  tool is served them, a plugin's reaches them through `ChildRuns`. */
-  readonly runs: Runs['Service'];
+  /** The session's services, picked where the loop dispatched the call: a
+   *  built-in runs over them, and so do the doors a plugin's tool calls
+   *  through (its child runs, an edit's review); no plugin tool is served
+   *  them, a plugin's reaches the session's runs through `ChildRuns`. */
+  readonly session: Context.Context<SessionServices>;
   /** The response whose call this is; a script's calls are its script's.
    *  A provider's call ids are unique within one response only. */
   readonly responseId: string;
@@ -225,7 +225,7 @@ export interface RunCallShape {
   readonly scriptCalls: Effect.Effect<
     ScriptDoor,
     never,
-    PluginToolServices
+    PluginToolServices | SessionServices
   > | null;
   /** What the call's `PreToolUse` hooks said, for the review its body
    *  opens (an edit, a plan, a delegation proposal); absent: no answer. */

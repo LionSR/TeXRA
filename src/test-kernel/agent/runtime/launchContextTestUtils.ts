@@ -5,15 +5,11 @@ import { Effect, Schema } from 'effect';
 // Local imports
 import { AgentConfigSchema, type RunId } from '@texra-ai/harness/schemas';
 import type { RunLaunch } from '@agent/runtime/run/AgentRun';
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { PersonaSchema } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 interface TestLaunchContextInit {
   runId: RunId;
-  /** Session owning the run; defaults to the ambient default session. */
-  session?: SessionHandle;
   agent?: string;
   /** Trace the run publishes through; defaults to the silent trace. */
   logger?: RunLaunch['logger'];
@@ -25,7 +21,6 @@ interface TestLaunchContextInit {
  */
 export function createTestLaunchContext({
   runId,
-  session = testDefaultSession(),
   agent = 'assistant',
   logger = noopTrace,
 }: TestLaunchContextInit): RunLaunch {
@@ -38,7 +33,6 @@ export function createTestLaunchContext({
     config,
     persona: Schema.decodeUnknownSync(PersonaSchema)({}),
     runId,
-    session,
     logger,
     parentStage: logger.openStage(`Run: ${config.agent}`),
     opening: {
