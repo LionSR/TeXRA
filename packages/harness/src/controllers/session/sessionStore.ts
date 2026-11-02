@@ -146,15 +146,15 @@ function settlement(
  *  and takes the claim, later ones find it this process's. Only the last to
  *  go decides the claim (`Scope.addFinalizer` keeps no context: in its
  *  closer's transaction): given back to how the holders found it, or
- *  released when a hold `ends` it. The session's close decides whatever is
- *  still held. */
+ *  released when a hold `ends` it, unless a holder here holds it by the
+ *  time that release takes its write lock. Close decides what is left. */
 const claimHolds = (database: Context.Service.Shape<typeof Database>) => {
   type Hold = { count: number; taken: boolean; ended: boolean };
   const holds = new Map<AggregateId, Hold>();
   const decide = (id: AggregateId, hold: Hold) =>
     hold.taken || hold.ended
       ? database
-          .releaseClaims([id])
+          .releaseClaims([id], () => (holds.get(id)?.count ?? 0) > 0)
           .pipe(
             Effect.catch(
               logFailure(
@@ -163,24 +163,26 @@ const claimHolds = (database: Context.Service.Shape<typeof Database>) => {
             ),
           )
       : Effect.void;
+  /** Drop an entry once its release ran, unless it is held again: kept till
+   *  then, a holder that comes back meanwhile keeps its `taken`. */
+  const forget = (id: AggregateId, hold: Hold) =>
+    hold.count === 0 && holds.get(id) === hold && holds.delete(id);
   const letGo = (id: AggregateId, hold: Hold) =>
     Effect.suspend(() => {
       hold.count -= 1;
       if (hold.count > 0 || holds.get(id) !== hold) return Effect.void;
-      holds.delete(id);
-      return decide(id, hold);
+      return decide(id, hold).pipe(
+        Effect.ensuring(Effect.sync(() => forget(id, hold))),
+      );
     });
   const close = Effect.suspend(() => {
     const held = [...holds];
     holds.clear();
-    return Effect.forEach(held, ([id, hold]) => decide(id, hold), {
-      discard: true,
-    });
+    return Effect.forEach(held, ([id, hold]) => decide(id, hold));
   });
   const hold: SessionLogShape['hold'] = (runId, options = {}) => {
     const id = qualifyAggregateId('run', runId);
-    // Taking the claim and recording it are one step: a claim committed
-    // under an interrupt that landed before `taken` would never be released.
+    // One step, so an interrupt cannot leave a claim taken and unrecorded.
     return Effect.uninterruptible(
       Effect.gen(function* () {
         const held = holds.get(id) ?? { count: 0, taken: false, ended: false };
@@ -215,17 +217,15 @@ const transaction =
       let committed: CommitOrdinal | null = null;
       const owned: AggregateId[] = [];
       const release = Effect.suspend(() =>
-        owned.length === 0
-          ? Effect.void
-          : database
-              .releaseClaims(owned)
-              .pipe(
-                Effect.catch(
-                  logFailure(
-                    'Claims a refused transaction took were not released; the next process proves this one dead before it takes them.',
-                  ),
-                ),
+        database
+          .releaseClaims(owned)
+          .pipe(
+            Effect.catch(
+              logFailure(
+                'Claims a refused transaction took were not released; the next process proves this one dead before it takes them.',
               ),
+            ),
+          ),
       );
       const tx = (append: Append): SessionTransaction => ({
         append: (drafts) =>

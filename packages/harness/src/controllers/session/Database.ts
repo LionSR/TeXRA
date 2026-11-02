@@ -974,12 +974,14 @@ export const databaseLayer = (
               yield* reclaimFreePages(sql, path);
             }),
         },
-        releaseClaims: (ids) =>
+        releaseClaims: (ids, heldAgain = () => false) =>
           ids.length === 0
             ? Effect.void
             : transaction(
                 'write',
-                exec(release, [...aggregateLists(ids), identity.ownerId]),
+                exec(release, [...aggregateLists(ids), identity.ownerId]).pipe(
+                  Effect.when(Effect.sync(() => !heldAgain())),
+                ),
                 writeFailed,
                 false,
               ),
