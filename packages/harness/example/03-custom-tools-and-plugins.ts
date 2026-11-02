@@ -93,7 +93,7 @@ const program = Effect.gen(function* () {
     Sessions.layer({
       platform,
       plugins: [...harnessBuiltins, latexMetricsPlugin],
-    }).pipe(Layer.provide(route.transport)),
+    }).pipe(Layer.provideMerge(route.transport)),
   ),
 );
 

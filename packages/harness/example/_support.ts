@@ -175,11 +175,12 @@ export async function makeExampleWorkspace(
   /** The scripted model's requests, in order; empty on a real route. */
   readonly requests: Readonly<Record<string, unknown>>[];
   /** The route the example's runs take: the model they start with, and
-   *  what to provide beneath `Sessions.layer` (the scripted model's
-   *  `ModelFetch`, or nothing on a real route). */
+   *  what to merge beneath `Sessions.layer` (the scripted model's
+   *  `ModelFetch`, or nothing on a real route). `Layer.empty` is no
+   *  `Layer<ModelFetch>`, so the type is the union of the two cases. */
   readonly route: {
     readonly model: string;
-    readonly transport: Layer.Layer<never>;
+    readonly transport: Layer.Layer<ModelFetch> | Layer.Layer<never>;
   };
 }> {
   const requests: Readonly<Record<string, unknown>>[] = [];

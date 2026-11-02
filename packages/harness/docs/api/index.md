@@ -21,8 +21,8 @@ What an embedder needs to know, in order:
 5. `session.attach({ approve })` answers the approvals a run asks for.
 
 Model requests go through the harness's own HTTP transport. To answer them
-yourself (a scripted model in a test), provide {@link ModelFetch} beneath
-`Sessions.layer`.
+yourself (a scripted model in a test), merge {@link ModelFetch} beneath
+`Sessions.layer` with `Layer.provideMerge`.
 
 The surface is Effect: nothing here calls `Effect.runPromise`; your
 program runs it at its own entry point. Every failure is a tagged error
@@ -461,9 +461,10 @@ interface LocalSession extends Session {
 
 The fetch every model request of the process's runs goes through, when the
 embedder supplies one: a fake model for a test or an example, a recording
-or instrumented transport. Provide it beneath `Sessions.layer` (or
-`processLayer`); the supplied fetch then owns the proxy policy and the
-timeouts too. Absent, the harness's own transport carries model traffic:
+or instrumented transport. Merge it beneath `Sessions.layer` (or
+`processLayer`) with `Layer.provideMerge`, so it stays in the context the
+runs read; the supplied fetch then owns the proxy policy and the timeouts
+too. Absent, the harness's own transport carries model traffic:
 the environment's proxy policy, a project's `.env` proxy over it, and the
 long-stream timeouts a streamed reasoning turn needs. A service read as an
 option, not a `Context.Reference`, because that default depends on the

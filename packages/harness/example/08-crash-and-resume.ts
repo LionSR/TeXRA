@@ -87,7 +87,7 @@ const { platform, workspace, requests, route } = await makeExampleWorkspace(
   existing,
 );
 const layer = Sessions.layer({ platform, plugins }).pipe(
-  Layer.provide(route.transport),
+  Layer.provideMerge(route.transport),
 );
 
 const crashProgram = Effect.gen(function* () {

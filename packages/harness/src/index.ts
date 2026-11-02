@@ -18,8 +18,8 @@
  * 5. `session.attach({ approve })` answers the approvals a run asks for.
  *
  * Model requests go through the harness's own HTTP transport. To answer them
- * yourself (a scripted model in a test), provide {@link ModelFetch} beneath
- * `Sessions.layer`.
+ * yourself (a scripted model in a test), merge {@link ModelFetch} beneath
+ * `Sessions.layer` with `Layer.provideMerge`.
  *
  * The surface is Effect: nothing here calls `Effect.runPromise`; your
  * program runs it at its own entry point. Every failure is a tagged error
@@ -46,7 +46,7 @@ export type { AgentPlatform } from '@platform/agentPlatform';
 export type { Composition } from './effect/sessions.js';
 export type { Plugin } from '@tools/plugins';
 export type { WorkspaceRoots } from '@platform/workspaceRoots';
-// The fetch model requests go through, provided beneath `Sessions.layer`:
+// The fetch model requests go through, merged beneath `Sessions.layer`:
 // a fake model for a test, or the harness's own transport when absent.
 export { ModelFetch } from '@platform/defaults/longRunningModelTransport';
 export type {

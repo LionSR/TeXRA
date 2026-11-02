@@ -118,9 +118,10 @@ const longRunningModelFetch = fetchThrough(modelDispatcher);
 /**
  * The fetch every model request of the process's runs goes through, when the
  * embedder supplies one: a fake model for a test or an example, a recording
- * or instrumented transport. Provide it beneath `Sessions.layer` (or
- * `processLayer`); the supplied fetch then owns the proxy policy and the
- * timeouts too. Absent, the harness's own transport carries model traffic:
+ * or instrumented transport. Merge it beneath `Sessions.layer` (or
+ * `processLayer`) with `Layer.provideMerge`, so it stays in the context the
+ * runs read; the supplied fetch then owns the proxy policy and the timeouts
+ * too. Absent, the harness's own transport carries model traffic:
  * the environment's proxy policy, a project's `.env` proxy over it, and the
  * long-stream timeouts a streamed reasoning turn needs. A service read as an
  * option, not a `Context.Reference`, because that default depends on the

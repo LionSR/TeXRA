@@ -405,7 +405,7 @@ Model requests carry their own HTTP transport: the environment's proxy policy
 (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and a 30-minute stream inactivity
 timeout, bound to each model rather than installed as your process's global
 dispatcher. To answer model requests yourself, for a scripted model in a test
-or a recording transport, provide `ModelFetch` (a `fetch`) beneath
+or a recording transport, merge `ModelFetch` (a `fetch`) beneath
 `Sessions.layer`; every model request of the layer's runs then goes through
 it, and it owns the proxy policy and timeouts too:
 
@@ -419,13 +419,16 @@ const scripted: typeof fetch = async () =>
 program.pipe(
   Effect.provide(
     Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
-      Layer.provide(Layer.succeed(ModelFetch)(scripted)),
+      Layer.provideMerge(Layer.succeed(ModelFetch)(scripted)),
     ),
   ),
 );
 ```
 
-Leave it out and the harness's own transport carries the requests.
+The fetch has to stay in the runtime's context, where the runs read it, so
+the sample merges it with `Layer.provideMerge` rather than handing it only to
+the layer's build with `Layer.provide`. Leave it out and the harness's own
+transport carries the requests.
 [`example/_support.ts`](./example/_support.ts) answers with an in-memory
 Anthropic Messages stream this way.
 

@@ -79,7 +79,7 @@ const program = Effect.gen(function* () {
   Effect.scoped,
   Effect.provide(
     Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
-      Layer.provide(route.transport),
+      Layer.provideMerge(route.transport),
     ),
   ),
 );
