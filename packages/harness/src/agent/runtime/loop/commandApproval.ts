@@ -30,7 +30,7 @@ const DEFAULT_BASH_REJECTION_GUIDANCE =
  * offers to turn on; `'superYolo'`, the delegated-work grant, which it does
  * not offer; `null`, a `PreToolUse` hook asked, so only a person answers.
  */
-export const askCommandApproval = (
+export const askCommandApproval = Effect.fn('askCommandApproval')(function* (
   runId: RunId,
   approvals: Pick<SessionApprovals, 'enqueue'>,
   requests: CallRequests,
@@ -39,7 +39,7 @@ export const askCommandApproval = (
     readonly cwd: string | undefined;
     readonly grant: ApprovalBypassKind | null;
   },
-): Effect.Effect<DecisionOf<'bash'>, Error> => {
+): Effect.fn.Return<DecisionOf<'bash'>, Error> {
   // The payload every host lists: a blank directory is dropped, so no
   // renderer decides what an empty `cwd` means.
   const cwd = ask.cwd?.trim();
@@ -56,14 +56,12 @@ export const askCommandApproval = (
       },
     })
     .pipe(Effect.map(({ decision }) => decision));
-  return approvals
-    .enqueue('bash', runId, {
-      grant: ask.grant,
-      prompt,
-      bypassed: Effect.succeed<DecisionOf<'bash'>>({ action: 'approve' }),
-    })
-    .pipe(Effect.withSpan('askCommandApproval'));
-};
+  return yield* approvals.enqueue('bash', runId, {
+    grant: ask.grant,
+    prompt,
+    bypassed: Effect.succeed<DecisionOf<'bash'>>({ action: 'approve' }),
+  });
+});
 
 /** What the model is told when the person refuses `command`. */
 export function commandRejectedResult(
