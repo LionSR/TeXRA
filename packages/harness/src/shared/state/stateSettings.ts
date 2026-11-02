@@ -187,7 +187,9 @@ const HARNESS_CONFIG_ROWS: Record<
   // Global, as the cap is: the strategy is what checks the cap, so a
   // committed project config must not pick one that ignores it.
   [GOAL_STRATEGY_SETTING.configKey]: {
-    schema: Schema.String.check(Schema.isPattern(/^builtIn:./)).pipe(
+    schema: Schema.String.check(
+      Schema.isPattern(/^builtIn:[A-Za-z0-9_-]+$/),
+    ).pipe(
       Schema.withDecodingDefault(
         Effect.succeed(GOAL_STRATEGY_SETTING.defaultValue),
       ),

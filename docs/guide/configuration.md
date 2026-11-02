@@ -148,13 +148,13 @@ A new ID is made on the next send.
 
 ## Goal mode
 
-A goal is a script that runs the agent again, in rounds. Each round
-continues the conversation as it stood when the goal started, is given the
-objective and the last round's report, works toward the objective with the
-agent's own tools, and ends by submitting a verdict: done, keep going, or
-needs you. The goal ends when a round verifies the objective, when a round
-needs you, or at the spend cap, and its result says which, with the last
-report.
+A goal is a script that runs the agent again, in rounds. By default, each
+round continues the conversation as it stood when the goal started, is given
+the objective and the last round's report, works toward the objective with
+the agent's own tools, and ends by submitting a verdict: done, keep going,
+or needs you. The goal ends when a round verifies the objective, when a
+round needs you, or at the spend cap, and its result says which, with the
+last report.
 
 Approving a plan with **Run as goal** (press `r` in the terminal) runs the
 plan as a goal: a background script of the conversation, which you can
