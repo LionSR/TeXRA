@@ -659,7 +659,9 @@ const driveProcess = Effect.fn('childRunLoop.driveProcess')(function* <
 });
 
 /** A user's stop of a native child queues what it left for its parent to
- *  resume; a notice that cannot be read still says the child stopped. */
+ *  resume; a notice that cannot be read still says the child stopped. The
+ *  parent hears the end the store holds: a stop that lands after the run's
+ *  own end leaves that end, and the delivery it carried, as told. */
 const sendStopNotice = Effect.fn('childRunLoop.sendStopNotice')(function* <
   TTurn,
   R,
@@ -671,6 +673,8 @@ const sendStopNotice = Effect.fn('childRunLoop.sendStopNotice')(function* <
     loop.runs.stopCause(runId) !== 'user'
   )
     return;
+  const held = (yield* (yield* SessionLog).facts(runId))?.end?.outcome;
+  if (held !== undefined && held !== RUN_OUTCOME.CANCELLED) return;
   const text = yield* strategy
     .stopNotice()
     .pipe(
