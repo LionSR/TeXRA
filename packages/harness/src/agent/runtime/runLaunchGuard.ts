@@ -372,18 +372,16 @@ export const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   // A resume refused once it decides is reported; one blocked on a missing
   // agent or plugin is the catalog follower's to retry, and one that failed
   // is left for the next resume, said once.
+  const told = (what: string) => (error: unknown) =>
+    warn(undefined, `Child run ${run.id} ${what}`, { parent, error });
   yield* Effect.forkScoped(
     Effect.matchEffect(attempt.answer, {
       onSuccess: (answer) =>
         'failed' in answer && answer.failed.kind !== 'blocked'
           ? report(answer.failed.kind)
           : Effect.void,
-      onFailure: (error) => warn(undefined, `${run.id} not resumed`, error),
-    }).pipe(
-      Effect.catch((error) =>
-        warn(undefined, `${run.id}'s interruption not reported`, error),
-      ),
-    ),
+      onFailure: told('was not resumed'),
+    }).pipe(Effect.catch(told('was not reported interrupted'))),
   );
 });
 
