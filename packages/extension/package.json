@@ -534,7 +534,7 @@
     "@texra-ai/harness": "workspace:*",
     "@texra-ai/llm": "workspace:*",
     "@types/vscode": "^1.125.0",
-    "@vscode/vsce": "^4.0.0",
+    "@vscode/vsce": "^4.1.0",
     "concurrently": "^10.0.6",
     "effect": "catalog:",
     "esbuild": "^0.28.2",
