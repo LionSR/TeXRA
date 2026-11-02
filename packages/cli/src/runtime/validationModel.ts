@@ -212,7 +212,8 @@ function goldenTurn(
   }
   if (system.includes('GOLDEN-SCRIPT')) {
     // A background command waiting for its release file; its result wakes
-    // the task once more.
+    // the task once more. The wait is Node's, not a shell loop: the bash
+    // tool runs a command in cmd.exe on Windows, which has no `until`.
     if (said.includes('Run in the background.')) {
       const last = turn.messages.at(-1);
       if (last?.role === 'tool')
@@ -221,8 +222,7 @@ function goldenTurn(
         JSON.stringify(last).includes('Run in the background.')
           ? [
               call('bash', {
-                command:
-                  'until [ -e ../bash.release ]; do sleep 0.05; done; echo released',
+                command: `node -e "const wait = setInterval(() => { if (require('fs').existsSync('../bash.release')) { clearInterval(wait); console.log('released'); } }, 50)"`,
                 description: 'Wait for the release',
                 run_in_background: true,
               }),
