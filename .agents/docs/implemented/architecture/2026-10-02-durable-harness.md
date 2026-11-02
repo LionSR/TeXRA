@@ -68,8 +68,10 @@ base is no longer the latest.
   `run.start.provenance` is `{ kind: 'fork', from, at }` and whose first row is
   a view edit seeded with the source's view at `at`. The cut must be a settled
   position; anything else is refused. Pending sets are not copied: follow-ups,
-  requests and retry permits start empty, and usage starts at zero. Plugin facts
-  are not copied; goal mode is paused, as on resume.
+  requests and retry permits start empty, and usage starts at zero. Run-owned
+  plugin facts follow each kind's `FactKind.fork` policy: `copy` restates the
+  latest fact at the cut; `drop` starts without it. The goal plugin's approved
+  plan is copied. Facts of a plugin's own aggregate stay with that aggregate.
 
 ## Auto-continue on open, blocked until installed
 
@@ -144,8 +146,8 @@ the same rule as npm publication.
   which catches writers outside the lane. Nested script edits go through the
   same per-call program.
 - **`defineDoc`.** `plugin.fact` is typed and versioned per plugin, with
-  upcasters. A fork does not copy plugin facts. Third-party plugins have no
-  durable state for 1.0.
+  upcasters and a per-kind fork policy. These rows provide plugin-owned durable
+  state without a separate document store.
 - **The live tree as a `FiberSet` per parent.** Children fork on the session
   through the one launch door (rule R2 of the
   [core concepts](./2026-09-26-core-concepts.md)), so a child never inherits its
