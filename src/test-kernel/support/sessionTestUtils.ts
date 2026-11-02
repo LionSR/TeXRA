@@ -3,9 +3,8 @@ import '@test/support/sessionGraphTestSetup';
 import { Effect, Context } from 'effect';
 import { TraceEmitter } from '@agent/trace';
 import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
-import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { SessionRoots } from '@platform/rootedFs';
 import {
   runStateAppend,
   SessionLog,
@@ -33,10 +32,6 @@ import {
   type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { generateRunId } from '@shared/schemas';
-import {
-  closeSessionOf,
-  openTestDefaultSession,
-} from '@test/support/sessionEnd';
 import { testSessionOwner } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
@@ -78,38 +73,6 @@ export const createTestSession = (
       }),
     });
   });
-
-/**
- * Open a fresh session over the process roots, for a file that seeds or
- * reads the process storage outside the session's scope. One root holds one
- * session, so a session still open there (a previous test's) is released
- * first, and its release is awaited: `dispose` settles once the root's entry
- * has unwound, and an open issued before that would race it. The caller
- * gets its own session, over the store it supplies.
- */
-export function createProcessSession(
-  init: TestSessionInit = {},
-): Effect.Effect<Context.Context<SessionServices>, SessionOpenError> {
-  return Effect.gen(function* () {
-    const roots = testWorkspaceRoots();
-    const owner = yield* SessionOwner;
-    const predecessors = (yield* owner.list).filter(
-      (live) => Context.get(live, SessionRoots).storage === roots.storage,
-    );
-    yield* Effect.forEach(predecessors, (live) => closeSessionOf(live), {
-      discard: true,
-    });
-    // The session over the process roots is the file's default session.
-    const { persistent, ...open } = init;
-    return yield* openTestDefaultSession({
-      ...open,
-      roots,
-      ...(!persistent && {
-        transcriptMode: init.transcriptMode ?? { kind: 'ephemeral' },
-      }),
-    });
-  }).pipe(Effect.provideServiceEffect(SessionOwner, testSessionOwner));
-}
 
 /**
  * Enqueue rows on the session's publisher and return at once, as a detached
