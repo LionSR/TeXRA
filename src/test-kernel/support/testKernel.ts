@@ -306,8 +306,9 @@ export const sessionHandleOf = (
     }),
   );
 
-/** The sessions `isolatedTestSession` opened in this file, which name their
- *  storage roots. */
+/** The sessions `isolatedTestSession` opened in this worker, across every
+ *  file it runs: each names its storage root by its number, so no two of
+ *  them share one. */
 let isolatedSessions = 0;
 
 /**
