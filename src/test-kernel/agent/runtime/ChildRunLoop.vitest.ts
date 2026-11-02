@@ -10,7 +10,14 @@ import '@test/support/sessionGraphTestSetup';
 // since delivery/interrupt/terminal choreography all live in the loop.
 
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, SubscriptionRef } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  SubscriptionRef,
+  Context,
+} from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -19,10 +26,23 @@ const mocks = vi.hoisted(() => ({
 
 // A delivery commits with its settlement; the parent's wake after it is
 // what a fixture holds open or observes.
-vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agent/followUp/ToolUseFollowUp')>()),
-  wakeRun: mocks.wakeRun,
-}));
+vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@agent/followUp/ToolUseFollowUp')>();
+  return {
+    ...original,
+    wakeRun: mocks.wakeRun,
+    // The parent's wake reaches `wakeRun` inside its module, which the mock
+    // above cannot replace: the owed check is the original's, its wake the
+    // mock's.
+    wakeIfOwed: (runId: RunId) =>
+      Effect.gen(function* () {
+        const owed = yield* (yield* original.Inbox).owesResume(runId);
+        if (owed === undefined) return false;
+        return owed ? yield* mocks.wakeRun(runId) : Effect.void;
+      }),
+  };
+});
 
 import {
   generateRunId,
@@ -36,8 +56,11 @@ import {
   type ChildRunLoopParams,
   type NativeChildStrategy,
 } from '@agent/runtime/childRunLoop';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { createChildRun } from '@agent/runtime/delegation/childRun';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { SessionRoots } from '@platform/rootedFs';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { closeTestDefaultSession } from '@test/support/sessionEnd';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { sessionStoreFaults } from '@test/support/storeFaults';
@@ -58,7 +81,7 @@ import type { ProcessChildStrategy } from '@texra-ai/harness/plugins';
 const tempDirs = useTempDirs();
 setupPlatform(() => createTempDirPlatform('texra-child-loop-', tempDirs));
 
-let session: SessionHandle;
+let session: Context.Context<SessionServices>;
 
 const PARENT_RUN_ID = 'ffff01' as RunId;
 
@@ -151,7 +174,7 @@ function createFakeStrategy(): FakeStrategyHandle {
 
 /** A process child's port for `runId`. */
 const childRunPort = (runId: RunId) =>
-  Effect.sync(() => createChildRun(session, runId));
+  Effect.sync(() => createChildRun(Context.get(session, SessionLog), runId));
 
 /**
  * Start a process child's loop with the fixture defaults (a port of its own
@@ -168,14 +191,13 @@ const startLoop = (
   Effect.gen(function* () {
     const childRun = extras.childRun ?? (yield* childRunPort(runId));
     const started = yield* startChildRunLoop({
-      session,
       runId,
       parentRunId: PARENT_RUN_ID,
       agentName: 'fake',
       ...extras,
       childRun,
       strategy,
-    }).pipe(Effect.provideService(Runs, session.runs));
+    }).pipe(Effect.provide(session));
     return started.fiber;
   });
 
@@ -187,7 +209,6 @@ const startNativeLoop = (
   budgeted = false,
 ) =>
   startChildRunLoop({
-    session,
     runId,
     parentRunId: PARENT_RUN_ID,
     agentName: 'fake',
@@ -195,27 +216,32 @@ const startNativeLoop = (
     strategy,
   }).pipe(
     Effect.map((started) => started.fiber),
-    Effect.provideService(Runs, session.runs),
+    Effect.provide(session),
   );
 
 /** The run's `run.end` rows, in order. */
 const runEnds = (runId: RunId) =>
   Effect.map(
-    session.log.runRows(qualifyAggregateId('run', runId), 'lifecycle'),
+    Context.get(session, SessionLog).runRows(
+      qualifyAggregateId('run', runId),
+      'lifecycle',
+    ),
     (rows) => rows.lifecycles.filter((row) => row.type === 'run.end'),
   );
 
 /** The next `run.end` the store is asked to commit is refused, for the
  *  rest of the test's scope. */
 const refuseNextRunEnd = Effect.gen(function* () {
-  const faults = yield* sessionStoreFaults(session.roots.storage);
+  const faults = yield* sessionStoreFaults(
+    Context.get(session, SessionRoots).storage,
+  );
   yield* faults.failNext('appendAll', 'run.end');
 });
 
 beforeEach(async () => {
   session = await Effect.runPromise(createProcessSession({ persistent: true }));
   publishTestRunStart(session, PARENT_RUN_ID);
-  await Effect.runPromise(session.log.settled);
+  await Effect.runPromise(Context.get(session, SessionLog).settled);
   vi.clearAllMocks();
   mocks.wakeRun.mockReturnValue(Effect.succeed(Effect.void));
 });
@@ -230,38 +256,43 @@ describe('childRunLoop E2E fixtures', () => {
     (outcome) =>
       Effect.gen(function* () {
         const runId = loopRunId();
-        yield* session.log.settled;
-        yield* session.log.hold(runId);
+        yield* Context.get(session, SessionLog).settled;
+        yield* Context.get(session, SessionLog).hold(runId);
         const launch = () =>
           Effect.andThen(
             Effect.yieldNow,
             Effect.fail(new Error('Engine startup failed')),
           );
-        let stop: ReturnType<typeof session.runs.stop> | undefined;
+        let stop: ReturnType<Runs['Service']['stop']> | undefined;
         // The stop lands once the launch opened its activation, before its
         // program runs.
-        const registry = registryOf(session.runs);
+        const registry = registryOf(Context.get(session, Runs));
         const start = registry.start.bind(registry);
-        const claim = vi
-          .spyOn(registry, 'start')
-          .mockImplementationOnce((...args) =>
-            Effect.tap(start(...args), () =>
+        // cast: the generic `start`'s parameters infer as never; the spy
+        // forwards them unchanged.
+        const forward = start as (
+          ...args: readonly unknown[]
+        ) => Effect.Effect<Fiber.Fiber<unknown, unknown>>;
+        const claim = vi.spyOn(registry, 'start').mockImplementationOnce(
+          // cast: the forwarding body is `start` itself, typed as such.
+          ((...args: readonly unknown[]) =>
+            Effect.tap(forward(...args), () =>
               Effect.sync(() => {
                 if (outcome === RUN_OUTCOME.CANCELLED)
-                  stop = session.runs.stop(runId, {
+                  stop = Context.get(session, Runs).stop(runId, {
                     reason: 'user',
                     detachActiveChildren: false,
                   });
               }),
-            ),
-          );
+            )) as typeof start,
+        );
         const loop = yield* startNativeLoop(runId, {
           stageLabel: 'Engine startup',
           launch,
           formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
           formatError: () => 'error',
         }).pipe(Effect.ensuring(Effect.sync(() => claim.mockRestore())));
-        if (stop) yield* stop.settlement;
+        if (stop) yield* stop.settlement.pipe(Effect.provide(session));
         // A stopped loop's fiber ends interrupted.
         yield* Fiber.await(loop);
 
@@ -281,7 +312,7 @@ describe('childRunLoop E2E fixtures', () => {
         const loop = yield* startLoop(runId, strategy);
 
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
-        yield* session.followUps.send(runId, {
+        yield* Context.get(session, Inbox).send(runId, {
           text: 'keep going',
           from: { kind: 'user' as const },
         });
@@ -331,8 +362,10 @@ describe('childRunLoop E2E fixtures', () => {
             // Snapshot registry state the instant the wake step is reached. The
             // same moment a resumed parent's own turn would begin running.
             skippedAtWakeTime = shouldSkipWait(
-              session,
-              SubscriptionRef.getUnsafe(session.view.ref),
+              Context.get(session, Runs),
+              SubscriptionRef.getUnsafe(
+                Context.get(session, SessionViewAccess).ref,
+              ),
               runId,
             );
             yield* Deferred.succeed(wakeReached, undefined);
@@ -353,7 +386,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         yield* Deferred.succeed(releaseWake, undefined);
         yield* Fiber.join(loop);
-        expect(session.runs.get(runId)).toBeUndefined();
+        expect(Context.get(session, Runs).get(runId)).toBeUndefined();
       }),
   );
 
@@ -372,7 +405,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
         yield* Deferred.await(firstDelivered);
-        yield* session.followUps.send(runId, {
+        yield* Context.get(session, Inbox).send(runId, {
           text: 'resume please',
           from: { kind: 'user' as const },
         });

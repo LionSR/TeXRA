@@ -7,6 +7,7 @@
  */
 import {
   Cause,
+  Context,
   Deferred,
   Duration,
   Effect,
@@ -17,9 +18,15 @@ import {
   Stream,
 } from 'effect';
 
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  Interactions,
+  type HostInteractions,
+} from '@agent/runtime/HostInteractions';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { withLogChannel } from '@logger/effectLog';
+import { attentionOf } from '@shared/session/sessionView';
+import { SessionViewAccess } from '@shared/session/runHistory';
 import {
   answerMismatch,
   blocksCaller,
@@ -29,7 +36,6 @@ import type {
   PendingRequest,
   SessionView,
 } from '@shared/session/readonlyViews';
-import { attentionOf } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { ApprovalHandler, SessionHost } from './sessions.js';
@@ -126,11 +132,11 @@ export const followPendingRequests = <P extends PendingRequest, R>(
  * interrupted.
  */
 const answerRequests = (
-  session: RuntimeSessionHandle,
+  session: Context.Context<SessionServices>,
   host: AnsweringHost,
 ): Effect.Effect<void, never, Scope.Scope> =>
   followPendingRequests(
-    session.view,
+    Context.get(session, SessionViewAccess),
     (view) =>
       attentionOf(view).requests.filter((pending) =>
         blocksCaller(pending.payload),
@@ -138,14 +144,17 @@ const answerRequests = (
     (pending) =>
       decisionOf(host, pending).pipe(
         Effect.flatMap((decision) =>
-          session.requests
+          Context.get(session, SessionRequests)
             .request({
               kind: 'request.decide',
               runId: pending.runId,
               requestId: pending.requestId,
               decision,
             })
-            .pipe(Effect.retry({ schedule: DECIDE_RETRY, times: 3 })),
+            .pipe(
+              Effect.provide(session),
+              Effect.retry({ schedule: DECIDE_RETRY, times: 3 }),
+            ),
         ),
         // A decided request stays held until the view drops it, so the fold
         // catching up cannot re-ask it.
@@ -171,14 +180,14 @@ const answerRequests = (
  * surface says.
  */
 export function attachHost(
-  session: RuntimeSessionHandle,
+  session: Context.Context<SessionServices>,
   host: SessionHost,
 ): Effect.Effect<void, never, Scope.Scope> {
   return Effect.gen(function* () {
     // The session disposes its host as it closes: the answerer ends then.
     const ended = yield* Deferred.make<void>();
     yield* Effect.acquireRelease(
-      session.interactions.use(
+      Context.get(session, Interactions).use(
         overlay(host, () => Deferred.doneUnsafe(ended, Effect.void)),
       ),
       (detach) => Effect.sync(detach),

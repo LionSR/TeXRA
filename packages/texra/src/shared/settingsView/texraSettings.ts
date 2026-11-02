@@ -19,6 +19,7 @@ import { Effect, Schema } from 'effect';
 // Local imports
 import {
   configTreeRows,
+  GlobalStateKey,
   settingsCatalog,
   type SettingsCatalog,
   type StateSettingEntry,
@@ -300,10 +301,19 @@ const TEXRA_SETTING_ROWS: readonly (StateSettingEntry | TexraSettingRow)[] = [
   ...[...CODEX_SETTINGS, ...CLAUDE_AGENT_SETTINGS].map(({ row }) => row),
 ];
 
+/**
+ * TeXRA's helper model while the person has chosen none (polishing, agent
+ * creation, merge, session descriptions). DeepSeek V4.1 Flash is the cheapest
+ * capable option (~$0.15/$0.60 per MTok) and keeps these one-shot,
+ * non-streaming helper calls fast.
+ */
+const DEFAULT_HELPER_MODEL = 'deepseek/deepseek-flash@none';
+
 /** The catalog every host's config carries: the harness's rows and TeXRA's. */
 const catalog: SettingsCatalog = settingsCatalog({
   namespace: 'texra',
   rows: TEXRA_SETTING_ROWS,
+  defaults: { [GlobalStateKey.HELPER_MODEL]: DEFAULT_HELPER_MODEL },
 });
 
 function hasOwnSurfaces(row: StateSettingEntry): row is TexraSettingRow {

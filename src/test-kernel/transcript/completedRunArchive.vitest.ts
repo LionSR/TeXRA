@@ -1,6 +1,6 @@
 import { it } from '@effect/vitest';
 /** Completed conversation reads and task reads through the archive facade. */
-import { Effect, Schema } from 'effect';
+import { Effect, Schema, Context } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
@@ -13,8 +13,10 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { withProcessServices } from '@texra-ai/harness/host';
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { resumeRun } from '@agent/runtime/resumeRun';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionRoots } from '@platform/rootedFs';
+import { SessionLog } from '@shared/session/runHistory';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
@@ -50,10 +52,12 @@ function runConfig(
   });
 }
 
-let taskSession: SessionHandle;
+let taskSession: Context.Context<SessionServices>;
 
-function closeTestSession(session: SessionHandle): Effect.Effect<void, Error> {
-  return closeSessionAt(session.roots.storage).pipe(
+function closeTestSession(
+  session: Context.Context<SessionServices>,
+): Effect.Effect<void, Error> {
+  return closeSessionAt(Context.get(session, SessionRoots).storage).pipe(
     Effect.flatMap((report) =>
       report.settled && report.abandoned.length === 0
         ? Effect.void
@@ -108,7 +112,7 @@ describe('completedRunArchive facade', () => {
         });
         taskSession = session;
         publishTestRunStart(session, runId);
-        yield* session.log.settled;
+        yield* Context.get(session, SessionLog).settled;
         yield* seedRunRecord(session, runId, config);
         publishTestRows(session, [
           {
@@ -124,10 +128,10 @@ describe('completedRunArchive facade', () => {
             text: 'First proof.',
           },
         ]);
-        yield* session.log.settled;
+        yield* Context.get(session, SessionLog).settled;
 
         // The one fact a resume reads: the run's opening `run.position`.
-        yield* seedRows(session.log)([
+        yield* seedRows(Context.get(session, SessionLog))([
           {
             type: 'run.position',
             aggregateId: qualifyAggregateId('run', runId),
@@ -150,17 +154,19 @@ describe('completedRunArchive facade', () => {
             text: 'Second proof.',
           },
         ]);
-        yield* session.log.settled;
+        yield* Context.get(session, SessionLog).settled;
 
         // The resumed launch stops before it enters the run (no provider key
         // binds its model): it writes nothing and lets the claim go.
         expect(
-          (yield* Effect.flip(resumeRun(runId, { session }))).message,
+          (yield* Effect.flip(
+            resumeRun(runId, {}).pipe(Effect.provide(session)),
+          )).message,
         ).toContain('Missing API key');
 
         expect(
           (yield* Effect.exit(
-            session.log.transact([
+            Context.get(session, SessionLog).transact([
               {
                 type: 'log',
                 aggregateId: qualifyAggregateId('run', runId),
@@ -170,12 +176,12 @@ describe('completedRunArchive facade', () => {
             ]),
           ))._tag,
         ).toBe('Failure');
-        expect(yield* session.log.owns(runId)).toBe(false);
+        expect(yield* Context.get(session, SessionLog).owns(runId)).toBe(false);
 
         const archived = yield* readCompletedRunConversationEffect(
           runId,
-          session,
-        );
+          Context.get(session, SessionRoots).config,
+        ).pipe(Effect.provide(session));
         expect(archived).toEqual([
           {
             kind: 'user-message',
@@ -191,7 +197,7 @@ describe('completedRunArchive facade', () => {
 
         const toolLayer = nativeToolTestLayer({
           run: { session: taskSession, runId, toolPolicy: {} },
-          roots: taskSession.roots,
+          roots: Context.get(taskSession, SessionRoots),
         });
 
         const firstPage = yield* ExecutionsTool.call({

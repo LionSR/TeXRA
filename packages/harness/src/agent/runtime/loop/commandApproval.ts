@@ -6,12 +6,16 @@ import { Effect } from 'effect';
 
 import type { CallRequests } from '@agent/core/tools/ToolTypes';
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import type { DecisionOf, RefusalDecision, ToolResult } from '@shared/schemas';
+import type {
+  DecisionOf,
+  RefusalDecision,
+  RunId,
+  ToolResult,
+} from '@shared/schemas';
 import { refusalCopy } from '@shared/session/approvalDecision';
+import type { SessionApprovals } from '@shared/session/sessionApprovals';
 import { errorResult } from '@tools/core/result';
 import { previewLabel } from '@utils/text/stringUtils';
-
-import type { AgentRunShape } from '../run/AgentRun';
 
 const DEFAULT_BASH_REJECTION_GUIDANCE =
   'Do not retry this rejected command or another approval-gated shell command for the same check. ' +
@@ -27,7 +31,8 @@ const DEFAULT_BASH_REJECTION_GUIDANCE =
  * not offer; `null`, a `PreToolUse` hook asked, so only a person answers.
  */
 export const askCommandApproval = (
-  run: Pick<AgentRunShape, 'runId' | 'session'>,
+  runId: RunId,
+  approvals: Pick<SessionApprovals, 'enqueue'>,
   requests: CallRequests,
   ask: {
     readonly command: string;
@@ -35,7 +40,6 @@ export const askCommandApproval = (
     readonly grant: ApprovalBypassKind | null;
   },
 ): Effect.Effect<DecisionOf<'bash'>, Error> => {
-  const { runId, session } = run;
   // The payload every host lists: a blank directory is dropped, so no
   // renderer decides what an empty `cwd` means.
   const cwd = ask.cwd?.trim();
@@ -52,7 +56,7 @@ export const askCommandApproval = (
       },
     })
     .pipe(Effect.map(({ decision }) => decision));
-  return session.approvals
+  return approvals
     .enqueue('bash', runId, {
       grant: ask.grant,
       prompt,

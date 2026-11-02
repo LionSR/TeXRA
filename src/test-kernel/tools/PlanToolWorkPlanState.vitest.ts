@@ -3,7 +3,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, Context } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 import {
   APPROVAL_BYPASS_KINDS,
@@ -15,6 +15,8 @@ import {
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
+import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { Approvals } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -86,10 +88,10 @@ describe('PlanTool — update (plan approval)', () => {
           const { session, awaitPlanRequest } = yield* planSession(runId);
 
           yield* Effect.addFinalizer(() =>
-            Effect.sync(() => session.followUps.forget(runId)),
+            Effect.sync(() => Context.get(session, Inbox).forget(runId)),
           );
 
-          yield* session.approvals.change(
+          yield* Context.get(session, Approvals).change(
             runId,
             humanGrant(APPROVAL_BYPASS_KINDS, true),
           );

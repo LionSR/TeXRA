@@ -1,6 +1,6 @@
 // Test harness: seed the session fold with synthetic runs and rows, render
 // <App /> to the real terminal. Every fixture is published through the
-// runtime session (`SessionHandle.log`, the transcript store, the
+// runtime session (its log, the transcript store, the
 // interaction port), so the TUI under test renders the same `SessionView` a
 // live chat does. Used to verify the TUI without API access. Exits on Ctrl-C.
 
@@ -26,10 +26,19 @@ import {
   describeFollowUpFailure,
   Secrets,
 } from '@texra-ai/harness/host';
+import { Interactions } from '@agent/runtime/HostInteractions';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
+import { SessionRoots } from '@platform/rootedFs';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
+import {
+  RunHistory,
+  SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
+import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
 import { runBypasses } from '@shared/approvalBypassKind';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
@@ -64,15 +73,14 @@ import {
   type SessionEventDraft,
   type UserQuestionPermission,
   aggregateTarget,
+  type ToolEditContent,
 } from '@shared/schemas';
 import type { DraftBlob } from '@shared/session/historyTurns';
-import type { ToolEditContent } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
-import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import {
   buildScenario,
@@ -376,7 +384,7 @@ if (HARNESS_MEMORY_FILES.length > 0) {
   });
 }
 // The persistent session `initCliPlatform` opened over the harness roots,
-// and its internal handle, which the fixtures seed rows through: the same
+// and its internal owners, which the fixtures seed rows through: the same
 // root's, from the process's session owner.
 const harnessRunSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.session,
@@ -414,9 +422,18 @@ await harnessRuntime.runPromise(AgentCatalog.use((catalog) => catalog.refresh));
 
 const HARNESS_DISPOSERS: Array<() => void> = [];
 
-/** The session every fixture publishes into and the TUI renders. */
+/** The owners of the session every fixture publishes into and the TUI
+ *  renders. */
+const harnessOwners = {
+  log: Context.get(harnessRuntimeSession, SessionLog),
+  runHistory: Context.get(harnessRuntimeSession, RunHistory),
+  view: Context.get(harnessRuntimeSession, SessionViewAccess),
+  interactions: Context.get(harnessRuntimeSession, Interactions),
+  requests: Context.get(harnessRuntimeSession, SessionRequests),
+  roots: Context.get(harnessRuntimeSession, SessionRoots),
+};
 function session() {
-  return harnessRuntimeSession;
+  return harnessOwners;
 }
 
 /**
@@ -498,7 +515,13 @@ HARNESS_DISPOSERS.push(
   Effect.runSync(
     session().interactions.use(
       createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
-        requests: { request: session().requests.request, view: session().view },
+        requests: {
+          request: (req) =>
+            session()
+              .requests.request(req)
+              .pipe(Effect.provide(harnessRuntimeSession)),
+          view: session().view,
+        },
         settings: HARNESS_PLATFORM_SERVICES,
         runtime: harnessRuntime,
       }),

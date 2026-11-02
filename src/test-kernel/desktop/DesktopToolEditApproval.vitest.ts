@@ -7,9 +7,11 @@ import {
   type FileSystem,
   type Path,
   SubscriptionRef,
+  Context,
 } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { testSessionOf, testRuntime } from '@test/support/testProcessRuntime';
 import { closeSessionOf } from '@test/support/sessionEnd';
 
@@ -128,7 +130,7 @@ describe('desktop tool edit approval', () => {
           // A request row is only ever appended to a run the history knows.
           const runId = 'a40000' as RunId;
           publishTestRunStart(session, runId);
-          yield* session.log.settled;
+          yield* Context.get(session, SessionLog).settled;
           const result = yield* Effect.forkScoped(
             requestToolEditApproval({
               path: '/workspace/notes.txt',
@@ -149,8 +151,9 @@ describe('desktop tool edit approval', () => {
           yield* Effect.tryPromise(() =>
             vi.waitFor(() => expect(window.staged).toHaveLength(1), 10_000),
           );
-          const { requestId } = SubscriptionRef.getUnsafe(session.view.ref)
-            .requests[0]!;
+          const { requestId } = SubscriptionRef.getUnsafe(
+            Context.get(session, SessionViewAccess).ref,
+          ).requests[0]!;
 
           // The user opens the proposed copy and edits it on disk.
           yield* onRuntime(

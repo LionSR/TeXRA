@@ -2044,12 +2044,16 @@ type SessionView = ReadonlyDeep<typeof SessionViewSchema.Type>;
 ## settingsCatalog
 
 The harness's rows, then `rows` (an app's own, its plugins' included),
-stored under `namespace`. A key declared twice is a defect and throws.
+stored under `namespace`. A key declared twice is a defect and throws, and
+so does a `defaults` key that names no harness row.
 
 ```ts
 function settingsCatalog(options: {
   readonly namespace: string;
   readonly rows: readonly StateSettingEntry[];
+  /** The app's own defaults for harness rows, by key: the value an absent
+   *  key reads as (the helper model, which the harness leaves unset). */
+  readonly defaults?: Readonly<Record<string, unknown>>;
 }): SettingsCatalog
 ```
 

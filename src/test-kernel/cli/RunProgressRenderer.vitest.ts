@@ -1,12 +1,12 @@
 import { layer } from '@effect/vitest';
-import { Effect, Exit, Schema, Scope } from 'effect';
+import { Effect, Exit, Schema, Scope, type Context } from 'effect';
 import { expect } from 'vitest';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import { USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
@@ -32,7 +32,10 @@ async function settle(): Promise<void> {
 }
 /** A run on a real session: its `run.start`, the config the fold reads the
  *  inputs from, and the RUNNING transition. */
-function publishRun(session: SessionHandle, runId: RunId): void {
+function publishRun(
+  session: Context.Context<SessionServices>,
+  runId: RunId,
+): void {
   const agent = 'polish';
   publishTestRows(session, [
     {

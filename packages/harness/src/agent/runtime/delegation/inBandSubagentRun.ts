@@ -26,8 +26,11 @@ import type {
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { runRejection } from '@agent/storage/resumability';
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
-import type { AgentRunServices } from '@agent/runtime/runRegistry';
+import {
+  registryOf,
+  Runs,
+  type AgentRunServices,
+} from '@agent/runtime/runRegistry';
 import {
   createNativeSubagentStrategy,
   type ChildRunLaunchOptions,
@@ -143,7 +146,6 @@ const executeInBand = Effect.fn('executeInBand')(
     const startedAt = yield* Clock.currentTimeMillis;
     const workingDirectory = config.workingDirectory ?? undefined;
     const { fiber, lastTurn } = yield* startDetachedChildRunLoop({
-      session: options.session,
       runId,
       parentRunId: options.parentRunId,
       agentName: config.agent,
@@ -167,7 +169,7 @@ const executeInBand = Effect.fn('executeInBand')(
             {
               resume: {
                 config,
-                parent: persistedParentRunId(options.session, runId),
+                parent: persistedParentRunId(runId),
                 stopAfterCycle: true,
               },
             }),
@@ -199,9 +201,7 @@ const executeInBand = Effect.fn('executeInBand')(
     // own lifecycle; the manifest carries only the output as this turn's
     // delivery enriched it. A read failure is kept apart from an absent row
     // so the thrown error can name the I/O cause.
-    const endExit = yield* Effect.exit(
-      getRunRecords(options.session, runId).readRunEnd(),
-    );
+    const endExit = yield* Effect.exit(getRunRecords(runId).readRunEnd());
     const runEnd = Exit.isSuccess(endExit) ? endExit.value : null;
     const endFailure = Exit.isFailure(endExit)
       ? Cause.squash(endExit.cause)
@@ -230,7 +230,7 @@ const executeInBand = Effect.fn('executeInBand')(
     // thrown error blames the I/O cause rather than persistence.
     {
       const persistedExit = yield* Effect.exit(
-        getRunRecords(options.session, runId).readResultMeta(),
+        getRunRecords(runId).readResultMeta(),
       );
       const readFailure = Exit.isFailure(persistedExit)
         ? Cause.squash(persistedExit.cause)
@@ -314,7 +314,6 @@ export const executeSubagentInBand = (
         config: Schema.decodeUnknownSync(AgentConfigSchema)(
           options.configPayload,
         ),
-        session: options.session,
         stopAfterCycle: true,
       });
       return yield* executeInBand(options, { kind: 'fresh', definition });
@@ -334,15 +333,12 @@ export const resumeSubagentInBand = (
   awaitInBand(
     options.runId,
     Effect.gen(function* () {
-      const rejection = yield* runRejection(options.runId, options.session);
+      const rejection = yield* runRejection(options.runId);
       if (rejection !== null)
         return yield* new SubagentDurabilityError({
           message: `Subagent ${options.runId} cannot be resumed here (${rejection.kind}).`,
         });
-      const config = yield* getRunRecords(
-        options.session,
-        options.runId,
-      ).readConfig();
+      const config = yield* getRunRecords(options.runId).readConfig();
       if (config === null)
         return yield* new SubagentDurabilityError({
           message: `Subagent ${options.runId} has no stored configuration to resume.`,

@@ -32,6 +32,7 @@ import {
   followUpDisplay,
   userFollowUpInstruction,
 } from '@agent/followUp/followUpMessages';
+import { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpBatch, RunInput } from '@agent/followUp/RunInput';
 import { logUserMessage } from '@agent/trace';
 import {
@@ -43,7 +44,7 @@ import { consumedRow, isInstruction } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
-import type { RunCell } from '@shared/session/runHistory';
+import { SessionLog, type RunCell } from '@shared/session/runHistory';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
 import {
@@ -58,6 +59,7 @@ import { promptHooks } from './loop/hooks';
 import { resolveActivations } from './loop/step';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { AgentRunShape } from './run/AgentRun';
+import type { SessionServices } from './rootLaunch';
 import type { AppendedMessage } from './storedTurn';
 
 /** A batch as the rows that consume it: its message's `append` carries what
@@ -99,18 +101,20 @@ export interface FollowUps {
   ) => Effect.Effect<
     { readonly state: RunState; readonly turn: boolean },
     Error,
-    FileSystem.FileSystem | ChildProcessSpawner
+    FileSystem.FileSystem | ChildProcessSpawner | SessionServices
   >;
 }
 
 /** Open `run`'s own reader for the enclosing scope. */
 export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   run: AgentRunShape,
-): Effect.fn.Return<FollowUps, never, Scope.Scope> {
-  const { runId, session, logger } = run;
+): Effect.fn.Return<FollowUps, never, Scope.Scope | Inbox | SessionLog> {
+  const { runId, logger } = run;
+  const inbox = yield* Inbox;
+  const log = yield* SessionLog;
   // Ended with the scope; the run's settleRun ends it first, saying
   // whether the run takes more input.
-  const input = yield* session.followUps.open(runId);
+  const input = yield* inbox.open(runId);
 
   /** The canonical user message of one batch: every item's text as its
    *  own part, media parts after it; `kinds[i]` is item i's badges.
@@ -138,7 +142,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
           mimeType === 'application/pdf' &&
           capabilities.supportsVision
         ) {
-          const base64 = (yield* session.log.blobs([digest])).get(digest);
+          const base64 = (yield* log.blobs([digest])).get(digest);
           const pages =
             base64 === undefined
               ? Result.fail(new Error('its bytes are not stored'))
@@ -183,7 +187,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   ): Effect.fn.Return<
     BatchRows,
     Error,
-    FileSystem.FileSystem | ChildProcessSpawner
+    FileSystem.FileSystem | ChildProcessSpawner | SessionServices
   > {
     const followUps = batch.kind === 'followUps' ? batch.followUps : [];
     const stale = batch.kind === 'followUps' ? batch.stale : [];
@@ -286,7 +290,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   ): Effect.fn.Return<
     { readonly state: RunState; readonly turn: boolean },
     Error,
-    FileSystem.FileSystem | ChildProcessSpawner
+    FileSystem.FileSystem | ChildProcessSpawner | SessionServices
   > {
     const state = yield* cell.current;
     // A batch with a message opens the next turn, or joins the one running.
@@ -310,7 +314,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     input,
     // A child takes no more input once its loop ends: its parent resumes it.
     release: (next) =>
-      session.followUps.release(
+      inbox.release(
         runId,
         input,
         next === 'terminal' || run.entry.parent !== null,

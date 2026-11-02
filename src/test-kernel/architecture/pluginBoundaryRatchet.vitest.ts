@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, type Context } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -11,9 +11,8 @@ import {
   type PluginDefinition,
   type ToolRun,
 } from '@texra-ai/harness/plugins';
-import { rootRun } from '@agent/runtime/rootLaunch';
+import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import { texraPlugins } from '@texra/tools/registry';
 import { factKindsOf } from '@tools/plugins';
@@ -303,13 +302,13 @@ describe('plugin rosters', () => {
     const calling = <R>(
       call: () => Effect.Effect<ToolResult, Error, R>,
     ): ITool<Error, R> => ({ definition: { name: 'probe' }, call });
-    const session = null as unknown as SessionHandle;
+    const session = null as unknown as Context.Context<SessionServices>;
     const probes: PluginTool[] = [
       // @ts-expect-error a plugin's tool never reaches a root launch
       calling(() =>
-        rootRun(session, { config: null as never, runId: null as never }).pipe(
-          Effect.as(null as unknown as ToolResult),
-        ),
+        rootRun({ config: null as never, runId: null as never })
+          .pipe(Effect.as(null as unknown as ToolResult))
+          .pipe(Effect.provide(session)),
       ),
     ];
     expect(probes).toHaveLength(1);

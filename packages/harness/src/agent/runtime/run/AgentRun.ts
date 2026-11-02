@@ -24,8 +24,15 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
+import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
-import type { Persona } from '@shared/schemas';
+import {
+  type Persona,
+  AGENT_SOURCE,
+  type DeclinableUsageRoute,
+  type RunId,
+  type SubagentProgressUpdate,
+} from '@shared/schemas';
 import type {
   RegisterRunOptions,
   Registration,
@@ -33,20 +40,17 @@ import type {
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
-import {
-  AGENT_SOURCE,
-  type DeclinableUsageRoute,
-  type RunId,
-  type SubagentProgressUpdate,
-} from '@shared/schemas';
 import type { ClaimError } from '@shared/session/sessionLog';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import { RunFileService } from '@utils/files/runStorage';
+import { ProjectTools, type OpenStep } from '../loop/step';
 import type { ModelConfig } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 
-import type { OpenStep } from '../loop/step';
-import type { SessionHandle } from '../SessionHandle';
+/** Model access over the session's roots. */
+const sessionModelAccess = Layer.unwrap(
+  Effect.map(SessionRoots, modelAccessLayer),
+);
 
 /**
  * How a launch enters its run's cell: a fresh run's `registration` rides
@@ -94,7 +98,6 @@ const SCRIPT_TOOL = 'script';
  *  the run's `AgentRun` carries whole. */
 export interface RunLaunch {
   readonly runId: RunId;
-  readonly session: SessionHandle;
   readonly config: AgentConfig;
   /** The persona the run is, with the tools it declares. */
   readonly persona: Persona;
@@ -189,13 +192,14 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun | ModelAccess,
   Error,
-  RunHistory | HttpClient.HttpClient | Secrets
+  RunHistory | ProjectTools | SessionRoots | HttpClient.HttpClient | Secrets
 > =>
   Layer.effect(
     AgentRun,
     Effect.gen(function* () {
-      const { runId, session, logger, config, persona } = launch;
+      const { runId, logger, config, persona } = launch;
       const runHistory = yield* RunHistory;
+      const roots = yield* SessionRoots;
       const layerScope = yield* Effect.scope;
       // One parallel child holds what the run holds for its life; at close
       // each release runs concurrently under its own deadline.
@@ -244,7 +248,7 @@ export const agentRunLayer = (
       // the project's catalog for the run's life and started with its
       // variables; the read's problems reach its transcript.
       const declared = declaredToolNames(tools);
-      const held = yield* session.tools
+      const held = yield* (yield* ProjectTools)
         .hold(declared, root)
         .pipe(Scope.provide(scope));
       for (const warning of held.warnings) logger.warn(warning);
@@ -268,8 +272,8 @@ export const agentRunLayer = (
           !textOnly &&
           (root || config.asCaller === true || inherits) &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
-        stores: session.roots,
-        workspaceRoot: session.roots.workspace,
+        stores: roots,
+        workspaceRoot: roots.workspace,
         held,
       };
       // A fork binds as its source was bound at the cut (its seed's binding).
@@ -320,7 +324,7 @@ export const agentRunLayer = (
 
       return {
         ...launch,
-        fileService: new RunFileService(runId, session.roots),
+        fileService: new RunFileService(runId, roots),
         toolInputs,
         steps: yield* SynchronizedRef.make<OpenStep | null>(null),
         finalToolName,
@@ -331,4 +335,4 @@ export const agentRunLayer = (
         callbacks: input.callbacks,
       };
     }),
-  ).pipe(Layer.provideMerge(modelAccessLayer(launch.session.roots)));
+  ).pipe(Layer.provideMerge(sessionModelAccess));

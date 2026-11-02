@@ -1,13 +1,16 @@
 import '@test/support/sessionGraphTestSetup';
 
-import { Effect } from 'effect';
+import { Effect, Context } from 'effect';
 import { TraceEmitter } from '@agent/trace';
-import type {
-  SessionHandle,
-  SessionHandleInit,
-} from '@agent/runtime/SessionHandle';
+import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { runStateAppend } from '@shared/session/runHistory';
+import { SessionRoots } from '@platform/rootedFs';
+import {
+  runStateAppend,
+  SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import {
   qualifyAggregateId,
   isTranscriptEvent,
@@ -53,7 +56,7 @@ let opened = 0;
  */
 export const createTestSession = (
   init: TestSessionInit = {},
-): Effect.Effect<SessionHandle, SessionOpenError> =>
+): Effect.Effect<Context.Context<SessionServices>, SessionOpenError> =>
   Effect.flatMap(testSessionOwner, (owner) => {
     const installed = testWorkspaceRoots();
     opened += 1;
@@ -86,12 +89,12 @@ export const createTestSession = (
  */
 export function createProcessSession(
   init: TestSessionInit = {},
-): Effect.Effect<SessionHandle, SessionOpenError> {
+): Effect.Effect<Context.Context<SessionServices>, SessionOpenError> {
   return Effect.gen(function* () {
     const roots = testWorkspaceRoots();
     const owner = yield* testSessionOwner;
     const predecessors = (yield* owner.list).filter(
-      (live) => live.roots.storage === roots.storage,
+      (live) => Context.get(live, SessionRoots).storage === roots.storage,
     );
     yield* Effect.forEach(predecessors, (live) => closeSessionOf(live), {
       discard: true,
@@ -114,16 +117,16 @@ export function createProcessSession(
  * `session.log.settled` before reading them.
  */
 export function publishTestRows(
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   rows: readonly SessionEventDraft[],
 ): void {
-  Effect.runFork(seedRows(session.log)(rows));
+  Effect.runFork(seedRows(Context.get(session, SessionLog))(rows));
 }
 
 /** A fixture's rows committed as the store holds them, every kind
  *  admitted: a seeded history stands in for what a run's cell wrote. */
 export const seedRows =
-  (log: Pick<SessionHandle['log'], 'transact'>) =>
+  (log: Pick<SessionLog['Service'], 'transact'>) =>
   (rows: readonly SessionEventDraft[]) =>
     log.transact((tx) => runStateAppend(tx.append)(rows));
 
@@ -132,7 +135,7 @@ export const seedRows =
  * A child names its parent, whose own `run.start` must already be published.
  */
 export function publishTestRunStart(
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   runId: RunId = generateRunId(),
   options: { parent?: RunId | null } = {},
 ): RunId {
@@ -154,10 +157,13 @@ export function publishTestRunStart(
  * The follow-ups a run's rows still queue, as every view lists them: the
  * session's publications settled, then one cold read of the fold.
  */
-export const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
+export const queuedFollowUps = (
+  session: Context.Context<SessionServices>,
+  runId: RunId,
+) =>
   Effect.gen(function* () {
-    yield* session.log.settled;
-    const view = yield* session.view.read([runId]);
+    yield* Context.get(session, SessionLog).settled;
+    const view = yield* Context.get(session, SessionViewAccess).read([runId]);
     return view.queuedFollowUps.get(runId) ?? [];
   });
 

@@ -1,4 +1,4 @@
-import { Effect, Schema, SubscriptionRef } from 'effect';
+import { Effect, Schema, SubscriptionRef, Context } from 'effect';
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
 
@@ -8,7 +8,8 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { getRunRecords } from '@agent/storage/runRecords';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -16,14 +17,14 @@ import { seedRunRecord, seedReport } from '@test/support/runRecordSeeds';
 
 setupPlatform({ workspacePath: '/workspace' });
 const runId = 'abcdef' as RunId;
-let session: SessionHandle;
-const run = <A, E>(effect: Effect.Effect<A, E>) =>
-  testRuntime().runPromise(effect);
+let session: Context.Context<SessionServices>;
+const run = <A, E>(effect: Effect.Effect<A, E, SessionServices>) =>
+  testRuntime().runPromise(effect.pipe(Effect.provide(session)));
 
 beforeEach(async () => {
   session = await Effect.runPromise(createTestSession());
   await run(
-    session.log.transact([
+    Context.get(session, SessionLog).transact([
       {
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', runId),
@@ -38,7 +39,7 @@ beforeEach(async () => {
 
 describe('canonical run records', () => {
   it('preserves private values while display readers drain past their commits', async () => {
-    const records = getRunRecords(session, runId);
+    const records = getRunRecords(runId);
     const config = Schema.decodeUnknownSync(AgentConfigSchema)({
       agent: 'worker',
       instruction: 'private instruction',
@@ -47,23 +48,24 @@ describe('canonical run records', () => {
     await run(seedReport(session, runId, 'private report'));
     expect(await run(records.readConfig())).toEqual(config);
     expect(await run(records.readReport())).toBe('private report');
-    const visible = await run(session.log.display(runId));
+    const visible = await run(Context.get(session, SessionLog).display(runId));
     // The configuration is the run's one `run.config` display row; the
     // report stays private.
     expect(visible.map((event) => event.type)).toEqual([
       'run.start',
       'run.config',
     ]);
-    expect(SubscriptionRef.getUnsafe(session.view.ref).cursor).toBe(
-      session.log.now(),
-    );
+    expect(
+      SubscriptionRef.getUnsafe(Context.get(session, SessionViewAccess).ref)
+        .cursor,
+    ).toBe(Context.get(session, SessionLog).now());
   });
 
   it.effect(
     'hides all private records at deletion while their rows await collection',
     () =>
       Effect.gen(function* () {
-        const records = getRunRecords(session, runId);
+        const records = getRunRecords(runId);
         yield* seedRunRecord(
           session,
           runId,
@@ -72,7 +74,7 @@ describe('canonical run records', () => {
           }),
         );
         yield* seedReport(session, runId, 'retained report bytes');
-        yield* session.log.transact([
+        yield* Context.get(session, SessionLog).transact([
           {
             type: 'run.result',
             aggregateId: qualifyAggregateId('run', runId),
@@ -82,7 +84,7 @@ describe('canonical run records', () => {
             },
           },
         ]);
-        yield* session.log.transact([
+        yield* Context.get(session, SessionLog).transact([
           {
             type: 'run.end',
             aggregateId: qualifyAggregateId('run', runId),
@@ -97,7 +99,7 @@ describe('canonical run records', () => {
           outcome: 'completed',
           output: { response: 'done', files: [] },
         });
-        yield* session.log.transact([
+        yield* Context.get(session, SessionLog).transact([
           {
             type: 'run.removed',
             aggregateId: qualifyAggregateId('run', runId),
@@ -112,11 +114,11 @@ describe('canonical run records', () => {
             records.readResultMeta(),
           ]),
         ).toEqual([false, null, null, [], null]);
-        const retained = yield* session.log.runRows(
+        const retained = yield* Context.get(session, SessionLog).runRows(
           qualifyAggregateId('run', runId),
           'input',
         );
         expect(retained.removed).not.toBeNull();
-      }),
+      }).pipe(Effect.provide(session)),
   );
 });

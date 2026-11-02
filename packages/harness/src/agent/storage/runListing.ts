@@ -2,8 +2,6 @@
 
 import { Effect, Stream, Predicate } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-
 import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isAgentRunRecord } from '@agent/core/definition/RunRecord';
 import { withLogChannel } from '@logger/effectLog';
@@ -15,6 +13,7 @@ import {
   type RunLifecycleStatus,
 } from '@shared/schemas';
 import { recordsOf } from '@shared/session/runFacts';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { deriveResumability } from './resumability';
@@ -58,12 +57,15 @@ export interface AgentRunListingEntry {
  * beside the same listing's rows, already decoded by the database read and
  * folded per run (`recordsOf`) for its configuration.
  */
-export const listRuns = Effect.fn('listRuns')(function* (
-  session: SessionHandle,
-): Effect.fn.Return<AgentRunListingEntry[], Error> {
+export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
+  AgentRunListingEntry[],
+  Error,
+  SessionLog | SessionViewAccess
+> {
+  const log = yield* SessionLog;
   const [view, listing] = yield* Effect.all([
-    session.view.read([]),
-    Stream.runCollect(session.log.listing()),
+    (yield* SessionViewAccess).read([]),
+    Stream.runCollect(log.listing()),
   ]);
   const rows = Map.groupBy(listing, (row) => row.aggregateId);
   const results = yield* Effect.forEach(
@@ -71,7 +73,11 @@ export const listRuns = Effect.fn('listRuns')(function* (
       (run) => run.identity.kind === 'agent' && run.parentId === null,
     ),
     (run) =>
-      Effect.gen(function* (): Effect.fn.Return<AgentRunListingEntry, Error> {
+      Effect.gen(function* (): Effect.fn.Return<
+        AgentRunListingEntry,
+        Error,
+        SessionLog
+      > {
         const { id, identity } = run;
         const own = rows.get(qualifyAggregateId('run', id)) ?? [];
         const record = recordsOf(own, id).config;
@@ -81,7 +87,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
           return yield* Effect.fail(
             new Error('agent run without an AgentConfig'),
           );
-        const resumeFrom = yield* deriveResumability(id, session);
+        const resumeFrom = yield* deriveResumability(id);
         return {
           id,
           timestamp: new Date(run.launchedAt).toISOString(),

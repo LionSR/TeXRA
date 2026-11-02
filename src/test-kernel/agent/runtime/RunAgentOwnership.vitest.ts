@@ -14,7 +14,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Schema } from 'effect';
+import { Effect, Fiber, Schema, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 import {
@@ -23,8 +23,8 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { withProcessServices } from '@texra-ai/harness/host';
-import { rootRun } from '@agent/runtime/rootLaunch';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
+import { Runs } from '@agent/runtime/runRegistry';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
 import {
   claimHolder,
@@ -45,10 +45,12 @@ const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
 });
 
 /** A root launch of `config` as `runId` on the session. */
-const launch = (session: SessionHandle, runId: RunId) =>
+const launch = (session: Context.Context<SessionServices>, runId: RunId) =>
   withProcessServices(
     testRuntime(),
-    rootRun(session, { config: CONFIG, runId, interactive: true }),
+    rootRun({ config: CONFIG, runId, interactive: true }).pipe(
+      Effect.provide(session),
+    ),
   );
 
 describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
@@ -65,7 +67,9 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
       expect(yield* Effect.flip(launch(session, runId))).toMatchObject({
         message: `Run is already running: ${runId}`,
       });
-      yield* session.runs.stop(runId, { reason: 'user' }).settlement;
+      yield* Context.get(session, Runs)
+        .stop(runId, { reason: 'user' })
+        .settlement.pipe(Effect.provide(session));
       yield* Fiber.await(first);
       expect(
         storedRows(roots.storage).filter(

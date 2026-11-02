@@ -1,9 +1,11 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Context } from 'effect';
 import { beforeEach, describe, expect } from 'vitest';
 import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import { finalizeRun } from '@agent/storage/runLifecycle';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import {
   createTestSession,
   publishTestRunStart,
@@ -11,12 +13,12 @@ import {
 import { setupPlatform } from '@test/support/setupPlatform';
 
 setupPlatform({ workspacePath: '/workspace' });
-let session: SessionHandle;
+let session: Context.Context<SessionServices>;
 const id = 'bbb001' as RunId;
 beforeEach(async () => {
   session = await Effect.runPromise(createTestSession());
   publishTestRunStart(session, id);
-  await Effect.runPromise(session.log.settled);
+  await Effect.runPromise(Context.get(session, SessionLog).settled);
 });
 
 describe('run metadata updates', () => {
@@ -26,7 +28,7 @@ describe('run metadata updates', () => {
       Effect.gen(function* () {
         yield* Effect.all(
           [
-            session.log.transact([
+            Context.get(session, SessionLog).transact([
               {
                 type: 'run.description',
                 by: 'model',
@@ -34,14 +36,18 @@ describe('run metadata updates', () => {
                 description: 'A described session',
               },
             ]),
-            finalizeRun(session, {
+            finalizeRun({
               runId: id,
               outcome: 'completed',
-            }),
+            }).pipe(Effect.provide(session)),
           ],
           { concurrency: 'unbounded' },
         );
-        expect((yield* session.view.read([id])).runs.get(id)).toMatchObject({
+        expect(
+          (yield* Context.get(session, SessionViewAccess).read([id])).runs.get(
+            id,
+          ),
+        ).toMatchObject({
           description: 'A described session',
           status: 'completed',
         });
@@ -51,14 +57,20 @@ describe('run metadata updates', () => {
   // request, so no resume meets it again.
   it.effect('settles a request the run never applied with its end', () =>
     Effect.gen(function* () {
-      yield* session.followUps.send(id, {
+      yield* Context.get(session, Inbox).send(id, {
         text: '/model gone',
         from: { kind: 'user' },
         control: { kind: 'model', model: 'gone' },
       });
-      expect((yield* session.followUps.read(id)).followUps).toHaveLength(1);
-      yield* finalizeRun(session, { runId: id, outcome: 'failed' });
-      expect((yield* session.followUps.read(id)).followUps).toEqual([]);
+      expect(
+        (yield* Context.get(session, Inbox).read(id)).followUps,
+      ).toHaveLength(1);
+      yield* finalizeRun({ runId: id, outcome: 'failed' }).pipe(
+        Effect.provide(session),
+      );
+      expect((yield* Context.get(session, Inbox).read(id)).followUps).toEqual(
+        [],
+      );
     }),
   );
 });

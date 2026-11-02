@@ -24,8 +24,8 @@ import {
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ResultEvent } from '@shared/session/agentEvent';
-import type { RunOutcome } from '@shared/schemas';
 import {
+  type RunOutcome,
   emptyRunEndOutput,
   RUN_OUTCOME,
   toRetryErrorInfo,
@@ -33,7 +33,7 @@ import {
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import type { RunReport } from './runReport';
 import type { ChildRunTurns } from './childRunLoop';
-import type { SessionHandle } from './SessionHandle';
+import type { SessionServices } from './rootLaunch';
 import type { RunLaunch } from './run/AgentRun';
 
 const CHANNEL = 'agentRunLifecycle';
@@ -45,10 +45,9 @@ const logLifecycleWarning = (message: string, data: unknown) =>
     withLogChannel(CHANNEL),
   );
 
-/** What ends an activation: the run's end, on the session that owns the
+/** What ends an activation: the run's end, on the caller's session, whose
  *  publisher every row of the run goes through in order. */
 interface EndActivationParams extends FinalizeRunInput {
-  readonly session: SessionHandle;
   /** Transcript stage closed with the resolved outcome (guarded). */
   readonly stage?: Pick<StageHandle, 'end'>;
 }
@@ -77,8 +76,8 @@ interface EndActivationResult {
 export const endActivation = Effect.fn('endActivation')(
   function* (
     params: EndActivationParams,
-  ): Effect.fn.Return<EndActivationResult, Error> {
-    const { session, runId } = params;
+  ): Effect.fn.Return<EndActivationResult, Error, SessionServices> {
+    const { runId } = params;
     // Stop precedence, read once: a stop that reached the run before its exit
     // outranks the flow's report, on the stage here as on the row below.
     const outcome =
@@ -111,7 +110,7 @@ export const endActivation = Effect.fn('endActivation')(
       ...(error ? { error } : {}),
       output,
     };
-    const finalization = yield* finalizeRun(session, {
+    const finalization = yield* finalizeRun({
       runId,
       outcome,
       error,
@@ -183,7 +182,6 @@ const endWith = (
 ) => {
   const { lastResult, ...facts } = end;
   return endActivation({
-    session: ctx.session,
     runId: ctx.runId,
     stage: ctx.parentStage,
     ...facts,
@@ -303,7 +301,7 @@ export const endRun = Effect.fn('endRun')(function* (
   exit: Exit.Exit<RunReport, Error>,
   /** A child's last turn result, from the result its run ends with. */
   finish?: FinishLastTurn,
-): Effect.fn.Return<RunReport, Error> {
+): Effect.fn.Return<RunReport, Error, SessionServices> {
   if (Exit.isSuccess(exit)) {
     const result = exit.value;
     if (result.failure) {

@@ -52,7 +52,8 @@ export const buildModelSelectionMessage = Effect.fn(
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
     models,
-    helperModel: yield* getHelperModelName(stores),
+    // TeXRA's catalog always names one; '' is the select's empty value.
+    helperModel: (yield* getHelperModelName(stores)) ?? '',
     preferShortModelNames: yield* Settings.get<boolean>(
       stores,
       GlobalStateKey.PREFER_SHORT_MODEL_NAMES,

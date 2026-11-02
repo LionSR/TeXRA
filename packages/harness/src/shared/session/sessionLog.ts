@@ -9,8 +9,11 @@ import type {
   AggregateId,
   CommitOrdinal,
   DisplaySessionEvent,
+  RunEnd,
   RunId,
+  RunOutcome,
   SessionEvent,
+  SessionEventDraft,
 } from '@shared/schemas';
 import type { Effect, Scope, Stream, SubscriptionRef } from 'effect';
 import type { AgentEvent } from './agentEvent';
@@ -24,7 +27,16 @@ import type {
 } from './database';
 import type { RunRowRead } from './runRowReads';
 import type { RunRows } from './runRowsShape';
+import type { RunHistoryDraft } from './runState';
 import type { Append, UnfoldedDraft } from './sessionEvents';
+
+/** A streaming row's closing fact, as the run history commits it. */
+export type StreamClosure = Extract<RunHistoryDraft, { type: 'stream.end' }>;
+
+/** The facts that close a run's open work: its streams, and with an
+ *  outcome its stages too. */
+export type ClosureFact =
+  StreamClosure | Extract<SessionEventDraft, { type: 'stage.end' }>;
 
 /** A write the store refused: nothing was written. */
 export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
@@ -66,8 +78,15 @@ export interface SessionLogShape {
   ): Effect.Effect<A, E | LogWriteError>;
   /** Publish one trace event (display rows only: no {@link AgentEvent} is
    *  part of the run's state) as its row, a chunk as transient text; its order
-   *  is this call, a refusal the run's own (its trace's `lost`). */
+   *  is this call, a refusal the run's own ({@link lost}). */
   publish(runId: RunId, event: AgentEvent): void;
+  /** The first row of `runId` the store refused, taken, as its `run.end`
+   *  error. */
+  lost(runId: RunId): Effect.Effect<RunEnd['error'] | undefined>;
+  /** What closes `runId`'s open streams (and stages, with an `outcome`);
+   *  read in a publisher job or after {@link settled}. */
+  closure(runId: RunId): StreamClosure[];
+  closure(runId: RunId, outcome: RunOutcome): ClosureFact[];
   /** A barrier: every job enqueued before it has run, the view applied it, and
    *  the terminal-result presenter read the view's tail past it. A refused
    *  detached row is heard by its writer. */

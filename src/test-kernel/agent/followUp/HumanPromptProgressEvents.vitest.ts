@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Context } from 'effect';
 import { it } from '@effect/vitest';
 // Test composition imports
 
@@ -12,7 +12,9 @@ import { beforeEach, describe, expect } from 'vitest';
 import { generateRunId, type RunId } from '@texra-ai/harness/schemas';
 import { requestToolEditApproval } from '@texra-ai/harness/plugins';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
+import { Interactions } from '@agent/runtime/HostInteractions';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
+import { Approvals } from '@shared/session/runHistory';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
@@ -32,7 +34,9 @@ function inToolContext<A, E, R>(
 ) {
   return Effect.acquireUseRelease(
     Effect.sync(() =>
-      Effect.runSync(testDefaultSession().interactions.use(interactions)),
+      Effect.runSync(
+        Context.get(testDefaultSession(), Interactions).use(interactions),
+      ),
     ),
     () =>
       run().pipe(
@@ -66,7 +70,7 @@ describe('human prompt progress events', () => {
         action: 'approve',
       }));
       yield* Effect.addFinalizer(() => Effect.sync(decided.detach));
-      yield* testDefaultSession().approvals.change(
+      yield* Context.get(testDefaultSession(), Approvals).change(
         runId,
         humanGrant(['toolEdit'], true),
       );
@@ -83,7 +87,7 @@ describe('human prompt progress events', () => {
 
       // A bash bypass answers without asking; the edit bypass above is not
       // what silenced it.
-      yield* testDefaultSession().approvals.change(
+      yield* Context.get(testDefaultSession(), Approvals).change(
         runId,
         humanGrant(['bash'], true),
       );
@@ -95,7 +99,7 @@ describe('human prompt progress events', () => {
       expect(bypassed).toMatchObject({ status: 'executed' });
       expect(decided.opened).toHaveLength(1);
 
-      yield* testDefaultSession().approvals.change(
+      yield* Context.get(testDefaultSession(), Approvals).change(
         runId,
         humanGrant(['toolEdit'], false),
       );

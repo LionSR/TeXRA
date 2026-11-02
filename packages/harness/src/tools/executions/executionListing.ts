@@ -13,10 +13,10 @@
 import { Effect, SubscriptionRef } from 'effect';
 
 // Local imports
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId, RunRelation } from '@shared/schemas';
 import { runRelation } from '@shared/session/runRelation';
-import type { RunView } from '@shared/session/sessionView';
+import { type RunView } from '@shared/session/sessionView';
+import { SessionViewAccess } from '@shared/session/runHistory';
 import { executed } from '@tools/core/result';
 
 // Local file imports
@@ -32,20 +32,17 @@ const RELATION_NOUN: Record<Exclude<RunRelation, 'peer'>, string> = {
   sibling: 'sibling',
 };
 
-/** The session to list and the run asking, whose relations the list marks. */
-interface ListingCaller {
-  readonly session: SessionHandle;
-  readonly runId: RunId | undefined;
-}
-
+/** The caller's session's runs, as the run asking (`caller`) relates to
+ *  each. */
 export const listExecutions = Effect.fn('listExecutions')(function* (
-  { session, runId: caller }: ListingCaller,
+  caller: RunId | undefined,
   offset: number,
   limit: number,
 ) {
+  const access = yield* SessionViewAccess;
   // One cold fold of the log's listing tier: every run's identity, model,
   // description, parentage and status, already decided. Nothing per row.
-  const view = yield* session.view.read([]);
+  const view = yield* access.read([]);
   const entries = [...view.runs.values()].toSorted(
     (left, right) =>
       right.launchedAt - left.launchedAt || right.createdAt - left.createdAt,
@@ -56,7 +53,7 @@ export const listExecutions = Effect.fn('listExecutions')(function* (
   }
 
   // Unread input is the live fold's: the listing tier carries no follow-ups.
-  const { queuedFollowUps } = SubscriptionRef.getUnsafe(session.view.ref);
+  const { queuedFollowUps } = SubscriptionRef.getUnsafe(access.ref);
   const parentOf = (id: RunId) => view.runs.get(id)?.parentId;
   const relationTo = (run: RunView): string | undefined => {
     if (caller === undefined) return undefined;

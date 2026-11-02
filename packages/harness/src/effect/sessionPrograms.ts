@@ -6,8 +6,8 @@
  * opened here is the same session every host opens (one session per
  * workspace storage root, never a second registry). A {@link Session} is a
  * value, not a tag — there are N of them, one per root — and a pure
- * function of the owner's handle: it stores nothing the owner already
- * holds.
+ * function of the session's services the owner opened: it stores nothing
+ * the owner already holds.
  *
  * What a session is opened with is decided here: its store (memory, or the
  * root's SQLite store that every host keeps). Who answers its runs'
@@ -21,20 +21,28 @@ import { Context, Effect, Schema, SubscriptionRef } from 'effect';
 import { AgentCatalog, AgentNotFound } from '@agent/index/agentCatalog';
 import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { rootRun, SessionOwner } from '@agent/runtime/rootLaunch';
-import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
+import { Interactions } from '@agent/runtime/HostInteractions';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import {
+  rootRun,
+  SessionOwner,
+  type SessionServices,
+} from '@agent/runtime/rootLaunch';
+import { Runs } from '@agent/runtime/runRegistry';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { asksApproval } from '@agent/runtime/agentToolResolution';
 
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
+import { SessionRoots } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentConfigSchema,
   InlinePersonaSchema,
   type RunId,
+  generateRunId,
 } from '@shared/schemas';
-import { generateRunId } from '@shared/schemas';
+import { SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -46,8 +54,7 @@ import {
 import { attachHost } from './requestAnswerer.js';
 import { runView } from './runHandle.js';
 import { sessionReads } from './sessionReads.js';
-import type { ProcessServices } from './processLayer.js';
-import type { Sessions } from './processLayer.js';
+import type { ProcessServices, Sessions } from './processLayer.js';
 import type {
   OpenOptions,
   ResumeInput,
@@ -89,11 +96,12 @@ function admitTools(
  *  recorded on the config and validated by its schema there. */
 function admitInput(
   input: StartInput,
-  session: RuntimeSessionHandle,
+  session: Context.Context<SessionServices>,
   services: Context.Context<AgentCatalog>,
 ): Effect.Effect<typeof AgentConfigSchema.Type, LaunchError | RunFailure> {
   return Effect.gen(function* () {
-    const canAsk = !session.interactions.approvalPromptsUnavailable;
+    const canAsk = !Context.get(session, Interactions)
+      .approvalPromptsUnavailable;
     yield* admitTools(input.tools ?? [], canAsk);
     // A host's whole configuration: its launch resolves the agent itself.
     if ('config' in input) return input.config;
@@ -132,7 +140,7 @@ function admitInput(
 /** Start one run on `session`: a root launch under the process's session
  *  owner, with the run id minted here when the input names none. */
 function start(
-  session: RuntimeSessionHandle,
+  session: Context.Context<SessionServices>,
   services: Context.Context<ProcessServices>,
   owner: Context.Service.Shape<typeof SessionOwner>,
   input: StartInput,
@@ -144,18 +152,21 @@ function start(
     // still opens, its activation refuses (`RunLive`).
     if (
       input.runId !== undefined &&
-      (SubscriptionRef.getUnsafe(session.view.ref).runs.has(runId) ||
-        session.runs.get(runId) !== undefined)
+      (SubscriptionRef.getUnsafe(
+        Context.get(session, SessionViewAccess).ref,
+      ).runs.has(runId) ||
+        Context.get(session, Runs).get(runId) !== undefined)
     )
       return yield* runFailure(
         new Error(`Run ${runId} already exists in this session.`),
       );
-    const activation = yield* rootRun(session, {
+    const activation = yield* rootRun({
       ...input,
       config,
       runId,
     }).pipe(
       Effect.provideService(SessionOwner, owner),
+      Effect.provide(session),
       Effect.mapError(runFailure),
     );
     return runView(session, runId, activation);
@@ -175,7 +186,7 @@ type ResumeError = ResumeRefused | ToolsRefused | RunFailure;
  * refused.
  */
 function resume(
-  session: RuntimeSessionHandle,
+  session: Context.Context<SessionServices>,
   runId: RunId,
   input: ResumeInput = {},
   redirectedFrom?: RunId,
@@ -184,13 +195,12 @@ function resume(
   return Effect.gen(function* () {
     yield* admitTools(
       tools ?? [],
-      !session.interactions.approvalPromptsUnavailable,
+      !Context.get(session, Interactions).approvalPromptsUnavailable,
     );
     const resumed = yield* resumeRun(runId, {
-      session,
       stopAfterCycle: interactive !== true,
       tools,
-    }).pipe(Effect.mapError(runFailure));
+    }).pipe(Effect.provide(session), Effect.mapError(runFailure));
     if ('ownedBy' in resumed)
       return yield* resume(
         session,
@@ -208,20 +218,22 @@ function resume(
   });
 }
 
-/** The session as this package works on it: a pure function of the owner's
- *  handle, holding nothing the owner already holds. */
+/** The session as this package works on it: a pure function of the
+ *  session's services the owner opened, holding nothing the owner already
+ *  holds. */
 function sessionOf(
-  handle: RuntimeSessionHandle,
+  session: Context.Context<SessionServices>,
   services: Context.Context<ProcessServices>,
   owner: Context.Service.Shape<typeof SessionOwner>,
 ): LocalSession {
+  const requests = Context.get(session, SessionRequests);
   return {
-    roots: handle.roots,
-    ...sessionReads(handle),
-    start: (input) => start(handle, services, owner, input),
-    resume: (runId, input) => resume(handle, runId, input),
-    request: handle.requests.request,
-    attach: (host) => attachHost(handle, host),
+    roots: Context.get(session, SessionRoots),
+    ...sessionReads(session),
+    start: (input) => start(session, services, owner, input),
+    resume: (runId, input) => resume(session, runId, input),
+    request: (req) => requests.request(req).pipe(Effect.provide(session)),
+    attach: (host) => attachHost(session, host),
   };
 }
 
@@ -232,8 +244,9 @@ export function makeSessions(
   services: Context.Context<ProcessServices>,
 ): Effect.Effect<Context.Service.Shape<typeof Sessions>> {
   return Effect.sync(() => {
-    const sessionFor = (handle: RuntimeSessionHandle): LocalSession =>
-      sessionOf(handle, services, owner);
+    const sessionFor = (
+      session: Context.Context<SessionServices>,
+    ): LocalSession => sessionOf(session, services, owner);
     return {
       // An open asking for the other store than the session's is the
       // owner's refusal. Until a host that can prompt attaches, nobody here
@@ -256,7 +269,7 @@ export function makeSessions(
         ),
       close: (roots: WorkspaceRoots) => owner.close(roots.storage),
       closeAll: owner.closeAll,
-      list: Effect.map(owner.list, (handles) => handles.map(sessionFor)),
+      list: Effect.map(owner.list, (sessions) => sessions.map(sessionFor)),
     };
   });
 }

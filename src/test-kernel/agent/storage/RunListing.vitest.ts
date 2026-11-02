@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Schema } from 'effect';
+import { Effect, Schema, Context } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { DatabaseReadFailed } from '@texra-ai/harness';
@@ -11,7 +11,8 @@ import {
   type RunIdentity,
 } from '@texra-ai/harness/schemas';
 import { listRuns } from '@agent/storage/runListing';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionLog } from '@shared/session/runHistory';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
@@ -25,11 +26,11 @@ function config(agent: string): AgentConfig {
   });
 }
 
-let session: SessionHandle;
+let session: Context.Context<SessionServices>;
 
 /** Commit the run's `run.start`, the fact its listing row is built from. */
 const startRun = (id: RunId, identity: RunIdentity, parentRunId?: RunId) =>
-  session.log.transact([
+  Context.get(session, SessionLog).transact([
     {
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', id),
@@ -63,7 +64,7 @@ describe('run listing normalization', () => {
     Effect.gen(function* () {
       const id = 'eee556' as RunId;
       yield* writeRun(id, 'assistant');
-      vi.spyOn(session.log, 'facts').mockReturnValue(
+      vi.spyOn(session.pipe(Context.get(SessionLog)), 'facts').mockReturnValue(
         Effect.fail(
           new DatabaseReadFailed({
             path: 'session.db',
@@ -72,7 +73,7 @@ describe('run listing normalization', () => {
         ),
       );
 
-      expect(yield* listRuns(session)).toEqual([
+      expect(yield* listRuns().pipe(Effect.provide(session))).toEqual([
         expect.objectContaining({
           id,
           resumable: false,
@@ -89,7 +90,7 @@ describe('run listing normalization', () => {
       yield* seedRunRecord(session, processId, config('assistant'));
       yield* writeRun(customBashAgentId, 'bash');
 
-      expect(yield* listRuns(session)).toEqual([
+      expect(yield* listRuns().pipe(Effect.provide(session))).toEqual([
         expect.objectContaining({
           id: customBashAgentId,
           identity: { kind: 'agent', agent: 'bash' },
@@ -107,7 +108,9 @@ describe('run listing normalization', () => {
       yield* writeRun(childId, 'search', rootId);
 
       // A child belongs to its parent's transcript, not to the history list.
-      expect((yield* listRuns(session)).map(({ id }) => id)).toEqual([rootId]);
+      expect(
+        (yield* listRuns().pipe(Effect.provide(session))).map(({ id }) => id),
+      ).toEqual([rootId]);
     }),
   );
 });

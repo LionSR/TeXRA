@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Layer, Schema } from 'effect';
+import { Effect, Layer, Schema, Context } from 'effect';
 import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
@@ -24,6 +24,7 @@ import {
   agentRunLayer,
   type RunLaunch,
 } from '@agent/runtime/run/AgentRun';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { validationModelLayer } from '@cli/runtime/validationModel';
 import { RunHistory } from '@shared/session/runHistory';
 import { closeSessionOf } from '@test/support/sessionEnd';
@@ -78,7 +79,12 @@ function observingInvokerLayer(seen: InvokeRequest[]) {
 }
 
 /** The run's layer over a launch, with the given run-scoped tools. */
-function runLayer(ctx: RunLaunch, tools: ITool[], seen: InvokeRequest[] = []) {
+function runLayer(
+  session: Context.Context<SessionServices>,
+  ctx: RunLaunch,
+  tools: ITool[],
+  seen: InvokeRequest[] = [],
+) {
   return Layer.mergeAll(
     observingInvokerLayer(seen),
     nativeToolTestLayer(),
@@ -90,7 +96,7 @@ function runLayer(ctx: RunLaunch, tools: ITool[], seen: InvokeRequest[] = []) {
         callbacks: {},
       }),
     ),
-    Layer.provideMerge(Layer.succeed(RunHistory, ctx.session.runHistory)),
+    Layer.provideMerge(Layer.succeedContext(session)),
     Layer.provideMerge(testHttpClientLayer),
     // No key is read: every launch here binds the validation model.
     Layer.provideMerge(Secrets.layer(new FakeSecrets())),
@@ -143,18 +149,18 @@ describe('run-scoped tool resolution', () => {
           model: 'test-model',
           workingDirectory: process.cwd(),
         });
-        const ctx = validationLaunch({ runId, session }, config);
+        const ctx = validationLaunch({ runId }, config);
         yield* runToolUse({ resume: false }).pipe(
-          Effect.provide(runLayer(ctx, [tool('gone'), tool('kept')])),
+          Effect.provide(runLayer(session, ctx, [tool('gone'), tool('kept')])),
           Effect.orDie,
         );
 
         // `gone` vanished and `added` appeared since the run opened.
         const step = yield* Effect.gen(function* () {
-          const state = yield* session.runHistory.load(runId);
+          const state = yield* Context.get(session, RunHistory).load(runId);
           return yield* stepFor(yield* AgentRun, state!, 'request', false);
         }).pipe(
-          Effect.provide(runLayer(ctx, [tool('kept'), tool('added')])),
+          Effect.provide(runLayer(session, ctx, [tool('kept'), tool('added')])),
           Effect.orDie,
         );
 

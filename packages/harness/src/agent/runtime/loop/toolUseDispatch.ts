@@ -38,7 +38,11 @@ import {
 import { normalizeToolCallError } from '@agent/core/tools/toolCallParsing';
 import { extractToolAttachments } from '@agent/core/tools/toolAttachmentExtraction';
 import type { ScriptOp } from '@agent/codeSandbox/codeSandbox';
-import { ChildRuns, childRuns } from '@agent/runtime/ToolServices';
+import {
+  ChildRuns,
+  childRuns,
+  sessionServices,
+} from '@agent/runtime/ToolServices';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
   RunCall,
@@ -48,7 +52,7 @@ import {
   type ScriptScope,
   type ScriptSource,
 } from '@agent/runtime/RunCall';
-import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
+import { SessionRoots } from '@platform/rootedFs';
 import {
   qualifyAggregateId,
   SettledToolResultSchema,
@@ -66,6 +70,7 @@ import type { DraftBlob } from '@shared/session/historyTurns';
 import {
   findStorageRefusal,
   runRefusal,
+  SessionLog,
   type RunCell,
 } from '@shared/session/runHistory';
 import { consumedRow } from '@shared/session/runFacts';
@@ -106,8 +111,7 @@ import {
 import { callRequests, guardedToolCall } from './toolGuard';
 import { callHookText, preToolUse } from './hooks';
 import { appendRow, displayRow, positionRow } from './rows';
-import { Runs } from '../runRegistry';
-import type { RunServices } from '../ToolServices';
+import type { AgentRunServices } from '../runRegistry';
 import type { StepTools } from './step';
 import type { InvokeError } from '../ModelInvoker';
 
@@ -133,8 +137,8 @@ interface Dispatch {
   readonly recovered: boolean;
   /** Each offered tool's plugin, by tool name. */
   readonly pluginOf: ReadonlyMap<string, string>;
-  /** The session's runs, which the engine door hands each call. */
-  readonly runs: Runs['Service'];
+  /** The session's services, which each call's run carries. */
+  readonly session: RunCallShape['session'];
 }
 
 /** One call as the per-call program takes it: its facts (a response's
@@ -364,10 +368,12 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   call: Call,
   place: Pick<RunCallShape, 'script' | 'scriptCalls'>,
   ended = false,
-): Effect.fn.Return<void, InvokeError, RunServices | WorkspaceFs | StorageFs> {
+): Effect.fn.Return<void, InvokeError, AgentRunServices> {
   const { dispatch, fact, input } = call;
-  const { run, cell, step, responseId } = dispatch;
+  const { run, cell, step, responseId, session } = dispatch;
   const { runId, logger } = run;
+  const log = yield* SessionLog;
+  const roots = yield* SessionRoots;
   const script = scriptOf(fact);
   const state = yield* cell.current;
   const status: CallStatus = recordOf(dispatch, state, fact.callId)?.status ?? {
@@ -424,10 +430,11 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     if (text.length === 0) return;
     streamed += text.length;
     const { logId: id } = fact;
-    run.session.log.publish(runId, { type: 'stream.chunk', id, text });
+    log.publish(runId, { type: 'stream.chunk', id, text });
   };
   const { requests, retireStanding } = callRequests(
     run,
+    session,
     cell,
     (rows) => commit(call, rows),
     { ...at, attempt },
@@ -479,7 +486,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
     // This call's place in its run, and the child door over exactly it.
     const runCall: RunCallShape = {
       run,
-      runs: dispatch.runs,
+      session,
       responseId,
       instruction: dispatch.instruction,
       attempt,
@@ -495,7 +502,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
           Effect.provideService(ToolContext, {
             callId: fact.callId,
             env: {
-              roots: run.session.roots,
+              roots,
               workingDirectory: run.workingDirectory,
               stepRoots: step.stepRoots,
               run,
@@ -569,7 +576,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   }));
   const { attachments, blobs } = yield* captureAttachments(
     extracted.attachments,
-    run.session.roots.workspace,
+    roots.workspace,
   );
   const sanitized = extracted.sanitizedResult;
   // The card commits with the result (a slow tool's closes, a fast tool's
@@ -587,7 +594,7 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   const post = pre ? yield* pre.after(sanitized) : [];
   const answered =
     sanitized.status === 'executed' ? (sanitized.consumedFollowUps ?? []) : [];
-  const facts = factRows(extracted.facts, runId, plugin, run.session.log);
+  const facts = factRows(extracted.facts, runId, plugin, log);
   // A retirement refused outside the run history is the claim's refusal,
   // worded as the cell words one of its own.
   yield* retireStanding.pipe(
@@ -631,8 +638,9 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   script: DispatchFacts,
   dispatched: Scope.Scope,
 ) {
-  const { run, cell, step, responseId } = dispatch;
+  const { run, cell, step, responseId, session } = dispatch;
   const { runId } = run;
+  const log = yield* SessionLog;
   const stageId = `script-${script.logId}`;
   const issued = (state: RunState) =>
     Object.values(state.pendingResponse?.records ?? {}).flatMap(
@@ -710,6 +718,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
               // A request the call was parked on is withdrawn with it.
               const { retireStanding } = callRequests(
                 run,
+                session,
                 cell,
                 (rows) => commit(call, rows),
                 { ...at, attempt: entered.attempt },
@@ -729,10 +738,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   );
   // Made after that finalizer, so it closes first: no call the guest
   // issued still runs when the finalizer reads what it left.
-  const fork = yield* FiberMap.makeRuntime<
-    RunServices | WorkspaceFs | StorageFs,
-    string
-  >();
+  const fork = yield* FiberMap.makeRuntime<AgentRunServices, string>();
   // Opened once, labelled by the script's title, which its first call carries.
   let stageOpened = false;
   const openStage = Effect.fn('toolUse.openScriptStage')(function* (
@@ -740,7 +746,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   ) {
     if (stageOpened) return;
     stageOpened = true;
-    run.session.log.publish(runId, {
+    log.publish(runId, {
       type: 'stage.start',
       id: stageId,
       label: title ?? 'Script',
@@ -756,7 +762,7 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
         let status: 'completed' | 'failed' | 'cancelled' =
           settled?.result.status === 'executed' ? 'completed' : 'failed';
         if (Exit.hasInterrupts(exit)) status = 'cancelled';
-        run.session.log.publish(runId, {
+        log.publish(runId, {
           type: 'stage.end',
           id: stageId,
           status,
@@ -974,7 +980,7 @@ const deliver = Effect.fn('toolUse.deliver')(function* (
     documents.length === 0 ? undefined : bound.model.uploadFile;
   if (uploadFile !== undefined) {
     // The documents' bytes, held by address: read once for the uploads.
-    const bytes = yield* run.session.log.blobs(
+    const bytes = yield* (yield* SessionLog).blobs(
       documents.map(({ part }) => part.digest),
     );
     // Settled uploads leave the set; the aggregate deadline names the rest.
@@ -1028,11 +1034,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
   step: StepTools,
   controls: Effect.Effect<readonly QueuedFollowUp[]>,
-): Effect.fn.Return<
-  DispatchOutcome,
-  InvokeError,
-  AgentRun | RunServices | Runs | WorkspaceFs | StorageFs
-> {
+): Effect.fn.Return<DispatchOutcome, InvokeError, AgentRun | AgentRunServices> {
   const run = yield* AgentRun;
   const { runId, logger } = run;
   const initial = yield* cell.current;
@@ -1054,7 +1056,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       cell.opened.pendingResponse?.responseId === responseId &&
       pending.assistant.origin !== null,
     pluginOf: new Map(step.offered.map((t) => [t.name, t.plugin])),
-    runs: yield* Runs,
+    session: yield* sessionServices,
   };
   const inputOf = new Map(
     localCallsOf(pending.assistant.content).map((call) => [

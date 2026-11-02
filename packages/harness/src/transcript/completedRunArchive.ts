@@ -1,11 +1,10 @@
 /** Completed-run display reads, keyed by run id. */
 import { Effect, Predicate, Result, Schema, absurd } from 'effect';
 import type { ExportNode } from '@agent/export/schemas';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 
-import { Settings } from '@shared/config/settings';
+import { Settings, type ConfigProvider } from '@shared/config/settings';
 import {
   DEBUG_MODE_KEY,
   TOOL_CALL_STATUS,
@@ -13,6 +12,7 @@ import {
   type RunId,
   type ToolUseLog,
 } from '@shared/schemas';
+import { SessionLog } from '@shared/session/runHistory';
 import type { TranscriptView } from '@shared/session/sessionView';
 import { buildRunTranscript } from '@shared/session/transcriptUpdate';
 
@@ -126,14 +126,14 @@ export const readCompletedRunConversation = Effect.fn(
   'readCompletedRunConversation',
 )(function* (
   runId: RunId,
-  session: SessionHandle,
-): Effect.fn.Return<ExportNode[], Error> {
+  config: ConfigProvider,
+): Effect.fn.Return<ExportNode[], Error, SessionLog> {
   // The transcript is built cold from the run's committed rows by the same
   // reducer the session view runs, at the verbosity the session's config
   // reads now; empty when the run never existed or was removed.
   const transcript = buildRunTranscript(
-    yield* session.log.display(runId),
-    Settings.getConfig<boolean>(session.roots.config, DEBUG_MODE_KEY),
+    yield* (yield* SessionLog).display(runId),
+    Settings.getConfig<boolean>(config, DEBUG_MODE_KEY),
   );
   return transcript.rows.flatMap(conversationNodesForRow);
 });
