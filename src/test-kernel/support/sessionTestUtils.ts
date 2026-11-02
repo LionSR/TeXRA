@@ -3,7 +3,7 @@ import '@test/support/sessionGraphTestSetup';
 import { Effect, Context } from 'effect';
 import { TraceEmitter } from '@agent/trace';
 import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
-import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { SessionRoots } from '@platform/rootedFs';
 import {
@@ -92,7 +92,7 @@ export function createProcessSession(
 ): Effect.Effect<Context.Context<SessionServices>, SessionOpenError> {
   return Effect.gen(function* () {
     const roots = testWorkspaceRoots();
-    const owner = yield* testSessionOwner;
+    const owner = yield* SessionOwner;
     const predecessors = (yield* owner.list).filter(
       (live) => Context.get(live, SessionRoots).storage === roots.storage,
     );
@@ -108,7 +108,7 @@ export function createProcessSession(
         transcriptMode: init.transcriptMode ?? { kind: 'ephemeral' },
       }),
     });
-  });
+  }).pipe(Effect.provideServiceEffect(SessionOwner, testSessionOwner));
 }
 
 /**

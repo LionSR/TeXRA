@@ -49,10 +49,7 @@ const planSession = Effect.fn('planSession')(function* (runId: RunId) {
   const { interactions } = createRecordingHost();
   const session = yield* isolatedTestSession(interactions);
   publishTestRunStart(session, runId);
-  const requests = yield* Effect.acquireRelease(
-    Effect.sync(() => autoDecideRequests(session, () => null)),
-    (requests) => Effect.sync(() => requests.detach()),
-  );
+  const requests = yield* autoDecideRequests(session, () => null);
 
   /** The plan request the tool opened, and the way to answer it. */
   const awaitPlanRequest = async () => {

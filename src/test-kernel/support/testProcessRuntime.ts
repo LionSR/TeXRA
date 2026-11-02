@@ -19,11 +19,10 @@
  * fresh module instances, and the install has to land in the instance the
  * code under test will import next.
  */
-import { Context, Effect, type ManagedRuntime, References } from 'effect';
+import { Context, Effect, type ManagedRuntime } from 'effect';
 
-import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
-import { SessionRoots } from '@platform/rootedFs';
-import type { LocalSession, Sessions } from '@texra-ai/harness';
+import { SessionOwner } from '@agent/runtime/rootLaunch';
+import type { Sessions } from '@texra-ai/harness';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
 /** The harness's runtime: a host's, with the internal session owner a root
@@ -34,20 +33,16 @@ type TestProcessRuntime = ManagedRuntime.ManagedRuntime<
 >;
 
 let runtime: TestProcessRuntime | undefined;
-let graphSessions: Effect.Effect<Sessions['Service']> | undefined;
 
-/** Install the harness's runtime, and the sessions it serves when it holds
- *  the session graph (`installTestSessionGraph`). */
+/** Install the harness's runtime. */
 export function initTestProcessRuntime(
   instance:
     | TestProcessRuntime
     | ManagedRuntime.ManagedRuntime<ProcessServices | SessionOwner, never>,
-  sessions?: Effect.Effect<Sessions['Service']>,
 ): void {
   // cast: the bare runtime serves no `Sessions`, as before it had none; a
   // suite that opens sessions installs the session graph, whose runtime does.
   runtime = instance as TestProcessRuntime;
-  graphSessions = sessions;
 }
 
 /** The harness's runtime, or `undefined` — the non-throwing read, which
@@ -73,30 +68,3 @@ export const testSessionOwner: Effect.Effect<SessionOwner['Service']> =
   Effect.suspend(() =>
     Effect.map(testRuntime().contextEffect, Context.get(SessionOwner)),
   );
-
-/** The sessions the harness's session graph serves. */
-const testSessions: Effect.Effect<Sessions['Service']> = Effect.suspend(
-  () =>
-    graphSessions ??
-    Effect.die(new Error('No test session graph is installed.')),
-);
-
-/** `handle`'s session as a host holds it (`LocalSession`): the one the
- *  installed sessions list for its root, which is open. */
-export function testSessionOf(
-  handle: Context.Context<SessionServices>,
-): LocalSession {
-  const session = Effect.runSync(
-    Effect.map(testSessions, (installed) => installed.list).pipe(
-      Effect.flatten,
-      Effect.provideService(References.PreventSchedulerYield, true),
-    ),
-  ).find(
-    (open) => open.roots.storage === Context.get(handle, SessionRoots).storage,
-  );
-  if (session === undefined)
-    throw new Error(
-      `No session is open at ${Context.get(handle, SessionRoots).storage}.`,
-    );
-  return session;
-}

@@ -435,7 +435,7 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
       it.effect('cancels the run when the user declines the retry', () =>
         Effect.gen(function* () {
           const session = yield* isolatedTestSession();
-          const requests = autoDecideRequests(session, () => ({
+          yield* autoDecideRequests(session, () => ({
             action: 'cancel',
             cause: 'The user declined the retry.',
           }));
@@ -450,7 +450,6 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
 
           expect(outcome.kind).toBe('cancelled');
           expect(stub.attempts()).toBe(1);
-          requests.detach();
         }),
       );
 
@@ -460,7 +459,7 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
         Effect.gen(function* () {
           const session = yield* isolatedTestSession();
           const pump = yield* pumpClock;
-          const requests = autoDecideRequests(session, () => ({
+          const requests = yield* autoDecideRequests(session, () => ({
             action: 'retry',
           }));
           const stub = stubModel([
@@ -501,7 +500,6 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
           expect(
             Context.get(session, SessionViewAccess).run(runId)?.status,
           ).toBe(RUN_PHASE.RUNNING);
-          requests.detach();
           yield* Fiber.interrupt(pump);
         }),
       );
@@ -514,7 +512,7 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
           Effect.gen(function* () {
             const session = yield* isolatedTestSession();
             const pump = yield* pumpClock;
-            const requests = autoDecideRequests(session, () => ({
+            const requests = yield* autoDecideRequests(session, () => ({
               action: 'retry',
             }));
             const stub = stubModel([
@@ -538,7 +536,6 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
             // The interrupted attempt was asked about again, then sent once.
             expect(requests.opened).toHaveLength(2);
             expect(stub.attempts()).toBe(3);
-            requests.detach();
             yield* Fiber.interrupt(pump);
           }),
       );
@@ -587,7 +584,7 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
         Effect.gen(function* () {
           const session = yield* isolatedTestSession();
           const pump = yield* pumpClock;
-          const requests = autoDecideRequests(session, () => ({
+          const requests = yield* autoDecideRequests(session, () => ({
             action: 'deny',
             reason: 'Denied by the approval policy.',
           }));
@@ -601,7 +598,6 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
             1 + MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
           );
           expect(requests.opened).toHaveLength(1);
-          requests.detach();
           yield* Fiber.interrupt(pump);
         }),
       );
@@ -615,7 +611,7 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const session = yield* isolatedTestSession();
-            const requests = autoDecideRequests(session, () => ({
+            const requests = yield* autoDecideRequests(session, () => ({
               action: 'deny',
               reason: 'Denied by the approval policy.',
             }));
@@ -642,7 +638,6 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
             expect(resumed.state.lastError).not.toBeNull();
             expect(stub.attempts()).toBe(2);
             expect(requests.opened).toHaveLength(1);
-            requests.detach();
           }),
       );
     });

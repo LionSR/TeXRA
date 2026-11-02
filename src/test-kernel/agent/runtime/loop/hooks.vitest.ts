@@ -27,7 +27,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { resumeRun } from '@agent/runtime/resumeRun';
-import { rootRun } from '@agent/runtime/rootLaunch';
+import { rootRun, SessionOwner } from '@agent/runtime/rootLaunch';
 import {
   closeTestSession,
   openTestDefaultSession,
@@ -40,7 +40,10 @@ import {
   untilStored,
   validationHost,
 } from '@test/support/storeFaults';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import {
+  testRuntime,
+  testSessionOwner,
+} from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 /** A file's lines, none when it is absent. */
@@ -219,6 +222,6 @@ describe('run loop hooks', { timeout: REAL_RUN_TIMEOUT }, () => {
         expect(linesOf(effects)).toEqual(['rewritten']);
         expect(linesOf(hookRuns)).toEqual(['ran']);
         expect(rowsOf(storage, runId, 'hook.outcome')).toHaveLength(1);
-      }),
+      }).pipe(Effect.provideServiceEffect(SessionOwner, testSessionOwner)),
   );
 });

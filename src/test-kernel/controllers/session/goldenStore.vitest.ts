@@ -719,10 +719,10 @@ describe('the golden run killed after its effect', () => {
     await testRuntime().runPromise(
       AgentCatalog.use((catalog) => catalog.refresh),
     );
-    await Effect.runPromise(closeTestDefaultSession);
+    await testRuntime().runPromise(closeTestDefaultSession);
   });
   afterEach(async () => {
-    await Effect.runPromise(closeTestDefaultSession);
+    await testRuntime().runPromise(closeTestDefaultSession);
     for (const [key, value] of Object.entries(restore)) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
@@ -732,9 +732,10 @@ describe('the golden run killed after its effect', () => {
   it.live('reports the command as an unknown outcome and never reruns it', () =>
     Effect.gen(function* () {
       const { storage, workspace } = testWorkspaceRoots();
-      const session = yield* openTestDefaultSession({
-        roots: testWorkspaceRoots(),
-      });
+      const session = yield* withProcessServices(
+        testRuntime(),
+        openTestDefaultSession({ roots: testWorkspaceRoots() }),
+      );
       const result = yield* withProcessServices(
         testRuntime(),
         resumeRun(KILLED, {}).pipe(Effect.provide(session)),
@@ -753,7 +754,7 @@ describe('the golden run killed after its effect', () => {
           },
         ),
       );
-      yield* closeTestDefaultSession;
+      yield* withProcessServices(testRuntime(), closeTestDefaultSession);
       const settled = raw(storage, (db) =>
         db
           .prepare(

@@ -70,10 +70,9 @@ layer(
       Effect.gen(function* () {
         const explicit = createRecordingHost();
         const runId = startedRun(session);
-        const decided = autoDecideRequests(session, () => ({
+        const decided = yield* autoDecideRequests(session, () => ({
           action: 'approve',
         }));
-        yield* Effect.addFinalizer(() => Effect.sync(decided.detach));
         yield* Context.get(session, Approvals).change(
           runId,
           humanGrant(['toolEdit'], true),

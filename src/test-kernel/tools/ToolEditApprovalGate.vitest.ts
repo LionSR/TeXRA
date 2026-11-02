@@ -61,7 +61,8 @@ let runId: RunId;
 // The decision a surface sends for each request the run opens; a case that
 // must park one returns null and decides it later with `decideRequest`.
 let nextDecision: () => RequestDecision | null = () => ({ action: 'approve' });
-let decisions: ReturnType<typeof autoDecideRequests> | undefined;
+let decisions:
+  Effect.Success<ReturnType<typeof autoDecideRequests>> | undefined;
 let policyDenials = 0;
 // The tool edits the run opened, as their rows reached the log; tests
 // override the decision when they need to reject or adjust, and assert on
@@ -168,10 +169,7 @@ const setUp = (config: Record<string, unknown> = {}) =>
     relativeFiles.clear();
     runId = publishTestRunStart(session, generateRunId());
     yield* Context.get(session, SessionLog).settled;
-    decisions = yield* Effect.acquireRelease(
-      Effect.sync(() => autoDecideRequests(session, () => nextDecision())),
-      (requests) => Effect.sync(() => requests.detach()),
-    );
+    decisions = yield* autoDecideRequests(session, () => nextDecision());
   });
 
 // Live clock: requests are opened and answered on the session's log.

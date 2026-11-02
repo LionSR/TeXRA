@@ -1,6 +1,6 @@
 import { access, writeFile } from 'node:fs/promises';
 
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import {
   Effect,
   Fiber,
@@ -9,38 +9,25 @@ import {
   SubscriptionRef,
   Context,
 } from 'effect';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, expect, vi } from 'vitest';
 
+import { DesktopToolEditApprovalHost } from '@desktop/main/desktopToolEditApproval';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import { testSessionOf, testRuntime } from '@test/support/testProcessRuntime';
-import { closeSessionOf } from '@test/support/sessionEnd';
-
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
-import type { ToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
+import {
+  ToolEditApprovalController,
+  type ToolEditPreview,
+} from '@texra/controllers/approval/ToolEditApprovalController';
+import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-
-/**
- * The host wiring point's run. The controller's verbs are Effects and it
- * holds no runtime of its own; a desktop window hands them its process
- * runtime, and so does this suite.
- */
-const onRuntime = <A, E>(
-  program: Effect.Effect<
-    A,
-    E,
-    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
-  >,
-): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({
-    try: () => testRuntime().runPromise(program),
-    catch: (error) => error,
-  });
 
 async function pathExists(filePath: string): Promise<boolean> {
   try {
@@ -51,37 +38,34 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-describe('desktop tool edit approval', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+// Live clock: the window follows the session's log, and the user acts on
+// it, on real turns.
+layer(SessionGraph.layer, { excludeTestServices: true })(
+  'desktop tool edit approval',
+  (it) => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
 
-  it.live(
-    'applies the proposed copy as the user left it when the window approves',
-    () =>
-      Effect.scoped(
+    it.effect(
+      'applies the proposed copy as the user left it when the window approves',
+      () =>
         Effect.gen(function* () {
-          const { requestToolEditApproval, controllerModule, desktopModule } =
-            yield* Effect.tryPromise(async () => {
-              vi.resetModules();
-              const { installPlatform } =
-                await import('@test/support/setupPlatform');
-              await installPlatform({ workspacePath: '/workspace' });
-              await import('@test/support/sessionGraphTestSetup');
-              const [approval, controllerModule, desktopModule] =
-                await Promise.all([
-                  import('@tools/approval/toolEditApproval'),
-                  import('@texra/controllers/approval/ToolEditApprovalController'),
-                  import('@desktop/main/desktopToolEditApproval'),
-                ]);
-              return {
-                requestToolEditApproval: approval.requestToolEditApproval,
-                controllerModule,
-                desktopModule,
-              };
-            });
-          const session = yield* createTestSession();
-          yield* Effect.addFinalizer(() => closeSessionOf(session));
+          // The window's process runtime. The controller's verbs are Effects
+          // and it holds no runtime of its own; a desktop window hands them
+          // its process runtime, and so does this suite.
+          const runtime = yield* SessionGraph.runtime;
+          const onRuntime = <A, E>(
+            program: Effect.Effect<
+              A,
+              E,
+              FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+            >,
+          ) => Effect.promise(() => runtime.runPromise(program));
+          const localSession = yield* TestSession.open(undefined, {
+            host: {},
+          });
+          const session = yield* sessionHandleOf(localSession);
           const roots = createFakeWorkspaceRoots({
             workspacePath: '/workspace',
           });
@@ -91,9 +75,9 @@ describe('desktop tool edit approval', () => {
               const opened: string[] = [];
               // The previews the host staged, as each program produces one.
               const staged: ToolEditPreview[] = [];
-              const host = new desktopModule.DesktopToolEditApprovalHost({
+              const host = new DesktopToolEditApprovalHost({
                 spawn: (program) => {
-                  testRuntime().runFork(program);
+                  runtime.runFork(program);
                 },
                 focused: () => focused,
                 ui: {
@@ -115,13 +99,12 @@ describe('desktop tool edit approval', () => {
                   ),
                 ),
               );
-              const controller =
-                new controllerModule.ToolEditApprovalController({
-                  host,
-                  session: testSessionOf(session),
-                  roots,
-                });
-              const window = testRuntime().runFork(controller.follow);
+              const controller = new ToolEditApprovalController({
+                host,
+                session: localSession,
+                roots,
+              });
+              const window = runtime.runFork(controller.follow);
               yield* Effect.addFinalizer(() => Fiber.interrupt(window));
               return { controller, opened, staged, window };
             });
@@ -188,7 +171,7 @@ describe('desktop tool edit approval', () => {
             }),
           );
         }),
-      ),
-    30_000,
-  );
-});
+      30_000,
+    );
+  },
+);

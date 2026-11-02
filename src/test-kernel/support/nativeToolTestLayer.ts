@@ -1,4 +1,4 @@
-/** Explicit call capabilities over the test host's existing process services. */
+/** Explicit call capabilities over the calling fiber's process services. */
 import { Context, Effect, Layer, Schema, Scope, SynchronizedRef } from 'effect';
 
 import { Interactions } from '@agent/runtime/HostInteractions';
@@ -32,7 +32,6 @@ import {
 } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { testCallPluginServices } from '@test/support/testPluginServices';
 import { RunFileService } from '@utils/files/runStorage';
@@ -73,7 +72,8 @@ export const testRunTools = (
  *  (what it read and edited) are read from its session's store, as a
  *  resumed process reads them. The call's `Runs` are its run's session's;
  *  a call outside any run gets a registry over an empty fold, as it tracks
- *  no run. */
+ *  no run. The process services the call reads are the calling fiber's:
+ *  a suite provides this layer inside its `SessionGraph` block. */
 export function nativeToolTestLayer(
   options: Partial<Omit<ToolEnv, 'run'>> &
     Partial<Pick<ToolContextShape, 'callId' | 'emit'>> & {
@@ -108,9 +108,10 @@ export function nativeToolTestLayer(
   };
   // One layer value, which the plugin services are built over; the child
   // door reads the same runs off the call's session.
-  const runs = Layer.sync(Runs, () =>
-    session === undefined ? testRunRegistry() : Context.get(session, Runs),
-  );
+  const runs =
+    session === undefined
+      ? Layer.effect(Runs, testRunRegistry)
+      : Layer.succeed(Runs)(Context.get(session, Runs));
   // A test call is no script's and issues none; under a run it launches
   // children through the door over its own place in the run, and outside
   // one the place and the door keep their defaults (null, a refusal).
@@ -141,11 +142,8 @@ export function nativeToolTestLayer(
       ? Layer.effectDiscard(Effect.void)
       : Layer.succeed(ChildRuns)(childRuns(runCall));
   return Layer.mergeAll(
-    Layer.effectContext(testRuntime().contextEffect),
     // The call's rooted filesystems, from the same roots it is given.
-    sessionFsLayer(roots).pipe(
-      Layer.provide(Layer.effectContext(testRuntime().contextEffect)),
-    ),
+    sessionFsLayer(roots),
     Layer.sync(ToolContext, (): ToolContextShape => ({
       callId,
       env: {
