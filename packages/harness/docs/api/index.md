@@ -20,6 +20,10 @@ What an embedder needs to know, in order:
 4. `session.resume(runId)` continues a run a persistent session stored.
 5. `session.attach({ approve })` answers the approvals a run asks for.
 
+Model requests go through the harness's own HTTP transport. To answer them
+yourself (a scripted model in a test), merge {@link ModelFetch} beneath
+`Sessions.layer` with `Layer.provideMerge`.
+
 The surface is Effect: nothing here calls `Effect.runPromise`; your
 program runs it at its own entry point. Every failure is a tagged error
 listed below.
@@ -410,6 +414,12 @@ interface LocalSession extends Session {
      * {@link head}, or a snapshot's `cursor`), in write order, then each
      * new one as it is written. `drained`, if given, is updated to the
      * position each read reached.
+     *
+     * Another process writing to the same store is seen here as soon as its
+     * commit is read, while `current` and `changes` take it up on the
+     * store's next poll (about 250 ms). A caller that acts on an event here
+     * and then needs the snapshot to show it waits on `changes` rather than
+     * reading `current` once.
      */
     readonly events: (
       from: CommitOrdinal,
@@ -445,6 +455,25 @@ interface LocalSession extends Session {
    *  shown to the attached host (or queued for the next one). */
   readonly settled: Effect.Effect<void>;
 }
+```
+
+## ModelFetch
+
+The fetch every model request of the process's runs goes through, when the
+embedder supplies one: a fake model for a test or an example, a recording
+or instrumented transport. Merge it beneath `Sessions.layer` (or
+`processLayer`) with `Layer.provideMerge`, so it stays in the context the
+runs read; the supplied fetch then owns the proxy policy and the timeouts
+too. Absent, the harness's own transport carries model traffic:
+the environment's proxy policy, a project's `.env` proxy over it, and the
+long-stream timeouts a streamed reasoning turn needs. A service read as an
+option, not a `Context.Reference`, because that default depends on the
+run's project.
+
+```ts
+class ModelFetch extends Context.Service<ModelFetch, typeof fetch>()(
+  '@texra-ai/harness/ModelFetch',
+)
 ```
 
 ## NotOwner

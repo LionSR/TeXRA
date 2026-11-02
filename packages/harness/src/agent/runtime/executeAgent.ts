@@ -58,7 +58,7 @@ export interface ExecuteAgentOptions {
    *  a fresh run's is its registration's. */
   readonly parentRunId?: RunId;
   /** The child-run policy: each turn's permit, each turn's settlement. */
-  readonly turns?: ChildRunTurns<RunReport>;
+  readonly turns?: ChildRunTurns<RunReport, AgentRunServices>;
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
