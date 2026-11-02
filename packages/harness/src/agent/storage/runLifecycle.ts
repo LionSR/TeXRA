@@ -149,8 +149,9 @@ export const registrationRows = Effect.fn('registrationRows')(function* (
   }).pipe(defectAsFailure);
 });
 
-/** What ends a run: its outcome and the facts its `run.end` carries. */
-export interface FinalizeRunInput {
+/** What ends a run: its outcome and the facts its `run.end` carries; `R`,
+ *  what building its last turn reads of the caller beside its session. */
+export interface FinalizeRunInput<R = never> {
   readonly runId: RunId;
   readonly outcome: RunOutcome;
   /** An end no driver here writes (a stop that reached no live target, a
@@ -164,7 +165,7 @@ export interface FinalizeRunInput {
    *  committed with that end (or, if refused, the notice that it was lost). */
   readonly lastTurn?: (
     outcome: RunOutcome,
-  ) => Effect.Effect<TransactionPart | undefined, never, EndServices>;
+  ) => Effect.Effect<TransactionPart | undefined, never, EndServices | R>;
 }
 
 /** The `run.end` held (`wrote`: this call's); none if unborn or held back. */
@@ -312,12 +313,12 @@ const beforeEnd = Effect.fn('beforeEnd')(function* (
 /** The one writer of a run's end ({@link endIn}, in its own transaction),
  *  driver's or not, answering the end the store holds. An end that does
  *  not commit fails it, after a FAILED backstop end it tries alone, loudly. */
-export const finalizeRun = Effect.fn('finalizeRun')(function* (
-  input: FinalizeRunInput,
+export const finalizeRun = Effect.fn('finalizeRun')(function* <R = never>(
+  input: FinalizeRunInput<R>,
 ): Effect.fn.Return<
   FinalizedRun,
   Error,
-  Scope.Scope | EndServices | SessionViewAccess | SessionRoots
+  R | Scope.Scope | EndServices | SessionViewAccess | SessionRoots
 > {
   const { runId, outcome, ownerless } = input;
   const services = yield* endServices;

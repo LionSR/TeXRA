@@ -2,7 +2,9 @@
 
 Runs [`@texra-ai/llm`](../../llm/README.md) and [`@texra-ai/harness`](../README.md) the way a consumer off the registry gets them: both packages are packed into `.tgz` tarballs, installed into a fresh directory outside the repository with `npm install`, type-checked with `skipLibCheck: false`, and executed by `node`. Every import specifier is a published package subpath (`@texra-ai/llm`, `@texra-ai/llm/node`, `@texra-ai/harness`, `@texra-ai/harness/node`, `@texra-ai/harness/plugins`, `@texra-ai/harness/schemas`, `@texra-ai/harness/transcript`), never a workspace path alias.
 
-None of the examples need a provider API key or network access: `01-llm-turn.ts` supplies in-process `fetch` handlers, and `02`–`08` use `_support.ts`, which wires `nodePlatform` with an in-memory Anthropic Messages SSE dispatcher.
+None of the examples need a provider API key or network access: `01-llm-turn.ts` supplies in-process `fetch` handlers to `bindModel`, and `02`–`08` use `_support.ts`, which builds `nodePlatform` and provides the harness's `ModelFetch` beneath `Sessions.layer` with an in-memory Anthropic Messages SSE fetch that answers each request with the example's next scripted turn.
+
+Set `TEXRA_EXAMPLE_MODEL` to a `provider/model` string (for example `anthropic/claude-sonnet-5-5`) to run `02`–`08` against that real route instead: `_support.ts` then supplies no fetch, the harness's own transport carries the requests, and the provider's API key comes from its usual environment variable (`<PROVIDER>_API_KEY`, such as `ANTHROPIC_API_KEY`). The checks an example makes on its scripted turns (request counts, the exact replies) hold only on the in-memory model.
 
 ```bash
 corepack pnpm --filter @texra-ai/harness run example:packed

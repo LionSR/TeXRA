@@ -73,6 +73,7 @@ import { it } from '@effect/vitest';
 import {
   Duration,
   Effect,
+  Exit,
   Fiber,
   RcMap,
   Schema,
@@ -88,6 +89,10 @@ import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { Runs } from '@agent/runtime/runRegistry';
 import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import {
+  nodeProcesses,
+  processOwnerId,
+} from '@platform/defaults/nodeProcesses';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
@@ -1200,6 +1205,181 @@ export function crashConformanceSuite(): void {
           }),
         600_000,
       );
+    /**
+     * A background command its stopped parent let go (a detach) has no
+     * parent to finish it when the process running it dies: the next open
+     * ends it once, failed with its outcome unknown, never runs it again,
+     * and lets its claim go. Parentless is not unowned: a command another
+     * live process still runs is left as it stands.
+     *
+     * The clean pass sends two commands to the background, each waiting for
+     * a release that never comes, then stops their parent, keeping them
+     * running. The cut is the last commit before the session's close ends
+     * them: the parent has ended and the commands run detached. The first,
+     * which the open reaches first, is the control, its claim a live
+     * process's; the second's owner died.
+     */
+    it.live(
+      'ends a detached command a dead process left running, once',
+      () =>
+        Effect.gen(function* () {
+          const roots = testWorkspaceRoots();
+          const root = generateRunId();
+          const SEND = 'Run in the background.';
+          const of = (rows: readonly Row[], run: string, type: string) =>
+            rows.filter((row) => row.run === run && row.type === type);
+          /** The root's background commands, in launch order. */
+          const commands = (rows: readonly Row[]) =>
+            rows
+              .filter(
+                (row) =>
+                  row.type === 'run.start' &&
+                  row.parent === root &&
+                  (json(row).identity as { kind: string }).kind === 'process',
+              )
+              // cast: the store's logical id of a run aggregate is its RunId.
+              .map((row) => row.run as RunId);
+          const began = (rows: readonly Row[]) =>
+            commands(rows).filter((run) =>
+              of(rows, run, 'child.turn').some(
+                (row) => json(row).phase === 'accepted',
+              ),
+            ).length;
+          const { points, clean } = yield* cleanPass(
+            roots,
+            (session) =>
+              withProcessServices(
+                testRuntime(),
+                rootRun({
+                  config: Schema.decodeUnknownSync(AgentConfigSchema)({
+                    agent: 'golden_script',
+                    model: 'openai/gpt-5.6-sol',
+                    instruction: SEND,
+                  }),
+                  runId: root,
+                  interactive: true,
+                }).pipe(Effect.provide(session)),
+              ),
+            (session) =>
+              Effect.gen(function* () {
+                const requests = Context.get(session, SessionRequests);
+                yield* until(roots.storage, (rows) =>
+                  parkedAfter(rows, root, 1),
+                );
+                yield* requests.request({
+                  kind: 'followUp.send',
+                  runId: root,
+                  text: SEND,
+                });
+                yield* until(
+                  roots.storage,
+                  (rows) => parkedAfter(rows, root, 2) && began(rows) === 2,
+                );
+                yield* requests.request({
+                  kind: 'run.stop',
+                  runId: root,
+                  detachActiveChildren: true,
+                  reason: 'user',
+                });
+                yield* until(
+                  roots.storage,
+                  (rows) =>
+                    of(rows, root, 'run.end').length > 0 &&
+                    commands(rows).every(
+                      (run) => of(rows, run, 'run.detach').length > 0,
+                    ),
+                );
+              }).pipe(Effect.provide(session)),
+          );
+          const cleanRows = rowsOf(roots.storage);
+          expect(commands(cleanRows)).toHaveLength(2);
+          const [control, detached] = commands(cleanRows) as [RunId, RunId];
+          // The cut: the parent ended, both commands run detached, neither
+          // has ended yet.
+          const ended = cleanRows.filter(
+            (row) =>
+              (row.run === control || row.run === detached) &&
+              row.type === 'run.end',
+          );
+          const n = Math.max(
+            ...points.filter((point) =>
+              ended.every((row) => point < row.commit),
+            ),
+          );
+          // Owners other than the suite's own (its start reads `vitest`):
+          // this live process under its real start, and one that died.
+          const live = processOwnerId(
+            yield* withProcessServices(
+              testRuntime(),
+              nodeProcesses.selfIdentity(),
+            ),
+          );
+          const dead = processOwnerId('killed');
+          const storage = join(roots.storage, 'crash-detached');
+          crashAt(clean, storage, n);
+          const db = new DatabaseSync(join(storage, 'texra.db'));
+          try {
+            const own = db.prepare(
+              "UPDATE event_sequence SET owner_id = ? WHERE kind = 'run' AND logical_id = ?",
+            );
+            own.run(live, control);
+            own.run(dead, detached);
+          } finally {
+            db.close();
+          }
+          const reopened = yield* Effect.scoped(
+            Effect.gen(function* () {
+              const session = yield* openTestDefaultSession({
+                roots: { ...roots, storage },
+              });
+              const log = Context.get(session, SessionLog);
+              const isEnded = (rows: readonly Row[]) =>
+                of(rows, detached, 'run.end').length > 0;
+              // Its end's claim goes with the end, not with the session.
+              const released = Effect.gen(function* () {
+                while ((yield* log.owner(detached)).ownerId !== null)
+                  yield* Effect.sleep(Duration.millis(25));
+              }).pipe(Effect.timeout('30 seconds'));
+              const closed = yield* Effect.exit(
+                Effect.andThen(until(storage, isEnded), released),
+              );
+              return {
+                released: Exit.isSuccess(closed),
+                control: yield* log.owner(control),
+              };
+            }).pipe(Effect.ensuring(closeTestDefaultSession)),
+          );
+          const final = rowsOf(storage);
+          const after = (run: RunId) =>
+            final.filter((row) => row.run === run && row.commit > n);
+          expect(
+            of(final, detached, 'run.end').map((row) => json(row).outcome),
+          ).toEqual(['failed']);
+          expect(reopened.released).toBe(true);
+          expect(
+            of(after(detached), detached, 'run.report').map((row) =>
+              String(json(row).report),
+            ),
+          ).toEqual([expect.stringContaining('its outcome is unknown')]);
+          // Never run again: no turn begun after the cut, no run launched.
+          expect(
+            after(detached).filter(
+              (row) =>
+                row.type === 'child.turn' && json(row).phase === 'accepted',
+            ),
+          ).toEqual([]);
+          expect(
+            final.filter((row) => row.commit > n && row.type === 'run.start'),
+          ).toEqual([]);
+          // The control, untouched under its live owner.
+          expect(after(control)).toEqual([]);
+          expect(reopened.control).toEqual({
+            ownerId: live,
+            liveness: 'alive',
+          });
+        }),
+      600_000,
+    );
     /**
      * A job's appends commit together: a process killed between two of them
      * leaves neither on disk. The cut is the store's files copied while the

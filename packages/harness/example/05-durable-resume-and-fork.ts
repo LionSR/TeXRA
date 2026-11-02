@@ -12,13 +12,13 @@
  *    the first `run1` handle again: they are its own activation's, and the
  *    read ends without waiting for the resumed one.
  */
-import { Effect, Option, Stream } from 'effect';
+import { Effect, Layer, Option, Stream } from 'effect';
 import { responseText, Sessions } from '@texra-ai/harness';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
 import { makeExampleWorkspace } from './_support.ts';
 
-const { platform, requests } = await makeExampleWorkspace([
+const { platform, route } = await makeExampleWorkspace([
   { text: 'Drafted section 1 with an informal proof sketch.' },
   { text: 'Rewrote section 1 with Lemma 1 and a formal proof.' },
 ]);
@@ -35,7 +35,7 @@ const program = Effect.gen(function* () {
       tools: ['read_file'],
     },
     instruction: 'Draft section 1.',
-    model: 'anthropic/claude-sonnet-5-5',
+    model: route.model,
     interactive: true,
   });
 
@@ -67,7 +67,9 @@ const program = Effect.gen(function* () {
   });
 
   // Send a follow-up to the forked run; sending to a stopped interactive run
-  // resumes it from its committed history in SQLite
+  // resumes it from its committed history in SQLite. Its reply ends on a
+  // wait later than any it holds now.
+  const forkedWait = session.view.current().runs.get(forkedRunId)?.forkPoint;
   const sendOutcome = yield* session.request({
     kind: 'followUp.send',
     runId: forkedRunId,
@@ -83,7 +85,7 @@ const program = Effect.gen(function* () {
       return (
         forked?.status === 'waiting' &&
         pendingFollowUps === 0 &&
-        requests.length === 2
+        forked.forkPoint !== forkedWait
       );
     }),
   );
@@ -124,7 +126,11 @@ const program = Effect.gen(function* () {
   );
 }).pipe(
   Effect.scoped,
-  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
+  Effect.provide(
+    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
+      Layer.provideMerge(route.transport),
+    ),
+  ),
 );
 
 await Effect.runPromise(program);

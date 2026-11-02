@@ -47,7 +47,7 @@ const logLifecycleWarning = (message: string, data: unknown) =>
 
 /** What ends an activation: the run's end, on the caller's session, whose
  *  publisher every row of the run goes through in order. */
-interface EndActivationParams extends FinalizeRunInput {
+interface EndActivationParams<R = never> extends FinalizeRunInput<R> {
   /** Transcript stage closed with the resolved outcome (guarded). */
   readonly stage?: Pick<StageHandle, 'end'>;
 }
@@ -74,9 +74,9 @@ interface EndActivationResult {
  * writes (a failed hand-off).
  */
 export const endActivation = Effect.fn('endActivation')(
-  function* (
-    params: EndActivationParams,
-  ): Effect.fn.Return<EndActivationResult, Error, SessionServices> {
+  function* <R = never>(
+    params: EndActivationParams<R>,
+  ): Effect.fn.Return<EndActivationResult, Error, SessionServices | R> {
     const { runId, outcome } = params;
     // Close the transcript stage first: its `stage.end` is published ahead of
     // the `run.end` row, and a refusal of it is that row's write failure.
@@ -140,8 +140,9 @@ export const endActivation = Effect.fn('endActivation')(
   Effect.uninterruptible,
 );
 
-/** A child's last turn, finished under the outcome its end resolves. */
-type FinishLastTurn = ChildRunTurns<RunReport>['finishLastTurn'];
+/** A child's last turn, finished under the outcome its end resolves; `R`,
+ *  what finishing it reads of the run. */
+type FinishLastTurn<R> = ChildRunTurns<RunReport, R>['finishLastTurn'];
 
 /** The report of a run that ended before its loop produced an output. */
 function emptyReport(ctx: RunLaunch, outcome: RunOutcome): RunReport {
@@ -168,9 +169,9 @@ function withResolvedOutcome(
 
 /** End the run's activation with `end`'s facts; a child's last turn
  *  (`lastResult`) is finished under the resolved outcome. */
-const endWith = (
+const endWith = <R>(
   ctx: RunLaunch,
-  finish: FinishLastTurn | undefined,
+  finish: FinishLastTurn<R> | undefined,
   end: Pick<FinalizeRunInput, 'outcome' | 'error' | 'output'> & {
     readonly lastResult?: RunReport;
   },
@@ -192,9 +193,9 @@ const endWith = (
  * A stop that met the failure (`stopped`) outranks it: the failure rides
  * the cancelled row as its error.
  */
-const failedEnd = Effect.fn('failedEnd')(function* (
+const failedEnd = Effect.fn('failedEnd')(function* <R>(
   ctx: RunLaunch,
-  finish: FinishLastTurn | undefined,
+  finish: FinishLastTurn<R> | undefined,
   err: unknown,
   carried: RunReport | undefined,
   stopped = false,
@@ -290,12 +291,12 @@ const failedEnd = Effect.fn('failedEnd')(function* (
  * result. Uninterruptible: the run's stop is its fiber's interruption, and
  * one landing mid-way must not strand the run with no `run.end` row.
  */
-export const endRun = Effect.fn('endRun')(function* (
+export const endRun = Effect.fn('endRun')(function* <R = never>(
   ctx: RunLaunch,
   exit: Exit.Exit<RunReport, Error>,
   /** A child's last turn result, from the result its run ends with. */
-  finish?: FinishLastTurn,
-): Effect.fn.Return<RunReport, Error, SessionServices> {
+  finish?: FinishLastTurn<R>,
+): Effect.fn.Return<RunReport, Error, SessionServices | R> {
   if (Exit.isSuccess(exit)) {
     const result = exit.value;
     if (result.failure) {

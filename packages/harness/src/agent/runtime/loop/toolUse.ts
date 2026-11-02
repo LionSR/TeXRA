@@ -80,7 +80,7 @@ export interface ToolUseStart {
   /** The caller launched this as a resume; the run history decides what it is. */
   readonly resume: boolean;
   /** A native child's turn permit, and the turn result its boundary commits. */
-  readonly turns?: ChildRunBoundary<RunReport>;
+  readonly turns?: ChildRunBoundary<RunReport, AgentRunServices>;
 }
 
 /** A user message the loop appends itself. */
