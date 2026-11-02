@@ -1,15 +1,15 @@
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, expect, vi } from 'vitest';
 
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { FakeHost } from '@test/support/testKernel';
 import { GrepTool } from '@tools/grep';
 import * as execUtils from '@utils/system/execUtils';
 
-describe('GrepTool run', () => {
-  setupPlatform({ workspacePath: process.cwd() });
-
+layer(FakeHost.layer({ workspacePath: process.cwd() }), {
+  buildPerTest: true,
+})('GrepTool run', (it) => {
   afterEach(() => {
     vi.restoreAllMocks();
   });

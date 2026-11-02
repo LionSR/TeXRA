@@ -9,8 +9,8 @@ import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
 
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { installPlatform } from '@test/support/setupPlatform';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
+import { FakeHost } from '@test/support/testKernel';
 import { GlobTool } from '@tools/glob';
 import type { PluginToolServices } from '@texra-ai/harness/plugins';
 
@@ -50,7 +50,6 @@ function withGlobWorkspace(
   return withTempDirEffect('texra-glob-tool-', (workspacePath) =>
     Effect.gen(function* () {
       yield* Effect.promise(async () => {
-        await installPlatform({ workspacePath });
         await Promise.all(
           ['vanished.tex', 'blocked.tex'].map((name) =>
             writeFile(path.join(workspacePath, name), name),
@@ -61,12 +60,8 @@ function withGlobWorkspace(
       });
       yield* run(workspacePath).pipe(Effect.provide(nativeToolTestLayer()));
     }).pipe(
-      Effect.ensuring(
-        Effect.promise(() => {
-          vi.restoreAllMocks();
-          return installPlatform();
-        }),
-      ),
+      Effect.ensuring(Effect.sync(() => vi.restoreAllMocks())),
+      Effect.provide(FakeHost.layer({ workspacePath })),
     ),
   );
 }

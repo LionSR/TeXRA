@@ -1,46 +1,40 @@
 // Third-party imports
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
-import { afterEach, describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 // Local imports
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
-import {
-  fakeProcessServices,
-  installedHost,
-  installPlatform,
-} from '@test/support/setupPlatform';
+import { installedHost } from '@test/support/setupPlatform';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { wolfram } from '@texra/tools/wolframPlugin';
 import { texraPlugins } from '@texra/tools/registry';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
-describe('seedDisabledToolDefaults', () => {
-  afterEach(() => installPlatform());
+/** A host whose DISABLED_TOOLS list is already seeded, and empty. */
+const seeded = FakeHost.layer({
+  globalState: { [GlobalStateKey.DISABLED_TOOLS]: [] as string[] },
+});
 
+layer(seeded, { buildPerTest: true })('seedDisabledToolDefaults', (it) => {
   // An empty list is the person's choice (every tool enabled); reseeding it
   // would silently switch their tools back off on the next start.
   it.effect(
     'does not seed for an already-seeded DISABLED_TOOLS list, even an empty one',
     () =>
       Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installPlatform({
-            globalState: { [GlobalStateKey.DISABLED_TOOLS]: [] as string[] },
-          }),
-        );
+        const { globalState } = (yield* FakeHost).roots;
 
         yield* seedDisabledToolDefaults(
-          installedHost().roots.globalState,
+          globalState,
           texraPlugins({ name: 'vscode' }),
         );
 
-        expect(
-          yield* installedHost().roots.globalState.get(
-            GlobalStateKey.DISABLED_TOOLS,
-          ),
-        ).toEqual([]);
+        expect(yield* globalState.get(GlobalStateKey.DISABLED_TOOLS)).toEqual(
+          [],
+        );
       }),
   );
 });
@@ -49,17 +43,14 @@ describe('seedDisabledToolDefaults', () => {
  * A dashboard refresh forks the version probes; an interrupted refresh must
  * stop the `<tool> --version` process it spawned, not leave it running.
  */
-describe('external tool availability probes', () => {
+layer(SessionGraph.layer)('external tool availability probes', (it) => {
   it.effect('an interrupted version probe stops the process it spawned', () =>
     Effect.gen(function* () {
       const spawner = scriptedSpawnerLayer(() => 'hang');
       const fiber = yield* Effect.forkChild(
         wolfram
           .availability!.check(installedHost().roots)
-          .pipe(
-            Effect.provide(spawner.layer),
-            Effect.provide(fakeProcessServices()),
-          ),
+          .pipe(Effect.provide(spawner.layer)),
       );
 
       yield* Effect.promise(() =>

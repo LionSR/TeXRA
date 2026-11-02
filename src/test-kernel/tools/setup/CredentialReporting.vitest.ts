@@ -2,14 +2,14 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, vi } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
 
 // Local imports
 import { apiKeyEnvName } from '@texra-ai/llm';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { FakeHost } from '@test/support/testKernel';
 import { ProbeEnvironmentTool } from '@texra/tools/setup/ProbeEnvironmentTool';
 
 // Local file imports
@@ -36,7 +36,11 @@ function outputOf(result: { output?: string }): string {
   return result.output ?? '';
 }
 
-setupPlatform({}, { setup: createFakeSetupPlatform() });
+/** A host whose environment holds a provider key. */
+const host = FakeHost.layer(
+  { env: { [apiKeyEnvName('deepseek')]: 'private-test-value' } },
+  { setup: createFakeSetupPlatform() },
+);
 
 beforeEach(() => {
   // The default fake host has no credentials at all, so the aggregate probe
@@ -54,19 +58,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('setup credential reporting', () => {
+layer(host, { buildPerTest: true })('setup credential reporting', (it) => {
   it.effect(
     'reports the active host and provider-key origin without secret values',
     () =>
       Effect.gen(function* () {
-        yield* Effect.tryPromise(() =>
-          installPlatform(
-            {
-              env: { [apiKeyEnvName('deepseek')]: 'private-test-value' },
-            },
-            { setup: createFakeSetupPlatform() },
-          ),
-        );
         const result = yield* ProbeEnvironmentTool.call({}).pipe(
           Effect.provide(withSetup(nativeToolTestLayer(), 'cli')),
         );

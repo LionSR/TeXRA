@@ -1,5 +1,3 @@
-import '@test/support/defaultSessionTestSetup';
-
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';

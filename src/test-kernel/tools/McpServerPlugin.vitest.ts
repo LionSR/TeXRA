@@ -1,5 +1,3 @@
-import '@test/support/defaultSessionTestSetup';
-
 import {
   existsSync,
   mkdtempSync,
@@ -26,12 +24,12 @@ import { describe, expect } from 'vitest';
 
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import { SessionLog } from '@shared/session/runHistory';
-import { closeSessionOf } from '@test/support/sessionEnd';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { installedHost } from '@test/support/setupPlatform';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
+import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
 import { toolCatalogLayer } from '@tools/liveTools';
 import { mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import { toolTable } from '@tools/toolTable';
@@ -39,7 +37,6 @@ import {
   autoDecideRequests,
   createRecordingHost,
   decideRequest,
-  sessionWithInteractions,
 } from '../agent/progressTestUtils';
 import type { RunId } from '@texra-ai/harness/schemas';
 
@@ -125,122 +122,130 @@ const writtenText = (file: string) =>
   }).pipe(Effect.timeout(Duration.seconds(5)));
 
 describe('MCP server plugins', () => {
-  // it.live: a real child process answers over stdio, and the approval's
-  // `request.opened` row is delivered by a consumer on the process runtime.
-  it.live(
-    'offers a configured server tools, gates each call on approval, and stops the server with the composition',
-    () =>
-      Effect.gen(function* () {
-        const dir = yield* tempDir;
-        const pidFile = path.join(dir, 'pid');
-        writeFileSync(path.join(dir, 'server.cjs'), FIXTURE_SERVER);
-        const writeConfig = (mode: string) =>
-          writeFileSync(
-            path.join(dir, 'mcp.json'),
-            JSON.stringify({
-              mcpServers: {
-                fixture: {
-                  command: process.execPath,
-                  args: [path.join(dir, 'server.cjs'), pidFile],
-                  env: { FIXTURE_MODE: mode },
-                },
-              },
-            }),
+  // Live clock: a real child process answers over stdio, and the approval's
+  // `request.opened` row is delivered by a consumer of the session's log.
+  it.layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+    it.effect(
+      'offers a configured server tools, gates each call on approval, and stops the server with the composition',
+      () =>
+        Effect.gen(function* () {
+          // The session the call's approval request opens on, with a recording
+          // host attached; opened before the tool layer below, which serves
+          // the process services of a call.
+          const session = yield* isolatedTestSession(
+            createRecordingHost().interactions,
           );
-        writeConfig('a');
-        // A credential-shaped variable of this process never reaches the
-        // server unless its entry names it.
-        process.env.FIXTURE_API_KEY = 'secret';
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => delete process.env.FIXTURE_API_KEY),
-        );
+          yield* Effect.gen(function* () {
+            const dir = yield* tempDir;
+            const pidFile = path.join(dir, 'pid');
+            writeFileSync(path.join(dir, 'server.cjs'), FIXTURE_SERVER);
+            const writeConfig = (mode: string) =>
+              writeFileSync(
+                path.join(dir, 'mcp.json'),
+                JSON.stringify({
+                  mcpServers: {
+                    fixture: {
+                      command: process.execPath,
+                      args: [path.join(dir, 'server.cjs'), pidFile],
+                      env: { FIXTURE_MODE: mode },
+                    },
+                  },
+                }),
+              );
+            writeConfig('a');
+            // A credential-shaped variable of this process never reaches the
+            // server unless its entry names it.
+            process.env.FIXTURE_API_KEY = 'secret';
+            yield* Effect.addFinalizer(() =>
+              Effect.sync(() => delete process.env.FIXTURE_API_KEY),
+            );
 
-        const services = yield* Layer.build(mcpToolTableLayer(dir));
-        const open = (pin: Scope.Scope) =>
-          resolveTestStep({
-            tools: [{ name: 'mcp__fixture__*' }],
-            injectTools: false,
-            stores: installedHost().roots,
-            workspaceRoot: undefined,
-          }).pipe(Scope.provide(pin), Effect.provideContext(services));
-        const pin = yield* Scope.make();
-        const resolved = yield* open(pin);
-        expect([...resolved.held.warnings, ...resolved.warnings]).toEqual([]);
-        expect(resolved.definitions).toEqual([
-          expect.objectContaining({
-            name: 'mcp__fixture__echo',
-            parameters: expect.objectContaining({ required: ['text'] }),
-          }),
-        ]);
-        const pid = Number(readFileSync(pidFile, 'utf8'));
-        expect(isAlive(pid)).toBe(true);
-
-        // An edited env value is a new revision: a run opened now gets its
-        // own server, whose tools supersede the old revision's in the catalog
-        // while the open run keeps the server it started with.
-        writeConfig('b');
-        const editedPin = yield* Scope.make();
-        yield* open(editedPin);
-        const editedPid = Number(readFileSync(pidFile, 'utf8'));
-        expect(editedPid).not.toBe(pid);
-        yield* Scope.close(editedPin, Exit.void);
-
-        // The call goes through the loop's guard: a bash request the
-        // session's approval authority opens, answered here.
-        const runId = 'a99f0000c0d1' as RunId;
-        const session = yield* Effect.acquireRelease(
-          sessionWithInteractions(createRecordingHost().interactions),
-          (session) => closeSessionOf(session),
-        );
-        publishTestRunStart(session, runId);
-        yield* Context.get(session, SessionLog).settled;
-        const requestOpened = yield* Deferred.make<void>();
-        const requests = yield* Effect.acquireRelease(
-          Effect.sync(() =>
-            autoDecideRequests(session, () => {
-              Deferred.doneUnsafe(requestOpened, Effect.void);
-              return null;
-            }),
-          ),
-          (requests) => Effect.sync(() => requests.detach()),
-        );
-        const tool = resolved.registry.get('mcp__fixture__echo')!;
-        const call = yield* Effect.forkChild(
-          guardedToolCall(tool, { text: 'hi' }).pipe(
-            Effect.provide(
-              nativeToolTestLayer({
-                run: { session, runId, toolPolicy: {} },
+            const services = yield* Layer.build(mcpToolTableLayer(dir));
+            const open = (pin: Scope.Scope) =>
+              resolveTestStep({
+                tools: [{ name: 'mcp__fixture__*' }],
+                injectTools: false,
+                stores: installedHost().roots,
+                workspaceRoot: undefined,
+              }).pipe(Scope.provide(pin), Effect.provideContext(services));
+            const pin = yield* Scope.make();
+            const resolved = yield* open(pin);
+            expect([...resolved.held.warnings, ...resolved.warnings]).toEqual(
+              [],
+            );
+            expect(resolved.definitions).toEqual([
+              expect.objectContaining({
+                name: 'mcp__fixture__echo',
+                parameters: expect.objectContaining({ required: ['text'] }),
               }),
-            ),
-          ),
-        );
-        yield* Deferred.await(requestOpened);
-        const opened = requests.opened[0]!;
-        expect(opened.payload).toMatchObject({
-          kind: 'bash',
-          data: { command: 'mcp fixture echo {"text":"hi"}' },
-        });
-        decideRequest(
-          session,
-          { runId, requestId: opened.requestId },
-          { action: 'approve' },
-        );
-        expect(yield* Fiber.join(call)).toMatchObject({
-          status: 'executed',
-          output: 'echo: hi (key: unset)',
-        });
+            ]);
+            const pid = Number(readFileSync(pidFile, 'utf8'));
+            expect(isAlive(pid)).toBe(true);
 
-        // The run's pin was the server's last holder: closing it stops the
-        // server.
-        yield* Scope.close(pin, Exit.void);
-        yield* Effect.gen(function* () {
-          while (isAlive(pid) || isAlive(editedPid))
-            yield* Effect.sleep(Duration.millis(20));
-        }).pipe(Effect.timeout(Duration.seconds(5)));
-        expect([isAlive(pid), isAlive(editedPid)]).toEqual([false, false]);
-      }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer())),
-    20_000,
-  );
+            // An edited env value is a new revision: a run opened now gets its
+            // own server, whose tools supersede the old revision's in the catalog
+            // while the open run keeps the server it started with.
+            writeConfig('b');
+            const editedPin = yield* Scope.make();
+            yield* open(editedPin);
+            const editedPid = Number(readFileSync(pidFile, 'utf8'));
+            expect(editedPid).not.toBe(pid);
+            yield* Scope.close(editedPin, Exit.void);
+
+            // The call goes through the loop's guard: a bash request the
+            // session's approval authority opens, answered here.
+            const runId = 'a99f0000c0d1' as RunId;
+            publishTestRunStart(session, runId);
+            yield* Context.get(session, SessionLog).settled;
+            const requestOpened = yield* Deferred.make<void>();
+            const requests = yield* Effect.acquireRelease(
+              Effect.sync(() =>
+                autoDecideRequests(session, () => {
+                  Deferred.doneUnsafe(requestOpened, Effect.void);
+                  return null;
+                }),
+              ),
+              (requests) => Effect.sync(() => requests.detach()),
+            );
+            const tool = resolved.registry.get('mcp__fixture__echo')!;
+            const call = yield* Effect.forkChild(
+              guardedToolCall(tool, { text: 'hi' }).pipe(
+                Effect.provide(
+                  nativeToolTestLayer({
+                    run: { session, runId, toolPolicy: {} },
+                  }),
+                ),
+              ),
+            );
+            yield* Deferred.await(requestOpened);
+            const opened = requests.opened[0]!;
+            expect(opened.payload).toMatchObject({
+              kind: 'bash',
+              data: { command: 'mcp fixture echo {"text":"hi"}' },
+            });
+            decideRequest(
+              session,
+              { runId, requestId: opened.requestId },
+              { action: 'approve' },
+            );
+            expect(yield* Fiber.join(call)).toMatchObject({
+              status: 'executed',
+              output: 'echo: hi (key: unset)',
+            });
+
+            // The run's pin was the server's last holder: closing it stops the
+            // server.
+            yield* Scope.close(pin, Exit.void);
+            yield* Effect.gen(function* () {
+              while (isAlive(pid) || isAlive(editedPid))
+                yield* Effect.sleep(Duration.millis(20));
+            }).pipe(Effect.timeout(Duration.seconds(5)));
+            expect([isAlive(pid), isAlive(editedPid)]).toEqual([false, false]);
+          }).pipe(Effect.scoped, Effect.provide(nativeToolTestLayer()));
+        }),
+      20_000,
+    );
+  });
 
   // Failure mode: a call the run stops waiting for (a stop, or the call's
   // timeout) is never cancelled, so the server keeps working on it.
