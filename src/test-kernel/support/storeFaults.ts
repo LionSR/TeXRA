@@ -67,6 +67,7 @@ const WRITES = ['appendAll', 'job', 'acquireClaims', 'releaseClaims'] as const;
 const READS = [
   'readRunRecords',
   'readAggregate',
+  'readInputBatch',
   'claimOwner',
   'aggregateState',
 ] as const;
@@ -286,7 +287,7 @@ export function crashAt(
  * run files beside it, copied to a fresh root with every claim held by a
  * dead owner (or by `owner`). Returns that root, for a fresh session to open.
  */
-function crashedCopy(storage: string, owner?: string): string {
+export function crashedCopy(storage: string, owner?: string): string {
   const crashed = join(storage, `crashed-${Date.now()}`);
   const committed = join(storage, 'committed.db');
   const db = new DatabaseSync(storeFile(storage));

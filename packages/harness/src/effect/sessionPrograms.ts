@@ -160,16 +160,22 @@ function start(
       return yield* runFailure(
         new Error(`Run ${runId} already exists in this session.`),
       );
-    const activation = yield* rootRun({
-      ...input,
-      config,
-      runId,
-    }).pipe(
+    // `rootRun` stops a run whose opening is interrupted. A caller
+    // interrupted after the run opened, before this hands its handle back,
+    // never holds the run either: the handle, built as the run opens, stops
+    // it. Only this call's own handle, so a caller that never opened the run
+    // stops nobody else's.
+    let opened: Run | undefined;
+    return yield* rootRun({ ...input, config, runId }).pipe(
       Effect.provideService(SessionOwner, owner),
       Effect.provide(session),
       Effect.mapError(runFailure),
+      Effect.map((activation) => {
+        opened = runView(session, runId, activation);
+        return opened;
+      }),
+      Effect.onInterrupt(() => opened?.interrupt ?? Effect.void),
     );
-    return runView(session, runId, activation);
   });
 }
 
