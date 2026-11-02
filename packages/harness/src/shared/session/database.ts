@@ -368,9 +368,12 @@ export class Database extends Context.Service<
         cleanup: (runIds: readonly RunId[]) => Effect.Effect<void, Error>,
       ) => Effect.Effect<void, Error>;
     };
-    /** Clear only this process's claims, in one transaction. */
+    /** Clear only this process's claims, in one transaction, unless
+     *  `heldAgain`, read under that transaction's write lock, says a holder
+     *  here took them back meanwhile. */
     readonly releaseClaims: (
       ids: readonly AggregateId[],
+      heldAgain?: () => boolean,
     ) => Effect.Effect<void, DatabaseWriteFailed>;
     /** The event prefix, current claims and damaged runs from one read: the
      *  claims of `checkedIds` and of every aggregate whose existence or

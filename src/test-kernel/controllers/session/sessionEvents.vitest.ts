@@ -35,6 +35,7 @@ import * as SqlDriver from '@effect/sql-sqlite-node/SqliteClient';
 import {
   Cause,
   Clock,
+  Deferred,
   Effect,
   Exit,
   Fiber,
@@ -42,6 +43,7 @@ import {
   Layer,
   type Path,
   Schema,
+  Scope,
   Stream,
   SubscriptionRef,
   Context,
@@ -1983,6 +1985,74 @@ describe('the session event table and its one publisher', () => {
           );
         }).pipe(Effect.provide(substrate(storage, OTHER)));
       }).pipe(Effect.provide(substrate(storage)));
+    },
+  );
+  it.live(
+    "an old activation's claim release that lands late leaves the run with the activation holding it now (R23)",
+    () => {
+      const storage = workspace();
+      const run = qualifyAggregateId('run', RUN);
+      return Effect.gen(function* () {
+        const db = yield* Database;
+        yield* db.releaseClaims([run]);
+        const ownerOf = Effect.map(
+          db.aggregateState([run]),
+          ([state]) => state?.ownerId ?? null,
+        );
+        // The first release, the old activation's, waits at this gate until
+        // the new activation holds the run; every later one runs at once.
+        const releasing = yield* Deferred.make<void>();
+        const gate = yield* Deferred.make<void>();
+        const { log } = yield* makeSessionStore(storage).pipe(
+          Effect.provideService(Database, {
+            ...db,
+            releaseClaims: (ids, heldAgain) =>
+              Effect.andThen(
+                Deferred.isDone(releasing).pipe(
+                  Effect.flatMap((late) =>
+                    late
+                      ? Effect.void
+                      : Deferred.succeed(releasing, undefined).pipe(
+                          Effect.andThen(Deferred.await(gate)),
+                        ),
+                  ),
+                ),
+                db.releaseClaims(ids, heldAgain),
+              ),
+          }),
+          Effect.provide(ProcessIdentity.layer(SELF)),
+        );
+        /** Hold the run for a scope of its own, which the caller closes. */
+        const holder = (options?: { readonly ends: true }) =>
+          Effect.tap(Scope.make(), (scope) =>
+            log.hold(RUN, options).pipe(Scope.provide(scope)),
+          );
+        // The old activation ends; its release waits.
+        const old = yield* holder({ ends: true });
+        expect(yield* ownerOf).toBe(SELF);
+        const ending = yield* Effect.forkChild(Scope.close(old, Exit.void));
+        yield* Deferred.await(releasing);
+        // A message's delivery holds the run and lets it go; then the new
+        // activation holds it.
+        yield* Scope.close(yield* holder(), Exit.void);
+        const renewed = yield* holder();
+        expect(yield* ownerOf).toBe(SELF);
+        yield* Deferred.succeed(gate, undefined);
+        yield* Fiber.join(ending);
+
+        // The new activation still holds the run: in the store, and against
+        // another process.
+        expect(yield* ownerOf).toBe(SELF);
+        const refused = yield* Effect.flip(
+          Effect.flatMap(Database, (second) => second.acquireClaims([run])),
+        ).pipe(Effect.provide(substrate(storage, OTHER)));
+        expect(refused._tag).toBe('DatabaseClaimRefused');
+        yield* Scope.close(renewed, Exit.void);
+        expect(yield* ownerOf).toBeNull();
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(graph([runStart], substrate(storage).pipe(Layer.orDie))),
+      );
     },
   );
 });
