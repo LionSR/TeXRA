@@ -10,7 +10,7 @@ import {
   Effect,
   type Fiber,
   FileSystem,
-  type Path,
+  Path,
   type PlatformError,
   Schema,
   type Scope,
@@ -18,7 +18,12 @@ import {
 
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
-import { SessionRoots, withSessionFs } from '@platform/rootedFs';
+import {
+  SessionRoots,
+  StorageFs,
+  WorkspaceFs,
+  withSessionFs,
+} from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
 import type { Database } from '@shared/session/database';
 import { recordOf } from '@shared/session/runRowReads';
@@ -31,8 +36,8 @@ import {
 } from '@shared/session/runtimeRequest';
 import { SessionLog } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { copyDereferenced } from '@utils/files/fsDurability';
 import { absentReason } from '@utils/files/fsEntryExists';
-import { copyOrRemoveRunDir } from '@utils/files/runStorageFs';
 import { isPathWithin } from '@utils/core/pathCore';
 
 const CHANNEL = 'DeletionCleanup';
@@ -148,6 +153,41 @@ export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
 
 /** What a `run.files` request reads from the process: its files. */
 export type RunFilesServices = FileSystem.FileSystem | Path.Path;
+
+/**
+ * Copy a stopped run's directory to the workspace path `to`, or remove it;
+ * `false` when the run has no directory. Symlinks are dereferenced so a copy
+ * stands alone, and a copy onto an existing folder fails rather than merging
+ * into it.
+ */
+const copyOrRemoveRunDir = Effect.fn('runStorage.copyOrRemoveRunDir')(
+  function* (
+    runId: RunId,
+    files:
+      { readonly op: 'copy'; readonly to: string } | { readonly op: 'remove' },
+  ) {
+    const storageFs = yield* StorageFs;
+    const runDir = path.posix.join(WORKSPACE_STORAGE_LAYOUT.runs, runId);
+    if (!(yield* storageFs.exists(runDir))) {
+      yield* Effect.logWarning(`Run directory not found for run ${runId}`);
+      return false;
+    }
+    if (files.op === 'remove') {
+      yield* Effect.logInfo(`Removing the run directory ${runDir}`);
+      yield* storageFs.remove(runDir, { recursive: true, force: true });
+      return true;
+    }
+    const workspaceFs = yield* WorkspaceFs;
+    const source = yield* storageFs.resolve(runDir);
+    const destination = yield* workspaceFs.resolve(files.to);
+    yield* workspaceFs.makeDirectory((yield* Path.Path).dirname(files.to), {
+      recursive: true,
+    });
+    yield* copyDereferenced(source, destination);
+    yield* Effect.logInfo(`Copied ${source} -> ${destination}`);
+    return true;
+  },
+);
 
 /**
  * Answer a `run.files` request on its session as one step on the inactive run

@@ -15,6 +15,7 @@ import {
   SynchronizedRef,
 } from 'effect';
 
+import { RunFileService } from '@texra-ai/harness/plugins';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
@@ -45,7 +46,6 @@ import { testRunTools } from '@test/support/nativeToolTestLayer';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { installedHost } from '@test/support/setupPlatform';
-import { RunFileService } from '@utils/files/runStorage';
 
 import type { Model, TurnResult } from '@texra-ai/llm';
 

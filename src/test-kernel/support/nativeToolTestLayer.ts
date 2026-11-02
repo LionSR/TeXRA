@@ -1,6 +1,7 @@
 /** Explicit call capabilities over the calling fiber's process services. */
 import { Context, Effect, Layer, Schema, Scope, SynchronizedRef } from 'effect';
 
+import { RunFileService } from '@texra-ai/harness/plugins';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -34,7 +35,6 @@ import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 import { testCallPluginServices } from '@test/support/testPluginServices';
-import { RunFileService } from '@utils/files/runStorage';
 
 /** The run a test call is made under: what every fixture names, plus whatever
  *  else of the run the case under test actually reads. */

@@ -11,6 +11,7 @@
     { "from": "agent", "to": "skills", "kind": "value" },
     { "from": "agent", "to": "tools", "kind": "value" },
     { "from": "agent", "to": "utils", "kind": "value" },
+    { "from": "common", "to": "logger", "kind": "value" },
     { "from": "common", "to": "shared", "kind": "value" },
     { "from": "common", "to": "utils", "kind": "value" },
     { "from": "controllers", "to": "agent", "kind": "value" },
@@ -56,7 +57,6 @@
     { "from": "transcript", "to": "agent", "kind": "value" },
     { "from": "transcript", "to": "shared", "kind": "value" },
     { "from": "ui", "to": "shared", "kind": "value" },
-    { "from": "utils", "to": "common", "kind": "value" },
     { "from": "utils", "to": "logger", "kind": "value" },
     { "from": "utils", "to": "platform", "kind": "value" },
     { "from": "utils", "to": "shared", "kind": "value" }

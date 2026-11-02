@@ -16,6 +16,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
+import { runDirUnder } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
@@ -23,7 +24,6 @@ import type { RunId } from '@shared/schemas';
 // walk below, not raw user input.
 import { toPosixPath } from '@utils/core/pathCore';
 import { absentReason } from '@utils/files/fsEntryExists';
-import { runDirUnder } from '@utils/files/runStorageFs';
 
 const CHANNEL = 'runGeneratedFiles';
 

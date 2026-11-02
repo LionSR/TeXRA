@@ -5,7 +5,7 @@ import {
   type RunStorageFileLocation,
   type WorkspaceFileLocation,
 } from '@shared/schemas';
-import { locateInWorkspace } from './workspaceFS';
+import { locateInWorkspace } from '@utils/files/workspaceFS';
 
 export function createWorkspaceLocation(
   absolutePath: string,

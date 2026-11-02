@@ -4,12 +4,12 @@ import { Effect, FileSystem } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { replaceInputCommands } from '@texra/agent/output/fileMapping';
 import {
   createExternalLocation as externalLocation,
   createWorkspaceLocation,
-} from '@utils/files/fileLocation';
+} from '@texra-ai/harness/host';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { replaceInputCommands } from '@texra/agent/output/fileMapping';
 
 describe('replaceInputCommands', () => {
   it.effect('rewrites an extensionless LaTeX input to the generated file', () =>

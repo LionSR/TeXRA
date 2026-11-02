@@ -210,7 +210,10 @@ export type {
 } from '@agent/runtime/ModelRetryGate';
 // A run's files under its session storage: its directory, the pre-run
 // snapshots and workspace mirrors it prepares, and output locations.
-export { RunFileService, type RunStorageEntry } from '@utils/files/runStorage';
+export {
+  RunFileService,
+  type RunStorageEntry,
+} from '@common/storage/runStorage';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 // The harness's retry policy: which HTTP statuses are worth retrying, the
 // randomized exponential backoff `Schedule` its fetches retry on, and the

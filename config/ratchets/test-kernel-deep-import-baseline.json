@@ -158,11 +158,8 @@
       "@transcript/traceAssembler",
       "@utils/core/idHash",
       "@utils/files/externalRoots",
-      "@utils/files/fileLocation",
       "@utils/files/fsEntryExists",
       "@utils/files/rootedFileSystem",
-      "@utils/files/runStorage",
-      "@utils/files/runStorageFs",
       "@utils/files/varsUtils",
       "@utils/system/execUtils",
       "@utils/text/appendTail"

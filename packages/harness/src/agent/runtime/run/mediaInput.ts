@@ -14,6 +14,7 @@
  */
 import { Cause, Effect, Exit, FileSystem } from 'effect';
 
+import { pathToLocationIn } from '@common/storage/fileLocation';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigProvider } from '@shared/config/settings';
 import {
@@ -29,7 +30,6 @@ import type { DraftBlob } from '@shared/session/historyTurns';
 import { Rejected } from '@shared/session/runtimeRequest';
 import { blobAddress } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { getBasename } from '@utils/core';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';

@@ -45,8 +45,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@utils/files/runStorageFs', async (importActual) => ({
-  ...(await importActual<typeof import('@utils/files/runStorageFs')>()),
+vi.mock('@common/storage/storageLayout', async (importActual) => ({
+  ...(await importActual<typeof import('@common/storage/storageLayout')>()),
   runDirUnder: vi.fn(
     (_storageRoot: string, runId: string) => `/tmp/runs/${runId}`,
   ),
