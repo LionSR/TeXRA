@@ -11,6 +11,7 @@ import { humanGrant } from '@agent/runtime/runApprovalQueue';
 // Local imports
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Interactions } from '@agent/runtime/HostInteractions';
+import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import { SessionLog, Approvals } from '@shared/session/runHistory';
 import {
   setTestApprovalPolicy,
@@ -20,7 +21,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { requestBashApproval } from '@tools/approval/bashApproval';
+import { commandTool } from '@test/agent/progressTestUtils';
 
 /** Watch bash requests in a scoped fiber, as a real host surface does. */
 function watchBashRequests(session: Context.Context<SessionServices>) {
@@ -62,7 +63,7 @@ function watchBashRequests(session: Context.Context<SessionServices>) {
   });
 }
 
-describe('requestBashApproval queueing', () => {
+describe('command approval queueing', () => {
   // The project's policy is the fake host's setting, shared by the file.
   beforeEach(() => setTestApprovalPolicy('ask'));
 
@@ -113,7 +114,7 @@ describe('requestBashApproval queueing', () => {
           const requests = yield* watchBashRequests(session);
 
           const request = (command: string) =>
-            requestBashApproval({ command, grant: 'bash' }).pipe(
+            guardedToolCall(commandTool, { command }).pipe(
               Effect.provide(
                 nativeToolTestLayer({
                   run: { runId, session, toolPolicy: {} },
@@ -134,8 +135,12 @@ describe('requestBashApproval queueing', () => {
           );
           requests.approve(0);
 
-          expect(yield* Fiber.join(first)).toEqual({ action: 'approve' });
-          expect(yield* Fiber.join(second)).toEqual({ action: 'approve' });
+          expect(yield* Fiber.join(first)).toMatchObject({
+            status: 'executed',
+          });
+          expect(yield* Fiber.join(second)).toMatchObject({
+            status: 'executed',
+          });
           expect(requests.opened).toHaveLength(1);
         }),
       ),

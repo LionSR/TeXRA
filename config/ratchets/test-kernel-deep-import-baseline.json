@@ -129,7 +129,6 @@
       "@skills/runtimeSkills",
       "@skills/skillSources",
       "@tools/approval/approvedWrite",
-      "@tools/approval/bashApproval",
       "@tools/approval/toolEditApproval",
       "@tools/attachments",
       "@tools/bash",

@@ -117,8 +117,6 @@
       "type export/schemas#ExportNode"
     ],
     "agent->tools": [
-      "approval/bashApproval#buildBashApprovalRejectedResult",
-      "approval/bashApproval#requestBashApproval",
       "catalogEntries#sentDefinitions",
       "catalogEntries#toolDefinitionsFor",
       "catalogEntries#toolDigests",

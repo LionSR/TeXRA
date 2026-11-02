@@ -13,15 +13,19 @@ import { generateRunId, type RunId } from '@texra-ai/harness/schemas';
 import { requestToolEditApproval } from '@texra-ai/harness/plugins';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import { Interactions } from '@agent/runtime/HostInteractions';
+import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import { Approvals } from '@shared/session/runHistory';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { requestBashApproval } from '@tools/approval/bashApproval';
 
 // Local file imports
-import { autoDecideRequests, createRecordingHost } from '../progressTestUtils';
+import {
+  autoDecideRequests,
+  commandTool,
+  createRecordingHost,
+} from '../progressTestUtils';
 
 function inToolContext<A, E, R>(
   interactions: ReturnType<typeof createRecordingHost>['interactions'],
@@ -72,10 +76,10 @@ describe('human prompt progress events', () => {
       );
 
       const approval = yield* inToolContext(explicit.interactions, runId, () =>
-        requestBashApproval({ command: 'echo still asks', grant: 'bash' }),
+        guardedToolCall(commandTool, { command: 'echo still asks' }),
       );
 
-      expect(approval).toMatchObject({ action: 'approve' });
+      expect(approval).toMatchObject({ status: 'executed' });
       expect(decided.opened.at(-1)?.payload).toMatchObject({
         kind: 'bash',
         data: { command: 'echo still asks' },
@@ -89,10 +93,10 @@ describe('human prompt progress events', () => {
       );
 
       const bypassed = yield* inToolContext(explicit.interactions, runId, () =>
-        requestBashApproval({ command: 'echo bypassed', grant: 'bash' }),
+        guardedToolCall(commandTool, { command: 'echo bypassed' }),
       );
 
-      expect(bypassed).toEqual({ action: 'approve' });
+      expect(bypassed).toMatchObject({ status: 'executed' });
       expect(decided.opened).toHaveLength(1);
 
       yield* Context.get(testDefaultSession(), Approvals).change(
