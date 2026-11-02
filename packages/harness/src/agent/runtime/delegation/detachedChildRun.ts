@@ -119,7 +119,8 @@ export function startDetachedChildRunLoop<
 
 /** Log, detached, how a loop nobody awaits failed: on the loop's log
  *  channel always (the child's trace may be closed by its end by then),
- *  and on the child's trace when it has one. */
+ *  and on the child's trace when it has one. An interruption alone is the
+ *  loop's stop, whose end its terminal recorded, not a failure. */
 const logLateFailure = (
   agentName: string,
   fiber: Fiber.Fiber<unknown, Error>,
@@ -129,6 +130,7 @@ const logLateFailure = (
   return Effect.forkDetach(
     Fiber.join(fiber).pipe(
       Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) return Effect.void;
         const error = Cause.squash(cause);
         return Effect.sync(() => trace?.error(message, { data: error })).pipe(
           Effect.andThen(
