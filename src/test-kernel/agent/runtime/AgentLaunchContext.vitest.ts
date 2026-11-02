@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Schema } from 'effect';
+import { Effect, Schema, Context } from 'effect';
 import { describe, expect } from 'vitest';
 import {
   AgentConfigSchema,
@@ -9,6 +9,12 @@ import {
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
 import { activationRows, registerRun } from '@agent/storage/runLifecycle';
+import {
+  SessionLog,
+  RunHistory,
+  SessionViewAccess,
+  Approvals,
+} from '@shared/session/runHistory';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -53,25 +59,29 @@ describe('AgentLaunchContext', () => {
           agent: 'chat',
           model: 'openai/gpt-5.5-2026-04-23',
         });
-        yield* registerRun(session, EXECUTION_ID, config, {
+        yield* registerRun(EXECUTION_ID, config, {
           identity: { kind: 'agent', agent: 'chat' },
-        });
+        }).pipe(Effect.provide(session));
         // A human approves edits for the session; the run's goal then
         // auto-approves its commands.
-        yield* session.approvals.change(
+        yield* Context.get(session, Approvals).change(
           EXECUTION_ID,
           humanGrant(['toolEdit'], true),
         );
-        yield* session.approvals.change(EXECUTION_ID, goalGrant(['bash']));
-        yield* session.log.settled;
+        yield* Context.get(session, Approvals).change(
+          EXECUTION_ID,
+          goalGrant(['bash']),
+        );
+        yield* Context.get(session, SessionLog).settled;
 
         // A resume's activation, as its run's cell commits it.
-        yield* session.runHistory.open(EXECUTION_ID, {
-          activation: () => activationRows(session, EXECUTION_ID, config),
+        yield* Context.get(session, RunHistory).open(EXECUTION_ID, {
+          activation: () =>
+            activationRows(EXECUTION_ID, config).pipe(Effect.provide(session)),
         });
 
         // The human's grant stands; the goal's ends with the activation.
-        const view = yield* session.view.read([]);
+        const view = yield* Context.get(session, SessionViewAccess).read([]);
         expect(runBypasses(view, EXECUTION_ID)).toEqual({
           bash: false,
           toolEdit: true,

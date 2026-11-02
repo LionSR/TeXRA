@@ -1,11 +1,12 @@
 import { it } from '@effect/vitest';
-import { Effect, Schema } from 'effect';
+import { Effect, Schema, Context } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema, type RunId } from '@texra-ai/harness/schemas';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { registerRun } from '@agent/storage/runLifecycle';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionLog } from '@shared/session/runHistory';
 import {
   createTestSession,
   publishTestRunStart,
@@ -23,17 +24,16 @@ const options = {
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'nativeInteractive',
 } as const;
-let session: SessionHandle;
+let session: Context.Context<SessionServices>;
 const register = (workingDirectory?: string) =>
   registerRun(
-    session,
     runId,
     {
       ...baseConfig,
       ...(workingDirectory === undefined ? {} : { workingDirectory }),
     },
     options,
-  );
+  ).pipe(Effect.provide(session));
 
 beforeEach(async () => {
   vi.restoreAllMocks();
@@ -46,11 +46,13 @@ describe('run registration and finalization', () => {
     (workingDirectory) =>
       Effect.gen(function* () {
         yield* register(workingDirectory);
-        expect(yield* getRunRecords(session, runId).readConfig()).toMatchObject(
-          {
-            workingDirectory: workingDirectory ?? '/workspace/root',
-          },
-        );
+        expect(
+          yield* getRunRecords(runId)
+            .readConfig()
+            .pipe(Effect.provide(session)),
+        ).toMatchObject({
+          workingDirectory: workingDirectory ?? '/workspace/root',
+        });
       }),
   );
 
@@ -62,19 +64,21 @@ describe('run registration and finalization', () => {
         // what a record read sees: without the barrier ahead of it, this child is
         // refused as if its parent did not exist.
         const parentRunId = publishTestRunStart(session);
-        yield* registerRun(session, runId, baseConfig, {
+        yield* registerRun(runId, baseConfig, {
           ...options,
           parentRunId,
-        });
-        expect(yield* getRunRecords(session, runId).exists()).toBe(true);
+        }).pipe(Effect.provide(session));
+        expect(
+          yield* getRunRecords(runId).exists().pipe(Effect.provide(session)),
+        ).toBe(true);
         // A parent nothing ever published must still refuse its child rather
         // than wait on the barrier for a row that is not coming.
         const absentParentId = 'def456' as RunId;
         const refusal = yield* Effect.flip(
-          registerRun(session, 'fed789' as RunId, baseConfig, {
+          registerRun('fed789' as RunId, baseConfig, {
             ...options,
             parentRunId: absentParentId,
-          }),
+          }).pipe(Effect.provide(session)),
         );
         expect(refusal.message).toBe(
           `Parent run ${absentParentId} is unavailable.`,
@@ -87,12 +91,13 @@ describe('run registration and finalization', () => {
     () =>
       Effect.gen(function* () {
         const failure = new Error('database write failed');
-        vi.spyOn(session.log, 'transact').mockReturnValueOnce(
-          Effect.die(failure),
-        );
+        const log = Context.get(session, SessionLog);
+        vi.spyOn(log, 'transact').mockReturnValueOnce(Effect.die(failure));
         expect(yield* Effect.flip(register())).toBe(failure);
-        expect(yield* session.log.owns(runId)).toBe(false);
-        expect(yield* getRunRecords(session, runId).exists()).toBe(false);
+        expect(yield* log.owns(runId)).toBe(false);
+        expect(
+          yield* getRunRecords(runId).exists().pipe(Effect.provide(session)),
+        ).toBe(false);
       }),
   );
 });

@@ -20,10 +20,12 @@ import {
   FileSystem,
   Layer,
   Scope,
+  Context,
 } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
+import { SessionLog } from '@shared/session/runHistory';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -191,7 +193,7 @@ describe('MCP server plugins', () => {
           (session) => closeSessionOf(session),
         );
         publishTestRunStart(session, runId);
-        yield* session.log.settled;
+        yield* Context.get(session, SessionLog).settled;
         const requestOpened = yield* Deferred.make<void>();
         const requests = yield* Effect.acquireRelease(
           Effect.sync(() =>

@@ -7,6 +7,7 @@
 import type { RunId } from '@shared/schemas';
 import type { RunStopReason } from '@shared/session/runtimeRequest';
 import type { Effect } from 'effect';
+import type { SessionServices } from './rootLaunch';
 
 /**
  * What a host can ask of a running tool-use loop: the members something
@@ -43,8 +44,6 @@ export interface LiveRun {
    *  and a run with no loop of its own (a background command) reads what
    *  its launch said it takes. */
   readonly readsMessages: boolean;
-  /** Why it was stopped here, while it unwinds from that stop. */
-  readonly stopReason: StopCause | undefined;
   /** Resolves once every owner of it here has left. */
   readonly drained: Effect.Effect<void>;
 }
@@ -61,6 +60,9 @@ export interface RunsShape {
    *  it is in flight here. */
   get(runId: RunId): LiveRun | undefined;
   get(): readonly LiveRun[];
+  /** Why the launch of `runId` here is stopping, while it unwinds from that
+   *  stop: the one answer to whether a stop reached it, and how. */
+  stopCause(runId: RunId): StopCause | undefined;
 }
 
 /**
@@ -74,8 +76,9 @@ export interface RunStop {
   /** Whether a live interrupt target took the stop. */
   readonly accepted: () => boolean;
   /** Fails when a durable fact the stop owed storage was refused: a detach
-   *  batch, or the terminal row of a stop that reached no live target. */
-  readonly settlement: Effect.Effect<void, Error>;
+   *  batch, or the terminal row of a stop that reached no live target, which
+   *  it writes over the session's services from its caller's context. */
+  readonly settlement: Effect.Effect<void, Error, SessionServices>;
 }
 
 /** Why a run here stops: a stop's reason, or `released`: its holder let go

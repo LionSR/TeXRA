@@ -347,7 +347,7 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
       GlobalStateKey.HELPER_MODEL,
     ).get();
     const enabledModels = this.models.filter((m) => m.enabled);
-    // The pinned default (`DEFAULT_HELPER_MODEL`) is valid even when it is
+    // TeXRA's default helper model is valid even when it is
     // not an enabled picker row. Keep it selectable so wa-select is not blank.
     const selectedHelper =
       helperModel !== '' && !enabledModels.some((m) => m.name === helperModel)

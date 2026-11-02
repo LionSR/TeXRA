@@ -1,8 +1,8 @@
 import '@test/support/sessionGraphTestSetup';
 
-import { Effect, References } from 'effect';
+import { Effect, References, type Context } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import {
   openTestDefaultSession,
   tryTestDefaultSession,
@@ -25,7 +25,7 @@ Effect.runSync(
  * through `openTestDefaultSession`. Access with none open is a lifecycle
  * error.
  */
-export function testDefaultSession(): SessionHandle {
+export function testDefaultSession(): Context.Context<SessionServices> {
   const session = tryTestDefaultSession();
   if (!session) {
     throw new Error(

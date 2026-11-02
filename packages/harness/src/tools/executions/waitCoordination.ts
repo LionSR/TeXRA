@@ -3,7 +3,7 @@
  * decides which executions are worth blocking on.
  */
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { Runs } from '@agent/runtime/runRegistry';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import type { SessionView } from '@shared/session/sessionView';
@@ -21,11 +21,11 @@ import type { SessionView } from '@shared/session/sessionView';
  * snapshot the caller judges every run against.
  */
 export function shouldSkipWait(
-  session: SessionHandle,
+  runs: Pick<Runs['Service'], 'get'>,
   view: SessionView,
   runId: RunId,
 ): boolean {
-  if (session.runs.get(runId) === undefined) return true;
+  if (runs.get(runId) === undefined) return true;
 
   // A launched run whose start has not folded yet is running.
   const run = view.runs.get(runId);

@@ -1,5 +1,5 @@
 /**
- * Each run's trace sink (`RunTrace`): its rows in the publisher's order, the
+ * Each run's trace sink (the session log's `publish`, `lost` and `closure`): its rows in the publisher's order, the
  * transient text of what it streams, and what it left open. A row the store
  * refused is the run's own to hear at its end (`lost`), never another
  * writer's; the text a committed row closes is dropped as the tail delivers
@@ -8,11 +8,6 @@
  */
 import { Effect, Stream, Struct, SubscriptionRef } from 'effect';
 
-import type {
-  ClosureFact,
-  RunTrace,
-  StreamClosure,
-} from '@agent/runtime/SessionHandle';
 import { runEventDraft } from '@agent/trace/TraceEmitter';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { writeLogLine } from '@logger/logSink';
@@ -34,15 +29,20 @@ import {
 import { lastLifecycleRow, runEndFromEvents } from '@shared/session/runFacts';
 import { closesRunWindow, recordOf } from '@shared/session/runRowReads';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
-import type { SessionLogShape } from '@shared/session/sessionLog';
+import type {
+  ClosureFact,
+  SessionLogShape,
+  StreamClosure,
+} from '@shared/session/sessionLog';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { InflightText, InflightTextChunk } from './sessionSources';
 
 /** A session's trace sink, and the tail's hand-off of each committed row. */
-export interface RunTraceSink extends RunTrace {
-  /** The session log's display door ({@link SessionLogShape.publish}). */
-  readonly publish: SessionLogShape['publish'];
+export interface RunTraceSink extends Pick<
+  SessionLogShape,
+  'publish' | 'lost' | 'closure'
+> {
   /** Drop the transient text a committed row closes: a stream's final text
    *  or a card's terminal result its own, a phase move that rests or ends
    *  the run, and its removal, every chunk of the run. */

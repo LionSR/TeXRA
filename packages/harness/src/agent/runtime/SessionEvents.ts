@@ -18,7 +18,6 @@ import {
   Stream,
 } from 'effect';
 
-import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import {
@@ -41,6 +40,13 @@ import {
 } from '@shared/session/sessionEvents';
 
 const CHANNEL = 'sessionEvents';
+
+/** The budget one session close spends waiting for its runs to end before it
+ *  reports the ones still live abandoned (`SessionOwner.close`). A hung run
+ *  must not wedge desktop quit, eat the extension's ~5s deactivate budget, or
+ *  stall a CLI SIGTERM indefinitely. The closes of a process's sessions start
+ *  together, so they finish under one deadline for the process, not one each. */
+export const SESSION_CLOSE_DEADLINE_MS = 5_000;
 
 /** What the publisher keeps per aggregate: its open work, so closing it at
  *  a park, an end or a host exit reads no rows. Streams close at a phase

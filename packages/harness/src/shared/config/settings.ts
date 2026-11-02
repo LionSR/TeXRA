@@ -17,7 +17,7 @@ const CHANNEL = 'settings';
  *
  * A setting answers for the stores the caller holds as data. A session's
  * `WorkspaceRoots` carries all of them, so a tool call's `call.roots`, a run's
- * `session.roots` and a host command's `session.roots` are passed directly,
+ * `SessionRoots` and a host command's `session.roots` are passed directly,
  * and the value answers for that project rather than for whichever roots the
  * calling fiber happens to carry. The row is looked up by key in the
  * catalog the stores' `ConfigProvider` carries (`config.catalog`); a key that
@@ -161,8 +161,8 @@ export type StoredSetting<T = unknown> =
   | { readonly kind: 'value'; readonly value: T }
   | { readonly kind: 'invalid'; readonly cause: string };
 
-function entryOf(config: ConfigProvider, key: string): StateSettingEntry {
-  const entry = config.catalog.byKey(key);
+function entryOf(catalog: SettingsCatalog, key: string): StateSettingEntry {
+  const entry = catalog.byKey(key);
   if (!entry) {
     throw new Error(`No setting catalog entry for key: ${key}`);
   }
@@ -270,7 +270,7 @@ function get<T>(
   stores: SettingsStores,
   key: string,
 ): Effect.Effect<T, StateReadFailed> {
-  const entry = entryOf(stores.config, key);
+  const entry = entryOf(stores.config.catalog, key);
   // cast: the caller names the row's value type; the row's schema parsed it.
   return Effect.flatMap(inspectEntry(entry, stores), (stored) =>
     valueOrDefault(entry.key, entry.schema, stored),
@@ -288,10 +288,10 @@ function inspect<T>(
   key: string,
 ): Effect.Effect<StoredSetting<T>, StateReadFailed> {
   // cast: the caller names the row's value type; the row's schema parsed it.
-  return inspectEntry(entryOf(stores.config, key), stores) as Effect.Effect<
-    StoredSetting<T>,
-    StateReadFailed
-  >;
+  return inspectEntry(
+    entryOf(stores.config.catalog, key),
+    stores,
+  ) as Effect.Effect<StoredSetting<T>, StateReadFailed>;
 }
 
 /**
@@ -302,15 +302,21 @@ function inspect<T>(
  * both readers run the same body rather than two that can drift.
  */
 function getConfig<T>(config: ConfigProvider, key: string): T {
-  const entry = entryOf(config, key);
+  const entry = entryOf(config.catalog, key);
   const stored = classifyStored(entry.schema, rawConfigValue(entry, config));
   // cast: the caller names the row's value type; the row's schema parsed it.
   if (stored.kind === 'value') return stored.value as T;
   // Direct sink write: config reads are synchronous by ruling and this one
   // also serves the CLI's pre-runtime startup rows, so no fiber exists here.
   writeLogLine(CHANNEL, invalidStoredMessage(entry.key, stored.cause));
-  // cast: the row's schema produced its own default.
-  return Schema.decodeUnknownSync(entry.schema)(undefined) as T;
+  return defaultOf<T>(config.catalog, key);
+}
+
+/** What a row reads as while its key is absent: the default its catalog
+ *  gives it, `undefined` for a row that names none. */
+function defaultOf<T>(catalog: SettingsCatalog, key: string): T {
+  // cast: the caller names the row's value type; the row's schema produced it.
+  return Schema.decodeUnknownSync(entryOf(catalog, key).schema)(undefined) as T;
 }
 
 /**
@@ -335,7 +341,7 @@ function set(
   value: unknown,
   target?: ConfigTarget,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
-  const entry = entryOf(stores.config, key);
+  const entry = entryOf(stores.config.catalog, key);
   // A schema rejection is thrown rather than constructed as a typed failure:
   // a value the catalog's schema refuses is a defect of the caller, not a
   // `ConfigWriteFailed` the store reported.
@@ -359,7 +365,12 @@ function reset(
   key: string,
   target?: ConfigTarget,
 ): Effect.Effect<void, ConfigWriteFailed | Error> {
-  return writeSlot(entryOf(stores.config, key), undefined, stores, target);
+  return writeSlot(
+    entryOf(stores.config.catalog, key),
+    undefined,
+    stores,
+    target,
+  );
 }
 
 /**
@@ -386,6 +397,7 @@ export const Settings = Object.freeze({
   get,
   inspect,
   getConfig,
+  defaultOf,
   set,
   reset,
   state,

@@ -7,7 +7,6 @@
 import { Effect } from 'effect';
 
 import { type RunReport } from '@agent/runtime/runReport';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
@@ -21,7 +20,9 @@ import {
   type PreparedAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
+import { SessionRoots } from '@platform/rootedFs';
 import type { RegisterRunOptions } from '@shared/session/runFacts';
+import type { SessionLog } from '@shared/session/runHistory';
 import { emptyRunEndOutput, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { readRecipeResult } from './recipeResult';
@@ -36,7 +37,6 @@ import { formatSubagentDelivery, formatSubagentError } from './subagentResults';
  * registration's, a resumed one's its rows'.
  */
 export interface ChildRunLaunchOptions {
-  readonly session: SessionHandle;
   /** The history a fresh child is born on: a fork's (`forkSeed`). */
   readonly seed?: RegisterRunOptions['seed'];
 }
@@ -67,7 +67,7 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
          *  the claim its loop holds. */
         readonly resume: Pick<ExecuteAgentOptions, 'onAdmitted' | 'tools'> & {
           readonly config: AgentConfig;
-          readonly parent: Effect.Effect<RunId | undefined, Error>;
+          readonly parent: Effect.Effect<RunId | undefined, Error, SessionLog>;
           readonly stopAfterCycle?: boolean;
         };
       }
@@ -111,7 +111,6 @@ export function createNativeSubagentStrategy(
         Effect.gen(function* () {
           const { programs } = registryOf(yield* Runs);
           const options = {
-            session: params.session,
             onProgress: notify,
             turns: {
               turnPermit: turns.turnPermit,
@@ -131,7 +130,6 @@ export function createNativeSubagentStrategy(
             const { config, parent, stopAfterCycle, ...launch } = params.resume;
             const definition = yield* prepareAgentDefinition({
               config,
-              session: params.session,
               stopAfterCycle,
             });
             return yield* programs.executeAgent(definition, params.runId, {
@@ -166,7 +164,7 @@ export function createNativeSubagentStrategy(
               config,
               turn.output,
               params.runId,
-              params.session.roots,
+              yield* SessionRoots,
             )
           : undefined;
       // A formatter throw is this turn's failure, not a defect.

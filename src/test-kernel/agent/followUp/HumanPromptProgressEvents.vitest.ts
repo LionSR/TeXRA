@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Context } from 'effect';
 import { it } from '@effect/vitest';
 // Test composition imports
 
@@ -12,14 +12,20 @@ import { beforeEach, describe, expect } from 'vitest';
 import { generateRunId, type RunId } from '@texra-ai/harness/schemas';
 import { requestToolEditApproval } from '@texra-ai/harness/plugins';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
+import { Interactions } from '@agent/runtime/HostInteractions';
+import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
+import { Approvals } from '@shared/session/runHistory';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { requestBashApproval } from '@tools/approval/bashApproval';
 
 // Local file imports
-import { autoDecideRequests, createRecordingHost } from '../progressTestUtils';
+import {
+  autoDecideRequests,
+  commandTool,
+  createRecordingHost,
+} from '../progressTestUtils';
 
 function inToolContext<A, E, R>(
   interactions: ReturnType<typeof createRecordingHost>['interactions'],
@@ -28,7 +34,9 @@ function inToolContext<A, E, R>(
 ) {
   return Effect.acquireUseRelease(
     Effect.sync(() =>
-      Effect.runSync(testDefaultSession().interactions.use(interactions)),
+      Effect.runSync(
+        Context.get(testDefaultSession(), Interactions).use(interactions),
+      ),
     ),
     () =>
       run().pipe(
@@ -62,16 +70,16 @@ describe('human prompt progress events', () => {
         action: 'approve',
       }));
       yield* Effect.addFinalizer(() => Effect.sync(decided.detach));
-      yield* testDefaultSession().approvals.change(
+      yield* Context.get(testDefaultSession(), Approvals).change(
         runId,
         humanGrant(['toolEdit'], true),
       );
 
       const approval = yield* inToolContext(explicit.interactions, runId, () =>
-        requestBashApproval({ command: 'echo still asks', grant: 'bash' }),
+        guardedToolCall(commandTool, { command: 'echo still asks' }),
       );
 
-      expect(approval).toMatchObject({ action: 'approve' });
+      expect(approval).toMatchObject({ status: 'executed' });
       expect(decided.opened.at(-1)?.payload).toMatchObject({
         kind: 'bash',
         data: { command: 'echo still asks' },
@@ -79,19 +87,19 @@ describe('human prompt progress events', () => {
 
       // A bash bypass answers without asking; the edit bypass above is not
       // what silenced it.
-      yield* testDefaultSession().approvals.change(
+      yield* Context.get(testDefaultSession(), Approvals).change(
         runId,
         humanGrant(['bash'], true),
       );
 
       const bypassed = yield* inToolContext(explicit.interactions, runId, () =>
-        requestBashApproval({ command: 'echo bypassed', grant: 'bash' }),
+        guardedToolCall(commandTool, { command: 'echo bypassed' }),
       );
 
-      expect(bypassed).toEqual({ action: 'approve' });
+      expect(bypassed).toMatchObject({ status: 'executed' });
       expect(decided.opened).toHaveLength(1);
 
-      yield* testDefaultSession().approvals.change(
+      yield* Context.get(testDefaultSession(), Approvals).change(
         runId,
         humanGrant(['toolEdit'], false),
       );

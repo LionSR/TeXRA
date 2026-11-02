@@ -46,7 +46,7 @@ const RULES: readonly {
 }[] = [
   {
     what: 'reads the plugin switches and pins the tools they give and the plugins on',
-    pattern: /\.tools\s*\.pin\(/,
+    pattern: /(?:\.tools|ProjectTools\))\s*\.pin\(/,
     also: [],
   },
   {

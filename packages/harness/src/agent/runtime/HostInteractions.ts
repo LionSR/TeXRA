@@ -1,4 +1,4 @@
-import { Cause, Effect, Predicate } from 'effect';
+import { Cause, Context, Effect, Layer, Predicate } from 'effect';
 import {
   agentErrorPresentation,
   classifyAgentError,
@@ -18,14 +18,14 @@ import {
 } from '@shared/schemas';
 import { recordOf } from '@shared/session/runRowReads';
 import { Rejected } from '@shared/session/runtimeRequest';
+import { SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { HostPresentationFailed } from './runtimePresentationEvents';
-import type { SessionHandle } from './SessionHandle';
-import type {
-  AgentRuntimeEmitOptions,
-  HostPresentation,
-  RuntimePresentationEvent,
-  RuntimePresentationEventPayloads,
+import {
+  HostPresentationFailed,
+  type AgentRuntimeEmitOptions,
+  type HostPresentation,
+  type RuntimePresentationEvent,
+  type RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
 
 const CHANNEL = 'SessionHostInteractions';
@@ -112,8 +112,8 @@ function presentOn<K extends RuntimePresentationEvent>(
 }
 
 /**
- * Stable per-session presentation owner. The `SessionHandle` exposes this
- * object once, while one host at a time attaches and detaches; the host the
+ * Stable per-session presentation owner. The session serves this object
+ * once (`Interactions`), while one host at a time attaches and detaches; the host the
  * session was opened with answers while none is, and notices raised while
  * none is are replayed to the next one.
  */
@@ -306,18 +306,36 @@ function presentAgentFailure(
  * attached parent is the view's, which has the run's `run.start` once it
  * ended) is its parent's to report; any other row presents nothing.
  */
-export function presentTerminalResult(
-  session: SessionHandle,
+export const presentTerminalResult = (
   row: SessionEvent,
   self: LocalRuntimeState['self'],
-): Effect.Effect<void> {
-  const target = aggregateTarget(row.aggregateId);
-  const { end } = recordOf(row);
-  if (target.kind !== 'run' || end === null) return Effect.void;
-  if (end.origin == null || !self.includes(end.origin)) return Effect.void;
-  return !end.error || session.view.run(target.id)?.parentId != null
-    ? Effect.void
-    : presentAgentFailure(session.interactions, end.error);
+): Effect.Effect<void, never, SessionViewAccess | Interactions> =>
+  Effect.gen(function* () {
+    const target = aggregateTarget(row.aggregateId);
+    const { end } = recordOf(row);
+    if (target.kind !== 'run' || end === null || !end.error) return;
+    if (end.origin == null || !self.includes(end.origin)) return;
+    if ((yield* SessionViewAccess).run(target.id)?.parentId != null) return;
+    yield* presentAgentFailure(yield* Interactions, end.error);
+  });
+
+/** The session's presentation host ({@link SessionHostInteractions}): the
+ *  one its runs, requests and host commands present through. */
+export class Interactions extends Context.Service<
+  Interactions,
+  SessionHostInteractions
+>()('@texra-ai/harness/session/Interactions') {
+  /** Over the host the session was opened with; disposed with the layer. */
+  static readonly layer = (
+    opened?: HostInteractions,
+  ): Layer.Layer<Interactions> =>
+    Layer.effect(
+      Interactions,
+      Effect.acquireRelease(
+        Effect.sync(() => new SessionHostInteractions(opened)),
+        (interactions) => interactions.dispose(),
+      ),
+    );
 }
 
 /**

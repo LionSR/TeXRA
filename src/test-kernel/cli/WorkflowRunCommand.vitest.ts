@@ -10,8 +10,7 @@ import { beforeEach, expect, vi } from 'vitest';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 
 import { layer } from '@effect/vitest';
-import { Effect } from 'effect';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { Effect, Context } from 'effect';
 import type { DocumentsResult } from '@texra/shared/plugins/documentOutputs';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -33,6 +32,8 @@ import {
   sessionHandleOf,
   TestSession,
 } from '@test/support/testKernel';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionLog } from '@shared/session/runHistory';
 
 const mocks = vi.hoisted(() => {
   return {
@@ -214,8 +215,11 @@ async function writeGeneratedOutput(root: string): Promise<string> {
  * append claims the aggregate for this process, the way the launch's own
  * commit claims it before finalization writes.
  */
-const seedStartedRun = (session: SessionHandle, runId: string) =>
-  session.log.transact([
+const seedStartedRun = (
+  session: Context.Context<SessionServices>,
+  runId: string,
+) =>
+  Context.get(session, SessionLog).transact([
     {
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', runId as RunId),

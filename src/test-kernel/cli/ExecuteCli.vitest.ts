@@ -1,7 +1,7 @@
 import '@test/support/sessionGraphTestSetup';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import { Deferred, Effect, Exit, Fiber, Scope, Stream } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Scope, Stream, Context } from 'effect';
 
 import {
   RunFailure,
@@ -24,6 +24,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliConfig } from '@cli/runtime/executeCli';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
+import { SessionLog } from '@shared/session/runHistory';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
 import {
@@ -221,7 +222,9 @@ function stubHangingRun(published: Deferred.Deferred<void>): {
     // Committed before the run reports admission, so every later read
     // of its rows finds the opening.
     const opening = testRuntime().runPromise(
-      seedRows(testDefaultSession().log)([runStartRow(input.runId)]),
+      seedRows(Context.get(testDefaultSession(), SessionLog))([
+        runStartRow(input.runId),
+      ]),
     );
     return new Promise((resolve) => {
       resolveRun = resolve;
@@ -289,13 +292,18 @@ describe('executeCliConfig', () => {
             )(NO_APPROVAL_GRANTS),
           },
         ]);
-        await testRuntime().runPromise(session.log.settled);
+        await testRuntime().runPromise(
+          Context.get(session, SessionLog).settled,
+        );
       }
-      seen = liveToolGates({
-        session,
-        runId: request.runId,
-        entry: { registration: null },
-      }).approvalPromptsUnavailable;
+      seen = (
+        await testRuntime().runPromise(
+          liveToolGates({
+            runId: request.runId,
+            entry: { registration: null },
+          }).pipe(Effect.provide(session)),
+        )
+      ).approvalPromptsUnavailable;
       return COMPLETED_RUN;
     });
     return () => seen;

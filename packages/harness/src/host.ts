@@ -91,7 +91,6 @@ export {
   readStorageInventory,
   type StorageInventory,
 } from '@controllers/session/projectDatabase';
-export { heldElsewhereBy } from '@shared/session/database';
 // Follow-up delivery, error-presentation and prompt-escaping helpers hosts share.
 export {
   describeFollowUpFailure,
@@ -135,7 +134,7 @@ export {
   type AppSignalPayloads,
 } from '@platform/appSignals';
 // The budget a session close waits for its runs: a plugin's drain fits it.
-export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
+export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionEvents';
 // Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
 // The canned model a package-validation build provides beneath the process.

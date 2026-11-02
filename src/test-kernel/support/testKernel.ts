@@ -48,12 +48,12 @@ import {
   type ProcessRuntime,
   type ProcessServices,
 } from '@texra-ai/harness/host';
-import { SessionOwner } from '@agent/runtime/rootLaunch';
+import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import { RouteRetries } from '@agent/runtime/run/invocation';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { validationModelLayer } from '@cli/runtime/validationModel';
 import { withForkFailureReporting } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { SessionRoots } from '@platform/rootedFs';
 import {
   GlobalDatabase,
   ProjectDatabases,
@@ -243,11 +243,13 @@ export class TestSession extends Context.Service<TestSession, LocalSession>()(
  */
 export const sessionHandleOf = (
   session: LocalSession,
-): Effect.Effect<SessionHandle, never, SessionOwner> =>
+): Effect.Effect<Context.Context<SessionServices>, never, SessionOwner> =>
   Effect.flatMap(SessionOwner, (owner) =>
     Effect.flatMap(owner.list, (open) => {
       const handle = open.find(
-        (candidate) => candidate.roots.storage === session.roots.storage,
+        (candidate) =>
+          Context.get(candidate, SessionRoots).storage ===
+          session.roots.storage,
       );
       return handle === undefined
         ? Effect.die(

@@ -21,14 +21,17 @@ import type { UnfoldedDraft } from './sessionEvents';
 
 /**
  * One queued approval. A request can wait behind another prompt for long:
- * if the user turns the run's bypass on meanwhile (say by answering the one
+ * if the user turns its `grant` on meanwhile (say by answering the one
  * ahead with "approve and stop asking"), `bypassed` honours that decision
  * instead of prompting anyway.
  */
 interface QueuedApproval<A, E, R> {
+  /** The grant that answers the request instead, read as it reaches the
+   *  head of its lane; null when only a person answers it. */
+  readonly grant: ApprovalBypassKind | null;
   /** Open the request and wait for its decision. */
   readonly prompt: Effect.Effect<A, E, R>;
-  /** Result used instead when the run is bypassed by dispatch time. */
+  /** Result used instead when `grant` is on by dispatch time. */
   readonly bypassed: Effect.Effect<A, E, R>;
 }
 
@@ -47,10 +50,11 @@ export type HookAnswer = 'allow' | 'ask' | undefined;
  * reads {@link bypass}; every change goes through {@link change}.
  */
 export interface SessionApprovals {
-  /** Serialize prompts per run and kind, checking bypass when each starts. */
+  /** Serialize prompts per run and kind, checking each one's grant when it
+   *  starts. */
   enqueue<A, E, R>(
     kind: QueuedKind,
-    runId: RunId | undefined,
+    runId: RunId,
     approval: QueuedApproval<A, E, R>,
   ): Effect.Effect<A, E, R>;
   /** Who bypasses one kind's prompts for a run, read from the view. */

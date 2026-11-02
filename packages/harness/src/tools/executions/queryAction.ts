@@ -9,12 +9,12 @@
 import { Effect } from 'effect';
 
 // Local imports
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type {
-  HistoryCell,
-  HistoryPage,
-} from '@agent/runtime/historyQuery/HistoryQuery';
 import { ToolError, type ToolResult } from '@shared/schemas';
+import {
+  HistoryQuery,
+  type HistoryCell,
+  type HistoryPage,
+} from '@shared/session/runHistory';
 
 const CELL_CHARACTER_LIMIT = 2000;
 
@@ -41,11 +41,10 @@ function formatPage(page: HistoryPage): string {
 }
 
 export const queryHistory = Effect.fn('ExecutionsTool.query')(function* (
-  session: SessionHandle,
   sql: string,
   params: readonly string[],
 ) {
-  const page = yield* session.history
+  const page = yield* (yield* HistoryQuery)
     .query(sql, params)
     .pipe(
       Effect.catchTag('HistoryQueryRefused', (refused) =>

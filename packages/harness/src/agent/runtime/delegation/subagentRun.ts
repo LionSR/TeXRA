@@ -107,18 +107,16 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     },
   ) {
     const { runId, grants } = launch;
-    const { session: parentSession, runId: parentRunId } = parent.run;
+    const { runId: parentRunId } = parent.run;
     const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
     const agentName = childConfigPayload.agent;
     const startedAt = yield* Clock.currentTimeMillis;
     const definition = yield* prepareAgentDefinition({
       config: Schema.decodeUnknownSync(AgentConfigSchema)(childConfigPayload),
-      session: parentSession,
     });
     const { config } = definition;
     const opened = yield* Deferred.make<CommitOrdinal>();
     yield* startDetachedChildRunLoop({
-      session: parentSession,
       runId,
       parentRunId,
       agentName,
@@ -132,7 +130,6 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
           grants,
         },
         runId,
-        session: parentSession,
         startedAt,
         workingDirectory,
         onAdmitted: (_, commit) => Deferred.succeed(opened, commit),

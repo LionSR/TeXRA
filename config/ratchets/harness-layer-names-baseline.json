@@ -84,13 +84,10 @@
       "type runtime/RunCall#RunToolCall",
       "type runtime/RunCall#ScriptDoor",
       "type runtime/RunCall#ScriptScope",
-      "type runtime/SessionHandle#SessionHandle",
       "type runtime/ToolServices#PluginToolServices",
       "type runtime/childRunLoop#ProcessChildStrategy",
       "type runtime/delegation/bashDelivery#BackgroundBashCall",
       "type runtime/delegation/bashDelivery#BashDeliveryStreamExcerpt",
-      "type runtime/historyQuery/HistoryQuery#HistoryCell",
-      "type runtime/historyQuery/HistoryQuery#HistoryPage",
       "type runtime/scriptRun#ScriptCallCard",
       "type storage/conversationFormat#ConversationFormatOptions",
       "type trace#AgentTrace"
@@ -101,12 +98,9 @@
       "storage/conversationFormat#stringifyConversationValue",
       "storage/runRecords#getRunRecords",
       "type core/definition/RunRecord#RunRecord",
-      "type export/schemas#ExportNode",
-      "type runtime/SessionHandle#SessionHandle"
+      "type export/schemas#ExportNode"
     ],
     "agent->tools": [
-      "approval/bashApproval#buildBashApprovalRejectedResult",
-      "approval/bashApproval#requestBashApproval",
       "catalogEntries#sentDefinitions",
       "catalogEntries#toolDefinitionsFor",
       "catalogEntries#toolDigests",

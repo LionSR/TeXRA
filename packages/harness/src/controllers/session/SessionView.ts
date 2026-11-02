@@ -173,7 +173,7 @@ export class RemoteSessionView extends Context.Service<
 }
 
 /**
- * A session's view as its handle carries it (`SessionHandle.view`): the
+ * A session's view as its runs and readers take it (`SessionViewAccess`): the
  * current view, the replay it is built from, the transcript subscriptions
  * that decide which transcripts it holds, and the local runtime state it
  * applies beside the rows.

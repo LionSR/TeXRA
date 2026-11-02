@@ -40,14 +40,20 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Cause, Effect, Fiber } from 'effect';
+import { Cause, Effect, Fiber, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { withProcessServices } from '@texra-ai/harness/host';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
-import { submitFollowUp, wakeRun } from '@agent/followUp/ToolUseFollowUp';
+import {
+  submitFollowUp,
+  wakeRun,
+  Inbox,
+} from '@agent/followUp/ToolUseFollowUp';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { Runs } from '@agent/runtime/runRegistry';
+import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { queuedFollowUps } from '@test/support/sessionTestUtils';
 import {
   answersOf,
@@ -64,16 +70,28 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { makeSessions } from '../../../../packages/harness/src/effect/sessionPrograms';
 import type { RunId } from '@texra-ai/harness/schemas';
 
-/** A resume on the test process's runtime. */
-const resume = (runId: RunId, options: ResumeRunOptions) =>
-  withProcessServices(testRuntime(), resumeRun(runId, options));
+/** A resume in `session` on the test process's runtime. */
+const resume = (
+  runId: RunId,
+  {
+    session,
+    ...options
+  }: ResumeRunOptions & { readonly session: Context.Context<SessionServices> },
+) =>
+  withProcessServices(
+    testRuntime(),
+    resumeRun(runId, options).pipe(Effect.provide(session)),
+  );
 
 /** Send `text` to the run as its user. */
-const send = (session: SessionHandle, runId: RunId, text: string) =>
-  session.followUps.send(runId, { from: { kind: 'user' }, text });
+const send = (
+  session: Context.Context<SessionServices>,
+  runId: RunId,
+  text: string,
+) => Context.get(session, Inbox).send(runId, { from: { kind: 'user' }, text });
 
 /** The texts the run's rows still queue. */
-const queuedTexts = (session: SessionHandle, runId: RunId) =>
+const queuedTexts = (session: Context.Context<SessionServices>, runId: RunId) =>
   Effect.map(queuedFollowUps(session, runId), (queued) =>
     queued.map((followUp) => followUp.text),
   );
@@ -105,7 +123,7 @@ const endsOf = (storage: string, runId: RunId) =>
     .map((row) => (JSON.parse(row.data) as { outcome: string }).outcome);
 
 /** `session` as the package hands it to an embedder (`Sessions.open`). */
-const packageSession = (session: SessionHandle) =>
+const packageSession = (session: Context.Context<SessionServices>) =>
   Effect.gen(function* () {
     const sessions = yield* makeSessions(
       // cast: the owner opens the one session this case holds.
@@ -181,7 +199,7 @@ describe(
           );
 
           // A root outlives its resume: its input ending ends it.
-          yield* session.followUps.closeInput(runId);
+          yield* Context.get(session, Inbox).closeInput(runId);
           yield* untilStored(
             storage,
             () => endsOf(storage, runId).at(-1) === 'cancelled',
@@ -252,10 +270,10 @@ describe(
           const { session, runId, storage } = yield* parkedRunAfterCrash();
           // The crash cut a turn short: its message taken, its answer not given.
           yield* Effect.gen(function* () {
-            yield* session.log.hold(runId);
-            const parked = yield* session.runHistory.load(runId);
+            yield* Context.get(session, SessionLog).hold(runId);
+            const parked = yield* Context.get(session, RunHistory).load(runId);
             if (parked === null) throw new Error('The run has no history.');
-            const cell = yield* session.runHistory.open(runId);
+            const cell = yield* Context.get(session, RunHistory).open(runId);
             yield* cell.append([
               appendRow(runId, [
                 {
@@ -268,14 +286,14 @@ describe(
           }).pipe(Effect.scoped);
           // Read at a turn's end, never mid-turn; the turn it starts holds
           // its model call until released.
-          yield* session.followUps.send(
+          yield* Context.get(session, Inbox).send(
             runId,
             { from: { kind: 'user' }, text: 'GOLDEN-PARK then this' },
             { hold: 'turn' },
           );
 
           // The receipt is what a wake (no caller holds the run) answers on.
-          yield* Effect.flatten(wakeRun(runId, session));
+          yield* Effect.flatten(wakeRun(runId).pipe(Effect.provide(session)));
           expect(answersOf(storage, runId)).toHaveLength(2);
           writeFileSync(
             join(testWorkspaceRoots().storage, 'golden-park.release'),
@@ -318,12 +336,12 @@ describe(
           yield* claim.release;
           yield* input.reached;
 
-          const stop = session.runs.stop(runId, {
+          const stop = Context.get(session, Runs).stop(runId, {
             reason: 'user',
             detachActiveChildren: false,
           });
-          expect(session.runs.get(runId)?.stopReason).toBe('user');
-          yield* stop.settlement;
+          expect(Context.get(session, Runs).stopCause(runId)).toBe('user');
+          yield* stop.settlement.pipe(Effect.provide(session));
           yield* input.release;
           yield* Fiber.join(resumed);
 
@@ -355,13 +373,13 @@ describe(
           yield* lineage.release;
           yield* launched.reached;
           // Its generation holds the run here, not yet admitted.
-          expect(session.runs.get(runId)).toBeDefined();
+          expect(Context.get(session, Runs).get(runId)).toBeDefined();
 
-          session.runs.stop(runId, {
+          Context.get(session, Runs).stop(runId, {
             reason: 'user',
             detachActiveChildren: false,
           });
-          expect(session.runs.get(runId)?.stopReason).toBe('user');
+          expect(Context.get(session, Runs).stopCause(runId)).toBe('user');
           yield* launched.release;
           yield* Fiber.join(resumed);
 
@@ -423,7 +441,7 @@ describe(
           expect(
             activated._tag === 'Failure' && Cause.squash(activated.cause),
           ).toBeInstanceOf(Cause.TimeoutError);
-          expect(session.runs.get(runId)).toBeUndefined();
+          expect(Context.get(session, Runs).get(runId)).toBeUndefined();
         }),
     );
 
@@ -445,8 +463,8 @@ describe(
             yield* submitFollowUp(
               runId,
               { from: { kind: 'user' }, text: 'woken' },
-              { session },
-            ),
+              {},
+            ).pipe(Effect.provide(session)),
           ).toEqual({ status: 'queued' });
           yield* Fiber.interrupt(resumed);
           yield* config.release;

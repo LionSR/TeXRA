@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, Schema } from 'effect';
+import { Effect, Schema, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 import {
@@ -9,8 +9,9 @@ import {
   qualifyAggregateId,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { LOG_LEVELS, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
+import { SessionLog } from '@shared/session/runHistory';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createTestSession,
@@ -32,9 +33,10 @@ describe('assembleTrace', () => {
 
   it.effect('assembles a full trace document for a run', () =>
     Effect.gen(function* () {
-      const session: SessionHandle = yield* createTestSession({
-        roots: testWorkspaceRoots(),
-      });
+      const session: Context.Context<SessionServices> =
+        yield* createTestSession({
+          roots: testWorkspaceRoots(),
+        });
       const runId = 'aa11bb22cc33' as RunId;
       const aggregateId = qualifyAggregateId('run', runId);
       const planFact = {
@@ -45,7 +47,7 @@ describe('assembleTrace', () => {
       };
 
       publishTestRunStart(session, runId);
-      yield* session.log.settled;
+      yield* Context.get(session, SessionLog).settled;
       yield* seedRunRecord(
         session,
         runId,
@@ -57,7 +59,7 @@ describe('assembleTrace', () => {
         }),
       );
       // The terminal fact is `run.end`; the view's outcome is folded from it.
-      yield* session.log.transact([
+      yield* Context.get(session, SessionLog).transact([
         {
           type: 'run.end',
           aggregateId,
@@ -65,7 +67,7 @@ describe('assembleTrace', () => {
           output: emptyRunEndOutput(),
         },
       ]);
-      yield* session.log.transact([
+      yield* Context.get(session, SessionLog).transact([
         {
           type: 'log',
           aggregateId,
@@ -74,11 +76,11 @@ describe('assembleTrace', () => {
           message: 'hello',
         },
       ]);
-      yield* session.log.transact([
+      yield* Context.get(session, SessionLog).transact([
         { type: 'plugin.fact', aggregateId, parent: null, ...planFact },
       ]);
 
-      const result = yield* assembleTrace(runId, session);
+      const result = yield* assembleTrace(runId).pipe(Effect.provide(session));
       if (result.status !== 'ok') {
         throw new Error(`expected an ok trace, got ${result.status}`);
       }

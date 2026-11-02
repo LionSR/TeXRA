@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Effect, Schema } from 'effect';
+import { Effect, Schema, Context } from 'effect';
 import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 import {
@@ -12,12 +12,13 @@ import {
   type RunOutcome,
   type RunRecord,
 } from '@texra-ai/harness/schemas';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import {
   cliHistoryNdjsonRecords,
   listCliHistoryEntries,
   readCliHistoryDetails,
 } from '@cli/runtime/history';
+import { SessionLog } from '@shared/session/runHistory';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   publishTestRunStart,
@@ -64,7 +65,7 @@ const historyDetails = (id: RunId) =>
  * surface reads).
  */
 const publishRunFacts = (
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   runId: RunId,
   facts: {
     record: RunRecord;
@@ -74,7 +75,7 @@ const publishRunFacts = (
 ) =>
   Effect.gen(function* () {
     publishTestRunStart(session, runId);
-    yield* session.log.settled;
+    yield* Context.get(session, SessionLog).settled;
     yield* seedRunRecord(session, runId, facts.record);
     if (facts.edited) yield* seedEditedFiles(session, runId, facts.edited);
     if (facts.outcome) {
@@ -87,7 +88,7 @@ const publishRunFacts = (
         },
       ]);
     }
-    yield* session.log.settled;
+    yield* Context.get(session, SessionLog).settled;
   });
 
 // Live clock: the history readers run as the command runs them.

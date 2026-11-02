@@ -1,5 +1,5 @@
 import { layer } from '@effect/vitest';
-import { Effect, Schema } from 'effect';
+import { Effect, Schema, Context } from 'effect';
 
 import { beforeEach, expect, vi } from 'vitest';
 
@@ -11,6 +11,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
 import {
@@ -57,7 +58,7 @@ const seedRunRecord = (config: AgentConfig | null) =>
         session: Effect.succeed(session),
       }),
     );
-    yield* handle.log.transact([
+    yield* Context.get(handle, SessionLog).transact([
       {
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', RUN_ID),
@@ -69,7 +70,7 @@ const seedRunRecord = (config: AgentConfig | null) =>
     ]);
     if (config) yield* commitRunRecord(handle, RUN_ID, config);
     // The position that opens the run: its rows hold a checkpoint.
-    const cell = yield* handle.runHistory.open(RUN_ID, {
+    const cell = yield* Context.get(handle, RunHistory).open(RUN_ID, {
       activation: () => Effect.succeed([]),
     });
     yield* cell.append([
@@ -82,7 +83,9 @@ const seedRunRecord = (config: AgentConfig | null) =>
     // Seeding wrote the run's rows, which claimed its aggregate. A run waiting
     // to be resumed is one nobody holds, so the seed gives the claim back: a
     // hold taken and let go releases it.
-    yield* Effect.scoped(handle.log.hold(RUN_ID, { ends: true }));
+    yield* Effect.scoped(
+      Context.get(handle, SessionLog).hold(RUN_ID, { ends: true }),
+    );
     return handle;
   });
 
@@ -156,7 +159,8 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const seededSession = yield* seedRunRecord(TOOL_USE_CONFIG);
-            vi.spyOn(seededSession.log, 'owner').mockReturnValue(
+            const log = Context.get(seededSession, SessionLog);
+            vi.spyOn(log, 'owner').mockReturnValue(
               Effect.succeed({
                 ownerId: JSON.stringify(['other-host', 4321, 'start-1']),
                 liveness: 'alive',

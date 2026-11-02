@@ -46,8 +46,8 @@ is the module map by concern. Run-loop rules are in
   activation, serial lane; the single in-process liveness authority, with
   admission, lookup and stop); `runs` (the session's `Runs` as hosts and
   tools see them, and a loop's `RunControls`).
-- **Session events**: `SessionHandle` (one composition record per session);
-  `SessionEvents` (one publisher, the reads, and trace-to-fact translation);
+- **Session events**: `sessionServices` (every owner of a session, each its
+  own service, as its runs and requests read them); `SessionEvents` (one publisher, the reads, and trace-to-fact translation);
   `runtimePresentationEvents`; `HostInteractions` /
   `SessionHostInteractions` (the session's host port: diagnostics, approvals,
   retries, user questions, plugin requests, and other notices, and what a
@@ -69,7 +69,9 @@ is the module map by concern. Run-loop rules are in
 - **Control**: `runApprovalQueue`;
   `requestPolicy` (what the approval policy decides when a request opens).
 - **Helper model**: `helperModel` (`helperCall`, the gated, priced and logged
-  one-shot path through `ModelAccess`); `helperModelName`;
+  one-shot path through `ModelAccess`); `helperModelName` (the configured
+  helper model, else the app catalog's default; with neither, a run's helper
+  calls use its own model);
   `sessionDescription` (the AI session summary).
 
 A native child keeps one run scope and live handle across follow-ups. The

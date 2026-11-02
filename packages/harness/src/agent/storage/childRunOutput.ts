@@ -1,14 +1,19 @@
 import { Effect, type FileSystem } from 'effect';
 
 import { readRecipeResult } from '@agent/runtime/recipeResult';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RunFileService } from '@common/storage/runStorage';
 import { runStorageLocationUnder } from '@common/storage/storageLayout';
+import { SessionRoots } from '@platform/rootedFs';
 import {
   RUN_OUTCOME,
   type RunId,
   type RunStorageFileLocation,
 } from '@shared/schemas';
+import {
+  type RunHistory,
+  type SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import type { ToolRegistry } from '@tools/toolTable';
 import { normalizeFilePath } from '@utils/core';
 
@@ -18,20 +23,20 @@ import { getRunRecords } from './runRecords';
  *  child of `parentRunId`. */
 const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
   function* (
-    session: SessionHandle,
     parentRunId: RunId,
     reference: Pick<
       RunStorageFileLocation,
       'runId' | 'relativePath' | 'absolutePath'
     >,
   ) {
-    const store = getRunRecords(session, reference.runId);
+    const store = getRunRecords(reference.runId);
     const [runEnd, resultMeta, config] = yield* Effect.all([
       store.readRunEnd(),
       store.readResultMeta(),
       store.readConfig(),
     ]);
-    if (session.view.run(reference.runId)?.parentId !== parentRunId) {
+    const view = yield* SessionViewAccess;
+    if (view.run(reference.runId)?.parentId !== parentRunId) {
       return yield* Effect.fail(
         new Error(
           `Run ${reference.runId} is not a direct child of ${parentRunId}.`,
@@ -47,7 +52,7 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
             config,
             runEnd.output,
             reference.runId,
-            session.roots,
+            yield* SessionRoots,
           )
         : undefined;
     if (recipe === undefined) {
@@ -82,13 +87,18 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
   function* (
     parentRunId: RunId,
     absolutePath: string,
-    session: SessionHandle,
   ): Effect.fn.Return<
     RunStorageFileLocation | undefined,
     Error,
-    FileSystem.FileSystem | ToolRegistry
+    | FileSystem.FileSystem
+    | ToolRegistry
+    | SessionLog
+    | SessionViewAccess
+    | RunHistory
+    | SessionRoots
   > {
-    const storageRoot = session.roots.storage;
+    const roots = yield* SessionRoots;
+    const storageRoot = roots.storage;
     const reference = runStorageLocationUnder(storageRoot, absolutePath);
     if (!reference) {
       return yield* Effect.fail(
@@ -98,11 +108,11 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
 
     // The calling run's own storage needs no manifest: it is its own.
     if (reference.runId !== parentRunId)
-      yield* checkDeclaredChildOutput(session, parentRunId, reference);
+      yield* checkDeclaredChildOutput(parentRunId, reference);
 
     const entry = yield* new RunFileService(
       reference.runId,
-      session.roots,
+      roots,
     ).inspectEntry(reference.relativePath);
     switch (entry.kind) {
       case 'file':

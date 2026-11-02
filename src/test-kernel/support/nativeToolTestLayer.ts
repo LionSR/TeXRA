@@ -1,7 +1,10 @@
 /** Explicit call capabilities over the test host's existing process services. */
-import { Effect, Layer, Schema, Scope, SynchronizedRef } from 'effect';
+import { Context, Effect, Layer, Schema, Scope, SynchronizedRef } from 'effect';
 
 import { RunFileService } from '@texra-ai/harness/plugins';
+import { Interactions } from '@agent/runtime/HostInteractions';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
   ToolContext,
@@ -21,6 +24,7 @@ import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { sessionFsLayer } from '@platform/rootedFs';
 import type { SettingsStores } from '@shared/config/settings';
 import type { DraftBlob } from '@shared/session/historyTurns';
+import { RunHistory } from '@shared/session/runHistory';
 import { NO_FACTS } from '@shared/session/runFacts';
 import {
   AgentConfigSchema,
@@ -35,11 +39,10 @@ import { testCallPluginServices } from '@test/support/testPluginServices';
 
 /** The run a test call is made under: what every fixture names, plus whatever
  *  else of the run the case under test actually reads. */
-type TestCallRun = Pick<
-  RunCallShape['run'],
-  'session' | 'runId' | 'toolPolicy'
-> &
-  Partial<RunCallShape['run']>;
+type TestCallRun = Pick<RunCallShape['run'], 'runId' | 'toolPolicy'> &
+  Partial<RunCallShape['run']> & {
+    readonly session: Context.Context<SessionServices>;
+  };
 
 /** A run's live model cell holding only the id a tool reads off it. */
 export const testModelCell = (modelId: string) =>
@@ -85,6 +88,7 @@ export function nativeToolTestLayer(
   const callId = options.callId ?? `call-${crypto.randomUUID()}`;
   // A fixture is the slice of the run its case reads; the run answers for
   // its own config and trace with the inert pair.
+  const { session, ...runFields } = run ?? {};
   const toolRun: RunCallShape['run'] | undefined = run && {
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
       agent: 'test',
@@ -98,30 +102,36 @@ export function nativeToolTestLayer(
     opening: null,
     fileService: new RunFileService(run.runId, roots),
     callbacks: {},
-    ...run,
+    ...runFields,
+    runId: run.runId,
+    toolPolicy: run.toolPolicy,
   };
   // One layer value, which the plugin services are built over; the child
-  // door reads the same runs off the call (`RunCallShape.runs`).
-  const runs = Layer.sync(Runs, () => run?.session.runs ?? testRunRegistry());
+  // door reads the same runs off the call's session.
+  const runs = Layer.sync(Runs, () =>
+    session === undefined ? testRunRegistry() : Context.get(session, Runs),
+  );
   // A test call is no script's and issues none; under a run it launches
   // children through the door over its own place in the run, and outside
   // one the place and the door keep their defaults (null, a refusal).
   const runCall: RunCallShape | null =
-    toolRun === undefined
+    toolRun === undefined || session === undefined
       ? null
       : {
           run: toolRun,
-          runs: toolRun.session.runs,
+          session,
           responseId: 'test-response',
           instruction: undefined,
           attempt: 1,
           logId: `log-${callId}`,
           // The run's rows as the store holds them: what a case seeds
           // (`seedEditedFiles`) is what the call reads.
-          facts: toolRun.session.runHistory.load(toolRun.runId).pipe(
-            Effect.map((state) => state ?? NO_FACTS),
-            Effect.orDie,
-          ),
+          facts: Context.get(session, RunHistory)
+            .load(toolRun.runId)
+            .pipe(
+              Effect.map((state) => state ?? NO_FACTS),
+              Effect.orDie,
+            ),
           script: null,
           scriptCalls: null,
           ...origin,
@@ -145,47 +155,50 @@ export function nativeToolTestLayer(
         ...(toolRun !== undefined && { run: toolRun }),
       },
       emit: options.emit ?? (() => undefined),
-      ...(toolRun !== undefined && {
-        // A run's requests open unbound on its session: a test call has no
-        // loop to bind them to.
-        requests: {
-          nextId: (prefix: string) => `${prefix}-${crypto.randomUUID()}`,
-          open: <P extends PermissionPayload>(
-            payload: P,
-            blobs?: readonly DraftBlob[],
-          ) =>
-            toolRun.session.requests
-              .ask(toolRun.runId, payload, {
-                ...(blobs && { blobs }),
-              })
-              .pipe(
-                Effect.map((decision) => ({
-                  // The fixture always answers the supplied request's kind.
-                  payload: payload as Extract<
-                    PermissionPayload,
-                    { kind: P['kind'] }
-                  >,
-                  decision,
-                })),
-              ),
-          post: (requestId: string, payload: PermissionPayload) =>
-            toolRun.session.runHistory.open(toolRun.runId).pipe(
-              Effect.flatMap((cell) =>
-                cell.append([
-                  {
-                    type: 'request.opened',
-                    aggregateId: qualifyAggregateId('run', toolRun.runId),
-                    requestId,
-                    payload,
-                  },
-                ]),
-              ),
-              Effect.asVoid,
-            ),
-          present: (event, payload) =>
-            toolRun.session.interactions.emit(event, payload),
-        },
-      }),
+      ...(toolRun !== undefined &&
+        session !== undefined && {
+          // A run's requests open unbound on its session: a test call has no
+          // loop to bind them to.
+          requests: {
+            nextId: (prefix: string) => `${prefix}-${crypto.randomUUID()}`,
+            open: <P extends PermissionPayload>(
+              payload: P,
+              blobs?: readonly DraftBlob[],
+            ) =>
+              Context.get(session, SessionRequests)
+                .ask(toolRun.runId, payload, {
+                  ...(blobs && { blobs }),
+                })
+                .pipe(
+                  Effect.map((decision) => ({
+                    // The fixture always answers the supplied request's kind.
+                    payload: payload as Extract<
+                      PermissionPayload,
+                      { kind: P['kind'] }
+                    >,
+                    decision,
+                  })),
+                ),
+            post: (requestId: string, payload: PermissionPayload) =>
+              Context.get(session, RunHistory)
+                .open(toolRun.runId)
+                .pipe(
+                  Effect.flatMap((cell) =>
+                    cell.append([
+                      {
+                        type: 'request.opened',
+                        aggregateId: qualifyAggregateId('run', toolRun.runId),
+                        requestId,
+                        payload,
+                      },
+                    ]),
+                  ),
+                  Effect.asVoid,
+                ),
+            present: (event, payload) =>
+              Context.get(session, Interactions).emit(event, payload),
+          },
+        }),
     })),
     runs,
     Layer.succeed(RunCall)(runCall),

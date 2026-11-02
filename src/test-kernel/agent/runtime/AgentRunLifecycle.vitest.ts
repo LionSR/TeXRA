@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Context } from 'effect';
 
 import { afterEach, describe, expect, vi } from 'vitest';
 
@@ -9,10 +9,12 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { setLogSink } from '@texra-ai/harness/node';
-import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { endRun } from '@agent/runtime/AgentRunLifecycle';
 import { type RunReport } from '@agent/runtime/runReport';
 import type { RunLaunch } from '@agent/runtime/run/AgentRun';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { Runs } from '@agent/runtime/runRegistry';
+import { SessionLog } from '@shared/session/runHistory';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -22,11 +24,14 @@ import { createTestLaunchContext } from './launchContextTestUtils';
 
 /** The run's committed `run.end` rows, once the session's writes settled:
  *  what the run's one terminal writer (`finalizeRun`) said. */
-const runEnds = (session: SessionHandle, runId: RunId) =>
+const runEnds = (session: Context.Context<SessionServices>, runId: RunId) =>
   Effect.andThen(
-    session.log.settled,
+    Context.get(session, SessionLog).settled,
     Effect.map(
-      session.log.runRows(qualifyAggregateId('run', runId), 'lifecycle'),
+      Context.get(session, SessionLog).runRows(
+        qualifyAggregateId('run', runId),
+        'lifecycle',
+      ),
       (rows) => rows.lifecycles.filter((row) => row.type === 'run.end'),
     ),
   );
@@ -41,14 +46,16 @@ let lifecycleFixtureCounter = 0;
 function lifecycleFixture(agent = 'test-agent'): {
   runId: RunId;
   ctx: RunLaunch;
+  session: Context.Context<SessionServices>;
 } {
   const runId =
     `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
+  const session = testDefaultSession();
   const ctx = createTestLaunchContext({ runId, agent });
   // A run is registered before its lifecycle runs: an activation commits
   // onto the run's rows.
-  publishTestRunStart(ctx.session, runId);
-  return { runId, ctx };
+  publishTestRunStart(session, runId);
+  return { runId, ctx, session };
 }
 
 /** The launching run a subagent fixture names as its parent edge. */
@@ -60,14 +67,17 @@ const PARENT_RUN_ID = 'aa0001' as RunId;
  * until `release`, so the end's transaction queues behind it. `started`
  * resolves once that job holds the publisher.
  */
-const parkTerminal = (ctx: RunLaunch) =>
+const parkTerminal = (
+  ctx: RunLaunch,
+  session: Context.Context<SessionServices>,
+) =>
   Effect.gen(function* () {
     const started = yield* Deferred.make<void>();
     const release = yield* Deferred.make<void>();
     const endStage = ctx.parentStage.end.bind(ctx.parentStage);
     vi.spyOn(ctx.parentStage, 'end').mockImplementationOnce((outcome) => {
       Effect.runFork(
-        ctx.session.log.transact(() =>
+        Context.get(session, SessionLog).transact(() =>
           Deferred.succeed(started, undefined).pipe(
             Effect.andThen(Deferred.await(release)),
           ),
@@ -87,12 +97,12 @@ describe('endRun', () => {
         // interrupt context is detached, and its own finalize is parked at the
         // persist await. The terminal is uninterruptible, so the stop its
         // launch takes lands after the end the run reported.
-        const { runId, ctx } = lifecycleFixture();
-        const parked = yield* parkTerminal(ctx);
+        const { runId, ctx, session } = lifecycleFixture();
+        const parked = yield* parkTerminal(ctx, session);
 
         const running = yield* Effect.forkChild(
           startAwaited(
-            ctx.session.runs,
+            Context.get(session, Runs),
             runId,
             endRun(
               { ...ctx, entry: { ...ctx.entry, parent: PARENT_RUN_ID } },
@@ -108,16 +118,16 @@ describe('endRun', () => {
         // which is the window the stop below has to land in.
         yield* Deferred.await(parked.started);
 
-        const stop = testDefaultSession().runs.stop(runId, {
+        const stop = Context.get(session, Runs).stop(runId, {
           reason: 'user',
           detachActiveChildren: false,
         });
         expect(stop.accepted()).toBe(true);
-        yield* stop.settlement;
+        yield* stop.settlement.pipe(Effect.provide(session));
 
         yield* Deferred.succeed(parked.release, undefined);
         yield* Fiber.await(running);
-        expect(yield* runEnds(ctx.session, runId)).toMatchObject([
+        expect(yield* runEnds(session, runId)).toMatchObject([
           { outcome: RUN_OUTCOME.COMPLETED },
         ]);
       }),
@@ -130,16 +140,16 @@ describe('endRun', () => {
     'writes the cancelled terminal fact when the run aborts before its first turn',
     () =>
       Effect.gen(function* () {
-        const { runId, ctx } = lifecycleFixture();
-        const recorded = recordSessionEvents(ctx.session, {
+        const { runId, ctx, session } = lifecycleFixture();
+        const recorded = recordSessionEvents(session, {
           aggregateId: qualifyAggregateId('run', runId),
         });
 
         yield* endRun(
           ctx,
           Exit.fail(new DOMException('Request aborted', 'AbortError')),
-        );
-        yield* ctx.session.log.settled;
+        ).pipe(Effect.provide(session));
+        yield* Context.get(session, SessionLog).settled;
         // A run that never ran a turn writes no step of its own: `run.end` is
         // the whole of what it says.
         expect(
@@ -148,7 +158,7 @@ describe('endRun', () => {
             'run.position',
           ),
         ).toEqual([]);
-        expect(yield* runEnds(ctx.session, runId)).toMatchObject([
+        expect(yield* runEnds(session, runId)).toMatchObject([
           {
             outcome: RUN_OUTCOME.CANCELLED,
             error: { kind: 'abort', userRetryable: false },
