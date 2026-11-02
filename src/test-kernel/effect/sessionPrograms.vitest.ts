@@ -97,10 +97,6 @@ const activationsAfter = (storage: string, runId: string, after: number) =>
       row.run === runId && row.type === 'run.activate' && row.commit > after,
   ).length;
 
-/** Close the session over `roots` as a host does, with its report. */
-const closeAt = (roots: LocalSession['roots']) =>
-  Sessions.use((sessions) => sessions.close(roots));
-
 /** Whether process `pid` is alive. */
 const isAlive = (pid: number) => {
   try {
@@ -191,7 +187,9 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
               (row) => row.type === 'run.start' && row.run !== holding.runId,
             )?.run as RunId;
 
-            expect(yield* closeAt(roots)).toEqual({
+            expect(
+              yield* Sessions.use((sessions) => sessions.close(roots)),
+            ).toEqual({
               settled: true,
               abandoned: [],
             });
@@ -249,7 +247,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             ];
             for (const exit of exits) expect(Exit.isFailure(exit)).toBe(true);
             expect(String(exits[0])).toContain('injected readInputBatch fault');
-            yield* closeAt(roots);
+            yield* Sessions.use((sessions) => sessions.close(roots));
             expect(claimHolder(roots.storage, run.runId)).toBeNull();
           }),
       );
@@ -294,7 +292,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
                 yield* intent.reached;
                 const storage = crashedCopy(roots.storage);
                 yield* intent.release;
-                yield* closeAt(roots);
+                yield* Sessions.use((sessions) => sessions.close(roots));
                 const child = storedRows(storage).find(
                   (row) => row.parent === run.runId && row.type === 'run.start',
                 )?.run as RunId;
