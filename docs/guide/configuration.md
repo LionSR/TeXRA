@@ -160,8 +160,11 @@ Approving a plan with **Run as goal** (press `r` in the terminal) runs the
 plan as a goal: a background script of the conversation, which you can
 watch like any other. It auto-approves shell commands in the goal (or all
 agent work, if you chose that); the conversation's own approvals stay as
-they were. The goal's result arrives in the conversation when it ends. A
-script can run the same loop itself with
+they were. The goal's result arrives in the conversation when it ends:
+`completed`, or `paused` with the reason (a round needs you, a round
+failed, a round gave no verdict, or the spend cap), the rounds it ran and
+what it spent. The rounds are a script module, `builtIn:goal`, which a
+script can also call itself; a script can equally run its own loop with
 [`self()`](./multi-agent-workflows.md), with a stopping rule of its own.
 
 On your own API key a goal has no natural end, so it carries a spend cap:

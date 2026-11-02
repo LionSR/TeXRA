@@ -19,6 +19,7 @@ import { GlobTool } from '@tools/glob';
 import { GrepTool } from '@tools/grep';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
+import { GOAL_MODULE } from '@tools/plan/goalScript';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { definePlugin, type Plugin } from '@tools/plugins';
 import { ReadFileTool } from '@tools/ReadTool';
@@ -81,12 +82,14 @@ export const memoryWorkflow: Plugin = definePlugin({
 /**
  * Plans and goals: the `plan` tool proposes a plan, which the user may run
  * as a goal: a background script of the conversation that runs its agent
- * in rounds through `self()` (`goalScript`).
+ * in rounds through `self()` (`goalScript`), on the default strategy, its
+ * module `builtIn:goal`, unless `goal.strategy` names another.
  */
 export const goal: Plugin = definePlugin({
   id: 'goal',
   tools: [PlanTool],
   factKinds: [GOAL_PLAN_KIND],
+  scriptModules: { goal: GOAL_MODULE },
   // A goal is a script whose rounds are `self()`.
   requires: ['codemode'],
   injectedWhen: { plan: true },

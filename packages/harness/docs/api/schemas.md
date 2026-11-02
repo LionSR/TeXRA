@@ -857,6 +857,29 @@ range.
 const GOAL_MAX_COST_SETTING: Readonly<{ readonly configKey: "goal.maxCostUsd"; readonly defaultValue: 5; readonly min: 0; readonly max: 10000; readonly description: "Spend in US dollars, across its rounds, at which an autonomous goal pauses instead of starting another round. Raise it, then run the goal again to continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key)."; }>
 ```
 
+## GOAL_STRATEGY_SETTING
+
+Default and copy for `goal.strategy`: the script module whose `goal`
+export a plan run as a goal calls. The default is the goal plugin's own
+module; a `scriptModules` entry of any plugin that is on may replace it. Read when
+the goal launches.
+
+```ts
+const GOAL_STRATEGY_SETTING: Readonly<{ readonly configKey: "goal.strategy"; readonly defaultValue: "builtIn:goal"; readonly description: "The script module a plan run as a goal runs, by its import specifier (`builtIn:<module>`): its `goal(objective, { maxCostUsd })` export decides the rounds, what context each starts from and when to stop, and resolves to the goal's result. Defaults to the goal plugin's own module."; }>
+```
+
+## GoalResultSchema
+
+A goal's result: what its strategy, the `goal` export of the script
+module the `goal.strategy` setting names, returns, and so the structured
+output its run ends with. `completed` when a round verified the
+objective, `paused` with the reason otherwise. A pause is a result, not a
+waiting run: work continues through a new goal or a new turn.
+
+```ts
+const GoalResultSchema: Union<readonly [Struct<{ readonly rounds: Int; readonly spent: Finite; readonly report: String; readonly outcome: Literal<"completed">; }>, Struct<{ readonly rounds: Int; readonly spent: Finite; readonly report: String; readonly outcome: Literal<"paused">; readonly pause: Union<readonly [Struct<{ readonly reason: Literal<"needs_user">; }>, Struct<{ readonly reason: Literal<"round_failed">; readonly error: Struct<{ readonly name: String; readonly message: String; }>; }>, Struct<{ readonly reason: Literal<"no_verdict">; readonly response: String; }>, Struct<{ readonly reason: Literal<"spend_cap">; readonly maxCostUsd: Finite; }>]>; }>]>
+```
+
 ## HARNESS_INSTRUCTION_KEY
 
 The instruction keys the harness itself emits as

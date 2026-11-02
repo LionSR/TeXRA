@@ -21,6 +21,7 @@ import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   GOAL_MAX_COST_SETTING,
+  GOAL_STRATEGY_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   INHERITED_WORKSPACE_AGENTS,
@@ -182,6 +183,17 @@ const HARNESS_CONFIG_ROWS: Record<
     title: 'Goal spend cap (USD)',
     description: GOAL_MAX_COST_SETTING.description,
     category: 'tools',
+  },
+  // Global, as the cap is: the strategy is what checks the cap, so a
+  // committed project config must not pick one that ignores it.
+  [GOAL_STRATEGY_SETTING.configKey]: {
+    schema: Schema.String.check(Schema.isPattern(/^builtIn:./)).pipe(
+      Schema.withDecodingDefault(
+        Effect.succeed(GOAL_STRATEGY_SETTING.defaultValue),
+      ),
+    ),
+    configTarget: 'global',
+    description: GOAL_STRATEGY_SETTING.description,
   },
   // The provider toggles below are `configTarget: 'global'`: they describe how
   // you talk to a provider, not a property of one project. Writes go to the
