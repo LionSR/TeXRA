@@ -25,7 +25,7 @@ import {
   qualifyAggregateId,
 } from '@texra-ai/harness/schemas';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
-import { rootRun } from '@agent/runtime/rootLaunch';
+import { rootRun, SessionOwner } from '@agent/runtime/rootLaunch';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import {
   closeTestSession,
@@ -38,7 +38,10 @@ import {
   untilStored,
   validationHost,
 } from '@test/support/storeFaults';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import {
+  testRuntime,
+  testSessionOwner,
+} from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 /** The titles the store holds for `runId`, oldest first. */
@@ -112,6 +115,6 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
           descriptionBy: 'user',
         });
         yield* closeTestSession(roots.storage);
-      }),
+      }).pipe(Effect.provideServiceEffect(SessionOwner, testSessionOwner)),
   );
 });

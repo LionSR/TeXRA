@@ -148,20 +148,23 @@ A new ID is made on the next send.
 
 ## Goal mode
 
-A goal is a script that runs the agent again, in rounds. Each round
-continues the conversation as it stood when the goal started, is given the
-objective and the last round's report, works toward the objective with the
-agent's own tools, and ends by submitting a verdict: done, keep going, or
-needs you. The goal ends when a round verifies the objective, when a round
-needs you, or at the spend cap, and its result says which, with the last
-report.
+A goal is a script that runs the agent again, in rounds. By default, each
+round continues the conversation as it stood when the goal started, is given
+the objective and the last round's report, works toward the objective with
+the agent's own tools, and ends by submitting a verdict: done, keep going,
+or needs you. The goal ends when a round verifies the objective, when a
+round needs you, or at the spend cap, and its result says which, with the
+last report.
 
 Approving a plan with **Run as goal** (press `r` in the terminal) runs the
 plan as a goal: a background script of the conversation, which you can
 watch like any other. It auto-approves shell commands in the goal (or all
 agent work, if you chose that); the conversation's own approvals stay as
-they were. The goal's result arrives in the conversation when it ends. A
-script can run the same loop itself with
+they were. The goal's result arrives in the conversation when it ends:
+`completed`, or `paused` with the reason (a round needs you, a round
+failed, a round gave no verdict, or the spend cap), the rounds it ran and
+what it spent. The rounds are a script module, `builtIn:goal`, which a
+script can also call itself; a script can equally run its own loop with
 [`self()`](./multi-agent-workflows.md), with a stopping rule of its own.
 
 On your own API key a goal has no natural end, so it carries a spend cap:

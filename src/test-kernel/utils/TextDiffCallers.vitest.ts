@@ -2,28 +2,28 @@
 import { readFile } from 'node:fs/promises';
 
 // Third-party imports
-import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { describe, expect } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Layer } from 'effect';
+import { expect } from 'vitest';
 
 // Local imports
 import { approvedWriteConflict } from '@texra-ai/harness/plugins';
-import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { writeApprovedContent } from '@tools/approval/approvedWrite';
 
-function installFakePlatform(
-  files: Record<string, string> = {},
-): Promise<void> {
-  return installPlatform({
-    files,
-    storagePath: fakePath('workspace/.texra/storage'),
-    workspacePath: fakePath('workspace'),
-  });
-}
+/** Install, for the test's scope, a host whose workspace holds `files`. */
+const installFakePlatform = (files: Record<string, string> = {}) =>
+  Layer.build(
+    FakeHost.layer({
+      files,
+      storagePath: fakePath('workspace/.texra/storage'),
+      workspacePath: fakePath('workspace'),
+    }),
+  );
 
-describe('approved write', () => {
+layer(SessionGraph.layer)('approved write', (it) => {
   it.effect(
     'applies an approved edit over unrelated concurrent changes and refuses conflicting ones',
     () =>
@@ -31,11 +31,9 @@ describe('approved write', () => {
         const original = 'alpha\nbeta\nomega\n';
         const final = 'alpha\nBETA\nomega\n';
 
-        yield* Effect.tryPromise(() =>
-          installFakePlatform({
-            '/workspace/paper.tex': 'alpha\nbeta\nomega\nlocal\n',
-          }),
-        );
+        yield* installFakePlatform({
+          '/workspace/paper.tex': 'alpha\nbeta\nomega\nlocal\n',
+        });
         const writeResult = yield* writeApprovedContent(
           'paper.tex',
           original,
@@ -57,11 +55,9 @@ describe('approved write', () => {
 
         // A concurrent change to the approved hunk is a conflict, never an
         // overwrite of that change with the approved content.
-        yield* Effect.tryPromise(() =>
-          installFakePlatform({
-            '/workspace/paper.tex': 'rewritten\nby another\nwriter\n',
-          }),
-        );
+        yield* installFakePlatform({
+          '/workspace/paper.tex': 'rewritten\nby another\nwriter\n',
+        });
         const conflict = yield* approvedWriteConflict(
           'paper.tex',
           original,

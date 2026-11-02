@@ -49,6 +49,7 @@ vi.mock('@texra/tools/agentCli/codexImport', async (importActual) => {
 
 import '@test/support/sessionGraphTestSetup';
 
+import { withProcessServices } from '@texra-ai/harness/host';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
@@ -60,6 +61,7 @@ import {
   validationHost,
 } from '@test/support/storeFaults';
 import { noPluginHold } from '@test/support/testPluginServices';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { CodexThreads as CodexThreadsService } from '@texra/tools/agentCli/agentCliSessionStores';
 import { AgentCliSessionRegistry } from '@texra/tools/agentCli/agentCliSessionRegistry';
@@ -77,13 +79,16 @@ const toolLayer = (
   Layer.merge(
     nativeToolTestLayer(run && { run: { ...run, toolPolicy: {} } }),
     Layer.succeed(CodexThreadsService)(registry),
-  );
+  ).pipe(Layer.provideMerge(Layer.effectContext(testRuntime().contextEffect)));
 
 /** A root run of the bundled `assistant`, parked waiting for input: the
  *  parent a Codex child is launched under and delivers to. */
 const parkedParent = Effect.gen(function* () {
   const roots = testWorkspaceRoots();
-  const session = yield* openTestDefaultSession({ roots });
+  const session = yield* withProcessServices(
+    testRuntime(),
+    openTestDefaultSession({ roots }),
+  );
   const runId = yield* parkedRoot(session, 'Parent.');
   return { session, runId, storage: roots.storage };
 });

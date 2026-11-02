@@ -2,9 +2,9 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { it, layer } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect, Context } from 'effect';
-import { describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 // Local imports
 import { generateRunId } from '@texra-ai/harness/schemas';
@@ -20,7 +20,7 @@ import {
 } from '@test/agent/progressTestUtils';
 import { UpdateConfigTool } from '@texra/tools/setup/ConfigTools';
 
-describe('ConfigTools — update_config allowlist', () => {
+layer(SessionGraph.layer)('ConfigTools — update_config allowlist', (it) => {
   it.effect('rejects a non-allowlisted key without writing', () =>
     Effect.gen(function* () {
       const { roots } = createFakeHost();
@@ -61,12 +61,9 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         yield* Context.get(session, SessionLog).settled;
-        const requests = yield* Effect.acquireRelease(
-          Effect.sync(() =>
-            autoDecideRequests(session, () => ({ action: 'reject' })),
-          ),
-          (requests) => Effect.sync(() => requests.detach()),
-        );
+        const requests = yield* autoDecideRequests(session, () => ({
+          action: 'reject',
+        }));
 
         const result = yield* guardedToolCall(UpdateConfigTool, {
           key: 'texra.bib.zoteroPort',

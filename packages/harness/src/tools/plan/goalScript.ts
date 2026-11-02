@@ -1,14 +1,15 @@
 /**
- * The goal template: the script "Run as Goal" runs in the background of the
- * conversation that approved the plan. Each round is this agent again
- * (`self()`), forked from that conversation as it stood when the goal
- * started, and ends with a verdict; the
- * script stops when a round says the objective is done or needs the user,
- * when a round fails, or when the rounds reach the spend cap. An agent that
- * wants another stopping rule writes the same loop with its own check.
+ * The goal: "Run as Goal" runs a background script of the conversation
+ * that approved the plan, and that script only calls a strategy, the `goal`
+ * export of the script module `goal.strategy` names. The strategy decides
+ * the rounds, what context each starts from and when to stop, and resolves
+ * to the goal's result (`GoalResultSchema`). The default strategy is the
+ * goal plugin's own module, `builtIn:goal`; a plugin replaces it by shipping
+ * another module and naming it in the setting, and a script may call any of
+ * them itself.
  */
 
-/** The verdict each round submits. */
+/** The verdict each round of the default strategy submits. */
 const ROUND_SCHEMA = {
   type: 'object',
   properties: {
@@ -39,35 +40,51 @@ const ROUND_BRIEF = [
 ].join('\n');
 
 /**
- * The goal's script for `objective`, stopping its rounds at `maxCostUsd` of
- * spend (`0`: no cap). The cap reads what the goal has spent in all after
- * each round (`spent`: every round, failed ones too, and work a round left
- * running), never a sum of its own. It returns `{ status, rounds, report }`,
- * with `status` `'completed'` or `'paused'`. Every value reaches the source as a JSON literal;
- * `String.raw` keeps the script's own escapes as written.
+ * The default strategy, the module `builtIn:goal`. Each round is this agent
+ * again (`self()`), forked from the conversation as it stood when the goal
+ * started, told the previous round's report, and ends with a verdict. It
+ * stops when a round says the objective is done or needs the user, when a
+ * round fails or submits no verdict, or when the goal's spend after a round
+ * reaches `maxCostUsd` (`0`: no cap). `spent` is what the goal has spent in
+ * all (every round, failed ones too, and work a round left running), never
+ * a sum of its own. Constants reach the source as JSON literals;
+ * `String.raw` keeps the module's own escapes as written.
  */
-export const goalScript = (objective: string, maxCostUsd: number): string =>
-  String.raw`const objective = ${JSON.stringify(objective)};
-const maxCostUsd = ${JSON.stringify(maxCostUsd)};
-const brief = ${JSON.stringify(ROUND_BRIEF)};
+export const GOAL_MODULE = String.raw`const brief = ${JSON.stringify(ROUND_BRIEF)};
 const schema = ${JSON.stringify(ROUND_SCHEMA)};
-let report = '';
-for (let round = 1; ; round += 1) {
-  phase('Round ' + round);
-  const previous = round === 1 ? '' : '\n\n<previous_round round="' + (round - 1) + '">\n' + report + '\n</previous_round>';
-  let reply;
-  try {
-    reply = await self(brief + '\n\n<objective>\n' + objective + '\n</objective>' + previous, {
-      schema, label: 'Round ' + round,
-    });
-  } catch (error) {
-    return { status: 'paused', rounds: round, report: 'Round ' + round + ' ended without a verdict (' + error.name + '): ' + error.message };
+export const goal = async (objective, { maxCostUsd }) => {
+  let report = '';
+  let spent = 0;
+  for (let round = 1; ; round += 1) {
+    phase('Round ' + round);
+    const previous = round === 1 ? '' : '\n\n<previous_round round="' + (round - 1) + '">\n' + report + '\n</previous_round>';
+    const paused = (pause) => ({ outcome: 'paused', pause, rounds: round, spent, report });
+    let reply;
+    try {
+      reply = await self(brief + '\n\n<objective>\n' + objective + '\n</objective>' + previous, {
+        schema, label: 'Round ' + round,
+      });
+    } catch (error) {
+      return paused({ reason: 'round_failed', error: { name: error.name, message: error.message } });
+    }
+    spent = reply.spent;
+    if (reply.structured == null) return paused({ reason: 'no_verdict', response: reply.response });
+    report = reply.structured.report;
+    if (reply.structured.status === 'done') return { outcome: 'completed', rounds: round, spent, report };
+    if (reply.structured.status === 'needs_user') return paused({ reason: 'needs_user' });
+    if (maxCostUsd > 0 && spent >= maxCostUsd) return paused({ reason: 'spend_cap', maxCostUsd });
   }
-  if (reply.structured == null)
-    return { status: 'paused', rounds: round, report: 'Round ' + round + ' ended without a verdict: it did not submit one.\n\n' + reply.response };
-  report = reply.structured.report;
-  if (reply.structured.status === 'done') return { status: 'completed', rounds: round, report };
-  if (reply.structured.status === 'needs_user') return { status: 'paused', rounds: round, report };
-  if (maxCostUsd > 0 && reply.spent >= maxCostUsd)
-    return { status: 'paused', rounds: round, report: 'The goal has spent $' + reply.spent.toFixed(2) + ', reaching its cap of $' + maxCostUsd + ' (texra.goal.maxCostUsd).\n\n' + report };
-}`;
+};`;
+
+/**
+ * The goal's script: the `goal` export of the module `strategy` names, on
+ * `objective` with the cap `maxCostUsd`. What it resolves to is the
+ * script's return, so the goal's run ends with it as its structured output.
+ */
+export const goalScript = (
+  strategy: string,
+  objective: string,
+  maxCostUsd: number,
+): string =>
+  `const { goal } = await import(${JSON.stringify(strategy)});
+return await goal(${JSON.stringify(objective)}, { maxCostUsd: ${JSON.stringify(maxCostUsd)} });`;

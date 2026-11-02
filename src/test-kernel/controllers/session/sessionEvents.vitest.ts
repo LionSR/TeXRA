@@ -106,7 +106,6 @@ import { Database } from '@shared/session/database';
 import { runActions } from '@shared/session/runActions';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
-import { closeSessionOf, openTestSession } from '@test/support/sessionEnd';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   nodeSpawnerLayer,
@@ -114,13 +113,17 @@ import {
 } from '@test/support/childProcessTestLayer';
 import { seedRows } from '@test/support/sessionTestUtils';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import '@test/support/sessionGraphTestSetup';
 import {
   storePluginsLayer,
   globalValuesOver,
 } from '@test/support/setupPlatform';
 import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
 import { REPO_ROOT } from '@test/support/repoScan';
+import {
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 import type { InquiryThreadSummary } from '@texra/shared/plugins/externalInquiry';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { toolTable } from '@tools/toolTable';
@@ -527,8 +530,8 @@ describe('session events and view', () => {
 });
 
 /**
- * The session owner (proposal 2026-09-05, sections 3 and 9): `closeSession`
- * is how a session the `Sessions` map holds behind `openTestSession` ends.
+ * The session owner: `closeSession` is how a session the `Sessions` map
+ * holds ends.
  */
 describe('Sessions owner', () => {
   /** The graph over one started run, with the global values and platform a
@@ -698,24 +701,28 @@ describe('Sessions owner', () => {
       }).pipe(withRequestServices),
   );
 
+  /** The session over `storagePath`, open while the test's scope lives. */
   const open = (storagePath: string) =>
-    openTestSession({
-      roots: createFakeWorkspaceRoots({ storagePath }),
-      transcriptMode: { kind: 'ephemeral' },
-    });
+    Effect.flatMap(
+      TestSession.open(createFakeWorkspaceRoots({ storagePath }), { host: {} }),
+      sessionHandleOf,
+    );
 
-  // Real polling loops (`vi.waitFor`) on the process runtime's live work:
-  // `it.live`, so nothing the session does waits on a test clock.
-  it.live(
-    'delivers committed runtime facts and never announces a rejected write',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* open('/workspace/owner/committed-status');
-        // The folded tail presents each `run.end` this process committed:
-        // the presenter's calls say which rows the tail delivered.
-        const presented = vi.spyOn(toast, 'presentTerminalResult');
+  // Real polling loops (`vi.waitFor`) on the session graph's live work: a
+  // live clock, so nothing the session does waits on a test clock.
+  it.layer(SessionGraph.layer, { excludeTestServices: true })((it) => {
+    it.effect(
+      'delivers committed runtime facts and never announces a rejected write',
+      () =>
+        Effect.gen(function* () {
+          const session = yield* open('/workspace/owner/committed-status');
+          // The folded tail presents each `run.end` this process committed:
+          // the presenter's calls say which rows the tail delivered.
+          const presented = vi.spyOn(toast, 'presentTerminalResult');
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => presented.mockRestore()),
+          );
 
-        try {
           publishTestRows(session, [
             runStart,
             { ...runStart, aggregateId: qualifyAggregateId('run', OLDER) },
@@ -789,12 +796,9 @@ describe('Sessions owner', () => {
               ).toEqual([qualifyAggregateId('run', OLDER)]),
             ),
           );
-        } finally {
-          presented.mockRestore();
-          yield* closeSessionOf(session);
-        }
-      }),
-  );
+        }),
+    );
+  });
 });
 
 /**

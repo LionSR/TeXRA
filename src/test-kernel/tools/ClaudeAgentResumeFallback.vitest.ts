@@ -43,6 +43,7 @@ vi.mock('@texra/tools/agentCli/claudeAgentImport', async (importActual) => {
 
 import '@test/support/sessionGraphTestSetup';
 
+import { withProcessServices } from '@texra-ai/harness/host';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { openTestDefaultSession } from '@test/support/sessionEnd';
@@ -54,6 +55,7 @@ import {
   validationHost,
 } from '@test/support/storeFaults';
 import { noPluginHold } from '@test/support/testPluginServices';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@texra/tools/agentCli/agentCliSessionStores';
 import { AgentCliSessionRegistry } from '@texra/tools/agentCli/agentCliSessionRegistry';
@@ -71,7 +73,10 @@ interface Parent {
  *  and delivers to. */
 const parkedParent = Effect.gen(function* () {
   const roots = testWorkspaceRoots();
-  const session = yield* openTestDefaultSession({ roots });
+  const session = yield* withProcessServices(
+    testRuntime(),
+    openTestDefaultSession({ roots }),
+  );
   const runId = yield* parkedRoot(session, 'Parent.');
   return { session, runId, storage: roots.storage } satisfies Parent;
 });
@@ -84,7 +89,7 @@ const toolLayer = (registry: AgentCliSessionRegistry, parent: Parent) =>
       run: { session: parent.session, runId: parent.runId, toolPolicy: {} },
     }),
     Layer.succeed(ClaudeAgentSessionsService)(registry),
-  );
+  ).pipe(Layer.provideMerge(Layer.effectContext(testRuntime().contextEffect)));
 
 /** One SDK `query` answering a single successful turn of `session_id`. */
 const succeeded = (sessionId: string) =>

@@ -25,7 +25,11 @@ import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
 import { withProcessServices } from '@texra-ai/harness/host';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
+import {
+  rootRun,
+  SessionOwner,
+  type SessionServices,
+} from '@agent/runtime/rootLaunch';
 import {
   closeTestSession,
   openTestDefaultSession,
@@ -38,7 +42,10 @@ import {
   REAL_RUN_TIMEOUT,
   validationHost,
 } from '@test/support/storeFaults';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import {
+  testRuntime,
+  testSessionOwner,
+} from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 /** What a run of a launch was offered and asked, and how its calls ended,
@@ -99,7 +106,10 @@ describe(
       () =>
         Effect.gen(function* () {
           const roots = testWorkspaceRoots();
-          const session = yield* openTestDefaultSession({ roots });
+          const session = yield* withProcessServices(
+            testRuntime(),
+            openTestDefaultSession({ roots }),
+          );
           const parentRunId = generateRunId();
           yield* withProcessServices(
             testRuntime(),
@@ -236,7 +246,7 @@ describe(
           expect(fileWithheld.offered[0]).not.toContain('bash');
           expect(inlineWithheld).toEqual(fileWithheld);
           yield* closeTestSession(roots.storage);
-        }),
+        }).pipe(Effect.provideServiceEffect(SessionOwner, testSessionOwner)),
     );
   },
 );

@@ -752,7 +752,8 @@ type GitignoreMatcher = {
 
 Plans and goals: the `plan` tool proposes a plan, which the user may run
 as a goal: a background script of the conversation that runs its agent
-in rounds through `self()` (`goalScript`).
+in rounds through `self()` (`goalScript`), on the default strategy, its
+module `builtIn:goal`, unless `goal.strategy` names another.
 
 ```ts
 const goal: Plugin

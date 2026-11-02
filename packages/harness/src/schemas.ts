@@ -302,6 +302,8 @@ export {
   generateRunId,
   getProposalFileGroups,
   GOAL_MAX_COST_SETTING,
+  GOAL_STRATEGY_SETTING,
+  GoalResultSchema,
   InlinePersonaSchema,
   InstalledPluginSchema,
   HARNESS_INSTRUCTION_KEY,

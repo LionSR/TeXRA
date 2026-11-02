@@ -2,8 +2,9 @@
  * The plan tool: propose or replace the plan, a plain objective document
  * stating what to achieve, the approach, and a verifiable stopping
  * condition. Every proposal gates on the user's approval: approve, reject,
- * or run the plan as a goal, which runs the goal template (`goalScript`) as
- * a background script of this conversation with the plan as its objective.
+ * or run the plan as a goal, which runs the configured goal strategy
+ * (`goalScript`) as a background script of this conversation with the plan
+ * as its objective.
  */
 
 // Third-party imports
@@ -27,6 +28,7 @@ import {
 import {
   GOAL_MAX_COST_SETTING,
   GOAL_PLAN_KIND,
+  GOAL_STRATEGY_SETTING,
   qualifyAggregateId,
   RunIdSchema,
   type Plan,
@@ -84,10 +86,11 @@ const approvedPlan = (plan: Plan): ToolFact => ({
 });
 
 /**
- * Run the just-approved plan as a goal: the goal template, a background
- * script of this conversation whose rounds are this agent again (`self()`),
- * with the plan document verbatim as its objective and the auto-approvals
- * the user's answer chose on the script's run, which its rounds inherit.
+ * Run the just-approved plan as a goal: a background script of this
+ * conversation that runs the strategy `goal.strategy` names, whose rounds
+ * are this agent again (`self()`), with the plan document verbatim as its
+ * objective and the auto-approvals the user's answer chose on the script's
+ * run, which its rounds inherit.
  * The conversation's own approvals stay as they were.
  */
 const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
@@ -156,10 +159,14 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
     call.env.roots,
     GOAL_MAX_COST_SETTING.configKey,
   );
+  const strategy = yield* Settings.get<string>(
+    call.env.roots,
+    GOAL_STRATEGY_SETTING.configKey,
+  );
   const launched = yield* launchBackgroundScript(
     call,
     {
-      code: goalScript(plan.objective, maxCostUsd),
+      code: goalScript(strategy, plan.objective, maxCostUsd),
       timeoutMs: GOAL_TIMEOUT_MS,
     },
     GOAL_TITLE,
@@ -169,8 +176,8 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
     ...launched,
     output:
       `The user approved this plan and runs it as a goal: a background ` +
-      `script runs you again in rounds, each continuing this conversation, ` +
-      `until a round verifies the stopping condition.\n\n` +
+      `script runs you again in rounds until a round verifies the stopping ` +
+      `condition or the goal pauses.\n\n` +
       `${launched.output ?? ''}\n\n` +
       `Leave the objective to the goal's rounds: end this turn, and report ` +
       `the goal's result to the user when it arrives.`,

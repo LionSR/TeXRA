@@ -156,12 +156,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.layer), {
         yield* Context.get(session, SessionLog).settled;
         // A run that never ran a turn writes no step of its own: `run.end` is
         // the whole of what it says.
-        expect(
-          eventsOfType(
-            yield* Effect.promise(() => recorded.read()),
-            'run.position',
-          ),
-        ).toEqual([]);
+        expect(eventsOfType(yield* recorded.read, 'run.position')).toEqual([]);
         expect(yield* runEnds(session, runId)).toMatchObject([
           {
             outcome: RUN_OUTCOME.CANCELLED,

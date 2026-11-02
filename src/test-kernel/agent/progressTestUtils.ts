@@ -1,8 +1,8 @@
 import {
   Context,
   Effect,
-  Fiber,
   Schema,
+  type Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -23,7 +23,6 @@ import {
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { aggregateTarget } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   publishTestRunStart,
   publishTestRows,
@@ -50,16 +49,18 @@ type SessionEventReader = Context.Context<SessionLog>;
 
 /**
  * Read the committed prefix using its drain coordinate, including private rows
- * that advance the cursor without appearing on the display plane.
+ * that advance the cursor without appearing on the display plane. The upper
+ * bound is the commit the log holds when the read runs; a store that fails
+ * the read fails the test.
  */
-async function readSessionEvents(
+const readSessionEvents = (
   session: SessionEventReader,
-  fromCommit = 0,
-): Promise<DisplaySessionEvent[]> {
-  const through = Context.get(session, SessionLog).now();
-  if (through <= fromCommit) return [];
-  return testRuntime().runPromise(
-    Effect.gen(function* () {
+  fromCommit: number,
+): Effect.Effect<DisplaySessionEvent[]> =>
+  Effect.suspend(() => {
+    const through = Context.get(session, SessionLog).now();
+    if (through <= fromCommit) return Effect.succeed([]);
+    return Effect.gen(function* () {
       const drained = yield* SubscriptionRef.make(fromCommit);
       return yield* Context.get(session, SessionLog)
         .tail(fromCommit, drained)
@@ -72,9 +73,8 @@ async function readSessionEvents(
           ),
           Stream.runCollect,
         );
-    }),
-  );
-}
+    }).pipe(Effect.orDie);
+  });
 
 /**
  * Read public events committed since this call. Each read captures its own
@@ -83,15 +83,14 @@ async function readSessionEvents(
 export function recordSessionEvents(
   session: SessionEventReader,
   filter: { readonly aggregateId?: string } = {},
-): { readonly read: () => Promise<DisplaySessionEvent[]> } {
+): { readonly read: Effect.Effect<DisplaySessionEvent[]> } {
   const start = Context.get(session, SessionLog).now();
   return {
-    async read() {
-      const events = await readSessionEvents(session, start);
-      return filter.aggregateId === undefined
+    read: Effect.map(readSessionEvents(session, start), (events) =>
+      filter.aggregateId === undefined
         ? events
-        : events.filter((event) => event.aggregateId === filter.aggregateId);
-    },
+        : events.filter((event) => event.aggregateId === filter.aggregateId),
+    ),
   };
 }
 
@@ -149,20 +148,22 @@ export function decideRequest(
 }
 
 /**
- * Answer every request a session opens from this call on. `decide` sees the
- * `request.opened` row and returns the decision, or null to leave the request
- * pending — which is how a test exercises a run parked on an unanswered
- * request.
+ * Answer every request a session opens from this call on, until the calling
+ * scope closes. `decide` sees the `request.opened` row and returns the
+ * decision, or null to leave the request pending — which is how a test
+ * exercises a run parked on an unanswered request. `opened` lists every
+ * request the session opened meanwhile.
  */
-export function autoDecideRequests(
+export const autoDecideRequests = (
   session: Context.Context<SessionServices>,
   decide: (request: OpenedRequest) => RequestDecision | null,
-): { readonly opened: OpenedRequest[]; readonly detach: () => void } {
-  const opened: OpenedRequest[] = [];
-  const fiber = testRuntime().runFork(
-    Stream.runForEach(
-      Context.get(session, SessionLog)
-        .tail(Context.get(session, SessionLog).now())
+): Effect.Effect<{ readonly opened: OpenedRequest[] }, never, Scope.Scope> =>
+  Effect.suspend(() => {
+    const opened: OpenedRequest[] = [];
+    const log = Context.get(session, SessionLog);
+    return Stream.runForEach(
+      log
+        .tail(log.now())
         .pipe(
           Stream.filter(
             (event): event is OpenedRequest => event.type === 'request.opened',
@@ -181,15 +182,11 @@ export function autoDecideRequests(
             decision,
           );
         }),
-    ),
-  );
-  return {
-    opened,
-    detach: () => {
-      testRuntime().runFork(Fiber.interrupt(fiber));
-    },
-  };
-}
+    ).pipe(
+      Effect.forkScoped({ startImmediately: true }),
+      Effect.as({ opened }),
+    );
+  });
 
 /** Publish the run's existence fact when the view has yet to hold it. */
 async function ensureRunStart(
