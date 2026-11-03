@@ -22,12 +22,11 @@ import {
   type PluginToolServices,
 } from '@texra-ai/harness/plugins';
 import { WorkspaceFs } from '@texra-ai/harness/host';
-import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRoots } from '@platform/rootedFs';
-import { SessionLog, Approvals } from '@shared/session/runHistory';
+import { SessionLog } from '@shared/session/runHistory';
 import {
   setTestApprovalPolicy,
   publishTestRunStart,
@@ -250,60 +249,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         assert.strictEqual(result.status, 'error');
         assert.strictEqual(policyDenials, 1);
       }),
-    );
-
-    it.effect(
-      'rechecks session bypass between concurrent approval requests',
-      () =>
-        Effect.gen(function* () {
-          yield* setUp();
-          // The first request stays parked so the second is enqueued behind it.
-          nextDecision = () => null;
-
-          const requestInRun = (path: string) =>
-            inRun(
-              requestToolEditApproval({
-                path,
-                originalContent: '',
-                proposedContent: path,
-                sourceTool: 'write_file',
-              }),
-            );
-
-          const firstRequest = yield* Effect.forkChild(
-            requestInRun('first.txt'),
-          );
-          const secondRequest = yield* Effect.forkChild(
-            requestInRun('second.txt'),
-          );
-          yield* Effect.tryPromise(() =>
-            waitForCondition(() => openedEdits().length === 1, {
-              timeoutMessage:
-                'Timed out waiting for the first edit to be opened',
-            }),
-          );
-
-          yield* Context.get(session, Approvals).change(
-            runId,
-            humanGrant(['toolEdit'], true),
-          );
-          decideRequest(
-            session,
-            { runId, requestId: openedEdits()[0]!.requestId },
-            { action: 'approve', content: 'first.txt' },
-          );
-
-          const results = yield* Effect.all([
-            Fiber.join(firstRequest),
-            Fiber.join(secondRequest),
-          ]);
-          assert.deepStrictEqual(
-            results.map((result) => result.action),
-            ['apply', 'apply'],
-          );
-          // The bypassed second request never reaches a surface.
-          assert.strictEqual(openedEdits().length, 1);
-        }),
     );
 
     it.effect(

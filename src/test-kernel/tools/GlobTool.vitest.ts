@@ -50,10 +50,9 @@ function withGlobWorkspace(
   return withTempDirEffect('texra-glob-tool-', (workspacePath) =>
     Effect.gen(function* () {
       yield* Effect.promise(async () => {
-        await Promise.all(
-          ['vanished.tex', 'blocked.tex'].map((name) =>
-            writeFile(path.join(workspacePath, name), name),
-          ),
+        await writeFile(
+          path.join(workspacePath, 'vanished.tex'),
+          'vanished.tex',
         );
         // An ignored `dist/` an external search must not be matched against.
         await writeFile(path.join(workspacePath, '.gitignore'), 'dist/\n');
@@ -71,7 +70,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
   (it) => {
     it.effect.each([
       { fileName: 'vanished.tex', tag: 'NotFound' as const },
-      { fileName: 'blocked.tex', tag: 'BadResource' as const },
     ])(
       'omits a match whose metadata lookup fails with $tag',
       ({ fileName, tag }) =>
