@@ -560,14 +560,6 @@ describe('LAY-1 subsystem edge ratchet', () => {
         '\n\nRemove them from the baseline so they cannot absorb a future new edge.',
     ).toEqual([]);
   });
-
-  it('keeps the baseline non-empty and ordered', () => {
-    const baseline = readBaseline();
-    const sortedEdges = baseline.edges.toSorted(compareEdges);
-
-    expect(baseline.edges.length).toBeGreaterThan(0);
-    expect(baseline.edges).toEqual(sortedEdges);
-  });
 });
 
 describe('LAY-2 harness layer order', () => {

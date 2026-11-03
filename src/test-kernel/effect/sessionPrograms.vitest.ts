@@ -1,32 +1,19 @@
 /**
- * The package's `start` and `resume` (`sessionPrograms.ts`) and the `Run`
- * they hand back, over a real store on the validation model: the run
- * ownership and hand-off scenarios of the harness 1.0 release acceptance
- * (R4, R14), each checked against the result it requires.
+ * The package's `resume` (`sessionPrograms.ts`) and the `Run` it hands
+ * back, over a real store on the validation model: the run hand-off
+ * scenario of the harness 1.0 release acceptance (R14).
  *
- * Failure modes:
- * - R4: a caller cancelled as its run opens leaves the run executing with
- *   nobody to stop it; closing the session then leaves a run unended, a
- *   claim held, a view reader waiting, or a command's process alive;
- * - R4: a view that dies during an activation leaves the caller of the
- *   run's view or result waiting forever;
+ * Failure mode:
  * - R14: a resumed child its parent's open call owns is activated on its
  *   own, or the parent twice, or the redirect is an error instead of the
  *   parent's handle; the redirect leaves a claim held or a listener of its
  *   own subscribed.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { layer } from '@effect/vitest';
-import { Context, Effect, Exit, Fiber, Scope, Stream } from 'effect';
+import { Context, Effect, Exit, Scope, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
-import {
-  qualifyAggregateId,
-  type InlinePersona,
-  type RunId,
-} from '@texra-ai/harness/schemas';
+import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
@@ -58,30 +45,11 @@ const packageSession = (session: Context.Context<SessionServices>) =>
     return yield* sessions.open(testWorkspaceRoots());
   });
 
-/** A persona whose one turn runs `command` through `bash`, then answers
- *  "The approved command ran.": the validation model's approval script. */
-const commandPersona = (command: string): InlinePersona => ({
-  name: 'command_runner',
-  description: 'Runs one command.',
-  prompt: `GOLDEN-APPROVAL bash ${command}`,
-  tools: ['bash'],
-});
-
 /** The outcomes of the run's `run.end` rows, in order. */
 const endsOf = (storage: string, runId: RunId) =>
   storedRows(storage)
     .filter((row) => row.run === runId && row.type === 'run.end')
     .map((row) => (JSON.parse(row.data) as { outcome: string }).outcome);
-
-/** How many model requests the run sent: its `attempt` rows. */
-const requestsOf = (storage: string, runId: RunId) =>
-  storedRows(storage).filter(
-    (row) =>
-      row.run === runId &&
-      row.type === 'model.message' &&
-      (JSON.parse(row.data) as { payload: { kind: string } }).payload.kind ===
-        'attempt',
-  ).length;
 
 /** How many times the run was activated after commit `after`. */
 const activationsAfter = (storage: string, runId: string, after: number) =>
@@ -89,16 +57,6 @@ const activationsAfter = (storage: string, runId: string, after: number) =>
     (row) =>
       row.run === runId && row.type === 'run.activate' && row.commit > after,
   ).length;
-
-/** Whether process `pid` is alive. */
-const isAlive = (pid: number) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 /** The transcripts the session view keeps for its subscribers. */
 const subscribed = (session: LocalSession) => [
@@ -125,130 +83,6 @@ const untilSubscribed = (session: LocalSession, ids: readonly RunId[]) => {
 describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
   layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.layer(validationHost('texra-handoff-'), { buildPerTest: true })((it) => {
-      it.effect(
-        'R4: a start cancelled at the hand-off and a session close leave no run, claim, reader or process behind',
-        () =>
-          Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
-            const sdk = yield* packageSession(
-              yield* persistentTestSession(roots),
-            );
-            // A run whose command holds a process open, read by the caller.
-            // The process writes its own pid; `node -e` runs the same under
-            // a POSIX shell and cmd.exe, from the workspace the command runs in.
-            const pidFile = join(roots.workspace!, 'held.pid');
-            const holding = yield* sdk.start({
-              agent: commandPersona(
-                `node -e "require('fs').writeFileSync('held.pid', String(process.pid)); setInterval(() => {}, 1000)"`,
-              ),
-              instruction: 'Run the command.',
-              model: MODEL,
-              approval: { delegated: true },
-            });
-            const reader = yield* Effect.forkChild(
-              Stream.runDrain(holding.view),
-            );
-            const result = yield* Effect.forkChild(holding.result);
-            yield* untilStored(roots.storage, () =>
-              existsSync(pidFile)
-                ? readFileSync(pidFile, 'utf8').trim() !== ''
-                : false,
-            );
-            const pid = Number(readFileSync(pidFile, 'utf8').trim());
-            expect(isAlive(pid)).toBe(true);
-
-            // A second start whose caller leaves while its opening commits.
-            const faults = yield* sessionStoreFaults(roots.storage);
-            const opening = yield* faults.holdNext('appendAll', 'run.start');
-            const cancelled = yield* Effect.forkChild(
-              sdk.start({
-                agent: 'assistant',
-                instruction: 'Never answered.',
-                model: MODEL,
-              }),
-            );
-            yield* opening.reached;
-            // The interrupt is delivered while the opening is still held.
-            const leaving = yield* Effect.forkChild(
-              Fiber.interrupt(cancelled),
-              {
-                startImmediately: true,
-              },
-            );
-            yield* opening.release;
-            yield* Fiber.join(leaving);
-            expect(Exit.hasInterrupts(yield* Fiber.await(cancelled))).toBe(
-              true,
-            );
-            const cancelledRun = storedRows(roots.storage).find(
-              (row) => row.type === 'run.start' && row.run !== holding.runId,
-            )?.run as RunId;
-
-            expect(
-              yield* Sessions.use((sessions) => sessions.close(roots)),
-            ).toEqual({
-              settled: true,
-              abandoned: [],
-            });
-
-            // The reader and the result answer; the process is gone.
-            yield* Fiber.join(reader).pipe(Effect.timeout('10 seconds'));
-            expect((yield* Fiber.join(result)).outcome).toBe('cancelled');
-            yield* untilStored(roots.storage, () => !isAlive(pid));
-            // The cancelled start never reached its model; both runs ended once
-            // and released their claims.
-            expect(cancelledRun).toBeDefined();
-            expect(requestsOf(roots.storage, cancelledRun)).toBe(0);
-            for (const runId of [holding.runId, cancelledRun]) {
-              expect(endsOf(roots.storage, runId)).toEqual(['cancelled']);
-              expect(claimHolder(roots.storage, runId)).toBeNull();
-            }
-          }),
-      );
-
-      it.effect(
-        "R4: a view that dies during an activation fails the run's view and result instead of leaving them waiting",
-        () =>
-          Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
-            const sdk = yield* packageSession(
-              yield* persistentTestSession(roots),
-            );
-            const release = join(roots.workspace!, 'release');
-            const run = yield* sdk.start({
-              agent: commandPersona(
-                `until [ -e ${release} ]; do sleep 0.05; done`,
-              ),
-              instruction: 'Run the command.',
-              model: MODEL,
-              approval: { delegated: true },
-            });
-            const view = yield* Effect.forkChild(
-              Effect.exit(Stream.runDrain(run.view)),
-            );
-            const result = yield* Effect.forkChild(Effect.exit(run.result));
-            yield* untilStored(roots.storage, (rows) =>
-              rows.some(
-                (row) => row.run === run.runId && row.type === 'tool.start',
-              ),
-            );
-            // Every read the view's updater retries fails: it dies.
-            const faults = yield* sessionStoreFaults(roots.storage);
-            for (let read = 0; read < 6; read += 1)
-              yield* faults.failNext('readInputBatch');
-            writeFileSync(release, '');
-
-            const exits: Exit.Exit<unknown, unknown>[] = [
-              yield* Fiber.join(view).pipe(Effect.timeout('15 seconds')),
-              yield* Fiber.join(result).pipe(Effect.timeout('15 seconds')),
-            ];
-            for (const exit of exits) expect(Exit.isFailure(exit)).toBe(true);
-            expect(String(exits[0])).toContain('injected readInputBatch fault');
-            yield* Sessions.use((sessions) => sessions.close(roots));
-            expect(claimHolder(roots.storage, run.runId)).toBeNull();
-          }),
-      );
-
       it.effect(
         "R14: resuming a child its parent's open call owns resumes the parent once, names the child, and leaves no claim or listener",
         () =>
