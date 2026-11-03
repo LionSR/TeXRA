@@ -96,33 +96,29 @@ const COMMENT_BODY_DESCRIPTION = 'The comment text (Markdown supported).';
 const InlineCommentInputSchema = Schema.Union([
   // Built here rather than passed as a shape: the branch carries a
   // cross-field check.
-  Schema.StructWithRest(
-    Schema.Struct({
-      command: Schema.Literal('add').annotate({
-        description: 'Open a new comment thread on a file range.',
-      }),
-      path: Schema.Trim.check(Schema.isMinLength(1)).annotate({
-        description:
-          // Provider conversion advertises one `path` for all commands and keeps
-          // this first-declared branch's description (flattenTopLevelUnion), so
-          // it must also carry the list command's guidance.
-          'File the comment anchors to (add), or the file to restrict to (list; omit for all threads). Workspace-relative or absolute.',
-      }),
-      line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
-        description: '1-based start line the comment anchors to.',
-      }),
-      endLine: Schema.optional(
-        Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
-      ).annotate({
-        description:
-          '1-based end line of the range; defaults to the start line.',
-      }),
-      body: Schema.String.check(Schema.isMinLength(1)).annotate({
-        description: COMMENT_BODY_DESCRIPTION,
-      }),
+  Schema.Struct({
+    command: Schema.Literal('add').annotate({
+      description: 'Open a new comment thread on a file range.',
     }),
-    [Schema.Record(Schema.String, Schema.Unknown)],
-  ).check(
+    path: Schema.Trim.check(Schema.isMinLength(1)).annotate({
+      description:
+        // Provider conversion advertises one `path` for all commands and keeps
+        // this first-declared branch's description (flattenTopLevelUnion), so
+        // it must also carry the list command's guidance.
+        'File the comment anchors to (add), or the file to restrict to (list; omit for all threads). Workspace-relative or absolute.',
+    }),
+    line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
+      description: '1-based start line the comment anchors to.',
+    }),
+    endLine: Schema.optional(
+      Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
+    ).annotate({
+      description: '1-based end line of the range; defaults to the start line.',
+    }),
+    body: Schema.String.check(Schema.isMinLength(1)).annotate({
+      description: COMMENT_BODY_DESCRIPTION,
+    }),
+  }).check(
     Schema.makeFilter((data) =>
       data.endLine == null || data.endLine >= data.line
         ? undefined
@@ -132,57 +128,45 @@ const InlineCommentInputSchema = Schema.Union([
           },
     ),
   ),
-  Schema.StructWithRest(
-    Schema.Struct({
-      command: Schema.Literal('reply').annotate({
-        description: 'Append a comment to an existing thread.',
-      }),
-      threadId: Schema.String.check(Schema.isMinLength(1)).annotate({
-        description: THREAD_ID_DESCRIPTION,
-      }),
-      body: Schema.String.check(Schema.isMinLength(1)).annotate({
-        description: COMMENT_BODY_DESCRIPTION,
-      }),
+  Schema.Struct({
+    command: Schema.Literal('reply').annotate({
+      description: 'Append a comment to an existing thread.',
     }),
-    [Schema.Record(Schema.String, Schema.Unknown)],
-  ),
-  Schema.StructWithRest(
-    Schema.Struct({
-      command: Schema.Literal('resolve').annotate({
-        description: 'Mark a thread resolved.',
-      }),
-      threadId: Schema.String.check(Schema.isMinLength(1)).annotate({
-        description: THREAD_ID_DESCRIPTION,
-      }),
+    threadId: Schema.String.check(Schema.isMinLength(1)).annotate({
+      description: THREAD_ID_DESCRIPTION,
     }),
-    [Schema.Record(Schema.String, Schema.Unknown)],
-  ),
-  Schema.StructWithRest(
-    Schema.Struct({
-      command: Schema.Literal('unresolve').annotate({
-        description: 'Reopen a resolved thread.',
-      }),
-      threadId: Schema.String.check(Schema.isMinLength(1)).annotate({
-        description: THREAD_ID_DESCRIPTION,
-      }),
+    body: Schema.String.check(Schema.isMinLength(1)).annotate({
+      description: COMMENT_BODY_DESCRIPTION,
     }),
-    [Schema.Record(Schema.String, Schema.Unknown)],
-  ),
-  Schema.StructWithRest(
-    Schema.Struct({
-      command: Schema.Literal('list').annotate({
-        description:
-          "Read open threads and their comments, including the user's replies.",
-      }),
-      path: Schema.optional(
-        Schema.NullOr(Schema.Trim.check(Schema.isMinLength(1))),
-      ).annotate({
-        description:
-          'Restrict to one file (omit for all threads). Workspace-relative or absolute.',
-      }),
+  }),
+  Schema.Struct({
+    command: Schema.Literal('resolve').annotate({
+      description: 'Mark a thread resolved.',
     }),
-    [Schema.Record(Schema.String, Schema.Unknown)],
-  ),
+    threadId: Schema.String.check(Schema.isMinLength(1)).annotate({
+      description: THREAD_ID_DESCRIPTION,
+    }),
+  }),
+  Schema.Struct({
+    command: Schema.Literal('unresolve').annotate({
+      description: 'Reopen a resolved thread.',
+    }),
+    threadId: Schema.String.check(Schema.isMinLength(1)).annotate({
+      description: THREAD_ID_DESCRIPTION,
+    }),
+  }),
+  Schema.Struct({
+    command: Schema.Literal('list').annotate({
+      description:
+        "Read open threads and their comments, including the user's replies.",
+    }),
+    path: Schema.optional(
+      Schema.NullOr(Schema.Trim.check(Schema.isMinLength(1))),
+    ).annotate({
+      description:
+        'Restrict to one file (omit for all threads). Workspace-relative or absolute.',
+    }),
+  }),
 ]);
 
 type InlineCommentInput = typeof InlineCommentInputSchema.Type;
