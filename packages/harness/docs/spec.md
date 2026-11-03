@@ -882,49 +882,47 @@ place a cut between an effect and its result. One real kill covers that case: a
 process killed after its command's effect and before its result reports the
 command as outcome unknown and never reruns it automatically; the model may
 still issue a new command, which runs under I4
-(`src/test-kernel/controllers/session/goldenStore.vitest.ts:777`).
+(`src/test-kernel/controllers/session/goldenStore.vitest.ts:620`).
 
 ## 10. Conformance
 
 These existing suites check the sections above.
 
 - **2.1 file and schema**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:808` (pre-1.0
-  moved aside), `:868` (foreign file refused), `:902` (damaged file moved
-  aside), `:1063` (newer schema refused)
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:624` (pre-1.0
+  moved aside), `:684` (foreign file refused), `:718` (damaged file moved
+  aside), `:820` (newer schema refused)
 - **2.2 envelope**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1087` (dense seq,
-  one commit order), `:1126` (parent incarnation), `:1236` (ordinals never
-  reused), `:1287` (blobs)
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:844` (dense seq,
+  one commit order), `:883` (ordinals never reused), `:934` (blobs)
 - **2.3 publisher**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:417` (enqueue
-  order), `:1199` (a rejected batch rolls back whole), `:372`, `:622`;
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:365` (batches
+  published in order);
   `src/test-kernel/support/crashConformance.ts:1392` (one job, one transaction)
 - **2.4 versions and gate**:
   `src/test-kernel/schemas/rowVersions.vitest.ts:110`, `:128`, `:162`;
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:571` (newer build
-  refused); `src/test-kernel/controllers/session/sessionEvents.vitest.ts:935`
-  (undecodable row), `:1004` (earlier build's row);
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:203`
+  `src/test-kernel/controllers/session/goldenStore.vitest.ts:486` (newer build
+  refused), `:735` (earlier build's row);
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:751`
+  (undecodable row)
 - **3 row kinds**:
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:203` (every golden
+  `src/test-kernel/controllers/session/goldenStore.vitest.ts:207` (every golden
   row decodes); `src/test-kernel/schemas/rowVersions.vitest.ts:110`
 - **4 write points**: `src/test-kernel/support/crashConformance.ts:810`, `:1444`
-- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:2083`
-  (live state equals reloaded state), `:2115` (batch contract);
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:468`, `:622`
-  (listing equals the fold)
-- **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:470`,
-  `:522` (asks again after a stop), `:436` (budget), `:593` (unchain once),
-  `:410`; `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:74`
+- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1749`
+  (batch contract); `src/test-kernel/controllers/session/goldenStore.vitest.ts:383`
+  (the pinned view and run states)
+- **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:441`,
+  `:565` (budget), `:591` (a stopped attempt spends a retry);
+  `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:74`
 - **7 claims**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:489`, `:558`,
-  `:1384`, `:1625` (another OS process), `:1737` (dead owner reclaimed), `:1787`
-  (second writer fenced); `src/test-kernel/agent/runtime/resumeRun.vitest.ts:147`
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:438`, `:1031`,
+  `:1272` (another OS process), `:1385` (dead owner reclaimed), `:1453`
+  (second writer fenced); `src/test-kernel/agent/runtime/resumeRun.vitest.ts:237`
 - **8 requests**: `src/test-kernel/support/crashConformance.ts:49-52`
 - **9 crash guarantees**:
   `src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts`,
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:731`
+  `src/test-kernel/controllers/session/goldenStore.vitest.ts:620`
 
 ## 11. Non-goals
 
