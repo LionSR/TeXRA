@@ -845,8 +845,8 @@ history`, a resume and a follow-up say it was "written by an earlier
     the run's rows. It is one of: `accepted`; `incorporated` into a turn;
     `answered`; or `unanswered`, with why. Why is one of: the turn failed,
     the run ended first, or the message left the queue unread.
-  - Hosts and examples wait on the receipt instead of counting model calls.
-  - The texra service protocol is 46.
+  - The harness examples wait on the receipt instead of counting model
+    calls.
   - A turn's end position records the turn's outcome (`run.position` v2), so
     a run an earlier build wrote reads as that build's.
 - **A message typed while a run works is answered at its next model

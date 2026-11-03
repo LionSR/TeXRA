@@ -293,9 +293,9 @@ receipt is one of:
   run ended before the turn did, or the message left the queue unread.
 
 With `wait: true` the read returns once the message is answered or
-unanswered. Messages that join one turn share that turn's answer. A host
-waits on the receipt rather than counting model calls or watching for a
-`waiting` status.
+unanswered. Messages that join one turn share that turn's answer. Wait on
+the receipt rather than counting model calls or watching for a `waiting`
+status.
 
 ## Durable invariants
 
