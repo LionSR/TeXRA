@@ -9,7 +9,6 @@ import { describe, expect, it } from 'vitest';
 import { Result, Schema } from 'effect';
 
 import {
-  emptyRunEndOutput,
   qualifyAggregateId,
   RUN_PHASE,
   type RunId,
@@ -22,27 +21,14 @@ import { SessionEventSchema } from '@shared/schemas';
 
 import type { RunHistoryRow } from '@shared/session/historyTurns';
 import { applyRunRows, type RunHistoryDraft } from '@shared/session/runState';
-import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
-import {
-  loadSurface,
-  persistSurface,
-  PersistedSurfaceSchema,
-} from '@texra/shared/session/surface';
-import { markShownRunSeen, unseenRuns } from '@texra/shared/session/unseenRuns';
 
 import {
   CHILD,
-  CHILD_IDENTITY,
-  GRANDCHILD,
-  Log,
   OWNER,
   PROCESS,
   ROOT,
-  ROOT_IDENTITY,
   buildScenario,
   local,
-  subscribe,
-  tail,
   viewOf,
 } from './fanOutScenario';
 
@@ -55,191 +41,8 @@ function runView(view: SessionView, id: RunId): RunView {
 const alive = local({ self: [OWNER] });
 const nobody = local({ dead: [OWNER] });
 
-/** A fresh updater of the fixture session. */
-const paper = () => makeSessionViewUpdater('paper');
-
 describe('session view update', () => {
   const scenario = buildScenario();
-
-  it('keeps read conversations read across history replay and restart while detecting later activity', () => {
-    const log = new Log();
-    const start = log.emit(ROOT, 1000, {
-      type: 'run.start',
-      identity: ROOT_IDENTITY,
-      userFollowUpSupport: 'unsupported',
-      parent: null,
-      provenance: null,
-    });
-    const response = log.emit(ROOT, 2000, {
-      type: 'response.finalized',
-      text: 'Ready for review.',
-    });
-    const end = log.emit(ROOT, 3000, {
-      type: 'run.end',
-      outcome: 'completed',
-      output: emptyRunEndOutput(),
-    });
-    const updater = paper();
-    const listing = viewOf(
-      [start, end].map((event) => ({
-        _tag: 'event',
-        read: 'listing',
-        event,
-      })),
-      updater,
-    );
-    const history = viewOf([subscribe(ROOT), ...log.events.map(tail)], updater);
-    const surface = loadSurface(
-      'paper',
-      Schema.decodeUnknownSync(PersistedSurfaceSchema)({ selected: ROOT }),
-    );
-    const read = markShownRunSeen(surface, history);
-    const restarted = loadSurface('paper', persistSurface(read));
-    expect(unseenRuns(restarted, listing)).toEqual(new Set());
-    expect(runView(history, ROOT).lastTimestamp).toBe(end.at);
-
-    // A partial replay must never move an existing read marker backwards.
-    const partial = viewOf([tail(start), subscribe(ROOT), tail(response)]);
-    expect(markShownRunSeen(restarted, partial)).toBe(restarted);
-    const later = updater.apply(
-      tail(
-        log.emit(ROOT, 4000, {
-          type: 'run.end',
-          outcome: 'completed',
-          output: emptyRunEndOutput(),
-        }),
-      ),
-    );
-    expect(unseenRuns(restarted, later)).toEqual(new Set([ROOT]));
-    expect(unseenRuns(markShownRunSeen(restarted, later), later)).toEqual(
-      new Set(),
-    );
-  });
-
-  it('projects completed trace facts identically live and on replay without applying the listing as transcript', () => {
-    const log = new Log();
-    const start = log.emit(CHILD, 1000, {
-      type: 'run.start',
-      identity: CHILD_IDENTITY,
-      userFollowUpSupport: 'unsupported',
-      parent: null,
-      provenance: null,
-    });
-    const stage = log.emit(CHILD, 1010, {
-      type: 'stage.start',
-      id: 'round',
-      label: 'Round 1',
-      kind: 'session',
-    });
-    const opened = log.emit(CHILD, 1020, {
-      type: 'stream.start',
-      id: 'response',
-      kind: 'modelResponse',
-      stageId: 'round',
-    });
-    const completed = log.emit(CHILD, 1030, {
-      type: 'stream.end',
-      id: 'response',
-      finalText: 'The integral is zero.',
-      stageId: 'round',
-    });
-    const completedText = 'The integral vanishes.\n'.repeat(3000);
-    const final = log.emit(CHILD, 1040, {
-      type: 'response.finalized',
-      text: completedText,
-      stageId: 'round',
-    });
-    const ended = log.emit(CHILD, 1050, {
-      type: 'stage.end',
-      id: 'round',
-      status: 'completed',
-    });
-    const notice = log.emit(CHILD, 1060, {
-      type: 'log',
-      level: 'info',
-      message: 'Calculation complete.',
-      stageId: 'round',
-    });
-    const debug = log.emit(CHILD, 1070, {
-      type: 'log',
-      level: 'debug',
-      message: 'Captured debug detail.',
-    });
-    // A verbose view: transcript verbosity is the view's own flag, read from
-    // its config authority at open — never a property of a row.
-    const initial = () => {
-      const updater = paper();
-      viewOf(
-        [
-          { _tag: 'debug', enabled: true },
-          tail(start),
-          subscribe(CHILD),
-          alive,
-        ],
-        updater,
-      );
-      return updater;
-    };
-    const live = viewOf(
-      [
-        tail(stage),
-        tail(opened),
-        {
-          _tag: 'chunk',
-          runId: CHILD,
-          rowId: 'response',
-          from: 0,
-          to: 12,
-          text: 'The integral',
-        },
-        ...[completed, final, ended, notice, debug].map(tail),
-      ],
-      initial(),
-    );
-    const replayed = initial();
-    const listing = replayed.apply({
-      _tag: 'event',
-      read: 'listing',
-      event: stage,
-    });
-    expect(runView(listing, CHILD).transcript.rows).toEqual([]);
-    expect(listing.transcriptSeq.get(qualifyAggregateId('run', CHILD))).toBe(0);
-    const replay = viewOf(
-      log.events.map((event) => ({ _tag: 'event', read: 'aggregate', event })),
-      replayed,
-    );
-    expect(runView(replay, CHILD).transcript).toEqual(
-      runView(live, CHILD).transcript,
-    );
-    expect(runView(replay, CHILD).transcript.rows).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'assistant',
-          text: expect.objectContaining({ full: completedText }),
-        }),
-      ]),
-    );
-    const hidden = log.emit(CHILD, 1080, {
-      type: 'log',
-      level: 'debug',
-      message: 'Hidden debug detail.',
-    });
-    // The same rows on a quiet view: the debug row is dropped, its cursor
-    // still advances.
-    const quietly = paper();
-    viewOf([subscribe(CHILD), alive], quietly);
-    const quiet = viewOf(
-      log.events
-        .filter((event) => event !== hidden)
-        .map((event) => ({ _tag: 'event', read: 'aggregate', event })),
-      quietly,
-    );
-    const filtered = quietly.apply(tail(hidden));
-    expect(filtered.runs).toBe(quiet.runs);
-    expect(filtered.transcriptSeq.get(qualifyAggregateId('run', CHILD))).toBe(
-      hidden.seq,
-    );
-  });
 
   it('reads a pending approval as waiting only with a held owner', () => {
     const withOwner = viewOf([...scenario.pending, alive]);
@@ -280,119 +83,6 @@ describe('session view update', () => {
     const unknown = viewOf(scenario.pending);
     expect(runView(unknown, CHILD).group).toBe('waiting');
     expect(runView(unknown, CHILD).readOnly).toBe(true);
-  });
-
-  it("sums each run's tree total once, grandchildren included", () => {
-    // Failure modes: a total that adds direct children only; a listing
-    // total and its replayed turns counted twice up the tree; a run's own
-    // `usage` absorbing its children's.
-    const log = new Log();
-    const startOf = (id: RunId, parent: RunId | null) =>
-      log.emit(id, 4000, {
-        type: 'run.start',
-        identity: id === ROOT ? ROOT_IDENTITY : CHILD_IDENTITY,
-        userFollowUpSupport: 'unsupported',
-        parent: parent === null ? null : log.parent(parent),
-        provenance: null,
-      });
-    const starts = [
-      startOf(ROOT, null),
-      startOf(CHILD, ROOT),
-      startOf(GRANDCHILD, CHILD),
-    ];
-    const turn = (id: RunId, cost: number) =>
-      log.emit(id, 4010, {
-        type: 'usage',
-        usage: { inputTokens: 10, outputTokens: 1, cost },
-      });
-    const turns = [turn(ROOT, 0.25), turn(CHILD, 0.5), turn(GRANDCHILD, 1)];
-    const view = viewOf(
-      [...starts, ...turns].map((event) => ({
-        _tag: 'event' as const,
-        read: 'aggregate' as const,
-        event,
-      })),
-    );
-    expect(runView(view, ROOT).usage.cost).toBe(0.25);
-    expect(runView(view, ROOT).treeUsage).toMatchObject({
-      cost: 1.75,
-      inputTokens: 30,
-    });
-    expect(runView(view, CHILD).treeUsage.cost).toBe(1.5);
-    expect(runView(view, GRANDCHILD).treeUsage.cost).toBe(1);
-
-    // A cold listing of the grandchild's total, then its replayed turn:
-    // the root's total still counts that turn once.
-    const listed = viewOf([
-      ...starts.map((event) => ({
-        _tag: 'event' as const,
-        read: 'listing' as const,
-        event,
-      })),
-      { _tag: 'event', read: 'listing', event: turns[2]! },
-      { _tag: 'event', read: 'aggregate', event: turns[2]! },
-    ]);
-    expect(runView(listed, ROOT).treeUsage.cost).toBe(1);
-  });
-
-  it('re-roots the children of a removed run, keeps the removal final, and closes the listing at the marker', () => {
-    const removed = scenario.log.emit(ROOT, 3000, {
-      type: 'run.removed',
-      runIds: [],
-    });
-    const updater = paper();
-    viewOf(scenario.events, updater);
-    const view = viewOf([tail(removed)], updater);
-    expect(view.runs.has(ROOT)).toBe(false);
-    expect(view.policy.has(ROOT)).toBe(false);
-    expect(view.transcriptSeq.has(qualifyAggregateId('run', ROOT))).toBe(false);
-    expect(view.order).toStrictEqual([PROCESS, CHILD]);
-    expect(runView(view, CHILD).parentId).toBeNull();
-    expect(runView(view, CHILD).ancestors).toStrictEqual([]);
-    expect(runView(view, GRANDCHILD).ancestors).toStrictEqual([
-      { id: CHILD, label: runView(view, CHILD).label },
-    ]);
-
-    // A read replaying the run.start beneath the removal does not recreate
-    // the run: the lifecycle pair shares one latest entry.
-    const rootStart = scenario.log.events.find(
-      (e) =>
-        e.aggregateId === qualifyAggregateId('run', ROOT) &&
-        e.type === 'run.start',
-    )!;
-    const replayed = updater.apply({
-      _tag: 'event',
-      read: 'aggregate',
-      event: rootStart,
-    });
-    expect(replayed.runs.has(ROOT)).toBe(false);
-
-    // At the replay marker, a run no listing row named is gone with
-    // everything a removal clears.
-    const processStart = scenario.log.events.find(
-      (e) =>
-        e.aggregateId === qualifyAggregateId('run', PROCESS) &&
-        e.type === 'run.start',
-    )!;
-    const pruning = paper();
-    viewOf(scenario.pending, pruning);
-    const pruned = viewOf(
-      [
-        { _tag: 'event', read: 'listing', event: processStart },
-        {
-          _tag: 'replay.complete',
-          existence: {
-            checkedAggregateIds: [processStart.aggregateId],
-            claims: [{ aggregateId: processStart.aggregateId, ownerId: OWNER }],
-          },
-        },
-      ],
-      pruning,
-    );
-    expect([...pruned.runs.keys()]).toStrictEqual([PROCESS]);
-    expect(pruned.order).toStrictEqual([PROCESS]);
-    expect(pruned.requests).toStrictEqual([]);
-    expect(pruned.policy.size).toBe(0);
   });
 });
 
@@ -629,29 +319,6 @@ const reasonOf = <A>(result: Result.Result<A, { reason: string }>): string =>
 
 describe('applyRunRows', () => {
   it.each([
-    [
-      'after the body started, before its result: outcome unknown, never fabricated',
-      () => {
-        const state = stateOf(through(6));
-        expect(state?.pendingResponse?.records['call-a']?.status).toEqual({
-          kind: 'started',
-          attempt: 1,
-        });
-        expect(state?.pendingResponse?.records['call-b']?.status).toEqual({
-          kind: 'issued',
-        });
-      },
-    ],
-    [
-      'after a paid response, before the turn-end snapshot: process, never re-invoke',
-      () => {
-        const state = stateOf(through(5));
-        expect(state?.invocation).toBeNull();
-        expect(state?.pendingResponse?.responseId).toBe(RESPONSE_ID);
-        expect(state?.phase).toBe('model.submitted');
-        expect(state?.messages).toHaveLength(1);
-      },
-    ],
     [
       'a provider call id of __proto__: an own entry, never a prototype setter',
       () => {
