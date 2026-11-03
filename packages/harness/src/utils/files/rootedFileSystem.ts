@@ -187,7 +187,7 @@ export function rootedFileSystem(
    * and `suffix` accepted only as filename fragments, and the created path
    * checked against the root once more before it is handed back.
    */
-  const temp = <R>(
+  const temp = Effect.fn('temp')(function* <R>(
     method: string,
     options:
       | {
@@ -199,20 +199,19 @@ export function rootedFileSystem(
     create: (
       directory: string,
     ) => Effect.Effect<string, PlatformError.PlatformError, R>,
-  ) =>
-    Effect.gen(function* () {
-      const fragment = tempNameEscape(options ?? {});
-      if (fragment !== undefined) {
-        return yield* PlatformError.badArgument({
-          module: MODULE,
-          method,
-          description: `temp name fragment is not a file name: ${fragment}`,
-        });
-      }
-      const directory = yield* inRoot(method, options?.directory);
-      const created = yield* create(directory);
-      return yield* at(method, created);
-    });
+  ) {
+    const fragment = tempNameEscape(options ?? {});
+    if (fragment !== undefined) {
+      return yield* PlatformError.badArgument({
+        module: MODULE,
+        method,
+        description: `temp name fragment is not a file name: ${fragment}`,
+      });
+    }
+    const directory = yield* inRoot(method, options?.directory);
+    const created = yield* create(directory);
+    return yield* at(method, created);
+  });
 
   const base = FileSystem.make({
     access: (target, options) =>

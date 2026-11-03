@@ -127,49 +127,52 @@ export class DesktopProgressFileActions {
    * with, so every desktop diff runs with the configured
    * `texra.latexdiff.mathMarkup`.
    */
-  diffStreamToolbarAction(runId: RunId): Effect.Effect<void, Error> {
-    return Effect.gen({ self: this }, function* () {
-      // The single host-neutral core shared with the VS Code command.
-      // Desktop has no per-operation progress UI.
-      const outcome = yield* withProcessServices(
-        this.host.runtime,
-        runLatexdiffForRun({
-          runId,
-          rounds: runOutputFiles(this.host.session.view.current(), runId),
-          roots: this.host.session.roots,
-          channel: DESKTOP_LATEXDIFF_CHANNEL,
-          progress: { report: () => undefined },
-        }),
-      );
-      if (!outcome.results.length) {
-        yield* this.ui.showInfoMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
-        return;
-      }
+  readonly diffStreamToolbarAction = Effect.fn(
+    'DesktopProgressFileActions.diffStreamToolbarAction',
+  )({ self: this }, function* (runId: RunId): Effect.fn.Return<void, Error> {
+    // The single host-neutral core shared with the VS Code command.
+    // Desktop has no per-operation progress UI.
+    const outcome = yield* withProcessServices(
+      this.host.runtime,
+      runLatexdiffForRun({
+        runId,
+        rounds: runOutputFiles(this.host.session.view.current(), runId),
+        roots: this.host.session.roots,
+        channel: DESKTOP_LATEXDIFF_CHANNEL,
+        progress: { report: () => undefined },
+      }),
+    );
+    if (!outcome.results.length) {
+      yield* this.ui.showInfoMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
+      return;
+    }
 
-      // Open every successful diff (between-round runs produce many),
-      // mirroring the VS Code command.
-      const successes = outcome.results.filter((entry) => entry.success);
-      for (const result of successes) {
-        yield* this.openDiffOutput(result.diffPath);
-      }
-      if (successes.length > 0) return;
+    // Open every successful diff (between-round runs produce many),
+    // mirroring the VS Code command.
+    const successes = outcome.results.filter((entry) => entry.success);
+    for (const result of successes) {
+      yield* this.openDiffOutput(result.diffPath);
+    }
+    if (successes.length > 0) return;
 
-      yield* this.ui.showErrorMessage(
-        latexdiffAllFailedMessage(
-          yield* Settings.get<LatexdiffMathMarkupValue>(
-            this.host.session.roots,
-            DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
-          ),
+    yield* this.ui.showErrorMessage(
+      latexdiffAllFailedMessage(
+        yield* Settings.get<LatexdiffMathMarkupValue>(
+          this.host.session.roots,
+          DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
         ),
-      );
-    });
-  }
+      ),
+    );
+  });
 
-  runLatexdiffFile(
+  readonly runLatexdiffFile: (
     baseFile: string,
     editedFile: string,
-  ): Effect.Effect<void, Error> {
-    return Effect.gen({ self: this }, function* () {
+  ) => Effect.Effect<void, Error> = Effect.fn(
+    'DesktopProgressFileActions.runLatexdiffFile',
+  )(
+    { self: this },
+    function* (baseFile: string, editedFile: string) {
       const service = new LaTeXdiffService(
         DESKTOP_LATEXDIFF_CHANNEL,
         this.host.session.roots,
@@ -188,8 +191,9 @@ export class DesktopProgressFileActions {
       }
 
       yield* this.openDiffOutput(result.diffPath);
-    }).pipe((program) => withProcessServices(this.host.runtime, program));
-  }
+    },
+    (program) => withProcessServices(this.host.runtime, program),
+  );
 
   /** Open a generated diff file via the desktop LaTeX build display. */
   private openDiffOutput(diffFilePath: string): Effect.Effect<void, Error> {

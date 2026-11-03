@@ -128,8 +128,8 @@ export const retryTransientFetch = Effect.fn('timeouts.retryTransientFetch')(
     options: RetryTransientFetchOptions<E>,
   ) =>
     withRequestTimeout(options.timeoutMs, request).pipe(
-      Effect.tapError((error) =>
-        Effect.gen(function* () {
+      Effect.tapError(
+        Effect.fnUntraced(function* (error) {
           if (!options.onFailedAttempt || !isTransientRequestError(error)) {
             return;
           }

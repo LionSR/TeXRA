@@ -165,14 +165,15 @@ export class SubscriptionUsageService {
    * account change. A reader already waiting on an in-flight lookup still
    * receives its result, but that result is not cached.
    */
-  invalidate(provider: SubscriptionUsageProvider): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
+  readonly invalidate = Effect.fn('SubscriptionUsageService.invalidate')(
+    { self: this },
+    function* (provider: SubscriptionUsageProvider): Effect.fn.Return<void> {
       const cache = yield* this.usageCache;
       for (const key of [...(yield* Cache.keys(cache))]) {
         if (key[0] === provider) yield* Cache.invalidate(cache, key);
       }
-    });
-  }
+    },
+  );
 
   getUsage(
     provider: SubscriptionUsageProvider,
@@ -189,17 +190,13 @@ export class SubscriptionUsageService {
           adapter.resolveVariant?.() ?? Effect.succeed(undefined),
       ),
       {
-        onFailure: (cause) =>
-          Effect.gen({ self: this }, function* () {
-            const error = Cause.squash(cause);
-            yield* Effect.logWarning(
-              `Subscription usage variant probe failed for ${provider}: ${toErrorMessage(error)}`,
-            ).pipe(
-              Effect.annotateLogs({ data: error }),
-              withLogChannel(CHANNEL),
-            );
-            return yield* this.unavailable(provider, 'request_failed');
-          }),
+        onFailure: Effect.fn('onFailure')({ self: this }, function* (cause) {
+          const error = Cause.squash(cause);
+          yield* Effect.logWarning(
+            `Subscription usage variant probe failed for ${provider}: ${toErrorMessage(error)}`,
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL));
+          return yield* this.unavailable(provider, 'request_failed');
+        }),
         onSuccess: (variant) => this.coalesced(provider, variant, options),
       },
     );
@@ -286,8 +283,8 @@ export class SubscriptionUsageService {
         }
         return this.available(provider, parsed);
       }),
-      Effect.catchCause((cause) =>
-        Effect.gen({ self: this }, function* () {
+      Effect.catchCause(
+        Effect.fnUntraced({ self: this }, function* (cause) {
           // The reason a failed fetch maps to, most specific cause first. The
           // failure classes are disjoint, so at most one of these checks
           // holds. The reason alone cannot tell a routine refusal from an

@@ -255,10 +255,11 @@ export class SessionHostInteractions implements HostInteractions {
       : Effect.void;
   }
 
-  private replayPendingPresentations(
-    interactions: HostInteractions,
-  ): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly replayPendingPresentations = Effect.fn(
+    'SessionHostInteractions.replayPendingPresentations',
+  )(
+    { self: this },
+    function* (interactions: HostInteractions): Effect.fn.Return<void> {
       while (
         this.attached === interactions &&
         this.pendingPresentationReplays.length > 0
@@ -276,8 +277,8 @@ export class SessionHostInteractions implements HostInteractions {
           ),
         );
       }
-    });
-  }
+    },
+  );
 }
 
 /**
@@ -305,18 +306,19 @@ function presentAgentFailure(
  * attached parent is the view's, which has the run's `run.start` once it
  * ended) is its parent's to report; any other row presents nothing.
  */
-export const presentTerminalResult = (
-  row: SessionEvent,
-  self: LocalRuntimeState['self'],
-): Effect.Effect<void, never, SessionViewAccess | Interactions> =>
-  Effect.gen(function* () {
+export const presentTerminalResult = Effect.fn('presentTerminalResult')(
+  function* (
+    row: SessionEvent,
+    self: LocalRuntimeState['self'],
+  ): Effect.fn.Return<void, never, SessionViewAccess | Interactions> {
     const target = aggregateTarget(row.aggregateId);
     const { end } = recordOf(row);
     if (target.kind !== 'run' || end === null || !end.error) return;
     if (end.origin == null || !self.includes(end.origin)) return;
     if ((yield* SessionViewAccess).run(target.id)?.parentId != null) return;
     yield* presentAgentFailure(yield* Interactions, end.error);
-  });
+  },
+);
 
 /** The session's presentation host ({@link SessionHostInteractions}): the
  *  one its runs, requests and host commands present through. */

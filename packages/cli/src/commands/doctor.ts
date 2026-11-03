@@ -27,47 +27,47 @@ import type { CliContext } from '../runtime/cliContext';
  * The whole command as one program: the init and the report it feeds,
  * with no Promise between them.
  */
-function doctorReport(context: CliContext): Effect.Effect<DoctorReport> {
-  return Effect.gen(function* () {
-    // The one step that cannot run on the process runtime, because it is what
-    // builds it. Its failure is a row in the report rather than a throw, so
-    // it is caught here and handed to the builder as data — over the whole
-    // cause, because a platform that dies on the way up is as much "no
-    // platform" as one that fails.
-    const init = yield* Effect.exit(initCliPlatform(context));
-    if (Exit.isFailure(init)) {
-      // A failed init disposed the runtime it installed (see
-      // `initPlatform.ts`), so the degraded report — node, workspace,
-      // resources, LaTeX, config and the platform-failure row — renders
-      // with only the Node platform services its LaTeX probes spawn on.
-      // Nothing in it logs through Effect.
-      return yield* buildDoctorReport(context, {
-        kind: 'degraded',
-        initError: ensureError(Cause.squash(init.cause)),
-      }).pipe(Effect.provide(nodePlatformServices));
-    }
-    const services = init.value;
-    // The healthy report runs on the root's own context — the provision
-    // `services.runtime.runPromise` made before this became one program — so
-    // the account read's Effect logs reach the CLI's own sink.
-    return yield* withProcessServices(
-      services.runtime,
-      buildDoctorReport(context, {
-        kind: 'ready',
-        modelAccessList: withProcessServices(
-          services.runtime,
-          getCliModelAccessList({ stores: services }),
-        ),
-        // Consent is read from the workspace configuration the init
-        // installed.
-        usageLoggingOptOut: withProcessServices(
-          services.runtime,
-          usageLoggingOptOut(services.roots.config),
-        ),
-      }),
-    );
-  });
-}
+const doctorReport = Effect.fn('doctorReport')(function* (
+  context: CliContext,
+): Effect.fn.Return<DoctorReport> {
+  // The one step that cannot run on the process runtime, because it is what
+  // builds it. Its failure is a row in the report rather than a throw, so
+  // it is caught here and handed to the builder as data — over the whole
+  // cause, because a platform that dies on the way up is as much "no
+  // platform" as one that fails.
+  const init = yield* Effect.exit(initCliPlatform(context));
+  if (Exit.isFailure(init)) {
+    // A failed init disposed the runtime it installed (see
+    // `initPlatform.ts`), so the degraded report — node, workspace,
+    // resources, LaTeX, config and the platform-failure row — renders
+    // with only the Node platform services its LaTeX probes spawn on.
+    // Nothing in it logs through Effect.
+    return yield* buildDoctorReport(context, {
+      kind: 'degraded',
+      initError: ensureError(Cause.squash(init.cause)),
+    }).pipe(Effect.provide(nodePlatformServices));
+  }
+  const services = init.value;
+  // The healthy report runs on the root's own context — the provision
+  // `services.runtime.runPromise` made before this became one program — so
+  // the account read's Effect logs reach the CLI's own sink.
+  return yield* withProcessServices(
+    services.runtime,
+    buildDoctorReport(context, {
+      kind: 'ready',
+      modelAccessList: withProcessServices(
+        services.runtime,
+        getCliModelAccessList({ stores: services }),
+      ),
+      // Consent is read from the workspace configuration the init
+      // installed.
+      usageLoggingOptOut: withProcessServices(
+        services.runtime,
+        usageLoggingOptOut(services.roots.config),
+      ),
+    }),
+  );
+});
 
 const DOCTOR_ARGS = {
   ...GLOBAL_ARGS,

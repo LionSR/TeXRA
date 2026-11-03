@@ -269,171 +269,169 @@ export function setCliHelperModel(
  * sets can never both be live. Pass `false` only where no handler should be
  * installed at all (the TUI harness).
  */
-export function initCliPlatform(
+export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
   context: CliPlatformInitOptions &
     Pick<CliContext, 'quietLogs' | 'minimumLogLevel'>,
-): Effect.Effect<CliPlatformServices, Error> {
-  return Effect.gen(function* () {
-    // Every command renders its own output, so the platform's log lines go
-    // nowhere; `quietLogs` is only the user's `--quiet`, which the shutdown
-    // handler below reads.
-    setLogSink(silentLogSink, { trusted: true });
+): Effect.fn.Return<CliPlatformServices, Error> {
+  // Every command renders its own output, so the platform's log lines go
+  // nowhere; `quietLogs` is only the user's `--quiet`, which the shutdown
+  // handler below reads.
+  setLogSink(silentLogSink, { trusted: true });
 
-    // The one Effect runtime of this process comes first: the stores
-    // below open as Effect programs, and the session graph and every
-    // Promise-facing fiber run on it. Disposed after the default session has
-    // released its graph. An entry that ran before any platform existed -- the
-    // update check, `clone` -- may already have installed it, and every later
-    // init finds it installed; each then adopts that one rather than building a
-    // second and leaving the first undisposed.
-    const runtime = yield* Effect.try({
-      try: () =>
-        installCliProcessRuntime(context.storageRoot, {
-          resourcesPath: context.resourcesPath,
-          skillSourceOptions: context.skillSourceOptions,
-          minimumLogLevel: context.minimumLogLevel,
-          workspace: context.cwd,
-        }),
-      catch: ensureError,
-    });
+  // The one Effect runtime of this process comes first: the stores
+  // below open as Effect programs, and the session graph and every
+  // Promise-facing fiber run on it. Disposed after the default session has
+  // released its graph. An entry that ran before any platform existed -- the
+  // update check, `clone` -- may already have installed it, and every later
+  // init finds it installed; each then adopts that one rather than building a
+  // second and leaving the first undisposed.
+  const runtime = yield* Effect.try({
+    try: () =>
+      installCliProcessRuntime(context.storageRoot, {
+        resourcesPath: context.resourcesPath,
+        skillSourceOptions: context.skillSourceOptions,
+        minimumLogLevel: context.minimumLogLevel,
+        workspace: context.cwd,
+      }),
+    catch: ensureError,
+  });
 
-    // One program on that runtime for the whole bootstrap: the process's global
-    // state store comes from its own context, and on the first init everything
-    // below runs in the same fiber rather than as a chain of separate runs.
-    //
-    // Double init is the normal path (every command runs this), so the roots
-    // an earlier init installed (or, beside a test harness's fake host, the
-    // process session it opened) are what the second and later calls find;
-    // the first call builds them below.
-    //
-    // A step that fails after the runtime exists (a store that will not open)
-    // registers nothing to dispose it; the failure is re-raised so the caller
-    // reports the cause, and the process entry (`bin/texra.ts`) disposes the
-    // still-installed runtime in its `Effect.ensuring`, never a fiber on that
-    // runtime. Keep the roots and lazy session private until the fallible
-    // setup has succeeded: their ports have no reset operation.
-    const { globalState, platform } = yield* withProcessServices(
-      runtime,
-      Effect.gen(function* () {
-        const globalState = yield* AppState;
-        // A later init finds the roots and session an earlier one built.
-        if (installed) return { globalState, platform: installed };
-        const sessions = yield* Sessions;
+  // One program on that runtime for the whole bootstrap: the process's global
+  // state store comes from its own context, and on the first init everything
+  // below runs in the same fiber rather than as a chain of separate runs.
+  //
+  // Double init is the normal path (every command runs this), so the roots
+  // an earlier init installed (or, beside a test harness's fake host, the
+  // process session it opened) are what the second and later calls find;
+  // the first call builds them below.
+  //
+  // A step that fails after the runtime exists (a store that will not open)
+  // registers nothing to dispose it; the failure is re-raised so the caller
+  // reports the cause, and the process entry (`bin/texra.ts`) disposes the
+  // still-installed runtime in its `Effect.ensuring`, never a fiber on that
+  // runtime. Keep the roots and lazy session private until the fallible
+  // setup has succeeded: their ports have no reset operation.
+  const { globalState, platform } = yield* withProcessServices(
+    runtime,
+    Effect.gen(function* () {
+      const globalState = yield* AppState;
+      // A later init finds the roots and session an earlier one built.
+      if (installed) return { globalState, platform: installed };
+      const sessions = yield* Sessions;
 
-        const projectScope = yield* Scope.make();
-        const closeProject = Scope.close(projectScope, Exit.void);
-        return yield* Effect.gen(function* () {
-          // The project's `texra.db` lives in its storage directory and is
-          // owned by the project scope; AppState (global) is the runtime's.
-          const { storageRoot } = context;
-          const storage = resolveWorkspaceStoragePath(storageRoot, context.cwd);
-          const workspaceState = yield* (yield* StateStores)
-            .project(storage, context.cwd)
-            .pipe(Scope.provide(projectScope));
-          const repoState = yield* (yield* StateStores).repo(
-            storage,
-            context.cwd,
-          );
-          // One process, one project: the process roots are the `--cwd` workspace,
-          // over the config provider the startup read already opened — the project
-          // `.texra/config.json` layered over the user-level
-          // `~/.texra/v1/global-storage/config.json`. One provider per process is
-          // what keeps a value `texra config` writes readable at the next startup.
-          const roots = createNodeWorkspaceRoots({
-            workspacePath: context.cwd,
-            storageRoot,
-            storage,
-            config: context.config,
-            workspaceState,
-            repoState,
-            globalState,
-          });
-          // The one open of the process session, over the roots published below,
-          // memoized so the first entry point that needs a session opens it and
-          // every later one gets the same handle; an entry that needs none never
-          // opens one.
-          const openSession = yield* Effect.cached(
-            Effect.acquireRelease(
-              Effect.flatMap(
-                context.interruptedTasks === 'setting'
-                  ? interruptedTasksOnOpen(roots)
-                  : Effect.succeed(context.interruptedTasks),
-                (interruptedTasks) =>
-                  sessions.open(roots, {
-                    persistent: true,
-                    host: { ...(interruptedTasks && { interruptedTasks }) },
-                  }),
-              ),
-              (session) => Effect.asVoid(sessions.close(session.roots)),
-            ).pipe(
-              Effect.tap(recordFirstCompletedRun),
-              Scope.provide(projectScope),
-              Effect.tap((session) =>
-                Effect.sync(() => {
-                  const moved = session.storeMovedAside;
-                  if (moved && context.presentsStoreMovedAside !== true) {
-                    writeTextStderr(sessionStoreMovedAsideMessage(moved));
-                  }
+      const projectScope = yield* Scope.make();
+      const closeProject = Scope.close(projectScope, Exit.void);
+      return yield* Effect.gen(function* () {
+        // The project's `texra.db` lives in its storage directory and is
+        // owned by the project scope; AppState (global) is the runtime's.
+        const { storageRoot } = context;
+        const storage = resolveWorkspaceStoragePath(storageRoot, context.cwd);
+        const workspaceState = yield* (yield* StateStores)
+          .project(storage, context.cwd)
+          .pipe(Scope.provide(projectScope));
+        const repoState = yield* (yield* StateStores).repo(
+          storage,
+          context.cwd,
+        );
+        // One process, one project: the process roots are the `--cwd` workspace,
+        // over the config provider the startup read already opened — the project
+        // `.texra/config.json` layered over the user-level
+        // `~/.texra/v1/global-storage/config.json`. One provider per process is
+        // what keeps a value `texra config` writes readable at the next startup.
+        const roots = createNodeWorkspaceRoots({
+          workspacePath: context.cwd,
+          storageRoot,
+          storage,
+          config: context.config,
+          workspaceState,
+          repoState,
+          globalState,
+        });
+        // The one open of the process session, over the roots published below,
+        // memoized so the first entry point that needs a session opens it and
+        // every later one gets the same handle; an entry that needs none never
+        // opens one.
+        const openSession = yield* Effect.cached(
+          Effect.acquireRelease(
+            Effect.flatMap(
+              context.interruptedTasks === 'setting'
+                ? interruptedTasksOnOpen(roots)
+                : Effect.succeed(context.interruptedTasks),
+              (interruptedTasks) =>
+                sessions.open(roots, {
+                  persistent: true,
+                  host: { ...(interruptedTasks && { interruptedTasks }) },
                 }),
-              ),
             ),
-          );
-
-          // The one-time telemetry notice: a single stderr line, then a state
-          // flag. A quiet run neither prints it nor marks it shown.
-          if (!context.quietLogs) {
-            const notice = yield* telemetryNoticeIfDue(roots.config);
-            if (notice) writeTextStderr(notice);
-          }
-
-          // The shutdown is this scope's close, its finalizers run in the
-          // reverse of their registration: every session closes first (its
-          // runs stopped and finished, its artifacts flushed). That stops
-          // agent-spawned OS children before the process exits, as the
-          // extension and desktop hosts do: a background `bash` run is its own
-          // process group (see execUtils), which its lifeline kills only once
-          // `texra` is gone, and this close stops it first so its run finishes.
-          // Then the project scope with a final NDJSON flush, and the runtime
-          // last, draining the usage log.
-          const scope = Scope.makeUnsafe();
-          yield* Scope.addFinalizer(scope, disposeCliProcessRuntime);
-          yield* Scope.addFinalizer(
-            scope,
-            closeProject.pipe(Effect.ensuring(flushNdjsonStdout())),
-          );
-          yield* Scope.addFinalizer(scope, Effect.asVoid(sessions.closeAll));
-          const platform = {
-            roots,
-            session: openSession,
-            shutdownScope: scope,
-            shutdown: yield* Effect.cached(Scope.close(scope, Exit.void)),
-          };
-          installed = platform;
-          if (context.installSignalHandlers !== false) {
-            installCliShutdownSignalHandlers(context.quietLogs);
-          }
-          return { globalState, platform };
-        }).pipe(
-          Effect.onExit((exit) =>
-            Exit.isFailure(exit) ? closeProject : Effect.void,
+            (session) => Effect.asVoid(sessions.close(session.roots)),
+          ).pipe(
+            Effect.tap(recordFirstCompletedRun),
+            Scope.provide(projectScope),
+            Effect.tap((session) =>
+              Effect.sync(() => {
+                const moved = session.storeMovedAside;
+                if (moved && context.presentsStoreMovedAside !== true) {
+                  writeTextStderr(sessionStoreMovedAsideMessage(moved));
+                }
+              }),
+            ),
           ),
         );
-      }),
-    );
 
-    const { roots } = platform;
+        // The one-time telemetry notice: a single stderr line, then a state
+        // flag. A quiet run neither prints it nor marks it shown.
+        if (!context.quietLogs) {
+          const notice = yield* telemetryNoticeIfDue(roots.config);
+          if (notice) writeTextStderr(notice);
+        }
 
-    const cliServices: CliPlatformServices = {
-      runtime,
-      config: roots.config,
-      workspaceState: roots.workspaceState,
-      repoState: roots.repoState,
-      globalState,
-      session: platform.session,
-      shutdownScope: platform.shutdownScope,
-      roots,
-    };
+        // The shutdown is this scope's close, its finalizers run in the
+        // reverse of their registration: every session closes first (its
+        // runs stopped and finished, its artifacts flushed). That stops
+        // agent-spawned OS children before the process exits, as the
+        // extension and desktop hosts do: a background `bash` run is its own
+        // process group (see execUtils), which its lifeline kills only once
+        // `texra` is gone, and this close stops it first so its run finishes.
+        // Then the project scope with a final NDJSON flush, and the runtime
+        // last, draining the usage log.
+        const scope = Scope.makeUnsafe();
+        yield* Scope.addFinalizer(scope, disposeCliProcessRuntime);
+        yield* Scope.addFinalizer(
+          scope,
+          closeProject.pipe(Effect.ensuring(flushNdjsonStdout())),
+        );
+        yield* Scope.addFinalizer(scope, Effect.asVoid(sessions.closeAll));
+        const platform = {
+          roots,
+          session: openSession,
+          shutdownScope: scope,
+          shutdown: yield* Effect.cached(Scope.close(scope, Exit.void)),
+        };
+        installed = platform;
+        if (context.installSignalHandlers !== false) {
+          installCliShutdownSignalHandlers(context.quietLogs);
+        }
+        return { globalState, platform };
+      }).pipe(
+        Effect.onExit((exit) =>
+          Exit.isFailure(exit) ? closeProject : Effect.void,
+        ),
+      );
+    }),
+  );
 
-    return cliServices;
-  });
-}
+  const { roots } = platform;
+
+  const cliServices: CliPlatformServices = {
+    runtime,
+    config: roots.config,
+    workspaceState: roots.workspaceState,
+    repoState: roots.repoState,
+    globalState,
+    session: platform.session,
+    shutdownScope: platform.shutdownScope,
+    roots,
+  };
+
+  return cliServices;
+});

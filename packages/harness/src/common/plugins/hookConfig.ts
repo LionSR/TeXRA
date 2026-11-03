@@ -303,7 +303,7 @@ export function claudeToolCall(
 } {
   const tool = CLAUDE_TOOLS[name];
   // The hook saw the harness's own input, so its rewrite is one.
-  if (tool === undefined || typeof input !== 'object' || input === null)
+  if (tool === undefined || !Predicate.isObjectOrArray(input))
     return { toolName: name, toolInput: input, fromHook: (input) => input };
   // cast: an object, as checked above.
   const issued = input as Fields;

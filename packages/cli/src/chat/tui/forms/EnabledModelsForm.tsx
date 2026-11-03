@@ -2,6 +2,7 @@
 // lead-model picker. Distinct from `/model`, which only chooses the active
 // model among those already enabled and runnable.
 
+import { Predicate } from 'effect';
 import { Text } from 'ink';
 
 import {
@@ -29,7 +30,7 @@ function formatEnabledModelDescription(model: CliEnabledModelRow): string {
     model.enabled ? 'enabled' : 'disabled',
     model.provider,
     model.deprecated ? 'deprecated' : undefined,
-  ].filter((part): part is string => part != null);
+  ].filter(Predicate.isNotNullish);
   return parts.join(' · ');
 }
 

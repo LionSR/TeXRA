@@ -74,10 +74,14 @@ export function servicePaths(storageRoot: string): ServicePaths {
 
 /** Make the run directory and the socket's directory, each the user's
  *  alone; an existing one is narrowed to 0700. */
-export function prepareServiceDirectories(
-  paths: ServicePaths,
-): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
+export const prepareServiceDirectories = Effect.fn('prepareServiceDirectories')(
+  function* (
+    paths: ServicePaths,
+  ): Effect.fn.Return<
+    void,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  > {
     const fs = yield* FileSystem.FileSystem;
     for (const directory of new Set([
       paths.runDirectory,
@@ -87,8 +91,8 @@ export function prepareServiceDirectories(
       yield* ownDirectory(directory);
       yield* fs.chmod(directory, 0o700);
     }
-  });
-}
+  },
+);
 
 /** Fails unless `directory` is a real directory (not a link) this user
  *  owns: one someone else made in `/tmp` must not hold the socket. */
@@ -148,64 +152,67 @@ export const readServiceRecord: Effect.Effect<
  * one is ever findable, whatever happens to the others between their probe
  * and their commit.
  */
-export function claimServiceRecord<A, E>(
+export const claimServiceRecord = Effect.fn('claimServiceRecord')(function* <
+  A,
+  E,
+>(
   record: ServiceRecord,
   probe: (held: ServiceRecord) => Effect.Effect<A | null, E>,
-): Effect.Effect<
+): Effect.fn.Return<
   A | null,
   E | DatabaseReadFailed | DatabaseWriteFailed,
   GlobalValues
 > {
-  return Effect.gen(function* () {
-    const values = yield* GlobalValues;
-    for (;;) {
-      const held = yield* values.get(TEXRA_SERVICE, CURRENT);
-      const live = held === undefined ? null : yield* probe(held);
-      if (live !== null) return live;
-      const claimed = yield* values.modify(TEXRA_SERVICE, CURRENT, (current) =>
-        Result.succeed(
-          sameService(current, held) ? ([true, record] as const) : [false],
-        ),
-      );
-      if (claimed) return null;
-    }
-  });
-}
+  const values = yield* GlobalValues;
+  for (;;) {
+    const held = yield* values.get(TEXRA_SERVICE, CURRENT);
+    const live = held === undefined ? null : yield* probe(held);
+    if (live !== null) return live;
+    const claimed = yield* values.modify(TEXRA_SERVICE, CURRENT, (current) =>
+      Result.succeed(
+        sameService(current, held) ? ([true, record] as const) : [false],
+      ),
+    );
+    if (claimed) return null;
+  }
+});
 
 /**
  * Remove what the service `record` names left: the record while it is
  * still this service's (a successor's is the successor's), and its socket.
  */
-export function releaseServiceRecord(
+export const releaseServiceRecord: (
   paths: ServicePaths,
   record: ServiceRecord,
-): Effect.Effect<void, never, FileSystem.FileSystem | GlobalValues> {
-  return Effect.gen(function* () {
-    const values = yield* GlobalValues;
-    yield* values.modify(TEXRA_SERVICE, CURRENT, (current) =>
-      Result.succeed(
-        sameService(current, record)
-          ? ([undefined, undefined] as const)
-          : [undefined],
-      ),
-    );
-    const fs = yield* FileSystem.FileSystem;
-    yield* fs.remove(paths.socketFor(record.pid), { force: true });
-  }).pipe(
+) => Effect.Effect<void, never, FileSystem.FileSystem | GlobalValues> =
+  Effect.fn('releaseServiceRecord')(
+    function* (paths: ServicePaths, record: ServiceRecord) {
+      const values = yield* GlobalValues;
+      yield* values.modify(TEXRA_SERVICE, CURRENT, (current) =>
+        Result.succeed(
+          sameService(current, record)
+            ? ([undefined, undefined] as const)
+            : [undefined],
+        ),
+      );
+      const fs = yield* FileSystem.FileSystem;
+      yield* fs.remove(paths.socketFor(record.pid), { force: true });
+    },
     Effect.catch((error) =>
       Effect.logWarning('Could not remove the service files').pipe(
         Effect.annotateLogs({ data: error }),
       ),
     ),
   );
-}
 
 /** Remove the sockets of services whose process is gone (one that was
  *  killed leaves its file). */
-export function removeDeadSockets(
+export const removeDeadSockets: (
   paths: ServicePaths,
-): Effect.Effect<void, never, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
+) => Effect.Effect<void, never, FileSystem.FileSystem> = Effect.fn(
+  'removeDeadSockets',
+)(
+  function* (paths: ServicePaths) {
     const fs = yield* FileSystem.FileSystem;
     const dead = (yield* fs.readDirectory(paths.socketDirectory)).filter(
       (name) => {
@@ -219,14 +226,13 @@ export function removeDeadSockets(
         fs.remove(path.join(paths.socketDirectory, name), { force: true }),
       { concurrency: 8, discard: true },
     );
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.logWarning("Could not remove dead services' sockets").pipe(
-        Effect.annotateLogs({ data: error }),
-      ),
+  },
+  Effect.catch((error) =>
+    Effect.logWarning("Could not remove dead services' sockets").pipe(
+      Effect.annotateLogs({ data: error }),
     ),
-  );
-}
+  ),
+);
 
 /** Whether process `pid` runs (one of another user counts as running). */
 function processAlive(pid: number): boolean {

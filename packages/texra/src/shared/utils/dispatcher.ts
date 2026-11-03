@@ -26,8 +26,7 @@ export function unsupported(reason: string): Unsupported {
 
 export function isUnsupported(value: unknown): value is Unsupported {
   return (
-    Predicate.isObjectOrArray(value) &&
-    'unsupported' in value &&
+    Predicate.hasProperty(value, 'unsupported') &&
     Predicate.isString(value.unsupported)
   );
 }
@@ -39,14 +38,12 @@ export function isUnsupported(value: unknown): value is Unsupported {
  * callers can surface it as visible feedback (toast/dialog) instead of an
  * error log.
  */
-export class UnsupportedCommandError extends Error {
-  readonly command: string;
-  readonly reason: string;
-  constructor(command: string, reason: string) {
-    super(`Command "${command}" is unsupported on this host: ${reason}`);
-    this.command = command;
-    this.reason = reason;
-    this.name = 'UnsupportedCommandError';
+export class UnsupportedCommandError extends Schema.TaggedError<UnsupportedCommandError>()(
+  'UnsupportedCommandError',
+  { command: Schema.String, reason: Schema.String },
+) {
+  override get message(): string {
+    return `Command "${this.command}" is unsupported on this host: ${this.reason}`;
   }
 }
 
@@ -123,7 +120,10 @@ export function createDispatcher<TMessage extends CommandMessage>(
 
     if (isUnsupported(entry)) {
       onError?.(
-        new UnsupportedCommandError(message.command, entry.unsupported),
+        new UnsupportedCommandError({
+          command: message.command,
+          reason: entry.unsupported,
+        }),
       );
       return false;
     }

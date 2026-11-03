@@ -254,84 +254,86 @@ function executeLeanCommand(
   );
 }
 
-function executeFileCommand(
+const executeFileCommand: (
   globalState: StateStore,
   command: LeanFileCommand,
   filePath: string,
-): Effect.Effect<void, LeanFileCommandFailed | LeanUnavailable> {
-  return Effect.gen(function* () {
+) => Effect.Effect<void, LeanFileCommandFailed | LeanUnavailable> = Effect.fn(
+  'executeFileCommand',
+)(
+  function* (
+    globalState: StateStore,
+    command: LeanFileCommand,
+    filePath: string,
+  ) {
     yield* openFileInEditor(filePath, { preview: true, preserveFocus: true });
     yield* getClientProvider(globalState);
     yield* executeLeanCommand(FILE_COMMAND_VSCODE_IDS[command]);
-  }).pipe(
-    Effect.mapError((failure) =>
-      // A missing extension is a setup problem; every other failure (an
-      // editor refusal, an activation fault, a rejected command) already
-      // says what to do in its message.
-      failure._tag === 'LeanExtensionUnavailable' &&
-      failure.reason === 'not-installed'
-        ? new LeanUnavailable({
-            reason: 'toolchain',
-            message: failure.message,
-            cause: failure,
-          })
-        : new LeanFileCommandFailed({
-            message: failure.message,
-            cause: failure,
-          }),
-    ),
-  );
-}
+  },
+  Effect.mapError((failure) =>
+    // A missing extension is a setup problem; every other failure (an
+    // editor refusal, an activation fault, a rejected command) already
+    // says what to do in its message.
+    failure._tag === 'LeanExtensionUnavailable' &&
+    failure.reason === 'not-installed'
+      ? new LeanUnavailable({
+          reason: 'toolchain',
+          message: failure.message,
+          cause: failure,
+        })
+      : new LeanFileCommandFailed({
+          message: failure.message,
+          cause: failure,
+        }),
+  ),
+);
 
 /**
  * Get the Lean 4 extension's client provider, or say why there is none.
  * Prompts the user to install the extension when it is missing; the prompt
  * is an offer, so failing to show it does not change the answer.
  */
-function getClientProvider(
+const getClientProvider = Effect.fn('getClientProvider')(function* (
   globalState: StateStore,
-): Effect.Effect<LeanClientProvider, LeanExtensionUnavailable> {
-  return Effect.gen(function* () {
-    const lean4Ext =
-      vscode.extensions.getExtension<Lean4ExtensionApi>(LEAN4_EXTENSION_ID);
-    if (!lean4Ext) {
-      yield* promptExtensionInstall(globalState, {
-        suppressKey: 'lean4-install-tool',
-        message:
-          'Lean 4 extension is required for this operation. Install now?',
-        extensionId: LEAN4_EXTENSION_ID,
-        channel: 'lean',
-      }).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning(
-            `Could not offer the Lean 4 install prompt: ${toErrorMessage(Cause.squash(cause))}`,
-          ).pipe(withLogChannel(CHANNEL)),
-        ),
-      );
-      return yield* Effect.fail(
-        new LeanExtensionUnavailable({
-          reason: 'not-installed',
-          message: LEAN4_NOT_INSTALLED,
-        }),
-      );
-    }
+): Effect.fn.Return<LeanClientProvider, LeanExtensionUnavailable> {
+  const lean4Ext =
+    vscode.extensions.getExtension<Lean4ExtensionApi>(LEAN4_EXTENSION_ID);
+  if (!lean4Ext) {
+    yield* promptExtensionInstall(globalState, {
+      suppressKey: 'lean4-install-tool',
+      message: 'Lean 4 extension is required for this operation. Install now?',
+      extensionId: LEAN4_EXTENSION_ID,
+      channel: 'lean',
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning(
+          `Could not offer the Lean 4 install prompt: ${toErrorMessage(Cause.squash(cause))}`,
+        ).pipe(withLogChannel(CHANNEL)),
+      ),
+    );
+    return yield* Effect.fail(
+      new LeanExtensionUnavailable({
+        reason: 'not-installed',
+        message: LEAN4_NOT_INSTALLED,
+      }),
+    );
+  }
 
-    const features = yield* Effect.tryPromise({
-      try: async () => {
-        const api = await lean4Ext.activate();
-        return await api.lean4EnabledFeatures;
-      },
-      catch: (cause) =>
-        new LeanExtensionUnavailable({
-          reason: 'activation-failed',
-          message:
-            'The Lean 4 extension is not ready. Open a Lean file in the project, then try again.',
-          cause,
-        }),
-    });
-    return features.clientProvider;
+  const features = yield* Effect.tryPromise({
+    try: async () => {
+      const api = await lean4Ext.activate();
+      return await api.lean4EnabledFeatures;
+    },
+    catch: (cause) =>
+      new LeanExtensionUnavailable({
+        reason: 'activation-failed',
+        message:
+          'The Lean 4 extension is not ready. Open a Lean file in the project, then try again.',
+        cause,
+      }),
   });
-}
+  return features.clientProvider;
+});
 
 /**
  * Send an LSP request at a specific position in a Lean file.
@@ -339,7 +341,7 @@ function getClientProvider(
  * failure mode is its own `data: null` answer, as the callers' models read
  * the error text; nothing here throws.
  */
-function sendPositionRequest<T>(
+const sendPositionRequest = Effect.fn('sendPositionRequest')(function* <T>(
   globalState: StateStore,
   roster: LeanServerRoster,
   absolutePath: string,
@@ -347,127 +349,123 @@ function sendPositionRequest<T>(
   column: number,
   method: string,
   reply: Schema.Codec<T, unknown>,
-): Effect.Effect<LspResult<T>> {
-  return Effect.gen(function* () {
-    const leanUri = createLeanFileUri(absolutePath);
+): Effect.fn.Return<LspResult<T>> {
+  const leanUri = createLeanFileUri(absolutePath);
 
-    const provider = yield* Effect.result(getClientProvider(globalState));
-    if (Result.isFailure(provider)) {
-      return { data: null, error: provider.failure.message };
-    }
+  const provider = yield* Effect.result(getClientProvider(globalState));
+  if (Result.isFailure(provider)) {
+    return { data: null, error: provider.failure.message };
+  }
 
-    const opened = yield* Effect.result(
-      openFileInEditor(absolutePath, { preview: true, preserveFocus: true }),
-    );
-    if (Result.isFailure(opened)) {
-      return { data: null, error: opened.failure.message };
-    }
+  const opened = yield* Effect.result(
+    openFileInEditor(absolutePath, { preview: true, preserveFocus: true }),
+  );
+  if (Result.isFailure(opened)) {
+    return { data: null, error: opened.failure.message };
+  }
 
-    const found = yield* Effect.result(
-      Effect.try({
-        try: () => provider.success.findClient(leanUri),
-        catch: ensureError,
-      }),
-    );
-    if (Result.isFailure(found)) {
-      // The lookup's own fault is the answer the caller needs: without it a
-      // real extension-API failure reads as "this file is not in a Lean
-      // project".
-      return {
-        data: null,
-        error: `Error finding Lean client for ${absolutePath}. Is this file in a Lean project? ${toErrorMessage(found.failure)}`,
-      };
-    }
-    const client = found.success;
-    if (!client) {
-      return {
-        data: null,
-        error: `No Lean client for ${absolutePath}. Is this file in a Lean project with a lakefile?`,
-      };
-    }
-    if (!client.isRunning()) {
-      return {
-        data: null,
-        error: 'Lean server not running. Try lean_project restart_server.',
-      };
-    }
-
-    noteVscodeLeanServer(roster, workspaceRootForFile(absolutePath));
-
-    const params = {
-      textDocument: { uri: leanUri.toString() },
-      position: { line, character: column },
+  const found = yield* Effect.result(
+    Effect.try({
+      try: () => provider.success.findClient(leanUri),
+      catch: ensureError,
+    }),
+  );
+  if (Result.isFailure(found)) {
+    // The lookup's own fault is the answer the caller needs: without it a
+    // real extension-API failure reads as "this file is not in a Lean
+    // project".
+    return {
+      data: null,
+      error: `Error finding Lean client for ${absolutePath}. Is this file in a Lean project? ${toErrorMessage(found.failure)}`,
     };
-    // An interrupted call cancels the request at the server.
-    return yield* withCancellationToken(
-      (token) => client.sendRequest(method, params, token),
-      (cause) =>
-        new LspRequestFailed({
-          method,
-          message: `LSP request ${method} failed: ${toErrorMessage(cause)}`,
-          cause,
-        }),
-    ).pipe(
-      Effect.flatMap((result) =>
-        Schema.decodeUnknownEffect(Schema.NullOr(reply))(result).pipe(
-          Effect.mapError(
-            (cause) =>
-              new LspRequestFailed({
-                method,
-                message: `LSP request ${method} returned an unexpected reply: ${cause.message}`,
-                cause,
-              }),
-          ),
+  }
+  const client = found.success;
+  if (!client) {
+    return {
+      data: null,
+      error: `No Lean client for ${absolutePath}. Is this file in a Lean project with a lakefile?`,
+    };
+  }
+  if (!client.isRunning()) {
+    return {
+      data: null,
+      error: 'Lean server not running. Try lean_project restart_server.',
+    };
+  }
+
+  noteVscodeLeanServer(roster, workspaceRootForFile(absolutePath));
+
+  const params = {
+    textDocument: { uri: leanUri.toString() },
+    position: { line, character: column },
+  };
+  // An interrupted call cancels the request at the server.
+  return yield* withCancellationToken(
+    (token) => client.sendRequest(method, params, token),
+    (cause) =>
+      new LspRequestFailed({
+        method,
+        message: `LSP request ${method} failed: ${toErrorMessage(cause)}`,
+        cause,
+      }),
+  ).pipe(
+    Effect.flatMap((result) =>
+      Schema.decodeUnknownEffect(Schema.NullOr(reply))(result).pipe(
+        Effect.mapError(
+          (cause) =>
+            new LspRequestFailed({
+              method,
+              message: `LSP request ${method} returned an unexpected reply: ${cause.message}`,
+              cause,
+            }),
         ),
       ),
-      Effect.map((data): LspResult<T> => ({ data })),
-      Effect.catchTag('LspRequestFailed', (failure) =>
-        Effect.succeed({ data: null, error: failure.message }),
-      ),
-    );
-  });
-}
+    ),
+    Effect.map((data): LspResult<T> => ({ data })),
+    Effect.catchTag('LspRequestFailed', (failure) =>
+      Effect.succeed({ data: null, error: failure.message }),
+    ),
+  );
+});
 
 /**
  * Open a Lean file, wait for diagnostics, and return them.
  * The file that could not be opened fails with `LeanFileUnreadable`.
  */
-function fetchDiagnosticsForFile(
+const fetchDiagnosticsForFile = Effect.fn('fetchDiagnosticsForFile')(function* (
   roster: LeanServerRoster,
   absolutePath: string,
-): Effect.Effect<FetchDiagnosticsResult, LeanFileUnreadable> {
-  return Effect.gen(function* () {
-    // Subscribed on this frame, before the file is opened, so an update the
-    // open itself triggers is not missed; the program joins the same fiber
-    // below.
-    const diagnosticsWait = yield* Effect.forkChild(
-      waitForDiagnosticsChange(vscode.Uri.file(absolutePath), 10000),
-      { startImmediately: true },
-    );
+): Effect.fn.Return<FetchDiagnosticsResult, LeanFileUnreadable> {
+  // Subscribed on this frame, before the file is opened, so an update the
+  // open itself triggers is not missed; the program joins the same fiber
+  // below.
+  const diagnosticsWait = yield* Effect.forkChild(
+    waitForDiagnosticsChange(vscode.Uri.file(absolutePath), 10000),
+    { startImmediately: true },
+  );
 
-    const opened = yield* Effect.result(
-      openFileInEditor(absolutePath, { preserveFocus: true }),
-    );
-    if (Result.isFailure(opened)) {
-      // Could not be opened in the editor — the file itself is the problem,
-      // and the failure already names it and which step VS Code refused.
-      return yield* new LeanFileUnreadable({
-        message: opened.failure.message,
-        cause: opened.failure,
-      });
-    }
+  const opened = yield* Effect.result(
+    openFileInEditor(absolutePath, { preserveFocus: true }),
+  );
+  if (Result.isFailure(opened)) {
+    // Could not be opened in the editor — the file itself is the problem,
+    // and the failure already names it and which step VS Code refused.
+    return yield* new LeanFileUnreadable({
+      message: opened.failure.message,
+      cause: opened.failure,
+    });
+  }
 
-    noteVscodeLeanServer(roster, workspaceRootForFile(absolutePath));
+  noteVscodeLeanServer(roster, workspaceRootForFile(absolutePath));
 
-    yield* Fiber.join(diagnosticsWait);
-    return {
-      diagnostics: getDiagnostics(opened.success.absolutePath),
-      // VS Code's diagnostics collection carries no elaboration progress,
-      // so this adapter cannot tell a still-elaborating file apart.
-      complete: true,
-    } satisfies FetchDiagnosticsResult;
-  });
-}
+  yield* Fiber.join(diagnosticsWait);
+  return {
+    diagnostics: getDiagnostics(opened.success.absolutePath),
+    // VS Code's diagnostics collection carries no elaboration progress,
+    // so this adapter cannot tell a still-elaborating file apart.
+    complete: true,
+  } satisfies FetchDiagnosticsResult;
+});
 
 /** Navigate editor to first error location if present. */
 function navigateToFirstError(
@@ -490,22 +488,20 @@ function navigateToFirstError(
   );
 }
 
-function executeProjectCommand(
+const executeProjectCommand = Effect.fn('executeProjectCommand')(function* (
   globalState: StateStore,
   command: LeanProjectCommand,
-): Effect.Effect<void, LeanExtensionUnavailable | VscodeCommandFailed> {
-  return Effect.gen(function* () {
-    if (LEAN_FEATURE_PROJECT_COMMANDS.has(command)) {
-      // vscode-lean4 registers these commands in activateLean4Features(), not
-      // during its initial extension activation. Awaiting the exported feature
-      // promise prevents a race with command registration after a Lean file opens.
-      // Its failure is already the "extension cannot answer" report the tool
-      // shows, told apart by reason instead of by one message for both.
-      yield* getClientProvider(globalState);
-    }
-    yield* executeLeanCommand(PROJECT_COMMAND_VSCODE_IDS[command]);
-  });
-}
+): Effect.fn.Return<void, LeanExtensionUnavailable | VscodeCommandFailed> {
+  if (LEAN_FEATURE_PROJECT_COMMANDS.has(command)) {
+    // vscode-lean4 registers these commands in activateLean4Features(), not
+    // during its initial extension activation. Awaiting the exported feature
+    // promise prevents a race with command registration after a Lean file opens.
+    // Its failure is already the "extension cannot answer" report the tool
+    // shows, told apart by reason instead of by one message for both.
+    yield* getClientProvider(globalState);
+  }
+  yield* executeLeanCommand(PROJECT_COMMAND_VSCODE_IDS[command]);
+});
 
 /**
  * Build the VS Code-mediated `LeanLanguageServices` adapter, which

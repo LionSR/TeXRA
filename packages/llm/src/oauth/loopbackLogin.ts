@@ -124,30 +124,28 @@ function listenAttempt(port: number): Effect.Effect<http.Server | undefined> {
   });
 }
 
-function bindLoopbackServer(
+const bindLoopbackServer = Effect.fnUntraced(function* (
   ports: readonly number[],
   displayName: string,
-): Effect.Effect<
+): Effect.fn.Return<
   { server: http.Server; port: number },
   LoopbackTransportUnavailableError
 > {
-  return Effect.gen(function* () {
-    for (const port of ports) {
-      const server = yield* listenAttempt(port);
-      const address = server?.address();
-      if (server && address !== null && typeof address === 'object')
-        return { server, port: address.port };
-    }
-    const portList = ports.join(' or ');
-    return yield* Effect.fail(
-      new LoopbackTransportUnavailableError({
-        message:
-          `Could not bind the ${displayName} sign-in callback on port ${portList}. ` +
-          'Close whatever is using them, or use device-code sign-in instead.',
-      }),
-    );
-  });
-}
+  for (const port of ports) {
+    const server = yield* listenAttempt(port);
+    const address = server?.address();
+    if (server && address !== null && typeof address === 'object')
+      return { server, port: address.port };
+  }
+  const portList = ports.join(' or ');
+  return yield* Effect.fail(
+    new LoopbackTransportUnavailableError({
+      message:
+        `Could not bind the ${displayName} sign-in callback on port ${portList}. ` +
+        'Close whatever is using them, or use device-code sign-in instead.',
+    }),
+  );
+});
 
 /**
  * What one callback request asks the login flow to do. Parsed as a pure

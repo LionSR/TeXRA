@@ -290,14 +290,14 @@ function copyOutputFile(
   );
 }
 
-export function resolveWorkflowOutput(
-  outputFile: string | undefined,
-  outputDir: string | undefined,
-  result: CliRunResult,
-  context: CliContext,
-  options: WorkflowOutputResolutionOptions,
-): Effect.Effect<CliWorkflowRunResult, Error, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
+export const resolveWorkflowOutput = Effect.fn('resolveWorkflowOutput')(
+  function* (
+    outputFile: string | undefined,
+    outputDir: string | undefined,
+    result: CliRunResult,
+    context: CliContext,
+    options: WorkflowOutputResolutionOptions,
+  ): Effect.fn.Return<CliWorkflowRunResult, Error, FileSystem.FileSystem> {
     // A document task's recipe returns its documents, diffs included: its
     // run's `structured` value, which the CLI's result names `documents`.
     const { structured, ...output } = result.output;
@@ -393,8 +393,8 @@ export function resolveWorkflowOutput(
     }
 
     return { ...baseResult, copiedOutput: targetPath };
-  });
-}
+  },
+);
 
 export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
   if (result.outcome === RUN_OUTCOME.FAILED) {

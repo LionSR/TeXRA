@@ -20,22 +20,20 @@ import type { HttpClient, HttpClientError } from 'effect/http';
 const PROBE_TIMEOUT_MS = 2000;
 
 /** The HTTP status a localhost endpoint answers with. */
-function probeLocalhost(
+const probeLocalhost: (
   url: string,
-): Effect.Effect<
+) => Effect.Effect<
   number,
   HttpClientError.HttpClientError | Cause.TimeoutError,
   HttpClient.HttpClient
-> {
-  // The probe never reads the body: the request scope aborts the socket once
-  // the status is read, and the deadline (or a caller interrupting the probe)
-  // interrupts the request itself, so a connection that never returns
-  // headers is cut rather than abandoned.
-  return Effect.gen(function* () {
+> = Effect.fn('probeLocalhost')(
+  function* (url: string) {
     const client = yield* scopedClient;
     return (yield* client.get(url)).status;
-  }).pipe(Effect.scoped, Effect.timeout(Duration.millis(PROBE_TIMEOUT_MS)));
-}
+  },
+  Effect.scoped,
+  Effect.timeout(Duration.millis(PROBE_TIMEOUT_MS)),
+);
 
 /**
  * A probe that could not reach its endpoint answers "not running"; the

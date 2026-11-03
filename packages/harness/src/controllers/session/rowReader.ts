@@ -103,11 +103,14 @@ const BlobRowSchema = Schema.Struct({
   digest: Schema.String,
   value: Schema.instanceOf(Uint8Array),
 });
+const decodeBlobText = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.String),
+);
 /** One blob's string, verified against its address. */
 function inflateBlob(value: Uint8Array, digest: string): string {
   const text = zstdDecompressSync(value).toString('utf8');
   if (sha256Hex(text) !== digest) throw new Error(`Blob ${digest} is corrupt`);
-  return Schema.decodeUnknownSync(Schema.String)(JSON.parse(text));
+  return decodeBlobText(text);
 }
 /** The blobs a batch of selected rows inflates: each `{"$b": digest}` in
  *  the data of the rows this build decodes. A payload's own `$b` key is
@@ -277,52 +280,54 @@ export function rowReader<E>(
         throw new Error(`${path} holds no readable blob ${missing.join(', ')}`);
       return texts;
     });
-  const read = (rows: readonly SqlRow[], whole: boolean) =>
-    Effect.gen(function* () {
-      if (whole) {
-        yield* scan;
-        const [refusal] = rows.flatMap((row) => {
-          const { kind, logicalId } = Schema.decodeUnknownSync(RowSchema)(row);
-          return kind === 'run'
-            ? (earlier.get(Schema.decodeUnknownSync(RunIdSchema)(logicalId)) ??
-                [])
-            : [];
-        });
-        if (refusal !== undefined) return yield* refusal;
-      }
-      // The batch's blobs in one statement: a row carries addresses only.
-      const texts: Blobs = yield* stored(blobDigests(rows));
-      const events: SessionEvent[] = [];
-      for (const row of rows) {
-        const decoded = decodeRow(row, factKinds, texts);
-        if (Result.isSuccess(decoded)) {
-          if (decoded.success !== undefined) events.push(decoded.success);
-          else {
-            const { type } = Schema.decodeUnknownSync(RowSchema)(row);
-            yield* warnOnce(
-              type,
-              `${path}: rows of the retired kind ${type} fed only what a view showed; they are skipped, and their runs still resume.`,
-            );
-          }
-          continue;
-        }
-        if (whole || decoded.failure._tag === 'DatabaseStoreNewer')
-          return yield* decoded.failure;
-        yield* warnOnce(
-          `${decoded.failure.commit}`,
-          `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run is shown as unreadable and cannot be opened.`,
-        );
+  const read = Effect.fnUntraced(function* (
+    rows: readonly SqlRow[],
+    whole: boolean,
+  ) {
+    if (whole) {
+      yield* scan;
+      const [refusal] = rows.flatMap((row) => {
         const { kind, logicalId } = Schema.decodeUnknownSync(RowSchema)(row);
-        if (kind === 'run')
-          mark(
-            Schema.decodeUnknownSync(RunIdSchema)(logicalId),
-            decoded.failure._tag === 'DatabaseRowEarlier',
+        return kind === 'run'
+          ? (earlier.get(Schema.decodeUnknownSync(RunIdSchema)(logicalId)) ??
+              [])
+          : [];
+      });
+      if (refusal !== undefined) return yield* refusal;
+    }
+    // The batch's blobs in one statement: a row carries addresses only.
+    const texts: Blobs = yield* stored(blobDigests(rows));
+    const events: SessionEvent[] = [];
+    for (const row of rows) {
+      const decoded = decodeRow(row, factKinds, texts);
+      if (Result.isSuccess(decoded)) {
+        if (decoded.success !== undefined) events.push(decoded.success);
+        else {
+          const { type } = Schema.decodeUnknownSync(RowSchema)(row);
+          yield* warnOnce(
+            type,
+            `${path}: rows of the retired kind ${type} fed only what a view showed; they are skipped, and their runs still resume.`,
           );
-        const start = bareStart(row);
-        if (start !== null) events.push(start);
+        }
+        continue;
       }
-      return events;
-    });
+      if (whole || decoded.failure._tag === 'DatabaseStoreNewer')
+        return yield* decoded.failure;
+      yield* warnOnce(
+        `${decoded.failure.commit}`,
+        `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run is shown as unreadable and cannot be opened.`,
+      );
+      const { kind, logicalId } = Schema.decodeUnknownSync(RowSchema)(row);
+      if (kind === 'run')
+        mark(
+          Schema.decodeUnknownSync(RunIdSchema)(logicalId),
+          decoded.failure._tag === 'DatabaseRowEarlier',
+        );
+      const start = bareStart(row);
+      if (start !== null) events.push(start);
+    }
+    return events;
+  });
   return {
     read,
     blobs,

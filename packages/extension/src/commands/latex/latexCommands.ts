@@ -37,29 +37,28 @@ export function handleFixCompilation(
       saveDocument: true,
       errorMessage: 'Error launching LaTeX compilation fixer',
     },
-    ({ editor, relativePath }) =>
-      Effect.gen(function* () {
-        yield* Effect.logInfo(
-          `Launching agent to fix compilation for: ${relativePath}`,
-        ).pipe(withLogChannel(CHANNEL));
+    Effect.fnUntraced(function* ({ editor, relativePath }) {
+      yield* Effect.logInfo(
+        `Launching agent to fix compilation for: ${relativePath}`,
+      ).pipe(withLogChannel(CHANNEL));
 
-        const instruction = yield* buildLatexdiffAwareFixInstruction(
-          `Fix the LaTeX compilation errors in ${relativePath}.`,
-          editor.document.fileName,
-          roots.workspace,
-        );
+      const instruction = yield* buildLatexdiffAwareFixInstruction(
+        `Fix the LaTeX compilation errors in ${relativePath}.`,
+        editor.document.fileName,
+        roots.workspace,
+      );
 
-        // This is a "run latexFixer" command, so prefer the helper model.
-        // The command finishes when the run ends. A run that does not start
-        // finishes it too: the launcher has told why, so the guard's error
-        // would tell it again.
-        const config = yield* decodeLaunchConfig({
-          agent: 'latexFixer',
-          instruction,
-        });
-        const run = yield* Effect.option(launch(config, { helperModel: true }));
-        if (Option.isSome(run)) yield* run.value.result;
-      }),
+      // This is a "run latexFixer" command, so prefer the helper model.
+      // The command finishes when the run ends. A run that does not start
+      // finishes it too: the launcher has told why, so the guard's error
+      // would tell it again.
+      const config = yield* decodeLaunchConfig({
+        agent: 'latexFixer',
+        instruction,
+      });
+      const run = yield* Effect.option(launch(config, { helperModel: true }));
+      if (Option.isSome(run)) yield* run.value.result;
+    }),
   );
 }
 
@@ -74,40 +73,39 @@ export function handleIndentCurrentTeX(
       saveDocument: true,
       errorMessage: 'Error formatting the LaTeX file',
     },
-    ({ relativePath }) =>
-      Effect.gen(function* () {
-        yield* Effect.logDebug(`Indenting LaTeX file: ${relativePath}`).pipe(
-          withLogChannel(CHANNEL),
+    Effect.fnUntraced(function* ({ relativePath }) {
+      yield* Effect.logDebug(`Indenting LaTeX file: ${relativePath}`).pipe(
+        withLogChannel(CHANNEL),
+      );
+
+      // An explicit user action: a disabled formatter notifies instead of
+      // succeeding quietly.
+      const formatter = yield* resolveLatexFormatter(roots);
+      if (!formatter) {
+        yield* showLoggedInfoMessage(
+          CHANNEL,
+          'LaTeX formatter is disabled; no file was indented',
         );
+        return;
+      }
 
-        // An explicit user action: a disabled formatter notifies instead of
-        // succeeding quietly.
-        const formatter = yield* resolveLatexFormatter(roots);
-        if (!formatter) {
-          yield* showLoggedInfoMessage(
-            CHANNEL,
-            'LaTeX formatter is disabled; no file was indented',
-          );
-          return;
-        }
+      const success = yield* formatter.run(
+        relativePath,
+        roots.workspace,
+        formatter.configPath,
+        roots,
+      );
 
-        const success = yield* formatter.run(
-          relativePath,
-          roots.workspace,
-          formatter.configPath,
-          roots,
+      if (success) {
+        yield* Effect.sleep(100);
+        yield* showLoggedInfoMessage(
+          CHANNEL,
+          'LaTeX file indented successfully',
         );
-
-        if (success) {
-          yield* Effect.sleep(100);
-          yield* showLoggedInfoMessage(
-            CHANNEL,
-            'LaTeX file indented successfully',
-          );
-        } else {
-          yield* showLoggedMessage(CHANNEL, 'Failed to indent LaTeX file');
-        }
-      }),
+      } else {
+        yield* showLoggedMessage(CHANNEL, 'Failed to indent LaTeX file');
+      }
+    }),
   );
 }
 
@@ -121,69 +119,68 @@ export function handleGetTeXCount(
       action: 'get TeX count',
       errorMessage: 'Error getting tex count',
     },
-    ({ relativePath }) =>
-      Effect.gen(function* () {
-        yield* Effect.logDebug(`Getting tex count for: ${relativePath}`).pipe(
-          withLogChannel(CHANNEL),
-        );
+    Effect.fnUntraced(function* ({ relativePath }) {
+      yield* Effect.logDebug(`Getting tex count for: ${relativePath}`).pipe(
+        withLogChannel(CHANNEL),
+      );
 
-        const countingMode = yield* quickPick<
-          vscode.QuickPickItem & { value: TexcountMode }
-        >(
-          [
-            { label: 'Count main file only', value: 'separate' as const },
-            {
-              label: 'Follow \\input/\\include and combine',
-              value: 'include' as const,
-            },
-          ],
+      const countingMode = yield* quickPick<
+        vscode.QuickPickItem & { value: TexcountMode }
+      >(
+        [
+          { label: 'Count main file only', value: 'separate' as const },
           {
-            placeHolder: 'Count options',
-            canPickMany: false,
+            label: 'Follow \\input/\\include and combine',
+            value: 'include' as const,
           },
-        );
+        ],
+        {
+          placeHolder: 'Count options',
+          canPickMany: false,
+        },
+      );
 
-        if (!countingMode) {
-          return;
-        }
+      if (!countingMode) {
+        return;
+      }
 
-        // The notification lives for exactly as long as the body below, which
-        // is a step of this program rather than a nested settle.
-        yield* withVSCodeProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: 'Counting LaTeX Document',
-            cancellable: false,
-          },
-          (progress) =>
-            Effect.gen(function* () {
-              progress.report({ message: 'Running texcount...' });
+      // The notification lives for exactly as long as the body below, which
+      // is a step of this program rather than a nested settle.
+      yield* withVSCodeProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Counting LaTeX Document',
+          cancellable: false,
+        },
+        (progress) =>
+          Effect.gen(function* () {
+            progress.report({ message: 'Running texcount...' });
 
-              const { output, errors } = yield* getTeXCount(
-                roots.workspace,
-                relativePath,
-                {
-                  mode: countingMode.value,
-                  settings: roots,
-                },
-              );
+            const { output, errors } = yield* getTeXCount(
+              roots.workspace,
+              relativePath,
+              {
+                mode: countingMode.value,
+                settings: roots,
+              },
+            );
 
-              if (!output) {
-                const message =
-                  errors[0] ??
-                  'Failed to get tex count. Please verify the file path.';
-                yield* showLoggedMessage(CHANNEL, message);
-                return;
-              }
+            if (!output) {
+              const message =
+                errors[0] ??
+                'Failed to get tex count. Please verify the file path.';
+              yield* showLoggedMessage(CHANNEL, message);
+              return;
+            }
 
-              const stats = parseTeXCountStats(output);
+            const stats = parseTeXCountStats(output);
 
-              yield* quickPick(stats, {
-                placeHolder: 'TeXCount Results (press Esc to dismiss)',
-                canPickMany: false,
-              });
-            }),
-        );
-      }),
+            yield* quickPick(stats, {
+              placeHolder: 'TeXCount Results (press Esc to dismiss)',
+              canPickMany: false,
+            });
+          }),
+      );
+    }),
   );
 }

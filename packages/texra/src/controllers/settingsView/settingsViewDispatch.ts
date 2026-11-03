@@ -23,7 +23,10 @@ export function settingsViewProgram<R>(
     const handler = handlers[message.command];
     if (isUnsupported(handler)) {
       return Effect.fail(
-        new UnsupportedCommandError(message.command, handler.unsupported),
+        new UnsupportedCommandError({
+          command: message.command,
+          reason: handler.unsupported,
+        }),
       );
     }
     // cast: the discriminant selects exactly this handler's member of the union.
