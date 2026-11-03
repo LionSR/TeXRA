@@ -65,7 +65,11 @@ export function applyLiveText(
   const slot = ix.slots.get(chunk.rowId);
   const next: TranscriptDraft = { ...transcript };
   if (slot?.kind === 'tool') {
-    upsertRow(work, next, toolRow(slot.base, slot.log, text, runLabels));
+    upsertRow(
+      work,
+      next,
+      toolRow(slot.base, slot.log, text, runLabels, slot.call),
+    );
     return next;
   }
   const measured =

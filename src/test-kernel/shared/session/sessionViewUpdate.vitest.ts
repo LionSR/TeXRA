@@ -242,6 +242,47 @@ describe('session view update', () => {
     );
   });
 
+  it("keeps a running card's phase and attempt while its output streams", () => {
+    const log = new Log();
+    const start = log.emit(CHILD, 1000, {
+      type: 'run.start',
+      identity: CHILD_IDENTITY,
+      userFollowUpSupport: 'unsupported',
+      parent: null,
+      provenance: null,
+    });
+    const call = log.emit(CHILD, 1010, {
+      type: 'tool.start',
+      logId: 'build',
+      toolName: 'bash',
+      input: { command: 'make' },
+      phase: 'Compile',
+      attempt: 2,
+    });
+    const view = viewOf([
+      tail(start),
+      subscribe(CHILD),
+      alive,
+      tail(call),
+      {
+        _tag: 'chunk',
+        runId: CHILD,
+        rowId: 'build',
+        from: 0,
+        to: 9,
+        text: 'compiling',
+      },
+    ]);
+    expect(runView(view, CHILD).transcript.rows).toEqual([
+      expect.objectContaining({
+        kind: 'tool',
+        phase: 'Compile',
+        attempt: 2,
+        toolUse: expect.objectContaining({ outputText: 'compiling' }),
+      }),
+    ]);
+  });
+
   it('reads a pending approval as waiting only with a held owner', () => {
     const withOwner = viewOf([...scenario.pending, alive]);
     expect(runView(withOwner, CHILD).group).toBe('waiting');
