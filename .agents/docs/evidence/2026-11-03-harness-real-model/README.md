@@ -9,23 +9,23 @@ runs are allowed and nothing runs in CI.
 **DeepSeek has passed; Anthropic has not run.** As of 2026-11-03:
 
 - DeepSeek (`deepseek/deepseek-flash`): every scenario passed, twice, on the
-  build of #(this PR). The first run that reached the model, on `171aa36b38`,
+  build of #14623. The first run that reached the model, on `171aa36b38`,
   failed two of three; the fixes are in findings 4 and 5 below.
 - Anthropic: no `ANTHROPIC_API_KEY` is set; the run waits for the owner.
 
 ## Runs
 
 Each directory is one run. Its `summary.md` names `171aa36b38`, the commit the
-worktree was on; the runs after the first packed that commit with this PR's
+worktree was on; the runs after the first packed that commit with #14623's
 changes on top, uncommitted. Runs on intermediate versions of the fix are not
 kept.
 
-| Run                                                                       | Harness                 | codemode | plugin | crash-resume  | Spend (USD) |
-| ------------------------------------------------------------------------- | ----------------------- | -------- | ------ | ------------- | ----------- |
-| [`deepseek-deepseek-flash-1931`](deepseek-deepseek-flash-1931/summary.md) | `171aa36b38`            | fail     | pass   | fail          | 0.0144      |
-| [`deepseek-deepseek-flash-2016`](deepseek-deepseek-flash-2016/summary.md) | this PR, earlier runner | pass     | pass   | pass          | 0.0124      |
-| [`deepseek-deepseek-flash-2018`](deepseek-deepseek-flash-2018/summary.md) | this PR, earlier runner | pass     | pass   | fail (runner) | 0.0134      |
-| [`deepseek-deepseek-flash-2021`](deepseek-deepseek-flash-2021/summary.md) | this PR                 | pass     | pass   | pass          | 0.0129      |
+| Run                                                                       | Harness                | codemode | plugin | crash-resume  | Spend (USD) |
+| ------------------------------------------------------------------------- | ---------------------- | -------- | ------ | ------------- | ----------- |
+| [`deepseek-deepseek-flash-1931`](deepseek-deepseek-flash-1931/summary.md) | `171aa36b38`           | fail     | pass   | fail          | 0.0144      |
+| [`deepseek-deepseek-flash-2016`](deepseek-deepseek-flash-2016/summary.md) | #14623, earlier runner | pass     | pass   | pass          | 0.0124      |
+| [`deepseek-deepseek-flash-2018`](deepseek-deepseek-flash-2018/summary.md) | #14623, earlier runner | pass     | pass   | fail (runner) | 0.0134      |
+| [`deepseek-deepseek-flash-2021`](deepseek-deepseek-flash-2021/summary.md) | #14623                 | pass     | pass   | pass          | 0.0129      |
 
 Run `2018`'s crash-resume failed on the runner's checks, not the harness's
 behavior: the model first tried `self()` out in a separate script, and the
@@ -88,14 +88,14 @@ From the attempts and from checking the runner on the in-memory model:
    appended as one more paragraph; fresh, it was the prompt alone, with the
    parent's tools. On `171aa36b38` the crash-resume children each ran the whole
    task again, `self()` rounds included, four levels deep, and one called the
-   parent's `await_signoff` itself. Fixed in this PR: the child reads its
+   parent's `await_signoff` itself. Fixed in #14623: the child reads its
    prompt inside `<task>` under a note that a script of its own started it for
    one part of the work (`selfTask`, `packages/harness/src/tools/codemode/SelfTool.ts`).
 5. **A plugin's script module was named nowhere the model reads.** The `script`
    description said a module is imported by "the specifier a description
    names", and nothing named `builtIn:notes`; a run passed only when the model
    probed `import()` and read the error, which lists what is offered. Fixed in
-   this PR: the description lists the modules the step's scripts may import.
+   #14623: the description lists the modules the step's scripts may import.
 6. **The runner's checks assumed the model writes one script.** DeepSeek tries
    the functions out first, and sometimes runs a last script that only checks
    a count. Codemode now judges the last script that returned the asked-for
