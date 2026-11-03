@@ -5,16 +5,24 @@
  * requests. For each, the host stages the original and proposed content as
  * the files its diff view shows, for as long as the view lists the request.
  * The content is the request's (`request.preview`), so every window of the
- * project shows the same proposal; what the user types into the proposed
- * side is this window's until its Approve sends it as the decision's
- * content (`request.decide`), which the tool applies. Everything a host
- * owns (staging the files, its diff view, reading back what the user typed)
- * lives behind {@link ToolEditApprovalHost}.
+ * project shows the same proposal, and no window changes it; what the user
+ * types into the proposed side is this window's until its Approve sends it
+ * as the decision's content (`request.decide`), which the tool applies. The
+ * session records one decision per request: an Approve sent after another
+ * window answered is refused, never applied over that answer. Everything a
+ * host owns (staging the files, its diff view, reading back what the user
+ * typed) lives behind {@link ToolEditApprovalHost}.
  *
  * Each request's preview lives in a scope of its own, closed when the view
  * drops the request or the window goes. Closing it interrupts what the user
  * started on it (a LaTeX preview stops its subprocess), waits for a host
- * build still reading the staged files, and then removes them.
+ * build still reading the staged files and for an approval still on its
+ * way, and then removes them. A request that ended without the proposed
+ * side as the user left it here (another window or the terminal answered
+ * it, a session approval or a stop decided it) leaves that text with the
+ * host, which keeps it where the user can reach it and says so; a copy the
+ * user never changed just goes. A window that goes while the request still
+ * waits takes its edits with it.
  */
 import {
   Cause,
@@ -23,6 +31,7 @@ import {
   Fiber,
   type FileSystem,
   type Path,
+  Ref,
   Scope,
 } from 'effect';
 
@@ -73,8 +82,13 @@ export interface ToolEditPreview {
   openProposed(): PreviewCall<void>;
   /** Proposed content including edits the user made in the host's view. */
   readProposedContent(): PreviewCall<string>;
-  /** Close the view and remove everything staged for this request. */
-  dispose(): PreviewCall<void>;
+  /**
+   * Close the view and remove everything staged for this request. When the
+   * request ended without the proposed content as the user left it here,
+   * that content is `unapplied`: the host keeps it where the user can still
+   * reach it, and tells the user it was not applied and where it is.
+   */
+  dispose(unapplied?: string): PreviewCall<void>;
 }
 
 export interface ToolEditApprovalHost {
@@ -101,6 +115,9 @@ interface StagedPreview extends LatexPreviewEntry {
   readonly pending: PendingRequest;
   readonly preview: ToolEditPreview;
   readonly scope: Scope.Scope;
+  /** Whether the session recorded this window's approval, which carried
+   *  the proposed content as the user left it here. */
+  readonly applied: Ref.Ref<boolean>;
 }
 
 type ToolEditRequest = PendingRequest & {
@@ -181,13 +198,19 @@ export class ToolEditApprovalController {
             });
         }
       };
-      // In the request's scope: the scope's close interrupts it and waits.
-      return Effect.forkIn(
-        Effect.suspend(action).pipe(
-          Effect.catchCause((cause) =>
-            Cause.hasInterruptsOnly(cause) ? Effect.void : this.report(cause),
-          ),
+      const program = Effect.suspend(action).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause) ? Effect.void : this.report(cause),
         ),
+      );
+      // In the request's scope: the scope's close interrupts it and waits.
+      // An approval runs to its answer, which the close then reads: the
+      // view can drop the request (this approval recorded, or another
+      // window's) before the answer comes back.
+      return Effect.forkIn(
+        payload.action === 'approve'
+          ? Effect.uninterruptible(program)
+          : program,
         entry.scope,
       ).pipe(Effect.asVoid);
     });
@@ -216,13 +239,20 @@ export class ToolEditApprovalController {
       const content = outcome.preview;
       const scope = yield* Scope.Scope;
       const settled = yield* Deferred.make<void>();
+      const applied = yield* Ref.make(false);
       const workspaceTempCleanup: StagedPreview['workspaceTempCleanup'] = [];
       const preview = yield* Effect.acquireRelease(
         host.stagePreview({ ...pending.payload.data, ...content }),
         // The files the LaTeX previews wrote go even when the view's close
         // fails, as it can at window teardown.
         (staged) =>
-          staged.dispose().pipe(
+          this.unapplied(
+            pending,
+            staged,
+            content.proposedContent,
+            applied,
+          ).pipe(
+            Effect.flatMap((unapplied) => staged.dispose(unapplied)),
             Effect.ensuring(
               Effect.all(workspaceTempCleanup, { discard: true }),
             ),
@@ -233,6 +263,7 @@ export class ToolEditApprovalController {
         pending,
         scope,
         preview,
+        applied,
         request: { path: pending.payload.data.path, roots },
         originalUri: { fsPath: preview.originalPath },
         proposedUri: { fsPath: preview.proposedPath },
@@ -263,11 +294,42 @@ export class ToolEditApprovalController {
   /** Approve as the Approve button does: the document as the user left it
    *  in this view goes with the decision, which applies it. */
   private approve(entry: StagedPreview, grant?: Grant): PreviewCall<void> {
-    return entry.preview
-      .readProposedContent()
-      .pipe(
-        Effect.flatMap((content) => this.decide(entry.pending, grant, content)),
+    return entry.preview.readProposedContent().pipe(
+      Effect.flatMap((content) => this.decide(entry.pending, grant, content)),
+      Effect.andThen(Ref.set(entry.applied, true)),
+    );
+  }
+
+  /**
+   * The proposed content as the user left it in this window, when its
+   * request ended without it: the session recorded no approval from here,
+   * and the user changed the proposal. None while the view still lists the
+   * request, which is this window going; its edits go with it.
+   */
+  private unapplied(
+    pending: PendingRequest,
+    preview: ToolEditPreview,
+    proposal: string,
+    applied: Ref.Ref<boolean>,
+  ): Effect.Effect<string | undefined, never, PreviewServices> {
+    return Effect.gen({ self: this }, function* () {
+      if (yield* Ref.get(applied)) return undefined;
+      const listed = this.options.session.view
+        .current()
+        .requests.some(
+          (r) => r.runId === pending.runId && r.requestId === pending.requestId,
+        );
+      if (listed) return undefined;
+      const left = yield* preview.readProposedContent().pipe(
+        // Unread, the copy goes with the preview; the user hears why.
+        Effect.catch((error) => this.report(error).pipe(Effect.as(undefined))),
       );
+      // A host may read its copy back with CRLF line ends.
+      return left === undefined ||
+        left.replaceAll('\r\n', '\n') === proposal.replaceAll('\r\n', '\n')
+        ? undefined
+        : left;
+    });
   }
 
   private decide(

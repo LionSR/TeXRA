@@ -12,12 +12,14 @@ import { Effect, FileSystem, Scope } from 'effect';
 import * as vscode from 'vscode';
 
 import { pluralize } from '@texra-ai/harness/transcript';
+import { withLogChannel, type ProcessRuntime } from '@texra-ai/harness/host';
 import {
   VscodeDiffViewHost,
   type DiffSession,
 } from '@frontend/approval/VscodeDiffViewHost';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { announce, showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   fromHost,
   hostFailure,
@@ -30,8 +32,8 @@ import type {
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import type { ApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
+import { UNAPPLIED_TOOL_EDIT } from '@ui/copy/toolEditPreview';
 import type { HostRequestFailure, WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessRuntime } from '@texra-ai/harness/host';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -81,7 +83,12 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
       ),
       Effect.map(
         (staged) =>
-          new VscodeToolEditPreview(this.diffViewHost, request, staged),
+          new VscodeToolEditPreview(
+            this.diffViewHost,
+            request,
+            staged,
+            this.warn,
+          ),
       ),
     );
   }
@@ -91,6 +98,18 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     // shown on its own fiber, and the caller does not wait for the toast.
     this.runtime.runFork(showLoggedMessage(CHANNEL, message));
   }
+
+  /** A warning, logged and shown on its own fiber, as a report is. */
+  private readonly warn = (message: string): void => {
+    this.runtime.runFork(
+      Effect.logWarning(message).pipe(
+        withLogChannel(CHANNEL),
+        Effect.andThen(
+          announce(CHANNEL, vscodeUi.showWarningMessage(message), undefined),
+        ),
+      ),
+    );
+  };
 }
 
 class VscodeToolEditPreview implements ToolEditPreview {
@@ -99,14 +118,18 @@ class VscodeToolEditPreview implements ToolEditPreview {
   private readonly diffViewHost: VscodeDiffViewHost;
   private readonly request: ToolEditPreviewRequest;
   private readonly staged: ApprovalTempFiles;
+  /** Tell the user something without waiting for them to read it. */
+  private readonly warn: (message: string) => void;
   constructor(
     diffViewHost: VscodeDiffViewHost,
     request: ToolEditPreviewRequest,
     staged: ApprovalTempFiles,
+    warn: (message: string) => void,
   ) {
     this.diffViewHost = diffViewHost;
     this.request = request;
     this.staged = staged;
+    this.warn = warn;
     this.diffSession = {
       original: { filePath: staged.originalPath },
       proposed: { filePath: staged.proposedPath },
@@ -143,8 +166,25 @@ class VscodeToolEditPreview implements ToolEditPreview {
     return this.diffViewHost.readProposedContent(this.diffSession);
   }
 
-  dispose(): Effect.Effect<void, HostRequestFailure> {
-    return this.diffViewHost.closeDiff(this.diffSession).pipe(
+  /** `unapplied` moves to an untitled editor before the diff closes, where
+   *  it outlives the files removed under the diff. */
+  dispose(unapplied?: string): Effect.Effect<void, HostRequestFailure> {
+    const keep =
+      unapplied === undefined
+        ? Effect.void
+        : this.diffViewHost
+            .keepProposedText(this.diffSession, unapplied)
+            .pipe(
+              Effect.andThen(
+                Effect.sync(() =>
+                  this.warn(
+                    UNAPPLIED_TOOL_EDIT.inEditor(this.request.relativePath),
+                  ),
+                ),
+              ),
+            );
+    return keep.pipe(
+      Effect.andThen(this.diffViewHost.closeDiff(this.diffSession)),
       // The files go whether the tab close succeeds, fails, or is cut off:
       // at window teardown that RPC can reject or outlive the shutdown
       // phase's deadline, and the files would otherwise stay on disk.

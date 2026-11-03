@@ -4,9 +4,12 @@
 // retires it, and the open app reaches the newer one and lists its tasks
 // again. A file a service task accepts into the project shows in the app's
 // file tree, heard from the run's rows. The service outlives the app. Every host stamps the same build
-// identity, so "newer" means the same thing to all of them.
+// identity, so "newer" means the same thing to all of them. A tool edit a
+// service task asks for is one request every window answers: changes made
+// in the app that another window's answer leaves out stay with the app.
 import { spawnSync } from 'node:child_process';
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -17,6 +20,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -38,11 +42,19 @@ interface ServiceStatus {
 }
 
 /** A CLI bundle of this tree, stamped as `build` when one is named; a
- *  newer build carries the scripted validation model. */
-function buildCli(outfile: string, build?: string): void {
+ *  newer build carries the scripted validation model. `window` bundles the
+ *  validator's editor-less window (scripts/service-host-harness.ts)
+ *  instead. */
+function buildCli(
+  outfile: string,
+  { build, window = false }: { build?: string; window?: boolean } = {},
+): void {
   const result = spawnSync(
     process.execPath,
-    [join(CLI_ROOT, 'scripts', 'build-bundle.mjs')],
+    [
+      join(CLI_ROOT, 'scripts', 'build-bundle.mjs'),
+      ...(window ? ['--host-harness'] : []),
+    ],
     {
       cwd: CLI_ROOT,
       env: {
@@ -138,7 +150,7 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
     join(root, 'resources'),
   );
   buildCli(thisBuild);
-  buildCli(nextBuild, NEXT_BUILD);
+  buildCli(nextBuild, { build: NEXT_BUILD });
   const pids = new Set<number>();
   try {
     const launched = await launchTexraApp({
@@ -317,6 +329,232 @@ test('the desktop app shares the service with a CLI of its build, reaches the on
     // Release the held task, then stop every service this test started.
     writeFileSync(join(work, 'golden-park.release'), '');
     for (const pid of pids) if (alive(pid)) process.kill(pid, 'SIGTERM');
+    cleanupDirectory(root);
+  }
+});
+
+/** The tool edit `runId` asked for, as the project's store records it. */
+function openedToolEdit(dataRoot: string, runId: string): string | undefined {
+  const storage = join(dataRoot, 'v1', 'workspace-storage');
+  const project = existsSync(storage)
+    ? readdirSync(storage).find((name) => name.startsWith('work-'))
+    : undefined;
+  if (project === undefined) return undefined;
+  const db = new DatabaseSync(join(storage, project, 'texra.db'), {
+    readOnly: true,
+  });
+  try {
+    const row = db
+      .prepare(
+        `SELECT json_extract(e.data, '$.requestId') AS requestId FROM event e
+         JOIN event_sequence s ON s.id = e.aggregate
+         WHERE s.logical_id = ? AND e.type = 'request.opened'
+           AND json_extract(e.data, '$.payload.kind') = 'toolEdit'`,
+      )
+      .get(runId) as { readonly requestId: string } | undefined;
+    return row?.requestId;
+  } finally {
+    db.close();
+  }
+}
+
+test('a tool edit the app changed keeps its changes when another window answers it in the service, and a later answer is refused', async () => {
+  test.setTimeout(300_000);
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'texra-e2e-preview-')));
+  const home = join(root, 'home');
+  const dataRoot = join(home, '.texra');
+  const work = join(root, 'work');
+  mkdirSync(work, { recursive: true });
+  // A task that asks to write a file the project does not have yet.
+  const agents = join(dataRoot, 'v1', 'global-storage', 'custom_agents');
+  mkdirSync(agents, { recursive: true });
+  writeFileSync(
+    join(agents, 'edit-validation.yaml'),
+    'name: edit_validation\ndescription: Ask to write one file.\ntools: [write_file]\n\nprompt: |\n  GOLDEN-APPROVAL write_file {"path":"notes.txt","content":"beta\\n"}\n',
+  );
+  const flag = join(work, 'texra-validation.flag');
+  writeFileSync(flag, 'texra-cli-run-validation\n');
+  const scripted = {
+    TEXRA_INTERNAL_VALIDATE_MODEL: '1',
+    TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
+    TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
+    OPENAI_API_KEY: 'texra-validation-fake-key',
+  };
+  const nextBuild = join(root, 'bin', 'texra-next.js');
+  const otherWindow = join(root, 'bin', 'service-host-harness.js');
+  symlinkSync(
+    join(REPO_ROOT, 'packages', 'extension', 'resources'),
+    join(root, 'resources'),
+  );
+  buildCli(nextBuild, { build: NEXT_BUILD });
+  buildCli(otherWindow, { window: true });
+  /** The other window approves the request: unchanged, or with `content`,
+   *  the proposed file as that window left it. */
+  const approveElsewhere = (
+    runId: string,
+    requestId: string,
+    content?: string,
+  ): string =>
+    cli(otherWindow, home, [
+      dataRoot,
+      work,
+      'approve',
+      runId,
+      requestId,
+      ...(content === undefined ? [] : [content]),
+    ]).trim();
+  // The app stages each tool edit's copies in a directory of its own under
+  // the temp directory it shares with this test: one that was not there
+  // before is this task's.
+  const previewDirs = () =>
+    readdirSync(tmpdir()).filter((name) => name.startsWith('texra-tool-edit-'));
+  const earlier = new Set(previewDirs());
+  const stagedCopies = () =>
+    previewDirs()
+      .filter((dir) => !earlier.has(dir))
+      .flatMap((dir) =>
+        readdirSync(join(tmpdir(), dir))
+          .filter((name) => name.endsWith('-proposed.txt'))
+          .map((name) => join(tmpdir(), dir, name)),
+      );
+  const pids = new Set<number>();
+  let kept: string | undefined;
+  try {
+    const launched = await launchTexraApp({
+      userDataPath: dataRoot,
+      workspacePath: work,
+      env: { HOME: home },
+    });
+    try {
+      // The app's dialogs are recorded, not shown.
+      await launched.app.evaluate(({ dialog }) => {
+        const shown: string[] = [];
+        Object.assign(globalThis, { texraShownMessages: shown });
+        Object.assign(dialog, {
+          showMessageBox: (...args: unknown[]) => {
+            shown.push((args.at(-1) as { readonly message: string }).message);
+            return Promise.resolve({ response: 0, checkboxChecked: false });
+          },
+        });
+      });
+      const shownMessages = () =>
+        launched.app.evaluate(
+          () =>
+            (globalThis as unknown as { texraShownMessages: string[] })
+              .texraShownMessages,
+        );
+      // The app's own service; a newer build's task retires it, and the
+      // app reaches the newer one, which runs the scripted model.
+      await expect
+        .poll(() => status(nextBuild, home).online, { timeout: 60_000 })
+        .toBe(true);
+      pids.add(status(nextBuild, home).pid);
+      const task = JSON.parse(
+        cli(
+          nextBuild,
+          home,
+          [
+            'tasks',
+            'start',
+            'edit_validation',
+            '--model',
+            'openai/gpt-5.6-sol',
+            '--instruction',
+            'Write the notes',
+            '--output-format',
+            'json',
+            '--cwd',
+            work,
+          ],
+          scripted,
+        ),
+      ) as { readonly runId: string };
+      pids.add(status(nextBuild, home).pid);
+      await expect
+        .poll(() => openedToolEdit(dataRoot, task.runId), { timeout: 60_000 })
+        .toBeDefined();
+      const requestId = openedToolEdit(dataRoot, task.runId)!;
+      // The app lists the task and stages the proposal; the user edits its
+      // copy in the editor the app opens it in, which saves it to disk.
+      const row = launched.page
+        .locator('.shell-project-runs run-tab')
+        .filter({ has: launched.page.locator(`[data-run="${task.runId}"]`) });
+      await expect(row).toHaveCount(1, { timeout: 60_000 });
+      await row.click();
+      const card = launched.page.locator('tool-edit-request-panel');
+      await expect(card).toHaveCount(1, { timeout: 30_000 });
+      await expect.poll(stagedCopies, { timeout: 60_000 }).toHaveLength(1);
+      const copy = stagedCopies()[0]!;
+      kept = copy;
+      const proposal = readFileSync(copy, 'utf8');
+      const edited = 'beta\nedited in the app\n';
+      writeFileSync(copy, edited);
+      await launched.page.screenshot({
+        path: test.info().outputPath('desktop-edit-pending.png'),
+      });
+      // Another window approves the untouched proposal; the task writes it,
+      // and the app's card goes with the answer.
+      const answered = approveElsewhere(task.runId, requestId);
+      expect(answered).toBe('DECIDED');
+      const notes = join(work, 'notes.txt');
+      await expect
+        .poll(() => (existsSync(notes) ? readFileSync(notes, 'utf8') : null), {
+          timeout: 60_000,
+        })
+        .toBe(proposal);
+      await expect(card).toHaveCount(0, { timeout: 30_000 });
+      // The app keeps the user's changes where its editor has them, and
+      // says so once.
+      const aboutNotes = async () =>
+        (await shownMessages()).filter((message) =>
+          message.includes('notes.txt'),
+        );
+      await expect.poll(aboutNotes, { timeout: 30_000 }).toHaveLength(1);
+      const [notice] = await aboutNotes();
+      expect(notice).toContain(copy);
+      expect(readFileSync(copy, 'utf8')).toBe(edited);
+      // A later answer from another window, with its own changes, is
+      // refused: the recorded answer stands.
+      const stale = approveElsewhere(
+        task.runId,
+        requestId,
+        'beta\nedited in the other window\n',
+      );
+      expect(stale).toMatch(/^REFUSED Unavailable/);
+      expect(readFileSync(notes, 'utf8')).toBe(proposal);
+      await launched.page.screenshot({
+        path: test.info().outputPath('desktop-after-other-window.png'),
+      });
+      const applied = readFileSync(notes, 'utf8');
+      writeFileSync(
+        test.info().outputPath('shared-preview-conflict.json'),
+        `${JSON.stringify(
+          {
+            facts: {
+              otherWindowApprovedUnchanged: answered === 'DECIDED',
+              appCardWentWithTheAnswer: true,
+              appliedIsTheProposal: applied === proposal,
+              appEditKeptOnDisk: readFileSync(copy, 'utf8') === edited,
+              appSaidWhereItIs: notice?.includes(copy) ?? false,
+              laterAnswerRefused: stale.startsWith('REFUSED Unavailable'),
+            },
+            // Path-free, so a rerun diffs clean.
+            proposal,
+            applied,
+            appEdit: edited,
+            appNotice: notice?.replace(copy, '<the kept copy>'),
+            laterAnswer: stale,
+          },
+          null,
+          2,
+        )}\n`,
+      );
+    } finally {
+      await closeTexraApp(launched);
+    }
+  } finally {
+    for (const pid of pids) if (alive(pid)) process.kill(pid, 'SIGTERM');
+    if (kept !== undefined) cleanupDirectory(dirname(kept));
     cleanupDirectory(root);
   }
 });
