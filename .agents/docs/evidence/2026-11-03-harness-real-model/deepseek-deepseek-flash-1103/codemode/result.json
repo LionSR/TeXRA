@@ -1,0 +1,47 @@
+{
+  "scenario": "codemode",
+  "passed": false,
+  "reason": "run completed: Error executing agent draft_reviewer: HTTP 402 Payment Required – 402 Insufficient Balance (request_id: 03d2755b-ffb1-47db-88e3-76938cdb243c); a script finished: []; the module called the plugin tool: no; two self() rounds completed: 0 of 0; an executions SQL query succeeded: no; the script returned every section title: no; the returned count matches the finished children: {\"completed\":0}",
+  "runId": "19d3738788b8",
+  "checks": [
+    {
+      "name": "run completed",
+      "ok": false,
+      "detail": "Error executing agent draft_reviewer: HTTP 402 Payment Required – 402 Insufficient Balance (request_id: 03d2755b-ffb1-47db-88e3-76938cdb243c)"
+    },
+    {
+      "name": "a script finished",
+      "ok": false,
+      "detail": "[]"
+    },
+    {
+      "name": "the module called the plugin tool",
+      "ok": false
+    },
+    {
+      "name": "two self() rounds completed",
+      "ok": false,
+      "detail": "0 of 0"
+    },
+    {
+      "name": "an executions SQL query succeeded",
+      "ok": false
+    },
+    {
+      "name": "the script returned every section title",
+      "ok": false
+    },
+    {
+      "name": "the returned count matches the finished children",
+      "ok": false,
+      "detail": "{\"completed\":0}"
+    }
+  ],
+  "costUsd": 0,
+  "inputTokens": 0,
+  "outputTokens": 0,
+  "runs": 1,
+  "scripts": 0,
+  "failedScripts": 0,
+  "seconds": 1
+}

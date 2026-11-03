@@ -1,0 +1,117 @@
+{
+  "route": "deepseek",
+  "model": "deepseek/deepseek-flash",
+  "started": "2026-11-03T10:03:33.703Z",
+  "harness": "0.1.0",
+  "commit": "5bdefcf7b302f8d57d16ce6c3740bc3eaa475862",
+  "node": "v26.12.1",
+  "runLimit": "8 minutes",
+  "skipped": null,
+  "results": [
+    {
+      "scenario": "codemode",
+      "passed": false,
+      "reason": "run completed: Error executing agent draft_reviewer: HTTP 402 Payment Required – 402 Insufficient Balance (request_id: 03d2755b-ffb1-47db-88e3-76938cdb243c); a script finished: []; the module called the plugin tool: no; two self() rounds completed: 0 of 0; an executions SQL query succeeded: no; the script returned every section title: no; the returned count matches the finished children: {\"completed\":0}",
+      "runId": "19d3738788b8",
+      "checks": [
+        {
+          "name": "run completed",
+          "ok": false,
+          "detail": "Error executing agent draft_reviewer: HTTP 402 Payment Required – 402 Insufficient Balance (request_id: 03d2755b-ffb1-47db-88e3-76938cdb243c)"
+        },
+        {
+          "name": "a script finished",
+          "ok": false,
+          "detail": "[]"
+        },
+        {
+          "name": "the module called the plugin tool",
+          "ok": false
+        },
+        {
+          "name": "two self() rounds completed",
+          "ok": false,
+          "detail": "0 of 0"
+        },
+        {
+          "name": "an executions SQL query succeeded",
+          "ok": false
+        },
+        {
+          "name": "the script returned every section title",
+          "ok": false
+        },
+        {
+          "name": "the returned count matches the finished children",
+          "ok": false,
+          "detail": "{\"completed\":0}"
+        }
+      ],
+      "costUsd": 0,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "runs": 1,
+      "scripts": 0,
+      "failedScripts": 0,
+      "seconds": 1
+    },
+    {
+      "scenario": "plugin",
+      "passed": false,
+      "reason": "run completed: Error executing agent note_taker: HTTP 402 Payment Required – 402 Insufficient Balance (request_id: 02abe2f1-53cf-46a9-90fc-d7c407c9667a); a script imported the notes module: []; note_add ran from a script: no; both notes are versioned facts of the plugin: []; the script returned both notes: no",
+      "runId": "f395b96c51f0",
+      "checks": [
+        {
+          "name": "run completed",
+          "ok": false,
+          "detail": "Error executing agent note_taker: HTTP 402 Payment Required – 402 Insufficient Balance (request_id: 02abe2f1-53cf-46a9-90fc-d7c407c9667a)"
+        },
+        {
+          "name": "a script imported the notes module",
+          "ok": false,
+          "detail": "[]"
+        },
+        {
+          "name": "note_add ran from a script",
+          "ok": false
+        },
+        {
+          "name": "both notes are versioned facts of the plugin",
+          "ok": false,
+          "detail": "[]"
+        },
+        {
+          "name": "the script returned both notes",
+          "ok": false
+        }
+      ],
+      "costUsd": 0,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "runs": 1,
+      "scripts": 0,
+      "failedScripts": 0,
+      "seconds": 1
+    },
+    {
+      "scenario": "crash-resume",
+      "passed": false,
+      "reason": "the script reached a committed self() result and a pending sign-off: self ended: false, sign-off started: false, crash process exited first, its run failed: Error executing agent two_round_reviewer: HTTP 402 Payment Required – 402 Insufficient Balance (request_id: ce91a0e5-c8f6-4a9e-8946-a8fabe19a273)",
+      "runId": "2539b3cc3d49",
+      "checks": [
+        {
+          "name": "the script reached a committed self() result and a pending sign-off",
+          "ok": false,
+          "detail": "self ended: false, sign-off started: false, crash process exited first, its run failed: Error executing agent two_round_reviewer: HTTP 402 Payment Required – 402 Insufficient Balance (request_id: ce91a0e5-c8f6-4a9e-8946-a8fabe19a273)"
+        }
+      ],
+      "costUsd": 0,
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "runs": 1,
+      "scripts": 0,
+      "failedScripts": 0,
+      "seconds": 1
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+[
+  {
+    "kind": "user-message",
+    "parts": [
+      {
+        "type": "text",
+        "text": "Keep two notes on the draft, in one script program you write yourself, through the notes script module: \"Lemma 2 needs a citation.\" and \"Section 3 is done.\". Return what the module returned for each note."
+      }
+    ]
+  }
+]

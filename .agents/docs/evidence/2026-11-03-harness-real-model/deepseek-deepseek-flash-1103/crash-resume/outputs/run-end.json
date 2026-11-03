@@ -1,0 +1,26 @@
+{
+  "outcome": "failed",
+  "error": {
+    "statusCode": 402,
+    "statusText": "Payment Required",
+    "provider": "deepseek",
+    "userRetryable": false,
+    "message": "Error executing agent two_round_reviewer: HTTP 402 Payment Required – 402 Insufficient Balance (request_id: ce91a0e5-c8f6-4a9e-8946-a8fabe19a273)",
+    "kind": "unexpected"
+  },
+  "usage": {
+    "firstInputTokens": 0,
+    "totalInputTokens": 0,
+    "totalOutputTokens": 0,
+    "totalCost": 0,
+    "totalCachedInputTokens": 0,
+    "totalCacheMissInputTokens": 0,
+    "totalCacheWriteTokens": 0,
+    "totalReasoningTokens": 0,
+    "totalToolUsePromptTokens": 0
+  },
+  "output": {
+    "response": "",
+    "files": []
+  }
+}
