@@ -247,7 +247,7 @@ Prompt 模板与脚本代码是两种组合方式。1.0 保留参数化 prompt �
 
 因此不预建业务数据库、每表 schema 注册、写入口或 SQL 迁移框架。SQL 切片按下列说明实现。
 
-**公开的表。** `executions` 的 `query` 读四张表，列名即契约，由根入口导出的 `HISTORY_TABLES` 列出，进入 API 报告；列的含义只随改名而变。`runs` 每个运行一行，`status` 为 `created`、`running`、`waiting`、`interrupted`（未结束且无存活进程持有）或 `ended`，结束时 `outcome` 有值，`parent_call_id` 是启动它的父调用，`calls_unreadable` 在该运行的存储历史无法被本版本读取时写明原因（此时它的调用不在另两张表里，查询结果不会把缺失当作没有发生）；`run_tree` 是祖先关系；`tool_calls` 每个由模型回合或脚本发出的工具调用一行，带输入、尝试次数、状态、文本输出、结构化值（JSON）、错误和发出、开始、结束时间，`script_call_id` 指向发出它的脚本调用；`model_calls` 每个发出的模型请求一行，带用途（`turn` 或 `summary`）、尝试次数、状态、回复文本、错误、用量和时间。子运行的输入和结果就是父运行里启动它的那个调用的输入和结果，用 `parent_id` 与 `parent_call_id` 连接 `tool_calls` 读取。原来的 `events`、`messages` 和 `usage` 删除：前者暴露展示行的编码，后两者由 `model_calls` 覆盖。
+**公开的表。** `executions` 的 `query` 读四张表，列名即契约，由根入口导出的 `HISTORY_TABLES` 列出，进入 API 报告；列的含义只随改名而变。`runs` 每个运行一行，`status` 为 `created`、`running`、`waiting`、`interrupted`（未结束且无存活进程持有）或 `ended`，结束时 `outcome` 有值，`parent_call_position` 是启动它的父调用在 `tool_calls` 里的位置（每次发出的调用各占一个位置，供应商在后续回合复用调用 id 也不会混淆），`calls_unreadable` 在该运行的存储历史无法被本版本读取时写明原因（此时它的调用不在另两张表里，查询结果不会把缺失当作没有发生）；`run_tree` 是祖先关系；`tool_calls` 每个由模型回合或脚本发出的工具调用一行，带输入、尝试次数、状态、文本输出、结构化值（JSON）、错误和发出、开始、结束时间，`script_call_id` 指向发出它的脚本调用；`model_calls` 每个发出的模型请求一行，带用途（`turn` 或 `summary`）、尝试次数、状态、回复文本、错误、用量和时间。子运行的输入和结果就是父运行里启动它的那个调用的输入和结果，用 `parent_call_position` 连接 `tool_calls` 读取。原来的 `events`、`messages` 和 `usage` 删除：前者暴露展示行的编码，后两者由 `model_calls` 覆盖。
 
 **数据来源。** 每个单元格都由解码后的值填入：调用事实来自运行历史中的 `model.message`、`script.call`、`tool.intent`、`tool.result` 与压缩的 `context.edit`，运行来自会话视图的 `runs`（状态、父子关系、标题、模型和用量都按视图的规则，不在 SQL 里重新推导；视图没有结束时间和错误，`runs` 也就不提供）。存储行的 JSON、行版本、信封列和 blob 地址都不进入查询库，所以行编码可以在这些表背后改变，只要填充代码随之更新。
 

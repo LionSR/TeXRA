@@ -50,6 +50,7 @@ import {
 import { type SessionView } from '@shared/session/sessionView';
 
 import {
+  type CallPositions,
   failedStep,
   failedWith,
   openStore,
@@ -107,16 +108,13 @@ const modelEnd = (
 /** The writes one `model.message` row makes: a request sent or ended, and
  *  the tool calls a response or a hand-down issues. */
 function modelWrites(
-  callIds: Map<string, string>,
+  calls: CallPositions,
   runId: RunId,
   { payload: p }: ModelMessage,
   at: string,
 ): HistoryWrite[] {
-  const issue = (call: DispatchFacts, input: string): HistoryWrite => {
-    callIds.set(call.logId, call.callId);
-    const { callId, toolName } = call;
-    return ['toolCall', runId, callId, null, toolName, cutText(input), at];
-  };
+  const issue = ({ logId, callId, toolName }: DispatchFacts, input: string) =>
+    toolCall(calls, logId, [runId, callId, null, toolName, cutText(input), at]);
   switch (p.kind) {
     case 'attempt': {
       const { invocationId, attempt } = p.invocation;
@@ -160,21 +158,30 @@ function modelWrites(
   }
 }
 
+/** The write that issues a call at the next position, under its card. */
+function toolCall(
+  calls: CallPositions,
+  card: string,
+  values: readonly (string | number | null)[],
+): HistoryWrite {
+  calls.last += 1;
+  calls.byCard.set(card, calls.last);
+  return ['toolCall', calls.last, ...values];
+}
+
 /** The writes one of `runId`'s history rows makes, from its decoded
- *  payload; `callIds` learns each issued call's tool card. */
+ *  payload; `calls` places each issued call. */
 function callWrites(
-  callIds: Map<string, string>,
+  calls: CallPositions,
   runId: RunId,
   row: SessionEvent,
 ): HistoryWrite[] {
   const at = new Date(row.at).toISOString();
-  if (row.type === 'model.message') return modelWrites(callIds, runId, row, at);
+  if (row.type === 'model.message') return modelWrites(calls, runId, row, at);
   if (row.type === 'script.call') {
     const { callId, scriptCallId, toolName, input, logId } = row.payload;
-    callIds.set(logId, callId);
-    return [
-      ['toolCall', runId, callId, scriptCallId, toolName, cutJson(input), at],
-    ];
+    const issued = [runId, callId, scriptCallId, toolName, cutJson(input), at];
+    return [toolCall(calls, logId, issued)];
   }
   if (row.type === 'tool.intent') {
     return [['toolStart', row.payload.attempt, at, runId, row.payload.callId]];
@@ -363,7 +370,7 @@ export class HistoryQueryStore implements Context.Service.Shape<
         const kept = rows.filter((row) => row.commit <= target);
         yield* append(
           store,
-          kept.flatMap((row) => callWrites(store.callIds, run.id, row)),
+          kept.flatMap((row) => callWrites(store.calls, run.id, row)),
         );
         store.fed.set(run.id, { view: run, seq: kept.at(-1)?.seq ?? after });
       }

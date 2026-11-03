@@ -80,7 +80,7 @@ const page = await sql(
   ['call_script'],
 );
 const children = await sql(
-  'SELECT r.status, r.outcome, c.status FROM runs r JOIN tool_calls c ON c.run_id = r.parent_id AND c.call_id = r.parent_call_id WHERE c.script_call_id = ? ORDER BY c.position',
+  'SELECT r.status, r.outcome, c.status FROM runs r JOIN tool_calls c ON c.position = r.parent_call_position WHERE c.script_call_id = ? ORDER BY c.position',
   ['call_script'],
 );
 let write = null;

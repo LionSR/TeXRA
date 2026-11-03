@@ -21,7 +21,7 @@ export const HISTORY_TABLES = Object.freeze({
   runs: Object.freeze([
     'id',
     'parent_id',
-    'parent_call_id',
+    'parent_call_position',
     'kind',
     'name',
     'model',
@@ -152,8 +152,8 @@ const OPEN_STATUS = `CASE WHEN run_id IN
  *  calls are read against it again. */
 export const HISTORY_WRITE_SQL = {
   toolCall: `INSERT INTO tool_calls
-    (run_id, call_id, script_call_id, tool, input, status, issued_at)
-    VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
+    (position, run_id, call_id, script_call_id, tool, input, status, issued_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`,
   toolStart: `UPDATE tool_calls SET attempt = ?, status = 'running',
     started_at = ? WHERE position = (${LATEST_CALL})`,
   toolEnd: `UPDATE tool_calls SET attempt = ?, status = ?, output = ?,
@@ -194,12 +194,12 @@ function runStatus(run: RunView): string {
 }
 
 /** The writes that replace the runs table with the view's `runs` and read
- *  the open calls against it: `callIds` names each tool card's call,
- *  `unreadable` why a run's calls are missing. */
+ *  the open calls against it: `calls` places each tool card's call,
+ *  `unreadable` says why a run's calls are missing. */
 export const replaceRuns = (
   runs: SessionView['runs'],
   fed: {
-    readonly callIds: ReadonlyMap<string, string>;
+    readonly calls: { readonly byCard: ReadonlyMap<string, number> };
     readonly unreadable: ReadonlyMap<string, string>;
   },
 ): HistoryWrite[] => [
@@ -210,7 +210,7 @@ export const replaceRuns = (
       run.parentId,
       run.parentCard === null
         ? null
-        : (fed.callIds.get(run.parentCard) ?? null),
+        : (fed.calls.byCard.get(run.parentCard) ?? null),
       run.identity.kind,
       runIdentityName(run.identity),
       run.model,
@@ -230,7 +230,7 @@ export const replaceRuns = (
 ];
 
 /** What the tool description tells the model it can query. */
-export const HISTORY_VIEW_SUMMARY = `- runs(${HISTORY_TABLES.runs.join(', ')}) - one row per run of this session. status is 'created', 'running', 'waiting', 'interrupted' (not ended, and no live process holds it) or 'ended'; outcome ('completed', 'failed', 'cancelled') is set only when ended. parent_id is NULL for a top-level or detached run; parent_call_id is the parent's tool call that launched it (join tool_calls on run_id = parent_id AND call_id = parent_call_id for its input and result). cost/tokens are the run's own model calls so far. calls_unreadable is NULL, or why this run's calls are missing from tool_calls and model_calls (its stored history does not read in this build).
+export const HISTORY_VIEW_SUMMARY = `- runs(${HISTORY_TABLES.runs.join(', ')}) - one row per run of this session. status is 'created', 'running', 'waiting', 'interrupted' (not ended, and no live process holds it) or 'ended'; outcome ('completed', 'failed', 'cancelled') is set only when ended. parent_id is NULL for a top-level or detached run; parent_call_position is the position of the parent's tool call that launched it (join tool_calls ON tool_calls.position = runs.parent_call_position for its input and result). cost/tokens are the run's own model calls so far. calls_unreadable is NULL, or why this run's calls are missing from tool_calls and model_calls (its stored history does not read in this build).
 - run_tree(${HISTORY_TABLES.run_tree.join(', ')}) - every ancestor of every run; depth 1 is the direct parent.
 - tool_calls(${HISTORY_TABLES.tool_calls.join(', ')}) - one row per tool call a model turn or a script issued; script_call_id is the issuing script call (NULL for a model's call). input and value are JSON text (value: the structured result a script reads). status is 'pending' (its body has not started), 'running', 'unknown' (its body started and its run stopped with no result recorded: it may or may not have taken effect), or how it ended: 'executed', 'failed', 'cancelled', 'skipped', 'duplicate'. output is an executed call's text, error a failed one's.
 - model_calls(${HISTORY_TABLES.model_calls.join(', ')}) - one row per model request sent: purpose 'turn' or 'summary' (compaction), attempt counts retries of one invocation. status is 'running', 'unknown' (sent, and its run stopped with no answer recorded), 'completed', 'failed' (error says why) or 'cancelled'. output is a completed turn's reply text.

@@ -121,6 +121,13 @@ const ReplySchema = Schema.Union([
 ]);
 const ReplyLineSchema = Schema.fromJsonString(ReplySchema);
 
+/** The positions the store's `tool_calls` rows are inserted at: one per
+ *  issued call, so a provider's reused call id never shares one. */
+export interface CallPositions {
+  last: number;
+  readonly byCard: Map<string, number>;
+}
+
 /** One open store process and what the session side last fed it. */
 export interface Store {
   readonly scope: Scope.Closeable;
@@ -132,8 +139,9 @@ export interface Store {
   runs?: SessionView['runs'];
   /** Each fed run's view and the `seq` of the last of its rows read. */
   readonly fed: Map<RunId, { readonly view: RunView; readonly seq: number }>;
-  /** Each tool card's call id: what a child's `parent_call_id` reads. */
-  readonly callIds: Map<string, string>;
+  /** The `tool_calls` positions issued so far, and each tool card's: what
+   *  a child's `parent_call_position` reads. */
+  readonly calls: CallPositions;
   /** Why a run's calls are missing: its history does not decode here. */
   readonly unreadable: Map<RunId, string>;
 }
@@ -233,7 +241,7 @@ export const openStore = Effect.fn('HistoryQuery.open')(function* (
       replies,
       cursor: 0,
       fed: new Map(),
-      callIds: new Map(),
+      calls: { last: 0, byCard: new Map() },
       unreadable: new Map(),
     };
     yield* request(store, {
