@@ -189,7 +189,8 @@ highest version each kind was written at
 The store gate refuses a store that names a core kind this build lacks, or a
 known kind at a version above the one this build reads
 (`controllers/session/rowCodec.ts:372-398`). A plugin kind whose plugin this
-build lacks passes the gate; its rows are left out of every read (below). The
+build lacks passes the gate; its rows read as written, marked unavailable
+(below). The
 gate MUST run at open and inside every outermost transaction that writes or
 derives rows, so no build opens a store holding core rows it cannot read, or
 writes beside them (`controllers/session/Database.ts:276`, `:429-445`).
@@ -215,7 +216,9 @@ classified by the reader (`controllers/session/rowCodec.ts:268-334`):
 - **a plugin kind this build lacks**: read as written, its value neither
   upcast nor checked, with `unavailable` saying why; the row is unchanged, and
   a run holding one is refused resume as `pluginUnavailable`, naming the plugin
-  (`controllers/session/rowCodec.ts`, `agent/storage/resumability.ts`)
+  (`controllers/session/rowCodec.ts`, `agent/storage/resumability.ts`); a
+  retired built-in kind (`RETIRED_PLUGIN_FACTS`) is an earlier build's
+  (`DatabaseRowEarlier`) instead
 
 A read of one run's whole history MUST fail on any row of the aggregate that
 does not decode; a read of its records fails on any undecodable row among the
