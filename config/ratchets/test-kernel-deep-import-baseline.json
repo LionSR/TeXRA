@@ -23,7 +23,6 @@
       "@agent/runtime/delegation/delegationAvailability",
       "@agent/runtime/delegation/detachedChildRun",
       "@agent/runtime/delegation/inBandSubagentRun",
-      "@agent/runtime/delegation/subagentRun",
       "@agent/runtime/executeAgent",
       "@agent/runtime/helperModelName",
       "@agent/runtime/historyQuery/HistoryQuery",
