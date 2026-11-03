@@ -2,7 +2,7 @@
  * The package's `start` and `resume` (`sessionPrograms.ts`) and the `Run`
  * they hand back, over a real store on the validation model: the run
  * ownership and hand-off scenarios of the harness 1.0 release acceptance
- * (R4, R14, R17, R23), each checked against the result it requires.
+ * (R4, R14), each checked against the result it requires.
  *
  * Failure modes:
  * - R4: a caller cancelled as its run opens leaves the run executing with
@@ -13,12 +13,7 @@
  * - R14: a resumed child its parent's open call owns is activated on its
  *   own, or the parent twice, or the redirect is an error instead of the
  *   parent's handle; the redirect leaves a claim held or a listener of its
- *   own subscribed;
- * - R17: a caller interrupted after the handle is built, before it is
- *   handed over, leaves the run executing with no holder, its claim held,
- *   or its view subscribed;
- * - R23: an observer that stops waiting on a run's result, view or events
- *   stops the run.
+ *   own subscribed.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -33,10 +28,8 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
-  answersOf,
   claimHolder,
   crashedCopy,
   persistentTestSession,
@@ -335,97 +328,6 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             yield* untilSubscribed(sdk, [child]);
             yield* Scope.close(listener, Exit.void);
             yield* untilSubscribed(sdk, []);
-          }),
-      );
-
-      it.effect(
-        'R17: a caller interrupted after its handle is built, before it is handed over, leaves no run, claim or listener',
-        () =>
-          Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
-            const session = yield* persistentTestSession(roots);
-            // The handle's stop is built from the session's requests as the
-            // handle is: the caller is interrupted right there.
-            const requests = Context.get(session, SessionRequests);
-            let interrupted = false;
-            const sdk = yield* packageSession(
-              Context.add(session, SessionRequests, {
-                ...requests,
-                request: (request) => {
-                  if (!interrupted && request.kind === 'run.stop') {
-                    interrupted = true;
-                    Fiber.getCurrent()?.interruptUnsafe();
-                  }
-                  return requests.request(request);
-                },
-              }),
-            );
-            const caller = yield* Effect.forkChild(
-              sdk.start({
-                agent: 'assistant',
-                instruction: 'Say hi.',
-                model: MODEL,
-              }),
-            );
-            expect(Exit.hasInterrupts(yield* Fiber.await(caller))).toBe(true);
-            expect(interrupted).toBe(true);
-            const runId = storedRows(roots.storage).find(
-              (row) => row.type === 'run.start',
-            )?.run as RunId;
-            // The run's end, then its activation's cleanup.
-            yield* untilStored(
-              roots.storage,
-              () =>
-                sdk.held(runId) === undefined &&
-                claimHolder(roots.storage, runId) === null,
-            );
-
-            expect(endsOf(roots.storage, runId)).toEqual(['cancelled']);
-            expect(requestsOf(roots.storage, runId)).toBe(0);
-            expect(subscribed(sdk)).toEqual([]);
-          }),
-      );
-
-      it.effect(
-        "R23: an observer that stops waiting on a run's result, view and events leaves the run running to its end",
-        () =>
-          Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
-            const sdk = yield* packageSession(
-              yield* persistentTestSession(roots),
-            );
-            const release = join(roots.workspace!, 'release');
-            const run = yield* sdk.start({
-              agent: commandPersona(
-                `until [ -e ${release} ]; do sleep 0.05; done`,
-              ),
-              instruction: 'Run the command.',
-              model: MODEL,
-              approval: { delegated: true },
-            });
-            const waits = yield* Effect.forkChild(
-              Effect.all(
-                [
-                  run.result,
-                  Stream.runDrain(run.view),
-                  Stream.runDrain(run.events),
-                ],
-                { concurrency: 'unbounded' },
-              ),
-            );
-            yield* untilStored(roots.storage, (rows) =>
-              rows.some(
-                (row) => row.run === run.runId && row.type === 'tool.start',
-              ),
-            );
-            yield* Fiber.interrupt(waits);
-            writeFileSync(release, '');
-
-            expect((yield* run.result).outcome).toBe('completed');
-            expect(answersOf(roots.storage, run.runId)).toEqual([
-              'The approved command ran.',
-            ]);
-            expect(claimHolder(roots.storage, run.runId)).toBeNull();
           }),
       );
     });

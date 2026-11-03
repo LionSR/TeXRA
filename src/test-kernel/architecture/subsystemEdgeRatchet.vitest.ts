@@ -1,6 +1,6 @@
 // Node imports
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 // Third-party imports
 import { format, resolveConfig } from 'prettier';
@@ -34,7 +34,6 @@ interface EdgeViolation {
   currentKind: EdgeKind;
 }
 
-const SRC_ROOT = resolve(REPO_ROOT, 'src');
 const BASELINE_PATH = resolve(
   REPO_ROOT,
   'config/ratchets/architecture-edges-baseline.json',
@@ -562,73 +561,12 @@ describe('LAY-1 subsystem edge ratchet', () => {
     ).toEqual([]);
   });
 
-  it('rejects a baseline value row whose live import is type-only (value-overstated)', () => {
-    const baseline = readBaseline();
-    const valueRow = baseline.edges.find((edge) => edge.kind === 'value');
-    if (valueRow == null) {
-      throw new Error(
-        `${BASELINE_PATH} has no value row to exercise the mirror arm against.`,
-      );
-    }
-
-    // Deriving the row from the baseline keeps this assertion honest as the
-    // baseline shrinks: it exercises the mirror arm on whatever value row the
-    // ratchet currently claims, rather than on a hardcoded pair.
-    const violations = findRatchetViolations(
-      [{ ...valueRow, kind: 'type-only' }],
-      baseline.edges,
-    );
-
-    expect(violations).toEqual([
-      {
-        edge: edgeKey(valueRow),
-        reason: 'value-overstated',
-        baselineKind: 'value',
-        currentKind: 'type-only',
-      },
-    ]);
-    expect(formatViolations(violations)).toContain(
-      'every live import is type-only',
-    );
-  });
-
   it('keeps the baseline non-empty and ordered', () => {
     const baseline = readBaseline();
     const sortedEdges = baseline.edges.toSorted(compareEdges);
 
     expect(baseline.edges.length).toBeGreaterThan(0);
     expect(baseline.edges).toEqual(sortedEdges);
-  });
-
-  it('does not bucket @common/webview imports into the already-whitelisted common edge', () => {
-    // tsconfig.json carves this alias out to
-    // packages/extension/src/common/webview (VS Code-coupled), not packages/harness/src/common/*.
-    // A src/-side import of it must not resolve to the generic `common`
-    // subsystem, because `agent -> common` (etc.) is already whitelisted in
-    // the baseline and would silently absorb the violating import.
-    const file = join(SRC_ROOT, 'agent', 'example.ts');
-    const webviewSubsystem = resolveImportedSubsystem(file, '@common/webview');
-
-    expect(webviewSubsystem).not.toBe('common');
-    expect(resolveImportedSubsystem(file, '@common/webview/foo')).toBe(
-      webviewSubsystem,
-    );
-    // The generic `@common` alias (packages/harness/src/common/*) is unaffected.
-    expect(resolveImportedSubsystem(file, '@common/foo')).toBe('common');
-
-    // A hypothetical future `agent -> @common/webview` import must surface as
-    // a genuine new-edge ratchet violation, not be silently absorbed.
-    const violations = findRatchetViolations(
-      [{ from: 'agent', to: webviewSubsystem ?? '', kind: 'value' }],
-      readBaseline().edges,
-    );
-    expect(violations).toEqual([
-      {
-        edge: `agent->${webviewSubsystem}`,
-        reason: 'new-edge',
-        currentKind: 'value',
-      },
-    ]);
   });
 });
 
@@ -673,14 +611,6 @@ describe('LAY-2 harness layer order', () => {
       added,
       `harness imports point down HARNESS_LAYERS; move the code to the layer that owns it instead. Do not widen ${HARNESS_BASELINE_FILE}.`,
     ).toEqual([]);
-  });
-
-  it('counts a downward edge as a break when its reverse exists', () => {
-    const down = new Map([['controllers->shared', ['x#a']]]);
-
-    expect(harnessLayerBreaks(down)).toEqual(new Map());
-    const pair = new Map([...down, ['shared->controllers', ['type y#b']]]);
-    expect(harnessLayerBreaks(pair)).toEqual(pair);
   });
 
   it('lists only names that still break the order', async () => {

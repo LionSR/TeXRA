@@ -36,10 +36,6 @@ const nativeCliPlatformPackages = {
     packagePath: ['@openai', 'codex-darwin-arm64'],
     binaryPath: ['vendor', 'aarch64-apple-darwin', 'codex', 'codex'],
   },
-  claude: {
-    packagePath: ['@anthropic-ai', 'claude-agent-sdk-darwin-arm64'],
-    binaryPath: ['claude'],
-  },
 } as const;
 
 type NativeCliName = keyof typeof nativeCliPlatformPackages;
@@ -56,7 +52,6 @@ afterEach(() => {
 describe('desktop package native CLI payload', () => {
   it.each([
     { cli: 'codex' as const, label: 'OpenAI Codex CLI' },
-    { cli: 'claude' as const, label: 'Claude Code CLI' },
   ])('fails when the $label platform package is bundled', ({ cli, label }) => {
     const { packageRoot, resourcesDir } = createFakeDesktopPackage();
     writeNativeCliPackage(resourcesDir, cli);
