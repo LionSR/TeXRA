@@ -334,7 +334,7 @@ export function runEndDraft(
   },
 ): Extract<RunInputDraft, { readonly type: 'run.end' }> {
   const { outcome, error, note } = end;
-  const message = error && [error.message, note].filter(Boolean).join('; ');
+  const message = [error?.message, note].filter(Boolean).join('; ');
   return {
     type: 'run.end',
     aggregateId: qualifyAggregateId('run', runId),

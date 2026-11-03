@@ -130,12 +130,12 @@ const readableFrom = (type: string): number =>
     ? ROW_KINDS[type].version - ROW_KINDS[type].upcast.length
     : Number.MAX_SAFE_INTEGER;
 
-/** The upcasts a row this build reads takes, or why it refuses it: an
- *  earlier build's (a retired kind, or below its floor), a newer build's
- *  (above it), or damaged (an unknown kind: its run's reads fail). */
+/** The upcasts a row this build reads takes, null for a retired display row,
+ *  or why it refuses it: an earlier build's, a newer build's, or damaged. */
 function rowUpcasts({ commit, type, version: stored }: typeof RowSchema.Type) {
-  if (RETIRED_ROW_KINDS.has(type))
-    return new DatabaseRowEarlier({ commit, type });
+  const retired = RETIRED_ROW_KINDS.get(type);
+  if (retired === 'display') return null;
+  if (retired === 'execution') return new DatabaseRowEarlier({ commit, type });
   if (!hasKind(type))
     return new DatabaseRowCorrupt({ commit, type, detail: 'an unknown kind' });
   // A projected row has no version: this build's projector wrote it.
@@ -153,10 +153,10 @@ export function decodable(row: SqlRow): boolean {
 }
 
 /** The queries, with their parameters, for the runs holding a row an
- *  earlier build wrote ({@link readableFrom}). */
+ *  earlier build wrote ({@link readableFrom}), a retired display row aside. */
 export const EARLIER_RUNS: readonly (readonly [string, readonly unknown[]])[] =
-  [...RETIRED_ROW_KINDS, ...Object.keys(ROW_KINDS)].flatMap((type) =>
-    readableFrom(type) > 1
+  [...RETIRED_ROW_KINDS.keys(), ...Object.keys(ROW_KINDS)].flatMap((type) =>
+    RETIRED_ROW_KINDS.get(type) !== 'display' && readableFrom(type) > 1
       ? [
           [
             `SELECT s.logical_id AS logicalId, min(e."commit") AS "commit",
@@ -267,15 +267,14 @@ function parseData(data: string, blobs: Blobs): unknown {
   });
 }
 
-/** A selected row as its event, or why not ({@link rowUpcasts}, or an
- *  undecodable row's `DatabaseRowCorrupt`); a plugin fact whose kind this
- *  build lacks reads as written, unchecked, with why (`unavailable`). */
+/** A selected row as its event (undefined: a retired display row), or why
+ *  not; a plugin fact this build lacks reads as written (`unavailable`). */
 export function decodeRow(
   input: SqlRow,
   factKinds: FactKinds,
   blobs: Blobs,
 ): Result.Result<
-  SessionEvent,
+  SessionEvent | undefined,
   DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
 > {
   const row = Schema.decodeUnknownSync(RowSchema)(input);
@@ -288,6 +287,7 @@ export function decodeRow(
       }),
     );
   const upcasts = rowUpcasts(row);
+  if (upcasts === null) return Result.succeed(undefined);
   if (!Array.isArray(upcasts)) return Result.fail(upcasts);
   let data: Record<string, JsonValue>;
   try {

@@ -51,27 +51,42 @@ interface RowKind {
 const V1 = { version: 1, upcast: [] } as const;
 
 /**
- * The row kinds this build deleted from `ROW_KINDS`. A store that holds one
- * is not a newer build's: its run reads as an earlier build's
- * (`DatabaseRowEarlier`) and the rest of the store opens. A kind moves here
- * from `ROW_KINDS` in the change that deletes it; every kind ever stored is
+ * The row kinds this build deleted from `ROW_KINDS`, each with what its rows
+ * fed. A store that holds one is not a newer build's, and the rest of the
+ * store opens. A `display` row fed only what a view showed: it is skipped on
+ * read (logged once) and its run resumes, since no decision of the run was
+ * made from it. An `execution` row fed a decision the run made (its
+ * context, a retry permit, a request, its result): its run reads as an
+ * earlier build's (`DatabaseRowEarlier`), shown read-only, since resuming
+ * without it would continue from a different state. A kind moves here from
+ * `ROW_KINDS` in the change that deletes it; every kind ever stored is
  * listed in `config/storage/row-kinds-ever.json`, which never shrinks.
  */
-export const RETIRED_ROW_KINDS: ReadonlySet<string> = new Set<string>([
-  'conversation.progress',
-  'inquiryThreadUpdated',
-  'model.compaction',
-  'model.retry',
-  'output.produced',
-  'run.fact',
-  'run.snapshot',
-  'tool.binding',
-  'workflow.attempt',
-  'workflow.call',
-  'workflow.journal',
-  'workflow.plan',
-  'workflow.script',
-]);
+export const RETIRED_ROW_KINDS: ReadonlyMap<string, 'display' | 'execution'> =
+  new Map([
+    // A completed turn's tool-call count, which only the view showed.
+    ['conversation.progress', 'display'],
+    // An external inquiry thread's state: an open request.
+    ['inquiryThreadUpdated', 'execution'],
+    // A compaction of the model context.
+    ['model.compaction', 'execution'],
+    // The human retry permit a restart read back.
+    ['model.retry', 'execution'],
+    // A document round's outputs: the run's files.
+    ['output.produced', 'execution'],
+    // A goal run's plan.
+    ['run.fact', 'execution'],
+    // The loop state a resume continued from.
+    ['run.snapshot', 'execution'],
+    // An approval request's binding to its tool call.
+    ['tool.binding', 'execution'],
+    // The workflow engine's journal, plan, script, calls and attempts.
+    ['workflow.attempt', 'execution'],
+    ['workflow.call', 'execution'],
+    ['workflow.journal', 'execution'],
+    ['workflow.plan', 'execution'],
+    ['workflow.script', 'execution'],
+  ]);
 
 /** The lowest stored version of a plugin fact kind's value this build reads: an
  *  older one has no upcaster here, so an earlier build wrote it. The store
@@ -127,7 +142,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v2: a recipe's value is `structured`, with no `documents` (no upcaster,
   // as `run.config`).
   // v3: the error's classification as `model.message` v9.
-  'run.end': { version: 3, upcast: [], listing: 'own' },
+  // v4: an error always carries its `message` (no upcaster: an earlier
+  // build's error without one would fail as damaged).
+  'run.end': { version: 4, upcast: [], listing: 'own' },
   'child.park': { ...V1, listing: 'own' },
   'run.removed': { ...V1, listing: 'lifecycle' },
   'run.description': { ...V1, listing: 'own' },
