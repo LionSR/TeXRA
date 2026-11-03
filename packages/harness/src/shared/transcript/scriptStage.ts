@@ -202,7 +202,7 @@ function callView(
     ended !== undefined && ended.treeUsage.cost > 0
       ? formatCostUsd(ended.treeUsage.cost)
       : undefined,
-  ].filter((part): part is string => part !== undefined);
+  ].filter(Predicate.isNotUndefined);
   const label = agent
     ? (stringOf(input.label) ?? nameOf(input.agentName) ?? row.toolUse.toolName)
     : [row.model.headerLabel, row.model.headerPreview]

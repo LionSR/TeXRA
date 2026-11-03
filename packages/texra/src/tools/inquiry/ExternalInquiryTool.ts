@@ -228,8 +228,8 @@ When the [inquiry] continuation arrives, its Q is truncated to 400 chars and its
 
 Do not treat paper-specific claims from the external model as automatically verified: verify with arxiv_search / download_arxiv_source before building on them.`;
 
-function executeExternalInquiryTool(input: InquiryInput) {
-  return Effect.gen(function* () {
+const executeExternalInquiryTool = Effect.fn('executeExternalInquiryTool')(
+  function* (input: InquiryInput) {
     switch (input.command) {
       case 'ask':
         return yield* executeAsk(input);
@@ -238,169 +238,159 @@ function executeExternalInquiryTool(input: InquiryInput) {
       case 'list':
         return yield* executeList(input, (yield* callerRun)?.runId);
     }
-  }).pipe(
-    // The threads live on the process's global root.
-    Effect.provide(inquiryRecordsLayer),
-  );
-}
+  },
+  Effect.provide(inquiryRecordsLayer),
+);
 
-function executeAsk(
+const executeAsk = Effect.fn('executeAsk')(function* (
   input: Extract<InquiryInput, { command: 'ask' }>,
-): Effect.Effect<ToolResult, Error, InquiryRecords | PluginToolServices> {
-  return Effect.gen(function* () {
-    const records = yield* InquiryRecords;
-    const {
-      run: { runId },
-      requests,
-    } = yield* requireRun('inquiry { command: "ask" }');
-    const runs = yield* ChildRuns;
-    const questionContext = input.context ?? undefined;
-    const suggestSearch = input.suggestSearch ?? undefined;
-    const attachFiles = input.attachFiles ?? undefined;
+): Effect.fn.Return<ToolResult, Error, InquiryRecords | PluginToolServices> {
+  const records = yield* InquiryRecords;
+  const {
+    run: { runId },
+    requests,
+  } = yield* requireRun('inquiry { command: "ask" }');
+  const runs = yield* ChildRuns;
+  const questionContext = input.context ?? undefined;
+  const suggestSearch = input.suggestSearch ?? undefined;
+  const attachFiles = input.attachFiles ?? undefined;
 
-    yield* Effect.logInfo(
-      `Inquiry dispatch [${input.thread_id ?? 'new'}]`,
-    ).pipe(
-      Effect.annotateLogs({ data: input.question.slice(0, 100) }),
-      withLogChannel(CHANNEL),
-    );
+  yield* Effect.logInfo(`Inquiry dispatch [${input.thread_id ?? 'new'}]`).pipe(
+    Effect.annotateLogs({ data: input.question.slice(0, 100) }),
+    withLogChannel(CHANNEL),
+  );
 
-    const manifest = yield* records.recordOpenQuestion({
-      threadId: input.thread_id ?? undefined,
-      parentRunId: runId,
-      question: input.question,
-      context: questionContext,
-      suggestSearch,
-      attachFiles,
-    });
-    // Use the record committed by recordOpenQuestion.
-    // A re-read would only reintroduce the write/read race the continuation
-    // injectors already avoid via writer snapshots.
+  const manifest = yield* records.recordOpenQuestion({
+    threadId: input.thread_id ?? undefined,
+    parentRunId: runId,
+    question: input.question,
+    context: questionContext,
+    suggestSearch,
+    attachFiles,
+  });
+  // Use the record committed by recordOpenQuestion.
+  // A re-read would only reintroduce the write/read race the continuation
+  // injectors already avoid via writer snapshots.
 
-    // The first turn's request is the thread itself; a follow-up turn is
-    // its own request, `<thread>:<turn>`, whose payload names the thread.
-    const turnIndex = manifest.turns.at(-1)?.turnIndex ?? 1;
-    const requestId =
-      turnIndex === 1 ? manifest.threadId : `${manifest.threadId}:${turnIndex}`;
-    const inquiry: InquiryRequest = {
-      requestId,
-      question: input.question,
-      threadId: manifest.threadId,
-      context: questionContext,
-      suggestSearch,
-      attachFiles,
-      runId,
-      sessionLinks: collectKnownSessionLinks(manifest),
-      transcript: manifest.turns,
-    };
-    // A request the call does not wait on: the decision hook answers it.
-    yield* requests.post(requestId, { ...INQUIRY_REQUEST, data: inquiry }).pipe(
-      Effect.mapError(
-        (error) =>
-          new Error(
-            `The inquiry request could not be opened: ${toErrorMessage(error)}`,
-            { cause: error },
-          ),
-      ),
-      // The turn is committed in the global inquiry database before the
-      // request that renders it, and the two stores cannot share a
-      // transaction. A publication that never landed takes the turn back
-      // down with it: left open, no surface would list it and no later
-      // `ask` could re-dispatch on the thread. `commit` appends before it
-      // waits for the view to update, so failing is not proof of a
-      // rolled-back append: the committed rows decide, and a turn whose
-      // request is durably open stays open with it.
-      Effect.onError(() =>
-        runs.requested(runId, requestId).pipe(
-          Effect.flatMap((landed) =>
-            landed
-              ? Effect.void
-              : Effect.asVoid(
-                  records.markDropped({
-                    threadId: manifest.threadId,
-                    turnIndex,
-                  }),
-                ),
-          ),
-          // `catchCause`, not `catch`: neither the aggregate read's
-          // `DatabaseReadFailed` nor a defect from the drop may replace
-          // the commit failure this compensation runs under. Either way
-          // the thread stays open, which the warning says, and the
-          // original failure is what the tool reports.
-          Effect.catchCause((cause) =>
-            Effect.logWarning(
-              `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
-            ).pipe(
-              Effect.annotateLogs({ data: Cause.squash(cause) }),
-              withLogChannel(CHANNEL),
-            ),
+  // The first turn's request is the thread itself; a follow-up turn is
+  // its own request, `<thread>:<turn>`, whose payload names the thread.
+  const turnIndex = manifest.turns.at(-1)?.turnIndex ?? 1;
+  const requestId =
+    turnIndex === 1 ? manifest.threadId : `${manifest.threadId}:${turnIndex}`;
+  const inquiry: InquiryRequest = {
+    requestId,
+    question: input.question,
+    threadId: manifest.threadId,
+    context: questionContext,
+    suggestSearch,
+    attachFiles,
+    runId,
+    sessionLinks: collectKnownSessionLinks(manifest),
+    transcript: manifest.turns,
+  };
+  // A request the call does not wait on: the decision hook answers it.
+  yield* requests.post(requestId, { ...INQUIRY_REQUEST, data: inquiry }).pipe(
+    Effect.mapError(
+      (error) =>
+        new Error(
+          `The inquiry request could not be opened: ${toErrorMessage(error)}`,
+          { cause: error },
+        ),
+    ),
+    // The turn is committed in the global inquiry database before the
+    // request that renders it, and the two stores cannot share a
+    // transaction. A publication that never landed takes the turn back
+    // down with it: left open, no surface would list it and no later
+    // `ask` could re-dispatch on the thread. `commit` appends before it
+    // waits for the view to update, so failing is not proof of a
+    // rolled-back append: the committed rows decide, and a turn whose
+    // request is durably open stays open with it.
+    Effect.onError(() =>
+      runs.requested(runId, requestId).pipe(
+        Effect.flatMap((landed) =>
+          landed
+            ? Effect.void
+            : Effect.asVoid(
+                records.markDropped({
+                  threadId: manifest.threadId,
+                  turnIndex,
+                }),
+              ),
+        ),
+        // `catchCause`, not `catch`: neither the aggregate read's
+        // `DatabaseReadFailed` nor a defect from the drop may replace
+        // the commit failure this compensation runs under. Either way
+        // the thread stays open, which the warning says, and the
+        // original failure is what the tool reports.
+        Effect.catchCause((cause) =>
+          Effect.logWarning(
+            `Inquiry thread ${manifest.threadId} stays open after its request failed to open`,
+          ).pipe(
+            Effect.annotateLogs({ data: Cause.squash(cause) }),
+            withLogChannel(CHANNEL),
           ),
         ),
       ),
-    );
+    ),
+  );
 
-    // The Background Tasks panel's row for the open thread, a fact of the
-    // call: it commits with the call's `tool.result`, or not at all.
-    const summary = yield* records.getThreadSummary(manifest.threadId);
+  // The Background Tasks panel's row for the open thread, a fact of the
+  // call: it commits with the call's `tool.result`, or not at all.
+  const summary = yield* records.getThreadSummary(manifest.threadId);
 
-    // True whenever the user decides: the decision (even one landing before
-    // this result) queues the continuation.
-    const message =
-      'Question sent to the user. The answer, or the user dropping it, ' +
-      'arrives as an [inquiry] continuation message; `read` shows the ' +
-      "thread's current state. " +
-      `Do NOT re-dispatch on thread_id=${manifest.threadId}. ` +
-      'If your next step depends on this answer, end your turn now; ' +
-      'otherwise proceed with independent work.';
+  // True whenever the user decides: the decision (even one landing before
+  // this result) queues the continuation.
+  const message =
+    'Question sent to the user. The answer, or the user dropping it, ' +
+    'arrives as an [inquiry] continuation message; `read` shows the ' +
+    "thread's current state. " +
+    `Do NOT re-dispatch on thread_id=${manifest.threadId}. ` +
+    'If your next step depends on this answer, end your turn now; ' +
+    'otherwise proceed with independent work.';
 
-    return {
-      ...executed(
-        `status: dispatched\nthread_id: ${manifest.threadId}\n\n${message}`,
-        `Inquiry dispatched (${manifest.threadId})`,
-      ),
-      ...(summary && { facts: [inquiryThreadFact(summary)] }),
-    };
-  });
-}
+  return {
+    ...executed(
+      `status: dispatched\nthread_id: ${manifest.threadId}\n\n${message}`,
+      `Inquiry dispatched (${manifest.threadId})`,
+    ),
+    ...(summary && { facts: [inquiryThreadFact(summary)] }),
+  };
+});
 
-function executeRead(
+const executeRead = Effect.fn('executeRead')(function* (
   input: Extract<InquiryInput, { command: 'read' }>,
-): Effect.Effect<ToolResult, Error, InquiryRecords> {
-  return Effect.gen(function* () {
-    const records = yield* InquiryRecords;
-    const manifest = yield* records.readExternalInquiryThread(input.thread_id);
-    if (!manifest) {
-      return yield* Effect.fail(
-        new ToolError(`External inquiry thread not found: ${input.thread_id}`),
-      );
-    }
-    return buildReadOutput(manifest);
-  });
-}
+): Effect.fn.Return<ToolResult, Error, InquiryRecords> {
+  const records = yield* InquiryRecords;
+  const manifest = yield* records.readExternalInquiryThread(input.thread_id);
+  if (!manifest) {
+    return yield* Effect.fail(
+      new ToolError(`External inquiry thread not found: ${input.thread_id}`),
+    );
+  }
+  return buildReadOutput(manifest);
+});
 
-function executeList(
+const executeList = Effect.fn('executeList')(function* (
   input: Extract<InquiryInput, { command: 'list' }>,
   runId: RunId | undefined,
-): Effect.Effect<ToolResult, Error, InquiryRecords> {
-  return Effect.gen(function* () {
-    const records = yield* InquiryRecords;
-    if (input.scope === 'run' && !runId) {
-      return yield* Effect.fail(
-        new ToolError(
-          'inquiry { command: "list", scope: "run" } requires an active run context. ' +
-            'Use scope: "all" to list across runs.',
-        ),
-      );
-    }
+): Effect.fn.Return<ToolResult, Error, InquiryRecords> {
+  const records = yield* InquiryRecords;
+  if (input.scope === 'run' && !runId) {
+    return yield* Effect.fail(
+      new ToolError(
+        'inquiry { command: "list", scope: "run" } requires an active run context. ' +
+          'Use scope: "all" to list across runs.',
+      ),
+    );
+  }
 
-    const summaries = yield* records.listThreadsByStatus({
-      status: input.status,
-      scope: input.scope,
-      runId,
-    });
-    return buildListOutput(summaries, input.status, input.scope);
+  const summaries = yield* records.listThreadsByStatus({
+    status: input.status,
+    scope: input.scope,
+    runId,
   });
-}
+  return buildListOutput(summaries, input.status, input.scope);
+});
 
 /** The host capability of a host that shows the inquiry panel. */
 export type InquiryPanelCapability = 'inquiry-panel';

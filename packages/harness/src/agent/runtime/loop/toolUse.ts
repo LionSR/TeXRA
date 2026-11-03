@@ -398,112 +398,111 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     return cell;
   });
 
-  const loopBody = (cell: RunCell) =>
-    Effect.gen(function* () {
-      // A resumed run first finishes what its children were left as.
-      if (start.resume) yield* closeLeftoverChildren(runId);
-      for (;;) {
-        let state = yield* cell.current;
-        const parked =
-          (state.phase === 'waiting' || state.phase === 'halted') &&
-          state.at !== 'turn.ready';
-        // The invoker commits the run's failure fact and the input that
-        // recovers the run clears it, so the fold is the one place to read it.
-        const afterError = state.lastError !== null;
-        if (parked) {
-          if (state.handedDown !== null) return completeTurn(state);
-          // A native child waits in this same run scope, just like its root:
-          // its loop has already delivered the turn offered at the boundary.
-          const queued = yield* followUps.input.hasPending('idle');
-          if (isChild() && afterError && !queued)
-            return finish(state, RUN_OUTCOME.FAILED);
-          // An activation clears the step the view shows: a park it found
-          // idle is written again, unless the queued input starts a turn.
-          if (state.resuming && !queued)
-            state = yield* cell.append([positionRow(runId, state, 'waiting')]);
-          // A root's wait opens a step, recorded like a request's; a
-          // child's idle is its parent's.
-          if (!isChild()) {
-            const step = yield* openStep(state, 'park');
-            if (step.rows.length > 0) state = yield* cell.append(step.rows);
-          }
-          if (run.toolPolicy.stopAfterCycle) {
-            return finish(
-              state,
-              afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
-            );
-          }
-          // The host port stays attached: `/model`, `/compact` land here.
-          const batch = yield* followUps.input.next('idle');
-          if (batch === null) {
-            // The input ended under the waiting loop: a cancellation.
-            return finish(
-              state,
-              afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
-            );
-          }
-          const consumed = yield* followUps.consume(cell, batch);
-          if (!consumed.turn) continue;
+  const loopBody = Effect.fn('loopBody')(function* (cell: RunCell) {
+    // A resumed run first finishes what its children were left as.
+    if (start.resume) yield* closeLeftoverChildren(runId);
+    for (;;) {
+      let state = yield* cell.current;
+      const parked =
+        (state.phase === 'waiting' || state.phase === 'halted') &&
+        state.at !== 'turn.ready';
+      // The invoker commits the run's failure fact and the input that
+      // recovers the run clears it, so the fold is the one place to read it.
+      const afterError = state.lastError !== null;
+      if (parked) {
+        if (state.handedDown !== null) return completeTurn(state);
+        // A native child waits in this same run scope, just like its root:
+        // its loop has already delivered the turn offered at the boundary.
+        const queued = yield* followUps.input.hasPending('idle');
+        if (isChild() && afterError && !queued)
+          return finish(state, RUN_OUTCOME.FAILED);
+        // An activation clears the step the view shows: a park it found
+        // idle is written again, unless the queued input starts a turn.
+        if (state.resuming && !queued)
+          state = yield* cell.append([positionRow(runId, state, 'waiting')]);
+        // A root's wait opens a step, recorded like a request's; a
+        // child's idle is its parent's.
+        if (!isChild()) {
+          const step = yield* openStep(state, 'park');
+          if (step.rows.length > 0) state = yield* cell.append(step.rows);
         }
-        const turn: RunExit = yield* start.turns
-          ? start.turns.turnPermit(runTurn(cell))
-          : runTurn(cell);
-        state = turn.state;
-        if (turn.outcome === 'cancelled') {
-          return finish(state, RUN_OUTCOME.CANCELLED);
+        if (run.toolPolicy.stopAfterCycle) {
+          return finish(
+            state,
+            afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
+          );
         }
-        // A summary the turn started lands before the turn ends.
-        state = yield* compaction.finish(cell);
-        // The turn's trace rows are queued ahead of the boundary: the
-        // barrier lets the open streams `waiting` closes count every one.
-        yield* log.settled;
-        // The turn boundary, in one batch: Stop hooks, the steps (`waiting`
-        // closes open streams and is the rest a resume's receipt reads), a
-        // child's turn result with its parent's delivery, and a Stop hook's
-        // block or input already queued.
-        const reply = turnResponse(turn.state);
-        const { rows: hooks, block } = yield* stopHooks(run, turn, reply);
-        const goesOn =
-          !run.toolPolicy.stopAfterCycle && turn.outcome === 'completed';
-        const childTurn =
-          start.turns && goesOn && block === null
-            ? yield* start.turns.finishTurn(result(turn.outcome, state))
-            : null;
-        const ending = [
-          positionRow(runId, state, 'turn.end', turn.outcome),
-          ...log.closure(runId),
-          positionRow(runId, state, 'waiting'),
-          ...(childTurn?.rows ?? []),
-        ];
-        const next =
-          block ?? (goesOn ? yield* followUps.input.read('turn') : null);
-        const pin =
-          next !== null && !isChild() ? yield* openStep(state, 'park') : null;
-        state =
-          next === null
-            ? yield* cell.append([...hooks, ...ending], childTurn?.alongside)
-            : (yield* followUps.consume(cell, next, {
-                rows: [...hooks, ...ending, ...(pin?.rows ?? [])],
-                alongside: childTurn?.alongside,
-              })).state;
-        if (turn.outcome === 'completed') {
-          const cost = state.usage.totalCost;
-          run.callbacks.onProgress?.({
-            kind: 'overview',
-            toolCallCount: state.toolCalls,
-            filesChanged: [...state.edited],
-            cost: cost > 0 ? cost : undefined,
-          });
+        // The host port stays attached: `/model`, `/compact` land here.
+        const batch = yield* followUps.input.next('idle');
+        if (batch === null) {
+          // The input ended under the waiting loop: a cancellation.
+          return finish(
+            state,
+            afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
+          );
         }
-        if (block !== null) continue;
-        // A one-shot run ends with its completed turn; a handed-down call's
-        // run ends at its park, however its turn ended.
-        if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
-          return finish(state, turn.outcome);
-        if (childTurn !== null)
-          yield* Effect.uninterruptible(childTurn.wakeParent);
+        const consumed = yield* followUps.consume(cell, batch);
+        if (!consumed.turn) continue;
       }
-    });
+      const turn: RunExit = yield* start.turns
+        ? start.turns.turnPermit(runTurn(cell))
+        : runTurn(cell);
+      state = turn.state;
+      if (turn.outcome === 'cancelled') {
+        return finish(state, RUN_OUTCOME.CANCELLED);
+      }
+      // A summary the turn started lands before the turn ends.
+      state = yield* compaction.finish(cell);
+      // The turn's trace rows are queued ahead of the boundary: the
+      // barrier lets the open streams `waiting` closes count every one.
+      yield* log.settled;
+      // The turn boundary, in one batch: Stop hooks, the steps (`waiting`
+      // closes open streams and is the rest a resume's receipt reads), a
+      // child's turn result with its parent's delivery, and a Stop hook's
+      // block or input already queued.
+      const reply = turnResponse(turn.state);
+      const { rows: hooks, block } = yield* stopHooks(run, turn, reply);
+      const goesOn =
+        !run.toolPolicy.stopAfterCycle && turn.outcome === 'completed';
+      const childTurn =
+        start.turns && goesOn && block === null
+          ? yield* start.turns.finishTurn(result(turn.outcome, state))
+          : null;
+      const ending = [
+        positionRow(runId, state, 'turn.end', turn.outcome),
+        ...log.closure(runId),
+        positionRow(runId, state, 'waiting'),
+        ...(childTurn?.rows ?? []),
+      ];
+      const next =
+        block ?? (goesOn ? yield* followUps.input.read('turn') : null);
+      const pin =
+        next !== null && !isChild() ? yield* openStep(state, 'park') : null;
+      state =
+        next === null
+          ? yield* cell.append([...hooks, ...ending], childTurn?.alongside)
+          : (yield* followUps.consume(cell, next, {
+              rows: [...hooks, ...ending, ...(pin?.rows ?? [])],
+              alongside: childTurn?.alongside,
+            })).state;
+      if (turn.outcome === 'completed') {
+        const cost = state.usage.totalCost;
+        run.callbacks.onProgress?.({
+          kind: 'overview',
+          toolCallCount: state.toolCalls,
+          filesChanged: [...state.edited],
+          cost: cost > 0 ? cost : undefined,
+        });
+      }
+      if (block !== null) continue;
+      // A one-shot run ends with its completed turn; a handed-down call's
+      // run ends at its park, however its turn ended.
+      if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
+        return finish(state, turn.outcome);
+      if (childTurn !== null)
+        yield* Effect.uninterruptible(childTurn.wakeParent);
+    }
+  });
 
   /** A run that ends here: its halt commits with its `run.end`. */
   const finish = (state: RunState, outcome: RunOutcome): RunExit =>

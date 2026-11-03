@@ -244,38 +244,39 @@ const decideRequest = (
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
   heldHere: boolean,
 ): Effect.Effect<Outcome, RequestError, GlobalValues | SessionServices> => {
-  const answer = <R>(write: Effect.Effect<boolean, RequestError, R>) =>
-    Effect.gen(function* () {
-      const pending = pendingOf(deps, req.runId, req.requestId);
-      if (pending === undefined) return yield* settled(req.runId);
-      // A request that blocks its caller is answered by the fiber waiting on it,
-      // and that fiber died with the owner this decision takes over from:
-      // recording a decision would clear the panel without doing what it says.
-      // Resuming the run re-enters the call, which asks again and is answered then.
-      if (!heldHere && blocksCaller(pending.payload)) {
-        return yield* new Unavailable({
-          runId: req.runId,
-          reason: `The ${runNoun(deps.view, req.runId)} that asked is no longer running: resume it to answer this request.`,
-        });
-      }
-      const { payload } = pending;
-      const services = yield* followUpServices;
-      const side =
-        payload.kind === 'plugin'
-          ? deps.plugins.entries.get(payload.plugin)?.decision?.record({
-              payload,
-              decision: req.decision,
-              inbox: (runId) => runInbox(runId, services),
-              commit: (own) =>
-                deps.sessionLog.transact(
-                  own.map((f) => ownFactRow(f, req.runId)),
-                ),
-            })
-          : undefined;
-      if (side) yield* Effect.orDie(side);
-      if (!(yield* write)) return yield* settled(req.runId);
-      return done;
-    });
+  const answer = Effect.fn('answer')(function* <R>(
+    write: Effect.Effect<boolean, RequestError, R>,
+  ) {
+    const pending = pendingOf(deps, req.runId, req.requestId);
+    if (pending === undefined) return yield* settled(req.runId);
+    // A request that blocks its caller is answered by the fiber waiting on it,
+    // and that fiber died with the owner this decision takes over from:
+    // recording a decision would clear the panel without doing what it says.
+    // Resuming the run re-enters the call, which asks again and is answered then.
+    if (!heldHere && blocksCaller(pending.payload)) {
+      return yield* new Unavailable({
+        runId: req.runId,
+        reason: `The ${runNoun(deps.view, req.runId)} that asked is no longer running: resume it to answer this request.`,
+      });
+    }
+    const { payload } = pending;
+    const services = yield* followUpServices;
+    const side =
+      payload.kind === 'plugin'
+        ? deps.plugins.entries.get(payload.plugin)?.decision?.record({
+            payload,
+            decision: req.decision,
+            inbox: (runId) => runInbox(runId, services),
+            commit: (own) =>
+              deps.sessionLog.transact(
+                own.map((f) => ownFactRow(f, req.runId)),
+              ),
+          })
+        : undefined;
+    if (side) yield* Effect.orDie(side);
+    if (!(yield* write)) return yield* settled(req.runId);
+    return done;
+  });
   // An answer the request does not take is refused in the lane, before its grant.
   const decided = Effect.suspend(() => {
     const payload = pendingOf(deps, req.runId, req.requestId)?.payload;

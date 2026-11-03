@@ -175,19 +175,20 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
    * launchers' catalogs, the profile, the Models page and, when the
    * credential is a coding plan's, its usage.
    */
-  const refreshAfterCredentialChange = (
+  const refreshAfterCredentialChange: (
     usageProvider?: SubscriptionUsageProvider,
-  ): HostEffect =>
-    Effect.gen(function* () {
-      if (usageProvider) yield* usage.invalidate(usageProvider);
-      yield* bindings.refreshCredentialStatus;
-      yield* allSettledVoid<Error, ProcessServices>([
-        bindings.refreshCatalogs(),
-        postProfile,
-        postModelSelection,
-        ...(usageProvider ? [postUsage(false)] : []),
-      ]);
-    });
+  ) => HostEffect = Effect.fn('refreshAfterCredentialChange')(function* (
+    usageProvider?: SubscriptionUsageProvider,
+  ) {
+    if (usageProvider) yield* usage.invalidate(usageProvider);
+    yield* bindings.refreshCredentialStatus;
+    yield* allSettledVoid<Error, ProcessServices>([
+      bindings.refreshCatalogs(),
+      postProfile,
+      postModelSelection,
+      ...(usageProvider ? [postUsage(false)] : []),
+    ]);
+  });
   /** Run a subscription mutation, report its failure, and repaint what the
    *  subscription feeds whatever the mutation did. */
   const subscriptionChange = <E>(
@@ -246,37 +247,39 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     skills: () => Effect.andThen(postSnapshot('skills'), postSkills),
     telemetry: () => postSnapshot('telemetry'),
   };
-  const updateStateSetting = (key: string, value: unknown) =>
-    Effect.gen(function* () {
-      const result = yield* applyStateSettingUpdate(key, value, {
-        host: ports.host,
-        stores: roots,
-        requiresOpenWorkspace: bindings.requiresOpenWorkspace,
-      });
-      if (result.kind === 'ignored') return;
-      const label = result.entry.title ?? result.entry.key;
-      if (result.kind === 'rejected') {
-        yield* report(`Invalid value for “${label}”`, result.error);
-      } else if (result.kind === 'failed') {
-        yield* report(`Failed to update “${label}”`, result.error);
-      } else if (result.kind === 'workspace-required') {
-        yield* notice(
-          `Open a workspace folder before changing the “${label}” setting.`,
-        );
-      }
-      yield* stateSnapshotPosters[result.entry.surfaces.settingsView]();
-      if (result.kind !== 'applied') return;
-      if (result.entry.onWrite?.invalidatesModelOptions) {
-        yield* refreshAfterCredentialChange();
-      }
-      if (codingPlanForUsageSetting(key) !== undefined) {
-        yield* postUsage(false);
-      }
-      if (key === APPROVAL_POLICY_CONFIG_KEY) {
-        yield* bindings.refreshCatalogs();
-        yield* emitAppSignal('approvalPolicyChanged', undefined);
-      }
+  const updateStateSetting = Effect.fn('updateStateSetting')(function* (
+    key: string,
+    value: unknown,
+  ) {
+    const result = yield* applyStateSettingUpdate(key, value, {
+      host: ports.host,
+      stores: roots,
+      requiresOpenWorkspace: bindings.requiresOpenWorkspace,
     });
+    if (result.kind === 'ignored') return;
+    const label = result.entry.title ?? result.entry.key;
+    if (result.kind === 'rejected') {
+      yield* report(`Invalid value for “${label}”`, result.error);
+    } else if (result.kind === 'failed') {
+      yield* report(`Failed to update “${label}”`, result.error);
+    } else if (result.kind === 'workspace-required') {
+      yield* notice(
+        `Open a workspace folder before changing the “${label}” setting.`,
+      );
+    }
+    yield* stateSnapshotPosters[result.entry.surfaces.settingsView]();
+    if (result.kind !== 'applied') return;
+    if (result.entry.onWrite?.invalidatesModelOptions) {
+      yield* refreshAfterCredentialChange();
+    }
+    if (codingPlanForUsageSetting(key) !== undefined) {
+      yield* postUsage(false);
+    }
+    if (key === APPROVAL_POLICY_CONFIG_KEY) {
+      yield* bindings.refreshCatalogs();
+      yield* emitAppSignal('approvalPolicyChanged', undefined);
+    }
+  });
 
   // One read-modify-write at a time per list: two switches handled at once
   // would each read the list without the other's item.

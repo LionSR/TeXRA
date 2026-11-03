@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import { Text } from 'ink';
 import { useState } from 'react';
 
@@ -150,7 +150,7 @@ export function WorkspaceAgentsForm(
         agents.
       </Text>
     ) : null,
-  ].filter((notice) => notice !== null);
+  ].filter(Predicate.isNotNull);
   const frame = <T extends string>(
     items: readonly SelectItem<T>[],
     onSelect: (value: T) => void,

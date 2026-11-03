@@ -5,7 +5,7 @@
 
 import { Box, Text } from 'ink';
 import { useState } from 'react';
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
@@ -64,7 +64,7 @@ function rowDescription(row: PluginRow): string {
     pluginRowProblem(row),
     pluginRowUsedBy(row),
   ]
-    .filter((part): part is string => part !== null)
+    .filter(Predicate.isNotNull)
     .join(' · ');
 }
 

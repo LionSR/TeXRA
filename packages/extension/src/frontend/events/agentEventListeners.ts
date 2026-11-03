@@ -174,46 +174,44 @@ function launchNotice(config: AgentConfig): string {
  * (`HostRunActionPorts.revealProgress`), or name the run in a toast when it
  * cannot be made visible.
  */
-export function revealProgressView(
+export const revealProgressView = Effect.fn('revealProgressView')(function* (
   config: AgentConfig,
   progressViewProvider: Pick<
     ProgressViewProvider,
     'isViewVisible' | 'showProgressView'
   >,
-): Effect.Effect<void, Error> {
-  return Effect.gen(function* () {
-    if (progressViewProvider.isViewVisible()) return;
+): Effect.fn.Return<void, Error> {
+  if (progressViewProvider.isViewVisible()) return;
 
-    // A failed reveal is a diagnostic, not non-delivery: fall through to the
-    // visibility re-check and, when provided, the toast handoff below (#10554).
-    yield* warnOnFailure(
-      progressViewProvider.showProgressView(),
-      'Failed to reveal the progress view',
-    );
+  // A failed reveal is a diagnostic, not non-delivery: fall through to the
+  // visibility re-check and, when provided, the toast handoff below (#10554).
+  yield* warnOnFailure(
+    progressViewProvider.showProgressView(),
+    'Failed to reveal the progress view',
+  );
 
-    // Delivery is the reveal actually becoming visible, not the reveal command
-    // resolving. Re-check after the command before treating the event as
-    // presented.
-    if (progressViewProvider.isViewVisible()) return;
+  // Delivery is the reveal actually becoming visible, not the reveal command
+  // resolving. Re-check after the command before treating the event as
+  // presented.
+  if (progressViewProvider.isViewVisible()) return;
 
-    // The toast is the delivered surface when the view cannot be made
-    // visible: a successful handoff means the run was presented even if the
-    // user dismisses it without retrying the reveal.
-    const selection = yield* vscodeUi.info(launchNotice(config), {
-      modal: false,
-      detail:
-        'TeXRA agents run in the background; track them under Tasks in the TeXRA panel.',
-      items: ['Show Tasks'],
-    });
-    if (!selection) return;
-    // The toast handoff already established delivery; a failed retry is
-    // a diagnostic, not non-delivery, so it must not downgrade the event.
-    yield* warnOnFailure(
-      progressViewProvider.showProgressView(),
-      'Failed to retry the progress-view reveal',
-    );
+  // The toast is the delivered surface when the view cannot be made
+  // visible: a successful handoff means the run was presented even if the
+  // user dismisses it without retrying the reveal.
+  const selection = yield* vscodeUi.info(launchNotice(config), {
+    modal: false,
+    detail:
+      'TeXRA agents run in the background; track them under Tasks in the TeXRA panel.',
+    items: ['Show Tasks'],
   });
-}
+  if (!selection) return;
+  // The toast handoff already established delivery; a failed retry is
+  // a diagnostic, not non-delivery, so it must not downgrade the event.
+  yield* warnOnFailure(
+    progressViewProvider.showProgressView(),
+    'Failed to retry the progress-view reveal',
+  );
+});
 
 /**
  * Builds the extension's presentation host over its handler map. Every

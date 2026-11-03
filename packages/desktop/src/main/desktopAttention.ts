@@ -82,8 +82,8 @@ export function electronAttentionPort(options: {
       liveNotifications.delete(key);
       shown?.close();
     },
-    focused: Stream.callback<void>((queue) =>
-      Effect.gen(function* () {
+    focused: Stream.callback<void>(
+      Effect.fnUntraced(function* (queue) {
         const onFocus = () => {
           Queue.offerUnsafe(queue, undefined);
         };

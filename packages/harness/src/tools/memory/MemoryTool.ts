@@ -82,18 +82,16 @@ function formatListingRow(
 /**
  * Memory tool for managing persistent context files under /memories.
  */
-function executeMemoryTool(
+const executeMemoryTool = Effect.fn('executeMemoryTool')(function* (
   input: MemoryToolInput,
-): Effect.Effect<ToolResult, Error, PluginToolServices> {
-  return Effect.gen(function* () {
-    const caller = yield* callerRun;
-    const invocation = {
-      runId: caller?.runId,
-      agentName: caller?.config.agent,
-    } satisfies MemoryInvocation;
-    return yield* run(input, invocation).pipe(onMemoryTreeLane);
-  });
-}
+): Effect.fn.Return<ToolResult, Error, PluginToolServices> {
+  const caller = yield* callerRun;
+  const invocation = {
+    runId: caller?.runId,
+    agentName: caller?.config.agent,
+  } satisfies MemoryInvocation;
+  return yield* run(input, invocation).pipe(onMemoryTreeLane);
+});
 
 const run = Effect.fn('MemoryTool.run')(function* (
   input: MemoryToolInput,

@@ -6,7 +6,7 @@
 import path from 'node:path';
 import { formatCompactDuration, pluralize } from '@texra-ai/harness/transcript';
 
-import { Effect, type Fiber, type Scope, Stream } from 'effect';
+import { Effect, type Fiber, Schedule, type Scope, Stream } from 'effect';
 
 import {
   isLiveRun,
@@ -97,7 +97,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private wantedRunId: RunId | undefined;
   /** The last root phase the renderer painted; a repeat is not a change. */
   private paintedPhase: RunPhase | undefined;
-  private heartbeat: Fiber.Fiber<never> | undefined;
+  private heartbeat: Fiber.Fiber<number> | undefined;
   /** Open prompts holding the line ({@link suspend}). */
   private suspended = 0;
 
@@ -124,8 +124,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         Effect.andThen(
           Effect.forkScoped(
             Effect.scoped(
-              Stream.runForEach(session.view.changes, (view) =>
-                Effect.gen({ self: this }, function* () {
+              Stream.runForEach(
+                session.view.changes,
+                Effect.fnUntraced({ self: this }, function* (view) {
                   this.applyView(view);
                   if (this.rootRunTerminal || !this.rootRunId) {
                     this.stopHeartbeat();
@@ -136,11 +137,12 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
                   ) {
                     // A start waits a full interval. This stream's scope
                     // interrupts and joins the heartbeat when it ends.
-                    this.heartbeat = yield* Effect.sleep(
-                      this.heartbeatIntervalMs,
+                    this.heartbeat = yield* Effect.sync(() =>
+                      this.render(true),
                     ).pipe(
-                      Effect.andThen(Effect.sync(() => this.render(true))),
-                      Effect.forever,
+                      Effect.schedule(
+                        Schedule.spaced(this.heartbeatIntervalMs),
+                      ),
                       Effect.forkScoped({ startImmediately: true }),
                     );
                   }

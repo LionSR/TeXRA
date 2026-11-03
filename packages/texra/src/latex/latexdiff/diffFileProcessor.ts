@@ -67,11 +67,16 @@ export class DiffFileProcessor {
   // means the diff output is missing or corrupt, so it must stay in the error
   // channel for the caller (LaTeXdiffService.runDiff*/) to turn into a
   // `{ success: false }` result. Recovering here would falsely report success.
-  processDiffFile(
-    diffFileLocation: FileLocation,
-    editedFileLocation?: FileLocation,
-  ): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
+  readonly processDiffFile = Effect.fn('DiffFileProcessor.processDiffFile')(
+    { self: this },
+    function* (
+      diffFileLocation: FileLocation,
+      editedFileLocation?: FileLocation,
+    ): Effect.fn.Return<
+      void,
+      PlatformError.PlatformError,
+      FileSystem.FileSystem
+    > {
       const fs = yield* FileSystem.FileSystem;
       const [content, editedContent] = yield* Effect.all(
         [
@@ -101,8 +106,8 @@ export class DiffFileProcessor {
         diffFileLocation.absolutePath,
         processedContent,
       );
-    });
-  }
+    },
+  );
 
   private restoreFlattenedBibliography(
     content: string,

@@ -158,12 +158,15 @@ export class XmlOutputManager {
    * input files by content similarity rather than guessing from response
    * order, since a model can reorder or drop files in its response.
    */
-  private extractDocumentsByContentSimilarity(
-    outputContent: string,
-    round: number,
-    baseFiles: readonly FileLocation[],
-  ): Effect.Effect<NamedDocument[] | null, never, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly extractDocumentsByContentSimilarity = Effect.fn(
+    'XmlOutputManager.extractDocumentsByContentSimilarity',
+  )(
+    { self: this },
+    function* (
+      outputContent: string,
+      round: number,
+      baseFiles: readonly FileLocation[],
+    ): Effect.fn.Return<NamedDocument[] | null, never, FileSystem.FileSystem> {
       const fs = yield* FileSystem.FileSystem;
       const blocks = this.collectLatexFencedBlocks(outputContent);
       if (blocks.length === 0) return null;
@@ -217,15 +220,18 @@ export class XmlOutputManager {
         );
       }
       return documents;
-    });
-  }
+    },
+  );
 
-  splitScratchpadMultipleOutputXml(
-    outputLocation: FileLocation,
-    round: number,
-    baseFiles: readonly FileLocation[] = [],
-  ): Effect.Effect<OutputFileInfo[], Error, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
+  readonly splitScratchpadMultipleOutputXml = Effect.fn(
+    'XmlOutputManager.splitScratchpadMultipleOutputXml',
+  )(
+    { self: this },
+    function* (
+      outputLocation: FileLocation,
+      round: number,
+      baseFiles: readonly FileLocation[] = [],
+    ): Effect.fn.Return<OutputFileInfo[], Error, FileSystem.FileSystem> {
       const fs = yield* FileSystem.FileSystem;
       const rawOutputContent = (yield* fs.readFileString(
         outputLocation.absolutePath,
@@ -364,15 +370,18 @@ export class XmlOutputManager {
         outputLocation,
         round,
       );
-    });
-  }
+    },
+  );
 
-  processMultipleLatexDocuments(
-    latexDocuments: NamedDocument[],
-    outputLocation: FileLocation,
-    round: number,
-  ): Effect.Effect<OutputFileInfo[], Error, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
+  readonly processMultipleLatexDocuments = Effect.fn(
+    'XmlOutputManager.processMultipleLatexDocuments',
+  )(
+    { self: this },
+    function* (
+      latexDocuments: NamedDocument[],
+      outputLocation: FileLocation,
+      round: number,
+    ): Effect.fn.Return<OutputFileInfo[], Error, FileSystem.FileSystem> {
       const outputFiles: OutputFileInfo[] = [];
       // For workspace/runStorage outputs use the workspace-relative round dir
       // so fileService.createLocation can route through its storage layer.
@@ -418,42 +427,44 @@ export class XmlOutputManager {
       }
 
       return outputFiles;
-    });
-  }
+    },
+  );
 
-  ensureCorrectXmlStructure(
-    fileLocation: FileLocation,
-  ): Effect.Effect<void, Error, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
-      const fs = yield* FileSystem.FileSystem;
-      this.logger.debug(
-        `Ensuring correct XML structure: ${fileLocation.absolutePath}`,
-      );
-      const originalContent = (yield* fs.readFileString(
-        fileLocation.absolutePath,
-      )).replaceAll('\r\n', '\n');
-      const replaced = replacementEngine.applyFor(
-        originalContent,
-        'xml-content',
-        this.config,
-      );
-      yield* logReplacementDiagnostics(replaced.diagnostics);
-      let content = replaced.text;
+  readonly ensureCorrectXmlStructure = Effect.fn(
+    'XmlOutputManager.ensureCorrectXmlStructure',
+  )({ self: this }, function* (fileLocation: FileLocation): Effect.fn.Return<
+    void,
+    Error,
+    FileSystem.FileSystem
+  > {
+    const fs = yield* FileSystem.FileSystem;
+    this.logger.debug(
+      `Ensuring correct XML structure: ${fileLocation.absolutePath}`,
+    );
+    const originalContent = (yield* fs.readFileString(
+      fileLocation.absolutePath,
+    )).replaceAll('\r\n', '\n');
+    const replaced = replacementEngine.applyFor(
+      originalContent,
+      'xml-content',
+      this.config,
+    );
+    yield* logReplacementDiagnostics(replaced.diagnostics);
+    let content = replaced.text;
 
-      const closeTag = `</${OUTPUT_DOCUMENTS_TAG}>`;
-      const openTag = `<${OUTPUT_DOCUMENTS_TAG}>`;
+    const closeTag = `</${OUTPUT_DOCUMENTS_TAG}>`;
+    const openTag = `<${OUTPUT_DOCUMENTS_TAG}>`;
 
-      if (content.includes(openTag) && !content.endsWith(closeTag)) {
-        content =
-          content.replace(new RegExp(`${closeTag}.*$`, 's'), '') +
-          `\n${closeTag}`;
-      }
+    if (content.includes(openTag) && !content.endsWith(closeTag)) {
+      content =
+        content.replace(new RegExp(`${closeTag}.*$`, 's'), '') +
+        `\n${closeTag}`;
+    }
 
-      if (content !== originalContent) {
-        yield* fs.writeFileString(fileLocation.absolutePath, content);
-      }
-    });
-  }
+    if (content !== originalContent) {
+      yield* fs.writeFileString(fileLocation.absolutePath, content);
+    }
+  });
 
   private cleanExtractedDocumentContent(
     content: string,

@@ -155,92 +155,91 @@ export function openaiResponsesModel(
 
   const lifecycle = backgroundLifecycle({
     origin,
-    submit: (input, learned) =>
-      Effect.gen(function* () {
-        const { opened } = yield* createResponse(input, 'background');
-        yield* Ref.set(learned, { requestId: opened.request_id ?? undefined });
-        const source = opened.data;
-        const iterator = yield* Effect.acquireRelease(
-          Effect.sync(() => source[Symbol.asyncIterator]()),
-          (iterator, exit) => {
-            const returnIterator = iterator.return?.bind(iterator);
-            const close = returnIterator
-              ? Effect.promise(() => returnIterator())
-              : Effect.void;
-            const abort = Effect.sync(() => source.controller.abort());
-            // After the single read no next() is pending, so an accepted
-            // submission lets the SDK join its body cancellation before
-            // aborting the detached request; a failed one aborts first.
-            return Exit.isSuccess(exit)
-              ? close.pipe(Effect.ensuring(abort))
-              : abort.pipe(Effect.andThen(close));
-          },
-        );
-        const first = yield* Effect.tryPromise({
-          try: () => iterator.next(),
-          catch: (cause) =>
-            cause instanceof SyntaxError
-              ? new ModelError({
-                  kind: 'malformed-output',
-                  message: 'The model returned malformed stream data.',
-                  cause,
-                })
-              : openaiFailure(cause),
+    submit: Effect.fnUntraced(function* (input, learned) {
+      const { opened } = yield* createResponse(input, 'background');
+      yield* Ref.set(learned, { requestId: opened.request_id ?? undefined });
+      const source = opened.data;
+      const iterator = yield* Effect.acquireRelease(
+        Effect.sync(() => source[Symbol.asyncIterator]()),
+        (iterator, exit) => {
+          const returnIterator = iterator.return?.bind(iterator);
+          const close = returnIterator
+            ? Effect.promise(() => returnIterator())
+            : Effect.void;
+          const abort = Effect.sync(() => source.controller.abort());
+          // After the single read no next() is pending, so an accepted
+          // submission lets the SDK join its body cancellation before
+          // aborting the detached request; a failed one aborts first.
+          return Exit.isSuccess(exit)
+            ? close.pipe(Effect.ensuring(abort))
+            : abort.pipe(Effect.andThen(close));
+        },
+      );
+      const first = yield* Effect.tryPromise({
+        try: () => iterator.next(),
+        catch: (cause) =>
+          cause instanceof SyntaxError
+            ? new ModelError({
+                kind: 'malformed-output',
+                message: 'The model returned malformed stream data.',
+                cause,
+              })
+            : openaiFailure(cause),
+      });
+      if (first.done)
+        return yield* new ModelError({
+          kind: 'malformed-output',
+          message: 'Background submission ended without acceptance evidence.',
         });
-        if (first.done)
-          return yield* new ModelError({
-            kind: 'malformed-output',
-            message: 'Background submission ended without acceptance evidence.',
-          });
-        const parsed = Schema.decodeUnknownResult(ResponseEventSchema)(
-          first.value,
-        );
-        if (!Result.isSuccess(parsed))
-          return yield* new ModelError({
-            kind: 'malformed-output',
-            message: 'Background acceptance is malformed.',
-            cause: parsed.failure,
-          });
-        const { response, type, sequence_number } = parsed.success;
-        yield* Ref.update(learned, (known) => ({
-          ...known,
-          model: response.model,
-          operation: Schema.decodeUnknownSync(RemoteOperationSchema)({
+      const parsed = Schema.decodeUnknownResult(ResponseEventSchema)(
+        first.value,
+      );
+      if (!Result.isSuccess(parsed))
+        return yield* new ModelError({
+          kind: 'malformed-output',
+          message: 'Background acceptance is malformed.',
+          cause: parsed.failure,
+        });
+      const { response, type, sequence_number } = parsed.success;
+      yield* Ref.update(learned, (known) => ({
+        ...known,
+        model: response.model,
+        operation: Schema.decodeUnknownSync(RemoteOperationSchema)({
+          origin,
+          providerResponseId: response.id,
+          afterSequence: sequence_number,
+        }),
+      }));
+      if (
+        (type === 'response.completed' && response.status === 'completed') ||
+        (type === 'response.incomplete' && response.status === 'incomplete')
+      )
+        return yield* completedTurn(
+          assembleTurn(Stream.make(yield* terminalParts(response, type)), {
             origin,
-            providerResponseId: response.id,
-            afterSequence: sequence_number,
+            provider: 'The model',
           }),
-        }));
-        if (
-          (type === 'response.completed' && response.status === 'completed') ||
-          (type === 'response.incomplete' && response.status === 'incomplete')
-        )
-          return yield* completedTurn(
-            assembleTurn(Stream.make(yield* terminalParts(response, type)), {
-              origin,
-              provider: 'The model',
-            }),
-          );
-        if (
-          ![
-            'response.created',
-            'response.queued',
-            'response.in_progress',
-          ].includes(type) ||
-          !['queued', 'in_progress'].includes(response.status)
-        )
-          return yield* new ModelError({
-            kind:
-              response.status === 'failed'
-                ? 'provider-rejection'
-                : 'malformed-output',
-            message:
-              response.error?.message ??
-              'The provider did not acknowledge background work.',
-            cause: response.error,
-          });
-        return undefined;
-      }),
+        );
+      if (
+        ![
+          'response.created',
+          'response.queued',
+          'response.in_progress',
+        ].includes(type) ||
+        !['queued', 'in_progress'].includes(response.status)
+      )
+        return yield* new ModelError({
+          kind:
+            response.status === 'failed'
+              ? 'provider-rejection'
+              : 'malformed-output',
+          message:
+            response.error?.message ??
+            'The provider did not acknowledge background work.',
+          cause: response.error,
+        });
+      return undefined;
+    }),
     observe: {
       stream: (operation, learned) =>
         Stream.unwrap(
@@ -280,8 +279,8 @@ export function openaiResponsesModel(
             const progress = events.pipe(
               Stream.mapEffect(responsesWire(sequence)),
               Stream.takeUntil((event) => event.terminal),
-              Stream.mapEffect((event) =>
-                Effect.gen(function* () {
+              Stream.mapEffect(
+                Effect.fnUntraced(function* (event) {
                   sequence = event.sequence;
                   const turnEvents = (yield* Effect.forEach(
                     event.parts,
@@ -332,45 +331,43 @@ export function openaiResponsesModel(
           }),
         ),
     },
-    cancel: (operation, learned) =>
-      Effect.gen(function* () {
-        const reply = yield* ownedAbortSafeRequest(
-          async (signal) => {
-            const response = await client.responses
-              .cancel(operation.providerResponseId, { signal })
-              .asResponse();
-            return {
-              requestId: response.headers.get('x-request-id') ?? undefined,
-              body: await response.text(),
-            };
-          },
-          openaiFailure,
-          { isAbortMatch: openaiAbortMatch },
-        );
-        yield* Ref.update(learned, (known) => ({
-          ...known,
-          requestId: reply.requestId,
-        }));
-        // Cancellation cannot request encrypted output includes. Report status only.
-        const parsed = Schema.decodeUnknownResult(
-          Schema.fromJsonString(
-            ResponseSchema.mapFields(
-              Struct.pick(['id', 'object', 'model', 'status']),
-            ),
+    cancel: Effect.fnUntraced(function* (operation, learned) {
+      const reply = yield* ownedAbortSafeRequest(
+        async (signal) => {
+          const response = await client.responses
+            .cancel(operation.providerResponseId, { signal })
+            .asResponse();
+          return {
+            requestId: response.headers.get('x-request-id') ?? undefined,
+            body: await response.text(),
+          };
+        },
+        openaiFailure,
+        { isAbortMatch: openaiAbortMatch },
+      );
+      yield* Ref.update(learned, (known) => ({
+        ...known,
+        requestId: reply.requestId,
+      }));
+      // Cancellation cannot request encrypted output includes. Report status only.
+      const parsed = Schema.decodeUnknownResult(
+        Schema.fromJsonString(
+          ResponseSchema.mapFields(
+            Struct.pick(['id', 'object', 'model', 'status']),
           ),
-        )(reply.body);
-        if (
-          !Result.isSuccess(parsed) ||
-          parsed.success.id !== operation.providerResponseId
-        )
-          return yield* new ModelError({
-            kind: 'malformed-output',
-            message:
-              'Cancellation returned invalid response identity or status.',
-            cause: Result.isSuccess(parsed) ? undefined : parsed.failure,
-          });
-        return parsed.success.status;
-      }),
+        ),
+      )(reply.body);
+      if (
+        !Result.isSuccess(parsed) ||
+        parsed.success.id !== operation.providerResponseId
+      )
+        return yield* new ModelError({
+          kind: 'malformed-output',
+          message: 'Cancellation returned invalid response identity or status.',
+          cause: Result.isSuccess(parsed) ? undefined : parsed.failure,
+        });
+      return parsed.success.status;
+    }),
     // The same anchor the foreground completion builds: an observed or
     // submitted turn chains on `previous_response_id` too.
     finalize: (turn, result) => withResponsesContinuation(config, turn, result),

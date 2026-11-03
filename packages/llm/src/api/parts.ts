@@ -6,6 +6,9 @@
 // Node imports
 import { isDeepStrictEqual } from 'node:util';
 
+// Third-party imports
+import { Predicate } from 'effect';
+
 // Local imports - canonical model contract
 import type { ResolvedTurn, TurnResult } from '../turn.js';
 
@@ -99,10 +102,9 @@ export const sameIdentity = (left: Part, right: Part): boolean =>
  * time it restates an item, and the first is kept.
  */
 export const restates = (done: unknown, again: unknown): boolean =>
-  typeof again !== 'object' || again === null || Array.isArray(again)
+  !Predicate.isObject(again)
     ? isDeepStrictEqual(done, again)
-    : typeof done === 'object' &&
-      done !== null &&
+    : Predicate.isObjectOrArray(done) &&
       Object.entries(again).every(
         ([key, value]) =>
           value === undefined ||

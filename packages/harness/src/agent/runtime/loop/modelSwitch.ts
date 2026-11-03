@@ -53,8 +53,8 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     }
     const state = yield* beforeSwap(cell);
     let switched = state;
-    yield* run.swapModel(() =>
-      Effect.gen(function* () {
+    yield* run.swapModel(
+      Effect.fnUntraced(function* () {
         const next = yield* access.bind({
           modelId: model,
           config: selected.config,

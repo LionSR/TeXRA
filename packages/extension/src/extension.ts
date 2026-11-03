@@ -289,8 +289,8 @@ type WalkthroughCommandNeedingWorkspace =
 /** Internal command URI used by workspace-bound walkthrough links. */
 const WALKTHROUGH_WORKSPACE_ACTION_COMMAND = 'texra.walkthroughWorkspaceAction';
 
-const explainWorkspaceRequired = (extensionPath: string) =>
-  Effect.gen(function* () {
+const explainWorkspaceRequired = Effect.fn('explainWorkspaceRequired')(
+  function* (extensionPath: string) {
     const openFolder = 'Open Folder';
     const createSample = 'Create Sample Project';
     const choice = yield* vscodeUi.info(
@@ -302,7 +302,8 @@ const explainWorkspaceRequired = (extensionPath: string) =>
     } else if (choice === createSample) {
       yield* createSampleProjectWithoutWorkspace(extensionPath);
     }
-  });
+  },
+);
 
 function registerWalkthroughWorkspaceAction(
   context: vscode.ExtensionContext,

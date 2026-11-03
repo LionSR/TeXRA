@@ -133,31 +133,32 @@ const exists = (target: string) =>
   );
 
 /** Read and validate one JSON file, or `undefined` when it is absent. */
-export function readJsonFile<T>(file: string, schema: Schema.Codec<T>) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const text = yield* fs.readFileString(file).pipe(
-      Effect.catchIf(absentReason, () => Effect.void),
-      Effect.mapError(ioError),
-    );
-    if (text === undefined) return undefined;
-    const json = yield* Effect.try({
-      try: (): unknown => JSON.parse(text),
-      catch: (error) =>
-        new PluginError({
-          message: `${file} is not valid JSON: ${jsonSyntaxError(error)}`,
-        }),
-    });
-    return yield* Schema.decodeUnknownEffect(schema)(json).pipe(
-      Effect.mapError(
-        (error) =>
-          new PluginError({
-            message: `${file} does not match the expected shape: ${error.message}`,
-          }),
-      ),
-    );
+export const readJsonFile = Effect.fn('readJsonFile')(function* <T>(
+  file: string,
+  schema: Schema.Codec<T>,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const text = yield* fs.readFileString(file).pipe(
+    Effect.catchIf(absentReason, () => Effect.void),
+    Effect.mapError(ioError),
+  );
+  if (text === undefined) return undefined;
+  const json = yield* Effect.try({
+    try: (): unknown => JSON.parse(text),
+    catch: (error) =>
+      new PluginError({
+        message: `${file} is not valid JSON: ${jsonSyntaxError(error)}`,
+      }),
   });
-}
+  return yield* Schema.decodeUnknownEffect(schema)(json).pipe(
+    Effect.mapError(
+      (error) =>
+        new PluginError({
+          message: `${file} does not match the expected shape: ${error.message}`,
+        }),
+    ),
+  );
+});
 
 /**
  * Resolve a path a plugin declares against the directory it is relative to,
@@ -165,28 +166,29 @@ export function readJsonFile<T>(file: string, schema: Schema.Codec<T>) {
  * out, and symlinks whose target lies outside. `undefined` when it does not
  * exist.
  */
-export function containedPath(root: string, declared: string) {
-  return Effect.gen(function* () {
-    const resolved = path.resolve(root, declared);
-    if (path.isAbsolute(declared) || !isPathWithin(root, resolved)) {
-      return yield* failPlugin(
-        `Plugin path "${declared}" points outside the plugin directory ${root}.`,
-      );
-    }
-    if (!(yield* exists(resolved))) return undefined;
-    const fs = yield* FileSystem.FileSystem;
-    const [realRoot, realResolved] = yield* Effect.all(
-      [fs.realPath(root), fs.realPath(resolved)],
-      { concurrency: 2 },
-    ).pipe(Effect.mapError(ioError));
-    if (!isPathWithin(realRoot, realResolved)) {
-      return yield* failPlugin(
-        `Plugin path "${declared}" resolves through a symlink to ${realResolved}, outside the plugin directory ${root}.`,
-      );
-    }
-    return resolved;
-  });
-}
+export const containedPath = Effect.fn('containedPath')(function* (
+  root: string,
+  declared: string,
+) {
+  const resolved = path.resolve(root, declared);
+  if (path.isAbsolute(declared) || !isPathWithin(root, resolved)) {
+    return yield* failPlugin(
+      `Plugin path "${declared}" points outside the plugin directory ${root}.`,
+    );
+  }
+  if (!(yield* exists(resolved))) return undefined;
+  const fs = yield* FileSystem.FileSystem;
+  const [realRoot, realResolved] = yield* Effect.all(
+    [fs.realPath(root), fs.realPath(resolved)],
+    { concurrency: 2 },
+  ).pipe(Effect.mapError(ioError));
+  if (!isPathWithin(realRoot, realResolved)) {
+    return yield* failPlugin(
+      `Plugin path "${declared}" resolves through a symlink to ${realResolved}, outside the plugin directory ${root}.`,
+    );
+  }
+  return resolved;
+});
 
 const toList = (paths: string | readonly string[] | undefined) =>
   paths === undefined ? [] : [paths].flat();
@@ -243,45 +245,43 @@ export function readPluginManifests(dir: string) {
  * present plus every path the manifests declare (a file, or a directory
  * whose top-level `*.md` files count), relative to `dir`.
  */
-function markdownFiles(
+const markdownFiles = Effect.fn('markdownFiles')(function* (
   dir: string,
   conventional: string,
   declared: readonly string[],
 ) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const files = new Set<string>();
-    for (const [index, candidate] of [conventional, ...declared].entries()) {
-      const resolved = yield* containedPath(dir, candidate);
-      if (resolved === undefined) {
-        if (index === 0) continue;
-        return yield* failPlugin(
-          `The plugin at ${dir} declares "${candidate}", which does not exist.`,
-        );
-      }
-      const stat = yield* fs.stat(resolved).pipe(Effect.mapError(ioError));
-      const entries =
-        stat.type === 'Directory'
-          ? (yield* fs.readDirectory(resolved).pipe(Effect.mapError(ioError)))
-              .filter((name) => name.endsWith('.md'))
-              .toSorted()
-              .map((name) => path.join(resolved, name))
-          : [resolved];
-      // Every entry is checked together; the first failure in listing order
-      // is the one reported.
-      const checked = yield* Effect.forEach(
-        entries,
-        (entry) => Effect.result(containedPath(dir, path.relative(dir, entry))),
-        { concurrency: 16 },
+  const fs = yield* FileSystem.FileSystem;
+  const files = new Set<string>();
+  for (const [index, candidate] of [conventional, ...declared].entries()) {
+    const resolved = yield* containedPath(dir, candidate);
+    if (resolved === undefined) {
+      if (index === 0) continue;
+      return yield* failPlugin(
+        `The plugin at ${dir} declares "${candidate}", which does not exist.`,
       );
-      for (const result of checked) {
-        const file = yield* Effect.fromResult(result);
-        if (file !== undefined) files.add(path.relative(dir, file));
-      }
     }
-    return [...files];
-  });
-}
+    const stat = yield* fs.stat(resolved).pipe(Effect.mapError(ioError));
+    const entries =
+      stat.type === 'Directory'
+        ? (yield* fs.readDirectory(resolved).pipe(Effect.mapError(ioError)))
+            .filter((name) => name.endsWith('.md'))
+            .toSorted()
+            .map((name) => path.join(resolved, name))
+        : [resolved];
+    // Every entry is checked together; the first failure in listing order
+    // is the one reported.
+    const checked = yield* Effect.forEach(
+      entries,
+      (entry) => Effect.result(containedPath(dir, path.relative(dir, entry))),
+      { concurrency: 16 },
+    );
+    for (const result of checked) {
+      const file = yield* Effect.fromResult(result);
+      if (file !== undefined) files.add(path.relative(dir, file));
+    }
+  }
+  return [...files];
+});
 
 /** Replace `${CLAUDE_PLUGIN_ROOT}` with the plugin directory. */
 const expandRoot = (dir: string, value: string) =>
@@ -292,67 +292,67 @@ const expandRoot = (dir: string, value: string) =>
  * files it names, else in `.mcp.json` when present; each file holds its
  * servers under `mcpServers` or as the whole object.
  */
-function mcpServersOf(dir: string, name: string, manifests: PluginManifest[]) {
-  return Effect.gen(function* () {
-    const declared = manifests.flatMap((manifest) =>
-      manifest.mcpServers === undefined ? [] : [manifest.mcpServers],
-    );
-    const maps: { where: string; servers: Record<string, unknown> }[] = [];
-    const files = declared.flatMap((entry) =>
-      typeof entry === 'string' || Array.isArray(entry) ? toList(entry) : [],
-    );
-    for (const entry of declared) {
-      if (Predicate.isObject(entry))
-        maps.push({ where: `the manifest of ${name}`, servers: entry });
-    }
-    if (declared.length === 0 && (yield* exists(path.join(dir, '.mcp.json'))))
-      files.push('.mcp.json');
-    // Both manifests may name the same file: it is read once.
-    const read = new Set<string>();
-    for (const file of files) {
-      const resolved = yield* containedPath(dir, file);
-      if (resolved === undefined)
-        return yield* failPlugin(
-          `Plugin ${name} declares MCP servers in "${file}", which does not exist.`,
-        );
-      if (read.has(resolved)) continue;
-      read.add(resolved);
-      const json = (yield* readJsonFile(resolved, McpFileSchema)) ?? {};
-      const inner = Schema.decodeUnknownResult(McpFileSchema)(json.mcpServers);
-      maps.push({
-        where: resolved,
-        servers: Result.isSuccess(inner) ? inner.success : json,
+const mcpServersOf = Effect.fn('mcpServersOf')(function* (
+  dir: string,
+  name: string,
+  manifests: PluginManifest[],
+) {
+  const declared = manifests.flatMap((manifest) =>
+    manifest.mcpServers === undefined ? [] : [manifest.mcpServers],
+  );
+  const maps: { where: string; servers: Record<string, unknown> }[] = [];
+  const files = declared.flatMap((entry) =>
+    typeof entry === 'string' || Array.isArray(entry) ? toList(entry) : [],
+  );
+  for (const entry of declared) {
+    if (Predicate.isObject(entry))
+      maps.push({ where: `the manifest of ${name}`, servers: entry });
+  }
+  if (declared.length === 0 && (yield* exists(path.join(dir, '.mcp.json'))))
+    files.push('.mcp.json');
+  // Both manifests may name the same file: it is read once.
+  const read = new Set<string>();
+  for (const file of files) {
+    const resolved = yield* containedPath(dir, file);
+    if (resolved === undefined)
+      return yield* failPlugin(
+        `Plugin ${name} declares MCP servers in "${file}", which does not exist.`,
+      );
+    if (read.has(resolved)) continue;
+    read.add(resolved);
+    const json = (yield* readJsonFile(resolved, McpFileSchema)) ?? {};
+    const inner = Schema.decodeUnknownResult(McpFileSchema)(json.mcpServers);
+    maps.push({
+      where: resolved,
+      servers: Result.isSuccess(inner) ? inner.success : json,
+    });
+  }
+  const servers: McpServerConfig[] = [];
+  const warnings: string[] = [];
+  for (const { where, servers: map } of maps) {
+    const parsed = parseMcpServers(where, map);
+    warnings.push(...parsed.warnings);
+    for (const server of parsed.servers) {
+      servers.push({
+        name: `plugin_${name}_${server.name}`,
+        command: expandRoot(dir, server.command),
+        args: server.args.map((arg) => expandRoot(dir, arg)),
+        env: Object.fromEntries(
+          Object.entries(server.env).map(([key, value]) => [
+            key,
+            expandRoot(dir, value),
+          ]),
+        ),
+        cwd: dir,
       });
     }
-    const servers: McpServerConfig[] = [];
-    const warnings: string[] = [];
-    for (const { where, servers: map } of maps) {
-      const parsed = parseMcpServers(where, map);
-      warnings.push(...parsed.warnings);
-      for (const server of parsed.servers) {
-        servers.push({
-          name: `plugin_${name}_${server.name}`,
-          command: expandRoot(dir, server.command),
-          args: server.args.map((arg) => expandRoot(dir, arg)),
-          env: Object.fromEntries(
-            Object.entries(server.env).map(([key, value]) => [
-              key,
-              expandRoot(dir, value),
-            ]),
-          ),
-          cwd: dir,
-        });
-      }
-    }
-    const names = servers.map((server) => server.name);
-    const clash = names.find(
-      (server, index) => names.indexOf(server) !== index,
-    );
-    if (clash !== undefined)
-      return yield* failPlugin(`Plugin ${name} declares ${clash} twice.`);
-    return { servers, warnings };
-  });
-}
+  }
+  const names = servers.map((server) => server.name);
+  const clash = names.find((server, index) => names.indexOf(server) !== index);
+  if (clash !== undefined)
+    return yield* failPlugin(`Plugin ${name} declares ${clash} twice.`);
+  return { servers, warnings };
+});
 
 /** The conventional hooks file, read when present. */
 const HOOKS_FILE = path.join('hooks', 'hooks.json');
@@ -362,65 +362,67 @@ const HOOKS_FILE = path.join('hooks', 'hooks.json');
  * path or inline object its manifests declare under `hooks` (an inline
  * object holds the events under `hooks`, or is the events map itself).
  */
-function hooksOf(dir: string, name: string, manifests: PluginManifest[]) {
-  return Effect.gen(function* () {
-    const declared = manifests.flatMap((manifest) =>
-      manifest.hooks === undefined ? [] : [manifest.hooks],
+const hooksOf = Effect.fn('hooksOf')(function* (
+  dir: string,
+  name: string,
+  manifests: PluginManifest[],
+) {
+  const declared = manifests.flatMap((manifest) =>
+    manifest.hooks === undefined ? [] : [manifest.hooks],
+  );
+  const hooks: ConfiguredHook[] = [];
+  const unsupported: string[] = [];
+  // Handlers whose `if` the harness does not evaluate: they run on every
+  // call their matcher matches (which the trust listing describes), and
+  // the departure from the plugin's own configuration is warned once.
+  const unevaluated: string[] = [];
+  const add = (source: string, config: typeof HooksConfigSchema.Type) => {
+    const found = configuredHooks(source, config);
+    hooks.push(...found.hooks);
+    unsupported.push(...found.unsupported);
+    for (const [event, groups] of Object.entries(config.hooks))
+      for (const group of groups)
+        for (const handler of group.hooks)
+          if (handler.if !== undefined)
+            unevaluated.push(`${event} if ${handler.if}`);
+  };
+  const files = [
+    HOOKS_FILE,
+    ...declared.flatMap((entry) =>
+      typeof entry === 'string' || Array.isArray(entry) ? toList(entry) : [],
+    ),
+  ];
+  const read = new Set<string>();
+  for (const [index, file] of files.entries()) {
+    const resolved = yield* containedPath(dir, file);
+    if (resolved === undefined) {
+      if (index === 0) continue;
+      return yield* failPlugin(
+        `Plugin ${name} declares hooks in "${file}", which does not exist.`,
+      );
+    }
+    if (read.has(resolved)) continue;
+    read.add(resolved);
+    const config = yield* readJsonFile(resolved, HooksConfigSchema);
+    if (config !== undefined) add(path.relative(dir, resolved), config);
+  }
+  for (const entry of declared) {
+    if (typeof entry === 'string' || Array.isArray(entry)) continue;
+    const config = Schema.decodeUnknownResult(HooksConfigSchema)(
+      'hooks' in entry ? entry : { hooks: entry },
     );
-    const hooks: ConfiguredHook[] = [];
-    const unsupported: string[] = [];
-    // Handlers whose `if` the harness does not evaluate: they run on every
-    // call their matcher matches (which the trust listing describes), and
-    // the departure from the plugin's own configuration is warned once.
-    const unevaluated: string[] = [];
-    const add = (source: string, config: typeof HooksConfigSchema.Type) => {
-      const found = configuredHooks(source, config);
-      hooks.push(...found.hooks);
-      unsupported.push(...found.unsupported);
-      for (const [event, groups] of Object.entries(config.hooks))
-        for (const group of groups)
-          for (const handler of group.hooks)
-            if (handler.if !== undefined)
-              unevaluated.push(`${event} if ${handler.if}`);
-    };
-    const files = [
-      HOOKS_FILE,
-      ...declared.flatMap((entry) =>
-        typeof entry === 'string' || Array.isArray(entry) ? toList(entry) : [],
-      ),
-    ];
-    const read = new Set<string>();
-    for (const [index, file] of files.entries()) {
-      const resolved = yield* containedPath(dir, file);
-      if (resolved === undefined) {
-        if (index === 0) continue;
-        return yield* failPlugin(
-          `Plugin ${name} declares hooks in "${file}", which does not exist.`,
-        );
-      }
-      if (read.has(resolved)) continue;
-      read.add(resolved);
-      const config = yield* readJsonFile(resolved, HooksConfigSchema);
-      if (config !== undefined) add(path.relative(dir, resolved), config);
-    }
-    for (const entry of declared) {
-      if (typeof entry === 'string' || Array.isArray(entry)) continue;
-      const config = Schema.decodeUnknownResult(HooksConfigSchema)(
-        'hooks' in entry ? entry : { hooks: entry },
+    if (!Result.isSuccess(config))
+      return yield* failPlugin(
+        `The manifest of ${name} declares hooks that do not match the Claude Code hooks configuration: ${config.failure.message}`,
       );
-      if (!Result.isSuccess(config))
-        return yield* failPlugin(
-          `The manifest of ${name} declares hooks that do not match the Claude Code hooks configuration: ${config.failure.message}`,
-        );
-      add('manifest', config.success);
-    }
-    if (unevaluated.length > 0)
-      yield* Effect.logWarning(
-        `Plugin ${name}: hook \`if\` conditions are not evaluated, so these hooks run on every call their matcher matches: ${unevaluated.join('; ')}`,
-      );
-    return { hooks, unsupported };
-  });
-}
+    add('manifest', config.success);
+  }
+  if (unevaluated.length > 0)
+    yield* Effect.logWarning(
+      `Plugin ${name}: hook \`if\` conditions are not evaluated, so these hooks run on every call their matcher matches: ${unevaluated.join('; ')}`,
+    );
+  return { hooks, unsupported };
+});
 
 /** The labels of `components` that `dir` contains, by field or file. */
 function presentComponents(
@@ -457,94 +459,95 @@ function presentComponents(
  * marketplace entry, as a non-strict Claude Code marketplace allows, or on a
  * reread the plugin's own record.
  */
-export function readPlugin(dir: string, fallback?: PluginFallback) {
-  return Effect.gen(function* () {
-    const found = yield* readPluginManifests(dir);
-    const manifests: PluginFallback[] = [...found];
-    if (manifests.length === 0 && fallback) manifests.push(fallback);
-    const primary = manifests[0];
-    if (!primary) {
-      return yield* failPlugin(
-        `No plugin manifest in ${dir}: expected ${PLUGIN_MANIFEST_FILES.join(' or ')}.`,
-      );
-    }
-    const name = Schema.decodeUnknownResult(SkillNameSchema)(primary.name);
-    if (!Result.isSuccess(name)) {
-      return yield* failPlugin(
-        `Plugin name "${primary.name}" is not usable: ${name.failure.message}.`,
-      );
-    }
-    // A plugin's MCP servers are named plugin_<plugin>_<server>: the plugin
-    // name must fit a server name on its own.
-    if (
-      !Result.isSuccess(
-        Schema.decodeUnknownResult(ServerNameSchema)(name.success),
-      )
-    ) {
-      return yield* failPlugin(
-        `Plugin name "${name.success}" is too long: use at most 32 characters.`,
-      );
-    }
-    const declared = [
-      'skills',
-      ...manifests.flatMap((source) => toList(source.skills)),
-    ];
-    // The components are read at once and taken in order, so the failure
-    // reported is the first a sequential read would meet. Hooks, which
-    // warn, are read only once the parts before them have succeeded.
-    const parts = yield* Effect.all(
-      {
-        skills: Effect.all(
-          declared.map((candidate, index) =>
-            Effect.flatMap(containedPath(dir, candidate), (resolved) =>
-              resolved !== undefined || index === 0
-                ? Effect.succeed(resolved)
-                : // The conventional directory is optional; a declared one is not.
-                  failPlugin(
-                    `Plugin ${name.success} declares skills at "${candidate}", which does not exist.`,
-                  ),
-            ),
-          ),
-          { concurrency: 'unbounded', mode: 'result' },
-        ),
-        mcp: mcpServersOf(dir, name.success, found),
-        commands: markdownFiles(
-          dir,
-          'commands',
-          found.flatMap((manifest) => toList(manifest.commands)),
-        ),
-        agents: markdownFiles(
-          dir,
-          'agents',
-          found.flatMap((manifest) => toList(manifest.agents)),
-        ),
-        code: presentComponents(dir, found, CODE_COMPONENTS),
-        ignored: presentComponents(dir, found, IGNORED_COMPONENTS),
-      },
-      { concurrency: 'unbounded', mode: 'result' },
+export const readPlugin = Effect.fn('readPlugin')(function* (
+  dir: string,
+  fallback?: PluginFallback,
+) {
+  const found = yield* readPluginManifests(dir);
+  const manifests: PluginFallback[] = [...found];
+  if (manifests.length === 0 && fallback) manifests.push(fallback);
+  const primary = manifests[0];
+  if (!primary) {
+    return yield* failPlugin(
+      `No plugin manifest in ${dir}: expected ${PLUGIN_MANIFEST_FILES.join(' or ')}.`,
     );
-    const skills = new Set<string>();
-    for (const root of yield* Effect.forEach(
-      yield* Effect.fromResult(parts.skills),
-      Effect.fromResult,
-    ))
-      if (root !== undefined) skills.add(path.relative(dir, root) || '.');
-    const mcp = yield* Effect.fromResult(parts.mcp);
-    return {
-      name: name.success,
-      version: primary.version,
-      description: primary.description,
-      skills: [...skills],
-      commands: yield* Effect.fromResult(parts.commands),
-      agents: yield* Effect.fromResult(parts.agents),
-      mcpServers: mcp.servers,
-      hooks: yield* hooksOf(dir, name.success, found),
-      code: yield* Effect.fromResult(parts.code),
-      ignored: yield* Effect.fromResult(parts.ignored),
-      warnings: mcp.warnings,
-    } satisfies ResolvedPlugin;
-  });
-}
+  }
+  const name = Schema.decodeUnknownResult(SkillNameSchema)(primary.name);
+  if (!Result.isSuccess(name)) {
+    return yield* failPlugin(
+      `Plugin name "${primary.name}" is not usable: ${name.failure.message}.`,
+    );
+  }
+  // A plugin's MCP servers are named plugin_<plugin>_<server>: the plugin
+  // name must fit a server name on its own.
+  if (
+    !Result.isSuccess(
+      Schema.decodeUnknownResult(ServerNameSchema)(name.success),
+    )
+  ) {
+    return yield* failPlugin(
+      `Plugin name "${name.success}" is too long: use at most 32 characters.`,
+    );
+  }
+  const declared = [
+    'skills',
+    ...manifests.flatMap((source) => toList(source.skills)),
+  ];
+  // The components are read at once and taken in order, so the failure
+  // reported is the first a sequential read would meet. Hooks, which
+  // warn, are read only once the parts before them have succeeded.
+  const parts = yield* Effect.all(
+    {
+      skills: Effect.all(
+        declared.map((candidate, index) =>
+          Effect.flatMap(containedPath(dir, candidate), (resolved) =>
+            resolved !== undefined || index === 0
+              ? Effect.succeed(resolved)
+              : // The conventional directory is optional; a declared one is not.
+                failPlugin(
+                  `Plugin ${name.success} declares skills at "${candidate}", which does not exist.`,
+                ),
+          ),
+        ),
+        { concurrency: 'unbounded', mode: 'result' },
+      ),
+      mcp: mcpServersOf(dir, name.success, found),
+      commands: markdownFiles(
+        dir,
+        'commands',
+        found.flatMap((manifest) => toList(manifest.commands)),
+      ),
+      agents: markdownFiles(
+        dir,
+        'agents',
+        found.flatMap((manifest) => toList(manifest.agents)),
+      ),
+      code: presentComponents(dir, found, CODE_COMPONENTS),
+      ignored: presentComponents(dir, found, IGNORED_COMPONENTS),
+    },
+    { concurrency: 'unbounded', mode: 'result' },
+  );
+  const skills = new Set<string>();
+  for (const root of yield* Effect.forEach(
+    yield* Effect.fromResult(parts.skills),
+    Effect.fromResult,
+  ))
+    if (root !== undefined) skills.add(path.relative(dir, root) || '.');
+  const mcp = yield* Effect.fromResult(parts.mcp);
+  return {
+    name: name.success,
+    version: primary.version,
+    description: primary.description,
+    skills: [...skills],
+    commands: yield* Effect.fromResult(parts.commands),
+    agents: yield* Effect.fromResult(parts.agents),
+    mcpServers: mcp.servers,
+    hooks: yield* hooksOf(dir, name.success, found),
+    code: yield* Effect.fromResult(parts.code),
+    ignored: yield* Effect.fromResult(parts.ignored),
+    warnings: mcp.warnings,
+  } satisfies ResolvedPlugin;
+});
 
 /** Count the skill directories (`<name>/SKILL.md`) under one skill root; an
  *  entry that is not a directory has no `SKILL.md` under it. */

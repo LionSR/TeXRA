@@ -4,6 +4,8 @@
  * notices, and the tool-use/team instruction assemblers built on top
  * of them. Formerly one file per concern under `_helpers/`.
  */
+import { Predicate } from 'effect';
+
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 
 const TERMINAL_RUN_GUIDANCE =
@@ -30,7 +32,7 @@ function formatCliRunFileInstruction(init: {
         'Do not modify them unless the user explicitly asks for edits.',
       ],
     }),
-  ].filter((part): part is string => part !== undefined);
+  ].filter(Predicate.isNotUndefined);
 
   return parts.length > 0 ? parts.join('\n\n') : undefined;
 }

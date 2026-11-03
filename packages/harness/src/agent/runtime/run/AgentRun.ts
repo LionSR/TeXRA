@@ -301,8 +301,9 @@ export const agentRunLayer = (
         .pipe(Scope.provide(bindingScope));
       const model = yield* SynchronizedRef.make(bound);
       const swapModel: AgentRunShape['swapModel'] = (next) =>
-        SynchronizedRef.updateAndGetEffect(model, (current) =>
-          Effect.gen(function* () {
+        SynchronizedRef.updateAndGetEffect(
+          model,
+          Effect.fnUntraced(function* (current) {
             const fork = yield* Scope.fork(scope);
             const replacement = yield* next(current).pipe(
               Scope.provide(fork),

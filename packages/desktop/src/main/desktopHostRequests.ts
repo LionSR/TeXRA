@@ -139,12 +139,12 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
      * tab through the build display, as a run's outputs do. The math markup
      * is left to `diffCommandExecutor`, which reads `LATEXDIFF_MATH_MARKUP`.
      */
-    const latexdiffAgainstCommit = (
-      action: 'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc',
-      baseFile: string,
-      commit: string,
-    ) =>
-      Effect.gen(function* () {
+    const latexdiffAgainstCommit = Effect.fn('latexdiffAgainstCommit')(
+      function* (
+        action: 'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc',
+        baseFile: string,
+        commit: string,
+      ) {
         if (!baseFile) {
           return yield* Effect.fail(
             new Rejected({ reason: 'Choose a base file first.' }),
@@ -178,7 +178,8 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         );
         const message = latexdiffPackMessage(packed);
         if (message) yield* host.showInfoMessage(message);
-      });
+      },
+    );
 
     /** This window's half of the shared body's binding table: every verb
      *  mapped onto the window's dialogs, its preview host, its settings
@@ -244,40 +245,35 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
     /** The arms this window performs its own way. A capability's failure is
      *  named through `hostFailure`, so the failure channel is the value the
      *  arm failed with. */
-    const own = (request: OwnHostRequest) =>
-      Effect.gen(function* () {
-        switch (request.kind) {
-          case 'popOut':
-          case 'popBack':
-            return yield* Effect.fail(notOnDesktop('Pop-out to editor'));
-          case 'pickFiles': {
-            const { fileType } = request;
-            if (fileType === 'base' || fileType === 'edited') {
-              return yield* Effect.fail(
-                notOnDesktop(`A picker for ${fileType} files`),
-              );
-            }
-            const paths = yield* options.files
-              .pickFiles(fileType)
-              .pipe(
-                Effect.mapError((cause) =>
-                  hostFailure('files.pickFiles', cause),
-                ),
-              );
-            if (paths === null) return yield* Effect.fail(new Cancelled());
-            return { kind: 'files' as const, paths };
-          }
-          case 'useCurrentFile':
-          case 'addOpenedFiles':
+    const own = Effect.fn('own')(function* (request: OwnHostRequest) {
+      switch (request.kind) {
+        case 'popOut':
+        case 'popBack':
+          return yield* Effect.fail(notOnDesktop('Pop-out to editor'));
+        case 'pickFiles': {
+          const { fileType } = request;
+          if (fileType === 'base' || fileType === 'edited') {
             return yield* Effect.fail(
-              notOnDesktop("The editor's current file"),
+              notOnDesktop(`A picker for ${fileType} files`),
             );
-          case 'gettingStarted':
-            return yield* Effect.fail(notOnDesktop('Starting a project'));
-          case 'workspaceFile':
-            return yield* options.workspaceFile(request.action);
+          }
+          const paths = yield* options.files
+            .pickFiles(fileType)
+            .pipe(
+              Effect.mapError((cause) => hostFailure('files.pickFiles', cause)),
+            );
+          if (paths === null) return yield* Effect.fail(new Cancelled());
+          return { kind: 'files' as const, paths };
         }
-      });
+        case 'useCurrentFile':
+        case 'addOpenedFiles':
+          return yield* Effect.fail(notOnDesktop("The editor's current file"));
+        case 'gettingStarted':
+          return yield* Effect.fail(notOnDesktop('Starting a project'));
+        case 'workspaceFile':
+          return yield* options.workspaceFile(request.action);
+      }
+    });
 
     return {
       bindings,

@@ -107,16 +107,16 @@ export type CliConfigExecuteResult =
 
 /** A tool-use run (`texra run` on an agent with no task, `texra team run`):
  *  one model/tool cycle, with the session resume hint on an interrupt. */
-export function executeCliToolUseConfig(
-  config: AgentConfigPayload,
-  runContext: CliContext,
-  options: {
-    readonly services: CliExecuteOptions['services'];
-    /** False when invocation-owned temporary inputs will not survive exit. */
-    readonly recoveryInputIsDurable: boolean;
-  },
-) {
-  return Effect.gen(function* () {
+export const executeCliToolUseConfig = Effect.fn('executeCliToolUseConfig')(
+  function* (
+    config: AgentConfigPayload,
+    runContext: CliContext,
+    options: {
+      readonly services: CliExecuteOptions['services'];
+      /** False when invocation-owned temporary inputs will not survive exit. */
+      readonly recoveryInputIsDurable: boolean;
+    },
+  ) {
     const recoveryProcessCwd = tryReadCliCwd();
     const workingDirectory = config.workingDirectory || runContext.cwd;
     const run = yield* executeCliConfig(config, runContext, {
@@ -146,8 +146,8 @@ export function executeCliToolUseConfig(
       },
       exitCode: runOutcomeExitCode(result.outcome),
     };
-  });
-}
+  },
+);
 
 /** How a headless run enters its session: `texra resume`'s resume of the
  *  persisted run (a refusal is the caller's usage exit), or a fresh start
@@ -192,12 +192,18 @@ function launchOn(
  * failures) is genuinely unexpected and is rethrown so the crash handler
  * still reports it.
  */
-export function executeCliConfig(
+export const executeCliConfig: (
   config: AgentConfigPayload,
   runContext: CliContext,
   options: CliExecuteOptions,
-): Effect.Effect<CliConfigExecuteResult, Error, ProcessServices> {
-  return Effect.gen(function* () {
+) => Effect.Effect<CliConfigExecuteResult, Error, ProcessServices> = Effect.fn(
+  'executeCliConfig',
+)(
+  function* (
+    config: AgentConfigPayload,
+    runContext: CliContext,
+    options: CliExecuteOptions,
+  ) {
     const parsed = yield* Effect.result(decodeLaunchConfig(config));
     if (Result.isFailure(parsed)) {
       writeTextStderr(parsed.failure.reason);
@@ -589,7 +595,6 @@ export function executeCliConfig(
 
     yield* detachPresentation;
     return { ok: true as const, result: { ...runResult.result, plugins } };
-  }).pipe(
-    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
-  );
-}
+  },
+  Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+);

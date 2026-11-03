@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
 // Third-party imports
-import { Effect, PlatformError } from 'effect';
+import { Effect, PlatformError, Predicate } from 'effect';
 
 // Local imports
 import {
@@ -28,8 +28,7 @@ const closed = { stdout: false, stderr: false };
 type StreamKey = 'stdout' | 'stderr';
 
 function isCliPipeClosureError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null || !('code' in error))
-    return false;
+  if (!Predicate.hasProperty(error, 'code')) return false;
   const code = error.code;
   return code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED';
 }
@@ -329,8 +328,9 @@ export class NdjsonStdoutSink {
    * write that throws (including a stringify of a malformed record, which is
    * a producer bug) must not pass without a trace.
    */
-  private writeLine(record: CliNdjsonRecord): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly writeLine = Effect.fn('NdjsonStdoutSink.writeLine')(
+    { self: this },
+    function* (record: CliNdjsonRecord): Effect.fn.Return<void> {
       if (this.isClosed()) return;
       const writeResult = yield* Effect.try({
         try: () => this.stdout.write(`${JSON.stringify(record)}\n`),
@@ -353,8 +353,8 @@ export class NdjsonStdoutSink {
       if (!writeResult && !(yield* this.waitForStdoutDrain())) {
         this.closeQueue();
       }
-    });
-  }
+    },
+  );
 
   private isClosed(): boolean {
     return this.stdoutClosed || !this.stdout.usable;

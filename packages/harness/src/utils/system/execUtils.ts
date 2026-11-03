@@ -44,32 +44,33 @@ function normalizeOutput(text: string | null | undefined): string {
  * attributes each project's commits by that project's own setting. Empty when
  * the caller has no workspace, or when commit marking is off.
  */
-const gitAuthorEnv = (settings: SettingsStores | undefined) =>
-  Effect.gen(function* () {
-    if (!settings) return {};
-    if (
-      !(yield* Settings.get<boolean>(
-        settings,
-        WorkspaceStateKey.GIT_MARK_COMMITS,
-      ))
-    ) {
-      return {};
-    }
-    const name = yield* Settings.get<string>(
+const gitAuthorEnv = Effect.fn('gitAuthorEnv')(function* (
+  settings: SettingsStores | undefined,
+) {
+  if (!settings) return {};
+  if (
+    !(yield* Settings.get<boolean>(
       settings,
-      WorkspaceStateKey.GIT_AUTHOR_NAME,
-    );
-    const email = yield* Settings.get<string>(
-      settings,
-      WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-    );
-    return {
-      GIT_AUTHOR_NAME: name,
-      GIT_AUTHOR_EMAIL: email,
-      GIT_COMMITTER_NAME: name,
-      GIT_COMMITTER_EMAIL: email,
-    };
-  });
+      WorkspaceStateKey.GIT_MARK_COMMITS,
+    ))
+  ) {
+    return {};
+  }
+  const name = yield* Settings.get<string>(
+    settings,
+    WorkspaceStateKey.GIT_AUTHOR_NAME,
+  );
+  const email = yield* Settings.get<string>(
+    settings,
+    WorkspaceStateKey.GIT_AUTHOR_EMAIL,
+  );
+  return {
+    GIT_AUTHOR_NAME: name,
+    GIT_AUTHOR_EMAIL: email,
+    GIT_COMMITTER_NAME: name,
+    GIT_COMMITTER_EMAIL: email,
+  };
+});
 
 /**
  * The complete environment a command runs with: {@link inheritedEnv} on the

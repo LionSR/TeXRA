@@ -1082,14 +1082,7 @@ both read through here, so the value and the origin a status surface
 reports can never disagree.
 
 ```ts
-function resolveCredential(
-  store: Pick<CredentialStore, 'get'>,
-  name: string,
-  envNames: readonly string[],
-): Effect.Effect<
-  { readonly value: string | undefined; readonly origin: CredentialOrigin },
-  SecretsFailed
->
+const resolveCredential: (store: Pick<CredentialStore, "get">, name: string, envNames: readonly string[]) => Effect<{ readonly value: string | undefined; readonly origin: CredentialOrigin; }, SecretsFailed, never>
 ```
 
 ## ResolvedTurn

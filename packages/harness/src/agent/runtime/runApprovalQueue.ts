@@ -123,24 +123,23 @@ export const sessionApprovals: Effect.Effect<
           ? approval.bypassed
           : approval.prompt,
       ).pipe(withPerKeyLane(lanes[kind], runId)),
-    activationRows: (runId) =>
-      Effect.gen(function* () {
-        const runs = new Map<RunId, { parentId: RunId | null }>();
-        const policy = new Map<RunId, ApprovalGrants>();
-        for (let id: RunId | null = runId; id !== null && !runs.has(id);) {
-          const facts: RunRows | null = yield* log.facts(id);
-          const parentId: RunId | null = facts?.parent?.id ?? null;
-          runs.set(id, { parentId });
-          policy.set(id, facts?.grants ?? NO_APPROVAL_GRANTS);
-          id = parentId;
-        }
-        const next = afterActivation(
-          { runs, policy },
-          runId,
-          policy.get(runId) ?? NO_APPROVAL_GRANTS,
-        );
-        return next === null ? [] : [policyRow(runId, next)];
-      }),
+    activationRows: Effect.fn('activationRows')(function* (runId) {
+      const runs = new Map<RunId, { parentId: RunId | null }>();
+      const policy = new Map<RunId, ApprovalGrants>();
+      for (let id: RunId | null = runId; id !== null && !runs.has(id);) {
+        const facts: RunRows | null = yield* log.facts(id);
+        const parentId: RunId | null = facts?.parent?.id ?? null;
+        runs.set(id, { parentId });
+        policy.set(id, facts?.grants ?? NO_APPROVAL_GRANTS);
+        id = parentId;
+      }
+      const next = afterActivation(
+        { runs, policy },
+        runId,
+        policy.get(runId) ?? NO_APPROVAL_GRANTS,
+      );
+      return next === null ? [] : [policyRow(runId, next)];
+    }),
     change: (runId, edit, rows = []) => {
       // The claim holder's own grants are folded by the time each change
       // returns, so a change the view already shows writes nothing.
@@ -217,15 +216,15 @@ type BypassChange = Extract<PolicyChange, { field: 'bypass' }>;
  * offering no grant (another tool's call, a hook's ask) waits for a person;
  * an edit's approval applies the user's edit; one still opening stays.
  */
-function approvePendingUnderBypass({
-  runId,
-  bypass,
-}: BypassChange): Effect.Effect<
-  void,
-  RequestError,
-  SessionViewAccess | SessionRequests
-> {
-  return Effect.gen(function* () {
+const approvePendingUnderBypass = Effect.fn('approvePendingUnderBypass')(
+  function* ({
+    runId,
+    bypass,
+  }: BypassChange): Effect.fn.Return<
+    void,
+    RequestError,
+    SessionViewAccess | SessionRequests
+  > {
     const { ref } = yield* SessionViewAccess;
     const requests = yield* SessionRequests;
     yield* Effect.forEach(
@@ -246,8 +245,8 @@ function approvePendingUnderBypass({
         }),
       ),
     );
-  });
-}
+  },
+);
 
 /** Whether `change` only narrows a run (a bypass off, a lower limit): open
  *  on any run, live or not, where a widening needs a working run's `grant`. */

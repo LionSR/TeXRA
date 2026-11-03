@@ -312,8 +312,8 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   yield* Effect.forkScoped(
     Stream.fromQueue(outbound).pipe(
       Stream.run(options.output),
-      Effect.catch((error) =>
-        Effect.gen(function* () {
+      Effect.catch(
+        Effect.fnUntraced(function* (error) {
           if ((yield* Ref.get(closedReason)) === undefined) {
             yield* Effect.logDebug(
               `stdin write failed: ${toErrorMessage(error)}`,
@@ -332,8 +332,8 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
         (buffer, chunk) => decode(Buffer.concat([buffer, chunk])),
       ),
       Stream.runForEach(dispatch),
-      Effect.catch((error) =>
-        Effect.gen(function* () {
+      Effect.catch(
+        Effect.fnUntraced(function* (error) {
           if ((yield* Ref.get(closedReason)) === undefined) {
             yield* Effect.logDebug(
               `connection error: ${toErrorMessage(error)}`,
