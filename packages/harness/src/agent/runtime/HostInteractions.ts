@@ -254,10 +254,11 @@ export class SessionHostInteractions implements HostInteractions {
       : Effect.void;
   }
 
-  private replayPendingPresentations(
-    interactions: HostInteractions,
-  ): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly replayPendingPresentations = Effect.fn(
+    'SessionHostInteractions.replayPendingPresentations',
+  )(
+    { self: this },
+    function* (interactions: HostInteractions): Effect.fn.Return<void> {
       while (
         this.attached === interactions &&
         this.pendingPresentationReplays.length > 0
@@ -275,8 +276,8 @@ export class SessionHostInteractions implements HostInteractions {
           ),
         );
       }
-    });
-  }
+    },
+  );
 }
 
 /**

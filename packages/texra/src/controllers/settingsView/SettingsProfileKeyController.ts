@@ -84,11 +84,14 @@ export class SettingsProfileKeyController {
     );
   }
 
-  private storeProviderKey(
-    provider: string,
-    apiKey: string,
-  ): Effect.Effect<void, Error, Secrets> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly storeProviderKey = Effect.fn(
+    'SettingsProfileKeyController.storeProviderKey',
+  )(
+    { self: this },
+    function* (
+      provider: string,
+      apiKey: string,
+    ): Effect.fn.Return<void, Error, Secrets> {
       const displayName = yield* getProviderDisplayName(
         this.deps.stores,
         provider,
@@ -100,16 +103,21 @@ export class SettingsProfileKeyController {
         label: displayName,
       });
       yield* this.notify(`${displayName} API key has been set`);
-    });
-  }
+    },
+  );
 
   /** Name a failed action after its provider; interruption propagates. */
-  private run(
-    provider: string,
-    verb: 'set' | 'remove',
-    action: Effect.Effect<void, Error | PromptFailed, Secrets>,
-  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed, Secrets> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly run = Effect.fn('SettingsProfileKeyController.run')(
+    { self: this },
+    function* (
+      provider: string,
+      verb: 'set' | 'remove',
+      action: Effect.Effect<void, Error | PromptFailed, Secrets>,
+    ): Effect.fn.Return<
+      void,
+      ProviderKeyActionFailed | StateReadFailed,
+      Secrets
+    > {
       const label = yield* getProviderDisplayName(this.deps.stores, provider);
       yield* action.pipe(
         Effect.mapError(
@@ -120,8 +128,8 @@ export class SettingsProfileKeyController {
             }),
         ),
       );
-    });
-  }
+    },
+  );
 
   /**
    * Tell the user a key changed. Best-effort by design and not awaited, as it

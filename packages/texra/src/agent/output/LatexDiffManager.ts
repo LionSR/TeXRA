@@ -103,17 +103,17 @@ export class LatexDiffManager {
    * was removed under us, or a link cycle) falls back to the path as given —
    * the same directory latexdiff would have used without resolution.
    */
-  private getWorkingDirectory(
+  private readonly getWorkingDirectory = Effect.fn(
+    'LatexDiffManager.getWorkingDirectory',
+  )(function* (
     location: FileLocation,
-  ): Effect.Effect<string, never, FileSystem.FileSystem> {
-    return Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const resolved = yield* fs
-        .realPath(location.absolutePath)
-        .pipe(Effect.orElseSucceed(() => location.absolutePath));
-      return path.dirname(resolved);
-    });
-  }
+  ): Effect.fn.Return<string, never, FileSystem.FileSystem> {
+    const fs = yield* FileSystem.FileSystem;
+    const resolved = yield* fs
+      .realPath(location.absolutePath)
+      .pipe(Effect.orElseSucceed(() => location.absolutePath));
+    return path.dirname(resolved);
+  });
 
   private logLatexdiffResult(result: LaTeXdiffResult, operation: string): void {
     if (result.success) {
@@ -349,22 +349,23 @@ export class LatexDiffManager {
     );
   }
 
-  private compileDiff(
-    diffPath: string,
-    referenceLocation: FileLocation,
-    diffDirectory: DiffOutputDirectory,
-    round: number,
-    sourceLocation: FileLocation,
-    pdfStemSuffix: string,
-  ): Effect.Effect<
-    {
-      diffLocation: FileLocation;
-      artifact: RunStorageFileLocation | null;
-    },
-    Error,
-    DiffServices
-  > {
-    return Effect.gen({ self: this }, function* () {
+  private readonly compileDiff = Effect.fn('LatexDiffManager.compileDiff')(
+    { self: this },
+    function* (
+      diffPath: string,
+      referenceLocation: FileLocation,
+      diffDirectory: DiffOutputDirectory,
+      round: number,
+      sourceLocation: FileLocation,
+      pdfStemSuffix: string,
+    ): Effect.fn.Return<
+      {
+        diffLocation: FileLocation;
+        artifact: RunStorageFileLocation | null;
+      },
+      Error,
+      DiffServices
+    > {
       const diffFileName = path.basename(diffPath);
       const diffLocation = createRunStorageLocation(
         path.join(diffDirectory.absolutePath, diffFileName),
@@ -447,6 +448,6 @@ export class LatexDiffManager {
           ),
       );
       return { diffLocation, artifact };
-    });
-  }
+    },
+  );
 }

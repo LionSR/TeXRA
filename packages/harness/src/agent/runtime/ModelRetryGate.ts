@@ -287,13 +287,16 @@ export class ModelRetryGate {
     };
   }
 
-  private markRouteFailure(
-    route: string,
-    permit: RetryPermit,
-    baseBackoffMs: number,
-    failure: RouteFailure,
-  ): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly markRouteFailure = Effect.fn(
+    'ModelRetryGate.markRouteFailure',
+  )(
+    { self: this },
+    function* (
+      route: string,
+      permit: RetryPermit,
+      baseBackoffMs: number,
+      failure: RouteFailure,
+    ): Effect.fn.Return<void> {
       const state = this.routes.get(route);
       if (!state || permit.version !== state.version) return;
       if (state.phase !== 'healthy' && !permit.probe) return;
@@ -313,8 +316,8 @@ export class ModelRetryGate {
           failure.retryAfterMs ?? 0,
         );
       yield* this.scheduleProbe(state);
-    });
-  }
+    },
+  );
 
   private markReachable(
     route: string,
@@ -374,11 +377,9 @@ export class ModelRetryGate {
   }
 
   /** An unused probe permit reopens cooling so the next waiter probes at once. */
-  private abandonRoute(
-    state: RouteState,
-    permit: RetryPermit,
-  ): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly abandonRoute = Effect.fn('ModelRetryGate.abandonRoute')(
+    { self: this },
+    function* (state: RouteState, permit: RetryPermit): Effect.fn.Return<void> {
       if (
         !permit.probe ||
         permit.version !== state.version ||
@@ -389,8 +390,8 @@ export class ModelRetryGate {
       state.phase = 'cooling';
       state.retryAt = yield* Clock.currentTimeMillis;
       yield* this.scheduleProbe(state);
-    });
-  }
+    },
+  );
 
   private cancelProbe(state: RouteState): Effect.Effect<void> {
     const probe = state.probe;

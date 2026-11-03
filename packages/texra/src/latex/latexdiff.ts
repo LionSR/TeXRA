@@ -96,14 +96,16 @@ export class LaTeXdiffService {
       });
   }
 
-  private read(
+  private readonly read = Effect.fn('LaTeXdiffService.read')(function* (
     absolutePath: string,
-  ): Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem> {
-    return Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      return yield* readNormalizedFile(fs, absolutePath);
-    });
-  }
+  ): Effect.fn.Return<
+    string,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  > {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* readNormalizedFile(fs, absolutePath);
+  });
 
   /** Read both diff inputs, returning null when either input no longer exists. */
   private readDiffInputs(

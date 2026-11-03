@@ -116,12 +116,10 @@ export const collectFilesFromPatterns = Effect.fn(
     <A>(value: A) =>
     <R>(effect: Effect.Effect<A, PlatformError.PlatformError, R>) =>
       effect.pipe(
-        Effect.catch((error) =>
-          error.reason._tag === 'NotFound' ||
-          error.reason._tag === 'BadResource'
-            ? Effect.succeed(value)
-            : Effect.fail(error),
-        ),
+        Effect.catchReasons('PlatformError', {
+          NotFound: () => Effect.succeed(value),
+          BadResource: () => Effect.succeed(value),
+        }),
       );
 
   const files = new Set<string>();
