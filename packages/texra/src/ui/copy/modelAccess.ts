@@ -125,9 +125,10 @@ export function errorRowText({ summary, details, failure }: ErrorRow): {
   readonly summary: string;
   readonly detailText: TranscriptText;
 } {
-  const words = failure === undefined ? undefined : modelFailureText(failure);
   const worded = (text: string): string =>
-    words !== undefined && text === failure?.message ? words : text;
+    failure !== undefined && text === failure.message
+      ? modelFailureText(failure)
+      : text;
   return {
     summary: worded(summary.full),
     detailText: transcriptText(
