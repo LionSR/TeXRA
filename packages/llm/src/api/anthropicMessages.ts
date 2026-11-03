@@ -682,7 +682,7 @@ export function anthropicMessagesModel(
             // message_stop finishes the response; HTTP EOF is not an additional condition.
             Stream.takeUntil(() => wire.stopped()),
           ),
-          { origin, provider: 'Anthropic', ...(finalize ? { finalize } : {}) },
+          { origin, provider: 'Anthropic', finalize },
         );
       }).pipe(
         Effect.mapError((error) =>

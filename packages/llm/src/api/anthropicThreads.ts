@@ -89,19 +89,22 @@ function threadRejection(
 }
 
 /**
- * How a conversation's next request goes out: continuing `responseId`, or
- * with no thread (`null`) once the API could not store it.
+ * How a request went out, and so how its conversation's next one goes: on a
+ * thread (`replayed` when it was a full create after a lost thread), or
+ * whole once the API could not store the conversation.
  */
+type Mode =
+  | { readonly threaded: true; readonly replayed: boolean }
+  | { readonly threaded: false };
+
+/** A conversation's last response, and how its next request goes out. */
 interface StoredThread {
-  readonly responseId: string | null;
-  /** The response came from a replay: a full create after a lost thread. */
-  readonly replayed: boolean;
+  readonly responseId: string;
+  readonly mode: Mode;
   /** How many lowered messages the conversation holds, its response included. */
   readonly length: number;
   readonly expiresAtMs: number;
 }
-/** How a request went out, and so what its response stores. */
-type Sent = Pick<StoredThread, 'replayed'> & { readonly threaded: boolean };
 
 /** An SDK event stream, plain or beta: the codec reads either. */
 export type SdkSource = AsyncIterable<unknown> & {
@@ -121,7 +124,7 @@ interface MessageThreads {
   ) => Effect.Effect<
     {
       readonly source: SdkSource;
-      readonly finalize?: (
+      readonly finalize: (
         result: TurnResult,
       ) => Effect.Effect<TurnResult, ModelError>;
     },
@@ -168,7 +171,7 @@ export function messageThreads(options: {
     }
     return null;
   };
-  const store = (turn: ResolvedTurn, result: TurnResult, sent: Sent) =>
+  const store = (turn: ResolvedTurn, result: TurnResult, mode: Mode) =>
     Effect.gen(function* () {
       const responseId = result.providerResponseId;
       if (
@@ -186,8 +189,8 @@ export function messageThreads(options: {
       prune(nowMs);
       const key = threadKey(held, held.messages);
       live.set(key, {
-        responseId: sent.threaded ? responseId : null,
-        replayed: sent.replayed,
+        responseId,
+        mode,
         length: held.messages.length,
         expiresAtMs: nowMs + THREAD_LIFETIME_MS,
       });
@@ -201,30 +204,39 @@ export function messageThreads(options: {
 
   const send: MessageThreads['send'] = (turn, body) =>
     Effect.gen(function* () {
-      if (!supported) return { source: yield* options.open(body) };
-      const create = { ...body, thread: { type: 'create' }, betas } as const;
-      const stored = take(body, yield* Clock.currentTimeMillis);
-      let sent: Sent = { threaded: true, replayed: false };
-      const unthreaded = (replayed: boolean) => {
-        sent = { threaded: false, replayed };
-        return options.open(body);
-      };
+      const attempt = (request: ThreadedBody, mode: Mode) =>
+        Effect.map(options.open(request), (source) => ({ source, mode }));
+      const whole = attempt(body, { threaded: false });
+      const create = (replayed: boolean) =>
+        attempt(
+          { ...body, thread: { type: 'create' }, betas },
+          { threaded: true, replayed },
+        );
+      const stored = supported
+        ? take(body, yield* Clock.currentTimeMillis)
+        : null;
       // A new conversation creates a thread; a stored one continues it with
       // only the new messages, or goes out whole if the API cannot hold it.
       const first = () => {
-        if (stored === null) return options.open(create);
-        if (stored.responseId === null) return unthreaded(false);
-        return options.open({
-          ...body,
-          // Undefined fields are not serialized; an explicit null is refused.
-          system: undefined,
-          tools: undefined,
-          messages: body.messages.slice(stored.length),
-          thread: { type: 'continue', previous_message_id: stored.responseId },
-          betas,
-        });
+        if (!supported || stored?.mode.threaded === false) return whole;
+        if (stored === null) return create(false);
+        return attempt(
+          {
+            ...body,
+            // Undefined fields are not serialized; an explicit null is refused.
+            system: undefined,
+            tools: undefined,
+            messages: body.messages.slice(stored.length),
+            thread: {
+              type: 'continue',
+              previous_message_id: stored.responseId,
+            },
+            betas,
+          },
+          { threaded: true, replayed: false },
+        );
       };
-      const source = yield* first().pipe(
+      const { source, mode } = yield* first().pipe(
         Effect.catch((error) => {
           const rejection = threadRejection(error);
           if (rejection === 'unsupported') {
@@ -232,25 +244,24 @@ export function messageThreads(options: {
             live.clear();
             return Effect.logWarning(
               `Anthropic refused message threads; sending whole conversations: ${error.message}`,
-            ).pipe(Effect.andThen(options.open(body)));
+            ).pipe(Effect.andThen(whole));
           }
-          if (rejection === null || stored?.responseId == null)
+          if (rejection === null || stored?.mode.threaded !== true)
             return Effect.fail(error);
           // Lost again right after a replay: the API cannot store this
           // conversation, so it goes out whole from now on.
-          if (rejection === 'not-found' && stored.replayed)
+          if (rejection === 'not-found' && stored.mode.replayed)
             return Effect.logDebug(
               `Anthropic cannot hold this conversation's thread; sending it whole: ${error.message}`,
-            ).pipe(Effect.andThen(unthreaded(true)));
-          sent = { threaded: true, replayed: true };
+            ).pipe(Effect.andThen(whole));
           return Effect.logDebug(
             `Anthropic thread not continued; resending the conversation: ${error.message}`,
-          ).pipe(Effect.andThen(options.open(create)));
+          ).pipe(Effect.andThen(create(true)));
         }),
       );
       return {
         source,
-        finalize: (result: TurnResult) => store(turn, result, sent),
+        finalize: (result: TurnResult) => store(turn, result, mode),
       };
     });
   return { send };
