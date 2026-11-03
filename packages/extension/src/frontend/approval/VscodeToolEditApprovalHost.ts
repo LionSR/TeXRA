@@ -167,7 +167,9 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   /** `unapplied` moves to an untitled editor before the diff closes, where
-   *  it outlives the files removed under the diff. */
+   *  it outlives the files removed under the diff. If it cannot move, the
+   *  diff and its files stay, so the user's text is not lost, and the
+   *  failure goes to the caller's report. */
   dispose(unapplied?: string): Effect.Effect<void, HostRequestFailure> {
     const keep =
       unapplied === undefined
@@ -184,11 +186,14 @@ class VscodeToolEditPreview implements ToolEditPreview {
               ),
             );
     return keep.pipe(
-      Effect.andThen(this.diffViewHost.closeDiff(this.diffSession)),
-      // The files go whether the tab close succeeds, fails, or is cut off:
-      // at window teardown that RPC can reject or outlive the shutdown
-      // phase's deadline, and the files would otherwise stay on disk.
-      Effect.ensuring(this.staged.cleanup),
+      Effect.andThen(
+        this.diffViewHost.closeDiff(this.diffSession).pipe(
+          // The files go whether the tab close succeeds, fails, or is cut
+          // off: at window teardown that RPC can reject or outlive the
+          // shutdown phase's deadline, and the files would otherwise stay.
+          Effect.ensuring(this.staged.cleanup),
+        ),
+      ),
     );
   }
 
