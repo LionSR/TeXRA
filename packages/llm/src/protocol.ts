@@ -45,6 +45,15 @@ export const TurnProtocolSchema = Schema.Literals([
 export const ModelOriginSchema = BindingSchema.mapFields(
   Struct.assign({
     protocol: TurnProtocolSchema,
+    /**
+     * What the provider-specific state a turn stores means (reasoning
+     * signatures, encrypted reasoning, provider evidence). It changes only
+     * when a codec would read that stored state differently; adding a field
+     * or changing how a request is built keeps it. A stored turn of another
+     * version is not the same origin (`sameModelOrigin`), so it is sent as
+     * plain content without its reasoning and evidence, as after a model
+     * switch.
+     */
     codecVersion: Schema.Literal(1),
   }),
 );

@@ -15,6 +15,7 @@ import { hiddenRowsText } from '@cli/tui/overflowText';
 import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { formatBytes } from '@ui/copy/format';
+import { errorRowText } from '@ui/copy/modelAccess';
 
 // A body block can be arbitrarily large (a 50 KB tool dump, a long error
 // payload). Finalized scrollback and the live region show a head+tail slice
@@ -98,7 +99,7 @@ export function transcriptRowBodyLines(
       case 'scratchpad':
         return elidedTextLines(row.text, elide);
       case 'error':
-        return elidedTextLines(row.detailText, elide);
+        return elidedTextLines(errorRowText(row).detailText, elide);
       case 'fileList':
         return fileListLines(row);
       case 'contextManagement':

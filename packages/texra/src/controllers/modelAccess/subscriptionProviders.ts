@@ -109,7 +109,7 @@ export interface SubscriptionProvider {
   readonly sessionName: string;
   /** Copy-link toast target ('ChatGPT', 'Grok / xAI'). */
   readonly copyTarget: string;
-  /** Models the subscription unlocks ('Codex models', 'xAI models'). */
+  /** Models the subscription unlocks ('OpenAI models', 'xAI models'). */
   readonly modelFamily: string;
   /**
    * The sign-in program. A host runs it at its own edge (command, IPC or
@@ -296,7 +296,7 @@ const CHATGPT_PROVIDER = defineSubscriptionProvider({
   displayName: 'ChatGPT',
   sessionName: 'ChatGPT',
   copyTarget: 'ChatGPT',
-  modelFamily: 'Codex models',
+  modelFamily: 'OpenAI models',
   coordinator: (secrets) => chatgptCoordinator(secrets),
   getStatus: (secrets) => getChatgptStatus(secrets),
   loginWithLoopback: (options) => chatgptLoginWithLoopback(options),

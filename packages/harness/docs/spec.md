@@ -896,29 +896,33 @@ These existing suites check the sections above.
   `src/test-kernel/controllers/session/sessionEvents.vitest.ts:844` (dense seq,
   one commit order), `:883` (ordinals never reused), `:934` (blobs)
 - **2.3 publisher**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:365` (batches
-  published in order);
-  `src/test-kernel/support/crashConformance.ts:1392` (one job, one transaction)
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:365` (enqueue
+  order); `src/test-kernel/support/crashConformance.ts:1392` (one job, one
+  transaction)
 - **2.4 versions and gate**:
-  `src/test-kernel/schemas/rowVersions.vitest.ts:110`, `:128`, `:162`;
+  `src/test-kernel/schemas/rowVersions.vitest.ts:111`, `:129`, `:163`;
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:486` (newer build
-  refused), `:735` (earlier build's row);
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:751`
-  (undecodable row)
+  refused); `src/test-kernel/controllers/session/sessionEvents.vitest.ts:751`
+  (undecodable row); `src/test-kernel/controllers/session/goldenStore.vitest.ts:735`
+  (earlier build's row), `:207`
 - **3 row kinds**:
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:207` (every golden
-  row decodes); `src/test-kernel/schemas/rowVersions.vitest.ts:110`
+  row decodes); `src/test-kernel/schemas/rowVersions.vitest.ts:111`
 - **4 write points**: `src/test-kernel/support/crashConformance.ts:810`, `:1444`
 - **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1749`
   (batch contract); `src/test-kernel/controllers/session/goldenStore.vitest.ts:383`
-  (the pinned view and run states)
-- **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:441`,
-  `:565` (budget), `:591` (a stopped attempt spends a retry);
-  `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:74`
+  (the fold equals the pinned session view and run states)
+- **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:436`
+  (budget), `:441` (manual retry through a durable approval), `:565`
+  (automatic attempts stop at the limit), `:591` (an attempt the process
+  stopped during spends a retry);
+  `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:72`
 - **7 claims**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:438`, `:1031`,
-  `:1272` (another OS process), `:1385` (dead owner reclaimed), `:1453`
-  (second writer fenced); `src/test-kernel/agent/runtime/resumeRun.vitest.ts:237`
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:438` (requests
+  follow current claims), `:1031` (deletion needs every dependent claim),
+  `:1272` (another OS process), `:1385` (dead owner reclaimed), `:1453` (second
+  writer fenced); `src/test-kernel/agent/runtime/resumeRun.vitest.ts:126`,
+  `:237`
 - **8 requests**: `src/test-kernel/support/crashConformance.ts:49-52`
 - **9 crash guarantees**:
   `src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts`,

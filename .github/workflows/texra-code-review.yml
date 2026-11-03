@@ -1,6 +1,4 @@
 # TeXRA code review, powered by the external texra-ai/texra-action.
-# (Replaces the former in-repo .github/actions/texra-code-review composite
-# action + scripts, which now live in texra-ai/texra-action.)
 name: TeXRA Code Review
 
 # Reviews run once when a PR opens (or leaves draft), not on every push:
