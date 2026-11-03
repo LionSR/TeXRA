@@ -252,8 +252,8 @@ export interface FollowUpRecord {
 
 /**
  * Input `followUpId` of the run whose rows of the {@link RECEIPT_ROW_TYPES}
- * are `rows`, in seq order; undefined for an id no row queued, or a run
- * deleted since. A turn's input is answered at that turn's `turn.end` when
+ * are `rows`, in seq order: `unknown` for an id no row queued, `deleted`
+ * for a run deleted since, its inputs with it. A turn's input is answered at that turn's `turn.end` when
  * the turn completed, and unanswered when it failed, or when the run ended
  * with the turn open and no activation followed (a clean close is not an
  * end: the input is still the resumable run's). An activation after the end
@@ -262,12 +262,12 @@ export interface FollowUpRecord {
 export function followUpReceipt(
   rows: readonly SessionEvent[],
   followUpId: string,
-): FollowUpRecord | undefined {
-  if (rows.some((row) => row.type === 'run.removed')) return undefined;
+): FollowUpRecord | 'unknown' | 'deleted' {
+  if (rows.some((row) => row.type === 'run.removed')) return 'deleted';
   const at = rows.findIndex(
     (row) => row.type === 'followup.queued' && row.followUpId === followUpId,
   );
-  if (at < 0) return undefined;
+  if (at < 0) return 'unknown';
   // cast: the row `findIndex` matched is a `followup.queued`.
   const queued = rows[at] as RowOf<'followup.queued'>;
   const took = rows.findIndex(

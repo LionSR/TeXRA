@@ -33,6 +33,7 @@ import { runRelation } from '@shared/session/runRelation';
 import {
   Conflict,
   NotOwner,
+  Rejected,
   Unavailable,
 } from '@shared/session/runtimeRequest';
 import { isInstruction } from '@shared/session/runFacts';
@@ -133,35 +134,36 @@ const finished = ({ state }: FollowUpReceipt): boolean =>
 
 /**
  * Input `followUpId` of run `runId` as its committed rows say it; with
- * `wait`, once its receipt is finished: the tail opens before the first
- * read, so a row committed between the two is seen. None for an id no row
- * queued, a run deleted, or a session that closed while it waited.
+ * `wait`, once its receipt is finished or the run is deleted: the tail
+ * opens before the first read, so a row committed between the two is seen.
+ * A wait the session's close ends is interrupted: nothing answered it.
  */
 const readFollowUp = Effect.fn('readFollowUp')(function* (
   log: Pick<SessionLog['Service'], 'rows' | 'now' | 'tail'>,
   runId: RunId,
   followUpId: string,
   wait = false,
-): Effect.fn.Return<Option.Option<FollowUpRecord>, DatabaseReadFailed> {
+): Effect.fn.Return<
+  FollowUpRecord | 'unknown' | 'deleted',
+  DatabaseReadFailed
+> {
   const run = qualifyAggregateId('run', runId);
   const read = Effect.map(log.rows(run, RECEIPT_ROW_TYPES), (rows) =>
-    Option.fromUndefinedOr(followUpReceipt(rows, followUpId)),
+    followUpReceipt(rows, followUpId),
   );
+  const done = (found: Effect.Success<typeof read>) =>
+    typeof found === 'string' || finished(found.receipt);
   const from = log.now();
   const first = yield* read;
-  if (!wait || Option.isNone(first) || finished(first.value.receipt))
-    return first;
+  if (!wait || done(first)) return first;
   const kinds: ReadonlySet<string> = new Set(RECEIPT_ROW_TYPES);
-  return Option.flatten(
-    yield* log.tail(from).pipe(
-      Stream.filter((row) => row.aggregateId === run && kinds.has(row.type)),
-      Stream.mapEffect(() => read),
-      Stream.filter(
-        (found) => Option.isNone(found) || finished(found.value.receipt),
-      ),
-      Stream.runHead,
-    ),
+  const later = yield* log.tail(from).pipe(
+    Stream.filter((row) => row.aggregateId === run && kinds.has(row.type)),
+    Stream.mapEffect(() => read),
+    Stream.filter(done),
+    Stream.runHead,
   );
+  return Option.isSome(later) ? later.value : yield* Effect.interrupt;
 });
 
 /** The follow-up id of a caller's `followUp.send` named `id`: scoped to its
@@ -183,8 +185,8 @@ export const sameAsFirst = (
   Effect.flatMap(
     log.rows(qualifyAggregateId('run', runId), RECEIPT_ROW_TYPES),
     (rows) => {
-      const first = followUpReceipt(rows, row.followUpId)?.queued;
-      return first === undefined || sameRequest(first, row)
+      const first = followUpReceipt(rows, row.followUpId);
+      return typeof first === 'string' || sameRequest(first.queued, row)
         ? Effect.void
         : Effect.fail(new Conflict({ runId, id: caller }));
     },
@@ -207,13 +209,14 @@ export const sentBefore = Effect.fn('sentBefore')(function* (
   if (yield* heldElsewhere(log, runId)) return false;
   const deliveryId = sentFollowUpId(id);
   const first = yield* readFollowUp(log, runId, deliveryId);
-  if (Option.isNone(first)) return false;
+  // None, or a deleted run, whose send the path past this refuses.
+  if (typeof first === 'string') return false;
   const media = attach === undefined ? {} : yield* attach;
   const view = yield* SessionViewAccess;
   const asked = queuedRow({ ...item, ...media, deliveryId }, hold, (sender) =>
     runRelation(sender, runId, (run) => view.run(run)?.parentId),
   );
-  if (!sameRequest(first.value.queued, asked))
+  if (!sameRequest(first.queued, asked))
     return yield* new Conflict({ runId, id });
   return true;
 });
@@ -235,17 +238,21 @@ export const sentReceipt = Effect.fn('sentReceipt')(function* (
     readonly id: string;
     readonly wait?: boolean | null;
   },
-): Effect.fn.Return<FollowUpReceipt, Unavailable | NotOwner> {
+): Effect.fn.Return<FollowUpReceipt, Rejected | Unavailable | NotOwner> {
   const { runId } = req;
   if (yield* Effect.orDie(heldElsewhere(log, runId)))
     return yield* new NotOwner({ runId });
   const found = yield* Effect.orDie(
     readFollowUp(log, runId, sentFollowUpId(req.id), req.wait === true),
   );
-  if (Option.isNone(found))
+  if (found === 'unknown')
+    return yield* new Rejected({
+      reason: 'No message was sent under that id.',
+    });
+  if (found === 'deleted')
     return yield* new Unavailable({
       runId,
-      reason: 'No message under that id.',
+      reason: 'The run was deleted, and its messages with it.',
     });
-  return found.value.receipt;
+  return found.receipt;
 });
