@@ -20,7 +20,7 @@ import {
  */
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { Inbox, openResume, REFUSED } from '@agent/followUp/ToolUseFollowUp';
-import { runRejection } from '@agent/storage/resumability';
+import { earlierBuildRefusal, runRejection } from '@agent/storage/resumability';
 import {
   getRunRecords,
   owningCall,
@@ -34,7 +34,7 @@ import {
   type ResumeRefusal,
   type RunId,
 } from '@shared/schemas';
-import { DatabaseRowEarlier, heldElsewhereBy } from '@shared/session/database';
+import { heldElsewhereBy } from '@shared/session/database';
 import {
   RunHistoryRefused,
   SessionLog,
@@ -171,10 +171,17 @@ export const decideResume = Effect.fn('decideResume')(function* (
   const log = yield* SessionLog;
   const inbox = yield* Inbox;
   const store = getRunRecords(runId);
-  const [config, exists] = yield* Effect.all([
-    store.readConfig(),
-    store.exists(),
-  ]);
+  const records = yield* Effect.result(
+    Effect.all([store.readConfig(), store.exists()]),
+  );
+  // A record read refuses a run holding an earlier build's row, wherever
+  // the row sits: this build cannot open the run.
+  if (Result.isFailure(records)) {
+    const earlier = earlierBuildRefusal(records.failure);
+    if (earlier === undefined) return yield* Effect.fail(records.failure);
+    return { failed: earlier };
+  }
+  const [config, exists] = records.success;
   if (!config || !exists) {
     // A run whose records are gone: with nothing queued its input ends.
     yield* inbox.closeInput(runId);
@@ -260,10 +267,8 @@ function refusalFor(
   const owner = heldElsewhereBy(error);
   if (owner !== null)
     return Effect.succeed({ failed: { kind: 'ownedElsewhere', owner } });
-  if (error instanceof DatabaseRowEarlier)
-    return Effect.succeed({
-      failed: { kind: 'earlierBuild', cause: error.message },
-    });
+  const earlier = earlierBuildRefusal(error);
+  if (earlier !== undefined) return Effect.succeed({ failed: earlier });
   if (namesUnusableCheckpoint(error)) {
     return Effect.logWarning(
       `Refusing to resume ${runId}: its saved state cannot be continued: ${toErrorMessage(error)}`,

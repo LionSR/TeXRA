@@ -44,6 +44,9 @@
  *   first send's receipt; or a different message under that id is sent.
  * - R21: messages merged into one turn read as answered by different rows,
  *   or a turn that failed reads as answered.
+ * - R13: a receipt answered before a crash changes once the resumed run
+ *   takes later input; a model switch queued before a crash is lost by the
+ *   resume, or rewrites the model an earlier turn recorded.
  */
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -68,7 +71,12 @@ import {
   type TurnEvent,
   type TurnResult,
 } from '@texra-ai/llm';
-import { Conflict, defineTool, Sessions } from '@texra-ai/harness';
+import {
+  Conflict,
+  defineTool,
+  type LocalSession,
+  Sessions,
+} from '@texra-ai/harness';
 import { ValidationModel } from '@texra-ai/harness/host';
 import { definePlugin } from '@texra-ai/harness/plugins';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
@@ -970,6 +978,58 @@ const NOTES_AGENT = {
   tools: [],
 };
 
+/**
+ * A run of the notes agent that answered its first turn and waits, then
+ * `before` on its session, in a process that then dies; and a session of a
+ * second process over the store the crash left. Both run on the calling
+ * case's process.
+ */
+const resumedNotesRun = <E = never>(
+  before: (
+    session: LocalSession,
+    runId: RunId,
+  ) => Effect.Effect<void, E> = () => Effect.void,
+) =>
+  Effect.gen(function* () {
+    const roots = testWorkspaceRoots();
+    const sessions = yield* Sessions;
+    const { runId, storage } = yield* Effect.scoped(
+      Effect.gen(function* () {
+        const session = yield* sessions.open(roots, {
+          persistent: true,
+          host: {},
+        });
+        const run = yield* session.start({
+          agent: NOTES_AGENT,
+          instruction: 'Start the notes.',
+          model: 'openai/gpt-5.6-sol',
+          interactive: true,
+        });
+        yield* untilStored(
+          roots.storage,
+          parkedAfter(run.runId, 1, roots.storage),
+        );
+        yield* before(session, run.runId);
+        const storage = crashedCopy(roots.storage);
+        yield* sessions.close(roots);
+        return { runId: run.runId, storage };
+      }),
+    );
+    const session = yield* sessions.open(
+      { ...roots, storage },
+      { persistent: true, host: {} },
+    );
+    return { runId, storage, session };
+  });
+
+/** What `session` answers for the receipt of message `id` to `runId`,
+ *  once it has one. */
+const receiptOf = (session: LocalSession, runId: RunId, id: string) =>
+  Effect.map(
+    session.request({ kind: 'followUp.receipt', runId, id, wait: true }),
+    (answer) => answer.receipt,
+  );
+
 describe('input receipts', { timeout: REAL_RUN_TIMEOUT }, () => {
   layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.layer(validationHost('texra-receipt-'), { buildPerTest: true })((it) => {
@@ -1037,35 +1097,7 @@ describe('input receipts', { timeout: REAL_RUN_TIMEOUT }, () => {
         () => {
           const { process, gate } = receiptModel();
           return Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
-            // The first process parks the run, then dies.
-            const { runId, storage } = yield* Effect.scoped(
-              Effect.gen(function* () {
-                const sessions = yield* Sessions;
-                const session = yield* sessions.open(roots, {
-                  persistent: true,
-                  host: {},
-                });
-                const run = yield* session.start({
-                  agent: NOTES_AGENT,
-                  instruction: 'Start the notes.',
-                  model: 'openai/gpt-5.6-sol',
-                  interactive: true,
-                });
-                yield* untilStored(
-                  roots.storage,
-                  parkedAfter(run.runId, 1, roots.storage),
-                );
-                const storage = crashedCopy(roots.storage);
-                yield* sessions.close(roots);
-                return { runId: run.runId, storage };
-              }),
-            );
-            const sessions = yield* Sessions;
-            const session = yield* sessions.open(
-              { ...roots, storage },
-              { persistent: true, host: {} },
-            );
+            const { runId, storage, session } = yield* resumedNotesRun();
             // The message resumes the run, whose turn holds its model call.
             yield* session.request({
               kind: 'followUp.send',
@@ -1088,7 +1120,114 @@ describe('input receipts', { timeout: REAL_RUN_TIMEOUT }, () => {
               ),
             ).toBe(true);
             yield* Deferred.succeed(gate('WAIT1').open, undefined);
-            yield* sessions.close({ ...roots, storage });
+          }).pipe(Effect.scoped, Effect.provide(process, { local: true }));
+        },
+      );
+
+      it.effect(
+        'R13: a receipt answered before a crash reads the same once the resumed run takes later input',
+        () => {
+          const { process, gate } = receiptModel();
+          return Effect.gen(function* () {
+            let answered: Effect.Success<ReturnType<typeof receiptOf>> | null =
+              null;
+            const { runId, session } = yield* resumedNotesRun(
+              (session, runId) =>
+                Effect.gen(function* () {
+                  yield* session.request({
+                    kind: 'followUp.send',
+                    runId,
+                    id: 'a',
+                    text: 'First point.',
+                  });
+                  answered = yield* receiptOf(session, runId, 'a');
+                }),
+            );
+            expect(answered).toEqual({
+              state: 'answered',
+              turn: 2,
+              answer: expect.any(Number),
+            });
+            // The next message resumes the run; its turn holds the model
+            // call, then answers.
+            yield* session.request({
+              kind: 'followUp.send',
+              runId,
+              id: 'b',
+              text: 'WAIT1 Second point.',
+            });
+            yield* Deferred.await(gate('WAIT1').reached);
+            expect(yield* receiptOf(session, runId, 'a')).toEqual(answered);
+            yield* Deferred.succeed(gate('WAIT1').open, undefined);
+            expect(yield* receiptOf(session, runId, 'b')).toEqual({
+              state: 'answered',
+              turn: 3,
+              answer: expect.any(Number),
+            });
+            expect(yield* receiptOf(session, runId, 'a')).toEqual(answered);
+          }).pipe(Effect.scoped, Effect.provide(process, { local: true }));
+        },
+      );
+
+      it.effect(
+        'R13: a model switch queued before a crash applies to the resumed turn, and the earlier turn keeps its recorded model',
+        () => {
+          const { process } = receiptModel();
+          const SWITCHED = 'google/gemini-3.8-flash@medium';
+          return Effect.gen(function* () {
+            // The process dies with the switch queued for the next turn.
+            const { runId, storage, session } = yield* resumedNotesRun(
+              (session, runId) =>
+                Effect.asVoid(
+                  session.request({
+                    kind: 'run.model',
+                    runId,
+                    model: SWITCHED,
+                  }),
+                ),
+            );
+            const ofRun = (type: string) =>
+              storedRows(storage).flatMap((row) =>
+                row.run === runId && row.type === type
+                  ? [{ commit: row.commit, data: JSON.parse(row.data) }]
+                  : [],
+              );
+            /** The run's responses: each turn's commit and the model the
+             *  transport was asked for. */
+            const responses = () =>
+              ofRun('model.message').flatMap(({ commit, data }) =>
+                data.payload.kind === 'response'
+                  ? [
+                      {
+                        commit,
+                        model: data.payload.turn.requestedOrigin.requestedModel,
+                      },
+                    ]
+                  : [],
+              );
+            const before = responses();
+            expect(before.map(({ model }) => model)).toEqual(['gpt-5.6-sol']);
+
+            yield* session.request({
+              kind: 'followUp.send',
+              runId,
+              id: 'next',
+              text: 'Go on.',
+            });
+            expect(yield* receiptOf(session, runId, 'next')).toMatchObject({
+              state: 'answered',
+            });
+            expect(responses()).toEqual([
+              ...before,
+              { commit: expect.any(Number), model: 'gemini-3.8-flash' },
+            ]);
+            // Each activation records the config: the switch's names the new
+            // model, and none comes after it.
+            expect([
+              ...new Set(
+                ofRun('run.config').map(({ data }) => data.config.model),
+              ),
+            ]).toEqual(['openai/gpt-5.6-sol', SWITCHED]);
           }).pipe(Effect.scoped, Effect.provide(process, { local: true }));
         },
       );

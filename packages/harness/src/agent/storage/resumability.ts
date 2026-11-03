@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
 
+import { findInCauseChain } from '@common/errors/errorPredicates';
 import { withLogChannel } from '@logger/effectLog';
 import { recipeBlockOf, type ResumeRefusal, type RunId } from '@shared/schemas';
 import { claimStanding, DatabaseRowEarlier } from '@shared/session/database';
@@ -20,11 +21,16 @@ type ResumabilityDecision =
       { readonly kind: 'finished' | 'earlierBuild' | 'pluginUnavailable' }
     >;
 
-/** The earlier-build refusal a failed read carries, if any. */
-const earlierRefusal = (error: unknown): DatabaseRowEarlier | undefined =>
-  [error, error instanceof Error ? error.cause : undefined].find(
-    (e): e is DatabaseRowEarlier => e instanceof DatabaseRowEarlier,
+/** The refusal of a run an earlier build wrote, when a failed read of it
+ *  was refused for one of that build's rows. */
+export const earlierBuildRefusal = (
+  error: unknown,
+): Extract<ResumeRefusal, { readonly kind: 'earlierBuild' }> | undefined => {
+  const row = findInCauseChain(error, (cause) =>
+    cause instanceof DatabaseRowEarlier ? cause : undefined,
   );
+  return row && { kind: 'earlierBuild', cause: row.message };
+};
 
 /**
  * The one answer to "can this run resume?", before ownership (`runRejection`
@@ -41,9 +47,8 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   const read = yield* (yield* SessionLog).facts(runId).pipe(Effect.result);
   if (read._tag === 'Failure') {
     // An earlier build's row: this build cannot open the run, and says so.
-    const refusal = earlierRefusal(read.failure);
-    if (refusal !== undefined)
-      return { kind: 'earlierBuild', cause: refusal.message };
+    const refusal = earlierBuildRefusal(read.failure);
+    if (refusal !== undefined) return refusal;
     const cause = `run state could not be read (${toErrorMessage(read.failure)})`;
     yield* Effect.logWarning(`Run ${runId}: ${cause}`).pipe(
       withLogChannel(CHANNEL),

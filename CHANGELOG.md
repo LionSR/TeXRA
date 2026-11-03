@@ -833,6 +833,22 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **SDK: a message to a run carries the caller's id, and its receipt says
+  what became of it.**
+  - `followUp.send` takes an optional `id` and answers with that id and
+    the message's receipt.
+  - A retry under the same id answers with the first send's receipt instead
+    of sending the message twice. That holds after a lost reply, and after
+    the run stopped taking input.
+  - A different message under that id fails with `Conflict`.
+  - `followUp.receipt`, with `wait: true` to wait, reads the receipt from
+    the run's rows. It is one of: `accepted`; `incorporated` into a turn;
+    `answered`; or `unanswered`, with why. Why is one of: the turn failed,
+    the run ended first, or the message left the queue unread.
+  - The harness examples wait on the receipt instead of counting model
+    calls.
+  - A turn's end position records the turn's outcome (`run.position` v2), so
+    a run an earlier build wrote reads as that build's.
 - **A message typed while a run works is answered at its next model
   request, not after the turn ends.** Up to 0.40.10 a follow-up reached the
   model inside the turn; since then it waited for the turn to end. A message
@@ -1494,6 +1510,10 @@ show` print the same notice, and the new `texra agents customize`,
 - **The panel's agent menu lists each agent once, and a document agent
   opens on files.** Picking an agent such as `criticize` starts its
   document task and shows the file panel; a file icon marks those agents.
+  The New task form runs only an agent the menu lists: one you hide in
+  Settings → Agents after picking it (or one Run again… brings back)
+  reads **Choose agent** until you pick another, rather than starting
+  with files the form no longer shows.
 - **`texra`'s `/key` picker shows which providers already have a key.** Each
   provider row reads "Key set", "Env" or "Not set", as the API-keys page of
   `/config` already did. If the key store cannot be read, the rows read
@@ -1931,7 +1951,9 @@ view` on a sub-agent the parent waited for shows its report instead of
   definitions) never reached the compaction trigger; the trigger, the context
   gauge and the output-length limit now all read the last response's reported
   input plus output tokens and add an estimate for what was added since. The
-  gauge therefore counts the model's reply too.
+  gauge therefore counts the model's reply too. An estimate for images, PDFs
+  and audio attached since the model's last reply now counts toward
+  compaction and the output-length limit, where they counted as nothing.
 
 - **Long histories stay usable.** With a few thousand runs in a workspace,
   starting a session no longer stalls for minutes, and an agent's history
