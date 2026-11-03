@@ -14,9 +14,9 @@ import {
   type ApprovalPolicyDenial,
   FileLocationSchema,
   LaunchNoticeSchema,
+  RequestShowErrorPayloadSchema,
   RunIdSchema,
   type OpenFilePayload,
-  type RequestShowErrorPayload,
 } from '@texra-ai/harness/schemas';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
@@ -93,10 +93,7 @@ const NoticeSchema = Schema.Union([
   ...LaunchNoticeSchema.members,
   Schema.Struct({
     event: Schema.Literal('requestShowError'),
-    payload: Schema.Struct({
-      message: Schema.String,
-      docsPage: Schema.optional(Schema.String),
-    }) satisfies Schema.Codec<RequestShowErrorPayload, unknown>,
+    payload: RequestShowErrorPayloadSchema,
   }),
 ]);
 export type Notice = typeof NoticeSchema.Type;

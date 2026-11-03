@@ -62,11 +62,18 @@ function usedUpPlan({ quota }: ModelError): UsedUpPlan | undefined {
   };
 }
 
-/** The retry panel's classification: an overflowed window, a used-up credential, a missing key. */
+/** A failure's classification: an overflowed window, a used-up credential,
+ *  a missing key, or a subscription session that could not bill. */
 function classificationOf(
   error: ModelError | RouteUnavailable,
 ): ProviderErrorClassification | undefined {
   if (!(error instanceof ModelError)) {
+    if (error.session !== undefined)
+      return {
+        kind: 'subscription-session',
+        ...error.session,
+        sessionError: error.message,
+      };
     return error.reason === 'missing-api-key'
       ? { kind: 'missing-api-key' }
       : undefined;

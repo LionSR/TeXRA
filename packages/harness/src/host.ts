@@ -223,7 +223,8 @@ export {
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
 // Failures as hosts and plugins read them: the agent error, predicates, cause
-// chain, abort, provider message (`toErrorMessage` is in `./schemas`).
+// chain, abort, and a failure's message with its classification
+// (`toErrorMessage` is in `./schemas`).
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export type { AgentErrorKind } from '@common/errors/agentErrorClassification';
 export { causeChain } from '@utils/errors/errorMessage';
@@ -232,7 +233,7 @@ export {
   isUserAbort,
 } from '@common/errors/errorPredicates';
 export { isNotADirectoryError } from '@utils/files/fsEntryExists';
-export { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+export { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 // Platform path containment, segments, POSIX form, case-free extension check.
 export {
   getPathSegments,

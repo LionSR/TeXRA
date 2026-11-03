@@ -1,6 +1,7 @@
 import {
   HARNESS_INSTRUCTION_KEY,
   RUN_OUTCOME,
+  type ProviderErrorClassification,
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
   type RunEnd,
@@ -75,8 +76,14 @@ export function agentErrorPresentation(error: {
   /** Docs page of a refusing request (`Rejected.docsPage`), surfaced
    *  beside the error so the host's dialog keeps the guide affordance. */
   docsPage?: string;
+  /** The failure's classification, carried beside its message so a host
+   *  may word the failure itself. */
+  classification?: ProviderErrorClassification;
 }): AgentErrorPresentation | null {
   const docs = error.docsPage ? { docsPage: error.docsPage } : {};
+  const facts = error.classification
+    ? { classification: error.classification }
+    : {};
   switch (error.kind) {
     case 'missing-api-key':
       return {
@@ -91,7 +98,10 @@ export function agentErrorPresentation(error: {
     case 'disk-full':
     case 'result-lost':
     case 'unexpected':
-      return { type: 'error', payload: { message: error.message, ...docs } };
+      return {
+        type: 'error',
+        payload: { message: error.message, ...docs, ...facts },
+      };
     case 'abort':
       return null;
     default: {
