@@ -18,7 +18,7 @@ import * as ChildProcess from 'effect/process/ChildProcess';
 
 import {
   withLogChannel,
-  getSdkErrorMessage,
+  normalizeProviderError,
   Settings,
 } from '@texra-ai/harness/host';
 import {
@@ -76,7 +76,7 @@ const recorderFailure =
     self: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, AudioRecorderError, R> =>
     Effect.catch(self, (cause) => {
-      const message = getSdkErrorMessage(
+      const { message } = normalizeProviderError(
         cause instanceof PlatformError.PlatformError
           ? (cause.reason.cause ?? cause)
           : cause,

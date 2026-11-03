@@ -198,7 +198,7 @@ the CLI says so, and `TEXRA_NO_SERVICE=1` keeps the task in this terminal.
 Coding Plan can serve model calls in place of an API key:
 
 ```bash
-texra auth chatgpt login    # Codex models through your ChatGPT plan
+texra auth chatgpt login    # OpenAI models through your ChatGPT plan
 texra auth grok login       # Grok models through an xAI subscription
 ```
 

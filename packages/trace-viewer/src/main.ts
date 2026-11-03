@@ -2,11 +2,14 @@ import './themeTokens.css';
 import './shell.css';
 
 // The page-local host installs at module evaluation, before the progress
-// bundle resolves its bridge; the shell then mounts on the
-// `<progress-app data-session>` the HTML carries, as in every host. This
-// page owns the mount (rather than the bundle's entry) because the scrubber
-// remounts it: a fresh shell is a fresh generation, and the bridge answers
-// that generation at the new cut.
+// bundle resolves its bridge: modules evaluate in import order, and the
+// progress bundle reads the bridge as it loads, so this bare import comes
+// before every bundle import (`import/order` leaves bare imports where they
+// are). The shell then mounts on the `<progress-app data-session>` the HTML
+// carries, as in every host. This page owns the mount (rather than the
+// bundle's entry) because the scrubber remounts it: a fresh shell is a fresh
+// generation, and the bridge answers that generation at the new cut.
+import './traceHostBridge';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import '@ui/wa';
 import 'katex/dist/katex.min.css';

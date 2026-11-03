@@ -127,15 +127,18 @@ function goldenTurn(
   // A call naming GOLDEN-PARK (a label's too) waits for its release file.
   if ((system + said).includes('GOLDEN-PARK'))
     return Effect.as(gate('golden-park.release'), text('Parked run released.'));
-  // A call awaiting approval: the tool and command after the marker.
+  // A call awaiting approval: the tool after the marker, and its command,
+  // or its whole input when a JSON object follows the tool.
   const [marker, asked = 'bash', command = 'echo approved >> approved.txt'] =
     /GOLDEN-APPROVAL(?: (\w+))?(?: (.+))?/.exec(system) ?? [];
-  if (marker !== undefined)
+  if (marker !== undefined) {
+    const input: unknown = command.startsWith('{')
+      ? JSON.parse(command)
+      : { command };
     return Effect.succeed(
-      results.length
-        ? text('The approved command ran.')
-        : [call(asked, { command })],
+      results.length ? text('The approved command ran.') : [call(asked, input)],
     );
+  }
   // A diagnostics read the service forwards to an attached window.
   if (system.includes('GOLDEN-DIAGNOSTICS'))
     return Effect.succeed(

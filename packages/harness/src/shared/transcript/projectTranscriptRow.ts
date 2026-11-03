@@ -124,15 +124,19 @@ function errorRow(
   summary: string,
   data: ErrorLogData | undefined,
 ): ErrorRow {
-  const details = errorDetails(data, summary);
   return {
     ...base,
     kind: 'error',
     summary: transcriptText(summary),
-    details,
-    detailText: transcriptText(
-      details.map((detail) => `${detail.key}: ${detail.value}`).join('\n'),
-    ),
+    details: errorDetails(data, summary),
+    ...(data?.classification === undefined
+      ? {}
+      : {
+          failure: {
+            message: data.message,
+            classification: data.classification,
+          },
+        }),
   };
 }
 

@@ -33,7 +33,9 @@ export const ToolDefinitionSchema = Schema.StructWithRest(
     /**
      * What a script's call of the tool resolves to, as a TypeScript type, when
      * it is not `ToolOutput` (`{ output, summary }`): a tool whose result
-     * carries a `value` declares that value's type here.
+     * carries a `value` declares that value's type here. Nothing derives it
+     * from the value, so a tool that returns one without this is declared
+     * as resolving to `ToolOutput`.
      */
     scriptReturns: Schema.optional(Schema.String),
     /**

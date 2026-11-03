@@ -39,6 +39,7 @@ import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
 import { instructionActions } from '@ui/copy/instructionActions';
+import { modelFailureText } from '@ui/copy/modelAccess';
 import { texraGuideUrl } from '@ui/copy/guide';
 
 import {
@@ -105,8 +106,8 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       RuntimePresentationEventPayloads,
       HostPresentation
     > = {
-      requestShowError: ({ message, docsPage }) =>
-        host.showErrorDialog(message, docsPage),
+      requestShowError: (failure) =>
+        host.showErrorDialog(modelFailureText(failure), failure.docsPage),
       // An instruction is actionable guidance, not a failure, so it uses
       // the info-style dialog with each action token as a real button.
       requestShowInstruction: (instruction) =>
