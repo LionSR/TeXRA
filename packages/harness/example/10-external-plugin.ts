@@ -16,10 +16,11 @@
  *    resume of the run is refused as `pluginUnavailable`, naming the plugin,
  *    and the run listing shows the same reason.
  * 3. Reopens with the plugin again: the same fact reads interpreted, its
- *    value unchanged, and the run resumes with a message, calls the tool
- *    and records the next note.
+ *    value unchanged, and the run resumes with a message sent under an id,
+ *    calls the tool and records the next note; the message's receipt
+ *    (`followUp.receipt`) says a turn answered it.
  */
-import { Effect, Layer, Schema, Stream } from 'effect';
+import { Effect, Layer, Schema } from 'effect';
 import { Sessions } from '@texra-ai/harness';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -159,29 +160,31 @@ await Effect.runPromise(
     )
       throw new Error(`restored fact: ${JSON.stringify(notes)}`);
     // A message to a run no process holds waits in its queue; the resume
-    // delivers it.
+    // delivers it, and its receipt says when a turn answered it.
     yield* session.request({
       kind: 'followUp.send',
       runId,
+      id: 'second-note',
       text: 'Add a second note.',
     });
     const resumed = yield* session.resume(runId);
-    // The resumed turn ends waiting for the next message, its note recorded.
-    const rested = yield* Stream.runHead(
-      Stream.filter(resumed.view, (view) => {
-        const run = view.runs.get(runId);
-        return (
-          run?.status === 'waiting' &&
-          JSON.stringify(run.facts['acme-notes/note']) ===
-            JSON.stringify(SECOND)
-        );
-      }),
-    ).pipe(Effect.timeout('10 seconds'));
+    const { receipt } = yield* session
+      .request({
+        kind: 'followUp.receipt',
+        runId,
+        id: 'second-note',
+        wait: true,
+      })
+      .pipe(Effect.timeout('10 seconds'));
     yield* resumed.interrupt;
     yield* session.settled;
-    if (rested._tag !== 'Some' || withPlugin.requests.length !== 4)
+    const { notes: after } = yield* notesOf(withPlugin.platform, runId);
+    if (
+      receipt.state !== 'answered' ||
+      JSON.stringify(after.at(-1)?.value) !== JSON.stringify(SECOND)
+    )
       throw new Error(
-        `resume with the plugin: ${JSON.stringify({ requests: withPlugin.requests.length })}`,
+        `resume with the plugin: ${JSON.stringify({ receipt, after })}`,
       );
     console.log(
       `[10] with it again: the fact reads interpreted, value unchanged; the resumed run noted ${JSON.stringify(SECOND)}`,

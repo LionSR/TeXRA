@@ -833,6 +833,22 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **SDK: a message to a run carries the caller's id, and its receipt says
+  what became of it.**
+  - `followUp.send` takes an optional `id` and answers with that id and
+    the message's receipt.
+  - A retry under the same id answers with the first send's receipt instead
+    of sending the message twice. That holds after a lost reply, and after
+    the run stopped taking input.
+  - A different message under that id fails with `Conflict`.
+  - `followUp.receipt`, with `wait: true` to wait, reads the receipt from
+    the run's rows. It is one of: `accepted`; `incorporated` into a turn;
+    `answered`; or `unanswered`, with why. Why is one of: the turn failed,
+    the run ended first, or the message left the queue unread.
+  - Hosts and examples wait on the receipt instead of counting model calls.
+  - The texra service protocol is 46.
+  - A turn's end position records the turn's outcome (`run.position` v2), so
+    a run an earlier build wrote reads as that build's.
 - **A message typed while a run works is answered at its next model
   request, not after the turn ends.** Up to 0.40.10 a follow-up reached the
   model inside the turn; since then it waited for the turn to end. A message
