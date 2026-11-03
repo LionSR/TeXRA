@@ -352,7 +352,7 @@ interface ITool<E = Error, R = never> {
    * field as the first argument and the rest as the second:
    * `agent(prompt, opts)` for `tools.agent({ prompt, ...opts })`.
    * `withScript`: a function of scripts alone (`self()`), offered whenever
-   * the script tool is.
+   * the script tool is and never sent to the model as a tool of its own.
    */
   readonly scriptGlobal?: {
     readonly positional: string;
