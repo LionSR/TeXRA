@@ -144,6 +144,13 @@ const SurfaceActionMessageSchema = Schema.Struct({
   action: Schema.Union([
     Schema.Struct({ kind: Schema.Literal('selectNew') }),
     Schema.Struct({ kind: Schema.Literal('select'), runId: RunIdSchema }),
+    /** A run the window started, in the host's view as of commit `cursor`:
+     *  the surface's view, framed after the host's, selects it on arrival. */
+    Schema.Struct({
+      kind: Schema.Literal('selectOnArrival'),
+      runId: RunIdSchema,
+      cursor: CommitOrdinalSchema,
+    }),
     /** Show Sessions (`texra.showProgressView`): a surface on the New-task
      *  state opens `runId`, the newest session; one already showing a
      *  session keeps it. The surface decides, since only it knows. */

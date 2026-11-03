@@ -5,7 +5,7 @@
 // returns to the asking task with the proposal still waiting. An edit that
 // adds a context file and rewrites the instruction approves the child with
 // both, and Run again… on the finished child opens the form on that setup
-// and launches the same task again.
+// and launches the same task again, which the window then shows.
 import {
   existsSync,
   mkdirSync,
@@ -378,6 +378,14 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
         .poll(() => runsStartedBy(null), { timeout: 60_000 })
         .toHaveLength(2);
       const again = runsStartedBy(null).find((id) => id !== asking.runId)!;
+      // The window shows the task it started, with no click: its row is the
+      // one selected.
+      const selected = page.locator('.shell-project-runs run-tab[active]');
+      await expect(selected).toHaveCount(1);
+      await expect(selected.locator('#run-tab-select-button')).toHaveAttribute(
+        'data-run',
+        again,
+      );
       await expect
         .poll(() => outcomes(again), { timeout: 120_000 })
         .toEqual(['completed']);
@@ -395,10 +403,6 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
         workingDirectory: config.workingDirectory ?? work,
       });
       expect(setup(againConfig)).toEqual(setup(childConfig));
-      await page
-        .locator('.shell-project-runs run-tab')
-        .filter({ has: page.locator(`[data-run="${again}"]`) })
-        .click();
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(
         'revise_validation',
       );

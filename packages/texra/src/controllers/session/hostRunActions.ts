@@ -121,8 +121,9 @@ export interface HostRunActionPorts {
   /** The host's scope: what an action does when its run ends lives as long
    *  as the host. */
   readonly scope: Scope.Scope;
-  /** The host's follow-up for a run this window started, once admitted:
-   *  select it, and retire the missing-agent banner its agent resolved. */
+  /** The window's follow-up for a run it started, once admitted: show the
+   *  run once its surfaces hold it, and retire the missing-agent banner its
+   *  agent resolved. */
   launched(run: Run): Effect.Effect<void>;
   /** Open a settled run's final output, when its agent names one. */
   openFinalOutput(
@@ -157,8 +158,8 @@ export interface HostRunActions {
    * is admitted; it decodes nothing itself. A failure before the run opens is
    * logged and presented here, once, and fails with the launch's own error,
    * which the caller does not present again (a request answers `Cancelled`);
-   * the launched run is the host's to select, and its final output opens
-   * when it ends.
+   * the launched run is the window's to show (`launched`), and its final
+   * output opens when it ends.
    */
   runValidated(
     config: AgentConfig,

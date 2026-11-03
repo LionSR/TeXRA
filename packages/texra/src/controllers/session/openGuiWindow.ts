@@ -20,6 +20,7 @@ import {
   Exit,
   FiberSet,
   Layer,
+  Option,
   Scope,
   Stream,
   SubscriptionRef,
@@ -31,6 +32,7 @@ import {
   Unavailable,
   type HostRequestFailure,
   type LocalSession,
+  type Run,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
@@ -38,6 +40,7 @@ import {
   Secrets,
   SessionHostInteractions,
   sessionFsLayer,
+  withLogChannel,
   workspaceEnvironmentLayer,
   type ProcessServices,
   type StorageFs,
@@ -231,7 +234,7 @@ interface GuiWindowHost extends Pick<
   readonly window: WindowHost;
   readonly runs: Pick<
     HostRunActionPorts,
-    'launched' | 'openFinalOutput' | 'promptForApiKey' | 'revealProgress'
+    'openFinalOutput' | 'promptForApiKey' | 'revealProgress'
   >;
   readonly files: Omit<
     ConstructorParameters<
@@ -272,7 +275,13 @@ interface GuiWindowPorts {
   ): Effect.Effect<GuiWindowHost, never, Scope.Scope | ProcessServices>;
 }
 
+const CHANNEL = 'GuiWindow';
+
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
+
+/** How long a run this window started may take to reach the window's view
+ *  before the window stops waiting to show it. */
+const SHOW_LAUNCHED_WITHIN = '10 seconds';
 
 /** What the window tells the user after a pack or clean, at which severity
  *  (the latexdiff pack's counterpart is `latexdiffPackMessage`). */
@@ -417,8 +426,48 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   });
   yield* Effect.forkScoped(toolEditApprovals.follow);
 
+  /** A run this window started is in the window's view before it is in a
+   *  surface's, whose frames are cut from the session after it, so each
+   *  surface selects the run once its own view holds it, told the commit of
+   *  the first level here that held it. A run the window's view does not
+   *  hold in time is not selected, and the window says so. */
+  const showLaunched = (run: Run) =>
+    Stream.runHead(run.view).pipe(
+      Effect.timeoutOption(SHOW_LAUNCHED_WITHIN),
+      Effect.map(Option.flatten),
+      Effect.flatMap(
+        Option.match({
+          onSome: (level) =>
+            Effect.sync(() =>
+              bridge.surfaceAction({
+                kind: 'selectOnArrival',
+                runId: run.runId,
+                cursor: level.cursor,
+              }),
+            ),
+          onNone: () =>
+            Effect.logWarning(
+              `Run ${run.runId} started, but this window's view did not hold it within ${SHOW_LAUNCHED_WITHIN}`,
+            ).pipe(
+              withLogChannel(CHANNEL),
+              Effect.andThen(
+                host.showWarningMessage(
+                  'The task started, but this window could not show it. Find it in the task list.',
+                ),
+              ),
+              Effect.ignore({ log: 'Warn' }),
+            ),
+        }),
+      ),
+    );
   const runActions = yield* createHostRunActions({
     ...host.runs,
+    // The wait outlives the launch request; the missing-agent warning the
+    // run's agent resolved goes at once.
+    launched: (run) =>
+      Effect.forkIn(showLaunched(run), scope).pipe(
+        Effect.andThen(snapshot.clearAgentConfigBanner),
+      ),
     roots,
     readConfig,
     present,
