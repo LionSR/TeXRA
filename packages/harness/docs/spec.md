@@ -882,7 +882,7 @@ place a cut between an effect and its result. One real kill covers that case: a
 process killed after its command's effect and before its result reports the
 command as outcome unknown and never reruns it automatically; the model may
 still issue a new command, which runs under I4
-(`src/test-kernel/controllers/session/goldenStore.vitest.ts:777`).
+(`src/test-kernel/controllers/session/goldenStore.vitest.ts:620`).
 
 ## 10. Conformance
 
@@ -910,8 +910,8 @@ These existing suites check the sections above.
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:203` (every golden
   row decodes); `src/test-kernel/schemas/rowVersions.vitest.ts:110`
 - **4 write points**: `src/test-kernel/support/crashConformance.ts:810`, `:1444`
-- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:2083`
-  (live state equals reloaded state), `:2115` (batch contract);
+- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:365`
+  (live state equals reloaded state), `:1749` (batch contract);
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:468`, `:622`
   (listing equals the fold)
 - **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:470`,

@@ -6,7 +6,7 @@
  */
 
 import '@awesome.me/webawesome/dist/components/radio/radio.js';
-import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
+import WaRadioGroup from '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
@@ -24,7 +24,6 @@ import { RESUME_ON_OPEN_KEY } from '@texra/shared/settingsView/texraSettings';
 import { APPROVAL_POLICY_OPTIONS } from '@ui/copy/approvalPolicy';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
-import { readSelectValue } from '@ui/wa/selectTemplates';
 
 import {
   postStateSetting,
@@ -51,7 +50,10 @@ export class ApprovalTab extends SignalWatcher(LitElement) {
   ];
 
   private handleApprovalPolicyChange = (e: Event): void => {
-    const policy = parseApprovalPolicy(readSelectValue(e));
+    const group = e.currentTarget;
+    if (!(group instanceof WaRadioGroup) || typeof group.value !== 'string')
+      return;
+    const policy = parseApprovalPolicy(group.value);
     if (policy) postStateSetting(APPROVAL_POLICY_CONFIG_KEY, policy);
   };
 
