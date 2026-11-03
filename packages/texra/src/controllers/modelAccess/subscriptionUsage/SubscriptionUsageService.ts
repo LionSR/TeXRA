@@ -165,14 +165,15 @@ export class SubscriptionUsageService {
    * account change. A reader already waiting on an in-flight lookup still
    * receives its result, but that result is not cached.
    */
-  invalidate(provider: SubscriptionUsageProvider): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
+  readonly invalidate = Effect.fn('SubscriptionUsageService.invalidate')(
+    { self: this },
+    function* (provider: SubscriptionUsageProvider): Effect.fn.Return<void> {
       const cache = yield* this.usageCache;
       for (const key of [...(yield* Cache.keys(cache))]) {
         if (key[0] === provider) yield* Cache.invalidate(cache, key);
       }
-    });
-  }
+    },
+  );
 
   getUsage(
     provider: SubscriptionUsageProvider,

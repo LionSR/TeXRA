@@ -289,8 +289,9 @@ export class HistoryQueryStore implements Context.Service.Shape<
     );
   }
 
-  private run(sql: string, params: readonly HistoryCell[]) {
-    return Effect.gen({ self: this }, function* () {
+  private readonly run = Effect.fn('HistoryQueryStore.run')(
+    { self: this },
+    function* (sql: string, params: readonly HistoryCell[]) {
       const { log, view } = this.session;
       const now = log.now();
       // One watermark for every table: the first view that applied every
@@ -333,8 +334,8 @@ export class HistoryQueryStore implements Context.Service.Shape<
       return yield* Schema.decodeUnknownEffect(HistoryPageSchema)(
         reply.value.value,
       ).pipe(failedWith('The history query process sent an unreadable page.'));
-    });
-  }
+    },
+  );
 
   /** Feed `store` the call facts each of `runs` committed through `target`
    *  since the last feed, and drop the runs the view no longer holds. */
