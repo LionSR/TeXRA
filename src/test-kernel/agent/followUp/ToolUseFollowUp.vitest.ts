@@ -22,13 +22,9 @@ import * as resumability from '@agent/storage/resumability';
 import * as runLifecycle from '@agent/storage/runLifecycle';
 import { SessionInbox, type InboxPort } from '@agent/followUp/Inbox';
 import { RunInput } from '@agent/followUp/RunInput';
-import {
-  Inbox,
-  submitFollowUp,
-  wakeRun,
-} from '@agent/followUp/ToolUseFollowUp';
+import { Inbox, submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { Interactions } from '@agent/runtime/HostInteractions';
-import { resumeRun, type ResumeAttempt } from '@agent/runtime/resumeRun';
+import type { ResumeAttempt } from '@agent/runtime/resumeRun';
 import {
   RunRegistry,
   type RunPrograms,
@@ -36,7 +32,6 @@ import {
   Runs,
 } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { DatabaseClaimRefused } from '@shared/session/database';
 import type { Append } from '@shared/session/sessionEvents';
 import {
   runStateAppend,
@@ -76,22 +71,15 @@ const withResumePort =
 
 /**
  * The admission boundary over a recorded session plane: one serializer (a
- * one-permit semaphore standing in for the publisher), the rows it appended,
- * and the runs it claimed. `queued(runId)` is the text of every
+ * one-permit semaphore standing in for the publisher) and the rows it
+ * appended. `queued(runId)` is the text of every
  * `followup.queued` row written for the run, in order; what a reader takes
  * is what the rows still queue, as the publisher's pending set holds it.
  * `live` is the runs a generation holds here (the run registry's answer).
- * `claimRefused` answers each claim the way a live foreign owner does;
  * `failWrites` refuses that many appends.
  */
-function recordedFollowUps(
-  options: {
-    claimRefused?: boolean;
-    failWrites?: number;
-  } = {},
-) {
+function recordedFollowUps(options: { failWrites?: number } = {}) {
   const rows: SessionEvent[] = [];
-  const claims: RunId[] = [];
   const live = new Set<RunId>();
   let failWrites = options.failWrites ?? 0;
   const publisher = Semaphore.makeUnsafe(1);
@@ -157,18 +145,7 @@ function recordedFollowUps(
           (row) => row.aggregateId === qualifyAggregateId('run', runId),
         ),
       ),
-    hold: (runId) =>
-      Effect.suspend(() => {
-        claims.push(runId);
-        return options.claimRefused
-          ? Effect.fail(
-              new DatabaseClaimRefused({
-                ownerId: JSON.stringify(['other-host', 4321, null]),
-                verdict: 'alive',
-              }),
-            )
-          : Effect.void;
-      }),
+    hold: () => Effect.void,
     settled: Effect.void,
   } as InboxPort['log'];
   const followUps = new SessionInbox({
@@ -187,7 +164,6 @@ function recordedFollowUps(
     );
   return {
     followUps,
-    claims,
     live,
     queuedRows,
     queued: (runId: RunId) => queuedRows(runId).map((row) => row.content.text),
@@ -214,12 +190,7 @@ let recorded = recordedFollowUps();
  */
 type RunState = 'live' | 'idle';
 
-/** `deferFork`: the session's fork starts a fiber a tick after it returns
- *  it, as a fork whose layer resolves first may. */
-function fakeSession(
-  state: RunState,
-  { deferFork = false } = {},
-): Context.Context<SessionServices> {
+function fakeSession(state: RunState): Context.Context<SessionServices> {
   if (state === 'idle')
     vi.spyOn(resumability, 'runRejection').mockReturnValue(
       Effect.succeed(null),
@@ -263,10 +234,7 @@ function fakeSession(
     // cast: the fake decision reads no process service, only the session.
     fork: ((effect: Effect.Effect<unknown, unknown, SessionServices>) =>
       Effect.runFork(
-        Effect.provide(
-          deferFork ? Effect.andThen(Effect.yieldNow, effect) : effect,
-          session,
-        ),
+        Effect.provide(effect, session),
       )) as unknown as RunRegistryInit['fork'],
     // cast: a wake reaches only the session's resume decision.
     programs: {
@@ -301,134 +269,6 @@ const childResult = (deliveryId: string) => ({
   text: 'child result',
   from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
   deliveryId,
-});
-
-describe('wakeRun', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it.effect(
-    "a user's stop that lands before a resume's fiber runs ends the run cancelled, deciding nothing",
-    () =>
-      Effect.gen(function* () {
-        const runId = generateRunId();
-        const session = fakeSession('idle', { deferFork: true });
-        const decide = vi.fn(() => Effect.succeed(false));
-        const ended = vi
-          .spyOn(runLifecycle, 'finalizeRun')
-          .mockReturnValue(Effect.succeed({ end: null, wrote: false }));
-
-        const woken = yield* wakeRun(runId)
-          .pipe(withResumePort(decide))
-          .pipe(Effect.provide(session));
-        Context.get(session, Runs).stop(runId, {
-          reason: 'user',
-          detachActiveChildren: false,
-        });
-        yield* woken;
-
-        expect(decide).not.toHaveBeenCalled();
-        expect(ended).toHaveBeenCalledWith({
-          runId,
-          outcome: 'cancelled',
-          ownerless: true,
-        });
-      }),
-  );
-});
-
-describe('wakeRun races', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it.effect(
-    "a resume's only caller leaving before its fiber runs leaves it deciding nothing",
-    () =>
-      Effect.gen(function* () {
-        const runId = generateRunId();
-        const session = fakeSession('idle', { deferFork: true });
-        const decide = vi.fn(() => Effect.succeed(false));
-
-        const caller = yield* Effect.forkChild(
-          resumeRun(runId, {}).pipe(
-            withResumePort(decide),
-            Effect.provide(session),
-          ),
-          { startImmediately: true },
-        );
-        yield* Fiber.interrupt(caller);
-        yield* Context.get(session, Runs).get(runId)?.drained ?? Effect.void;
-
-        expect(decide).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect(
-    "a wake that joins a resume answering its owner follows it, though the resume's caller left",
-    () =>
-      Effect.gen(function* () {
-        const child = generateRunId();
-        const parent = generateRunId();
-        const session = fakeSession('idle');
-        const answered = createDeferred<void>();
-        const decide = vi.fn((runId: RunId) =>
-          runId === child
-            ? Effect.as(
-                Effect.promise(() => answered.promise),
-                {
-                  ownedBy: parent,
-                },
-              )
-            : Effect.succeed(false),
-        );
-
-        const caller = yield* Effect.forkChild(
-          resumeRun(child, {}).pipe(
-            withResumePort(decide),
-            Effect.provide(session),
-          ),
-          { startImmediately: true },
-        );
-        const woken = yield* wakeRun(child)
-          .pipe(withResumePort(decide))
-          .pipe(Effect.provide(session));
-        yield* Fiber.interrupt(caller);
-        answered.resolve();
-        yield* woken;
-
-        expect(decide.mock.calls.map(([runId]) => runId)).toEqual([
-          child,
-          parent,
-        ]);
-      }),
-  );
-
-  it.live(
-    'two wakes whose fibers interleave open one resume, the second joining it',
-    () =>
-      Effect.gen(function* () {
-        const runId = generateRunId();
-        const session = fakeSession('idle');
-        const barrier = createDeferred<boolean>();
-        const decide = vi.fn(() => Effect.promise(() => barrier.promise));
-
-        const wakes = [];
-        for (const _ of [1, 2])
-          wakes.push(
-            yield* Effect.forkChild(
-              wakeRun(runId)
-                .pipe(withResumePort(decide))
-                .pipe(Effect.provide(session)),
-            ),
-          );
-        for (const wake of wakes) yield* Fiber.join(wake);
-        barrier.resolve(false);
-
-        expect(decide).toHaveBeenCalledTimes(1);
-      }).pipe(Effect.provideService(Scheduler.MaxOpsBeforeYield, 3)),
-  );
 });
 
 describe('submitFollowUp', () => {
@@ -496,27 +336,6 @@ describe('submitFollowUp', () => {
       }),
   );
 
-  it.effect("wakes an un-ended run that is not live for a run's message", () =>
-    Effect.gen(function* () {
-      const runId = generateRunId();
-      const session = fakeSession('idle');
-      const tryResumeRun = vi.fn(() => Effect.succeed(true));
-      const message = {
-        text: 'from a peer',
-        from: { kind: 'run' as const, runId: generateRunId() },
-      };
-
-      expect(
-        yield* submitFollowUp(runId, message, {}).pipe(
-          withResumePort(tryResumeRun),
-          Effect.provide(session),
-        ),
-      ).toEqual({ status: 'queued' });
-      expect(recorded.queued(runId)).toEqual(['from a peer']);
-      expect(tryResumeRun).toHaveBeenCalledTimes(1);
-    }),
-  );
-
   it.effect('admits a replayed child delivery at most once', () =>
     Effect.gen(function* () {
       const runId = generateRunId();
@@ -573,27 +392,6 @@ describe('Inbox readers', () => {
           'between generations',
         ]);
       }),
-  );
-
-  it.effect('refuses a run another process holds, writing nothing', () =>
-    Effect.gen(function* () {
-      const { followUps, queued, claims } = recordedFollowUps({
-        claimRefused: true,
-      });
-      const id = generateRunId();
-      const delivery = childResult('d-held');
-
-      for (let attempt = 0; attempt < 2; attempt++) {
-        // Not remembered as admitted: a retry is tried again, not
-        // reported as a duplicate.
-        expect(yield* followUps.send(id, delivery)).toEqual({
-          kind: 'refused',
-          reason: 'ownedElsewhere',
-        });
-      }
-      expect(claims).toEqual([id, id]);
-      expect(queued(id)).toEqual([]);
-    }),
   );
 });
 

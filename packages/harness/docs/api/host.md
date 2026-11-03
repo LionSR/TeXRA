@@ -1739,6 +1739,10 @@ interface ProcessLayerOptions extends Omit<
   /** Seed the first-install tool switches (opt-in plugins off) unless the
    *  user's list exists; `false` for a store that refuses every write. */
   readonly seedToolSwitches?: boolean;
+  /** Label each root run with a short title from the helper model (its
+   *  `run.description`), for an app that shows one: an extra model request
+   *  per root run, outside the run's usage. Absent, no run is labelled. */
+  readonly labelRuns?: boolean;
 }
 ```
 
@@ -1832,8 +1836,9 @@ interface ProcessServicesOptions {
   /** The runtime's emission threshold for Effect diagnostics, from facts that
    *  cannot change mid-process: the surface (the extension's channel filters
    *  itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
-   *  `--quiet` / `--verbose`; no live setting changes it. */
-  readonly minimumLogLevel: LogLevel.LogLevel;
+   *  `--quiet` / `--verbose`; no live setting changes it. Absent (an
+   *  embedder), no logger, level or tracer is installed: its own decide. */
+  readonly minimumLogLevel?: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;
 }

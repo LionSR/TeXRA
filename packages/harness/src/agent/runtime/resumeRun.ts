@@ -93,14 +93,20 @@ export interface ResumeRunOptions extends Pick<ExecuteAgentOptions, 'tools'> {
 const CHANNEL = 'ResumeRun';
 
 /**
- * Only a run history refusal of the saved rows names an unusable checkpoint.
- * Ownership, metadata and lease failures remain operational errors.
+ * Only a run history refusal of the saved rows names an unusable checkpoint:
+ * rows that cannot be applied, a history the package's rules refuse, or turns
+ * on a protocol the run's binding no longer speaks. Ownership, metadata and
+ * lease failures remain operational errors.
  */
 function namesUnusableCheckpoint(error: unknown): boolean {
   const reason = findInCauseChain(error, (cause) =>
     cause instanceof RunHistoryRefused ? cause.reason : undefined,
   );
-  return reason === 'inconsistent' || reason === 'unprepared-history';
+  return (
+    reason === 'inconsistent' ||
+    reason === 'unprepared-history' ||
+    reason === 'foreign-protocol'
+  );
 }
 
 /**

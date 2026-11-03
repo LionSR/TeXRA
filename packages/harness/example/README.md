@@ -10,6 +10,27 @@ Set `TEXRA_EXAMPLE_MODEL` to a `provider/model` string (for example `anthropic/c
 corepack pnpm --filter @texra-ai/harness run example:packed
 ```
 
+## Real-model acceptance
+
+`acceptance.ts` is the harness's acceptance against a real model. Nothing in it hands the model a script: each scenario states a task in plain words, the model reads the tool descriptions and writes the programs itself, and the checks read only outcomes, calls, child runs, facts and artifacts, never exact text or request counts, so they hold for any competent model.
+
+| Scenario       | What the model does, and what is checked                                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codemode`     | From an agent file: a script that outlines `draft.tex` through a plugin's script module, runs two `self()` review rounds (the second chosen from the first's structured verdict) and counts its finished children with `executions` SQL over `runs`. Checks the calls, two completed children each ending with a structured verdict that names a section, every section title in the return and the SQL count against the view. |
+| `plugin`       | The `acme-notes` package's agent: a script over its `builtIn:notes` module. Checks the import, the `note_add` calls, both notes as version-1 facts of the plugin, and the return.                                                                                                                                                                                                                                               |
+| `crash-resume` | A second process runs a script that waits on a sign-off tool after its first `self()` round and is killed with SIGKILL once that child's result is committed; this process resumes the run. Checks that exactly one round was committed before the kill and did not run again, a second round completed after the resume, and the script finished from its saved source.                                                        |
+
+It packs and installs like the ladder, then runs `acceptance.ts` instead of `npm start`. It needs a route and that provider's key; a route without its key is recorded as skipped and sends nothing. It spends money, so it runs only by hand, never in CI:
+
+```bash
+TEXRA_EXAMPLE_MODEL=deepseek/deepseek-flash \
+  corepack pnpm --filter @texra-ai/harness run example:acceptance
+TEXRA_EXAMPLE_MODEL=anthropic/claude-haiku-5-5 \
+  corepack pnpm --filter @texra-ai/harness run example:acceptance
+```
+
+Each run writes its evidence (`_evidence.ts`) to a new directory, `.agents/docs/evidence/<date>-harness-real-model/<provider>-<model>-<HHMM>/` (`TEXRA_ACCEPTANCE_OUT` names another): `summary.md` and `run.json` (route, model, harness version and commit, each scenario's result, failed checks, tokens and the spend the runs report), and per scenario `config.json`, `scripts/` (every program the model wrote), `conversation.json`, `children.json`, `runs.json`, `calls.json` (each tool call with how it ended), `outputs/` (script returns, run end, reply, facts) and `result.json`. Each scenario's session database is copied to `store/`, which git ignores.
+
 ## Examples ladder
 
 | File                             | What it exercises                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -27,8 +48,8 @@ corepack pnpm --filter @texra-ai/harness run example:packed
 
 ## How `scripts/example-packed.mjs` runs
 
-1. Copies `package.json`, `tsconfig.json`, `_support.ts`, and `01-*.ts`..`10-*.ts` into a temporary directory outside the repository.
+1. Copies `package.json`, `tsconfig.json`, `_support.ts`, `acceptance.ts` with `_evidence.ts`, and `01-*.ts`..`10-*.ts` into a temporary directory outside the repository.
 2. Runs `pnpm --filter @texra-ai/llm pack` and `pnpm --filter @texra-ai/harness pack` into that directory as `llm.tgz` and `harness.tgz`, and `npm pack acme-notes/` as `acme-notes.tgz`.
 3. Runs `npm install --no-audit --no-fund` (plain `node_modules`, no workspace lockfile).
 4. Runs `tsc -p` with `strict: true`, `moduleResolution: "nodenext"`, and `skipLibCheck: false`.
-5. Runs `npm start` (executing `01` through `10` in order) and removes the temporary directory on success.
+5. Runs `npm start` (executing `01` through `10` in order), or with `--acceptance` `node acceptance.ts`, and removes the temporary directory on success.

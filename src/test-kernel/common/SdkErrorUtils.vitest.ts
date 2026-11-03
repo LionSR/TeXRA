@@ -1,5 +1,5 @@
 // Third-party imports
-import { BadRequestError as OpenAIBadRequestError } from 'openai';
+import { APIError, BadRequestError as OpenAIBadRequestError } from 'openai';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
@@ -29,6 +29,29 @@ describe('context-window overflow', () => {
 
     expect(judged(err).classification).toStrictEqual({
       kind: 'context-window',
+    });
+  });
+});
+
+describe('an account out of credit', () => {
+  // DeepSeek answers a request on an empty balance with a 402 whose error
+  // type, not its code, says why (the code is a generic
+  // `invalid_request_error`).
+  it("is the credit verdict on DeepSeek's insufficient balance", () => {
+    const err = new APIError(
+      402,
+      {
+        message: 'Insufficient Balance',
+        type: 'insufficient_balance_error',
+        param: null,
+        code: 'invalid_request_error',
+      },
+      '402 Insufficient Balance',
+      new Headers(),
+    );
+
+    expect(judged(err).classification).toStrictEqual({
+      kind: 'upstream-credit',
     });
   });
 });

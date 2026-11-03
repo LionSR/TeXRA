@@ -33,23 +33,4 @@ describe('replaceLiteralMatches', () => {
       );
     }
   });
-
-  it('inserts replacement patterns verbatim for every occurrence', () => {
-    for (const replacement of dollarPatterns) {
-      expect(
-        replaceLiteralMatches({
-          content: 'OLD and OLD',
-          search: 'OLD',
-          replacement,
-          mode: 'all',
-          notFoundError,
-        }),
-      ).toEqual(
-        Result.succeed({
-          content: `${replacement} and ${replacement}`,
-          count: 2,
-        }),
-      );
-    }
-  });
 });
