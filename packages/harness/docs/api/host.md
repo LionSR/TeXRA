@@ -1172,14 +1172,22 @@ type HostPresentation = Effect.Effect<void, Error> | void;
 
 A process's skill sources (`ProcessLayerOptions.skills`,
 `Composition.skills`): its bundled resources tree, under which each of its
-tool plugins ships its bundled skills (`plugins/<id>/skills`), and its
-process-wide source options (the CLI's flags). All three hosts discover
-custom roots, project skills, user skills and the bundled ones in that
-precedence. A process given none discovers no skills at all.
+tool plugins ships its bundled skills (`plugins/<id>/skills`), the folder
+it keeps in each project, and its process-wide source options (the CLI's
+flags). Discovery reads custom roots, project skills, user skills (the
+storage root's `skills/`) and the bundled ones in that precedence. A
+process given none discovers no skills at all.
 
 ```ts
 interface HostSkillOptions {
   readonly resourcesPath: string;
+  /**
+   * The folder the host keeps in each project, relative to a session's
+   * workspace (TeXRA's `.texra`): its `skills/` holds the project's own
+   * skills. Absent, a project has no skills but those a custom root or an
+   * interop listing reads.
+   */
+  readonly projectFolder?: string;
   readonly skillSourceOptions?: SkillSourceOptions;
 }
 ```

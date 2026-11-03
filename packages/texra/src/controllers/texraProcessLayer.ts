@@ -4,8 +4,9 @@
  * what it decides and hands the result to `ManagedRuntime.make`. TeXRA's
  * part is the settings catalog, the command directories, its plugins over
  * one editor registry the host's windows attach to (`HostWindows`), the one
- * credential store under the storage root, the agent directories with their
- * team membership, and the usage log.
+ * credential store under the storage root, the project folder its skills
+ * are read from, the agent directories with their team membership, and the
+ * usage log.
  */
 
 // Third-party imports
@@ -33,6 +34,7 @@ import {
 } from '@telemetry/UsageLogService';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
+import { TEXRA_STORAGE_DIR_NAME } from '@texra/platform/defaults/nodeStorage';
 import { teamMembers } from '@texra/shared/agentTeams';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { makeEditorHost } from '@texra/tools/editorHost';
@@ -101,7 +103,12 @@ export const texraProcessLayer = ({
     commandDirs,
     plugins,
     ...(resourcesPath !== undefined && {
-      skills: { resourcesPath, skillSourceOptions },
+      skills: {
+        resourcesPath,
+        // A project's skills sit beside its `.texra/config.json`.
+        projectFolder: TEXRA_STORAGE_DIR_NAME,
+        skillSourceOptions,
+      },
     }),
     // One credential store every host shares, announcing each key it writes.
     secrets: Secrets.announcing(

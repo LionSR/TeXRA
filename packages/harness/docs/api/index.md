@@ -1088,7 +1088,8 @@ interface WorkspaceRoots {
   /**
    * The storage root this process opened (a host's per-user directory, an
    * SDK embedder's `storageDir`): every storage path below derives from it, and
-   * the files a person keeps there (the MCP config) are found beside it.
+   * the files a person keeps there (the MCP config, their skills and the
+   * `AGENTS.md` a workspace without one falls back to) are found in it.
    */
   readonly storageRoot: string;
   /** Application-owned storage for this project's state. Custom hosts must

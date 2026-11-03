@@ -225,6 +225,7 @@ function sessionsLayer(
             options: options.skills.skillSourceOptions ?? {},
             contributions: hostSkillContributions(
               options.plugins.map(({ id }) => id),
+              options.skills.projectFolder,
             ),
           }),
     ),
