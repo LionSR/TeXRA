@@ -1390,8 +1390,8 @@ show` print the same notice, and the new `texra agents customize`,
 - **A used-up plan or a lapsed subscription reads in TeXRA's words again
   wherever a run's failure shows.** The end-of-run notice (the desktop and
   VS Code message, `texra run`'s `ERROR` line), a launch that fails before
-  its run starts, the transcript's error rows and a text polish say which
-  plan ran out and which switch or sign-in to use, as before: "ChatGPT
+  its run starts, and the transcript's error rows say which plan ran out
+  and which switch or sign-in to use, as before: "ChatGPT
   subscription usage limit reached (Plus plan). Resets in 2h 5m. Switch to
   your own OpenAI API key to keep working, or wait until the limit
   resets." and "ChatGPT subscription unavailable: … Sign in with ChatGPT
