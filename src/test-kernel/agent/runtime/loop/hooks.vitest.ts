@@ -39,11 +39,13 @@ import {
 import { SessionGraph } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
-/** A file's lines, none when it is absent. */
+/** A file's lines, none when it is absent. Trailing whitespace is dropped:
+ *  cmd.exe's `echo text >> file` writes `text \r\n`. */
 const linesOf = (file: string): string[] =>
   existsSync(file)
     ? readFileSync(file, 'utf8')
         .split('\n')
+        .map((line) => line.trimEnd())
         .filter((line) => line !== '')
     : [];
 

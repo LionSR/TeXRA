@@ -141,9 +141,13 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
               yield* persistentTestSession(roots),
             );
             // A run whose command holds a process open, read by the caller.
+            // The process writes its own pid; `node -e` runs the same under
+            // a POSIX shell and cmd.exe, from the workspace the command runs in.
             const pidFile = join(roots.workspace!, 'held.pid');
             const holding = yield* sdk.start({
-              agent: commandPersona(`echo $$ > ${pidFile} && exec sleep 60`),
+              agent: commandPersona(
+                `node -e "require('fs').writeFileSync('held.pid', String(process.pid)); setInterval(() => {}, 1000)"`,
+              ),
               instruction: 'Run the command.',
               model: MODEL,
               approval: { delegated: true },
