@@ -66,7 +66,7 @@ import {
   postDesktopSettingsView,
 } from '../shared/desktopCommandSurface.js';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
-import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
+import type { WindowOnboarding } from './desktopWindowOnboarding.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopProject } from './desktopProjects.js';
@@ -86,7 +86,7 @@ interface DesktopHostRequestsOptions {
   resourcesPath: string;
   postToRenderer(message: unknown): boolean | void;
   onboarding: Pick<
-    DesktopOnboardingIpc,
+    WindowOnboarding,
     'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'
   >;
   openExternalUrl(url: string): Effect.Effect<void, PreviewUnavailable>;
