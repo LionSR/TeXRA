@@ -1,0 +1,39 @@
+{
+  "scenario": "plugin",
+  "passed": true,
+  "reason": null,
+  "runId": "c69f21462a78",
+  "checks": [
+    {
+      "name": "run completed",
+      "ok": true,
+      "detail": "completed"
+    },
+    {
+      "name": "a script imported the notes module",
+      "ok": true,
+      "detail": "[\"const notes = await import('builtIn:notes');\\nconst mem = await tools.memory ? null : null;\\nreturn { keys: Object.keys(notes) };\",\"const notes = await import('builtIn:notes');\\nconst first = await notes.add({ text: 'Lemma 2 needs a citation.' });\\nconst second = await notes.add({ text: 'Section 3 is done.' });\\nreturn { first, second };\",\"const notes = await import('builtIn:notes');\\nconst first = await notes.add('Lemma 2 needs a citation.');\\nconst second = await notes.add('Section 3 is done.');\\nreturn { first, second };\"]"
+    },
+    {
+      "name": "note_add ran from a script",
+      "ok": true
+    },
+    {
+      "name": "both notes are versioned facts of the plugin",
+      "ok": true,
+      "detail": "[\"Lemma 2 needs a citation.\",\"Section 3 is done.\"]"
+    },
+    {
+      "name": "the script returned both notes",
+      "ok": true,
+      "detail": "{\"first\":{\"text\":\"Lemma 2 needs a citation.\"},\"second\":{\"text\":\"Section 3 is done.\"}}"
+    }
+  ],
+  "costUsd": 0.00090708,
+  "inputTokens": 12084,
+  "outputTokens": 686,
+  "runs": 1,
+  "scripts": 3,
+  "failedScripts": 1,
+  "seconds": 8
+}

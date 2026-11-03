@@ -1,0 +1,13 @@
+{
+  "inputFiles": [],
+  "contextFiles": [],
+  "mediaFiles": [],
+  "outputFiles": [],
+  "editedFile": null,
+  "agent": "note_taker",
+  "agentSource": "custom",
+  "persona": null,
+  "model": "deepseek/deepseek-flash",
+  "instruction": "Keep two notes on the draft, in one script program you write yourself, through the notes script module: \"Lemma 2 needs a citation.\" and \"Section 3 is done.\". Return what the module returned for each note.",
+  "memories": []
+}

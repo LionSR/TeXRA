@@ -1,0 +1,1 @@
+The review cleared "Setup" as internally sound but flagged "Main bound" as unsupported: $\sup_K|f|\le 1$ is false for arbitrary continuous $f$ on compact $K$ (take $f\equiv 2$), and the omitted proof leaves nowhere for the missing normalization hypothesis to enter.

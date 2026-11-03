@@ -39,7 +39,11 @@ import {
   harnessBuiltins,
   type Plugin,
 } from '@texra-ai/harness/plugins';
-import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
+import {
+  qualifyAggregateId,
+  RunIdSchema,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { API_KEY_PROVIDER_IDS, apiKeyEnvName } from '@texra-ai/llm';
 import { acmeNotes, agentsDir as notesAgents, NoteSchema } from 'acme-notes';
 
@@ -189,9 +193,11 @@ const codemode = (dir: string) =>
         (child) => child.durableOutcome === 'completed',
       ).length;
       // The object the task asked for: a later script that only checks
-      // something (a query, a listing) does not replace it.
+      // something (a query, a listing, the count alone) does not replace it.
       const returned = scriptReturnsOf(evidence.conversation).findLast(
-        (value) => has(value, 'completedChildren'),
+        (value) =>
+          has(value, 'completedChildren') &&
+          TITLES.some((title) => has(value, title)),
       );
       // Each finished round's structured verdict, as its run ended with it.
       const verdicts: unknown[] = [];
@@ -442,14 +448,17 @@ const crashResume = (dir: string) =>
 
       // Kill once a `self()` child's result is committed and the script
       // waits on the sign-off, which never resolves in that process. Only
-      // the latest script counts: the model may try the functions out in
-      // earlier ones, and its calls run one script at a time.
+      // the run's own latest script counts: the model may try the functions
+      // out in earlier ones, its calls run one script at a time, and a
+      // round's child may run scripts of its own.
+      const own = qualifyAggregateId('run', runId);
       let script: string | null = null;
       const selfCards = new Set<string>();
       let selfEnded = 0;
       let signoffStarted = false;
       const killPoint = yield* Stream.runHead(
         Stream.filter(session.view.events(from), (event) => {
+          if (event.aggregateId !== own) return false;
           if (event.type === 'tool.start' && event.toolName === 'script') {
             script = event.logId;
             selfCards.clear();

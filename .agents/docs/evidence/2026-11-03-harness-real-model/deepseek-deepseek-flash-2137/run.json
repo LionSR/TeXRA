@@ -1,0 +1,149 @@
+{
+  "route": "deepseek",
+  "model": "deepseek/deepseek-flash",
+  "started": "2026-11-03T20:37:17.503Z",
+  "harness": "0.1.0",
+  "commit": "14d0e110f723549495c3952c01393db1e6f5cf73",
+  "node": "v26.13.0",
+  "runLimit": "8 minutes",
+  "skipped": null,
+  "results": [
+    {
+      "scenario": "codemode",
+      "passed": true,
+      "reason": null,
+      "runId": "9a62a0b1c5fa",
+      "checks": [
+        {
+          "name": "run completed",
+          "ok": true,
+          "detail": "completed"
+        },
+        {
+          "name": "a script finished",
+          "ok": true,
+          "detail": "[\"memory:completed\",\"script:completed\",\"script:completed\",\"outline_sections:completed\",\"script:completed\",\"outline_sections:completed\",\"script:failed\",\"outline_sections:failed\",\"script:completed\",\"outline_sections:completed\",\"script:completed\",\"outline_sections:completed\",\"self:completed\",\"self:completed\",\"executions:completed\",\"executions:completed\"]"
+        },
+        {
+          "name": "the module called the plugin tool",
+          "ok": true
+        },
+        {
+          "name": "two self() rounds completed",
+          "ok": true,
+          "detail": "2 of 2"
+        },
+        {
+          "name": "each round ended with a structured verdict naming a section",
+          "ok": true,
+          "detail": "[{\"section\":\"Setup\",\"claim\":\"\\\"Let $K \\\\subset \\\\mathbb{R}^n$ be compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ continuous.\\\"\",\"supported\":true,\"reason\":\"The Setup section only fixes hypotheses and asserts nothing that needs proof, so it is internally sound as written; however these assumptions are far too weak for what the paper builds on them — a continuous function on a compact set need not satisfy $\\\\sup_K|f|\\\\le 1$ — so the gap lies downstream in \\\"Main bound\\\", not here.\",\"nextSection\":\"Main bound\"},{\"section\":\"Main bound\",\"claim\":\"We claim $\\\\sup_K |f| \\\\le 1$. The proof is omitted.\",\"suppor… [1005 chars]"
+        },
+        {
+          "name": "an executions SQL query succeeded",
+          "ok": true
+        },
+        {
+          "name": "the script returned every section title",
+          "ok": true,
+          "detail": "{\"sectionTitles\":[\"Setup\",\"Main bound\",\"Discussion\"],\"round1\":{\"section\":\"Setup\",\"claim\":\"\\\"Let $K \\\\subset \\\\mathbb{R}^n$ be compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ continuous.\\\"\",\"supported\":true,\"reason\":\"The Setup section only fixes hypotheses and asserts nothing that needs proof, so it is internally sound as written; however these assumptions are far too weak for what the paper builds on them — a continuous function on a compact set need not satisfy $\\\\sup_K|f|\\\\le 1$ — so the gap lies downstream in \\\"Main bound\\\", not here.\",\"nextSection\":\"Main bound\"},\"round2\":{\"section\":\"Main bound\",… [1132 chars]"
+        },
+        {
+          "name": "the returned count matches the finished children",
+          "ok": true,
+          "detail": "{\"completed\":2,\"returned\":{\"sectionTitles\":[\"Setup\",\"Main bound\",\"Discussion\"],\"round1\":{\"section\":\"Setup\",\"claim\":\"\\\"Let $K \\\\subset \\\\mathbb{R}^n$ be compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ continuous.\\\"\",\"supported\":true,\"reason\":\"The Setup section only fixes hypotheses and asserts nothing that needs proof, so it is internally sound as written; however these assumptions are far too weak for what the paper builds on them — a continuous function on a compact set need not satisfy $\\\\sup_K|f|\\\\le 1$ — so the gap lies downstream in \\\"Main bound\\\", not here.\",\"nextSection\":\"Main bound\"},\"round2… [1159 chars]"
+        }
+      ],
+      "costUsd": 0.005060076,
+      "inputTokens": 65206,
+      "outputTokens": 5115,
+      "runs": 3,
+      "scripts": 6,
+      "failedScripts": 1,
+      "seconds": 42
+    },
+    {
+      "scenario": "plugin",
+      "passed": true,
+      "reason": null,
+      "runId": "c69f21462a78",
+      "checks": [
+        {
+          "name": "run completed",
+          "ok": true,
+          "detail": "completed"
+        },
+        {
+          "name": "a script imported the notes module",
+          "ok": true,
+          "detail": "[\"const notes = await import('builtIn:notes');\\nconst mem = await tools.memory ? null : null;\\nreturn { keys: Object.keys(notes) };\",\"const notes = await import('builtIn:notes');\\nconst first = await notes.add({ text: 'Lemma 2 needs a citation.' });\\nconst second = await notes.add({ text: 'Section 3 is done.' });\\nreturn { first, second };\",\"const notes = await import('builtIn:notes');\\nconst first = await notes.add('Lemma 2 needs a citation.');\\nconst second = await notes.add('Section 3 is done.');\\nreturn { first, second };\"]"
+        },
+        {
+          "name": "note_add ran from a script",
+          "ok": true
+        },
+        {
+          "name": "both notes are versioned facts of the plugin",
+          "ok": true,
+          "detail": "[\"Lemma 2 needs a citation.\",\"Section 3 is done.\"]"
+        },
+        {
+          "name": "the script returned both notes",
+          "ok": true,
+          "detail": "{\"first\":{\"text\":\"Lemma 2 needs a citation.\"},\"second\":{\"text\":\"Section 3 is done.\"}}"
+        }
+      ],
+      "costUsd": 0.00090708,
+      "inputTokens": 12084,
+      "outputTokens": 686,
+      "runs": 1,
+      "scripts": 3,
+      "failedScripts": 1,
+      "seconds": 8
+    },
+    {
+      "scenario": "crash-resume",
+      "passed": true,
+      "reason": null,
+      "runId": "1dfd822f5e96",
+      "checks": [
+        {
+          "name": "killed by SIGKILL",
+          "ok": true,
+          "detail": "SIGKILL"
+        },
+        {
+          "name": "exactly one round was committed before the kill",
+          "ok": true,
+          "detail": "1"
+        },
+        {
+          "name": "resumed run completed",
+          "ok": true,
+          "detail": "completed"
+        },
+        {
+          "name": "committed children did not run again",
+          "ok": true,
+          "detail": "{\"before\":{\"7782cd6e50601217be86aafd\":7,\"997a34044289c4fa7f0e57fc\":7},\"unchanged\":[\"7782cd6e50601217be86aafd\",\"997a34044289c4fa7f0e57fc\"]}"
+        },
+        {
+          "name": "a second round ran and completed after the resume",
+          "ok": true,
+          "detail": "[\"7782cd6e50601217be86aafd:completed\",\"997a34044289c4fa7f0e57fc:completed\",\"b5cc533df3378b5d49c34927:completed\"]"
+        },
+        {
+          "name": "the interrupted script finished from its saved source",
+          "ok": true,
+          "detail": "completed"
+        }
+      ],
+      "costUsd": 0.006377766,
+      "inputTokens": 41029,
+      "outputTokens": 8181,
+      "runs": 4,
+      "scripts": 2,
+      "failedScripts": 1,
+      "seconds": 58
+    }
+  ]
+}

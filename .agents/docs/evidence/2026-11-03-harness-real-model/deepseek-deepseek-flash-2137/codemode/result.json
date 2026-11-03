@@ -1,0 +1,53 @@
+{
+  "scenario": "codemode",
+  "passed": true,
+  "reason": null,
+  "runId": "9a62a0b1c5fa",
+  "checks": [
+    {
+      "name": "run completed",
+      "ok": true,
+      "detail": "completed"
+    },
+    {
+      "name": "a script finished",
+      "ok": true,
+      "detail": "[\"memory:completed\",\"script:completed\",\"script:completed\",\"outline_sections:completed\",\"script:completed\",\"outline_sections:completed\",\"script:failed\",\"outline_sections:failed\",\"script:completed\",\"outline_sections:completed\",\"script:completed\",\"outline_sections:completed\",\"self:completed\",\"self:completed\",\"executions:completed\",\"executions:completed\"]"
+    },
+    {
+      "name": "the module called the plugin tool",
+      "ok": true
+    },
+    {
+      "name": "two self() rounds completed",
+      "ok": true,
+      "detail": "2 of 2"
+    },
+    {
+      "name": "each round ended with a structured verdict naming a section",
+      "ok": true,
+      "detail": "[{\"section\":\"Setup\",\"claim\":\"\\\"Let $K \\\\subset \\\\mathbb{R}^n$ be compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ continuous.\\\"\",\"supported\":true,\"reason\":\"The Setup section only fixes hypotheses and asserts nothing that needs proof, so it is internally sound as written; however these assumptions are far too weak for what the paper builds on them — a continuous function on a compact set need not satisfy $\\\\sup_K|f|\\\\le 1$ — so the gap lies downstream in \\\"Main bound\\\", not here.\",\"nextSection\":\"Main bound\"},{\"section\":\"Main bound\",\"claim\":\"We claim $\\\\sup_K |f| \\\\le 1$. The proof is omitted.\",\"suppor… [1005 chars]"
+    },
+    {
+      "name": "an executions SQL query succeeded",
+      "ok": true
+    },
+    {
+      "name": "the script returned every section title",
+      "ok": true,
+      "detail": "{\"sectionTitles\":[\"Setup\",\"Main bound\",\"Discussion\"],\"round1\":{\"section\":\"Setup\",\"claim\":\"\\\"Let $K \\\\subset \\\\mathbb{R}^n$ be compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ continuous.\\\"\",\"supported\":true,\"reason\":\"The Setup section only fixes hypotheses and asserts nothing that needs proof, so it is internally sound as written; however these assumptions are far too weak for what the paper builds on them — a continuous function on a compact set need not satisfy $\\\\sup_K|f|\\\\le 1$ — so the gap lies downstream in \\\"Main bound\\\", not here.\",\"nextSection\":\"Main bound\"},\"round2\":{\"section\":\"Main bound\",… [1132 chars]"
+    },
+    {
+      "name": "the returned count matches the finished children",
+      "ok": true,
+      "detail": "{\"completed\":2,\"returned\":{\"sectionTitles\":[\"Setup\",\"Main bound\",\"Discussion\"],\"round1\":{\"section\":\"Setup\",\"claim\":\"\\\"Let $K \\\\subset \\\\mathbb{R}^n$ be compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ continuous.\\\"\",\"supported\":true,\"reason\":\"The Setup section only fixes hypotheses and asserts nothing that needs proof, so it is internally sound as written; however these assumptions are far too weak for what the paper builds on them — a continuous function on a compact set need not satisfy $\\\\sup_K|f|\\\\le 1$ — so the gap lies downstream in \\\"Main bound\\\", not here.\",\"nextSection\":\"Main bound\"},\"round2… [1159 chars]"
+    }
+  ],
+  "costUsd": 0.005060076,
+  "inputTokens": 65206,
+  "outputTokens": 5115,
+  "runs": 3,
+  "scripts": 6,
+  "failedScripts": 1,
+  "seconds": 42
+}

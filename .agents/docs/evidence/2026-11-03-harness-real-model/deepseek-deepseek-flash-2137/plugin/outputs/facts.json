@@ -1,0 +1,32 @@
+[
+  {
+    "aggregateId": "[\"run\",\"c69f21462a78\"]",
+    "type": "plugin.fact",
+    "plugin": "acme-notes",
+    "kind": "note",
+    "version": 1,
+    "value": {
+      "text": "Lemma 2 needs a citation."
+    },
+    "parent": null,
+    "seq": 75,
+    "commit": 75,
+    "origin": null,
+    "at": 1793738286210
+  },
+  {
+    "aggregateId": "[\"run\",\"c69f21462a78\"]",
+    "type": "plugin.fact",
+    "plugin": "acme-notes",
+    "kind": "note",
+    "version": 1,
+    "value": {
+      "text": "Section 3 is done."
+    },
+    "parent": null,
+    "seq": 81,
+    "commit": 81,
+    "origin": null,
+    "at": 1793738286219
+  }
+]

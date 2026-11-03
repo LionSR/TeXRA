@@ -8,7 +8,7 @@ runs are allowed and nothing runs in CI.
 
 **DeepSeek has passed; Anthropic has not run.** As of 2026-11-03:
 
-- DeepSeek (`deepseek/deepseek-flash`): every scenario passed, twice, on the
+- DeepSeek (`deepseek/deepseek-flash`): every scenario passed, three times, on the
   build of #14623. The first run that reached the model, on `171aa36b38`,
   failed two of three; the fixes are in findings 4 and 5 below.
 - Anthropic: no `ANTHROPIC_API_KEY` is set; the run waits for the owner.
@@ -25,14 +25,15 @@ kept.
 | [`deepseek-deepseek-flash-1931`](deepseek-deepseek-flash-1931/summary.md) | `171aa36b38`           | fail     | pass   | fail          | 0.0144      |
 | [`deepseek-deepseek-flash-2016`](deepseek-deepseek-flash-2016/summary.md) | #14623, earlier runner | pass     | pass   | pass          | 0.0124      |
 | [`deepseek-deepseek-flash-2018`](deepseek-deepseek-flash-2018/summary.md) | #14623, earlier runner | pass     | pass   | fail (runner) | 0.0134      |
-| [`deepseek-deepseek-flash-2021`](deepseek-deepseek-flash-2021/summary.md) | #14623                 | pass     | pass   | pass          | 0.0129      |
+| [`deepseek-deepseek-flash-2021`](deepseek-deepseek-flash-2021/summary.md) | #14623, earlier runner | pass     | pass   | pass          | 0.0129      |
+| [`deepseek-deepseek-flash-2137`](deepseek-deepseek-flash-2137/summary.md) | #14623                 | pass     | pass   | pass          | 0.0123      |
 
 Run `2018`'s crash-resume failed on the runner's checks, not the harness's
 behavior: the model first tried `self()` out in a separate script, and the
 runner counted that probe's child as a round and judged the first script as
 the interrupted one. The resumed run completed, the committed children did not
 run again, and the interrupted script finished. The runner now follows the
-script that was open at the kill (finding 6).
+script of the run itself that was open at the kill (finding 6).
 
 ## What the runner covers
 
