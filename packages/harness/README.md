@@ -334,6 +334,35 @@ the session store's source; in short:
   caller refuses the same way (`heldElsewhereBy`): a resume or follow-up
   answers `ownedElsewhere`, a request `NotOwner`.
 
+## Generated files and deletion
+
+Under its storage root a session owns the store (`texra.db`) and one
+directory per run, `executions/<runId>/`, holding the files the run
+generated. A deletion removes nothing else: the project's own files are
+never touched, and a store moved aside (`texra.db.pre1`) is never read again
+and goes only when a person deletes it (`deleteStorageInventory`, which
+`texra doctor --prune-storage` runs after asking).
+
+- Deleting a run (the `run.delete` request) commits a deletion marker, the
+  `run.removed` row that closes the run and every run it owns. Nothing on
+  disk is removed before that row commits, and a deletion removes only the
+  directories of the runs its marker closed.
+- The session collects committed markers when it opens and after each
+  deletion: it removes the closed runs' directories, then their rows and the
+  blobs no other row uses. Each step may run twice, in one process or two,
+  with the same result.
+- A removal that fails leaves its marker pending, with a warning, and the
+  next collection retries it. The deleted run stays deleted meanwhile.
+- The only runs the harness deletes on its own are ended background shells
+  an earlier process left, at session open, through the same marker.
+- Before removing anything, the collector resolves the storage root and its
+  `executions` directory, which must resolve to itself. If it was replaced by
+  a link elsewhere, the collection is refused and stays pending; each target
+  must also fall inside it. This is resolve-then-check: a directory replaced
+  between the check and the removal is not detected.
+- The `run.files` request copies a stopped run's directory into the project,
+  or removes the directory without deleting the run.
+
 ## Run results
 
 There is exactly one result shape: `RunEnd`, the end the run stored for
