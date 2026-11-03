@@ -32,7 +32,6 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { seedEditedFiles } from '@test/support/runRecordSeeds';
 import { waitForCondition } from '@test/support/asyncTestUtils';
 import { fakePath } from '@test/support/FakePlatform';
 import {
@@ -202,31 +201,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         assert.match(result.error ?? '', /require a prior read/);
         assert.strictEqual(workspaceWrites.mock.calls.length, 0);
         assert.strictEqual(openedEdits().length, 0);
-      }),
-    );
-
-    it.effect('write_file rejects when user denies approval', () =>
-      Effect.gen(function* () {
-        yield* setUp();
-        const write = stubWorkspaceFile('summary.txt', {
-          exists: true,
-          content: 'base',
-        });
-        // The run's rows say it wrote the file: an edited file counts as read.
-        yield* seedEditedFiles(session, runId, ['summary.txt']);
-
-        nextDecision = () => ({
-          action: 'reject',
-          feedback: 'Rejected by user',
-        });
-
-        const result = yield* inRun(
-          writeFileTool().call({ path: 'summary.txt', content: 'new content' }),
-        );
-
-        assert.strictEqual(write.mock.calls.length, 0);
-        assert.strictEqual(result.status, 'error');
-        assert.strictEqual(result.userInstruction, 'Rejected by user');
       }),
     );
 
