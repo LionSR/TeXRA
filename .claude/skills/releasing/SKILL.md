@@ -24,7 +24,9 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
    kind, plugin arm and current-value family at its current version (the
    frozen fixtures `src/test-kernel/schemas/rowVersions.vitest.ts` checks),
    which releases those versions: every later build reads them through
-   upcasters. Commit both and push to `main`.
+   upcasters. Commit both and push to `main`. The release also promises the
+   store's contracts in `packages/harness/README.md`: "Durable invariants",
+   "Storage failures", and "Generated files and deletion".
 
 2. **Tags.** Cut both off that commit and push:
 
