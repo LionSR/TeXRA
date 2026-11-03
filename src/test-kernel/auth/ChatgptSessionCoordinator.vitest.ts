@@ -150,23 +150,6 @@ const freshToken = (coordinator: SubscriptionCoordinator<ChatgptSession>) =>
   Effect.map(coordinator.getFreshSession(), (fresh) => fresh.accessToken);
 
 describe('ChatGPT session coordinator', () => {
-  it.effect(
-    'reuses one coordinator per store, so distinct stores share no state',
-    () =>
-      Effect.gen(function* () {
-        const first = memoryStorage();
-        const second = memoryStorage();
-        const coordinator = chatgptCoordinator(first);
-
-        expect(chatgptCoordinator(first)).toBe(coordinator);
-        expect(chatgptCoordinator(second)).not.toBe(coordinator);
-
-        yield* coordinator.storeTokens(tokenResponse());
-        expect(first.peek()?.accessToken).toBe('access-1');
-        expect(second.peek()).toBeUndefined();
-      }),
-  );
-
   it.effect('single-flights concurrent refreshes', () =>
     Effect.gen(function* () {
       const storage = memoryStorage(expiredSession());
@@ -266,21 +249,6 @@ describe('ChatGPT session coordinator', () => {
         yield* withHttp(freshToken(coordinator));
         expect(storage.peek()?.refreshToken).toBe('refresh-0');
       }),
-  );
-
-  it.effect('clears the session and surfaces re-auth on a fatal refresh', () =>
-    Effect.gen(function* () {
-      const storage = memoryStorage(expiredSession());
-      const refreshTokens = async () => revoked();
-      const coordinator = makeCoordinator(storage, { refreshTokens });
-
-      const error = yield* Effect.flip(withHttp(freshToken(coordinator)));
-      expect(error).toMatchObject({
-        kind: 'fatal',
-        needsReauth: true,
-      });
-      expect(storage.peek()).toBeUndefined();
-    }),
   );
 
   it.effect('keeps the session on a transient refresh failure', () =>

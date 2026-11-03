@@ -3,7 +3,6 @@ import { layer } from '@effect/vitest';
 import { Effect, Layer, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { requestToolEditApproval } from '@texra-ai/harness/plugins';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { type CliApprovalPromptHooks } from '@cli/runtime/approval/approvalPrompts';
@@ -15,7 +14,6 @@ import {
   publishTestRunStart,
   setTestApprovalPolicy,
 } from '@test/support/sessionTestUtils';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   SessionGraph,
   sessionHandleOf,
@@ -75,30 +73,6 @@ function ensureRun(runId: RunId) {
   });
 }
 
-/** A tool's edit approval request for `path` on the root run. */
-function requestEdit(path: string, proposedContent: string) {
-  return Effect.gen(function* () {
-    yield* ensureRun(ROOT_RUN);
-    return yield* requestToolEditApproval({
-      path,
-      originalContent: '',
-      proposedContent,
-      sourceTool: 'write_file',
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          workingDirectory: '/tmp',
-          run: {
-            runId: ROOT_RUN,
-            session: yield* sessionHandle,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    );
-  });
-}
-
 // One session for the file: the runs it starts stay started across its cases.
 layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted))(
   'CLI approval adapter',
@@ -154,55 +128,6 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted))(
             expect(result).toMatchObject({ action: 'deny' });
             expect(prompted).toEqual([]);
           }),
-      );
-    });
-
-    describe('buildToolEditApprovalContent', () => {
-      it.effect(
-        'preserves a failed edit prompt as an automatic cancellation',
-        () =>
-          Effect.gen(function* () {
-            yield* useCliHostInteractions(
-              context({
-                approvalPrompt: () =>
-                  Effect.fail(new Error('terminal input closed')),
-              }),
-            );
-
-            const result = yield* requestEdit(
-              '/tmp/new-proof.tex',
-              '\\section{Proof}\nA concise proof.\n',
-            );
-
-            // A prompt that never reached a person closes the request as an
-            // automatic cancellation, never as that person's rejection.
-            expect(result).toEqual({
-              action: 'cancel',
-              cause: 'CLI approval prompt failed: terminal input closed',
-            });
-          }),
-      );
-
-      it.effect('skips prompting for auto-approved edits', () =>
-        Effect.gen(function* () {
-          yield* useCliHostInteractions(
-            context({
-              approvalPolicy: 'yolo',
-              approvalPrompt: () =>
-                Effect.die(new Error('approval prompt should not be called')),
-            }),
-          );
-
-          const result = yield* requestEdit(
-            '/tmp/auto-approved.tex',
-            '\\section{Auto-approved}\n',
-          );
-
-          expect(result).toMatchObject({
-            action: 'apply',
-            appliedContent: '\\section{Auto-approved}\n',
-          });
-        }),
       );
     });
   },

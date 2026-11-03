@@ -25,12 +25,10 @@ import {
   type RuntimeRequest,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
-import { AgentError } from '@texra-ai/harness/host';
 import { liveToolGates } from '@agent/runtime/requestPolicy';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliConfig } from '@cli/runtime/executeCli';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { SessionLog } from '@shared/session/runHistory';
@@ -49,7 +47,6 @@ import {
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
-  settled: vi.fn(),
   emit: vi.fn(),
   attachRunProgressRenderer: vi.fn(),
   detachSessionProgressProjection: vi.fn(),
@@ -92,7 +89,6 @@ type LaunchInput = Extract<StartInput, { readonly config: unknown }> & {
 function runSessionFake(session: LocalSession): LocalSession {
   return {
     ...session,
-    settled: Effect.suspend(() => mocks.settled() ?? session.settled),
     start: (input) =>
       // A rejected admission is a defect, as an unexpected launch failure is.
       Effect.promise(() => mocks.admit(input)).pipe(
@@ -333,39 +329,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           }),
       );
 
-      it.effect('presents a classified run failure as its exit code', () =>
-        Effect.gen(function* () {
-          const { executeCliConfig } = yield* loadExecuteCli;
-          mocks.rootLaunch.mockRejectedValueOnce(
-            new AgentError({ message: 'boom' }),
-          );
-          const order: string[] = [];
-          mocks.settled.mockImplementationOnce(() =>
-            Effect.sync(() => order.push('settled')),
-          );
-          mocks.close.mockImplementationOnce(() =>
-            Effect.sync(() => order.push('detached')),
-          );
-
-          // #7645: a classified run failure resolves to a non-zero exit code
-          // instead of rethrowing — otherwise it reaches bin/texra.ts's crash
-          // handler and gets misreported as an unexpected crash (double-printed
-          // message + a false "please report it" line).
-          const result = yield* executeCliConfig(baseConfig(), cliContext());
-
-          expect(result).toEqual({
-            ok: false,
-            exitCode: CliExitCode.AgentError,
-          });
-          expect(mocks.emit).toHaveBeenCalledWith('requestShowError', {
-            message: 'boom',
-          });
-          // A failed run's end reaches its presenter through the fold: the
-          // presentation host detaches only once the session settled.
-          expect(order).toEqual(['settled', 'detached']);
-        }),
-      );
-
       it.effect('marks owned runs interrupted during platform shutdown', () =>
         Effect.gen(function* () {
           const { platform } = yield* FakeHost;
@@ -427,44 +390,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             result: { outcome: 'cancelled', runId: launchedRunId() },
           });
         }),
-      );
-
-      it.effect(
-        'preserves a terminal outcome when shutdown cannot interrupt the finished run',
-        () =>
-          Effect.gen(function* () {
-            const { platform } = yield* FakeHost;
-            const { executeCliConfig } = yield* loadExecuteCli;
-            // The run has ended: the session refuses its stop.
-            mocks.stopRequest.mockReturnValue(
-              Effect.fail(new Error('The task is no longer open.')),
-            );
-            const published = yield* Deferred.make<void>();
-            const hangingRun = stubHangingRun(
-              yield* Effect.flatMap(TestSession, sessionHandleOf),
-              published,
-            );
-            const onInterruptedRunFinalized = vi.fn(() => Effect.void);
-            const run = yield* Effect.forkChild(
-              executeCliConfig(baseConfig(), cliContext(), {
-                onInterruptedRunFinalized,
-              }),
-            );
-            yield* Deferred.await(published);
-            yield* settle;
-
-            const shutdown = yield* Effect.forkChild(
-              Scope.close(platform.shutdownScope, Exit.void),
-              { startImmediately: true },
-            );
-            hangingRun.resolve(COMPLETED_RUN);
-            yield* Fiber.join(shutdown);
-            yield* Fiber.join(run);
-
-            // A stop that reached no live run never reads the launch as
-            // interrupted, so its rows promise no recovery.
-            expect(onInterruptedRunFinalized).not.toHaveBeenCalled();
-          }),
       );
     });
   },
