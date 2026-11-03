@@ -82,7 +82,7 @@ What the runs showed about the public surface, with the evidence:
    (`deepseek-deepseek-flash-1103/codemode/outputs/run-end.json`) where an
    OpenAI or Anthropic account would read `upstream-credit`. An embedder cannot
    tell "top up the account" from an unknown failure without parsing the
-   message. Small and clear: fixed in its own PR.
+   message. Small and clear: fixed in #14606.
 2. **Every run, each `self()` child included, sends an unrequested label
    request, outside the run's usage.** `generateSessionDescription`
    (`packages/harness/src/agent/runtime/sessionDescription.ts`) runs a helper
