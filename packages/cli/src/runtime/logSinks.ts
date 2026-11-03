@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
 // Third-party imports
-import { Effect, PlatformError } from 'effect';
+import { Effect, PlatformError, Predicate } from 'effect';
 
 // Local imports
 import {
@@ -28,8 +28,8 @@ const closed = { stdout: false, stderr: false };
 type StreamKey = 'stdout' | 'stderr';
 
 function isCliPipeClosureError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-  const code = (error as { code?: unknown }).code;
+  if (!Predicate.hasProperty(error, 'code')) return false;
+  const code = error.code;
   return code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED';
 }
 

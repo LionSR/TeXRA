@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Predicate } from 'effect';
 
 import { createRunStorageLocation, Settings } from '@texra-ai/harness/host';
 import { RunFileService } from '@texra-ai/harness/plugins';
@@ -392,7 +392,7 @@ export class LatexDiffManager {
         // folder.
         resolveWorkspaceSourceDir(this.roots, referenceLocation) ??
           path.dirname(referenceLocation.absolutePath),
-      ].filter((dir): dir is string => dir !== null);
+      ].filter(Predicate.isNotNull);
       const compiled = yield* compileLatex2Pdf(diffLocation, this.roots, {
         channel: this.runId,
         outputDirectory: buildDir,

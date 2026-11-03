@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect, Predicate, Schema } from 'effect';
 
 // Local imports - shared constants & state keys
 import {
@@ -726,9 +726,7 @@ export function settingsCatalog(options: {
         defaults.set(key, Schema.decodeUnknownSync(entry.schema)(undefined));
       }
       const value = defaults.get(key);
-      return value !== null && typeof value === 'object'
-        ? structuredClone(value)
-        : value;
+      return Predicate.isObjectOrArray(value) ? structuredClone(value) : value;
     },
   };
 }

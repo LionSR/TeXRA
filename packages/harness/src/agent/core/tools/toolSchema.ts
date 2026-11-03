@@ -80,7 +80,7 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
   for (const name of allPropNames) {
     const branchSchemas = variantProperties
       .map((props) => props[name])
-      .filter((s): s is JSONSchemaObject => s !== undefined);
+      .filter(Predicate.isNotUndefined);
     if (branchSchemas.length === 1) {
       mergedProperties[name] = branchSchemas[0];
       continue;
@@ -88,17 +88,17 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
     // Discriminator: every branch pins this prop to a literal value.
     const constValues = branchSchemas
       .map(schemaLiteralValue)
-      .filter((value) => value !== undefined);
+      .filter(Predicate.isNotUndefined);
     if (constValues.length === branchSchemas.length) {
       const descriptions = branchSchemas
         .map((s) => s.description)
-        .filter((d): d is string => typeof d === 'string');
+        .filter(Predicate.isString);
       // Infer the discriminator type from the branch shapes rather than
       // hardcoding 'string': a literal discriminator may also be a number
       // or a boolean.
       const branchType = branchSchemas
         .map((s) => (typeof s.type === 'string' ? s.type : undefined))
-        .find((t): t is string => t !== undefined);
+        .find(Predicate.isNotUndefined);
       const inferredType = branchType ?? typeof constValues[0];
       const merged: JSONSchemaObject = {
         type: inferredType,

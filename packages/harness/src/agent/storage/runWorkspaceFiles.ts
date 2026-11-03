@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { normalizeFilePath } from '@utils/core';
@@ -69,7 +69,7 @@ export const listRunWorkspaceFiles = Effect.fn('storage.listRunWorkspaceFiles')(
         ),
       { concurrency: 8 },
     );
-    const files = entries.filter((entry) => entry !== undefined);
+    const files = entries.filter(Predicate.isNotUndefined);
     return files.sort((a, b) => a.path.localeCompare(b.path));
   },
 );
