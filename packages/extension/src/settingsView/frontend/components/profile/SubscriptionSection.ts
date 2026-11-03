@@ -15,6 +15,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@texra-ai/harness/schemas';
+import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import {
   codexAccountLabel,
   type SubscriptionAuthStatus,
@@ -42,8 +43,6 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 /** Everything one provider contributes to the shared section. */
 interface SubscriptionSectionProvider {
@@ -85,7 +84,8 @@ export class SubscriptionSection extends SignalWatcher(LitElement) {
   @property({ attribute: false }) auth: SubscriptionAuthStatus | null = null;
 
   private readonly handlePreferSubscriptionChange = (event: Event): void => {
-    const enabled = (event.target as WaSwitch).checked;
+    if (!(event.target instanceof WaSwitch)) return;
+    const enabled = event.target.checked;
     postMessage(SETTINGS_VIEW_COMMANDS.SET_SUBSCRIPTION_PREFERENCE, {
       provider: this.provider.providerId,
       enabled,

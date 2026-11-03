@@ -122,15 +122,18 @@ function projectSection(
               .value=${name}
               @keydown=${(event: KeyboardEvent) => {
                 event.stopPropagation();
-                if (event.key === 'Enter')
-                  callbacks.onRenameProject?.(
-                    key,
-                    (event.target as HTMLInputElement).value,
-                  );
+                if (
+                  event.key === 'Enter' &&
+                  event.currentTarget instanceof HTMLInputElement
+                )
+                  callbacks.onRenameProject?.(key, event.currentTarget.value);
                 if (event.key === 'Escape')
                   callbacks.onRenameProject?.(key, null);
               }}
-              @blur=${(event: FocusEvent) => callbacks.onRenameProject?.(key, (event.target as HTMLInputElement).value)}
+              @blur=${(event: FocusEvent) => {
+                if (event.currentTarget instanceof HTMLInputElement)
+                  callbacks.onRenameProject?.(key, event.currentTarget.value);
+              }}
             />`
           : html`<wa-button
               type="button"

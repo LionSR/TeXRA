@@ -40,15 +40,22 @@ export function quickPick<T extends string | vscode.QuickPickItem>(
   items: readonly T[],
   options: vscode.QuickPickOptions,
 ): Effect.Effect<T | undefined, HostPromptFailed> {
-  return withCancellationToken(
-    async (token) =>
-      (await vscode.window.showQuickPick(
-        items as readonly vscode.QuickPickItem[],
-        options,
-        token,
-      )) as T | undefined,
-    hostPromptFailed,
-  );
+  // A string shows as an item with that label; the pick maps back to its entry.
+  const entries = items.map((item) => {
+    const shown: string | vscode.QuickPickItem = item;
+    return {
+      item,
+      pick: typeof shown === 'string' ? { label: shown } : shown,
+    };
+  });
+  return withCancellationToken(async (token) => {
+    const picked = await vscode.window.showQuickPick(
+      entries.map(({ pick }) => pick),
+      options,
+      token,
+    );
+    return entries.find(({ pick }) => pick === picked)?.item;
+  }, hostPromptFailed);
 }
 
 export function inputBox(

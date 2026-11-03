@@ -15,10 +15,9 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/popover/popover.js';
-import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
+import WaSplitPanel from '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import '@ui/progress/ProgressApp';
 import './TexraDiffView';
 import { extractErrorMessage } from '@texra-ai/harness/schemas';
 import { hostBridge, postMessage } from '@texra/shared/hostBridge';
@@ -34,7 +33,7 @@ import {
 } from '@texra/shared/commands/accelerators';
 import { DESKTOP_THEME_KIND } from '@texra/shared/ipc';
 import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
-import type { ProgressApp } from '@ui/progress/ProgressApp';
+import { ProgressApp } from '@ui/progress/ProgressApp';
 
 import { applyHostBodyTheme } from '@ui/wa/hostTheme';
 import {
@@ -83,11 +82,13 @@ import { createProjectWorkbench } from './projectWorkbench';
 import { createProjectRail } from './projectRail';
 import { createMessageRoutes } from './messageRoutes';
 
-const appRoot = document.querySelector<HTMLElement>('#app')!;
+const foundAppRoot = document.querySelector<HTMLElement>('#app');
 
-if (appRoot == null) {
+if (foundAppRoot == null) {
   throw new Error('TeXRA desktop renderer root was not found.');
 }
+// Bound after the check so the functions below see it present.
+const appRoot: HTMLElement = foundAppRoot;
 
 // =============================================================================
 // Desktop shell
@@ -468,10 +469,6 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
   `;
 }
 
-interface SplitPanelElement extends HTMLElement {
-  readonly positionInPixels: number;
-}
-
 /**
  * Store the split handle's measured size on this project's surface.
  */
@@ -489,7 +486,8 @@ function recordLayoutMeasurement(next: DesktopShellState): void {
  * panel's resize observer re-fires with the real measurement after layout.
  */
 function measuredSplitPosition(event: Event): number | undefined {
-  const value = (event.currentTarget as SplitPanelElement).positionInPixels;
+  if (!(event.currentTarget instanceof WaSplitPanel)) return undefined;
+  const value = event.currentTarget.positionInPixels;
   return Number.isFinite(value) ? value : undefined;
 }
 
@@ -802,9 +800,7 @@ const routeMessage = createMessageRoutes({
       projectSessions.sync(sessions);
       for (const key of sessions) {
         if (projectWorkbenches.has(key)) continue;
-        const conversationView = document.createElement(
-          'progress-app',
-        ) as ProgressApp;
+        const conversationView = new ProgressApp();
         // The attribute sets the property, and the desktop styles select it,
         // as the extension's page markup does.
         conversationView.setAttribute('placement', 'desktop');

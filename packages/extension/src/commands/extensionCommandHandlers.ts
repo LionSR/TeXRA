@@ -102,15 +102,11 @@ export interface ExtensionCommandActions {
  * command → tab mapping lives in one place (`settingsTabByCommand`).
  */
 const SETTINGS_TAB_COMMAND_HANDLERS = Object.fromEntries(
-  (
-    Object.entries(settingsTabByCommand) as [
-      SettingsTabCommandId,
-      SettingsTarget,
-    ][]
-  ).map(([id, tab]) => [
+  Object.entries(settingsTabByCommand).map(([id, tab]) => [
     id,
     (actions: ExtensionCommandActions) => actions.showSettings(tab),
   ]),
+  // cast: one row per key of `settingsTabByCommand`, exactly `SettingsTabCommandId`.
 ) as Record<
   SettingsTabCommandId,
   (actions: ExtensionCommandActions) => CommandProgram

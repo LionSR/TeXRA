@@ -161,12 +161,13 @@ class VscodeUiHost implements MessageHost, PromptHost {
     message: string,
     options: PromptMessageOptions<T>,
   ): Effect.Effect<T | undefined, NotificationFailed> {
+    const items = this.toVscodeItems(options.items);
     return Effect.tryPromise({
       try: async () =>
         SHOW_OF_MEMBER[member](
           message,
           { detail: options.detail, modal: options.modal },
-          ...this.toVscodeItems(options.items),
+          ...items,
         ),
       catch: (cause) =>
         new NotificationFailed({
@@ -174,12 +175,17 @@ class VscodeUiHost implements MessageHost, PromptHost {
           message: toErrorMessage(cause),
           cause,
         }),
-    }).pipe(Effect.map((selected) => selected?.title as T | undefined));
+    }).pipe(
+      Effect.map(
+        (selected) =>
+          items.find((item) => item.title === selected?.title)?.title,
+      ),
+    );
   }
 
   private toVscodeItems<T extends string>(
     items: readonly PromptMessageItem<T>[] = [],
-  ): vscode.MessageItem[] {
+  ): (vscode.MessageItem & { title: T })[] {
     return items.map((item) => {
       if (typeof item === 'string') {
         return { title: item };
