@@ -334,25 +334,24 @@ const CHATGPT_POLICY: SubscriptionOAuthPolicy<ChatgptSession> = {
   },
   // A returning sign-in reauthorizes the registered client and sends no name
   // hint, which only a registration takes.
-  registration: (secrets) =>
-    Effect.gen(function* () {
-      const host = yield* hostId(secrets);
-      const registered = yield* storedRegistration(secrets);
-      // The consent page shows again only when asked: OpenAI's recovery for
-      // a declined plan is a reauthorization with `prompt=consent`.
-      const params: Readonly<Record<string, string>> =
-        registered === undefined
-          ? { ext_agent_host_id: host, agent_name_hint: AGENT_NAME }
-          : {
-              ext_agent_host_id: host,
-              ...(registered.planDeclined ? { prompt: 'consent' } : {}),
-            };
-      return {
-        clientId: registered?.clientId ?? REGISTRATION_CLIENT_ID,
-        registering: registered === undefined,
-        params,
-      };
-    }),
+  registration: Effect.fnUntraced(function* (secrets) {
+    const host = yield* hostId(secrets);
+    const registered = yield* storedRegistration(secrets);
+    // The consent page shows again only when asked: OpenAI's recovery for
+    // a declined plan is a reauthorization with `prompt=consent`.
+    const params: Readonly<Record<string, string>> =
+      registered === undefined
+        ? { ext_agent_host_id: host, agent_name_hint: AGENT_NAME }
+        : {
+            ext_agent_host_id: host,
+            ...(registered.planDeclined ? { prompt: 'consent' } : {}),
+          };
+    return {
+      clientId: registered?.clientId ?? REGISTRATION_CLIENT_ID,
+      registering: registered === undefined,
+      params,
+    };
+  }),
   acceptGrant: acceptChatgptGrant,
   endSession: revokeSession,
   buildSession(tokens, refreshToken, nowMs, previous) {

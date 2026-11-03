@@ -140,77 +140,74 @@ const resolveSoxCommand = Effect.fnUntraced(function* (
  * scope has closed. Answers with the file the take is captured into and the
  * process handle, whose exit the caller watches.
  */
-export function startRecording(
+export const startRecording = Effect.fn('startRecording')(function* (
   roots: WorkspaceRoots,
-): Effect.Effect<
+): Effect.fn.Return<
   { readonly path: string; readonly handle: ChildProcessHandle },
   AudioRecorderError,
   FileSystem.FileSystem | ChildProcessSpawner | Scope.Scope
 > {
-  return Effect.gen(function* () {
-    const soxCommand = yield* resolveSoxCommand(roots);
-    if (!soxCommand) {
-      return yield* new AudioRecorderError({
-        message:
-          'Sox is required for audio recording. Please install it first.',
-      });
-    }
-    const directory = recordingsDir(roots);
-    const fs = yield* FileSystem.FileSystem;
-    yield* fs
-      .makeDirectory(directory, { recursive: true })
-      .pipe(recorderFailure('startRecording'));
-    const absPath = path.join(
-      directory,
-      `record_${yield* Clock.currentTimeMillis}.wav`,
-    );
-    const soxArgs = [
-      '--default-device',
-      '--no-show-progress',
-      '--rate',
-      '16000',
-      '--channels',
-      '1',
-      '--encoding',
-      'signed-integer',
-      '--bits',
-      '16',
-      '--type',
-      'wav',
-      absPath,
-    ];
-    yield* Effect.logInfo(
-      `Starting audio recording with sox: ${soxCommand.resolvedPath} ${soxArgs.join(' ')}`,
-    ).pipe(withLogChannel(CHANNEL));
+  const soxCommand = yield* resolveSoxCommand(roots);
+  if (!soxCommand) {
+    return yield* new AudioRecorderError({
+      message: 'Sox is required for audio recording. Please install it first.',
+    });
+  }
+  const directory = recordingsDir(roots);
+  const fs = yield* FileSystem.FileSystem;
+  yield* fs
+    .makeDirectory(directory, { recursive: true })
+    .pipe(recorderFailure('startRecording'));
+  const absPath = path.join(
+    directory,
+    `record_${yield* Clock.currentTimeMillis}.wav`,
+  );
+  const soxArgs = [
+    '--default-device',
+    '--no-show-progress',
+    '--rate',
+    '16000',
+    '--channels',
+    '1',
+    '--encoding',
+    'signed-integer',
+    '--bits',
+    '16',
+    '--type',
+    'wav',
+    absPath,
+  ];
+  yield* Effect.logInfo(
+    `Starting audio recording with sox: ${soxCommand.resolvedPath} ${soxArgs.join(' ')}`,
+  ).pipe(withLogChannel(CHANNEL));
 
-    const handle = yield* ChildProcess.make(
-      soxCommand.command,
-      [...soxCommand.args, ...soxArgs],
-      {
-        env: withExtendedPath(yield* inheritedEnv(), commandDirs()),
-        extendEnv: false,
-        stdin: 'ignore',
-        stdout: 'ignore',
-        detached: false,
-        forceKillAfter: Duration.millis(SOX_SHUTDOWN_TIMEOUT_MS),
-      },
-    ).pipe(recorderFailure('startRecording'));
-    // sox's stderr, line by line, for as long as it runs; the caller's scope
-    // ends it with the process.
-    yield* Effect.forkScoped(
-      handle.stderr.pipe(
-        Stream.decodeText(),
-        Stream.splitLines,
-        Stream.runForEach((line) => Effect.logDebug(`Sox stderr: ${line}`)),
-        Effect.catch((error: PlatformError.PlatformError) =>
-          Effect.logDebug(`Sox stderr ended early: ${error.reason._tag}`),
-        ),
-        withLogChannel(CHANNEL),
+  const handle = yield* ChildProcess.make(
+    soxCommand.command,
+    [...soxCommand.args, ...soxArgs],
+    {
+      env: withExtendedPath(yield* inheritedEnv(), commandDirs()),
+      extendEnv: false,
+      stdin: 'ignore',
+      stdout: 'ignore',
+      detached: false,
+      forceKillAfter: Duration.millis(SOX_SHUTDOWN_TIMEOUT_MS),
+    },
+  ).pipe(recorderFailure('startRecording'));
+  // sox's stderr, line by line, for as long as it runs; the caller's scope
+  // ends it with the process.
+  yield* Effect.forkScoped(
+    handle.stderr.pipe(
+      Stream.decodeText(),
+      Stream.splitLines,
+      Stream.runForEach((line) => Effect.logDebug(`Sox stderr: ${line}`)),
+      Effect.catch((error: PlatformError.PlatformError) =>
+        Effect.logDebug(`Sox stderr ended early: ${error.reason._tag}`),
       ),
-    );
-    return { path: absPath, handle };
-  });
-}
+      withLogChannel(CHANNEL),
+    ),
+  );
+  return { path: absPath, handle };
+});
 
 /**
  * Validate the file a stopped take captured. The recorder's scope has closed
@@ -218,10 +215,10 @@ export function startRecording(
  * caller stops the microphone before resolving the transcription credential,
  * so a slow, denied or failing keychain read can never leave it running.
  */
-export function validateRecordingFile(
-  recordingPath: string,
-): Effect.Effect<string, AudioRecorderError, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
+export const validateRecordingFile = Effect.fn('validateRecordingFile')(
+  function* (
+    recordingPath: string,
+  ): Effect.fn.Return<string, AudioRecorderError, FileSystem.FileSystem> {
     const fs = yield* FileSystem.FileSystem;
     const size = yield* fs.stat(recordingPath).pipe(
       Effect.map((info) => Number(info.size)),
@@ -239,8 +236,8 @@ export function validateRecordingFile(
       });
     }
     return recordingPath;
-  });
-}
+  },
+);
 
 /**
  * Transcribe a stopped recording with OpenAI. `credential` is the OpenAI

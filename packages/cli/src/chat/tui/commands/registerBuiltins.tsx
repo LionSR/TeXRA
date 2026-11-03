@@ -513,17 +513,16 @@ export function registerBuiltinSlashCommands(options: {
             'Resume a previous task; /resume all continues every interrupted one',
           category: 'session',
           echo: 'ifPersists',
-          handler: (remainder, context) =>
-            Effect.gen(function* () {
-              if (remainder.trim() === 'all')
-                return yield* resumeInterruptedTasks(context.runSession);
-              const id = parseCliHistoryId(remainder);
-              if (!id)
-                return yield* Effect.fail(
-                  new Error(`Invalid task id: ${remainder}`),
-                );
-              yield* context.resumeRun(id);
-            }),
+          handler: Effect.fn('handler')(function* (remainder, context) {
+            if (remainder.trim() === 'all')
+              return yield* resumeInterruptedTasks(context.runSession);
+            const id = parseCliHistoryId(remainder);
+            if (!id)
+              return yield* Effect.fail(
+                new Error(`Invalid task id: ${remainder}`),
+              );
+            yield* context.resumeRun(id);
+          }),
           formComponent: ResumeListFormAdapter,
         },
         ...(TasksFormAdapter

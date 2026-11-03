@@ -310,8 +310,8 @@ const make = ({
       return Deferred.succeed(arrived, undefined);
     };
 
-    const handlePublishDiagnostics = (params: LspPublishDiagnosticsParams) =>
-      Effect.gen(function* () {
+    const handlePublishDiagnostics = Effect.fn('handlePublishDiagnostics')(
+      function* (params: LspPublishDiagnosticsParams) {
         const absolute = yield* fileUriToPath(params.uri);
         if (!absolute) return;
         const state = openFiles.get(absolute);
@@ -319,22 +319,24 @@ const make = ({
         state.diagnostics = params.diagnostics.map(toLeanDiagnostic);
         state.lastDiagnosticsAt = yield* Clock.currentTimeMillis;
         yield* wakeWaiters(state);
-      });
+      },
+    );
 
-    const handleFileProgress = (params: LeanFileProgressParams) =>
-      Effect.gen(function* () {
-        const absolute = yield* fileUriToPath(params.textDocument.uri);
-        if (!absolute) return;
-        const state = openFiles.get(absolute);
-        // A report on a version since replaced says nothing about this one.
-        if (state?.version !== params.textDocument.version) return;
-        state.progress = params.processing.some(
-          (range) => (range.kind ?? 1) === 1,
-        )
-          ? 'processing'
-          : 'elaborated';
-        yield* wakeWaiters(state);
-      });
+    const handleFileProgress = Effect.fn('handleFileProgress')(function* (
+      params: LeanFileProgressParams,
+    ) {
+      const absolute = yield* fileUriToPath(params.textDocument.uri);
+      if (!absolute) return;
+      const state = openFiles.get(absolute);
+      // A report on a version since replaced says nothing about this one.
+      if (state?.version !== params.textDocument.version) return;
+      state.progress = params.processing.some(
+        (range) => (range.kind ?? 1) === 1,
+      )
+        ? 'processing'
+        : 'elaborated';
+      yield* wakeWaiters(state);
+    });
 
     const rpc: JsonRpcConnection = yield* makeJsonRpcConnection({
       input: handle.stdout,

@@ -157,8 +157,8 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         // an agent mode separately sends the chosen root to that project's
         // launcher. Each project's catalogs answer for that project: its
         // snapshot source was built over its own roots.
-        refreshCatalogs: (selectedAgent) =>
-          Effect.gen(function* () {
+        refreshCatalogs: Effect.fn('refreshCatalogs')(
+          function* (selectedAgent) {
             yield* bindings.eachSnapshot(
               (snapshot) => snapshot.refreshCatalogs,
             );
@@ -169,7 +169,8 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
               kind: 'launch',
               patch: { agent: selectedAgent },
             });
-          }),
+          },
+        ),
         refreshCredentialStatus: Effect.suspend(() =>
           Effect.andThen(
             bindings.eachSnapshot((snapshot) => snapshot.refreshHostBanners),

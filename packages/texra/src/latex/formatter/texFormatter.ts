@@ -70,8 +70,8 @@ const LATEX_FORMATTERS: Record<
  * config-file path come from that project rather than from whichever roots
  * the calling context happens to carry.
  */
-export function resolveLatexFormatter(stores: SettingsStores) {
-  return Effect.gen(function* () {
+export const resolveLatexFormatter = Effect.fn('resolveLatexFormatter')(
+  function* (stores: SettingsStores) {
     const formatter = yield* Settings.get<LatexFormatterValue>(
       stores,
       TexraStateKey.LATEX_FORMATTER,
@@ -85,5 +85,5 @@ export function resolveLatexFormatter(stores: SettingsStores) {
       configPath: yield* Settings.get<string>(stores, selected.configKey),
       settings: stores,
     };
-  });
-}
+  },
+);

@@ -58,47 +58,45 @@ export const listWorkspaceFiles = Effect.fn(
     );
 
   // `active` holds the indexes of the configs that visit `directory`.
-  function visit(
+  const visit = Effect.fn('visit')(function* (
     directory: string,
     relativeDirectory: string,
     active: readonly number[],
-  ): Effect.Effect<void, PlatformError.PlatformError, Path.Path> {
-    return Effect.gen(function* () {
-      const entries = yield* readDirectoryTypedTolerant(directory);
+  ): Effect.fn.Return<void, PlatformError.PlatformError, Path.Path> {
+    const entries = yield* readDirectoryTypedTolerant(directory);
 
-      // Results are sorted at the end, so entries are handled concurrently.
-      yield* Effect.forEach(
-        entries,
-        ([name, entryType]) =>
-          Effect.gen(function* () {
-            const relativePath = normalizeFilePath(
-              relativeDirectory ? `${relativeDirectory}/${name}` : name,
+    // Results are sorted at the end, so entries are handled concurrently.
+    yield* Effect.forEach(
+      entries,
+      ([name, entryType]) =>
+        Effect.gen(function* () {
+          const relativePath = normalizeFilePath(
+            relativeDirectory ? `${relativeDirectory}/${name}` : name,
+          );
+          const absolutePath = join(directory, name);
+          const type =
+            entryType === 'SymbolicLink'
+              ? yield* followLink(absolutePath)
+              : entryType;
+
+          if (type === 'Directory') {
+            const visiting = active.filter((i) =>
+              shouldVisitDirectory(relativePath, filters[i]),
             );
-            const absolutePath = join(directory, name);
-            const type =
-              entryType === 'SymbolicLink'
-                ? yield* followLink(absolutePath)
-                : entryType;
-
-            if (type === 'Directory') {
-              const visiting = active.filter((i) =>
-                shouldVisitDirectory(relativePath, filters[i]),
+            if (visiting.length > 0) {
+              yield* visit(absolutePath, relativePath, visiting).pipe(
+                Effect.catchIf(absentReason, () => Effect.void),
               );
-              if (visiting.length > 0) {
-                yield* visit(absolutePath, relativePath, visiting).pipe(
-                  Effect.catchIf(absentReason, () => Effect.void),
-                );
-              }
-            } else if (type === 'File') {
-              for (const i of active)
-                if (passesFileFilters(relativePath, filters[i]))
-                  results[i].push(relativePath);
             }
-          }),
-        { concurrency: 8, discard: true },
-      );
-    });
-  }
+          } else if (type === 'File') {
+            for (const i of active)
+              if (passesFileFilters(relativePath, filters[i]))
+                results[i].push(relativePath);
+          }
+        }),
+      { concurrency: 8, discard: true },
+    );
+  });
 
   yield* visit(
     options.root,

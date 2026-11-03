@@ -72,11 +72,11 @@ function scriptPlainLines(
  * A line prints when its entry is new or reads differently than at the
  * previous level; nothing here reduces, gates, or relabels.
  */
-export function attachScriptPlainOutput(
-  session: ScriptPlainSession,
-  options: ScriptPlainOutputOptions,
-): Effect.Effect<void, never, Scope.Scope> {
-  return Effect.gen(function* () {
+export const attachScriptPlainOutput = Effect.fn('attachScriptPlainOutput')(
+  function* (
+    session: ScriptPlainSession,
+    options: ScriptPlainOutputOptions,
+  ): Effect.fn.Return<void, never, Scope.Scope> {
     const previous = new Map<RunId, ReadonlyMap<string, string>>();
     let subscribed = '';
     let rootRunId: RunId | undefined;
@@ -139,5 +139,5 @@ export function attachScriptPlainOutput(
       ),
       { startImmediately: true },
     );
-  });
-}
+  },
+);

@@ -1413,10 +1413,7 @@ directories are registered external roots).
 outside path.
 
 ```ts
-function resolveToolPath(
-  call: ToolPathCall,
-  targetPath?: string,
-): Effect.Effect<ToolPathResolution, Error>
+const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, Error, never>
 ```
 
 ## retryTransientFetch

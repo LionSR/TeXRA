@@ -31,50 +31,49 @@ const SETUP_INSTRUCTION =
  * That refusal is the launch path's to show, and a failure once the run
  * started is its result row's: neither is a failure here.
  */
-export const launchSetup = <E>(options: {
+export const launchSetup = Effect.fn('launchSetup')(function* <E>(options: {
   readonly session: Pick<Session, 'view'>;
   readonly roots: SettingsStores;
   /** This host's launch path for the setup request, which shows a failure
    *  to start (`HostRunActions.runValidated`). */
   readonly start: (config: AgentConfig) => Effect.Effect<Run, E>;
-}) =>
-  Effect.gen(function* () {
-    // A second setup conversation, however it was started, would race the
-    // first one's installs and config writes.
-    const live = [...options.session.view.current().runs.values()].some(
-      (run) =>
-        isLiveRun(run) &&
-        run.identity.kind === 'agent' &&
-        agentName(run.identity.agent) === SETUP_AGENT_NAME,
+}) {
+  // A second setup conversation, however it was started, would race the
+  // first one's installs and config writes.
+  const live = [...options.session.view.current().runs.values()].some(
+    (run) =>
+      isLiveRun(run) &&
+      run.identity.kind === 'agent' &&
+      agentName(run.identity.agent) === SETUP_AGENT_NAME,
+  );
+  if (live) return 'already-running' as const;
+  // The launch model the credential predicate every host shares decides:
+  // adapter-level checks, so a blank env key does not count and fail later
+  // as "No model is available".
+  const model = yield* resolveSetupLaunchModel(options.roots);
+  if (model === null) return 'no-model' as const;
+  // An Error, as every host words a failed setup launch by its message.
+  const config = yield* decodeLaunchConfig({
+    agent: SETUP_AGENT_NAME,
+    model,
+    instruction: SETUP_INSTRUCTION,
+  }).pipe(Effect.mapError(({ reason }) => new Error(reason)));
+  const started = yield* Effect.result(options.start(config));
+  if (Result.isFailure(started)) {
+    yield* Effect.logWarning('The setup conversation did not start').pipe(
+      Effect.annotateLogs({ data: started.failure }),
     );
-    if (live) return 'already-running' as const;
-    // The launch model the credential predicate every host shares decides:
-    // adapter-level checks, so a blank env key does not count and fail later
-    // as "No model is available".
-    const model = yield* resolveSetupLaunchModel(options.roots);
-    if (model === null) return 'no-model' as const;
-    // An Error, as every host words a failed setup launch by its message.
-    const config = yield* decodeLaunchConfig({
-      agent: SETUP_AGENT_NAME,
-      model,
-      instruction: SETUP_INSTRUCTION,
-    }).pipe(Effect.mapError(({ reason }) => new Error(reason)));
-    const started = yield* Effect.result(options.start(config));
-    if (Result.isFailure(started)) {
-      yield* Effect.logWarning('The setup conversation did not start').pipe(
-        Effect.annotateLogs({ data: started.failure }),
-      );
-      return 'not-started' as const;
-    }
-    const run = started.success;
-    yield* run.result.pipe(
-      Effect.asVoid,
-      Effect.catch((failure) =>
-        Effect.logDebug(`The setup run failed: ${failure.message}`),
-      ),
-    );
-    return 'launched' as const;
-  });
+    return 'not-started' as const;
+  }
+  const run = started.success;
+  yield* run.result.pipe(
+    Effect.asVoid,
+    Effect.catch((failure) =>
+      Effect.logDebug(`The setup run failed: ${failure.message}`),
+    ),
+  );
+  return 'launched' as const;
+});
 
 /**
  * Launch the setup conversation from the desktop's setup card through the

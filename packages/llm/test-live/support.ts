@@ -106,13 +106,15 @@ const FOREIGN_CONTINUATION: Continuation = {
 };
 
 /** One live turn, folded to its completed result. */
-const completeTurn = (model: Model, request: TurnRequest) =>
-  Effect.gen(function* () {
-    const turn = yield* model.prepareTurn(request);
-    assert(turn.mode === 'foreground');
-    const result = yield* completedTurn(model.streamTurn(turn));
-    return result;
-  });
+const completeTurn = Effect.fn('completeTurn')(function* (
+  model: Model,
+  request: TurnRequest,
+) {
+  const turn = yield* model.prepareTurn(request);
+  assert(turn.mode === 'foreground');
+  const result = yield* completedTurn(model.streamTurn(turn));
+  return result;
+});
 
 function assistantText(result: TurnResult): string {
   return result.content

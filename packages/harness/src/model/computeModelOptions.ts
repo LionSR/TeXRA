@@ -213,10 +213,14 @@ const hostFact = <A, E, R>(fact: string, read: Effect.Effect<A, E, R>) =>
  * call. The Kimi Code key status is a route fact (`readModelSettings` reads it),
  * so it seeds the key statuses.
  */
-function buildAvailabilityContext(
-  stores: SettingsStores,
-): Effect.Effect<ModelAvailabilityContext, ModelHostFactUnreadable, Secrets> {
-  return Effect.gen(function* () {
+const buildAvailabilityContext = Effect.fn('buildAvailabilityContext')(
+  function* (
+    stores: SettingsStores,
+  ): Effect.fn.Return<
+    ModelAvailabilityContext,
+    ModelHostFactUnreadable,
+    Secrets
+  > {
     const settings = yield* hostFact(
       'the model settings',
       readModelSettings(stores),
@@ -226,8 +230,8 @@ function buildAvailabilityContext(
       facts: routeFactsFor(settings, []),
       keyStatuses: { kimiCode: settings.kimiCodeKey },
     };
-  });
-}
+  },
+);
 
 /**
  * Stage 1: decide every model's route once, and keep the decision, so
@@ -378,14 +382,14 @@ function enabledOrDefaults(selection: ModelSelection): readonly string[] {
  * The models the pickers show — the single reader of
  * `GlobalStateKey.MODEL_SELECTION` for every host.
  */
-export function getEnabledModels(state: Pick<StateStore, 'get'>) {
-  return Effect.gen(function* () {
-    const stored = yield* state.get(GlobalStateKey.MODEL_SELECTION);
-    const { selection, invalid } = selectionOf(stored);
-    yield* reportInvalid(invalid);
-    return enabledOrDefaults(selection);
-  });
-}
+export const getEnabledModels = Effect.fn('getEnabledModels')(function* (
+  state: Pick<StateStore, 'get'>,
+) {
+  const stored = yield* state.get(GlobalStateKey.MODEL_SELECTION);
+  const { selection, invalid } = selectionOf(stored);
+  yield* reportInvalid(invalid);
+  return enabledOrDefaults(selection);
+});
 
 /**
  * Enable or disable one model — the only writer of

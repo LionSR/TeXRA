@@ -357,8 +357,8 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       );
       return writeInterruptedResumeHint(hint, waitForWrite);
     };
-    const maybeAdvertiseRecovery = (runId: RunId) =>
-      Effect.gen(function* () {
+    const maybeAdvertiseRecovery = Effect.fn('maybeAdvertiseRecovery')(
+      function* (runId: RunId) {
         if (!run.ok) return;
         const resumable = yield* session.records(runId).readResumable();
         if (
@@ -369,7 +369,8 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           )
         )
           yield* writeResumeHint(runId);
-      });
+      },
+    );
     const run = yield* executeCliConfig(config, runContext, {
       services: options.services,
       runId: options.runId,

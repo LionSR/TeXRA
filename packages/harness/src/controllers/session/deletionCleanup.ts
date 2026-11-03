@@ -268,55 +268,54 @@ export const deleteAdmittedRun = (
  * on another process's behalf. What a copy is for, and where it goes, is the
  * requesting app's.
  */
-export const runFiles = (
+export const runFiles = Effect.fn('runFiles')(function* (
   runs: InactiveRunStep,
   req: Extract<RuntimeRequest, { kind: 'run.files' }>,
-): Effect.Effect<
+): Effect.fn.Return<
   OutcomeOf<'run.files'>,
   RequestError,
   RunFilesServices | SessionLog | SessionRoots
-> =>
-  Effect.gen(function* () {
-    const roots = yield* SessionRoots;
-    const log = yield* SessionLog;
-    return yield* runs
-      .withInactiveRunStep(
-        req.runId,
-        log.hold(req.runId).pipe(
-          Effect.andThen(
-            copyOrRemoveRunDir(req.runId, req.files).pipe(
-              Effect.map((found): RunFilesResult => {
-                if (!found) return { status: 'noFiles' };
-                return req.files.op === 'copy'
-                  ? { status: 'done', to: req.files.to }
-                  : { status: 'done' };
-              }),
-              Effect.catch((error) =>
-                Effect.logError(
-                  `The ${req.files.op} of run ${req.runId} failed`,
-                ).pipe(
-                  Effect.annotateLogs({ data: error }),
-                  Effect.as<RunFilesResult>({
-                    status: 'error',
-                    error: toErrorMessage(error),
-                  }),
-                ),
+> {
+  const roots = yield* SessionRoots;
+  const log = yield* SessionLog;
+  return yield* runs
+    .withInactiveRunStep(
+      req.runId,
+      log.hold(req.runId).pipe(
+        Effect.andThen(
+          copyOrRemoveRunDir(req.runId, req.files).pipe(
+            Effect.map((found): RunFilesResult => {
+              if (!found) return { status: 'noFiles' };
+              return req.files.op === 'copy'
+                ? { status: 'done', to: req.files.to }
+                : { status: 'done' };
+            }),
+            Effect.catch((error) =>
+              Effect.logError(
+                `The ${req.files.op} of run ${req.runId} failed`,
+              ).pipe(
+                Effect.annotateLogs({ data: error }),
+                Effect.as<RunFilesResult>({
+                  status: 'error',
+                  error: toErrorMessage(error),
+                }),
               ),
             ),
           ),
-          Effect.scoped,
         ),
-      )
-      .pipe(
-        Effect.mapError((cause) =>
-          cause instanceof Rejected
-            ? cause
-            : new Rejected({
-                reason: `This run is running or held elsewhere: ${toErrorMessage(cause)}`,
-              }),
-        ),
-        Effect.map((result) => ({ kind: 'runFiles', result }) as const),
-        (program) => withSessionFs(roots, program),
-        withLogChannel('runFiles'),
-      );
-  });
+        Effect.scoped,
+      ),
+    )
+    .pipe(
+      Effect.mapError((cause) =>
+        cause instanceof Rejected
+          ? cause
+          : new Rejected({
+              reason: `This run is running or held elsewhere: ${toErrorMessage(cause)}`,
+            }),
+      ),
+      Effect.map((result) => ({ kind: 'runFiles', result }) as const),
+      (program) => withSessionFs(roots, program),
+      withLogChannel('runFiles'),
+    );
+});

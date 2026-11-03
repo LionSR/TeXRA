@@ -74,10 +74,14 @@ export function servicePaths(storageRoot: string): ServicePaths {
 
 /** Make the run directory and the socket's directory, each the user's
  *  alone; an existing one is narrowed to 0700. */
-export function prepareServiceDirectories(
-  paths: ServicePaths,
-): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
+export const prepareServiceDirectories = Effect.fn('prepareServiceDirectories')(
+  function* (
+    paths: ServicePaths,
+  ): Effect.fn.Return<
+    void,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  > {
     const fs = yield* FileSystem.FileSystem;
     for (const directory of new Set([
       paths.runDirectory,
@@ -87,8 +91,8 @@ export function prepareServiceDirectories(
       yield* ownDirectory(directory);
       yield* fs.chmod(directory, 0o700);
     }
-  });
-}
+  },
+);
 
 /** Fails unless `directory` is a real directory (not a link) this user
  *  owns: one someone else made in `/tmp` must not hold the socket. */
@@ -148,29 +152,30 @@ export const readServiceRecord: Effect.Effect<
  * one is ever findable, whatever happens to the others between their probe
  * and their commit.
  */
-export function claimServiceRecord<A, E>(
+export const claimServiceRecord = Effect.fn('claimServiceRecord')(function* <
+  A,
+  E,
+>(
   record: ServiceRecord,
   probe: (held: ServiceRecord) => Effect.Effect<A | null, E>,
-): Effect.Effect<
+): Effect.fn.Return<
   A | null,
   E | DatabaseReadFailed | DatabaseWriteFailed,
   GlobalValues
 > {
-  return Effect.gen(function* () {
-    const values = yield* GlobalValues;
-    for (;;) {
-      const held = yield* values.get(TEXRA_SERVICE, CURRENT);
-      const live = held === undefined ? null : yield* probe(held);
-      if (live !== null) return live;
-      const claimed = yield* values.modify(TEXRA_SERVICE, CURRENT, (current) =>
-        Result.succeed(
-          sameService(current, held) ? ([true, record] as const) : [false],
-        ),
-      );
-      if (claimed) return null;
-    }
-  });
-}
+  const values = yield* GlobalValues;
+  for (;;) {
+    const held = yield* values.get(TEXRA_SERVICE, CURRENT);
+    const live = held === undefined ? null : yield* probe(held);
+    if (live !== null) return live;
+    const claimed = yield* values.modify(TEXRA_SERVICE, CURRENT, (current) =>
+      Result.succeed(
+        sameService(current, held) ? ([true, record] as const) : [false],
+      ),
+    );
+    if (claimed) return null;
+  }
+});
 
 /**
  * Remove what the service `record` names left: the record while it is

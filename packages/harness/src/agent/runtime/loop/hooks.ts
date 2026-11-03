@@ -262,21 +262,20 @@ const rootOf = (run: AgentRunShape) =>
 /** The fields every event's input carries for `run`: its root run's id as
  *  the session, its permission mode as its approvals decide, and for a child
  *  its own id and agent, as the reference gives a subagent's hooks. */
-const inputBase = (run: AgentRunShape) =>
-  Effect.gen(function* () {
-    const root = yield* rootOf(run);
-    return {
-      session_id: root,
-      cwd: run.workingDirectory ?? (yield* SessionRoots).workspace ?? '',
-      permission_mode:
-        (yield* executableDecision(run.runId)) === 'allow'
-          ? ('bypassPermissions' as const)
-          : ('default' as const),
-      ...(root === run.runId
-        ? {}
-        : { agent_id: run.runId, agent_type: run.config.agent }),
-    };
-  });
+const inputBase = Effect.fn('inputBase')(function* (run: AgentRunShape) {
+  const root = yield* rootOf(run);
+  return {
+    session_id: root,
+    cwd: run.workingDirectory ?? (yield* SessionRoots).workspace ?? '',
+    permission_mode:
+      (yield* executableDecision(run.runId)) === 'allow'
+        ? ('bypassPermissions' as const)
+        : ('default' as const),
+    ...(root === run.runId
+      ? {}
+      : { agent_id: run.runId, agent_type: run.config.agent }),
+  };
+});
 
 /** The hooks of the run's current step. */
 const currentHooks = (run: AgentRunShape) =>

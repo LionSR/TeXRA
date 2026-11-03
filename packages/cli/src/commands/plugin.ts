@@ -43,20 +43,18 @@ function pluginExitCode(error: unknown): number {
  * the global storage the managed plugins live under), then run one plugin
  * operation on the runtime it installed, whose spawner git runs on.
  */
-function withPluginEnv<A, E>(
+const withPluginEnv = Effect.fn('withPluginEnv')(function* <A, E>(
   context: CliContext,
   operation: (
     env: PluginEnv,
   ) => Effect.Effect<A, E, ChildProcessSpawner | FileSystem.FileSystem>,
 ) {
-  return Effect.gen(function* () {
-    const services = yield* initCliPlatform(context);
-    return yield* withProcessServices(
-      services.runtime,
-      operation(services.roots),
-    );
-  });
-}
+  const services = yield* initCliPlatform(context);
+  return yield* withProcessServices(
+    services.runtime,
+    operation(services.roots),
+  );
+});
 
 const shortCommit = (commit: string | undefined) => commit?.slice(0, 12);
 

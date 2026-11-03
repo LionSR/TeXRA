@@ -136,30 +136,32 @@ function readClipboardPngMac(
 
 /** One Linux clipboard tool's PNG bytes, stopped past the size limit. The
  *  scope's release kills a tool stopped early. */
-const readToolBytes = (cmd: string, args: readonly string[]) =>
-  Effect.gen(function* () {
-    const handle = yield* ChildProcess.make(cmd, args, {
-      stdin: 'ignore',
-      stderr: 'ignore',
-      detached: false,
-      forceKillAfter: '5 seconds',
-    });
-    const chunks = yield* handle.stdout.pipe(
-      Stream.runFoldEffect(
-        () => ({ chunks: [] as Uint8Array[], size: 0 }),
-        (acc, chunk) => {
-          const size = acc.size + chunk.length;
-          if (size > MAX_IMAGE_BYTES) {
-            return Effect.fail(new ClipboardImageTooLarge());
-          }
-          acc.chunks.push(chunk);
-          return Effect.succeed({ chunks: acc.chunks, size });
-        },
-      ),
-    );
-    const code = yield* handle.exitCode;
-    return code === 0 ? Buffer.concat(chunks.chunks) : Buffer.alloc(0);
-  }).pipe(Effect.scoped);
+const readToolBytes = Effect.fn('readToolBytes')(function* (
+  cmd: string,
+  args: readonly string[],
+) {
+  const handle = yield* ChildProcess.make(cmd, args, {
+    stdin: 'ignore',
+    stderr: 'ignore',
+    detached: false,
+    forceKillAfter: '5 seconds',
+  });
+  const chunks = yield* handle.stdout.pipe(
+    Stream.runFoldEffect(
+      () => ({ chunks: [] as Uint8Array[], size: 0 }),
+      (acc, chunk) => {
+        const size = acc.size + chunk.length;
+        if (size > MAX_IMAGE_BYTES) {
+          return Effect.fail(new ClipboardImageTooLarge());
+        }
+        acc.chunks.push(chunk);
+        return Effect.succeed({ chunks: acc.chunks, size });
+      },
+    ),
+  );
+  const code = yield* handle.exitCode;
+  return code === 0 ? Buffer.concat(chunks.chunks) : Buffer.alloc(0);
+}, Effect.scoped);
 
 function readClipboardPngLinux(): Effect.Effect<
   ClipboardRead,

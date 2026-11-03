@@ -11,6 +11,7 @@ import {
   FiberSet,
   Schema,
   Scope,
+  Semaphore,
   Stream,
 } from 'effect';
 
@@ -23,10 +24,8 @@ import {
   describeFollowUpFailure,
   launchNoticeOf,
   presentFollowUpResult,
-  type PerKeyLane,
   type ProcessRuntime,
   type ProcessServices,
-  withPerKeyLane,
 } from '@texra-ai/harness/host';
 import {
   type RuntimeRequest,
@@ -354,29 +353,28 @@ export function createChatSessionController(
     );
 
   /** Publish the configuration of the conversation the TUI adopts. */
-  const adoptRunConfig = (
+  const adoptRunConfig = Effect.fn('adoptRunConfig')(function* (
     config: Pick<
       AgentConfig,
       'agent' | 'agentSource' | 'model' | 'cli' | 'delegationAgentScope'
     >,
     modelSource?: 'history',
-  ) =>
-    Effect.gen(function* () {
-      const cliTeamId = config.cli?.teamId ?? undefined;
-      const teamName = yield* readCliTeamName(
-        runSession.roots.repoState,
-        cliTeamId,
-      );
-      patchSessionMeta({
-        agent: config.agent,
-        agentSource: config.agentSource ?? undefined,
-        model: config.model,
-        ...(modelSource ? { modelSource } : {}),
-        teamName,
-        cliTeamId,
-        delegationAgentScope: config.delegationAgentScope ?? undefined,
-      });
+  ) {
+    const cliTeamId = config.cli?.teamId ?? undefined;
+    const teamName = yield* readCliTeamName(
+      runSession.roots.repoState,
+      cliTeamId,
+    );
+    patchSessionMeta({
+      agent: config.agent,
+      agentSource: config.agentSource ?? undefined,
+      model: config.model,
+      ...(modelSource ? { modelSource } : {}),
+      teamName,
+      cliTeamId,
+      delegationAgentScope: config.delegationAgentScope ?? undefined,
     });
+  });
 
   // -----------------------------------------------------------------------
   // Internal helpers
@@ -870,8 +868,7 @@ export function createChatSessionController(
   // so a message typed while the chat starts its run waits until the
   // session holds that run. The send itself runs outside: the session keeps
   // a run's messages in order.
-  const submissionLanes = new Map<'chat', PerKeyLane>();
-  const inOrder = withPerKeyLane(submissionLanes, 'chat');
+  const inOrder = Semaphore.makeUnsafe(1).withPermit;
   // The sends in flight, which a graceful exit waits for.
   const sending = runtime.runSync(
     FiberSet.make<void>().pipe(Scope.provide(shutdownScope)),

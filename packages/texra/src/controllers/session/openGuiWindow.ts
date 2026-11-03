@@ -511,48 +511,46 @@ function answerShared(
   const { bindings: host, bridge } = parts;
 
   /** The Tools sheet's verbs over the launcher's base and edited files. */
-  const latexdiffs = (sheet: LatexdiffsRequest) =>
-    Effect.gen(function* () {
-      const { action } = sheet;
-      const baseFile = sheet.baseFile ?? '';
-      const editedFile = sheet.editedFile ?? '';
-      if (
-        action === 'latexdiffvc' ||
-        action === 'packLatexdiffvc' ||
-        action === 'cleanLatexdiffvc'
-      ) {
-        yield* host.latexdiffAgainstCommit(
-          action,
-          baseFile,
-          sheet.commit ?? 'HEAD',
-        );
+  const latexdiffs = Effect.fn('latexdiffs')(function* (
+    sheet: LatexdiffsRequest,
+  ) {
+    const { action } = sheet;
+    const baseFile = sheet.baseFile ?? '';
+    const editedFile = sheet.editedFile ?? '';
+    if (
+      action === 'latexdiffvc' ||
+      action === 'packLatexdiffvc' ||
+      action === 'cleanLatexdiffvc'
+    ) {
+      yield* host.latexdiffAgainstCommit(
+        action,
+        baseFile,
+        sheet.commit ?? 'HEAD',
+      );
+      return;
+    }
+    if (!baseFile || !editedFile) {
+      return yield* Effect.fail(
+        new Rejected({
+          reason: 'Choose a base file and an edited file first.',
+        }),
+      );
+    }
+    switch (action) {
+      case 'compare':
+        yield* parts.workflowFileActions.compareOriginal(editedFile, baseFile);
         return;
-      }
-      if (!baseFile || !editedFile) {
-        return yield* Effect.fail(
-          new Rejected({
-            reason: 'Choose a base file and an edited file first.',
-          }),
-        );
-      }
-      switch (action) {
-        case 'compare':
-          yield* parts.workflowFileActions.compareOriginal(
-            editedFile,
-            baseFile,
-          );
-          return;
-        case 'accept':
-          yield* parts.workflowFileActions.acceptFile(editedFile, baseFile);
-          return;
-        case 'merge':
-          yield* parts.workflowFileActions.mergeFile(editedFile, baseFile);
-          return;
-        case 'latexdiff':
-          yield* parts.workflowFileActions.latexdiffFile(editedFile, baseFile);
-          return;
-      }
-    });
+      case 'accept':
+        yield* parts.workflowFileActions.acceptFile(editedFile, baseFile);
+        return;
+      case 'merge':
+        yield* parts.workflowFileActions.mergeFile(editedFile, baseFile);
+        return;
+      case 'latexdiff':
+        yield* parts.workflowFileActions.latexdiffFile(editedFile, baseFile);
+        return;
+    }
+  });
 
   return Effect.gen(function* () {
     switch (request.kind) {

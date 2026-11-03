@@ -106,16 +106,16 @@ export type CliConfigExecuteResult =
 
 /** A tool-use run (`texra run` on an agent with no task, `texra team run`):
  *  one model/tool cycle, with the session resume hint on an interrupt. */
-export function executeCliToolUseConfig(
-  config: AgentConfigPayload,
-  runContext: CliContext,
-  options: {
-    readonly services: CliExecuteOptions['services'];
-    /** False when invocation-owned temporary inputs will not survive exit. */
-    readonly recoveryInputIsDurable: boolean;
-  },
-) {
-  return Effect.gen(function* () {
+export const executeCliToolUseConfig = Effect.fn('executeCliToolUseConfig')(
+  function* (
+    config: AgentConfigPayload,
+    runContext: CliContext,
+    options: {
+      readonly services: CliExecuteOptions['services'];
+      /** False when invocation-owned temporary inputs will not survive exit. */
+      readonly recoveryInputIsDurable: boolean;
+    },
+  ) {
     const recoveryProcessCwd = tryReadCliCwd();
     const workingDirectory = config.workingDirectory || runContext.cwd;
     const run = yield* executeCliConfig(config, runContext, {
@@ -145,8 +145,8 @@ export function executeCliToolUseConfig(
       },
       exitCode: runOutcomeExitCode(result.outcome),
     };
-  });
-}
+  },
+);
 
 /** How a headless run enters its session: `texra resume`'s resume of the
  *  persisted run (a refusal is the caller's usage exit), or a fresh start

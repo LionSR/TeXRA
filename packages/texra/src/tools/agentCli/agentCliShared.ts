@@ -412,98 +412,98 @@ interface AgentCliLoopParams<TTurn> {
  * Callers supply only their provider-specific turn run, usage/delivery
  * formatting, and registry entry construction.
  */
-export function buildAgentCliLaunch<TTurn>(
+export const buildAgentCliLaunch = Effect.fn('buildAgentCliLaunch')(function* <
+  TTurn,
+>(
   params: AgentCliLoopParams<TTurn>,
-): Effect.Effect<ProcessChildStrategy<TTurn>> {
-  return Effect.gen(function* () {
-    const {
-      logger,
-      runId,
-      stageLabel,
-      initialPrompt,
-      registry,
-      releaseFallbackClaim,
-      runProviderTurn,
-      resolveSessionIds,
-      getUsage,
-      formatDelivery,
-      formatError,
-      isTurnError,
-      turnErrorMessage,
-    } = params;
-    // Released with the child's aliases (`releaseSessionOwnership`).
-    yield* registry.holdWhileLive(runId);
+): Effect.fn.Return<ProcessChildStrategy<TTurn>> {
+  const {
+    logger,
+    runId,
+    stageLabel,
+    initialPrompt,
+    registry,
+    releaseFallbackClaim,
+    runProviderTurn,
+    resolveSessionIds,
+    getUsage,
+    formatDelivery,
+    formatError,
+    isTurnError,
+    turnErrorMessage,
+  } = params;
+  // Released with the child's aliases (`releaseSessionOwnership`).
+  yield* registry.holdWhileLive(runId);
 
-    // The one entry this loop registers and tracks: the child run's identity
-    // and follow-up address. Live handles are resolved by the registry itself.
-    const target: AgentCliSessionEntry = { runId };
+  // The one entry this loop registers and tracks: the child run's identity
+  // and follow-up address. Live handles are resolved by the registry itself.
+  const target: AgentCliSessionEntry = { runId };
 
-    // Session/thread ids are registered after the first successful turn is
-    // persisted, just before its result reaches the parent.
-    const [continueTool, continueParam, resumedId] = params.continueWith;
-    let continueId = resumedId;
-    const registerSessionId = (id: string): void => {
-      continueId = id;
-      if (registry.lookup(id)) return;
-      registry.register(id, target);
-    };
+  // Session/thread ids are registered after the first successful turn is
+  // persisted, just before its result reaches the parent.
+  const [continueTool, continueParam, resumedId] = params.continueWith;
+  let continueId = resumedId;
+  const registerSessionId = (id: string): void => {
+    continueId = id;
+    if (registry.lookup(id)) return;
+    registry.register(id, target);
+  };
 
-    // The joined prompt text for whichever turn is currently in flight;
-    // captured here (rather than threaded through the loop contract) since
-    // `formatDelivery`/`formatError` run strictly after the turn that set it.
-    let lastPrompt = initialPrompt;
-    // Every turn the provider returns, an error turn included, reports its
-    // spend: the child has no run history, so its `usage` rows are its one
-    // record of spend, one per turn, which is what each provider reports.
-    const providerTurn = (prompt: string): Effect.Effect<TTurn, Error> =>
-      runProviderTurn(prompt).pipe(
-        Effect.tap((turn) =>
-          Effect.sync(() => {
-            const usage = getUsage(turn);
-            if (!usage) return;
-            logger.info('Tokens', {
-              data: { input: usage.inputTokens, output: usage.outputTokens },
-            });
-            logger.emit({ type: 'usage', usage });
-          }),
-        ),
-      );
-    const runTurn = (
-      followUps: readonly FollowUpContent[],
-    ): Effect.Effect<TTurn, Error> =>
-      Effect.suspend(() => {
-        lastPrompt = followUps.map((f) => f.text).join('\n\n');
-        return providerTurn(lastPrompt);
-      });
-
-    return {
-      stageLabel,
-      launch: () => providerTurn(initialPrompt),
-      runTurn,
-      isTurnError,
-      turnErrorMessage,
-      onTurnSuccess: (turn) => {
-        for (const id of resolveSessionIds(turn)) {
-          if (id) registerSessionId(id);
-        }
-      },
-      formatDelivery: (turn, wallTimeMs) =>
-        Effect.try({
-          try: () => formatDelivery(turn, wallTimeMs, lastPrompt),
-          catch: ensureError,
+  // The joined prompt text for whichever turn is currently in flight;
+  // captured here (rather than threaded through the loop contract) since
+  // `formatDelivery`/`formatError` run strictly after the turn that set it.
+  let lastPrompt = initialPrompt;
+  // Every turn the provider returns, an error turn included, reports its
+  // spend: the child has no run history, so its `usage` rows are its one
+  // record of spend, one per turn, which is what each provider reports.
+  const providerTurn = (prompt: string): Effect.Effect<TTurn, Error> =>
+    runProviderTurn(prompt).pipe(
+      Effect.tap((turn) =>
+        Effect.sync(() => {
+          const usage = getUsage(turn);
+          if (!usage) return;
+          logger.info('Tokens', {
+            data: { input: usage.inputTokens, output: usage.outputTokens },
+          });
+          logger.emit({ type: 'usage', usage });
         }),
-      formatError: (turn, err) => formatError(turn, err, lastPrompt),
-      pauseNotice: () =>
-        continueId === undefined
-          ? undefined
-          : {
-              text: `The ${stageLabel} is paused. Nothing continues it on its own; to continue it, call ${continueTool} with ${continueParam} '${continueId}'.`,
-              resumeId: continueId,
-            },
-      releaseSessionOwnership: () => {
-        releaseFallbackClaim?.();
-        registry.releaseByRunId(runId);
-      },
-    };
-  });
-}
+      ),
+    );
+  const runTurn = (
+    followUps: readonly FollowUpContent[],
+  ): Effect.Effect<TTurn, Error> =>
+    Effect.suspend(() => {
+      lastPrompt = followUps.map((f) => f.text).join('\n\n');
+      return providerTurn(lastPrompt);
+    });
+
+  return {
+    stageLabel,
+    launch: () => providerTurn(initialPrompt),
+    runTurn,
+    isTurnError,
+    turnErrorMessage,
+    onTurnSuccess: (turn) => {
+      for (const id of resolveSessionIds(turn)) {
+        if (id) registerSessionId(id);
+      }
+    },
+    formatDelivery: (turn, wallTimeMs) =>
+      Effect.try({
+        try: () => formatDelivery(turn, wallTimeMs, lastPrompt),
+        catch: ensureError,
+      }),
+    formatError: (turn, err) => formatError(turn, err, lastPrompt),
+    pauseNotice: () =>
+      continueId === undefined
+        ? undefined
+        : {
+            text: `The ${stageLabel} is paused. Nothing continues it on its own; to continue it, call ${continueTool} with ${continueParam} '${continueId}'.`,
+            resumeId: continueId,
+          },
+    releaseSessionOwnership: () => {
+      releaseFallbackClaim?.();
+      registry.releaseByRunId(runId);
+    },
+  };
+});

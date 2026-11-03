@@ -55,11 +55,11 @@ function runGuardedSlashCommand(
   });
 }
 
-export function handleTuiSlashCommand(
-  line: string,
-  context: SlashCommandContext,
-): Effect.Effect<boolean, Error, ProcessServices> {
-  return Effect.gen(function* () {
+export const handleTuiSlashCommand = Effect.fn('handleTuiSlashCommand')(
+  function* (
+    line: string,
+    context: SlashCommandContext,
+  ): Effect.fn.Return<boolean, Error, ProcessServices> {
     const redactedIntent = findRedactedSlashCommandInput(line);
     const parsed = parseSlashInput(line);
     if (!parsed) {
@@ -123,5 +123,5 @@ export function handleTuiSlashCommand(
         : `Unknown command: /${parsed.name}.${didYouMean} Type /help to list commands.`,
     );
     return true;
-  });
-}
+  },
+);
