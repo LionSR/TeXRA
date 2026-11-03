@@ -467,7 +467,7 @@ function validationModel(config: ModelConfig): {
         call('executions', {
           path: '/executions',
           action: 'query',
-          sql: 'SELECT name, kind, lifecycle FROM runs ORDER BY started_at',
+          sql: 'SELECT name, kind, status FROM runs ORDER BY started_at',
         }),
       ];
     } else if ((scriptFanout && toolNames.has('script')) || historyQuery) {
