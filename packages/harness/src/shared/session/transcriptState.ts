@@ -27,7 +27,6 @@ import {
 import {
   compactionActivityRow,
   type StreamingTextRow,
-  type ToolCallFacts,
   type TranscriptRow,
   type TranscriptRowBase,
 } from '@shared/transcript/transcriptRow';
@@ -37,6 +36,7 @@ import {
   streamingTextRow,
   toolRow,
   type LogRowPayload,
+  type ToolCallFacts,
 } from '@shared/transcript/projectTranscriptRow';
 
 import type { TranscriptView } from './sessionView';
@@ -79,7 +79,7 @@ export type Slot =
       readonly kind: 'tool';
       base: TranscriptRowBase;
       log: ToolUseLog;
-      /** What the card's `tool.start` says of a script's call. */
+      /** What the row says of the call beyond its payload. */
       call: ToolCallFacts;
     }
   | {

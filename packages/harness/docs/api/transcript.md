@@ -753,18 +753,6 @@ interface ToolBadgesSection extends ToolSectionBase {
 }
 ```
 
-## ToolCallFacts
-
-What a card's `tool.start` says of its call beyond the tool and input:
-a script's call's phase, and the attempt from the second on.
-
-```ts
-interface ToolCallFacts {
-  readonly phase?: string;
-  readonly attempt?: number;
-}
-```
-
 ## ToolCodeSection
 
 ```ts
@@ -879,13 +867,22 @@ type ToolOutputSuppression =
 ## ToolRow
 
 ```ts
-interface ToolRow extends TranscriptRowBase, ToolCallFacts {
+interface ToolRow extends TranscriptRowBase {
   readonly kind: 'tool';
   readonly toolUse: NormalizedToolUse;
   readonly model: ToolRowModel;
   /** The decoded durable payload the row was built from, without live
    *  output: what a conversation export formats. */
   readonly log: ToolUseLog;
+  /** A script's call's phase, as its card's `tool.start` names it. */
+  readonly phase?: string;
+  /** The call's attempt, from the second on (its card's `tool.start`). */
+  readonly attempt?: number;
+  /** The run waited or ended while the call was open: the call never
+   *  finished, so nothing records how it ended, and the row reads failed.
+   *  A result that lands once the run runs again replaces it. The row
+   *  holds no text for it; each reader words it. */
+  readonly cutByRunEnd?: true;
 }
 ```
 
