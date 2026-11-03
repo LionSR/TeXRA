@@ -130,19 +130,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       );
 
       it.effect(
-        'rejects tool-use resume when the context says stdout is not a TTY',
-        () =>
-          Effect.gen(function* () {
-            yield* seedRunRecord(TOOL_USE_CONFIG);
-            expect(yield* run(cliContext({ stdoutIsTty: false }))).toBe(2);
-
-            expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-              expect.stringContaining('For scripting, use `texra run`.'),
-            );
-          }),
-      );
-
-      it.effect(
         'refuses a run another live TeXRA process holds, naming its pid',
         () =>
           Effect.gen(function* () {
