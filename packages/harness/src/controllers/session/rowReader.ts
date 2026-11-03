@@ -15,6 +15,7 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   DISPLAY_EVENT_TYPES,
   pluginFactFloor,
+  RETIRED_PLUGIN_FACTS,
   RunIdSchema,
   type AggregateId,
   type JsonValue,
@@ -215,10 +216,11 @@ export function rowReader<E>(
     mark(runId, true);
     if (!earlier.has(runId)) earlier.set(runId, row);
   };
-  // Only a fact kind with a floor can hold an earlier build's fact.
-  const floored = Object.values(factKinds).some(
-    (factKind) => pluginFactFloor(factKind) > 1,
-  );
+  // Only a retired fact kind, or one with a floor, can hold an earlier
+  // build's fact.
+  const floored =
+    RETIRED_PLUGIN_FACTS.size > 0 ||
+    Object.values(factKinds).some((factKind) => pluginFactFloor(factKind) > 1);
   /** Find, once, every run holding an earlier build's row. */
   const scan = Effect.gen(function* () {
     if (scanned) return;

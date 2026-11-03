@@ -81,6 +81,14 @@ export const pluginFactFloor = (factKind: {
   readonly upcasters: readonly unknown[];
 }): number => factKind.version - factKind.upcasters.length;
 
+/** Plugin fact kinds a built-in plugin wrote before this build retired
+ *  them, by `plugin/kind`: a row of one is an earlier build's, refused by
+ *  the store (`factKindOf`) and an imported trace alike, never read
+ *  unavailable, since its plugin is loaded. */
+export const RETIRED_PLUGIN_FACTS: ReadonlySet<string> = new Set([
+  'goal/state',
+]);
+
 /** Why a plugin fact is read uninterpreted: no plugin of this process
  *  registers its kind. Its row stays as written; the store and an imported
  *  trace read it with this reason (`unavailable`), its value and version

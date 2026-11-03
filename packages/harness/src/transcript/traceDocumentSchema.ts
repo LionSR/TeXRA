@@ -4,6 +4,7 @@ import {
   DisplaySessionEventSchema,
   GOAL_PLAN_KIND,
   pluginFactFloor,
+  RETIRED_PLUGIN_FACTS,
   RunIdSchema,
   unavailableFactReason,
 } from '@shared/schemas';
@@ -34,10 +35,6 @@ export interface TraceFactKind {
   readonly upcasters: readonly unknown[];
 }
 
-/** Plugin facts a built-in plugin wrote before this build retired them:
- *  a trace that holds one is from an earlier build, rejected, not stripped. */
-const RETIRED_FACTS: ReadonlySet<string> = new Set(['goal/state']);
-
 /**
  * A parsed trace with each plugin fact checked as the store checks it,
  * against the harness's built-in fact kind (the goal's plan) and the app's
@@ -67,7 +64,7 @@ export function readTraceFacts(
     const { unavailable: _unavailable, ...fact } = event;
     const name = `${fact.plugin}/${fact.kind}`;
     const factKind = factKinds.get(name);
-    if (factKind === undefined && RETIRED_FACTS.has(name))
+    if (factKind === undefined && RETIRED_PLUGIN_FACTS.has(name))
       throw new Error(
         `the plugin fact ${name} was written by an earlier build; this build no longer reads it.`,
       );
